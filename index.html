@@ -87,6 +87,7 @@ svg{display:block;width:100%;height:auto}
 .issue-card p,.todo-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
 .issue-card .flag{display:inline-flex;align-self:start;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800}
 .note{text-align:center;background:linear-gradient(135deg,#fff,#fff4d5)} .note strong{display:block;font-size:20px;margin-bottom:6px}
+.sleep-journey{display:grid;gap:12px}.sleep-hero{background:linear-gradient(135deg,var(--blue-soft),#fff);overflow:hidden;position:relative}.sleep-hero:after{content:"☾";position:absolute;right:20px;top:15px;font-size:58px;color:#b9d8f7;line-height:1}.sleep-hero h3{font-size:27px;line-height:1;margin:4px 0 5px;letter-spacing:-1px}.sleep-hero p{margin:0;color:var(--muted)}.sleep-ai{position:relative;margin-top:18px;max-width:290px;padding:11px 13px;border-radius:16px;background:#ffffffb8;color:#53636d;font-size:14px}.sleep-status{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:15px}.sleep-stat{padding:0 9px;border-left:1px solid var(--line)}.sleep-stat:first-child{padding-left:0;border-left:0}.sleep-stat b{display:block;margin-top:6px;font-size:23px;line-height:1;letter-spacing:-.7px}.sleep-stat small{font-size:10px;color:var(--muted);display:block}.sleep-note{margin-top:15px;padding:12px 13px;border-radius:16px;background:#f7fafc;color:#50606a;font-size:13px}.sleep-month{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}.sleep-month b{font-size:17px}.sleep-month span{font-size:12px;color:var(--muted)}.sleep-week,.sleep-calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;text-align:center}.sleep-week{font-size:11px;color:var(--muted);margin-bottom:6px}.sleep-calendar-grid button{border:0;width:36px;height:36px;margin:auto;border-radius:50%;font:800 12px inherit;cursor:pointer;transition:transform .2s}.sleep-calendar-grid button:hover{transform:scale(1.08)}.sleep-calendar-grid .stable{background:var(--green-soft);color:#278d50}.sleep-calendar-grid .unstable{background:var(--blue-soft);color:#337fce}.sleep-calendar-grid .missing{background:transparent;color:#c2c9cd}.sleep-calendar-grid .selected{outline:2px solid var(--blue);outline-offset:2px}.sleep-legend{display:flex;gap:13px;flex-wrap:wrap;margin-top:15px;padding-top:12px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}.sleep-legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.sleep-detail{margin-top:11px;padding:15px;border-radius:18px;background:#f7fafc}.sleep-detail-top{display:flex;justify-content:space-between;align-items:center}.sleep-detail-top b{font-size:16px}.sleep-pill{padding:5px 8px;border-radius:99px;font-size:11px;font-weight:800}.sleep-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.sleep-detail-grid small{display:block;color:var(--muted);font-size:11px}.sleep-detail-grid b{font-size:13px;font-weight:700}.sleep-detail-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.sleep-trend{padding:15px 0;border-top:1px solid var(--line)}.sleep-trend:first-of-type{border-top:0;padding-top:0}.sleep-trend-head{display:flex;align-items:end;justify-content:space-between;gap:8px}.sleep-trend-head small{color:var(--muted);display:block;font-size:11px}.sleep-trend-head b{font-size:18px}.sleep-trend svg{margin-top:7px}.trend-end{font-size:11px;font-weight:800;fill:#50606a}.sleep-timeline{display:grid;gap:0}.sleep-timeline-item{position:relative;display:grid;grid-template-columns:32px 1fr;gap:11px;padding:0 0 18px}.sleep-timeline-item:not(:last-child):before{content:"";position:absolute;left:15px;top:32px;bottom:0;width:1px;background:#dce8ee}.sleep-timeline-dot{position:relative;z-index:1;width:32px;height:32px;border-radius:50%;background:var(--blue-soft);display:grid;place-items:center}.sleep-timeline-item small{color:var(--muted);font-size:11px;font-weight:800}.sleep-timeline-item h4{margin:2px 0;font-size:15px}.sleep-timeline-item p{margin:0;color:var(--muted);font-size:13px}.sleep-insight{background:linear-gradient(135deg,#f6fbff,#fff)}.sleep-insight ol{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:8px}.sleep-insight li{display:grid;grid-template-columns:20px 1fr;gap:8px;font-size:13px;color:#50606a}.sleep-insight li b{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#337fce;font-size:11px}.sleep-next{margin-top:15px;padding-top:13px;border-top:1px solid #dfeaf1;font-size:14px;font-weight:700}
 .nav{position:fixed;left:50%;bottom:max(9px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;width:min(calc(100% - 18px),680px);display:grid;grid-template-columns:repeat(5,1fr);padding:7px;background:rgba(255,255,255,.92);border:1px solid #fff;border-radius:23px;box-shadow:0 15px 45px rgba(55,66,75,.22);backdrop-filter:blur(20px)}
 .nav button{border:0;background:transparent;padding:7px 2px;border-radius:16px;color:#65727b;font-size:11px;font-weight:750}
 .nav button b{display:block;font-size:20px;line-height:1.15}
@@ -349,78 +350,59 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 
   <section class="section" id="sleep">
     <div class="section-head">
-<h2>睡眠变化</h2>
-<span>曲线为主 · 可视化展示</span>
+<h2>Sleep Journey</h2>
+<span>张小年的睡眠成长记录</span>
 </div>
-    <div class="card chart-card">
-      <h4>🌙 睡眠质量趋势</h4>
-      <svg viewBox="0 0 390 250" role="img" aria-label="7月睡眠质量改善趋势">
-        <g stroke="#edf0f2" stroke-width="1">
-<path d="M42 30H370M42 75H370M42 120H370M42 165H370M42 210H370"/>
-</g>
-        <g fill="#87939b" font-size="10">
-<text x="7" y="214">差</text>
-<text x="7" y="34">好</text>
-<text x="38" y="236">6月底</text>
-<text x="95" y="236">7/7</text>
-<text x="146" y="236">7/8</text>
-<text x="203" y="236">7/10</text>
-<text x="261" y="236">7/12</text>
-<text x="314" y="236">7月中</text>
-</g>
-        <path d="M60 188 C91 170,102 160,118 154 S153 125,170 114 S213 91,229 82 S274 61,289 55 S332 39,349 34" fill="none" stroke="#4f97ee" stroke-width="6" stroke-linecap="round"/>
-        <path d="M60 188 C91 170,102 160,118 154 S153 125,170 114 S213 91,229 82 S274 61,289 55 S332 39,349 34 L349 210 L60 210 Z" fill="#eaf4ff" opacity=".78"/>
-        <g fill="#4f97ee">
-<circle cx="60" cy="188" r="6"/>
-<circle cx="118" cy="154" r="6"/>
-<circle cx="170" cy="114" r="6"/>
-<circle cx="229" cy="82" r="6"/>
-<circle cx="289" cy="55" r="6"/>
-<circle cx="349" cy="34" r="6"/>
-</g>
-        <g fill="#337fce" font-size="11" font-weight="700">
-<text x="45" y="177">夜醒高成本</text>
-<text x="154" y="103">整觉</text>
-<text x="267" y="44">无抱睡</text>
-<text x="307" y="22">稳定化</text>
-</g>
-      </svg>
-      <div class="sleep-summary">
-        <div>
-<b>增加</b>
-<small>整觉频率</small>
-</div>
-        <div>
-<b>下降</b>
-<small>夜醒处理成本</small>
-</div>
-        <div>
-<b>更独立</b>
-<small>入睡方式</small>
-</div>
-      </div>
-      <div class="milestones">
-        <div class="milestone">
-<b>🌙</b>
-<span>整夜未醒</span>
-</div>
-        <div class="milestone">
-<b>🙂</b>
-<span>夜醒更好哄</span>
-</div>
-        <div class="milestone">
-<b>🫂</b>
-<span>无抱睡入睡</span>
-</div>
-        <div class="milestone">
-<b>🛏️</b>
-<span>床上入睡</span>
-</div>
-        <div class="milestone">
-<b>⭐</b>
-<span>自主续睡</span>
-</div>
-      </div>
+    <div class="sleep-journey">
+      <article class="card sleep-hero">
+        <span class="eyebrow">Nian’s Life Journey · 2026.07</span>
+        <h3>Sleep Journey</h3>
+        <p>张小年的睡眠成长记录</p>
+        <div class="sleep-ai">夜里越来越稳定，睡前还需要一点耐心 ❤️</div>
+        <div class="sleep-status">
+          <div class="sleep-stat"><small>Night Stability<br>夜间稳定度</small><b>8.5 <small>/ 10</small></b></div>
+          <div class="sleep-stat"><small>Bedtime Resistance<br>入睡难度</small><b>4 <small>/ 10</small></b></div>
+          <div class="sleep-stat"><small>Trend<br>趋势</small><b>↗ <small>改善</small></b></div>
+        </div>
+        <div class="sleep-note">过去 14 天，有 <b>10 晚</b>没有明显夜醒；睡前仍需要陪伴，但夜里的恢复变得更轻松。</div>
+      </article>
+
+      <article class="card">
+        <div class="section-head" style="margin-top:0"><h3 style="font-size:18px">睡眠日历</h3><span>点按日期查看记录</span></div>
+        <div class="sleep-month"><b>2026 年 7 月</b><span>已记录 20 天</span></div>
+        <div class="sleep-week"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+        <div class="sleep-calendar-grid" id="sleep-calendar" aria-label="2026年7月睡眠日历"></div>
+        <div class="sleep-legend"><span><i style="background:var(--green)"></i>整觉</span><span><i style="background:var(--blue)"></i>没整觉</span><span><i style="background:#d7dde1"></i>未记录</span></div>
+        <div class="sleep-detail" id="sleep-detail"></div>
+      </article>
+
+      <article class="card">
+        <div class="section-head" style="margin-top:0"><h3 style="font-size:18px">睡眠趋势</h3><span>7 月的温柔变化</span></div>
+        <div class="sleep-trend">
+          <div class="sleep-trend-head"><div><small>Night Stability</small><b>夜间稳定度　6 → 8.5</b></div></div>
+          <svg viewBox="0 0 390 92" role="img" aria-label="夜间稳定度上升趋势"><path d="M8 78H382" stroke="#edf0f2" stroke-dasharray="4 5"/><path d="M8 73 C57 75,75 61,117 63 S183 46,225 48 S314 22,374 27" fill="none" stroke="#4f97ee" stroke-width="6" stroke-linecap="round"/><circle cx="374" cy="27" r="6" fill="#4f97ee"/><text x="220" y="18" class="trend-end">整觉正在慢慢成为常态</text></svg>
+        </div>
+        <div class="sleep-trend">
+          <div class="sleep-trend-head"><div><small>Bedtime Resistance</small><b>入睡难度　7 → 4</b></div></div>
+          <svg viewBox="0 0 390 92" role="img" aria-label="入睡难度下降趋势"><path d="M8 78H382" stroke="#edf0f2" stroke-dasharray="4 5"/><path d="M8 25 C57 22,75 37,117 36 S183 51,225 52 S314 70,374 73" fill="none" stroke="#eea46e" stroke-width="6" stroke-linecap="round"/><circle cx="374" cy="73" r="6" fill="#eea46e"/><text x="230" y="64" class="trend-end">入睡仍需要更多耐心</text></svg>
+        </div>
+        <div class="chart-note">夜间稳定度已经明显向好；现在最值得慢慢陪伴的，是睡前那段进入睡眠的时间。</div>
+      </article>
+
+      <article class="card">
+        <div class="section-head" style="margin-top:0"><h3 style="font-size:18px">重要睡眠瞬间</h3><span>家庭记忆，而非数据</span></div>
+        <div class="sleep-timeline">
+          <div class="sleep-timeline-item"><span class="sleep-timeline-dot">🌙</span><div><small>2026.07.12</small><h4>连续多晚稳定睡眠</h4><p>“小年开始逐渐建立自己的睡眠节奏。”</p></div></div>
+          <div class="sleep-timeline-item"><span class="sleep-timeline-dot">🌙</span><div><small>2026.07.13</small><h4>小爱同学成为新的安抚伙伴</h4><p>“夜里和睡前烦躁时，通过熟悉的声音互动慢慢平静下来。”</p></div></div>
+          <div class="sleep-timeline-item"><span class="sleep-timeline-dot">🌙</span><div><small>2026.07.18</small><h4>迎来一晚高质量整觉</h4><p>“从醒后好接，到整夜稳定；这份安全感正在慢慢长大。”</p></div></div>
+        </div>
+      </article>
+
+      <article class="card sleep-insight">
+        <div class="section-head" style="margin-top:0"><h3 style="font-size:18px">爸爸妈妈观察</h3><span>AI Sleep Insight</span></div>
+        <ol><li><b>1</b><span>夜间醒来的次数明显下降。</span></li><li><b>2</b><span>身体不舒服时，睡眠仍容易受到影响。</span></li><li><b>3</b><span>固定睡前流程正在发挥作用。</span></li></ol>
+        <div class="sleep-next"><span class="eyebrow">下一阶段</span><br>继续保持稳定睡前仪式，让自主入睡能力自然成长。</div>
+      </article>
     </div>
   </section>
 
@@ -591,6 +573,41 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 </nav>
 
 <script>
+const sleepRecords=[
+{date:'2026-07-08',state:'没整觉',bedtime:'未记录',wakes:'2 次',care:'爸爸 → 妈妈',method:'夜里明显干预',tags:['排便哭闹'],note:'入睡难，夜里排便哭闹。'},
+{date:'2026-07-09',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'爸爸',method:'入睡陪伴',tags:['睡到早上'],note:'入睡难，但睡到早上。'},
+{date:'2026-07-10',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'爸爸',method:'可控入睡',tags:['后半夜稳定'],note:'后半夜稳定。'},
+{date:'2026-07-11',state:'没整觉',bedtime:'未记录',wakes:'2 次',care:'妈妈',method:'醒后安抚',tags:['醒后好接'],note:'醒 2 次，醒后好接。'},
+{date:'2026-07-12',state:'没整觉',bedtime:'未记录',wakes:'01:30 醒',care:'妈妈',method:'妈妈陪伴重新入睡',tags:['醒一次好接'],note:'醒一次后，很快重新入睡。'},
+{date:'2026-07-13',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'妈妈',method:'小爱同学辅助',tags:['小爱辅助成功'],note:'入睡顺利，无夜醒。'},
+{date:'2026-07-14',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'妈妈',method:'抱睡',tags:['抱睡也稳定'],note:'入睡顺利，无夜醒。'},
+{date:'2026-07-15',state:'没整觉',bedtime:'未记录',wakes:'1 次',care:'妈妈',method:'低成本安抚',tags:['低成本夜醒'],note:'醒 1 次，低成本安抚后重新入睡。'},
+{date:'2026-07-16',state:'没整觉',bedtime:'未记录',wakes:'1 次',care:'爸爸',method:'爸爸安抚',tags:['爸爸也好接'],note:'醒 1 次，爸爸也好接。'},
+{date:'2026-07-17',state:'没整觉',bedtime:'未记录',wakes:'1 次',care:'爸爸',method:'爸爸安抚',tags:['重复好接'],note:'醒 1 次，重复好接。'},
+{date:'2026-07-18',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'妈妈',method:'顺利入睡',tags:['高质量整觉'],note:'入睡顺利，无夜醒。'},
+{date:'2026-07-19',state:'没整觉',bedtime:'未记录',wakes:'1 次',care:'妈妈',method:'身体不适时陪伴',tags:['拉稀夜醒','身体扰动'],note:'拉稀夜醒。'},
+{date:'2026-07-20',state:'没整觉',bedtime:'未记录',wakes:'02:00 轻醒',care:'妈妈',method:'入睡陪伴',tags:['入睡大哭'],note:'入睡难，夜里轻醒但整体稳定。'},
+...Array.from({length:7},(_,i)=>({date:`2026-07-${String(21+i).padStart(2,'0')}`,state:'整觉',bedtime:'21:05',wakes:'无夜醒',care:i%2?'爸爸':'妈妈',method:'固定流程 + 陪伴',tags:['入睡约 40 分钟'],note:'约 40 分钟入睡，9 点后睡，6:30 醒。'}))
+];
+const sleepByDate=Object.fromEntries(sleepRecords.map(item=>[item.date,item]));
+const calendar=document.getElementById('sleep-calendar');
+const detail=document.getElementById('sleep-detail');
+let selectedSleep=sleepByDate['2026-07-24'];
+function renderSleepDetail(record){
+  const tone=record.state==='整觉'?'good':'later';
+  detail.innerHTML=`<div class="sleep-detail-top"><b>${record.date.replaceAll('-','.')}</b><span class="sleep-pill ${tone}">${record.state}</span></div><div class="sleep-detail-grid"><div><small>睡觉</small><b>${record.bedtime}</b></div><div><small>夜醒</small><b>${record.wakes}</b></div><div><small>处理</small><b>${record.method}</b></div><div><small>谁带睡</small><b>${record.care}</b></div></div><div class="sleep-detail-tags">${record.tags.map(tag=>`<span class="tag tb">${tag}</span>`).join('')}</div><p style="margin:10px 0 0;border-top:1px solid var(--line);padding-top:10px;color:var(--muted);font-size:13px">“${record.note}”</p>`;
+}
+function renderSleepCalendar(){
+  calendar.innerHTML=[...Array(3).fill('<span></span>'),...Array.from({length:31},(_,i)=>{
+    const day=i+1,date=`2026-07-${String(day).padStart(2,'0')}`,record=sleepByDate[date];
+    const state=record?(record.state==='整觉'?'stable':'unstable'):'missing';
+    const active=selectedSleep&&selectedSleep.date===date?' selected':'';
+    return `<button class="${state}${active}" data-sleep-date="${date}" aria-label="${date} ${record?record.state:'未记录'}">${day}</button>`;
+  })].join('');
+  calendar.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>{const record=sleepByDate[button.dataset.sleepDate];if(!record)return;selectedSleep=record;renderSleepCalendar();renderSleepDetail(record)}));
+}
+renderSleepCalendar();renderSleepDetail(selectedSleep);
+
 const buttons=[...document.querySelectorAll('.nav button')];
 const sections=[...document.querySelectorAll('main .section[id]')];
 buttons.forEach(btn => {
