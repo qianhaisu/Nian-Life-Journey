@@ -56,7 +56,7 @@ a{color:inherit;text-decoration:none}
 .metric{padding:14px;border:1px solid var(--line);border-radius:18px;background:#fff}
 .metric .topline{display:flex;align-items:center;gap:10px}
 .metric .ico{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;font-size:20px}
-.metric h4{margin:0;font-size:16px} .metric p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.metric h4{margin:0;font-size:16px}.metric p{margin:4px 0 0;color:var(--muted);font-size:13px}.metric p+p{margin-top:2px}.metric .fact-lead{color:#4f5d66;font-weight:750}
 .big-point{display:grid;grid-template-columns:42px 1fr;gap:12px;align-items:start;padding:14px;border:1px solid var(--line);border-radius:18px;background:#fff}
 .big-point b{font-size:16px} .big-point p{margin:3px 0 0;color:var(--muted);font-size:13px}
 .chart-card h4{margin:0 0 8px;font-size:18px}
@@ -80,7 +80,7 @@ svg{display:block;width:100%;height:auto}
 .moment-copy{padding:15px} .moment-copy h4{margin:0 0 4px;font-size:18px} .moment-copy p{margin:0;color:var(--muted);font-size:14px}
 .food-entry{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:13px;background:linear-gradient(135deg,var(--green-soft),#fff)}
 .food-entry .icon{width:52px;height:52px;border-radius:17px}.food-entry h3,.food-guide h3{margin:0}.food-entry p{margin:3px 0 0;color:var(--muted);font-size:13px}.food-link{padding:8px 12px;border-radius:99px;background:#fff;border:1px solid var(--line);font-size:12px;font-weight:800;color:#278d50}
-.food-guide{background:linear-gradient(135deg,#fffdf7,#fff)}.food-principle{font-size:22px;font-weight:850;letter-spacing:-.4px;margin:5px 0 0}.food-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}.food-scene{border:1px solid var(--line);border-radius:20px;background:#fff;overflow:hidden}.food-photo{position:relative;aspect-ratio:720/478;background:linear-gradient(145deg,#f8f1e4,#eef5f1);overflow:hidden}.food-photo img{width:100%;height:100%;display:block;object-fit:cover}
+.food-guide{background:linear-gradient(135deg,#fffdf7,#fff)}.food-principle{font-size:22px;font-weight:850;letter-spacing:-.4px;margin:5px 0 0}.food-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}.food-scene{display:grid;grid-template-columns:38% 1fr;min-height:148px;border:1px solid var(--line);border-radius:20px;background:#fff;overflow:hidden}.food-photo{position:relative;min-width:0;background:linear-gradient(145deg,#f8f1e4,#eef5f1);overflow:hidden}.food-photo img{width:100%;height:100%;display:block;object-fit:cover;object-position:center}.food-copy{display:flex;flex-direction:column;justify-content:center;min-width:0;padding:14px}.food-copy h3{margin:0;font-size:18px}.food-items{margin:5px 0 0;color:#596770;font-size:13px;line-height:1.45}.food-tip{align-self:flex-start;margin-top:9px;padding:4px 8px;border-radius:999px;background:var(--yellow-soft);color:#94630a;font-size:11px;font-weight:800}.food-fallback{margin-top:12px;padding:15px;border-radius:18px;background:var(--blue-soft);text-align:center;color:#376a9f;font-size:16px;font-weight:750}.food-fallback strong{color:#285e92}
 .looking-ahead{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.ahead-item{padding:14px 15px;border-radius:18px;border:1px solid var(--line);background:#fff}.ahead-item h4{margin:0 0 3px;font-size:15px}.ahead-item p{margin:0;color:var(--muted);font-size:12px}.health-item.stable{opacity:.82;box-shadow:none;background:#fbfcfc}
 .note{text-align:center;background:linear-gradient(135deg,#fff,#fff4d5)} .note strong{display:block;font-size:20px;margin-bottom:6px}
 .sleep-trend-card{background:linear-gradient(135deg,var(--blue-soft),#fff);overflow:hidden}.sleep-trend-card h3{margin:0;font-size:23px}.sleep-key{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:13px 0}.sleep-key div{padding:12px 13px;border-radius:16px;background:#fff;border:1px solid var(--line)}.sleep-key small{display:block;color:var(--muted);font-size:11px}.sleep-key b{font-size:19px}.sleep-caption{margin:11px 0 0;color:#50606a;font-size:14px}.sleep-phase-labels{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:2px;color:var(--muted);font-size:10px;text-align:center}.sleep-phase-labels b{color:#337fce}
@@ -98,7 +98,7 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
   .health-item{grid-template-columns:40px 1fr}
   .health-item .pill{grid-column:2;justify-self:start}
   .sleep-key{grid-template-columns:1fr}.sleep-phase-labels{font-size:9px}.focus-detail{grid-template-columns:44px 1fr}
-  .food-entry{grid-template-columns:48px 1fr}.food-entry .food-link{grid-column:2;justify-self:start}.food-grid,.looking-ahead{grid-template-columns:1fr}
+  .food-entry{grid-template-columns:48px 1fr}.food-entry .food-link{grid-column:2;justify-self:start}.food-grid,.looking-ahead{grid-template-columns:1fr}.food-scene{grid-template-columns:36% 1fr;min-height:132px}.food-copy{padding:12px}.food-copy h3{font-size:17px}.food-items{font-size:12px}
 }
 @media(min-width:720px){
   .overview-grid{grid-template-columns:1.15fr .85fr}
@@ -139,44 +139,58 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 
     <div class="section card summary-card">
       <h3>本月情况总结</h3>
-      <p><strong>8 月进入了一个挺明显的新阶段。</strong><br>睡眠上，过去频繁夜醒和夜间安抚的问题基本解决了，但现在又进入“自主入睡”的新挑战——已经不愿意抱睡，却常常要在床上翻来滚去很久才睡着。吃饭也越来越像个“大孩子”，开始更多自己动手吃。这个月又经历了新一轮流鼻涕和咳嗽，好在精神状态大体还不错。与此同时，他也越来越可爱了：偶尔会清楚地叫“妈妈”，开始愿意安静下来翻绘本——虽然这项兴趣来得是晚了点，哈哈。</p>
-      <div class="tags"><span class="tag tb">夜间更稳定</span><span class="tag tp">自主入睡过渡</span><span class="tag tg">开始自主进食</span><span class="tag tc">偶尔叫妈妈</span><span class="tag ty">开始喜欢绘本</span></div>
+      <p>8月又长大了一点。夜间睡眠更稳定，开始进入自主入睡的新阶段；吃饭越来越喜欢自己来。这个月又经历了一轮流鼻涕和咳嗽，也开始偶尔叫“妈妈”、喜欢翻绘本了。每天都有一点新的变化，也还是一样可爱。</p>
+      <div class="tags"><span class="tag tp">自主入睡过渡</span><span class="tag tg">自主进食</span><span class="tag tc">偶尔叫妈妈</span><span class="tag ty">爱上绘本</span></div>
     </div>
 
     <div class="section">
       <div class="section-head">
 <h3>基本概况</h3>
-<span>Basic Facts · 当前生活阶段</span>
+<span>Basic Facts · 六个成长维度</span>
 </div>
       <div class="card">
           <div class="mini-grid">
             <div class="metric">
 <div class="topline">
-<span class="ico" style="background:var(--blue-soft)">🎂</span>
-<h4>出生日期</h4>
+<span class="ico" style="background:var(--yellow-soft)">☀️</span>
+<h4>性格</h4>
 </div>
-<p>2025.01.03</p>
-</div>
-            <div class="metric">
-<div class="topline">
-<span class="ico" style="background:var(--green-soft)">🏡</span>
-<h4>当前状态</h4>
-</div>
-<p>已入托</p>
+<p class="fact-lead">开朗好奇，爱笑爱互动</p><p>对周围的人和新鲜事越来越感兴趣</p>
 </div>
             <div class="metric">
 <div class="topline">
-<span class="ico" style="background:var(--blue-soft)">🗓️</span>
-<h4>托班时长</h4>
+<span class="ico" style="background:var(--green-soft)">✚</span>
+<h4>健康</h4>
 </div>
-<p>约 5 个月</p>
+<p class="fact-lead">整体状态不错</p><p>入托后呼吸道感染较频繁，本月第二轮流涕</p>
 </div>
             <div class="metric">
 <div class="topline">
-<span class="ico" style="background:var(--green-soft)">☀️</span>
-<h4>托班午睡</h4>
+<span class="ico" style="background:var(--blue-soft)">☾</span>
+<h4>睡眠</h4>
 </div>
-<p>12:30–15:00</p>
+<p class="fact-lead">夜间睡眠已明显稳定</p><p>正在从抱睡进入自主入睡阶段</p>
+</div>
+            <div class="metric">
+<div class="topline">
+<span class="ico" style="background:var(--coral-soft)">🥣</span>
+<h4>饮食</h4>
+</div>
+<p class="fact-lead">开始更多自主进食</p><p>愿意自己动手，也越来越有自己的选择</p>
+</div>
+            <div class="metric">
+<div class="topline">
+<span class="ico" style="background:var(--purple-soft)">⚽</span>
+<h4>运动</h4>
+</div>
+<p class="fact-lead">大运动发展不错</p><p>喜欢走、跑、玩水，活动意愿很强</p>
+</div>
+            <div class="metric">
+<div class="topline">
+<span class="ico" style="background:var(--green-soft)">💬</span>
+<h4>语言</h4>
+</div>
+<p class="fact-lead">表达正在慢慢增加</p><p>偶尔会叫“妈妈”，开始喜欢一起看绘本</p>
 </div>
           </div>
       </div>
@@ -386,12 +400,12 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
       <span class="eyebrow">给爷爷奶奶的 1Y7M 外出小抄</span>
       <div class="food-principle">不知道买什么：原味 · 软一点 · 少馅料</div>
       <div class="food-grid">
-        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/convenience-store.jpg" alt="便利店可选的香蕉、白煮蛋、原味玉米和纯牛奶"></div></article>
-        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/bakery.jpg" alt="面包店可选的原味吐司、小餐包、纯牛奶和香蕉"></div></article>
-        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/restaurant.jpg" alt="餐馆可选的米饭、蒸蛋和软青菜"></div></article>
-        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/noodles.jpg" alt="面馆可选的清汤面和鸡蛋"></div></article>
+        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/convenience-store.jpg" alt="便利店可选的香蕉、白煮蛋、原味玉米和纯牛奶"></div><div class="food-copy"><h3>便利店</h3><p class="food-items">香蕉 · 白煮蛋 · 玉米 · 纯牛奶</p><span class="food-tip">拿 2–3 样就行</span></div></article>
+        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/bakery.jpg" alt="面包店可选的原味吐司、小餐包、纯牛奶和香蕉"></div><div class="food-copy"><h3>面包店</h3><p class="food-items">原味吐司 · 小餐包 · 牛奶 · 香蕉</p><span class="food-tip">撕小块，少夹心</span></div></article>
+        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/restaurant.jpg" alt="餐馆可选的米饭、蒸蛋和软青菜"></div><div class="food-copy"><h3>餐馆</h3><p class="food-items">米饭 · 蒸蛋 · 软青菜</p><span class="food-tip">宝宝吃，少盐</span></div></article>
+        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/noodles.jpg" alt="面馆可选的清汤面和鸡蛋"></div><div class="food-copy"><h3>面馆</h3><p class="food-items">清汤面 · 鸡蛋</p><span class="food-tip">剪短 · 不辣 · 少喝汤</span></div></article>
       </div>
-      <div class="food-fallback"><b>实在不知道怎么选？</b><strong>饭 + 蛋 + 软蔬菜</strong></div>
+      <div class="food-fallback">实在不知道怎么选？<strong>饭 + 蛋 + 软蔬菜。</strong></div>
     </div>
   </section>
 
