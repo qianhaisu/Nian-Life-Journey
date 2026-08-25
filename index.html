@@ -80,7 +80,8 @@ svg{display:block;width:100%;height:auto}
 .moment-copy{padding:15px} .moment-copy h4{margin:0 0 4px;font-size:18px} .moment-copy p{margin:0;color:var(--muted);font-size:14px}
 .food-entry{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:13px;background:linear-gradient(135deg,var(--green-soft),#fff)}
 .food-entry .icon{width:52px;height:52px;border-radius:17px}.food-entry h3,.food-guide h3{margin:0}.food-entry p{margin:3px 0 0;color:var(--muted);font-size:13px}.food-link{padding:8px 12px;border-radius:99px;background:#fff;border:1px solid var(--line);font-size:12px;font-weight:800;color:#278d50}
-.food-guide{background:linear-gradient(135deg,#fffdf7,#fff)}.food-principle{font-size:22px;font-weight:850;letter-spacing:-.4px;margin:5px 0 0}.food-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}.food-scene{padding:16px;border:1px solid var(--line);border-radius:20px;background:#fff;overflow:hidden}.food-scene h3{margin:0;font-size:19px}.food-visual{display:flex;justify-content:center;align-items:center;gap:9px;min-height:82px;margin:11px 0;padding:12px;border-radius:17px;background:linear-gradient(135deg,var(--yellow-soft),#fff)}.food-visual span{display:grid;place-items:center;min-width:48px;height:48px;padding:0 4px;border-radius:15px;background:#fff;font-size:27px;box-shadow:0 5px 14px rgba(70,82,92,.08)}.food-main{font-weight:850;text-align:center;font-size:15px}.food-help{margin-top:5px;text-align:center;color:var(--muted);font-size:12px}.food-fallback{margin-top:11px;padding:18px;border-radius:18px;background:var(--blue-soft);text-align:center;color:#376a9f}.food-fallback b{display:block;font-size:18px}.food-fallback strong{display:block;margin-top:3px;font-size:23px;color:#285e92}
+.food-guide{background:linear-gradient(135deg,#fffdf7,#fff)}.food-principle{font-size:22px;font-weight:850;letter-spacing:-.4px;margin:5px 0 0}.food-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}.food-scene{border:1px solid var(--line);border-radius:20px;background:#fff;overflow:hidden}.food-photo{position:relative;aspect-ratio:720/478;background:linear-gradient(145deg,#f8f1e4,#eef5f1);overflow:hidden}.food-photo img{width:100%;height:100%;display:block;object-fit:cover}
+.looking-ahead{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.ahead-item{padding:14px 15px;border-radius:18px;border:1px solid var(--line);background:#fff}.ahead-item h4{margin:0 0 3px;font-size:15px}.ahead-item p{margin:0;color:var(--muted);font-size:12px}.health-item.stable{opacity:.82;box-shadow:none;background:#fbfcfc}
 .note{text-align:center;background:linear-gradient(135deg,#fff,#fff4d5)} .note strong{display:block;font-size:20px;margin-bottom:6px}
 .sleep-trend-card{background:linear-gradient(135deg,var(--blue-soft),#fff);overflow:hidden}.sleep-trend-card h3{margin:0;font-size:23px}.sleep-key{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:13px 0}.sleep-key div{padding:12px 13px;border-radius:16px;background:#fff;border:1px solid var(--line)}.sleep-key small{display:block;color:var(--muted);font-size:11px}.sleep-key b{font-size:19px}.sleep-caption{margin:11px 0 0;color:#50606a;font-size:14px}.sleep-phase-labels{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:2px;color:var(--muted);font-size:10px;text-align:center}.sleep-phase-labels b{color:#337fce}
 .nav{position:fixed;left:50%;bottom:max(9px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;width:min(calc(100% - 18px),680px);display:grid;grid-template-columns:repeat(5,1fr);padding:7px;background:rgba(255,255,255,.92);border:1px solid #fff;border-radius:23px;box-shadow:0 15px 45px rgba(55,66,75,.22);backdrop-filter:blur(20px)}
@@ -97,7 +98,7 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
   .health-item{grid-template-columns:40px 1fr}
   .health-item .pill{grid-column:2;justify-self:start}
   .sleep-key{grid-template-columns:1fr}.sleep-phase-labels{font-size:9px}.focus-detail{grid-template-columns:44px 1fr}
-  .food-entry{grid-template-columns:48px 1fr}.food-entry .food-link{grid-column:2;justify-self:start}.food-grid{grid-template-columns:1fr}
+  .food-entry{grid-template-columns:48px 1fr}.food-entry .food-link{grid-column:2;justify-self:start}.food-grid,.looking-ahead{grid-template-columns:1fr}
 }
 @media(min-width:720px){
   .overview-grid{grid-template-columns:1.15fr .85fr}
@@ -136,10 +137,16 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
       </div>
     </div></div>
 
+    <div class="section card summary-card">
+      <h3>本月情况总结</h3>
+      <p><strong>8 月进入了一个挺明显的新阶段。</strong><br>睡眠上，过去频繁夜醒和夜间安抚的问题基本解决了，但现在又进入“自主入睡”的新挑战——已经不愿意抱睡，却常常要在床上翻来滚去很久才睡着。吃饭也越来越像个“大孩子”，开始更多自己动手吃。这个月又经历了新一轮流鼻涕和咳嗽，好在精神状态大体还不错。与此同时，他也越来越可爱了：偶尔会清楚地叫“妈妈”，开始愿意安静下来翻绘本——虽然这项兴趣来得是晚了点，哈哈。</p>
+      <div class="tags"><span class="tag tb">夜间更稳定</span><span class="tag tp">自主入睡过渡</span><span class="tag tg">开始自主进食</span><span class="tag tc">偶尔叫妈妈</span><span class="tag ty">开始喜欢绘本</span></div>
+    </div>
+
     <div class="section">
       <div class="section-head">
 <h3>基本概况</h3>
-<span>Basic Facts · 仅保留基础信息</span>
+<span>Basic Facts · 当前生活阶段</span>
 </div>
       <div class="card">
           <div class="mini-grid">
@@ -152,24 +159,24 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 </div>
             <div class="metric">
 <div class="topline">
-<span class="ico" style="background:var(--green-soft)">🗓️</span>
-<h4>当前年龄</h4>
+<span class="ico" style="background:var(--green-soft)">🏡</span>
+<h4>当前状态</h4>
 </div>
-<p>约 1岁7个月 · 2026.08</p>
-</div>
-            <div class="metric">
-<div class="topline">
-<span class="ico" style="background:var(--blue-soft)">📏</span>
-<h4>当前身高</h4>
-</div>
-<p>86 cm · 2026.08</p>
+<p>已入托</p>
 </div>
             <div class="metric">
 <div class="topline">
-<span class="ico" style="background:var(--green-soft)">⚖️</span>
-<h4>当前体重</h4>
+<span class="ico" style="background:var(--blue-soft)">🗓️</span>
+<h4>托班时长</h4>
 </div>
-<p>12.1 kg · 2026.08</p>
+<p>约 5 个月</p>
+</div>
+            <div class="metric">
+<div class="topline">
+<span class="ico" style="background:var(--green-soft)">☀️</span>
+<h4>托班午睡</h4>
+</div>
+<p>12:30–15:00</p>
 </div>
           </div>
       </div>
@@ -242,7 +249,7 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 <span class="icon" style="background:var(--blue-soft)">🌧️</span>
 <div>
 <h4>呼吸道／感冒发烧</h4>
-<div class="focus-details"><div class="focus-detail"><b>最近</b><span>2026.08.19 起流鼻涕，随后出现浓绿色鼻涕和咳嗽；目前无发热报告，周末晨起较明显，08/23–08/24 夜间睡眠曾受影响。</span></div><div class="focus-detail"><b>历史</b><span>7月有一轮呼吸道感染并已恢复；入托后感染频率增加，2026.04–06 约发烧4次；曾有鼻窦炎历史，1岁以内曾高热急诊。</span></div><div class="focus-detail"><b>当前</b><span>继续观察本轮症状是否逐步改善；本次仅记录症状 episode，不作确定诊断。</span></div></div>
+<div class="focus-details"><div class="focus-detail"><b>最近</b><span>2026.08.19 起再次流鼻涕，后续出现较浓绿色鼻涕和咳嗽；暂无发热报告。周末晨起更明显、下午减轻，08/23–08/24 夜间睡眠受到影响。</span></div><div class="focus-detail"><b>历史</b><span>2026.07 一轮呼吸道感染，已恢复；2026.04–06 入托后感染次数增加；曾有鼻窦炎持续约一个月；1岁以内曾有一次高热急诊史。</span></div><div class="focus-detail"><b>当前</b><span>继续观察本轮症状是否逐步改善。本次只记录症状 episode，不作确定诊断。</span></div></div>
 </div>
 <span class="pill watch">观察中</span>
 </div>
@@ -250,11 +257,11 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 <span class="icon" style="background:var(--yellow-soft)">🦶</span>
 <div>
 <h4>双侧大脚趾甲沟／边缘</h4>
-<div class="focus-details"><div class="focus-detail"><b>状态</b><span>持续半年以上，无明显疼痛、触碰敏感或急性感染表现，与鞋子挤压关系不明显。</span></div><div class="focus-detail"><b>历史</b><span>剪甲一直谨慎，没有刻意剪两侧角；穿凉拖期间仍然存在。</span></div><div class="focus-detail"><b>当前</b><span>继续观察，下次儿童保健时请医生现场评估。</span></div></div>
+<div class="focus-details"><div class="focus-detail"><b>最近</b><span>持续半年以上甚至更久；无明显疼痛，触碰不明显敏感，与鞋子挤压关系不明确，暂无明显急性感染表现。</span></div><div class="focus-detail"><b>历史</b><span>剪甲一直谨慎，没有刻意剪两侧角；穿凉拖期间仍然存在。</span></div><div class="focus-detail"><b>当前</b><span>下次儿童保健时现场评估。</span></div></div>
 </div>
 <span class="pill later">长期观察</span>
 </div>
-      <div class="health-item">
+      <div class="health-item stable">
 <span class="icon" style="background:var(--purple-soft)">🦷</span>
 <div>
 <h4>牙齿／刷牙</h4>
@@ -262,7 +269,7 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 </div>
 <span class="pill watch">习惯建立</span>
 </div>
-      <div class="health-item">
+      <div class="health-item stable">
 <span class="icon" style="background:var(--coral-soft)">🩹</span>
 <div>
 <h4>烫伤疤痕</h4>
@@ -270,25 +277,17 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 </div>
 <span class="pill watch">护理中</span>
 </div>
-      <div class="health-item">
-<span class="icon" style="background:var(--green-soft)">💬</span>
-<div>
-<h4>语言积累</h4>
-<div class="focus-details"><div class="focus-detail"><b>状态</b><span>词汇仍在积累，互动意愿积极。</span></div><div class="focus-detail"><b>当前</b><span>继续在吃饭、洗澡、穿衣和玩耍中重复简短语言输入。</span></div></div>
-</div>
-<span class="pill later">持续观察</span>
-</div>
-      <div class="health-item">
+      <div class="health-item stable">
 <span class="icon" style="background:var(--blue-soft)">📱</span>
 <div><h4>屏幕使用</h4><div class="focus-details"><div class="focus-detail"><b>状态</b><span>近期较喜欢电视和手机。</span></div><div class="focus-detail"><b>当前</b><span>先记录频率与时长，再根据家庭节奏决定是否调整。</span></div></div></div>
 <span class="pill later">记录中</span>
 </div>
-      <div class="health-item">
+      <div class="health-item stable">
 <span class="icon" style="background:var(--yellow-soft)">🧑‍🦲</span>
 <div><h4>头发偏少</h4><div class="focus-details"><div class="focus-detail"><b>状态</b><span>发量相对偏少，发际线略呈 M 形。</span></div><div class="focus-detail"><b>当前</b><span>保留月度对比照片，计划两岁时复盘。</span></div></div></div>
 <span class="pill later">两岁复盘</span>
 </div>
-      <div class="health-item">
+      <div class="health-item stable">
 <span class="icon" style="background:var(--yellow-soft)">👶</span>
 <div><h4>新生儿黄疸</h4><div class="focus-details"><div class="focus-detail"><b>历史</b><span>出生后出现，照蓝光 1 天，复查正常。</span></div><div class="focus-detail"><b>当前</b><span>已稳定，仅作为历史记录保留。</span></div></div></div>
 <span class="pill good">历史 · 已处理</span>
@@ -387,12 +386,22 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
       <span class="eyebrow">给爷爷奶奶的 1Y7M 外出小抄</span>
       <div class="food-principle">不知道买什么：原味 · 软一点 · 少馅料</div>
       <div class="food-grid">
-        <article class="food-scene"><h3>便利店</h3><div class="food-visual" aria-label="香蕉、白煮蛋、玉米、纯牛奶"><span>🍌</span><span>🥚</span><span>🌽</span><span>🥛</span></div><div class="food-main">拿 2–3 样就行</div><div class="food-help">原味 · 不辣 · 少酱</div></article>
-        <article class="food-scene"><h3>面包店</h3><div class="food-visual" aria-label="原味吐司、小餐包、纯牛奶、香蕉"><span>🍞</span><span>🥖</span><span>🥛</span><span>🍌</span></div><div class="food-main">吐司／小餐包 + 牛奶 + 香蕉</div><div class="food-help">撕小块 · 避开夹心／坚果／糖霜</div></article>
-        <article class="food-scene"><h3>餐馆</h3><div class="food-visual" aria-label="米饭、蒸蛋、软青菜"><span>🍚</span><span>🥚</span><span>🥬</span></div><div class="food-main">米饭 + 蒸蛋 + 软青菜</div><div class="food-help">跟服务员说：宝宝吃，少盐</div></article>
-        <article class="food-scene"><h3>面馆</h3><div class="food-visual" aria-label="清汤面和鸡蛋"><span>🍜</span><span>🥚</span></div><div class="food-main">清汤面 + 鸡蛋</div><div class="food-help">✂️ 剪短　·　🚫🌶️ 不辣　·　🥣 少喝汤</div></article>
+        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/convenience-store.jpg" alt="便利店可选的香蕉、白煮蛋、原味玉米和纯牛奶"></div></article>
+        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/bakery.jpg" alt="面包店可选的原味吐司、小餐包、纯牛奶和香蕉"></div></article>
+        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/restaurant.jpg" alt="餐馆可选的米饭、蒸蛋和软青菜"></div></article>
+        <article class="food-scene"><div class="food-photo"><img src="assets/images/food-guide/noodles.jpg" alt="面馆可选的清汤面和鸡蛋"></div></article>
       </div>
       <div class="food-fallback"><b>实在不知道怎么选？</b><strong>饭 + 蛋 + 软蔬菜</strong></div>
+    </div>
+  </section>
+
+  <section class="section" id="looking-ahead">
+    <div class="section-head"><h2>下月重点关注</h2><span>Looking Ahead · September</span></div>
+    <div class="card looking-ahead">
+      <article class="ahead-item"><h4>自主入睡</h4><p>观察入睡耗时是否逐渐缩短。</p></article>
+      <article class="ahead-item"><h4>语言发展</h4><p>继续记录新的主动表达，尤其是“妈妈”等清晰称呼。</p></article>
+      <article class="ahead-item"><h4>绘本兴趣</h4><p>观察是否逐渐形成主动翻书、听读和互动兴趣。</p></article>
+      <article class="ahead-item"><h4>健康与儿保</h4><p>观察本轮呼吸道症状恢复；下次儿保现场看看长期大脚趾甲沟情况。</p></article>
     </div>
   </section>
 
