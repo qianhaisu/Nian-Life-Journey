@@ -49,7 +49,7 @@ a{color:inherit;text-decoration:none}
 .tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
 .tag{padding:6px 9px;border-radius:999px;font-size:12px;font-weight:800}
 .tb{background:var(--blue-soft);color:#337fce} .tg{background:var(--green-soft);color:#278d50} .ty{background:var(--yellow-soft);color:#a36d08} .tc{background:var(--coral-soft);color:#bf5c50} .tp{background:var(--purple-soft);color:#655ec2}
-.overview-grid,.mini-grid,.summary-grid,.summary-grid,.issue-grid,.todo-grid,.moments{display:grid;gap:10px}
+.overview-grid,.mini-grid,.summary-grid,.focus-grid,.moments{display:grid;gap:10px}
 .overview-grid{grid-template-columns:1fr}
 .mini-grid{grid-template-columns:repeat(2,1fr)}
 .summary-grid{grid-template-columns:1fr}
@@ -83,16 +83,10 @@ svg{display:block;width:100%;height:auto}
 .moment-copy{padding:15px} .moment-copy h4{margin:0 0 4px;font-size:18px} .moment-copy p{margin:0;color:var(--muted);font-size:14px}
 .food-entry{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:13px;background:linear-gradient(135deg,var(--green-soft),#fff)}
 .food-entry .icon{width:52px;height:52px;border-radius:17px}.food-entry h3,.food-guide h3{margin:0}.food-entry p{margin:3px 0 0;color:var(--muted);font-size:13px}.food-link{padding:8px 12px;border-radius:99px;background:#fff;border:1px solid var(--line);font-size:12px;font-weight:800;color:#278d50}
-.food-guide{background:linear-gradient(135deg,#fffdf7,#fff)}.food-principle{font-size:25px;font-weight:850;letter-spacing:-.5px;margin:4px 0}.food-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px}.food-step{padding:13px;border:1px solid var(--line);border-radius:17px;background:#fff}.food-step b{display:block}.food-step p{margin:4px 0 0;color:var(--muted);font-size:12px}
-.issue-grid,.todo-grid{grid-template-columns:repeat(2,1fr)}
-.issue-card,.todo-card{padding:14px;border:1px solid var(--line);border-radius:18px;background:#fff;display:grid;gap:8px;align-content:start}
-.issue-card .headrow,.todo-card .headrow{display:flex;align-items:center;gap:10px}
-.issue-card .mark,.todo-card .mark{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-size:22px}
-.issue-card h4,.todo-card h4{margin:0;font-size:15px;line-height:1.35}
-.issue-card p,.todo-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
-.issue-card .flag{display:inline-flex;align-self:start;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800}
+.food-guide{background:linear-gradient(135deg,#fffdf7,#fff)}.food-principle{font-size:20px;font-weight:850;letter-spacing:-.3px;margin:5px 0 0}.food-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}.food-scene{padding:15px;border:1px solid var(--line);border-radius:19px;background:#fff}.food-scene h3{display:flex;align-items:center;gap:8px;font-size:18px}.food-scene h3 span{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--green-soft)}.food-scene h4{margin:12px 0 4px;font-size:12px;color:#278d50;text-transform:uppercase;letter-spacing:.4px}.food-scene ul{margin:0;padding-left:19px;color:#53636d;font-size:13px}.food-combo{margin-top:10px;padding:10px 11px;border-radius:13px;background:var(--yellow-soft);font-size:12px;color:#765717}.food-avoid{margin-top:8px;font-size:12px;color:#9a635d}.food-fallback{margin-top:11px;padding:15px;border-radius:18px;background:var(--blue-soft);font-weight:750;color:#376a9f}
+.focus-grid{grid-template-columns:repeat(2,1fr)}.focus-card{padding:15px;border:1px solid var(--line);border-radius:18px;background:#fff}.focus-head{display:flex;align-items:center;gap:10px;margin-bottom:9px}.focus-head .mark{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-size:22px}.focus-card h4{margin:0;font-size:16px}.focus-line{display:grid;grid-template-columns:48px 1fr;gap:6px;padding-top:7px;border-top:1px solid #f0f2f3;font-size:12px}.focus-line+.focus-line{margin-top:7px}.focus-line b{color:#50606a}.focus-line span{color:var(--muted)}
 .note{text-align:center;background:linear-gradient(135deg,#fff,#fff4d5)} .note strong{display:block;font-size:20px;margin-bottom:6px}
-.sleep-journey{display:grid;gap:12px}.sleep-hero{background:linear-gradient(135deg,var(--blue-soft),#fff);overflow:hidden;position:relative}.sleep-hero:after{content:"☾";position:absolute;right:20px;top:15px;font-size:58px;color:#b9d8f7;line-height:1}.sleep-hero h3{font-size:27px;line-height:1;margin:4px 0 5px;letter-spacing:-1px}.sleep-hero p{margin:0;color:var(--muted)}.sleep-ai{position:relative;margin-top:18px;max-width:290px;padding:11px 13px;border-radius:16px;background:#ffffffb8;color:#53636d;font-size:14px}.sleep-status{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:15px}.sleep-stat{padding:0 9px;border-left:1px solid var(--line)}.sleep-stat:first-child{padding-left:0;border-left:0}.sleep-stat b{display:block;margin-top:6px;font-size:23px;line-height:1;letter-spacing:-.7px}.sleep-stat small{font-size:10px;color:var(--muted);display:block}.sleep-note{margin-top:15px;padding:12px 13px;border-radius:16px;background:#f7fafc;color:#50606a;font-size:13px}.sleep-month{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}.sleep-month b{font-size:17px}.sleep-month span{font-size:12px;color:var(--muted)}.sleep-week,.sleep-calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;text-align:center}.sleep-week{font-size:11px;color:var(--muted);margin-bottom:6px}.sleep-calendar-grid button{border:0;width:36px;height:36px;margin:auto;border-radius:50%;font:800 12px inherit;cursor:pointer;transition:transform .2s}.sleep-calendar-grid button:hover{transform:scale(1.08)}.sleep-calendar-grid .stable{background:var(--green-soft);color:#278d50}.sleep-calendar-grid .unstable{background:var(--blue-soft);color:#337fce}.sleep-calendar-grid .missing{background:transparent;color:#c2c9cd}.sleep-calendar-grid .selected{outline:2px solid var(--blue);outline-offset:2px}.sleep-legend{display:flex;gap:13px;flex-wrap:wrap;margin-top:15px;padding-top:12px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}.sleep-legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.sleep-detail{margin-top:11px;padding:15px;border-radius:18px;background:#f7fafc}.sleep-detail-top{display:flex;justify-content:space-between;align-items:center}.sleep-detail-top b{font-size:16px}.sleep-pill{padding:5px 8px;border-radius:99px;font-size:11px;font-weight:800}.sleep-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.sleep-detail-grid small{display:block;color:var(--muted);font-size:11px}.sleep-detail-grid b{font-size:13px;font-weight:700}.sleep-detail-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.sleep-trend{padding:15px 0;border-top:1px solid var(--line)}.sleep-trend:first-of-type{border-top:0;padding-top:0}.sleep-trend-head{display:flex;align-items:end;justify-content:space-between;gap:8px}.sleep-trend-head small{color:var(--muted);display:block;font-size:11px}.sleep-trend-head b{font-size:18px}.sleep-trend svg{margin-top:7px}.trend-end{font-size:11px;font-weight:800;fill:#50606a}.sleep-timeline{display:grid;gap:0}.sleep-timeline-item{position:relative;display:grid;grid-template-columns:32px 1fr;gap:11px;padding:0 0 18px}.sleep-timeline-item:not(:last-child):before{content:"";position:absolute;left:15px;top:32px;bottom:0;width:1px;background:#dce8ee}.sleep-timeline-dot{position:relative;z-index:1;width:32px;height:32px;border-radius:50%;background:var(--blue-soft);display:grid;place-items:center}.sleep-timeline-item small{color:var(--muted);font-size:11px;font-weight:800}.sleep-timeline-item h4{margin:2px 0;font-size:15px}.sleep-timeline-item p{margin:0;color:var(--muted);font-size:13px}.sleep-insight{background:linear-gradient(135deg,#f6fbff,#fff)}.sleep-insight ol{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:8px}.sleep-insight li{display:grid;grid-template-columns:20px 1fr;gap:8px;font-size:13px;color:#50606a}.sleep-insight li b{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#337fce;font-size:11px}.sleep-next{margin-top:15px;padding-top:13px;border-top:1px solid #dfeaf1;font-size:14px;font-weight:700}
+.sleep-journey{display:grid;gap:12px}.sleep-hero{background:linear-gradient(135deg,var(--blue-soft),#fff);overflow:hidden;position:relative}.sleep-hero:after{content:"☾";position:absolute;right:20px;top:15px;font-size:58px;color:#b9d8f7;line-height:1}.sleep-hero h3{font-size:27px;line-height:1;margin:4px 0 5px;letter-spacing:-1px}.sleep-hero p{margin:0;color:var(--muted)}.sleep-ai{position:relative;margin-top:18px;max-width:310px;padding:11px 13px;border-radius:16px;background:#ffffffb8;color:#53636d;font-size:14px}.sleep-status{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:15px}.sleep-stat{padding:0 9px;border-left:1px solid var(--line)}.sleep-stat:first-child{padding-left:0;border-left:0}.sleep-stat b{display:block;margin-top:6px;font-size:21px;line-height:1.15;letter-spacing:-.5px}.sleep-stat small{font-size:10px;color:var(--muted);display:block}.sleep-note{margin-top:15px;padding:12px 13px;border-radius:16px;background:#f7fafc;color:#50606a;font-size:13px}.sleep-shift{display:grid;grid-template-columns:1fr 44px 1fr;align-items:stretch;gap:10px}.sleep-stage{padding:16px;border:1px solid var(--line);border-radius:18px;background:#fff}.sleep-stage.current{background:var(--blue-soft);border-color:#d9eaff}.sleep-stage small{font-weight:800;color:var(--muted)}.sleep-stage h4{margin:3px 0 5px}.sleep-stage p{margin:0;color:var(--muted);font-size:13px}.sleep-arrow{display:grid;place-items:center;color:var(--blue);font-size:24px;font-weight:800}
 .nav{position:fixed;left:50%;bottom:max(9px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;width:min(calc(100% - 18px),680px);display:grid;grid-template-columns:repeat(5,1fr);padding:7px;background:rgba(255,255,255,.92);border:1px solid #fff;border-radius:23px;box-shadow:0 15px 45px rgba(55,66,75,.22);backdrop-filter:blur(20px)}
 .nav button{border:0;background:transparent;padding:7px 2px;border-radius:16px;color:#65727b;font-size:11px;font-weight:750}
 .nav button b{display:block;font-size:20px;line-height:1.15}
@@ -106,7 +100,7 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
   .hero-panel h2{font-size:32px}
   .health-item{grid-template-columns:40px 1fr}
   .health-item .pill{grid-column:2;justify-self:start}
-  .issue-grid,.todo-grid{grid-template-columns:1fr}
+  .focus-grid{grid-template-columns:1fr}.sleep-status{grid-template-columns:1fr;gap:10px}.sleep-stat{padding:0;border-left:0}.sleep-shift{grid-template-columns:1fr}.sleep-arrow{transform:rotate(90deg)}
   .episode-row{grid-template-columns:1fr;gap:1px}.food-entry{grid-template-columns:48px 1fr}.food-entry .food-link{grid-column:2;justify-self:start}.food-grid{grid-template-columns:1fr}
 }
 @media(min-width:720px){
@@ -139,8 +133,8 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
         <h2>张小年</h2>
         <p>约1岁7个月｜夜间睡眠更稳定，正在练习自己的入睡节奏，依然好奇、爱互动</p>
         <div class="stats">
-          <div class="stat"><b>85.0 cm</b><small>身高 · 2026-05-04</small></div>
-          <div class="stat"><b>11.2 kg</b><small>体重 · 2026-05-04</small></div>
+          <div class="stat"><b>86 cm</b><small>身高 · 2026-08</small></div>
+          <div class="stat"><b>12.1 kg</b><small>体重 · 2026-08</small></div>
           <div class="stat"><b>约1岁7个月</b><small>当前年龄 · 2026-08</small></div>
         </div>
       </div>
@@ -249,35 +243,40 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
         <g stroke="#edf0f2" stroke-width="1">
 <path d="M45 28H370M45 76H370M45 124H370M45 172H370"/>
 </g>
-        <g fill="#87939b" font-size="10">
-<text x="43" y="205">2025-11-08</text>
-<text x="128" y="205">2026-02-04</text>
-<text x="214" y="205">2026-03-23</text>
-<text x="300" y="205">2026-05-04</text>
+        <g fill="#87939b" font-size="9">
+<text x="34" y="205">2025.11</text>
+<text x="108" y="205">2026.02</text>
+<text x="182" y="205">2026.03</text>
+<text x="252" y="205">2026.05</text>
+<text x="326" y="205">2026.08</text>
 </g>
-        <path d="M62 168 L250 96 L348 72" fill="none" stroke="#4f97ee" stroke-width="5" stroke-linecap="round"/>
+        <path d="M55 168 L205 96 L275 72 L350 62" fill="none" stroke="#4f97ee" stroke-width="5" stroke-linecap="round"/>
         <g fill="#4f97ee">
-<circle cx="62" cy="168" r="6"/>
-<circle cx="250" cy="96" r="6"/>
-<circle cx="348" cy="72" r="6"/>
+<circle cx="55" cy="168" r="6"/>
+<circle cx="205" cy="96" r="6"/>
+<circle cx="275" cy="72" r="6"/>
+<circle cx="350" cy="62" r="6"/>
 </g>
         <g fill="#337fce" font-size="11" font-weight="700">
-<text x="46" y="157">73.2</text>
-<text x="234" y="85">82.0</text>
-<text x="332" y="61">85.0</text>
+<text x="39" y="157">73.2</text>
+<text x="189" y="85">82.0</text>
+<text x="259" y="61">85.0</text>
+<text x="334" y="51">86.0</text>
 </g>
-        <path d="M62 215 L155 132 L250 129 L348 150" fill="none" stroke="#56b878" stroke-width="5" stroke-linecap="round"/>
+        <path d="M55 215 L130 132 L205 129 L275 150 L350 96" fill="none" stroke="#56b878" stroke-width="5" stroke-linecap="round"/>
         <g fill="#56b878">
-<circle cx="62" cy="215" r="6"/>
-<circle cx="155" cy="132" r="6"/>
-<circle cx="250" cy="129" r="6"/>
-<circle cx="348" cy="150" r="6"/>
+<circle cx="55" cy="215" r="6"/>
+<circle cx="130" cy="132" r="6"/>
+<circle cx="205" cy="129" r="6"/>
+<circle cx="275" cy="150" r="6"/>
+<circle cx="350" cy="96" r="6"/>
 </g>
         <g fill="#348c55" font-size="11" font-weight="700">
-<text x="46" y="203">10.2</text>
-<text x="136" y="121">11.45</text>
-<text x="231" y="118">11.48</text>
-<text x="331" y="139">11.2</text>
+<text x="39" y="203">10.2</text>
+<text x="111" y="121">11.45</text>
+<text x="186" y="118">11.48</text>
+<text x="258" y="139">11.2</text>
+<text x="332" y="85">12.1</text>
 </g>
       </svg>
       <div class="tags">
@@ -285,12 +284,12 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 <span class="tag tg">绿：体重 kg</span>
 </div>
       <div class="chart-note">
-<strong>点评：</strong>从 2025年11月到 2026年5月，张小年的身高增长明显，体重整体稳定在 10.2–11.5 kg 区间。整体看，生长趋势平稳，暂无明显异常波动。</div>
+<strong>8月更新：</strong>2026年8月身高 86 cm、体重 12.1 kg；历史测量数据全部保留，继续按同一条成长曲线观察。</div>
     </div>
 
     <a class="section card food-entry" href="#food-guide" aria-label="打开外出食物指南">
       <span class="icon" style="background:var(--green-soft)">🥣</span>
-      <div><h3>Outside Food Guide</h3><p>外出临时买什么？先有后优，快速做出适合小年的选择。</p></div>
+      <div><h3>Outside Food Guide</h3><p>给爷爷奶奶的外出小抄：便利店、面包店、餐厅、面馆直接照着选。</p></div>
       <span class="food-link">查看指南 →</span>
     </a>
   </section>
@@ -302,51 +301,18 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 </div>
     <div class="card health-list">
       <div class="health-item">
-<span class="icon" style="background:var(--yellow-soft)">👶</span>
-<div>
-<h4>新生儿黄疸</h4>
-<p>出生后出现，照蓝光1天，复查正常。</p>
-</div>
-<span class="pill good">已处理</span>
-</div>
-      <div class="health-item">
-<span class="icon" style="background:var(--coral-soft)">🌡️</span>
-<div>
-<h4>发烧与感染史</h4>
-<p>1岁以内高热急诊过一次；入托后感染次数增加，2026年4–6月约发烧4次。</p>
-</div>
-<span class="pill watch">持续记录</span>
-</div>
-      <div class="health-item">
-<span class="icon" style="background:var(--blue-soft)">👃</span>
-<div>
-<h4>鼻窦炎与鼻部症状</h4>
-<p>鼻窦炎曾持续约1个月；近期鼻涕已变淡，但仍需观察反复情况。</p>
-</div>
-<span class="pill watch">观察中</span>
-</div>
-      <div class="health-item">
-<span class="icon" style="background:var(--green-soft)">🫁</span>
-<div>
-<h4>2026年7月呼吸道感染</h4>
-<p>未反复发热，精神、饮食和睡眠已恢复。</p>
-</div>
-<span class="pill good">已恢复</span>
-</div>
-      <div class="health-item">
 <span class="icon" style="background:var(--blue-soft)">🌧️</span>
 <div>
-<h4>2026年8月呼吸道症状 episode</h4>
-<p>08/19 起出现新一轮流鼻涕与咳嗽症状；未报告发热，整体精神状态尚可。按症状经过持续记录，不作确定诊断。</p>
+<h4>呼吸道感染／感冒发烧记录</h4>
+<p>同一类健康问题按 episode 与历史合并记录；8月仅记录症状经过，不作“鼻窦炎”等确定诊断。</p>
 <div class="episode-timeline">
-  <div class="episode-row"><time>08/19</time><p>开始出现新的流鼻涕。</p></div>
-  <div class="episode-row"><time>08/21</time><p>鼻涕发展为较浓的绿色鼻涕；未报告发热。</p></div>
-  <div class="episode-row"><time>08/22</time><p>绿色鼻涕较明显并开始咳嗽；精神状态尚可，仍未报告发热。</p></div>
-  <div class="episode-row"><time>08/22–08/23</time><p>浓绿鼻涕晨起最明显，下午有所减轻。</p></div>
-  <div class="episode-row"><time>08/23–08/24 夜间</time><p>睡眠受到影响，多次醒来。</p></div>
+  <div class="episode-row"><time>2026.08.19 起</time><p>流鼻涕逐渐发展为浓绿色鼻涕并出现咳嗽；无发热报告，精神状态尚可。周末晨起最明显、下午减轻；08/23–08/24 夜间睡眠受到影响。</p></div>
+  <div class="episode-row"><time>2026.07</time><p>曾有一轮呼吸道感染，现已恢复。</p></div>
+  <div class="episode-row"><time>2026.04–06</time><p>入托后感染次数增加，约发烧 4 次；期间曾有鼻窦炎持续约 1 个月。</p></div>
+  <div class="episode-row"><time>1 岁以内</time><p>曾有一次高热急诊史。</p></div>
 </div>
 </div>
-<span class="pill watch">记录中</span>
+<span class="pill watch">近期在前</span>
 </div>
       <div class="health-item">
 <span class="icon" style="background:var(--yellow-soft)">🦶</span>
@@ -380,6 +346,11 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
 </div>
 <span class="pill later">待复盘</span>
 </div>
+      <div class="health-item">
+<span class="icon" style="background:var(--yellow-soft)">👶</span>
+<div><h4>新生儿黄疸</h4><p>出生后出现，照蓝光 1 天，复查正常。</p></div>
+<span class="pill good">历史 · 已处理</span>
+</div>
     </div>
   </section>
 
@@ -403,41 +374,12 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
       </article>
 
       <article class="card">
-        <div class="section-head" style="margin-top:0"><h3 style="font-size:18px">睡眠日历</h3><span>点按日期查看记录</span></div>
-        <div class="sleep-month"><b>2026 年 7 月</b><span>已记录 20 天</span></div>
-        <div class="sleep-week"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
-        <div class="sleep-calendar-grid" id="sleep-calendar" aria-label="2026年7月睡眠日历"></div>
-        <div class="sleep-legend"><span><i style="background:var(--green)"></i>整觉</span><span><i style="background:var(--blue)"></i>没整觉</span><span><i style="background:#d7dde1"></i>未记录</span></div>
-        <div class="sleep-detail" id="sleep-detail"></div>
-      </article>
-
-      <article class="card">
-        <div class="section-head" style="margin-top:0"><h3 style="font-size:18px">睡眠趋势</h3><span>从夜间稳定到自主入睡</span></div>
-        <div class="sleep-trend">
-          <div class="sleep-trend-head"><div><small>Night Stability</small><b>夜间稳定度　6 → 8.5</b></div></div>
-          <svg viewBox="0 0 390 92" role="img" aria-label="夜间稳定度上升趋势"><path d="M8 78H382" stroke="#edf0f2" stroke-dasharray="4 5"/><path d="M8 73 C57 75,75 61,117 63 S183 46,225 48 S314 22,374 27" fill="none" stroke="#4f97ee" stroke-width="6" stroke-linecap="round"/><circle cx="374" cy="27" r="6" fill="#4f97ee"/><text x="220" y="18" class="trend-end">整觉正在慢慢成为常态</text></svg>
+        <div class="section-head" style="margin-top:0"><h3 style="font-size:18px">阶段变化</h3><span>问题没有结束，只是重点改变</span></div>
+        <div class="sleep-shift">
+          <div class="sleep-stage"><small>上一阶段 · 基本解决</small><h4>夜醒／夜间安抚</h4><p>过去频繁夜醒、需要夜间安抚的问题已经基本解决，夜间睡眠整体明显稳定。</p></div>
+          <div class="sleep-arrow">→</div>
+          <div class="sleep-stage current"><small>当前阶段 · 继续跟进</small><h4>自主入睡／入睡耗时</h4><p>不再接受抱睡，但自主入睡尚未稳定；上床后反复翻滚，通常需要约 1–2 小时真正入睡。</p></div>
         </div>
-        <div class="sleep-trend">
-          <div class="sleep-trend-head"><div><small>Bedtime Resistance</small><b>入睡难度　7 → 4</b></div></div>
-          <svg viewBox="0 0 390 92" role="img" aria-label="入睡难度下降趋势"><path d="M8 78H382" stroke="#edf0f2" stroke-dasharray="4 5"/><path d="M8 25 C57 22,75 37,117 36 S183 51,225 52 S314 70,374 73" fill="none" stroke="#eea46e" stroke-width="6" stroke-linecap="round"/><circle cx="374" cy="73" r="6" fill="#eea46e"/><text x="230" y="64" class="trend-end">入睡仍需要更多耐心</text></svg>
-        </div>
-        <div class="chart-note">上一阶段的夜醒与夜间安抚已经明显改善。8月起，记录重点正式切换为：自主入睡建立、入睡耗时与睡前状态。</div>
-      </article>
-
-      <article class="card">
-        <div class="section-head" style="margin-top:0"><h3 style="font-size:18px">重要睡眠瞬间</h3><span>家庭记忆，而非数据</span></div>
-        <div class="sleep-timeline">
-          <div class="sleep-timeline-item"><span class="sleep-timeline-dot">🌙</span><div><small>2026.07.12</small><h4>连续多晚稳定睡眠</h4><p>“小年开始逐渐建立自己的睡眠节奏。”</p></div></div>
-          <div class="sleep-timeline-item"><span class="sleep-timeline-dot">🌙</span><div><small>2026.07.13</small><h4>小爱同学成为新的安抚伙伴</h4><p>“夜里和睡前烦躁时，通过熟悉的声音互动慢慢平静下来。”</p></div></div>
-          <div class="sleep-timeline-item"><span class="sleep-timeline-dot">🌙</span><div><small>2026.07.18</small><h4>迎来一晚高质量整觉</h4><p>“从醒后好接，到整夜稳定；这份安全感正在慢慢长大。”</p></div></div>
-          <div class="sleep-timeline-item"><span class="sleep-timeline-dot">🌱</span><div><small>2026.08</small><h4>进入自主入睡过渡期</h4><p>不再接受抱睡，但上床后会长时间翻来滚去，通常需要约 1–2 小时入睡。夜间稳定仍在，新阶段关注的是如何自己进入睡眠。</p></div></div>
-        </div>
-      </article>
-
-      <article class="card sleep-insight">
-        <div class="section-head" style="margin-top:0"><h3 style="font-size:18px">爸爸妈妈观察</h3><span>AI Sleep Insight</span></div>
-        <ol><li><b>1</b><span>频繁夜醒与高成本夜间安抚已基本解决。</span></li><li><b>2</b><span>不接受抱睡是阶段变化，自主入睡能力仍在建立。</span></li><li><b>3</b><span>接下来记录入睡耗时、翻滚时长与睡前情绪，不把这一阶段理解为睡眠退步。</span></li></ol>
-        <div class="sleep-next"><span class="eyebrow">当前阶段 · 继续跟进</span><br>保持稳定睡前环境与陪伴，观察自主入睡如何逐步形成。</div>
       </article>
     </div>
   </section>
@@ -510,122 +452,31 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
   <section class="section" id="food-guide">
     <div class="section-head"><h2>Outside Food Guide</h2><span>外出食物指南 · V1 基础版</span></div>
     <div class="card food-guide">
-      <span class="eyebrow">本版本原则</span>
-      <div class="food-principle">先有后优</div>
-      <p style="margin:0;color:var(--muted)">外出时先解决“有合适食物可吃”，再在现有选择里做更优判断。这个入口先服务快速决策，后续再单独迭代完整指南。</p>
+      <span class="eyebrow">给爷爷奶奶的 1Y7M 外出小抄</span>
+      <div class="food-principle">不知道买什么，就找：原味、软一点、少馅料；再搭一样牛奶、水果或鸡蛋。</div>
       <div class="food-grid">
-        <div class="food-step"><b>① 先看安全形态</b><p>质地软、尺寸合适、方便切小或压碎，避开明显噎食风险。</p></div>
-        <div class="food-step"><b>② 再看配料与口味</b><p>在买得到的范围里，优先少盐、少添加、做法简单的选择。</p></div>
-        <div class="food-step"><b>③ 最后补营养</b><p>按当下缺口搭配主食、蛋白质、水果或奶，不追求一餐完美。</p></div>
+        <article class="food-scene"><h3><span>🏪</span>便利店</h3><h4>可以选</h4><ul><li>香蕉，掰小块</li><li>白煮蛋优先；茶叶蛋吃里面、少带卤汁</li><li>原味软玉米，掰小段</li><li>纯牛奶</li><li>原味、不辣、酱汁少的饭团</li></ul><div class="food-combo"><b>简单搭配</b><br>香蕉 + 白煮蛋 + 原味玉米<br>或 饭团 + 纯牛奶 + 水果</div><div class="food-avoid"><b>避免：</b>高糖调味奶、很辣、很多酱汁、很硬或颗粒明显的食物。</div></article>
+        <article class="food-scene"><h3><span>🍞</span>面包店</h3><h4>可以选</h4><ul><li>原味吐司</li><li>原味小餐包</li></ul><h4>拿到后</h4><ul><li>硬边去掉</li><li>撕成小块</li></ul><div class="food-combo"><b>简单搭配</b><br>面包 + 纯牛奶 + 香蕉</div><div class="food-avoid"><b>避免：</b>很甜的夹心、大量糖霜、明显坚果颗粒。</div></article>
+        <article class="food-scene"><h3><span>🍚</span>普通餐厅</h3><h4>优先找</h4><ul><li>米饭</li><li>蒸蛋</li><li>软一点的青菜</li></ul><h4>拿到后</h4><ul><li>直接说“宝宝吃，少盐”</li><li>蒸蛋放凉</li><li>青菜剪小一点、少带汁</li></ul><div class="food-combo"><b>直接照着点</b><br>米饭 + 蒸蛋 + 软青菜</div></article>
+        <article class="food-scene"><h3><span>🍜</span>面馆</h3><h4>优先找</h4><ul><li>清汤面</li><li>鸡蛋</li></ul><h4>拿到后</h4><ul><li>面剪短</li><li>不要辣</li><li>酱汁能分开最好</li><li>汤少喝</li></ul><div class="food-combo"><b>直接照着点</b><br>清汤面 + 鸡蛋</div></article>
       </div>
+      <div class="food-fallback">不知道怎么办时：看到套餐不用纠结，拆出来找——白米饭 + 蛋 + 没裹很多酱的软蔬菜。</div>
     </div>
   </section>
 
   <section class="section" id="summary">
     <div class="section-head">
-<h2>问题小结</h2>
-<span>图标为主 · 文字为辅</span>
+<h2>当前关注</h2>
+<span>Current Focus · 状态与下一步</span>
 </div>
     <div class="card">
-      <div class="section-head" style="margin-top:0">
-<h3 style="font-size:18px">近期问题</h3>
-<span>需要持续关注</span>
-</div>
-      <div class="issue-grid">
-        <div class="issue-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--coral-soft)">👃</span>
-<h4>8月呼吸道 episode</h4>
-</div>
-          <span class="flag ty">观察中</span>
-          <p>记录鼻涕、咳嗽与睡眠影响；目前未报告发热，保持家庭观察语气。</p>
-        </div>
-        <div class="issue-card">
-          <div class="headrow"><span class="mark" style="background:var(--yellow-soft)">🦶</span><h4>双侧大脚趾甲边缘</h4></div>
-          <span class="flag tb">长期观察</span>
-          <p>目前无明显疼痛、敏感或急性感染表现，下次儿童保健时请医生现场评估。</p>
-        </div>
-        <div class="issue-card">
-          <div class="headrow"><span class="mark" style="background:var(--blue-soft)">🌙</span><h4>自主入睡过渡／入睡耗时较长</h4></div>
-          <span class="flag tb">新阶段</span>
-          <p>夜醒问题基本解决；当前关注自主入睡建立、1–2小时入睡耗时与睡前状态。</p>
-        </div>
-        <div class="issue-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--purple-soft)">🦷</span>
-<h4>刷牙配合一般</h4>
-</div>
-          <span class="flag ty">习惯建立中</span>
-          <p>目前有效清洁可能不足，需要固定流程。</p>
-        </div>
-        <div class="issue-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--blue-soft)">💬</span>
-<h4>语言仍在积累</h4>
-</div>
-          <span class="flag tb">继续观察</span>
-          <p>词汇较少，继续看主动表达和理解能力。</p>
-        </div>
-        <div class="issue-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--yellow-soft)">🧑‍🦲</span>
-<h4>头发偏少</h4>
-</div>
-          <span class="flag tb">两岁复盘</span>
-          <p>目前无明显疾病信号，按月保留对比照片。</p>
-        </div>
-        <div class="issue-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--blue-soft)">📱</span>
-<h4>屏幕使用</h4>
-</div>
-          <span class="flag ty">开始记录</span>
-          <p>近期很喜欢电视和手机，需要记录频率与时长。</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="section card">
-      <div class="section-head" style="margin-top:0">
-<h3 style="font-size:18px">待办事项</h3>
-<span>下阶段行动</span>
-</div>
-      <div class="todo-grid">
-        <div class="todo-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--green-soft)">🌙</span>
-<h4>记录自主入睡过渡</h4>
-</div>
-          <p>保持固定睡前流程，记录入睡耗时和睡前状态，不以“夜醒”作为主要指标。</p>
-        </div>
-        <div class="todo-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--green-soft)">🪥</span>
-<h4>每天一次有效刷牙</h4>
-</div>
-          <p>先保证真正刷到牙面，再逐步提高配合。</p>
-        </div>
-        <div class="todo-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--green-soft)">🗣️</span>
-<h4>继续语言输入</h4>
-</div>
-          <p>在吃饭、洗澡、穿衣和玩耍中反复说短句。</p>
-        </div>
-        <div class="todo-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--green-soft)">📷</span>
-<h4>记录头发月度对比</h4>
-</div>
-          <p>固定正面、头顶和侧面角度拍照。</p>
-        </div>
-        <div class="todo-card">
-          <div class="headrow">
-<span class="mark" style="background:var(--green-soft)">⏱️</span>
-<h4>关注屏幕时长</h4>
-</div>
-          <p>先建立记录，再决定是否需要调整。</p>
-        </div>
+      <div class="focus-grid">
+        <article class="focus-card"><div class="focus-head"><span class="mark" style="background:var(--blue-soft)">🌙</span><h4>自主入睡过渡</h4></div><div class="focus-line"><b>当前</b><span>夜间稳定，但入睡耗时约 1–2 小时，上床后会反复翻滚。</span></div><div class="focus-line"><b>下一步</b><span>继续观察入睡时长和自主入睡能力变化。</span></div></article>
+        <article class="focus-card"><div class="focus-head"><span class="mark" style="background:var(--coral-soft)">👃</span><h4>8 月呼吸道症状</h4></div><div class="focus-line"><b>当前</b><span>流涕 + 咳嗽，无发热报告，夜间睡眠曾受影响。</span></div><div class="focus-line"><b>下一步</b><span>继续观察症状是否逐步改善。</span></div></article>
+        <article class="focus-card"><div class="focus-head"><span class="mark" style="background:var(--yellow-soft)">🦶</span><h4>大脚趾甲沟／边缘</h4></div><div class="focus-line"><b>当前</b><span>双侧长期存在，无明显疼痛或急性感染表现。</span></div><div class="focus-line"><b>下一步</b><span>下次儿童保健时让医生现场评估。</span></div></article>
+        <article class="focus-card"><div class="focus-head"><span class="mark" style="background:var(--purple-soft)">🪥</span><h4>刷牙习惯</h4></div><div class="focus-line"><b>当前</b><span>配合度一般，有效清洁仍需巩固。</span></div><div class="focus-line"><b>下一步</b><span>保持固定流程，先保证每天一次刷到牙面。</span></div></article>
+        <article class="focus-card"><div class="focus-head"><span class="mark" style="background:var(--green-soft)">💬</span><h4>语言积累</h4></div><div class="focus-line"><b>当前</b><span>词汇仍在积累，互动意愿积极。</span></div><div class="focus-line"><b>下一步</b><span>继续在日常场景里重复简短语言输入。</span></div></article>
+        <article class="focus-card"><div class="focus-head"><span class="mark" style="background:var(--yellow-soft)">🧑‍🦲</span><h4>头发与屏幕习惯</h4></div><div class="focus-line"><b>当前</b><span>头发偏少；近期也较喜欢电视和手机。</span></div><div class="focus-line"><b>下一步</b><span>保留月度照片、两岁复盘；先记录屏幕频率与时长。</span></div></article>
       </div>
     </div>
     <div class="section card note">
@@ -645,45 +496,10 @@ footer{text-align:center;color:#8b969d;font-size:12px;margin-top:18px}
   <button data-target="moments">
 <b>♡</b>闪光</button>
   <button data-target="summary">
-<b>▤</b>小结</button>
+<b>▤</b>关注</button>
 </nav>
 
 <script>
-const sleepRecords=[
-{date:'2026-07-08',state:'没整觉',bedtime:'未记录',wakes:'2 次',care:'爸爸 → 妈妈',method:'夜里明显干预',tags:['排便哭闹'],note:'入睡难，夜里排便哭闹。'},
-{date:'2026-07-09',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'爸爸',method:'入睡陪伴',tags:['睡到早上'],note:'入睡难，但睡到早上。'},
-{date:'2026-07-10',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'爸爸',method:'可控入睡',tags:['后半夜稳定'],note:'后半夜稳定。'},
-{date:'2026-07-11',state:'没整觉',bedtime:'未记录',wakes:'2 次',care:'妈妈',method:'醒后安抚',tags:['醒后好接'],note:'醒 2 次，醒后好接。'},
-{date:'2026-07-12',state:'没整觉',bedtime:'未记录',wakes:'01:30 醒',care:'妈妈',method:'妈妈陪伴重新入睡',tags:['醒一次好接'],note:'醒一次后，很快重新入睡。'},
-{date:'2026-07-13',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'妈妈',method:'小爱同学辅助',tags:['小爱辅助成功'],note:'入睡顺利，无夜醒。'},
-{date:'2026-07-14',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'妈妈',method:'抱睡',tags:['抱睡也稳定'],note:'入睡顺利，无夜醒。'},
-{date:'2026-07-15',state:'没整觉',bedtime:'未记录',wakes:'1 次',care:'妈妈',method:'低成本安抚',tags:['低成本夜醒'],note:'醒 1 次，低成本安抚后重新入睡。'},
-{date:'2026-07-16',state:'没整觉',bedtime:'未记录',wakes:'1 次',care:'爸爸',method:'爸爸安抚',tags:['爸爸也好接'],note:'醒 1 次，爸爸也好接。'},
-{date:'2026-07-17',state:'没整觉',bedtime:'未记录',wakes:'1 次',care:'爸爸',method:'爸爸安抚',tags:['重复好接'],note:'醒 1 次，重复好接。'},
-{date:'2026-07-18',state:'整觉',bedtime:'未记录',wakes:'无夜醒',care:'妈妈',method:'顺利入睡',tags:['高质量整觉'],note:'入睡顺利，无夜醒。'},
-{date:'2026-07-19',state:'没整觉',bedtime:'未记录',wakes:'1 次',care:'妈妈',method:'身体不适时陪伴',tags:['拉稀夜醒','身体扰动'],note:'拉稀夜醒。'},
-{date:'2026-07-20',state:'没整觉',bedtime:'未记录',wakes:'02:00 轻醒',care:'妈妈',method:'入睡陪伴',tags:['入睡大哭'],note:'入睡难，夜里轻醒但整体稳定。'},
-...Array.from({length:7},(_,i)=>({date:`2026-07-${String(21+i).padStart(2,'0')}`,state:'整觉',bedtime:'21:05',wakes:'无夜醒',care:i%2?'爸爸':'妈妈',method:'固定流程 + 陪伴',tags:['入睡约 40 分钟'],note:'约 40 分钟入睡，9 点后睡，6:30 醒。'}))
-];
-const sleepByDate=Object.fromEntries(sleepRecords.map(item=>[item.date,item]));
-const calendar=document.getElementById('sleep-calendar');
-const detail=document.getElementById('sleep-detail');
-let selectedSleep=sleepByDate['2026-07-24'];
-function renderSleepDetail(record){
-  const tone=record.state==='整觉'?'good':'later';
-  detail.innerHTML=`<div class="sleep-detail-top"><b>${record.date.replaceAll('-','.')}</b><span class="sleep-pill ${tone}">${record.state}</span></div><div class="sleep-detail-grid"><div><small>睡觉</small><b>${record.bedtime}</b></div><div><small>夜醒</small><b>${record.wakes}</b></div><div><small>处理</small><b>${record.method}</b></div><div><small>谁带睡</small><b>${record.care}</b></div></div><div class="sleep-detail-tags">${record.tags.map(tag=>`<span class="tag tb">${tag}</span>`).join('')}</div><p style="margin:10px 0 0;border-top:1px solid var(--line);padding-top:10px;color:var(--muted);font-size:13px">“${record.note}”</p>`;
-}
-function renderSleepCalendar(){
-  calendar.innerHTML=[...Array(3).fill('<span></span>'),...Array.from({length:31},(_,i)=>{
-    const day=i+1,date=`2026-07-${String(day).padStart(2,'0')}`,record=sleepByDate[date];
-    const state=record?(record.state==='整觉'?'stable':'unstable'):'missing';
-    const active=selectedSleep&&selectedSleep.date===date?' selected':'';
-    return `<button class="${state}${active}" data-sleep-date="${date}" aria-label="${date} ${record?record.state:'未记录'}">${day}</button>`;
-  })].join('');
-  calendar.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>{const record=sleepByDate[button.dataset.sleepDate];if(!record)return;selectedSleep=record;renderSleepCalendar();renderSleepDetail(record)}));
-}
-renderSleepCalendar();renderSleepDetail(selectedSleep);
-
 const buttons=[...document.querySelectorAll('.nav button')];
 const sections=[...document.querySelectorAll('main .section[id]')];
 buttons.forEach(btn => {
