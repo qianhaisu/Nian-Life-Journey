@@ -4,14 +4,14 @@ export const profile: Profile = { id: "profile-zhangnian", displayName: "张年"
 
 const image = (id: string, src: string, alt: string, lifeEventId: string, takenAt: string): Media => ({ id, profileId: profile.id, lifeEventId, type: "photo", src, alt, takenAt, visibility: "family", width: 1200, height: 900 });
 export const media: Media[] = [
-  image("media-lake", "/images/moments/2026-08-dongqian-lake.png", "张年在雨中的东钱湖边认真看着湖面", "event-lake", "2026-08-22"),
-  image("media-xiaoai", "/images/moments/2026-08-xiaoai.png", "睡前的张年回应家人呼唤", "event-xiaoai", "2026-08-20"),
-  image("media-walk", "/images/hero/2026-08-hero-walk.jpg", "张年笑着向前走的近期照片", "event-walk", "2026-08-17"),
-  image("media-pool", "/images/moments/2026-08-dongqian-lake.png", "张年在夏日泳池边玩水的记录插画", "event-pool", "2026-08-10"),
-  image("media-bus", "/images/moments/2026-08-xiaoai.png", "张年听到公交车歌曲时做出表演动作", "event-bus", "2026-08-08"),
-  image("media-ball", "/images/hero/2026-08-hero-walk.jpg", "张年和妈妈在客厅踢球的家庭记录", "event-ball", "2026-08-03"),
-  image("media-book", "/images/moments/2026-08-xiaoai.png", "张年和家人一起翻看绘本", "event-book", "2026-07-28"),
-  image("media-hat", "/images/moments/2026-08-dongqian-lake.png", "张年把尿不湿戴在头上开心地笑", "event-hat", "2026-07-21"),
+  image("media-lake", "/v2/images/moments/2026-08-dongqian-lake.png", "张年在雨中的东钱湖边认真看着湖面", "event-lake", "2026-08-22"),
+  image("media-xiaoai", "/v2/images/moments/2026-08-xiaoai.png", "睡前的张年回应家人呼唤", "event-xiaoai", "2026-08-20"),
+  image("media-walk", "/v2/images/hero/2026-08-hero-walk.jpg", "张年笑着向前走的近期照片", "event-walk", "2026-08-17"),
+  image("media-pool", "/v2/images/moments/2026-08-dongqian-lake.png", "张年在夏日泳池边玩水的记录插画", "event-pool", "2026-08-10"),
+  image("media-bus", "/v2/images/moments/2026-08-xiaoai.png", "张年听到公交车歌曲时做出表演动作", "event-bus", "2026-08-08"),
+  image("media-ball", "/v2/images/hero/2026-08-hero-walk.jpg", "张年和妈妈在客厅踢球的家庭记录", "event-ball", "2026-08-03"),
+  image("media-book", "/v2/images/moments/2026-08-xiaoai.png", "张年和家人一起翻看绘本", "event-book", "2026-07-28"),
+  image("media-hat", "/v2/images/moments/2026-08-dongqian-lake.png", "张年把尿不湿戴在头上开心地笑", "event-hat", "2026-07-21"),
 ];
 
 export const growthRecords: GrowthRecord[] = [
