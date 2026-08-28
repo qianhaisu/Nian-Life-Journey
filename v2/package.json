@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --import tsx --test test/*.test.mjs",
     "media:manifest": "node scripts/export-media-manifest.mjs",
     "start": "next start",
     "lint": "eslint .",

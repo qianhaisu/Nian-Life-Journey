@@ -6,9 +6,10 @@ const store = JSON.parse(await readFile(path.join(root, ".data", "nian-life.json
 const manifest = (store.mediaAssets ?? []).map((asset) => ({
   mediaAssetId: asset.id,
   checksum: asset.checksum,
-  quark: (store.mediaLocations ?? []).filter((location) => location.mediaAssetId === asset.id && location.provider === "quark"),
-  hot: (store.mediaLocations ?? []).filter((location) => location.mediaAssetId === asset.id && location.provider === "hot"),
-  lifeEventIds: (store.events ?? []).filter((event) => event.mediaIds.some((mediaId) => (store.media ?? []).some((media) => media.id === mediaId && media.mediaAssetId === asset.id))).map((event) => event.id),
+  original: (store.mediaLocations ?? []).find((location) => location.mediaAssetId === asset.id && location.provider === "quark" && location.variant === "original") ?? null,
+  derivatives: Object.fromEntries((store.mediaLocations ?? []).filter((location) => location.mediaAssetId === asset.id && location.provider === "hot" && location.variant !== "original").map((location) => [location.variant, location])),
+  archiveState: asset.archiveStatus ?? "awaiting_archive",
+  lifeEventLinks: (store.events ?? []).filter((event) => event.mediaIds.some((mediaId) => (store.media ?? []).some((media) => media.id === mediaId && media.mediaAssetId === asset.id))).map((event) => event.id),
 }));
 const destination = path.join(root, "media-manifest.json");
 await mkdir(path.dirname(destination), { recursive: true });

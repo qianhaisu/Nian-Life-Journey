@@ -22,6 +22,7 @@ export async function ingestQuarkFile(file: QuarkFile, options: { profileId: str
   const mediaId = newId("media");
   const now = new Date().toISOString();
   const type = file.mimeType.startsWith("video/") ? "video" : file.mimeType === "application/pdf" ? "document" : "photo";
+  const visibility = type === "document" ? "private" : options.visibility;
   const bytes = client ? await client.download(file.providerRef) : undefined;
   const dimensions = type === "photo" && bytes ? await sourceImageMetadata(bytes) : { width: file.width, height: file.height };
   const checksum = file.checksum ?? (bytes ? createHash("sha256").update(bytes).digest("hex") : undefined);
@@ -37,11 +38,11 @@ export async function ingestQuarkFile(file: QuarkFile, options: { profileId: str
     }
   }
 
-  const source: RawSource = { id: sourceId, profileId: options.profileId, sourceType: type === "video" ? "family_video" : type === "document" ? "other_document" : "family_photo", contentTypes: ["daily", "family"], contributorId: options.contributorId, capturedAt: file.takenAt ?? now, importedAt: now, mediaIds: [mediaId], sourceLabel: "Quark 自动备份", visibility: options.visibility, status: "uploaded", originalFilename: file.filename, metadata: { provider: "quark", providerRef: file.providerRef, quarkPathSnapshot: file.path } };
+  const source: RawSource = { id: sourceId, profileId: options.profileId, sourceType: type === "video" ? "family_video" : type === "document" ? "other_document" : "family_photo", contentTypes: ["daily", "family"], contributorId: options.contributorId, capturedAt: file.takenAt ?? now, importedAt: now, mediaIds: [mediaId], sourceLabel: "Quark 自动备份", visibility, status: "uploaded", originalFilename: file.filename, metadata: { provider: "quark", providerRef: file.providerRef, quarkPathSnapshot: file.path } };
   const width = dimensions.width ?? (type === "document" ? 960 : type === "video" ? 1280 : 1200);
   const height = dimensions.height ?? (type === "document" ? 1280 : type === "video" ? 720 : 900);
   const variant = type === "photo" ? "web" : type === "video" ? "poster" : "document_preview";
-  const media: Media = { id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type, src: `/api/media/${mediaId}?variant=${variant}`, originalFilename: file.filename, mimeType: file.mimeType, fileSize: file.size ?? bytes?.byteLength, alt: file.filename, takenAt: file.takenAt ?? now, visibility: options.visibility, width, height, durationSeconds: file.durationSeconds };
+  const media: Media = { id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type, src: `/api/media/${mediaId}?variant=${variant}`, originalFilename: file.filename, mimeType: file.mimeType, fileSize: file.size ?? bytes?.byteLength, alt: file.filename, takenAt: file.takenAt ?? now, visibility, width, height, durationSeconds: file.durationSeconds };
   await appendUpload({ source, media: [media], assets: [asset], locations });
   await organizeSources([sourceId]);
   return { sourceId, assetId, mediaId, organized: true };

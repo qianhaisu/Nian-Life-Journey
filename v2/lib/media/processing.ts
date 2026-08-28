@@ -8,7 +8,8 @@ const documentPlaceholder = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 
 
 export async function sourceImageMetadata(bytes: Uint8Array) {
   const metadata = await sharp(bytes).metadata();
-  return { width: metadata.width, height: metadata.height };
+  const rotates = metadata.orientation !== undefined && metadata.orientation >= 5 && metadata.orientation <= 8;
+  return { width: rotates ? metadata.height : metadata.width, height: rotates ? metadata.width : metadata.height };
 }
 
 export async function createDerivatives(asset: MediaAsset, bytes: Uint8Array): Promise<DerivativeOutput[]> {

@@ -1,6 +1,5 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { MediaAsset, MediaLocation, MediaVariant } from "@/lib/types";
 
 export type HotStorageObject = { providerRef: string; mimeType: string; fileSize?: number; width?: number; height?: number };
@@ -57,34 +56,30 @@ export function getR2Config(env: NodeJS.ProcessEnv = process.env): R2Config {
 
 export class R2HotStorage implements HotStorage {
   private readonly config: R2Config;
-  private readonly client: S3Client;
+  private readonly client: Promise<{ send(command: unknown): Promise<unknown> }>;
 
   constructor(config = getR2Config()) {
     this.config = config;
-    this.client = new S3Client({ endpoint: config.endpoint, region: "auto", forcePathStyle: true, credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } });
-  }
-
-  private send<T>(command: unknown) {
-    // The current AWS SDK type bundle exposes send through its base client at
-    // runtime but does not surface it in the generated S3Client declaration.
-    return (this.client as unknown as { send(value: unknown): Promise<T> }).send(command);
+    this.client = import("@aws-sdk/client-s3").then(({ S3Client }) => new S3Client({ endpoint: config.endpoint, region: "auto", forcePathStyle: true, credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } }));
   }
 
   async put(input: HotStorageInput) {
     const key = safeKey(input.key);
-    await this.send(new PutObjectCommand({ Bucket: this.config.bucket, Key: key, Body: input.body, ContentType: input.mimeType }));
+    const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+    await (await this.client).send(new PutObjectCommand({ Bucket: this.config.bucket, Key: key, Body: input.body, ContentType: input.mimeType }));
     return { providerRef: key, mimeType: input.mimeType, fileSize: input.body.byteLength };
   }
 
   async get(key: string) {
     try {
-      const result = await this.send<{ Body?: { transformToByteArray?: () => Promise<Uint8Array> } }>(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) }));
+      const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })) as { Body?: { transformToByteArray?: () => Promise<Uint8Array> } };
       if (!result.Body) return null;
       return result.Body.transformToByteArray ? result.Body.transformToByteArray() : null;
     } catch { return null; }
   }
 
-  async delete(key: string) { await this.send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })); }
+  async delete(key: string) { const { DeleteObjectCommand } = await import("@aws-sdk/client-s3"); await (await this.client).send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })); }
   url(location: MediaLocation) {
     if (location.provider !== "hot" || location.variant === "original" || location.status !== "ready") return null;
     return this.config.publicBaseUrl ? `${this.config.publicBaseUrl.replace(/\/$/, "")}/${encodeURI(location.providerRef)}` : null;

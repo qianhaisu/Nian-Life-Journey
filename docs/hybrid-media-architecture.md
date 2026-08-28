@@ -64,6 +64,49 @@ The repository has two adapters:
     production  -> PostgreSQL Repository and selected Hot Storage provider
 
 No provider credential, OAuth token, AUTH_SECRET, DATABASE_URL, or ingestion
-token is committed. The current Windows environment has no WSL distribution
-and no installed Quark skill, so the connector is intentionally an official
-client boundary rather than a fabricated API implementation.
+token is committed. The connector remains an official-client boundary rather
+than a fabricated API implementation. When the official skill is available in
+WSL or another Linux host, it supplies list, download, archive, and verify
+implementations; without that configuration, the interfaces, explicit-scope
+import path, idempotency, and recovery state machine remain locally testable.
+
+## Storage Phase 2 decisions
+
+Quark is a family-instance infrastructure binding, not a Nian user
+integration. One family has one hidden `original_vault` binding. OAuth state is
+stored on `connector_states`; ordinary Home, Memory, About, and Capture flows
+never expose a Quark login or call Quark during a page request.
+
+Direct upload writes an original to Hot Storage staging, computes SHA-256, and
+generates only two image derivatives: orientation-normalized WebP thumbnail
+(max width 480) and WebP web (max width 1280). The source aspect ratio is
+preserved with `fit: inside`; video gets a lightweight poster placeholder and
+PDF gets a document placeholder, with no FFmpeg/HLS/PDF rendering service.
+
+The archive worker processes pending staging originals independently of the
+user flow. It must receive a stable Quark `providerRef`, verify existence and
+size (and checksum when the provider reports support), persist the verified
+Quark location, and only then delete the staging object. Auth loss changes the
+family connector to `auth_required` and the asset to `paused_auth_required`
+while retaining the staging location as `awaiting_archive`. Non-auth failures
+are recorded as `archive_failed`; neither case blocks existing media reads or
+new uploads.
+
+Hot Storage has a credential-free Local adapter and a Cloudflare R2 adapter
+selected by `MEDIA_STORAGE_PROVIDER`. R2 configuration is lazy and validated
+only when `r2` is selected, so development remains runnable without secrets.
+The media route accepts only ready Hot derivatives. It never falls back to a
+Quark or staging original; original retrieval is reserved for an explicit,
+authenticated archive workflow that is not part of normal page rendering.
+
+The connector's two directions share the same model:
+
+```text
+Nian upload -> Hot staging -> archive worker -> Quark original
+Quark backup -> explicit scope -> RawSource -> Organizer -> Memory
+```
+
+`media-manifest.json` is the migration artifact containing `mediaAssetId`,
+checksum, verified Quark original, Hot derivatives, archive state, and
+life-event links. Quark folders are never treated as the database or as a
+signal that a memory has been organized.

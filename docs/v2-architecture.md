@@ -156,12 +156,29 @@ Selection & Connection > Generation
 
 ### Later
 
-- 生产 PostgreSQL 连接、单一对象存储 provider、最小家庭 Auth、真实服务端 profile policy 与媒体缩略图处理。
+- 生产 PostgreSQL 连接、最小家庭 Auth、真实服务端 profile policy、Quark OAuth 的家庭实例配置和正式 archive worker 调度。
 - 真实导入、搜索、AI 辅助聚合、受控医疗资料整理与偶遇过去策略。
 
 ### Out of Scope
 
-真实 AI API / 微信 API / OCR / 照片识别 / 转码 / 医疗诊断 / 队列 / Worker / 搜索引擎 / 完整 RBAC。
+真实 AI API / 微信 API / OCR / 照片识别 / 转码 / 医疗诊断 / 企业级队列平台 / 搜索引擎 / 完整 RBAC。
+
+## 14.5 Family-level Original Vault 与 Hot Storage
+
+Storage Phase 2 将原始档案绑定到家庭实例，而不是 Nian User：
+
+```text
+Nian User       使用产品的人
+Contributor     资料是谁留下的
+Vault Provider  原始资料长期保存在哪里
+
+Family Instance ── Quark / original_vault
+Hot Storage     ── thumbnail / web / poster / document_preview
+```
+
+Quark 的授权状态属于 `connector_states`，仅供家庭基础设施初始化和管理员维护。普通用户不需要 Quark 账号、OAuth 或登录。Direct Upload 在 Quark 离线时照常完成 RawSource、规则整理和 Memory；原始 staging 以 `awaiting_archive` 保留，连接恢复后由 connector 自动重试。只有 Quark 返回稳定 `providerRef` 且 existence/size 验证成功，才允许清理 staging original。
+
+Hot Storage 通过 `HotStorage` 接口隔离 provider。当前开发环境使用 Local adapter，生产可选择 Cloudflare R2；业务组件不直接导入 R2 SDK。照片 derivative 使用 Sharp 做 EXIF orientation normalize、等比 fit-inside 和 WebP 输出，页面只读取 ready Hot derivative，不回退到 Quark Original。视频当前只保留 Quark original + poster placeholder；PDF 当前只保留 Quark original + document placeholder，不引入转码或大型渲染基础设施。
 
 ## 14. Preview 与发布
 
