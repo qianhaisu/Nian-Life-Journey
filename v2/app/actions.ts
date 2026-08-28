@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { appendUpload, newId, undoOrganization } from "@/lib/db/repository";
 import { organizeSources } from "@/lib/organizer/rule-based";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
+import { mediaDeliveryUrl } from "@/lib/media/paths";
 import { hotStorage } from "@/lib/storage/hot-storage";
 import type { Media, MediaAsset, MediaLocation, RawSource, SourceType, Visibility } from "@/lib/types";
 
@@ -56,7 +57,7 @@ export async function captureSources(formData: FormData) {
     const width = dimensions.width ?? (type === "document" ? 960 : 1280);
     const height = dimensions.height ?? (type === "document" ? 1280 : type === "video" ? 720 : 900);
     const firstVariant = type === "photo" ? "web" : type === "video" ? "poster" : "document_preview";
-    media.push({ id: mediaId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaAssetId: assetId, type, src: "/api/media/" + mediaId + "?variant=" + firstVariant, objectKey, originalFilename: file.name, mimeType: file.type, fileSize: file.size, alt: note || file.name, takenAt: capturedAt, visibility, width, height });
+    media.push({ id: mediaId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaAssetId: assetId, type, src: mediaDeliveryUrl(mediaId, firstVariant), objectKey, originalFilename: file.name, mimeType: file.type, fileSize: file.size, alt: note || file.name, takenAt: capturedAt, visibility, width, height });
   }
 
   const sourceType = (kind === "daycare" ? "daycare_photo" : kind) as SourceType;

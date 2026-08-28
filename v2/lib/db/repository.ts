@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { careEpisodes, careRecords, contributors, dailyTraces, events as seedEvents, growthRecords, media as seedMedia, monthlySnapshot, profile, rawSources as seedSources } from "@/lib/mock-data";
 import type { CareEpisode, CareRecord, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlySnapshot, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
+import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
 
 export type Store = { profile: Profile; contributors: Contributor[]; media: Media[]; mediaAssets: MediaAsset[]; mediaLocations: MediaLocation[]; connectorStates: ConnectorState[]; rawSources: RawSource[]; events: LifeEvent[]; dailyTraces: DailyTrace[]; growthRecords: GrowthRecord[]; careRecords: CareRecord[]; careEpisodes: CareEpisode[]; links: SourceMemoryLink[]; monthlySnapshot: MonthlySnapshot };
@@ -17,11 +18,16 @@ function normalizeStore(store: Partial<Store>): Store {
 function hydrateMedia(store: Store): Store {
   store.media = store.media.map((media) => {
     const asset = store.mediaAssets.find((item) => item.id === media.mediaAssetId);
-    if (!asset) return media;
+    if (!asset) return { ...media, src: normalizeMediaUrl(media.src) };
     const locations = store.mediaLocations.filter((item) => item.mediaAssetId === asset.id);
     const webLocation = selectLocation(locations, asset, "web");
     const thumbnailLocation = selectLocation(locations, asset, "thumbnail");
-    return webLocation ? { ...media, src: "/api/media/" + media.id + "?variant=" + webLocation.variant, thumbnailSrc: thumbnailLocation ? "/api/media/" + media.id + "?variant=" + thumbnailLocation.variant : undefined } : media;
+    const legacyThumbnailSrc = (media as Media & { thumbnailSrc?: string }).thumbnailSrc;
+    return {
+      ...media,
+      src: webLocation ? mediaDeliveryUrl(media.id, webLocation.variant) : normalizeMediaUrl(media.src),
+      thumbnailSrc: thumbnailLocation ? mediaDeliveryUrl(media.id, thumbnailLocation.variant) : legacyThumbnailSrc ? normalizeMediaUrl(legacyThumbnailSrc) : undefined,
+    };
   });
   return store;
 }

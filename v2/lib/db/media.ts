@@ -1,5 +1,6 @@
 import type { Media, MediaAsset, MediaLocation, MediaVariant } from "@/lib/types";
 import type { Store } from "@/lib/db/repository";
+import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
 
 export function assetForMedia(store: Store, media: Media): MediaAsset | undefined {
@@ -13,5 +14,5 @@ export function locationForMedia(store: Store, media: Media, variant: MediaVaria
 }
 
 export function deliveryUrl(media: Media, location?: MediaLocation) {
-  return location && location.provider === "hot" && location.variant !== "original" ? "/api/media/" + media.id + "?variant=" + location.variant : media.src;
+  return location && location.provider === "hot" && location.variant !== "original" ? mediaDeliveryUrl(media.id, location.variant) : normalizeMediaUrl(media.src);
 }
