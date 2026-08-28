@@ -9,3 +9,5 @@ out/
 media-manifest.json
 .env*
 !.env.example
+
+.vercel
