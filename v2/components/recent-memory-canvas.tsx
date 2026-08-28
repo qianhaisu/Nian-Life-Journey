@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LifeEvent, Media } from "@/lib/types";
 
