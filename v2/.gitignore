@@ -1,0 +1,11 @@
+node_modules/
+*.tsbuildinfo
+.next/
+.next-*/
+out/
+.env*
+!.env.example
+.data/
+media-manifest.json
+.env*
+!.env.example
