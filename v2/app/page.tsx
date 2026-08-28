@@ -2,6 +2,8 @@ import Link from "next/link";
 import { RecentMemoryCanvas } from "@/components/recent-memory-canvas";
 import { getHomeEvents, getStore } from "@/lib/db/repository";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const [events, store] = await Promise.all([getHomeEvents(), getStore()]); const canvasEvents = events.slice(0, 4);
   const recentChanges = [
