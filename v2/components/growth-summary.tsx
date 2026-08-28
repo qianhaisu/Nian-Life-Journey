@@ -1,2 +1,26 @@
+import Link from "next/link";
 import type { GrowthRecord } from "@/lib/types";
-export function GrowthSummary({ records }: { records: GrowthRecord[] }) { const height = records.find((record) => record.kind === "height"); const weight = records.find((record) => record.kind === "weight"); const observations = records.filter((record) => !record.value).slice(0, 2); return <section className="growth-summary" id="growth"><div><span className="eyebrow">Recent growth</span><h2 className="serif">最近，长大在哪里</h2></div><div className="growth-measures"><div><strong>{height?.value} <small>{height?.unit}</small></strong><span>身高 · 2026.08</span></div><div><strong>{weight?.value} <small>{weight?.unit}</small></strong><span>体重 · 2026.08</span></div></div><div className="growth-notes">{observations.map((record) => <div key={record.id}><span>{record.kind === "language" ? "语言" : record.kind === "motor" ? "运动" : "观察"}</span><p>{record.note}</p></div>)}</div></section>; }
+
+function formatDate(date: string) { return date.slice(0, 7).replace("-", "."); }
+
+function GrowthPath({ label, description, records }: { label: string; description: string; records: GrowthRecord[] }) {
+	return <div className="growth-path">
+		<div className="growth-path-heading"><span>{label}</span><strong className="serif">{description}</strong></div>
+		<ol>{records.map((record) => <li key={record.id}>
+			<time dateTime={record.observedAt}>{formatDate(record.observedAt)}</time>
+			<div><p>{record.note}</p>{record.lifeEventId ? <Link href={`/events/${record.lifeEventId}`}>回到那一天 <b>↗</b></Link> : <span>{record.source}</span>}</div>
+		</li>)}</ol>
+	</div>;
+}
+
+export function GrowthSummary({ records }: { records: GrowthRecord[] }) {
+	const language = records.filter((record) => record.kind === "language").sort((first, second) => first.observedAt.localeCompare(second.observedAt));
+	const motor = records.filter((record) => record.kind === "motor").sort((first, second) => first.observedAt.localeCompare(second.observedAt));
+	const height = records.find((record) => record.kind === "height");
+	const weight = records.find((record) => record.kind === "weight");
+	return <section className="growth-summary" id="growth">
+		<div className="growth-summary-heading"><span className="eyebrow">成长的另一种读法</span><h2 className="serif">他正在成为谁？</h2><p>不把成长拆成孤立的数字，而是回到那些发生过的日子里看。</p></div>
+		<div className="growth-paths"><GrowthPath label="语言" description="从声音到回应" records={language} /><GrowthPath label="运动" description="从走到追球" records={motor} /></div>
+		<p className="growth-measure-note">身体记录仍然在这里，作为时间里的一个小注脚：{height?.value}{height?.unit} · {weight?.value}{weight?.unit} · {height ? formatDate(height.observedAt) : ""}</p>
+	</section>;
+}

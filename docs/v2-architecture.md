@@ -1,288 +1,183 @@
 # Nian Life Journey V2 架构方案
 
-**状态：架构设计阶段，不包含业务代码**  
+**状态：Mock UI 产品验证阶段，不接真实数据库、认证或导入服务**
 **基准：V1.3，2026-08**  
-**目标：建立可维护 5-10 年的“张年数字人生档案”**
+**目标：建立可维护 5-10 年的“张年人生档案”**
 
-## 1. 产品核心与设计原则
+## 1. 产品核心
 
-V2 不是由多个栏目拼接的网站，而是一个以时间为主轴的人生档案系统：
+V2 不是儿童个人主页，也不是成长 Dashboard。它是一部会持续长大的家庭摄影书：把散落在照片、视频、微信、老师记录、成长观察和照护资料里的生活，慢慢整理成多年以后仍然愿意重读的记忆。
+
+用户看到的是人生，系统内部才是数据。V1 `index.html` 和 `assets/` 保持原样；V2 在 `v2/` 中拥有独立的页面、组件和 Mock 数据边界。
+
+## 2. 三层产品模型
 
 ```text
-张年 Profile
-  -> Timeline
-    -> LifeEvent
-         -> Photo / Video / Location / People / Tags
-         -> GrowthRecord
-         -> CareRecord
+RAW       人生原材料
+  ↓
+MEMORY    整理后的记忆
+  ↓
+STORY     长期人生叙事
 ```
 
-`LifeEvent` 是完整的“记忆单元”：一次发生在时间中的经历及其故事、媒体、地点、同行的人、标签和相关观察。`GrowthRecord`、`CareRecord` 与 `Media` 可独立记录，但在发生于具体生活情境时应关联到 `LifeEvent`，使 Timeline 成为理解张年生活的共同入口，而不是让成长、照护和媒体形成孤立系统。
+```text
+照片 / 视频 / 微信 / 老师记录 / 医院资料 / 家庭文字
+                         ↓
+                   Memory Inbox
+                         ↓
+                     LifeEvent
+                         ↓
+       Timeline · Month · Year · Growth · Care
+                         ↓
+                   Search / AI（未来）
+```
 
-1. V1 保持原样、继续可访问，只作为真实内容、产品需求与视觉语言参考；V2 不重构 V1 DOM、CSS 或脚本。
-2. 首期优先完成可用的家庭记录体验，避免把家庭档案做成企业级 CMS。
-3. 数据记录应有时间、来源与可见性。成长和照护记录的更正保留原记录，并以新记录标示修正关系，不静默覆盖历史。
-4. 儿童照片、视频、健康记录和家庭信息默认私密。`public` 必须由被授权的家庭成员显式设置，不能由客户端自行决定。
-5. 所有读取、写入、媒体访问和 visibility 判断都必须在服务端再次授权；公开页面只能查询明确为 `public` 的数据。
-6. 任何生产发布仍需从当前 `main` 创建功能分支、通过 Preview 检查，并由指定家庭成员确认后合并。MVP 不在应用内实现审批平台。
+### RAW：人生原材料
 
-## 2. V1 现状与迁移边界
+刚进入系统的内容不需要立刻成为完整的 `LifeEvent`。它们先留在 `Memory Inbox`，保留来源、原始时间、作者和可见性，等待家庭成员判断：忽略、稍后查看、加入已有记忆，或整理成一条新记忆。
 
-V1 是 `index.html` 中的静态单页，展示了档案概况、月度总结、身高体重趋势、成长维度、健康与睡眠观察、闪光时刻、外出食物指南及下月关注事项。它使用固定底部导航，包含 `assets/images/` 下的图片，也有内嵌 base64 WebP。
+### MEMORY：整理后的记忆
 
-V2 应保留的产品价值：
+`LifeEvent` 是一个已经被家庭选择和整理过的生活片段。它有日期、地点、人物、标题、故事、标签、媒体和成长关联，但仍保留它由哪些 RawSource 支撑。
 
-- 从出生日期计算年龄；保留身高、体重及其测量日期。
-- 记录日常故事、闪光时刻、睡眠和健康观察，但健康内容只表述为日常观察，不替代专业医疗判断。
-- 延续适合手机阅读的温和、清晰视觉语言，且每张媒体都要求有 alt 文本。
-- 将 V1 的静态“下月重点”转成带日期的 GrowthRecord 或 CareRecord，必要时关联 LifeEvent。
+### STORY：长期人生叙事
 
-V2 不迁移或改写 V1 的代码和原始内容。任何导入必须逐项确认来源、可见性和媒体授权；首期可从合成数据开始，再手工录入或导入已确认可用的内容。V1 的 base64 媒体不直接复用为 V2 数据来源。
+Story 不是把原文拼起来，而是多年以后家庭愿意怎样记住这一刻。它可以被 Timeline、月度回顾和年度 Archive 重新阅读。未来 AI 只能帮助整理、连接和总结候选内容，不能创造事实。
 
-## 3. MVP 页面与体验
+## 3. Memory Inbox
 
-首期只有六个核心页面，均按当前用户可访问的数据渲染：
+`/inbox` 是受保护的家庭整理入口，不是企业后台。当前只用合成 Mock Data 验证体验，不实现认证或真实导入。
 
-1. **Home**：张年的当前状态、最近发生的事情、最近照片、近期重要成长变化和最近闪光时刻。
-2. **Timeline**：产品的主页面。按日期浏览 LifeEvent；一个日期块可以连续呈现照片、故事、同行的人、地点及相关成长或照护观察。
-3. **LifeEvent Detail**：一个完整记忆单元，包含标题、发生时间、地点、故事、照片/视频、标签、相关成长记录与相关照护记录。
-4. **Growth**：按时间查看身高、体重及发展观察；以趋势与记录列表为主，可跳回相关 LifeEvent。
-5. **Care**：按时间查看简单的健康、睡眠、饮食或照护观察；默认私密，可跳回相关 LifeEvent。
-6. **Media**：按时间浏览已授权媒体，并显示其关联的 LifeEvent；不做复杂媒体资产管理平台。
+- Source 是主体，按“来源 + 时间”自然展开，不使用数据表格。
+- 同一来源的一组照片、老师文字或聊天会一起出现，保留原始上下文。
+- 操作包括“整理成记忆”“加入已有记忆”“创建一条记忆”“暂时不处理”。当前操作只改变页面内的 Mock 状态。
+- 页面可以展示一段“候选记忆”，验证未来聚合体验，但本轮不实现 AI clustering。
+- 原材料默认 `family` 或 `private`，在整理完成前不会自动出现在 Timeline。
 
-创建和编辑可以作为上述页面中的受保护操作或简洁的 `/manage` 区域，不另建 Dashboard、发布审核、媒体审查或权限管理后台。首页、Timeline 和详情页是首期体验优先级最高的路径。
+## 4. TypeScript 数据模型
 
-## 4. MVP 数据模型
+第一阶段只在 `v2/lib/types.ts` 中预留模型，不创建真实业务表。模型保持少量、明确的实体，不预先拆出标签、人物、地点、审核、AI 任务等二十多张表。
 
-PostgreSQL 为唯一业务数据库，Drizzle ORM 负责 schema、迁移和 TypeScript 类型推导。业务表均使用 UUID；时间存 UTC、按家庭配置时区展示。第一阶段只建立以下六个核心实体，不为标签、人物、地点或审批预先建立大量表。
+### `RawSource`
 
-### 4.1 `profiles`
+它是 RAW 层的统一来源记录，也是 Story 的 Evidence 入口：
 
-张年的稳定档案，一期通常只有一条。
+- `id`、`profileId`
+- `sourceType`：`family_photo`、`family_video`、`daycare_photo`、`daycare_note`、`wechat`、`parent_note`、`medical_document`、`growth_measurement`
+- `capturedAt`、`importedAt`
+- 可选 `text`、`mediaIds`
+- `sourceLabel`、`authorLabel`
+- `visibility`：`private`、`family`、`public`
+- `status`：`inbox`、`reviewed`、`attached`、`ignored`
+- 可选 `relatedLifeEventId`
 
-- `id`、`displayName`、`birthDate`、`timezone`、`bio`、`visibility`
-- `createdAt`、`updatedAt`
+`status` 描述整理进度，不代表公开状态。`relatedLifeEventId` 只在它已经附着到某条 LifeEvent 后出现。
 
-年龄由 `birthDate` 和查看日期计算，不保存会过期的“当前年龄”。
+### `LifeEvent`
 
-### 4.2 `life_events`
+它是 MEMORY 层的主实体，保留 `sourceIds` 和 `mediaIds`，从而能同时表达“故事”和“故事由什么支撑”：
 
-Timeline 的主实体和记忆单元。
+- `title`、`story`、可选 `storySections`
+- `occurredAt`、`locationLabel`、`people`、`tags`
+- `sourceIds`、`mediaIds`、`heroMediaId`
+- `memoryWeight`：`feature`、`memory`、`daily_trace`
+- `scopes`：`family`、`daycare`、`outing`、`growth`
+- `growthRecordIds`、`careRecordIds`
+- `eventType`、`visibility`
 
-- `id`、`profileId`、`title`、`story`
-- `occurredAt`、可选 `occurredEndAt`、`recordedAt`
-- `eventType`（如 `moment`、`outing`、`routine`、`milestone`）
-- `locationLabel`：仅保存适合展示的粗粒度地点；不保存或公开儿童精确地址。
-- `people`：受限 JSON 数组，只放关系或经确认的显示名，例如“妈妈”“爷爷奶奶”。
-- `tags`：受限 JSON 字符串数组，用于首期筛选与后续 AI 理解。
-- `visibility`、`createdAt`、`updatedAt`
+详情页分成两层：
 
-首期 `people`、`tags` 和地点以字段承载，避免 `people`、`tags`、`locations` 及多对多关系表。出现跨档案复用、关系权限或复杂检索的明确需求时，再拆成独立实体。
+1. **Story Layer**：日期、地点、标题、Hero Media、家庭故事、人物、标签和相关成长变化。
+2. **Evidence Layer**：标题为“那天留下的东西”，按时间展示照片、视频、微信和家庭备注。故事表达多年以后如何记住它，Evidence 表达当时真正留下了什么。
 
-### 4.3 `growth_records`
+### 其他最小实体
 
-所有成长测量和成长观察共用一张表，而不是首期拆分 `growth_observations` 与 `growth_milestones`。
+- `Media`：照片/视频元数据，可在尚未附着到 LifeEvent 时只关联 RawSource。
+- `GrowthRecord`：身高体重和语言、运动、兴趣等观察；可选关联 LifeEvent。
+- `CareRecord`：健康、睡眠、饮食和儿保等照护观察；默认私密，不在 Home 或公开 Timeline 泄露健康详情。
+- `DailyTrace`：普通一天的几件小事，不强迫写成完整故事卡。
+- `CandidateMemory`：未来聚合能力的 Mock 表现，只保存候选来源和家庭确认状态。
+- `MonthlySnapshot`、`MonthArchive`、`YearArchive`：月度和年度回顾索引，不复制或覆盖历史记录。
 
-- `id`、`profileId`、可选 `lifeEventId`
-- `kind`（如 `height`、`weight`、`language`、`motor`、`social`、`feeding`、`sleep`）
-- `observedAt`、`value`、`unit`、`note`、`source`
-- 可选 `correctsId`：更正时指向旧记录，旧记录保留。
-- `visibility`、`createdAt`
+## 5. Timeline：人生的主阅读入口
 
-数值测量使用 `value` 与 `unit`；叙事观察可只使用 `note`。当睡眠需要每日结构化时段、成长指标需要医学参考区间或里程碑需要独立流程时，再拆分专用表。
+Timeline 不把所有事件做成平权日志，而是让记忆有重量：
 
-### 4.4 `care_records`
+- **Feature Memory**：旅行、生日、第一次或明显变化。大图、大标题、更多故事和更大的垂直空间。
+- **Memory**：普通但值得保留的 LifeEvent，使用中等视觉权重。
+- **Daily Trace**：普通一天的几条记录，使用轻量文字流，不生成完整故事卡。
 
-简单照护与健康观察共用一张表，而不是首期建立 `sleep_records`、`health_observations`、`care_guides`。
+Timeline 只提供克制的来源视角：`全部`、`家里`、`托班`、`出游`、`成长`。筛选不是数据管理功能，而是让家庭重新看到“托班生活”“一起出游的日子”或“这一年的成长变化”。
 
-- `id`、`profileId`、可选 `lifeEventId`
-- `kind`（如 `health_observation`、`sleep_note`、`feeding_guidance`、`reminder`）
-- `observedAt`、可选 `endedAt`、`status`、`note`、`source`
-- 可选 `correctsId`
-- `visibility`、`createdAt`
+## 6. Archive、Growth、Care
 
-健康记录默认 `private`，文字必须是观察而非诊断。只有确有稳定的、需要独立查询和验证的每日睡眠指标、医疗观察字段或版本化照护指南时，才拆分专用实体。
+### Archive
 
-### 4.5 `media`
+`/archive` 是 Month / Year 的回顾入口。当前只展示 2026 年的 August Mock：主照片、月度一句话、值得记住的时刻、照片/视频数量和几个线索。它不是统计系统，而是“重新阅读这个月”的入口。未来每一年是一册家庭摄影年鉴，历史月与历史年不可被覆盖。
 
-足够简单、可扩展的照片与视频元数据；数据库只存元数据和受控存储定位，不存二进制。
+### Growth
 
-- `id`、`profileId`、可选 `lifeEventId`
-- `type`（`photo` 或 `video`）
-- `objectKey`：受控对象存储的内部 key，不使用临时外链或不受控 URL。
-- `thumbnailObjectKey`、`width`、`height`、`mimeType`、可选 `durationSeconds`
-- `takenAt`、`alt`、`visibility`
-- `createdAt`
+Growth 不建立一套割裂于 Timeline 的健康 Dashboard。它回答“他正在成为谁”，把语言、运动、兴趣和第一次发生的事沿时间串起来；每个节点可以回到关联的 LifeEvent、Photo、Video 或 RawSource。身高体重只是时间中的小注脚。
 
-一期实现上传、保存、生成缩略图和绑定 LifeEvent。若同一媒体未来需要关联多个事件，再由 `media_links` 关系表替代 `lifeEventId`；一期不提前增加该表。
+### Care
 
-### 4.6 `monthly_snapshots`
+Care 是从照护角度重新阅读一段时间的 **Episode Timeline**，例如“开始流鼻涕 → 症状变化 → 睡眠受到影响 → 医院检查 → 状态改善”。健康记录默认 `private`，本轮只保留类型、Mock 数据和架构边界，不实现完整 Care 页面。
 
-用于首页月度回顾和长期浏览，不是发布版本系统。
+## 7. 隐私与历史
 
-- `id`、`profileId`、`month`（例如 `2026-08`，同一 Profile 唯一）
-- `summary`、`highlights`（JSON 字符串数组）、`visibility`
-- `createdAt`、`updatedAt`
+1. 儿童照片、视频、家庭信息和健康内容默认私密。
+2. `public` 必须由被授权的家庭成员显式设置；客户端不能自行改变 visibility。
+3. Home 和公开 Timeline 不加载健康详情；受保护页面也只能在真实服务端授权后读取私密内容。
+4. 原始来源、媒体、测量和事件不被静默覆盖。更正应保留历史关系，并在未来由服务端记录操作者和时间。
+5. V1 文件和媒体永远不作为 V2 的真实导入源；本轮所有数据都是合成 Mock。
 
-快照引用的是当月已存在的 LifeEvent、GrowthRecord、CareRecord 和 Media 查询结果，不复制这些原始记录。若未来需要冻结公开展览或正式版本回滚，再增加不可变发布版本模型。
+## 8. Now / Later / Out of Scope
 
-### 4.7 共通约束
-
-- MVP 只有 `private`、`family`、`public` 三种 visibility，存为受约束枚举值。
-- 新建照片、视频、健康记录和家庭关系信息默认 `private`；`public` 必须显式选择。
-- `family` 的具体访问者由认证后的家庭访问策略判断。MVP 可以只有单一受信家庭访问组，不实施多级 RBAC。
-- 读取服务和 Server Action/Route Handler 都必须按登录身份与 visibility 过滤；客户端传来的 visibility 和关联 ID 仅作输入，不能作为授权依据。
-- 以数据库外键保证 `profileId` 与可选 `lifeEventId` 的完整性；记录关联的 Profile 必须一致。
-- 为关键写入保留 `createdAt`、`updatedAt` 和操作者标识的最小请求日志。完整审计平台、修订系统和不可变发布版本留待后续。
-
-## 5. 媒体、隐私与访问控制
-
-### Media MVP
-
-1. 已登录用户从受保护页面上传照片或支持的短视频。
-2. 服务端确认用户可写入 Profile，并生成受限上传凭据或代理上传。
-3. 文件存入私有的受控 object storage；数据库保存 `objectKey`、尺寸、MIME、拍摄时间、alt 和 visibility。
-4. 同步或简单的受控处理生成缩略图；处理完成后才能在应用中使用。
-5. 用户将 Media 绑定到一个 LifeEvent；页面按服务端授权生成媒体访问响应。
-
-生产环境的 V2 新媒体使用对象存储，V1 的 `assets/images/` 保持原样。不得使用临时外链，不得提交私密原图、base64 媒体或凭据到仓库。选择对象存储服务前，应确认区域、备份、成本和访问策略；私有 bucket 默认拒绝公开列举与读取。
-
-### Privacy MVP
-
-- 儿童媒体、健康信息、家庭信息默认私密；`public` 是逐条显式选择，不是“已登录即可公开”。
-- 公开页面不得加载、预取、生成 metadata 或在错误信息中泄露私密标题、地点、缩略图、object key 或关系信息。
-- `private` 仅对记录者/档案所有者可见；`family` 仅对服务端认证后的家庭访问者可见；`public` 才允许匿名读取。
-- 访问策略放在服务端数据访问层；对象存储原件不直接公开。
-- 每个媒体需要来源、上传者和 alt；每条真实数据写入前需要人工确认适当的 visibility。完整 consent workflow 留待需求明确后再做。
-
-## 6. 技术架构：Now / Later / Optional
-
-### Now
+### Now：本轮验证
 
 - Next.js App Router、React、TypeScript、Tailwind CSS。
-- PostgreSQL 和 Drizzle ORM，六张 MVP 业务表及迁移。
-- 一个可靠的认证方案，用于登录并在服务端识别家庭访问者；选择与部署平台兼容、维护量低的方案。
-- 单一 Next.js 应用：页面、Server Actions/Route Handlers、授权策略和数据库访问在同一部署单元中完成；不建独立后端。
-- 私有受控 object storage，用于 V2 新媒体；上传、保存、缩略图和 LifeEvent 关联。
-- 部署到一个支持 Preview 的平台，配置生产数据库、环境变量、备份和最小健康检查。
-- 单元/集成测试覆盖 visibility 策略、关键写入校验及 Timeline 查询；在手机与桌面浏览器做关键路径验证。
+- `/` Home、`/timeline`、`/events/[id]`、`/inbox`、`/archive` 的 Mock UI。
+- `RawSource`、Story/Evidence、记忆重量、来源筛选、Daily Trace、候选记忆和 2026 Archive。
+- 移动端优先、桌面端编辑型布局、家庭可见性文案和可访问的基本交互。
 
-### Later
+### Later：真实产品阶段
 
-- `people`、`tags`、`locations` 与 Media 多对多关系的拆表：当复用、筛选、共享或关系授权成为实际需求时。
-- 更完整的账户与家庭成员管理：当单一家庭访问组不再够用时，再增加角色和成员模型。
-- 结构化睡眠、健康或照护专用表：当记录频率、字段验证或趋势分析证明 JSON/通用记录不够用时。
-- 多媒体处理队列：当同步缩略图影响体验、视频量增加或需要可靠重试时。
-- 不可变发布版本、内容修订、最小审计界面和公开内容回滚：当家庭开始频繁公开分享时。
-- 基础全文搜索或筛选索引：当 Timeline 数据规模和实际查询行为证明需要时。
-- 视频 poster、转码和字幕工作流：先明确视频使用量、设备兼容性与存储预算。
+- PostgreSQL、Drizzle、认证和服务端 visibility policy。
+- 受控 object storage、媒体授权、poster、字幕和可回滚的媒体绑定。
+- 真实导入流程、来源确认、修订历史、审计和家庭成员权限。
+- 搜索、年度浏览、Episode Timeline、候选聚合和 AI 辅助整理。
 
-### Optional
+### Out of Scope：本轮明确不做
 
-- Redis：只有出现可测量的会话、限流或缓存瓶颈时再引入。
-- 独立后端、消息队列和独立 worker：只有异步媒体/AI 工作无法在单体应用中可靠处理时再拆分。
-- CDN、自定义缓存失效和原图归档：由公开媒体规模、成本和撤回需求决定。
-- 第三方 CMS、搜索引擎、offline-first、多语言与高级统计：仅在明确的使用场景和维护责任出现后评估。
-- AI 能力：见下一节；不在 MVP 建立 `ai_jobs` 或通用 AI 平台。
+- PostgreSQL、Drizzle、认证、真实文件上传、微信/托班自动导入。
+- AI API、OCR、视频处理、自动 clustering、数据同步和真实医疗数据导入。
+- 复杂统计、管理后台、RBAC、发布审批平台和公开发布工作流。
 
-## 7. AI 预留
-
-V2 的结构化 `LifeEvent`、`GrowthRecord`、`CareRecord`、`Media` 与 `MonthlySnapshot` 已足以让未来 AI 在受控范围内理解张年的生活。未来可能支持：
-
-- 月度总结初稿；
-- LifeEvent 摘要；
-- 标签、时间线分类和图片 alt 文本建议；
-- 在明确授权范围内的搜索问答。
-
-AI 只能生成候选结果，不能自动改写测量、健康状态、visibility 或公开状态。接入前必须定义最小数据发送范围、家庭授权、人工确认与供应商保留策略；默认不向第三方发送儿童原图、健康详情或家庭身份信息。只有真实使用场景稳定后，才增加任务记录、模型版本和人工审核等能力。
-
-## 8. 实际目录结构
-
-保留 `v2/` 是合理的：它为 V1 静态站点与 V2 应用提供明确所有权边界。首期只建立马上会使用的目录；不要预建空的 `admin`、`api`、`audit`、`worker`、多层测试或组件分类目录。
+## 9. 目录与交付边界
 
 ```text
 .
 ├── index.html                     # V1，保持不改
-├── assets/images/                 # V1 参考媒体，保持不改
-├── AGENTS.md
-├── .github/
+├── assets/images/                 # V1 媒体，保持不改
 ├── docs/
 │   └── v2-architecture.md
 └── v2/
     ├── app/
-    │   ├── (app)/
-    │   │   ├── page.tsx           # Home
-    │   │   ├── timeline/
-    │   │   ├── events/[id]/
-    │   │   ├── growth/
-    │   │   ├── care/
-    │   │   └── media/
-    │   ├── login/
-    │   ├── layout.tsx
+    │   ├── page.tsx               # Home
+    │   ├── timeline/page.tsx
+    │   ├── events/[id]/page.tsx
+    │   ├── inbox/page.tsx
+    │   ├── archive/page.tsx
     │   └── globals.css
-    ├── components/                # 仅在首个可复用组件出现后创建
-    ├── db/
-    │   ├── schema.ts
-    │   └── index.ts
+    ├── components/
     ├── lib/
-    │   ├── auth.ts
-    │   ├── policy.ts
-    │   ├── media.ts
-    │   └── validation.ts
-    ├── drizzle/
-    ├── public/
-    ├── package.json
-    ├── drizzle.config.ts
-    ├── next.config.ts
-    └── tsconfig.json
+    │   ├── types.ts
+    │   └── mock-data.ts
+    └── public/images/              # V2 受控 Mock 媒体
 ```
 
-随着实现出现再创建 `tests/`、更细的 schema 文件、Route Handlers 或管理页面。V2 独立管理依赖、环境变量、迁移和部署项目；不改变 V1 入口或其历史。
+交付前检查：运行 `npm run lint`、`npm run build`，检查所有路由的移动端与桌面端渲染、图片 alt、浏览器 console、健康信息边界和 Timeline 是否仍然是产品中心。真实部署仍需从当前 `main` 创建功能分支、Preview 验证和指定家庭成员确认；本轮不执行真实部署。
 
-## 9. 实施顺序
+## 10. AI 预留原则
 
-1. **隐私与部署决策**：确认仓库和部署项目访问策略、默认时区、家庭访问者、生产数据库和对象存储；在确认前不导入真实敏感数据。
-2. **最小应用骨架**：在新功能分支创建 `v2/` Next.js 项目，配置 TypeScript、Tailwind、PostgreSQL、Drizzle、认证与 Preview。
-3. **六实体和服务端策略**：创建迁移、输入校验、visibility policy 和合成数据；先测试未授权与公开查询不会泄露私密数据。
-4. **Timeline 主路径**：实现 LifeEvent 创建、Timeline、详情页及 Growth/Care 关联。
-5. **照片主路径**：实现私有媒体上传、缩略图、alt、visibility 与 LifeEvent 关联。
-6. **Home、Growth、Care、Media**：以真实使用场景打通浏览与创建；完成移动端和 Preview 验证后部署生产。
-
-## MVP Scope
-
-MVP 完成后，指定家庭成员能够：
-
-1. 登录。
-2. 查看张年首页。
-3. 浏览 Timeline。
-4. 打开一个 LifeEvent。
-5. 创建 LifeEvent。
-6. 上传照片。
-7. 把照片绑定到 LifeEvent。
-8. 添加成长记录。
-9. 添加简单照护记录。
-10. 查看 Growth。
-11. 查看 Care。
-12. 控制每条记录和媒体的 `private` / `family` / `public`，并由服务端执行访问控制。
-13. 在手机上正常浏览和记录。
-14. 经过 Preview 检查后部署到生产环境。
-
-## Out of Scope for MVP
-
-- AI assistant 和通用 AI jobs 平台。
-- 视频转码、HLS、字幕处理和复杂视频管线。
-- 复杂搜索和搜索引擎。
-- 多级审批与 publication revision。
-- 多角色权限与完整 RBAC。
-- 完整审计系统。
-- 自动照片分类、自动 EXIF 清理 pipeline、去重和 AI 图片理解。
-- 病毒扫描 worker、CDN purge workflow、legal hold 和原图归档平台。
-- 多语言、离线编辑或 offline-first。
-- 高级统计分析。
-
-## 10. 未决事项
-
-- 哪些内容和媒体允许 `family` 或 `public`，以及谁负责最终的公开确认与紧急下线。
-- 认证供应商、对象存储供应商、区域、备份频率、存储预算与恢复责任。
-- 家庭访问者的最小定义，以及张年成年后对自身档案的控制与迁移安排。
-- 是否继续公开 V1；若继续公开，应单独评估 V1 已有敏感内容，且该评估不改变 V2 的默认私密原则。
+未来 AI 的职责是帮助家庭整理、连接和总结：从 RawSource 提议候选记忆、把相关来源连到 LifeEvent、生成月度总结初稿或辅助搜索。AI 不能创造日期、人物、测量、健康状态、媒体来源或公开权限；所有候选结果都要经过家庭成员确认，且默认不向第三方发送儿童原图、健康详情或家庭身份信息。
