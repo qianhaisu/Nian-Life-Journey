@@ -10,6 +10,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const media = store.media.find((item) => item.id === id);
   if (!media?.mediaAssetId || media.visibility === "private") return new NextResponse("Not found", { status: 404 });
   const value = new URL(request.url).searchParams.get("variant");
+  if (value === "original") return new NextResponse("Original media is not available through page delivery", { status: 404 });
   const requested: MediaVariant = value === "thumbnail" || value === "poster" || value === "preview" || value === "document_preview" ? value : "web";
   const location = locationForMedia(store, media, requested);
   // This route is deliberately Hot Storage only. Original retrieval is an

@@ -9,7 +9,7 @@ function formatDuration(seconds?: number) { return seconds ? `00:${String(second
 export function LifeEventCard({ event, mediaItem, featured = false, priority }: { event: LifeEvent; mediaItem?: Media; featured?: boolean; priority?: boolean }) {
 	return <Link className={`event-card event-card-${event.memoryWeight} ${featured ? "event-card-featured" : ""}`} href={`/events/${event.id}`}>
 		<div className="event-image">
-			{mediaItem ? <Image src={mediaItem.src} alt={mediaItem.alt} fill priority={priority ?? featured} sizes={featured ? "(max-width: 700px) 100vw, 58vw" : "(max-width: 700px) 100vw, 32vw"} style={{ objectFit: "cover" }} /> : null}
+			{mediaItem ? <Image src={mediaItem.thumbnailSrc ?? mediaItem.src} alt={mediaItem.alt} fill priority={priority ?? featured} sizes={featured ? "(max-width: 700px) 100vw, 58vw" : "(max-width: 700px) 100vw, 32vw"} style={{ objectFit: "cover" }} /> : null}
 			{mediaItem?.type === "video" ? <span className="media-chip">Video · {formatDuration(mediaItem.durationSeconds)}</span> : null}
 		</div>
 		<div className="event-copy">

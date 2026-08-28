@@ -18,8 +18,10 @@ function hydrateMedia(store: Store): Store {
   store.media = store.media.map((media) => {
     const asset = store.mediaAssets.find((item) => item.id === media.mediaAssetId);
     if (!asset) return media;
-    const location = selectLocation(store.mediaLocations.filter((item) => item.mediaAssetId === asset.id), asset);
-    return location ? { ...media, src: "/api/media/" + media.id + "?variant=" + location.variant } : media;
+    const locations = store.mediaLocations.filter((item) => item.mediaAssetId === asset.id);
+    const webLocation = selectLocation(locations, asset, "web");
+    const thumbnailLocation = selectLocation(locations, asset, "thumbnail");
+    return webLocation ? { ...media, src: "/api/media/" + media.id + "?variant=" + webLocation.variant, thumbnailSrc: thumbnailLocation ? "/api/media/" + media.id + "?variant=" + thumbnailLocation.variant : undefined } : media;
   });
   return store;
 }

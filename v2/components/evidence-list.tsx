@@ -35,7 +35,7 @@ export function EvidenceList({ sources, media, contributors }: { sources: RawSou
           {source.text ? <p className={source.sourceType === "wechat" ? "evidence-quote" : "evidence-note"}>{source.sourceType === "wechat" ? `“${source.text}”` : source.text}</p> : null}
           {sourceMedia.length > 0 ? <div className="evidence-media">
             {sourceMedia.map((item) => <div className="evidence-media-item" key={item.id}>
-              <Image src={item.src} alt={item.alt} fill sizes="(max-width: 700px) 42vw, 220px" style={{ objectFit: "cover" }} />
+              <Image src={item.thumbnailSrc ?? item.src} alt={item.alt} fill sizes="(max-width: 700px) 42vw, 220px" style={{ objectFit: "cover" }} />
               <span className="evidence-media-label">{item.type === "video" ? `Video · ${formatDuration(item.durationSeconds)}` : "Photo"}</span>
             </div>)}
           </div> : null}
