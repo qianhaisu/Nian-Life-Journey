@@ -5,11 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "test": "node --import tsx --test test/*.test.mjs",
+    "test": "node --import tsx --test --test-concurrency=1 test/*.test.mjs",
     "media:manifest": "node scripts/export-media-manifest.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --pretty false",
+    "organizer:eval": "node --import tsx scripts/evaluate-organizer.mjs",
     "quark:sync": "tsx tools/quark-connector/sync.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate"
