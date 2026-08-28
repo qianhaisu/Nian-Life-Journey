@@ -69,7 +69,7 @@ export function RecentMemoryCanvas({ events, media }: { events: LifeEvent[]; med
     onTouchEnd={(touch) => { const start = touchStart.current; const point = touch.changedTouches[0]; if (start && point) { const deltaX = start.x - point.clientX; const deltaY = start.y - point.clientY; if (Math.abs(deltaX) > 44 && Math.abs(deltaX) > Math.abs(deltaY)) move(deltaX > 0 ? 1 : -1); } touchStart.current = null; }}>
     <div className="canvas-stage">
       {displayHero ? <>
-        <Image key={displayHero.id} className="canvas-image" src={displayHero.src} alt={displayHero.alt} fill priority sizes="(max-width: 700px) 100vw, 68vw" onError={() => markMediaFailed(displayHero.id)} />
+          <Image key={displayHero.id} className="canvas-image" src={displayHero.src} alt={displayHero.alt} fill priority unoptimized sizes="(max-width: 700px) 100vw, 68vw" onError={() => markMediaFailed(displayHero.id)} />
         <div className="canvas-shade" />
         <div className="canvas-story" aria-live="polite">
           <time dateTime={event.occurredAt}>{formatEventDate(event.occurredAt)}</time>
