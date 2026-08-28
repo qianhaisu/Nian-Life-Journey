@@ -28,10 +28,11 @@ export function Timeline({ events, media, traces }: { events: LifeEvent[]; media
         const event = item.event;
         const hero = mediaById.get(event.heroMediaId ?? event.mediaIds[0]);
         const isKept = yearbookIds.has(event.id);
+        const orientation = hero && hero.height > hero.width ? "portrait" : "landscape";
         return <article className={`stream-entry stream-${event.memoryWeight}`} key={event.id}>
           <div className="stream-date"><strong>{date}</strong><button className={isKept ? "yearbook-mark is-kept" : "yearbook-mark"} type="button" aria-label={isKept ? "从年鉴移除" : "留在年鉴"} aria-pressed={isKept} title={isKept ? "已留在年鉴" : "留在年鉴"} onClick={() => setYearbookIds((current) => { const next = new Set(current); next.has(event.id) ? next.delete(event.id) : next.add(event.id); return next; })}>{isKept ? "★" : "☆"}</button></div>
           <Link className="stream-memory" href={`/events/${event.id}`}>
-            {hero ? <div className="stream-media"><Image src={hero.src} alt={hero.alt} fill sizes="(max-width: 700px) 100vw, 700px" /></div> : null}
+            {hero ? <div className={`stream-media media-${orientation}`}><Image src={hero.src} alt={hero.alt} fill sizes="(max-width: 700px) 100vw, (max-width: 1100px) 70vw, 620px" /></div> : null}
             <div className="stream-copy"><span>{labels[event.memoryWeight]}</span>{event.title ? <h2 className="serif">{event.title}</h2> : null}{event.story ? <p>{event.story}</p> : null}<small>{event.locationLabel}{event.mediaIds.length > 1 ? ` · ${event.mediaIds.length} 项媒体` : ""}</small></div>
           </Link>
         </article>;

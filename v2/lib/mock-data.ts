@@ -124,7 +124,7 @@ export const dailyTraces: DailyTrace[] = [
 
 export const candidateMemories: CandidateMemory[] = [{ id: "candidate-ball-0828", profileId: profile.id, occurredAt: "2026-08-28", contextLabel: "托班", title: "第一次追着哥哥姐姐一起踢球", description: "12 张托班照片、1 段视频、1 条老师记录和 2 条家庭聊天落在了同一条线上。", sourceIds: ["source-inbox-daycare-photos", "source-inbox-daycare-note", "source-inbox-mom-wechat", "source-inbox-dad-wechat", "source-inbox-dad-video"], suggestedContentTypes: ["daycare", "motor", "growth"], suggestedTags: ["托班", "运动", "社交"], growthInsight: "开始主动参与其他孩子的活动。", storyDraft: "户外活动时，他不再只站在旁边看，开始追着球和哥哥姐姐一起跑。", status: "suggested", visibility: "family" }];
 
-export const monthlySnapshot: MonthlySnapshot = { id: "snapshot-2026-08", profileId: profile.id, month: "2026-08", summary: "这个月，他开始把更多东西指给我们看，也开始用自己的声音把回应送回来。", highlights: ["开始说“车车”", "走路更稳", "主动翻绘本", "会追着球跑"], visibility: "family" };
+export const monthlySnapshot: MonthlySnapshot = { id: "snapshot-2026-08", profileId: profile.id, month: "2026-08", summary: "这个月，他开始说更多话，也越来越会回应我们了。", highlights: ["开始说“车车”", "走路更稳", "主动翻绘本", "会追着球跑"], visibility: "family" };
 export const monthArchives: MonthArchive[] = [{ id: "archive-month-2026-08", profileId: profile.id, month: "2026-08", label: "八月", coverMediaId: "media-lake", summary: monthlySnapshot.summary, highlights: monthlySnapshot.highlights, momentCount: 23, photoCount: 186, videoCount: 12, visibility: "family" }];
 export const yearArchive: YearArchive = { id: "archive-year-2026", profileId: profile.id, year: "2026", title: "正在长成的一年", intro: "这一年还没有结束。我们先把已经留下来的部分，放在这里。", monthIds: monthArchives.map((month) => month.id), visibility: "family" };
 
