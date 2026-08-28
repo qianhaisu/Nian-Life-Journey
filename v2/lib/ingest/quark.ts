@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { appendUpload, getStore, newId } from "@/lib/db/repository";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
+import { mediaDeliveryUrl } from "@/lib/media/paths";
 import { hotStorage } from "@/lib/storage/hot-storage";
 import { organizeSources } from "@/lib/organizer/rule-based";
 import type { Media, MediaAsset, MediaLocation, MediaType, RawSource } from "@/lib/types";
@@ -94,7 +95,7 @@ export async function ingestQuarkFile(file: QuarkFile, options: QuarkImportOptio
   const width = dimensions.width ?? (type === "document" ? 960 : type === "video" ? 1280 : 1200);
   const height = dimensions.height ?? (type === "document" ? 1280 : type === "video" ? 720 : 900);
   const variant = type === "photo" ? "web" : type === "video" ? "poster" : "document_preview";
-  const media: Media = { id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type, src: `/api/media/${mediaId}?variant=${variant}`, originalFilename: file.filename, mimeType: file.mimeType, fileSize: file.size ?? bytes?.byteLength, alt: file.filename, takenAt: file.takenAt ?? now, visibility, width, height, durationSeconds: file.durationSeconds };
+  const media: Media = { id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type, src: mediaDeliveryUrl(mediaId, variant), originalFilename: file.filename, mimeType: file.mimeType, fileSize: file.size ?? bytes?.byteLength, alt: file.filename, takenAt: file.takenAt ?? now, visibility, width, height, durationSeconds: file.durationSeconds };
   await appendUpload({ source, media: [media], assets: [asset], locations });
   await organizeSources([sourceId]);
   return { sourceId, assetId, mediaId, organized: true };
