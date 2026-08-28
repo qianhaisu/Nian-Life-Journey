@@ -9,6 +9,8 @@
     "media:manifest": "node scripts/export-media-manifest.mjs",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit --pretty false",
+    "quark:sync": "tsx tools/quark-connector/sync.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate"
   },

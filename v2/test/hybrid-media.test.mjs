@@ -25,4 +25,14 @@ test("ingestion endpoint is independently authenticated", async () => {
   const route = await read("app/api/internal/ingest/route.ts");
   assert.match(route, /INGESTION_TOKEN/);
   assert.match(route, /timingSafeEqual/);
+  assert.match(route, /toQuarkStructuredError/);
+});
+
+test("Quark authorization diagnostics are read-only and separately protected", async () => {
+  const route = await read("app/api/internal/quark/status/route.ts");
+  assert.match(route, /INGESTION_TOKEN/);
+  assert.match(route, /QuarkCliAdapter/);
+  assert.match(route, /checkAuth/);
+  assert.match(route, /officialCode/);
+  assert.doesNotMatch(route, /login|--token|cookie|account/);
 });
