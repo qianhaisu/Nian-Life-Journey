@@ -70,7 +70,7 @@ time, .growth-chart strong, .portrait-facts strong { font-variant-numeric: tabul
 button:disabled { cursor: not-allowed; opacity: .45; }
 
 .home-masthead { padding: clamp(56px, 9vw, 128px) 0 clamp(40px, 6vw, 80px); }
-.home-masthead h1 { max-width: none; margin: 18px 0 0; font-size: clamp(2.75rem, 12vw, 9rem); font-weight: 500; letter-spacing: -.065em; line-height: .93; white-space: nowrap; }
+.home-masthead h1 { max-width: none; margin: 18px 0 0; font-size: clamp(2.75rem, 14vw, 9rem); font-weight: 500; letter-spacing: -.065em; line-height: .93; white-space: nowrap; }
 .home-title-line { display: block; }
 .home-masthead em, .page-masthead em { color: var(--color-accent); font-style: normal; }
 .memory-canvas { display: grid; border-top: 1px solid var(--color-primary); }
