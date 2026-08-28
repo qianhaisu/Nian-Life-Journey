@@ -7,4 +7,5 @@ export interface ArchiveRepository {
   appendRawSource(input: { source: RawSource; assets: MediaAsset[]; locations: MediaLocation[] }): Promise<RawSource>;
   persistOrganization(sourceIds: string[], event: LifeEvent, links: SourceMemoryLink[]): Promise<LifeEvent>;
   getConnectorState(provider: "quark", profileId: string): Promise<ConnectorState | null>;
+  upsertConnectorState(input: ConnectorState): Promise<ConnectorState>;
 }
