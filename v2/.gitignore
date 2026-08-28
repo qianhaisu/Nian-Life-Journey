@@ -3,3 +3,7 @@ node_modules/
 out/
 .env*
 !.env.example
+.data/
+media-manifest.json
+.env*
+!.env.example

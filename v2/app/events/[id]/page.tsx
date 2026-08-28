@@ -2,19 +2,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EvidenceList } from "@/components/evidence-list";
-import { contributors, events, getCareForEvent, getEvent, getGrowthForEvent, getMediaForEvent, getSourcesForEvent } from "@/lib/mock-data";
-export function generateStaticParams() { return events.map((event) => ({ id: event.id })); }
+import { getAllEvents, getEventDetail } from "@/lib/db/repository";
+export async function generateStaticParams() { return (await getAllEvents()).map((event) => ({ id: event.id })); }
 function weightLabel(weight: "trace" | "memory" | "highlight" | "chapter") { return weight === "chapter" ? "人生章节" : weight === "highlight" ? "值得再看" : weight === "trace" ? "生活痕迹" : "一段记忆"; }
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
 	const { id } = await params;
-	const event = getEvent(id);
-	if (!event) notFound();
-	const eventMedia = getMediaForEvent(event);
+	const detail = await getEventDetail(id);
+	if (!detail) notFound();
+	const { event, media: eventMedia, sources: eventSources, contributors, growth, care } = detail;
 	const heroMedia = eventMedia.find((item) => item.id === event.heroMediaId) ?? eventMedia[0];
 	if (!heroMedia) notFound();
-	const eventSources = getSourcesForEvent(event);
-	const growth = getGrowthForEvent(event);
-	const care = getCareForEvent(event);
 	const photoCount = eventMedia.filter((item) => item.type === "photo").length;
 	const videoCount = eventMedia.filter((item) => item.type === "video").length;
 	const chatCount = eventSources.filter((source) => source.sourceType === "wechat").length;

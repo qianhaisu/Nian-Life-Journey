@@ -238,6 +238,19 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .sleep-trend li > span { color: var(--warm-gold); font-size: .66rem; }
 .sleep-trend li strong { font-size: .86rem; }
 .sleep-trend li small { color: var(--paper-dark); font-size: .72rem; line-height: 1.5; }
+.capture-form { display: grid; gap: 18px; margin-top: 32px; padding: 28px 0; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
+.capture-form label { display: grid; gap: 8px; color: var(--color-muted); font-size: .78rem; }
+.capture-form input, .capture-form select, .capture-form textarea { width: 100%; padding: 12px; border: 1px solid var(--color-border); border-radius: 0; background: var(--color-surface); color: var(--color-text); }
+.capture-form-grid { display: grid; gap: 16px; }
+.capture-form button, .capture-done a { justify-self: start; min-height: 46px; padding: 0 18px; border: 1px solid var(--color-primary); background: transparent; }
+.form-error { margin: 0; color: var(--color-accent); }
+.capture-done { display: grid; gap: 16px; padding: 48px 0; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
+.capture-done h2 { max-width: 14ch; margin: 0; font-size: clamp(2.5rem, 7vw, 5rem); line-height: 1; }
+.capture-done > p { margin: 0; color: var(--color-muted); }
+.done-summary { display: grid; gap: 6px; padding: 18px 0; border-top: 1px solid var(--color-accent); border-bottom: 1px solid var(--color-border); }
+.done-summary span, .capture-privacy { color: var(--color-muted); font-size: .8rem; }
+.capture-privacy { margin: 20px 0 0; }
+@media (min-width: 700px) { .capture-form-grid { grid-template-columns: 1fr 1fr; } }
 .sleep-trend li.is-current strong { color: var(--warm-gold); }
 .care-section { padding: 120px 0; }
 .care-ledger { margin-top: 56px; border-top: 1px solid var(--color-primary); }

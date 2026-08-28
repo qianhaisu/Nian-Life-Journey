@@ -1,6 +1,6 @@
 # Nian Life Journey V2 架构方案
 
-**状态：Mock UI 产品验证阶段，不接真实数据库、认证、导入或 AI 服务**
+**状态：Real Data Phase 1；automatic-by-default，使用规则整理器，不接真实 AI API**
 
 **基准：V2 Product Architecture，2026-08**
 
@@ -13,8 +13,8 @@ Nian Life 不是儿童 Dashboard、家庭 CMS、相册、健康管理 App 或 AI
 > 不是把张年的生活存下来，而是让这些日子以后还能回来。
 
 ```text
-生活发生 → 留下东西 → AI 筛选 / 分类 / 连接 → 爸爸妈妈确认
-        → 成为记忆 → 时间过去 → 再次遇见
+生活发生 → 留下东西 → 保存 RawSource / Media → 规则整理器筛选、分类、连接
+        → 自动成为记忆或 Daily Trace → 时间过去 → 再次遇见
 ```
 
 用户看到的是人生，系统内部才是数据。V1 `index.html` 与 `assets/` 保持原样；V2 只在 `v2/` 与本文档中演进。
@@ -31,7 +31,7 @@ Nian Life 不是儿童 Dashboard、家庭 CMS、相册、健康管理 App 或 AI
 录入是独立主操作：
 
 ```text
-＋ 留下点什么 → RawSource → 关联建议 → Memory Candidate → 人工确认 → Memory
+＋ 留下点什么 → RawSource / Media → RuleBasedMemoryOrganizer → Memory 或 DailyTrace
 ```
 
 - `/`：只回答“最近怎么样，张年。”
@@ -39,7 +39,7 @@ Nian Life 不是儿童 Dashboard、家庭 CMS、相册、健康管理 App 或 AI
 - `/memory/[year]/[month]`：Month Review；不是一级 Tab。
 - `/memory/[year]`：Year Review；不是一级 Tab。
 - `/about`：现在的状态，以及从成长、睡眠和照护角度重新阅读历史。
-- `/capture`：自然的 capture / organize Mock Flow。
+- `/capture`：自然的 capture flow；上传后自动整理，错误时再进入纠错。
 - `/events/[id]`：Memory 的 Story / Evidence 双层详情。
 - `/timeline`、`/archive`、`/inbox`：兼容旧链接，分别重定向到新结构。
 
@@ -47,10 +47,8 @@ Nian Life 不是儿童 Dashboard、家庭 CMS、相册、健康管理 App 或 AI
 
 ```text
 RawSource（原始资料，永不被 Story 覆盖）
-  ↓ AI 仅做筛选、分类、连接和克制草稿
-CandidateMemory（候选，必须人工确认）
-  ↓
-LifeEvent / Memory（可长期阅读的记忆）
+  ↓ RuleBasedMemoryOrganizer 自动筛选、分类、连接和克制草稿
+LifeEvent / Memory 或 DailyTrace（自动持久化，可撤销、可纠错）
   ↓
 Timeline / Month / Year / Growth / Care（不同阅读角度）
 ```
@@ -91,7 +89,7 @@ UI 用图片尺寸、标题比例、留白、故事长度和媒体数量表现�
 
 ## 7. Home：最近的人生变化播放器
 
-`RecentMemoryCanvas` 直接读取最近已确认的 LifeEvent，不维护第二套 Home CMS：
+`RecentMemoryCanvas` 直接读取最近已整理的 LifeEvent，不维护第二套 Home CMS：
 
 - 桌面端以一张主媒体和右侧 4 条克制索引切换。
 - 移动端支持按钮与横向手势切换，不使用广告轮播式分页点。
@@ -124,8 +122,7 @@ Growth、语言、运动、贡献者、人物、地点、标签与 Content Type 
 ```text
 Medical RawSource
   → 提取日期 / 医院 / 检查类型 / 原始事实
-  → 爸爸妈妈确认
-  → Care Episode
+  → Care Episode（private）
 ```
 
 AI 只允许提取、分类、整理和建立顺序；不得诊断、判断病因、修改医疗事实或生成确定性结论。原始医疗文档永久保留。当前 Mock 只证明数据关系和 Episode Timeline 可行，不开发医疗系统。
@@ -138,12 +135,12 @@ AI 的优先级是：
 Selection & Connection > Generation
 ```
 
-它可以把多数普通资料归入 Daily Trace，也可以明确说“今天没有发现需要单独形成 Memory 的事件”。任何候选 Memory、成长推断、Story Draft、医疗提取和可见性变更都必须由授权家庭成员最终确认。
+它可以把多数普通资料归入 Daily Trace，也可以明确说“今天没有发现需要单独形成 Memory 的事件”。自动整理无需家庭成员逐条确认；用户只在错误时编辑、重新整理或撤销。`public` 变更仍必须由授权家庭成员主动设置。
 
 ## 12. 隐私与媒体
 
 1. 儿童照片、视频、健康与家庭信息默认敏感。
-2. 原始资料默认 `family` 或 `private`；整理前不自动进入阅读页。
+2. 原始资料默认 `family` 或 `private`；整理成功后按 visibility 进入受保护阅读页。
 3. `public` 必须由授权家庭成员显式确认，并由真实服务端策略执行。
 4. Home 与公开 Memory metadata 不得加载健康详情。
 5. 媒体必须有授权、来源、可见性和描述性 alt；视频未来必须有 poster 与字幕策略。
@@ -153,18 +150,18 @@ Selection & Connection > Generation
 
 ### Now
 
-- Next.js App Router、React、TypeScript、CSS 与 Mock Data。
+- Next.js App Router、React、TypeScript、CSS；PostgreSQL/Drizzle schema 与 migration；credential-free 本地 JSON adapter；RawSource/Media 上传与规则整理闭环。
 - 新导航、Home、Memory 三尺度、About、Capture、Memory Candidate、Story / Evidence。
 - Contributor、Source / Content 双层分类、四级记忆重量、V1 Growth / Sleep / Care 内容迁移。
 
 ### Later
 
-- 服务端认证、visibility policy、对象存储、媒体授权与修订历史。
+- 生产 PostgreSQL 连接、单一对象存储 provider、最小家庭 Auth、真实服务端 profile policy 与媒体缩略图处理。
 - 真实导入、搜索、AI 辅助聚合、受控医疗资料整理与偶遇过去策略。
 
 ### Out of Scope
 
-PostgreSQL、Drizzle、真实 Auth / 上传 / 微信 API / OCR / AI API / 照片识别 / 转码 / 医疗诊断 / 队列 / Worker / 搜索引擎 / 完整 RBAC。
+真实 AI API / 微信 API / OCR / 照片识别 / 转码 / 医疗诊断 / 队列 / Worker / 搜索引擎 / 完整 RBAC。
 
 ## 14. Preview 与发布
 
