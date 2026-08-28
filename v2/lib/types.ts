@@ -1,9 +1,10 @@
 export type Visibility = "private" | "family" | "public";
-export type MediaType = "photo" | "video";
+export type MediaType = "photo" | "video" | "document";
 export type MediaProvider = "quark" | "hot";
 export type MediaVariant = "original" | "thumbnail" | "web" | "poster" | "preview" | "document_preview";
-export type MediaLocationStatus = "pending" | "awaiting_archive" | "archiving" | "archived" | "ready" | "failed";
-export type ConnectorSyncStatus = "discovered" | "indexed" | "processing" | "ready" | "failed";
+export type ArchiveStatus = "awaiting_archive" | "archiving" | "archived" | "archive_failed" | "paused_auth_required";
+export type MediaLocationStatus = "pending" | "ready" | "awaiting_archive" | "archiving" | "archived" | "archive_failed" | "paused_auth_required";
+export type ConnectorSyncStatus = "connected" | "auth_required" | "syncing" | "idle" | "failed";
 export type EventType = "moment" | "outing" | "routine" | "milestone" | "chapter";
 export type GrowthKind = "height" | "weight" | "language" | "motor" | "social" | "interest" | "sleep" | "food" | "personality";
 export type CareKind = "health_observation" | "sleep_note" | "feeding_guidance" | "reminder" | "medical_visit";
@@ -18,7 +19,7 @@ export type CandidateMemoryStatus = "suggested" | "deferred" | "split" | "conver
 
 export interface Profile { id: string; displayName: string; birthDate: string; timezone: string; bio: string; visibility: Visibility; }
 export interface Contributor { id: string; profileId: string; role: ContributorRole; displayName: string; }
-export interface MediaAsset { id: string; profileId: string; rawSourceId?: string; mediaType: MediaType; mimeType: string; width?: number; height?: number; durationSeconds?: number; takenAt?: string; checksum?: string; originalFilename?: string; createdAt: string; }
+export interface MediaAsset { id: string; profileId: string; rawSourceId?: string; mediaType: MediaType; mimeType: string; width?: number; height?: number; durationSeconds?: number; takenAt?: string; checksum?: string; originalFilename?: string; archiveStatus?: ArchiveStatus; archiveVerifiedAt?: string; archiveLastError?: string; createdAt: string; }
 export interface MediaLocation { id: string; mediaAssetId: string; provider: MediaProvider; variant: MediaVariant; providerRef: string; mimeType?: string; fileSize?: number; width?: number; height?: number; status: MediaLocationStatus; quarkPathSnapshot?: string; createdAt: string; updatedAt: string; }
 export interface Media { id: string; profileId: string; lifeEventId?: string; rawSourceId?: string; mediaAssetId?: string; type: MediaType; src: string; objectKey?: string; thumbnailObjectKey?: string; originalFilename?: string; mimeType?: string; fileSize?: number; alt: string; takenAt: string; visibility: Visibility; width: number; height: number; durationSeconds?: number; posterSrc?: string; locations?: MediaLocation[]; }
 export interface RawSource { id: string; profileId: string; sourceType: SourceType; contentTypes: ContentType[]; contributorId: string; capturedAt: string; importedAt: string; text?: string; mediaIds: string[]; sourceLabel: string; visibility: Visibility; status: RawSourceStatus; originalFilename?: string; metadata?: Record<string, unknown>; deletedAt?: string; relatedLifeEventId?: string; extractedMedicalFacts?: { hospital?: string; examinationType?: string; recordedAt?: string; facts: string[] }; }
@@ -34,4 +35,4 @@ export interface MonthArchive { id: string; profileId: string; month: string; la
 export interface YearArchive { id: string; profileId: string; year: string; title: string; intro: string; monthIds: string[]; visibility: Visibility; }
 export interface CurrentPortrait { label: string; summary: string; recordId?: string; private?: boolean; }
 export interface SleepPhase { id: string; label: string; startedAt: string; note: string; current?: boolean; }
-export interface ConnectorState { id: string; provider: "quark"; profileId: string; cursor?: string; lastSuccessfulSync?: string; version: string; status: ConnectorSyncStatus; updatedAt: string; }
+export interface ConnectorState { id: string; provider: "quark"; profileId: string; cursor?: string; lastSuccessfulSync?: string; lastError?: string; pendingArchiveCount: number; scope?: { folder?: string; from?: string; to?: string; query?: string }; connectorVersion: string; status: ConnectorSyncStatus; updatedAt: string; }

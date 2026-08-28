@@ -1,10 +1,10 @@
 "use server";
 
 import { createHash } from "node:crypto";
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { appendUpload, newId, undoOrganization } from "@/lib/db/repository";
 import { organizeSources } from "@/lib/organizer/rule-based";
+import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
+import { hotStorage } from "@/lib/storage/hot-storage";
 import type { Media, MediaAsset, MediaLocation, RawSource, SourceType, Visibility } from "@/lib/types";
 
 const allowed = new Map<string, [string, number]>([
@@ -26,25 +26,37 @@ export async function captureSources(formData: FormData) {
   const media: Media[] = [];
   const assets: MediaAsset[] = [];
   const locations: MediaLocation[] = [];
-  const mediaDir = path.join(process.cwd(), ".data", "media");
-  await fs.mkdir(mediaDir, { recursive: true });
 
   for (const file of files) {
     const rule = allowed.get(file.type);
     if (!rule || file.size > rule[1] * 1024 * 1024) throw new Error(file.name + " 的格式或大小不符合要求");
     const mediaId = newId("media");
     const assetId = newId("asset");
-    const filename = assetId + "-" + safeName(file.name);
+    const filename = safeName(file.name);
     const bytes = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(path.join(mediaDir, filename), bytes);
-    const type = file.type.startsWith("video/") ? "video" : "photo";
+    const type = file.type.startsWith("video/") ? "video" : file.type === "application/pdf" ? "document" : "photo";
     const now = new Date().toISOString();
-    const objectKey = "media/" + filename;
-    assets.push({ id: assetId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaType: type, mimeType: file.type, originalFilename: file.name, checksum: createHash("sha256").update(bytes).digest("hex"), createdAt: now });
-    locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant: "original", providerRef: objectKey, mimeType: file.type, fileSize: file.size, status: "awaiting_archive", createdAt: now, updatedAt: now });
-    const variants = type === "photo" ? ["thumbnail", "web"] as const : ["poster"] as const;
-    for (const variant of variants) locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant, providerRef: objectKey, mimeType: file.type, status: "pending", createdAt: now, updatedAt: now });
-    media.push({ id: mediaId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaAssetId: assetId, type, src: "/api/media/" + mediaId, objectKey, originalFilename: file.name, mimeType: file.type, fileSize: file.size, alt: note || file.name, takenAt: capturedAt, visibility, width: 1200, height: 900 });
+    const checksum = createHash("sha256").update(bytes).digest("hex");
+    const objectKey = `media/original/${assetId}/${filename}`;
+    await hotStorage.put({ key: objectKey, body: bytes, mimeType: file.type });
+    const dimensions: { width?: number; height?: number } = type === "photo" ? await sourceImageMetadata(bytes) : {};
+    const asset: MediaAsset = { id: assetId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaType: type, mimeType: file.type, width: dimensions.width, height: dimensions.height, originalFilename: file.name, checksum, archiveStatus: "awaiting_archive", createdAt: now };
+    assets.push(asset);
+    locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant: "original", providerRef: objectKey, mimeType: file.type, fileSize: file.size, width: dimensions.width, height: dimensions.height, status: "awaiting_archive", createdAt: now, updatedAt: now });
+    try {
+      for (const derivative of await createDerivatives(asset, bytes)) {
+        const extension = derivative.mimeType === "image/webp" ? "webp" : "svg";
+        const derivativeKey = `media/derivatives/${assetId}/${derivative.variant}.${extension}`;
+        await hotStorage.put({ key: derivativeKey, body: derivative.body, mimeType: derivative.mimeType });
+        locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant: derivative.variant, providerRef: derivativeKey, mimeType: derivative.mimeType, fileSize: derivative.body.byteLength, width: derivative.width, height: derivative.height, status: "ready", createdAt: now, updatedAt: now });
+      }
+    } catch {
+      for (const variant of type === "photo" ? ["thumbnail", "web"] as const : type === "video" ? ["poster"] as const : ["document_preview"] as const) locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant, providerRef: "", status: "pending", createdAt: now, updatedAt: now });
+    }
+    const width = dimensions.width ?? (type === "document" ? 960 : 1280);
+    const height = dimensions.height ?? (type === "document" ? 1280 : type === "video" ? 720 : 900);
+    const firstVariant = type === "photo" ? "web" : type === "video" ? "poster" : "document_preview";
+    media.push({ id: mediaId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaAssetId: assetId, type, src: "/api/media/" + mediaId + "?variant=" + firstVariant, objectKey, originalFilename: file.name, mimeType: file.type, fileSize: file.size, alt: note || file.name, takenAt: capturedAt, visibility, width, height });
   }
 
   const sourceType = (kind === "daycare" ? "daycare_photo" : kind) as SourceType;

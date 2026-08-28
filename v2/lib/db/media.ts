@@ -13,5 +13,5 @@ export function locationForMedia(store: Store, media: Media, variant: MediaVaria
 }
 
 export function deliveryUrl(media: Media, location?: MediaLocation) {
-  return location ? "/api/media/" + media.id + "?variant=" + location.variant : media.src;
+  return location && location.provider === "hot" && location.variant !== "original" ? "/api/media/" + media.id + "?variant=" + location.variant : media.src;
 }
