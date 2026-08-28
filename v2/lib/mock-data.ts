@@ -14,21 +14,21 @@ const image = (id: string, src: string, alt: string, takenAt: string, lifeEventI
 const video = (id: string, src: string, alt: string, takenAt: string, durationSeconds: number, lifeEventId?: string, rawSourceId?: string): Media => ({ id, profileId: profile.id, lifeEventId, rawSourceId, type: "video", src, alt, takenAt, durationSeconds, posterSrc: src, visibility: "family", width: 1200, height: 900 });
 
 export const media: Media[] = [
-  image("media-ball-daycare", "/v2/images/hero/2026-08-hero-walk.jpg", "张年追着托班里的哥哥姐姐一起踢球", "2026-08-28", "event-daycare-ball", "source-inbox-daycare-photos"),
-  image("media-car", "/v2/images/moments/2026-08-xiaoai.png", "张年看着窗外的车并用手指给家人看", "2026-08-27", "event-car", "source-car-photo"),
-  image("media-lake", "/v2/images/moments/2026-08-dongqian-lake.png", "张年在雨中的东钱湖边认真看着湖面", "2026-08-23", "event-lake", "source-lake-photos"),
-  image("media-lake-2", "/v2/images/moments/2026-08-dongqian-lake.png", "雨幕里的张年转身看向家人", "2026-08-23", "event-lake", "source-lake-photos"),
-  video("media-lake-video", "/v2/images/moments/2026-08-dongqian-lake.png", "张年站在露台边看雨的视频画面", "2026-08-23", 17, "event-lake", "source-lake-video"),
-  image("media-xiaoai", "/v2/images/moments/2026-08-xiaoai.png", "睡前的张年回应家人呼唤", "2026-08-20", "event-xiaoai", "source-xiaoai-photo"),
-  image("media-walk", "/v2/images/hero/2026-08-hero-walk.jpg", "张年笑着向前走的近期照片", "2026-08-17", "event-walk", "source-walk-photo"),
-  image("media-pool", "/v2/images/moments/2026-08-dongqian-lake.png", "张年在夏日泳池边玩水的家庭记录", "2026-08-10", "event-pool", "source-pool-photo"),
-  video("media-pool-video", "/v2/images/moments/2026-08-dongqian-lake.png", "张年在泳池边向前跑的视频画面", "2026-08-10", 23, "event-pool", "source-pool-video"),
-  image("media-bus", "/v2/images/moments/2026-08-xiaoai.png", "张年听到公交车歌曲时做出表演动作", "2026-08-08", "event-bus", "source-bus-photo"),
-  image("media-ball", "/v2/images/hero/2026-08-hero-walk.jpg", "张年和妈妈在客厅踢球的家庭记录", "2026-08-03", "event-ball", "source-ball-photo"),
-  image("media-book", "/v2/images/moments/2026-08-xiaoai.png", "张年和家人一起翻看绘本", "2026-07-28", "event-book", "source-book-photo"),
-  image("media-hat", "/v2/images/moments/2026-08-dongqian-lake.png", "张年把尿不湿戴在头上开心地笑", "2026-07-21", "event-hat", "source-hat-photo"),
-  ...Array.from({ length: 8 }, (_, index) => image(`inbox-daycare-${index + 1}`, index % 2 === 0 ? "/v2/images/hero/2026-08-hero-walk.jpg" : "/v2/images/moments/2026-08-dongqian-lake.png", `张年在托班户外活动中追球的第 ${index + 1} 张记录`, "2026-08-28", undefined, "source-inbox-daycare-photos")),
-  video("inbox-dad-video", "/v2/images/hero/2026-08-hero-walk.jpg", "张年回家后还在客厅追球的视频画面", "2026-08-28", 23, undefined, "source-inbox-dad-video"),
+  image("media-ball-daycare", "/images/hero/2026-08-hero-walk.jpg", "张年追着托班里的哥哥姐姐一起踢球", "2026-08-28", "event-daycare-ball", "source-inbox-daycare-photos"),
+  image("media-car", "/images/moments/2026-08-xiaoai.png", "张年看着窗外的车并用手指给家人看", "2026-08-27", "event-car", "source-car-photo"),
+  image("media-lake", "/images/moments/2026-08-dongqian-lake.png", "张年在雨中的东钱湖边认真看着湖面", "2026-08-23", "event-lake", "source-lake-photos"),
+  image("media-lake-2", "/images/moments/2026-08-dongqian-lake.png", "雨幕里的张年转身看向家人", "2026-08-23", "event-lake", "source-lake-photos"),
+  video("media-lake-video", "/images/moments/2026-08-dongqian-lake.png", "张年站在露台边看雨的视频画面", "2026-08-23", 17, "event-lake", "source-lake-video"),
+  image("media-xiaoai", "/images/moments/2026-08-xiaoai.png", "睡前的张年回应家人呼唤", "2026-08-20", "event-xiaoai", "source-xiaoai-photo"),
+  image("media-walk", "/images/hero/2026-08-hero-walk.jpg", "张年笑着向前走的近期照片", "2026-08-17", "event-walk", "source-walk-photo"),
+  image("media-pool", "/images/moments/2026-08-dongqian-lake.png", "张年在夏日泳池边玩水的家庭记录", "2026-08-10", "event-pool", "source-pool-photo"),
+  video("media-pool-video", "/images/moments/2026-08-dongqian-lake.png", "张年在泳池边向前跑的视频画面", "2026-08-10", 23, "event-pool", "source-pool-video"),
+  image("media-bus", "/images/moments/2026-08-xiaoai.png", "张年听到公交车歌曲时做出表演动作", "2026-08-08", "event-bus", "source-bus-photo"),
+  image("media-ball", "/images/hero/2026-08-hero-walk.jpg", "张年和妈妈在客厅踢球的家庭记录", "2026-08-03", "event-ball", "source-ball-photo"),
+  image("media-book", "/images/moments/2026-08-xiaoai.png", "张年和家人一起翻看绘本", "2026-07-28", "event-book", "source-book-photo"),
+  image("media-hat", "/images/moments/2026-08-dongqian-lake.png", "张年把尿不湿戴在头上开心地笑", "2026-07-21", "event-hat", "source-hat-photo"),
+  ...Array.from({ length: 8 }, (_, index) => image(`inbox-daycare-${index + 1}`, index % 2 === 0 ? "/images/hero/2026-08-hero-walk.jpg" : "/images/moments/2026-08-dongqian-lake.png", `张年在托班户外活动中追球的第 ${index + 1} 张记录`, "2026-08-28", undefined, "source-inbox-daycare-photos")),
+  video("inbox-dad-video", "/images/hero/2026-08-hero-walk.jpg", "张年回家后还在客厅追球的视频画面", "2026-08-28", 23, undefined, "source-inbox-dad-video"),
 ];
 
 export const growthRecords: GrowthRecord[] = [
