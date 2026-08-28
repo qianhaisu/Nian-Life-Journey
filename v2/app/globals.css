@@ -70,12 +70,30 @@ time, .growth-chart strong, .portrait-facts strong { font-variant-numeric: tabul
 button:disabled { cursor: not-allowed; opacity: .45; }
 
 .home-masthead { padding: clamp(56px, 9vw, 128px) 0 clamp(40px, 6vw, 80px); }
-.home-masthead h1 { max-width: 9ch; margin: 18px 0 0; font-size: clamp(3.8rem, 10vw, 9rem); font-weight: 500; letter-spacing: -.065em; line-height: .93; }
+.home-masthead h1 { max-width: none; margin: 18px 0 0; font-size: clamp(2.75rem, 12vw, 9rem); font-weight: 500; letter-spacing: -.065em; line-height: .93; white-space: nowrap; }
+.home-title-line { display: block; }
 .home-masthead em, .page-masthead em { color: var(--color-accent); font-style: normal; }
 .memory-canvas { display: grid; border-top: 1px solid var(--color-primary); }
 .canvas-stage { position: relative; min-height: clamp(530px, 78vw, 760px); overflow: hidden; background: var(--paper-dark); }
 .canvas-image { object-fit: cover; animation: canvasReveal 650ms var(--ease-out) both; }
 .canvas-shade { position: absolute; inset: 0; background: linear-gradient(to top, oklch(15% .02 55 / .46), transparent 56%); }
+.memory-canvas--text .canvas-stage { display: grid; place-items: center; background: radial-gradient(circle at 78% 20%, color-mix(in oklch, var(--warm-gold) 20%, transparent), transparent 34%), linear-gradient(115deg, color-mix(in oklch, var(--paper-dark) 92%, var(--color-accent)), var(--paper-dark) 68%); }
+.memory-canvas--text .canvas-stage::before { position: absolute; top: 12%; right: 8%; width: clamp(160px, 28vw, 320px); aspect-ratio: 1; border: 1px solid color-mix(in oklch, var(--color-accent) 34%, transparent); border-radius: 50%; content: ""; }
+.memory-canvas--text .canvas-stage::after { position: absolute; top: 0; bottom: 0; left: 18%; border-left: 1px solid color-mix(in oklch, var(--color-accent) 24%, transparent); content: ""; }
+.canvas-text-memory { position: relative; z-index: 1; display: grid; width: min(86%, 620px); min-height: clamp(320px, 46vw, 440px); align-content: space-between; padding: clamp(28px, 5vw, 60px); border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-primary); background: color-mix(in oklch, var(--color-surface) 84%, transparent); box-shadow: 0 18px 34px oklch(30% .03 55 / .08); transform: rotate(-.7deg); animation: textMemoryReveal 560ms var(--ease-out) both; }
+.canvas-text-memory-head { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border); color: var(--color-accent); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+.canvas-text-memory-body { max-width: 32rem; padding-block: 24px 28px; }
+.canvas-text-memory-quote { display: block; height: 24px; color: var(--color-accent); font-family: var(--font-heading); font-size: 3.5rem; line-height: .65; }
+.canvas-text-memory-topic { margin: 0 0 12px; color: var(--color-muted); font-size: .82rem; overflow-wrap: anywhere; }
+.canvas-text-memory blockquote { margin: 0; color: var(--color-text); font-size: clamp(1.8rem, 4.5vw, 3.15rem); line-height: 1.28; overflow-wrap: anywhere; text-wrap: pretty; }
+.canvas-text-memory-link { display: inline-flex; min-height: 44px; align-items: center; justify-self: start; border-bottom: 1px solid currentColor; font-size: .8rem; font-weight: 700; }
+.canvas-text-memory-link:hover { color: var(--color-accent); }
+.memory-canvas--text .canvas-pause { border-color: color-mix(in oklch, var(--color-primary) 42%, transparent); background: color-mix(in oklch, var(--color-surface) 70%, transparent); color: var(--color-primary); }
+.memory-canvas--text .canvas-pause:hover { background: var(--color-surface); }
+.memory-canvas--text .canvas-mobile-controls { background: var(--color-primary); }
+.memory-canvas--empty { min-height: 260px; border-bottom: 1px solid var(--color-border); }
+.canvas-empty-state { display: grid; max-width: 420px; gap: 14px; align-content: center; min-height: 260px; padding: 32px 24px; }
+.canvas-empty-state p { margin: 0; font-size: clamp(1.8rem, 4vw, 2.5rem); line-height: 1.2; }
 .canvas-story { position: absolute; right: 24px; bottom: 80px; left: 24px; z-index: 2; max-width: 420px; color: var(--color-bg); }
 .canvas-story time { font-size: .8rem; letter-spacing: .1em; }
 .canvas-story h2 { display: -webkit-box; overflow: hidden; max-width: 14ch; margin: 8px 0 12px; font-size: clamp(1.75rem, 3.2vw, 2.6rem); line-height: 1.08; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
@@ -422,5 +440,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 @keyframes canvasReveal { from { opacity: .35; transform: scale(1.025); } to { opacity: 1; transform: scale(1); } }
+@keyframes textMemoryReveal { from { opacity: 0; transform: translateY(14px) rotate(-.7deg); } to { opacity: 1; transform: translateY(0) rotate(-.7deg); } }
 @keyframes rise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 .reveal { animation: rise 650ms var(--ease-out) both; }
