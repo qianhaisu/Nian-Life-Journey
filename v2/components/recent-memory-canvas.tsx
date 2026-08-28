@@ -16,13 +16,15 @@ export function RecentMemoryCanvas({ events, media }: { events: LifeEvent[]; med
   const [isManuallyPaused, setIsManuallyPaused] = useState(false);
   const [cycleVersion, setCycleVersion] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(() => new Set());
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const mediaById = useMemo(() => new Map(media.map((item) => [item.id, item])), [media]);
   const safeIndex = events.length ? activeIndex % events.length : 0;
   const isPaused = isInteractionPaused || isManuallyPaused;
   const event = events[safeIndex];
   const hero = event ? mediaById.get(event.heroMediaId ?? event.mediaIds[0]) : undefined;
-  const isTextMemory = Boolean(event && !hero);
+  const displayHero = hero && !failedMediaIds.has(hero.id) ? hero : undefined;
+  const isTextMemory = Boolean(event && !displayHero);
 
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -48,6 +50,10 @@ export function RecentMemoryCanvas({ events, media }: { events: LifeEvent[]; med
     selectIndex(safeIndex + direction);
   }
 
+  function markMediaFailed(mediaId: string) {
+    setFailedMediaIds((current) => current.has(mediaId) ? current : new Set(current).add(mediaId));
+  }
+
   if (!event) return <section className="memory-canvas memory-canvas--empty" data-ai-id="recent-memory-canvas" aria-label="最近的记忆">
     <div className="canvas-empty-state">
       <span className="section-mark">最近</span>
@@ -62,8 +68,8 @@ export function RecentMemoryCanvas({ events, media }: { events: LifeEvent[]; med
     onTouchStart={(touch) => { const point = touch.touches[0]; touchStart.current = point ? { x: point.clientX, y: point.clientY } : null; }}
     onTouchEnd={(touch) => { const start = touchStart.current; const point = touch.changedTouches[0]; if (start && point) { const deltaX = start.x - point.clientX; const deltaY = start.y - point.clientY; if (Math.abs(deltaX) > 44 && Math.abs(deltaX) > Math.abs(deltaY)) move(deltaX > 0 ? 1 : -1); } touchStart.current = null; }}>
     <div className="canvas-stage">
-      {hero ? <>
-        <Image key={hero.id} className="canvas-image" src={hero.src} alt={hero.alt} fill priority sizes="(max-width: 700px) 100vw, 68vw" />
+      {displayHero ? <>
+        <Image key={displayHero.id} className="canvas-image" src={displayHero.src} alt={displayHero.alt} fill priority sizes="(max-width: 700px) 100vw, 68vw" onError={() => markMediaFailed(displayHero.id)} />
         <div className="canvas-shade" />
         <div className="canvas-story" aria-live="polite">
           <time dateTime={event.occurredAt}>{formatEventDate(event.occurredAt)}</time>
@@ -89,7 +95,7 @@ export function RecentMemoryCanvas({ events, media }: { events: LifeEvent[]; med
         <button type="button" onClick={() => move(1)} aria-label="下一段记忆">→</button>
       </div>
     </div>
-    {hero ? <div className="canvas-caption" aria-live="polite"><p>{event.story || "这一天留下了一张照片。"}</p></div> : null}
+    {displayHero ? <div className="canvas-caption" aria-live="polite"><p>{event.story || "这一天留下了一张照片。"}</p></div> : null}
     <ol className="canvas-index">
       {events.map((item, index) => <li key={item.id}><button type="button" className={index === safeIndex ? "is-active" : ""} aria-current={index === safeIndex ? "true" : undefined} onClick={() => selectIndex(index)}><time dateTime={item.occurredAt}>{formatEventDate(item.occurredAt)}</time><span>{eventTitle(item)}</span></button></li>)}
     </ol>
