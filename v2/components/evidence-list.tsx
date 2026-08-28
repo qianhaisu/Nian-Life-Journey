@@ -1,5 +1,5 @@
 import Image from "next/image";
-import type { Media, RawSource, SourceType } from "@/lib/types";
+import type { Contributor, Media, RawSource, SourceType } from "@/lib/types";
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
@@ -20,15 +20,16 @@ function sourceTypeLabel(sourceType: SourceType) {
   return "资料";
 }
 
-export function EvidenceList({ sources, media }: { sources: RawSource[]; media: Media[] }) {
+export function EvidenceList({ sources, media, contributors }: { sources: RawSource[]; media: Media[]; contributors: Contributor[] }) {
   const mediaById = new Map(media.map((item) => [item.id, item]));
+  const contributorById = new Map(contributors.map((item) => [item.id, item]));
   const orderedSources = [...sources].sort((first, second) => first.capturedAt.localeCompare(second.capturedAt));
 
   return <div className="evidence-list">
     {orderedSources.map((source) => {
       const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
       return <article className="evidence-item" key={source.id}>
-        <div className="evidence-time"><time dateTime={source.capturedAt}>{formatTime(source.capturedAt)}</time><span>{source.authorLabel}</span></div>
+        <div className="evidence-time"><time dateTime={source.capturedAt}>{formatTime(source.capturedAt)}</time><span>{contributorById.get(source.contributorId)?.displayName ?? "家庭"}</span></div>
         <div className="evidence-content">
           <div className="evidence-source"><span>{sourceTypeLabel(source.sourceType)}</span><span>{source.sourceLabel}</span></div>
           {source.text ? <p className={source.sourceType === "wechat" ? "evidence-quote" : "evidence-note"}>{source.sourceType === "wechat" ? `“${source.text}”` : source.text}</p> : null}

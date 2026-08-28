@@ -1,183 +1,171 @@
 # Nian Life Journey V2 架构方案
 
-**状态：Mock UI 产品验证阶段，不接真实数据库、认证或导入服务**
-**基准：V1.3，2026-08**  
-**目标：建立可维护 5-10 年的“张年人生档案”**
+**状态：Mock UI 产品验证阶段，不接真实数据库、认证、导入或 AI 服务**
+
+**基准：V2 Product Architecture，2026-08**
+
+**目标：建立可维护 5–10 年的张年数字人生档案**
 
 ## 1. 产品核心
 
-V2 不是儿童个人主页，也不是成长 Dashboard。它是一部会持续长大的家庭摄影书：把散落在照片、视频、微信、老师记录、成长观察和照护资料里的生活，慢慢整理成多年以后仍然愿意重读的记忆。
+Nian Life 不是儿童 Dashboard、家庭 CMS、相册、健康管理 App 或 AI 自动日记。它把照片、视频、聊天、老师记录、文档、成长与照护资料这些散落的真实痕迹，慢慢整理成多年以后仍愿意重读的记忆。
 
-用户看到的是人生，系统内部才是数据。V1 `index.html` 和 `assets/` 保持原样；V2 在 `v2/` 中拥有独立的页面、组件和 Mock 数据边界。
-
-## 2. 三层产品模型
+> 不是把张年的生活存下来，而是让这些日子以后还能回来。
 
 ```text
-RAW       人生原材料
+生活发生 → 留下东西 → AI 筛选 / 分类 / 连接 → 爸爸妈妈确认
+        → 成为记忆 → 时间过去 → 再次遇见
+```
+
+用户看到的是人生，系统内部才是数据。V1 `index.html` 与 `assets/` 保持原样；V2 只在 `v2/` 与本文档中演进。
+
+## 2. 一级产品结构
+
+阅读入口收敛为三个：
+
+```text
+首页             记忆                   关于张年
+最近             以前                   状态 / 成长 / 睡眠 / 健康
+```
+
+录入是独立主操作：
+
+```text
+＋ 留下点什么 → RawSource → 关联建议 → Memory Candidate → 人工确认 → Memory
+```
+
+- `/`：只回答“最近怎么样，张年。”
+- `/memory`：连续时间流，默认从 Event / Day 尺度阅读。
+- `/memory/[year]/[month]`：Month Review；不是一级 Tab。
+- `/memory/[year]`：Year Review；不是一级 Tab。
+- `/about`：现在的状态，以及从成长、睡眠和照护角度重新阅读历史。
+- `/capture`：自然的 capture / organize Mock Flow。
+- `/events/[id]`：Memory 的 Story / Evidence 双层详情。
+- `/timeline`、`/archive`、`/inbox`：兼容旧链接，分别重定向到新结构。
+
+## 3. 数据层次与不可覆盖原则
+
+```text
+RawSource（原始资料，永不被 Story 覆盖）
+  ↓ AI 仅做筛选、分类、连接和克制草稿
+CandidateMemory（候选，必须人工确认）
   ↓
-MEMORY    整理后的记忆
+LifeEvent / Memory（可长期阅读的记忆）
   ↓
-STORY     长期人生叙事
+Timeline / Month / Year / Growth / Care（不同阅读角度）
 ```
+
+Story 可以修改；RawSource、原始媒体、医疗文档、历史测量和已发布版本不能被静默覆盖。未来修改必须保留修订关系、操作者与时间。
+
+## 4. RawSource：来源、内容与贡献者
+
+每条原始资料有三个独立维度：
+
+- `sourceType`：它从哪里来，如 `family_photo`、`daycare_note`、`wechat`、`medical_document`。
+- `contentTypes`：它在讲什么，如 `daily`、`language`、`motor`、`sleep`、`health`。
+- `contributorId`：谁留下它，如爸爸、妈妈、老师、医院或系统导入。
+
+`sourceType = wechat` 不等于 `contributor = 妈妈`。这种区分让未来可以从“妈妈眼里的张年”“老师留下的记录”等角度重读，而无需现在增加复杂页面或数据库表。
+
+## 5. Memory 与记忆重量
+
+`LifeEvent` 允许不完整：标题、故事、地点、人物、标签和图库都可以缺省。最轻的记忆可以只是一句话、一张照片或一段 8 秒视频。
+
+内部 `memoryWeight` 有四级：
+
+- `trace`：普通生活痕迹；轻量文字，不强迫成故事。
+- `memory`：值得留下的一段普通记忆。
+- `highlight`：第一次、明显成长变化或特别有趣的时刻。
+- `chapter`：旅行、生日、人生阶段等章节性记忆。
+
+UI 用图片尺寸、标题比例、留白、故事长度和媒体数量表现重量。用户不需要理解这些技术字段，只能使用自然信号“留在年鉴”。
+
+## 6. Story / Evidence
+
+详情页分两层：
+
+1. **Story**：多年后如何重新阅读这一天，包含时间、地点、主媒体、简短故事、人物与成长关联。
+2. **Evidence / 那天留下的东西**：照片、视频、微信原话、老师记录、家庭备注与文档。
+
+微信显示为“当时我们怎么说”，老师记录显示为“老师眼里的张年”，而不是笼统附件计数。AI 不能改写或替换这些原话。
+
+## 7. Home：最近的人生变化播放器
+
+`RecentMemoryCanvas` 直接读取最近已确认的 LifeEvent，不维护第二套 Home CMS：
+
+- 桌面端以一张主媒体和右侧 4 条克制索引切换。
+- 移动端支持按钮与横向手势切换，不使用广告轮播式分页点。
+- Home 其余内容仅有最近变化、少量时刻、当前月份与一段轻量“以前的这个时候”。
+- Home 不读取或泄露私密健康详情。
+
+## 8. Memory：三种时间尺度
+
+- Event / Day：`/memory` 连续时间流。
+- Month：`/memory/2026/08` 摄影月刊式回顾。
+- Year：`/memory/2026` 年鉴式回顾。
+
+Growth、语言、运动、贡献者、人物、地点、标签与 Content Type 都是未来重新阅读 Timeline 的索引角度，而不是新的平行内容库。
+
+## 9. 关于张年
+
+`/about` 取代 Growth / Health 一级入口，包含：
+
+- 现在的张年：年龄、身高、体重与语言、运动、饮食、睡眠、兴趣、性格。
+- 成长：数据驱动的身高 / 体重趋势，以及语言 / 运动路径；节点可以回到 Memory。
+- Sleep Journey：频繁夜醒 → 夜醒减少 → 夜间稳定 → 抱睡退出 → 自主入睡过渡。
+- 健康与关注：观察中、长期关注、习惯建立、护理中、已稳定与历史。
+
+健康和睡眠默认 `private`。当前仅为 Mock UI，明确标记“仅家庭可见”；真实版本必须在服务端认证和授权之后才读取这些数据。
+
+## 10. 医疗资料与 Care Episode
+
+医疗资料采用受控流程：
 
 ```text
-照片 / 视频 / 微信 / 老师记录 / 医院资料 / 家庭文字
-                         ↓
-                   Memory Inbox
-                         ↓
-                     LifeEvent
-                         ↓
-       Timeline · Month · Year · Growth · Care
-                         ↓
-                   Search / AI（未来）
+Medical RawSource
+  → 提取日期 / 医院 / 检查类型 / 原始事实
+  → 爸爸妈妈确认
+  → Care Episode
 ```
 
-### RAW：人生原材料
+AI 只允许提取、分类、整理和建立顺序；不得诊断、判断病因、修改医疗事实或生成确定性结论。原始医疗文档永久保留。当前 Mock 只证明数据关系和 Episode Timeline 可行，不开发医疗系统。
 
-刚进入系统的内容不需要立刻成为完整的 `LifeEvent`。它们先留在 `Memory Inbox`，保留来源、原始时间、作者和可见性，等待家庭成员判断：忽略、稍后查看、加入已有记忆，或整理成一条新记忆。
+## 11. AI 边界
 
-### MEMORY：整理后的记忆
-
-`LifeEvent` 是一个已经被家庭选择和整理过的生活片段。它有日期、地点、人物、标题、故事、标签、媒体和成长关联，但仍保留它由哪些 RawSource 支撑。
-
-### STORY：长期人生叙事
-
-Story 不是把原文拼起来，而是多年以后家庭愿意怎样记住这一刻。它可以被 Timeline、月度回顾和年度 Archive 重新阅读。未来 AI 只能帮助整理、连接和总结候选内容，不能创造事实。
-
-## 3. Memory Inbox
-
-`/inbox` 是受保护的家庭整理入口，不是企业后台。当前只用合成 Mock Data 验证体验，不实现认证或真实导入。
-
-- Source 是主体，按“来源 + 时间”自然展开，不使用数据表格。
-- 同一来源的一组照片、老师文字或聊天会一起出现，保留原始上下文。
-- 操作包括“整理成记忆”“加入已有记忆”“创建一条记忆”“暂时不处理”。当前操作只改变页面内的 Mock 状态。
-- 页面可以展示一段“候选记忆”，验证未来聚合体验，但本轮不实现 AI clustering。
-- 原材料默认 `family` 或 `private`，在整理完成前不会自动出现在 Timeline。
-
-## 4. TypeScript 数据模型
-
-第一阶段只在 `v2/lib/types.ts` 中预留模型，不创建真实业务表。模型保持少量、明确的实体，不预先拆出标签、人物、地点、审核、AI 任务等二十多张表。
-
-### `RawSource`
-
-它是 RAW 层的统一来源记录，也是 Story 的 Evidence 入口：
-
-- `id`、`profileId`
-- `sourceType`：`family_photo`、`family_video`、`daycare_photo`、`daycare_note`、`wechat`、`parent_note`、`medical_document`、`growth_measurement`
-- `capturedAt`、`importedAt`
-- 可选 `text`、`mediaIds`
-- `sourceLabel`、`authorLabel`
-- `visibility`：`private`、`family`、`public`
-- `status`：`inbox`、`reviewed`、`attached`、`ignored`
-- 可选 `relatedLifeEventId`
-
-`status` 描述整理进度，不代表公开状态。`relatedLifeEventId` 只在它已经附着到某条 LifeEvent 后出现。
-
-### `LifeEvent`
-
-它是 MEMORY 层的主实体，保留 `sourceIds` 和 `mediaIds`，从而能同时表达“故事”和“故事由什么支撑”：
-
-- `title`、`story`、可选 `storySections`
-- `occurredAt`、`locationLabel`、`people`、`tags`
-- `sourceIds`、`mediaIds`、`heroMediaId`
-- `memoryWeight`：`feature`、`memory`、`daily_trace`
-- `scopes`：`family`、`daycare`、`outing`、`growth`
-- `growthRecordIds`、`careRecordIds`
-- `eventType`、`visibility`
-
-详情页分成两层：
-
-1. **Story Layer**：日期、地点、标题、Hero Media、家庭故事、人物、标签和相关成长变化。
-2. **Evidence Layer**：标题为“那天留下的东西”，按时间展示照片、视频、微信和家庭备注。故事表达多年以后如何记住它，Evidence 表达当时真正留下了什么。
-
-### 其他最小实体
-
-- `Media`：照片/视频元数据，可在尚未附着到 LifeEvent 时只关联 RawSource。
-- `GrowthRecord`：身高体重和语言、运动、兴趣等观察；可选关联 LifeEvent。
-- `CareRecord`：健康、睡眠、饮食和儿保等照护观察；默认私密，不在 Home 或公开 Timeline 泄露健康详情。
-- `DailyTrace`：普通一天的几件小事，不强迫写成完整故事卡。
-- `CandidateMemory`：未来聚合能力的 Mock 表现，只保存候选来源和家庭确认状态。
-- `MonthlySnapshot`、`MonthArchive`、`YearArchive`：月度和年度回顾索引，不复制或覆盖历史记录。
-
-## 5. Timeline：人生的主阅读入口
-
-Timeline 不把所有事件做成平权日志，而是让记忆有重量：
-
-- **Feature Memory**：旅行、生日、第一次或明显变化。大图、大标题、更多故事和更大的垂直空间。
-- **Memory**：普通但值得保留的 LifeEvent，使用中等视觉权重。
-- **Daily Trace**：普通一天的几条记录，使用轻量文字流，不生成完整故事卡。
-
-Timeline 只提供克制的来源视角：`全部`、`家里`、`托班`、`出游`、`成长`。筛选不是数据管理功能，而是让家庭重新看到“托班生活”“一起出游的日子”或“这一年的成长变化”。
-
-## 6. Archive、Growth、Care
-
-### Archive
-
-`/archive` 是 Month / Year 的回顾入口。当前只展示 2026 年的 August Mock：主照片、月度一句话、值得记住的时刻、照片/视频数量和几个线索。它不是统计系统，而是“重新阅读这个月”的入口。未来每一年是一册家庭摄影年鉴，历史月与历史年不可被覆盖。
-
-### Growth
-
-Growth 不建立一套割裂于 Timeline 的健康 Dashboard。它回答“他正在成为谁”，把语言、运动、兴趣和第一次发生的事沿时间串起来；每个节点可以回到关联的 LifeEvent、Photo、Video 或 RawSource。身高体重只是时间中的小注脚。
-
-### Care
-
-Care 是从照护角度重新阅读一段时间的 **Episode Timeline**，例如“开始流鼻涕 → 症状变化 → 睡眠受到影响 → 医院检查 → 状态改善”。健康记录默认 `private`，本轮只保留类型、Mock 数据和架构边界，不实现完整 Care 页面。
-
-## 7. 隐私与历史
-
-1. 儿童照片、视频、家庭信息和健康内容默认私密。
-2. `public` 必须由被授权的家庭成员显式设置；客户端不能自行改变 visibility。
-3. Home 和公开 Timeline 不加载健康详情；受保护页面也只能在真实服务端授权后读取私密内容。
-4. 原始来源、媒体、测量和事件不被静默覆盖。更正应保留历史关系，并在未来由服务端记录操作者和时间。
-5. V1 文件和媒体永远不作为 V2 的真实导入源；本轮所有数据都是合成 Mock。
-
-## 8. Now / Later / Out of Scope
-
-### Now：本轮验证
-
-- Next.js App Router、React、TypeScript、Tailwind CSS。
-- `/` Home、`/timeline`、`/events/[id]`、`/inbox`、`/archive` 的 Mock UI。
-- `RawSource`、Story/Evidence、记忆重量、来源筛选、Daily Trace、候选记忆和 2026 Archive。
-- 移动端优先、桌面端编辑型布局、家庭可见性文案和可访问的基本交互。
-
-### Later：真实产品阶段
-
-- PostgreSQL、Drizzle、认证和服务端 visibility policy。
-- 受控 object storage、媒体授权、poster、字幕和可回滚的媒体绑定。
-- 真实导入流程、来源确认、修订历史、审计和家庭成员权限。
-- 搜索、年度浏览、Episode Timeline、候选聚合和 AI 辅助整理。
-
-### Out of Scope：本轮明确不做
-
-- PostgreSQL、Drizzle、认证、真实文件上传、微信/托班自动导入。
-- AI API、OCR、视频处理、自动 clustering、数据同步和真实医疗数据导入。
-- 复杂统计、管理后台、RBAC、发布审批平台和公开发布工作流。
-
-## 9. 目录与交付边界
+AI 的优先级是：
 
 ```text
-.
-├── index.html                     # V1，保持不改
-├── assets/images/                 # V1 媒体，保持不改
-├── docs/
-│   └── v2-architecture.md
-└── v2/
-    ├── app/
-    │   ├── page.tsx               # Home
-    │   ├── timeline/page.tsx
-    │   ├── events/[id]/page.tsx
-    │   ├── inbox/page.tsx
-    │   ├── archive/page.tsx
-    │   └── globals.css
-    ├── components/
-    ├── lib/
-    │   ├── types.ts
-    │   └── mock-data.ts
-    └── public/images/              # V2 受控 Mock 媒体
+Selection & Connection > Generation
 ```
 
-交付前检查：运行 `npm run lint`、`npm run build`，检查所有路由的移动端与桌面端渲染、图片 alt、浏览器 console、健康信息边界和 Timeline 是否仍然是产品中心。真实部署仍需从当前 `main` 创建功能分支、Preview 验证和指定家庭成员确认；本轮不执行真实部署。
+它可以把多数普通资料归入 Daily Trace，也可以明确说“今天没有发现需要单独形成 Memory 的事件”。任何候选 Memory、成长推断、Story Draft、医疗提取和可见性变更都必须由授权家庭成员最终确认。
 
-## 10. AI 预留原则
+## 12. 隐私与媒体
 
-未来 AI 的职责是帮助家庭整理、连接和总结：从 RawSource 提议候选记忆、把相关来源连到 LifeEvent、生成月度总结初稿或辅助搜索。AI 不能创造日期、人物、测量、健康状态、媒体来源或公开权限；所有候选结果都要经过家庭成员确认，且默认不向第三方发送儿童原图、健康详情或家庭身份信息。
+1. 儿童照片、视频、健康与家庭信息默认敏感。
+2. 原始资料默认 `family` 或 `private`；整理前不自动进入阅读页。
+3. `public` 必须由授权家庭成员显式确认，并由真实服务端策略执行。
+4. Home 与公开 Memory metadata 不得加载健康详情。
+5. 媒体必须有授权、来源、可见性和描述性 alt；视频未来必须有 poster 与字幕策略。
+6. Mock 图片来自仓库内受控路径，不使用临时外链。
+
+## 13. Now / Later / Out of Scope
+
+### Now
+
+- Next.js App Router、React、TypeScript、CSS 与 Mock Data。
+- 新导航、Home、Memory 三尺度、About、Capture、Memory Candidate、Story / Evidence。
+- Contributor、Source / Content 双层分类、四级记忆重量、V1 Growth / Sleep / Care 内容迁移。
+
+### Later
+
+- 服务端认证、visibility policy、对象存储、媒体授权与修订历史。
+- 真实导入、搜索、AI 辅助聚合、受控医疗资料整理与偶遇过去策略。
+
+### Out of Scope
+
+PostgreSQL、Drizzle、真实 Auth / 上传 / 微信 API / OCR / AI API / 照片识别 / 转码 / 医疗诊断 / 队列 / Worker / 搜索引擎 / 完整 RBAC。
+
+## 14. Preview 与发布
+
+本轮只能在功能分支与 Preview 验证。交付前运行 `npm run lint`、`npm run build`，检查桌面 / 移动端、导航、所有核心路由、中文标题断行、图片比例、键盘焦点与 console。真实合并和发布只能由指定家庭成员确认。

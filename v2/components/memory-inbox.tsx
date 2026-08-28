@@ -1,118 +1,41 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
-import type { CandidateMemory, Media, RawSource } from "@/lib/types";
+import { useMemo, useState } from "react";
+import type { CandidateMemory, Contributor, Media, RawSource } from "@/lib/types";
 
-interface SourceGroup {
-  key: string;
-  label: string;
-  authorLabel: string;
-  capturedAt: string;
-  sources: RawSource[];
-  media: Media[];
-}
+const captureKinds = ["照片 / 视频", "聊天记录", "托班记录", "文档", "健康 / 就医资料", "写一句话"];
+const sourceLabels: Record<RawSource["sourceType"], string> = { family_photo: "家庭照片", family_video: "家庭视频", daycare_photo: "托班照片", daycare_note: "老师记录", wechat: "微信", parent_note: "家庭备注", medical_document: "医疗文档", checkup_document: "儿保文档", growth_measurement: "成长测量", other_document: "其他文档" };
+const contentLabels: Record<string, string> = { daily: "日常", daycare: "托班", travel: "旅行", milestone: "第一次", growth: "成长", language: "语言", motor: "运动", interest: "兴趣", food: "饮食", sleep: "睡眠", health: "健康", family: "家庭", funny_moment: "有趣时刻" };
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric" }).format(new Date(value));
-}
+export function MemoryInbox({ sources, media, candidate, contributors }: { sources: RawSource[]; media: Media[]; candidate: CandidateMemory; contributors: Contributor[] }) {
+  const [selected, setSelected] = useState<string[]>(["照片 / 视频", "托班记录", "聊天记录"]);
+  const [stage, setStage] = useState<"capture" | "organize">("capture");
+  const [result, setResult] = useState("");
+  const contributorById = useMemo(() => new Map(contributors.map((item) => [item.id, item])), [contributors]);
+  const mediaById = useMemo(() => new Map(media.map((item) => [item.id, item])), [media]);
 
-function formatDuration(seconds?: number) {
-  if (!seconds) return "";
-  return `00:${String(seconds).padStart(2, "0")}`;
-}
-
-function buildGroups(sources: RawSource[], media: Media[]) {
-  const mediaById = new Map(media.map((item) => [item.id, item]));
-  const groups = new Map<string, SourceGroup>();
-  sources.forEach((source) => {
-    const key = `${source.sourceLabel}-${source.capturedAt.slice(0, 10)}`;
-    const existing = groups.get(key) ?? { key, label: source.sourceLabel, authorLabel: source.authorLabel, capturedAt: source.capturedAt, sources: [], media: [] };
-    existing.sources.push(source);
-    source.mediaIds.forEach((mediaId) => {
-      const item = mediaById.get(mediaId);
-      if (item) existing.media.push(item);
-    });
-    groups.set(key, existing);
-  });
-  return [...groups.values()].sort((first, second) => first.capturedAt.localeCompare(second.capturedAt));
-}
-
-function sourceSummary(group: SourceGroup) {
-  const photos = group.media.filter((item) => item.type === "photo").length;
-  const videos = group.media.filter((item) => item.type === "video").length;
-  const notes = group.sources.filter((source) => source.sourceType === "daycare_note" || source.sourceType === "parent_note").length;
-  const chats = group.sources.filter((source) => source.sourceType === "wechat").length;
-  const summary: string[] = [];
-  if (photos > 0) summary.push(`${photos} 张照片`);
-  if (videos > 0) summary.push(`${videos} 段视频`);
-  if (chats > 0) summary.push(`${chats} 条聊天`);
-  if (notes > 0) summary.push(`${notes} 条记录`);
-  return summary.join(" · ");
-}
-
-function candidateSummary(sources: RawSource[], media: Media[]) {
-  const sourceIds = new Set(sources.flatMap((source) => source.mediaIds));
-  const candidateMedia = media.filter((item) => sourceIds.has(item.id));
-  const photos = candidateMedia.filter((item) => item.type === "photo").length;
-  const videos = candidateMedia.filter((item) => item.type === "video").length;
-  const chats = sources.filter((source) => source.sourceType === "wechat").length;
-  const notes = sources.filter((source) => source.sourceType === "daycare_note" || source.sourceType === "parent_note").length;
-  return [photos > 0 ? `${photos} 张照片` : "", videos > 0 ? `${videos} 段视频` : "", chats > 0 ? `${chats} 条家庭聊天` : "", notes > 0 ? `${notes} 条记录` : ""].filter(Boolean).join(" · ");
-}
-
-export function MemoryInbox({ sources, media, candidate }: { sources: RawSource[]; media: Media[]; candidate: CandidateMemory }) {
-  const groups = buildGroups(sources, media);
-  const candidateSources = candidate.sourceIds.map((id) => sources.find((source) => source.id === id)).filter((source): source is RawSource => Boolean(source));
-  const [groupStates, setGroupStates] = useState<Record<string, string>>({});
-  const [candidateState, setCandidateState] = useState("");
-
-  function markGroup(key: string, message: string) {
-    setGroupStates((current) => ({ ...current, [key]: message }));
-  }
-
-  return <div className="inbox-flow">
-    <section className="candidate-memory" aria-labelledby="candidate-title">
-      <div className="candidate-mark"><span>可能的记忆</span><span>还没有成为故事</span></div>
-      <div className="candidate-copy">
-        <p className="candidate-date">{candidate.occurredAt.replaceAll("-", ".")}</p>
-        <h2 id="candidate-title" className="serif">发现一段可能值得留下的记忆</h2>
-        <p>{candidate.description}</p>
-        <div className="candidate-details"><span>{candidateSummary(candidateSources, media)}</span><span>来自 {candidateSources.length} 个来源</span></div>
-        <div className="candidate-actions">
-          <button className="ink-button" type="button" onClick={() => setCandidateState("已放入整理队列")}>整理成记忆</button>
-          <button className="quiet-button" type="button" onClick={() => setCandidateState("已暂时收起")}>暂时不处理</button>
-          {candidateState ? <span className="inline-confirmation" role="status">{candidateState}</span> : null}
+  return <div className="capture-flow" data-ai-id="capture-organize-flow">
+    <ol className="flow-steps" aria-label="整理进度"><li className={stage === "capture" ? "is-active" : "is-done"}>1 留下东西</li><li className={stage === "organize" ? "is-active" : ""}>2 看看关联</li><li>3 确认成为记忆</li></ol>
+    {stage === "capture" ? <section className="capture-question" aria-labelledby="capture-title">
+      <div><span className="section-mark">现在</span><h2 id="capture-title" className="serif">今天想留下什么？</h2><p>可以一次放进不同来源。这里只演示整理方式，不会真的上传。</p></div>
+      <div className="capture-kinds">{captureKinds.map((kind) => <button type="button" key={kind} className={selected.includes(kind) ? "is-selected" : ""} aria-pressed={selected.includes(kind)} onClick={() => setSelected((current) => current.includes(kind) ? current.filter((item) => item !== kind) : [...current, kind])}><span aria-hidden="true">{selected.includes(kind) ? "✓" : "＋"}</span>{kind}</button>)}</div>
+      <div className="capture-batch"><span>这次准备留下</span><strong>12 张托班照片 · 1 段视频 · 2 张微信截图 · 1 条爸爸备注</strong><button className="primary-button" type="button" disabled={!selected.length} onClick={() => setStage("organize")}>看看它们之间的关联</button></div>
+    </section> : <>
+      <section className="candidate-memory" aria-labelledby="candidate-title">
+        <div className="candidate-flag"><span>AI 提议</span><small>等待爸爸妈妈确认</small></div>
+        <div className="candidate-main">
+          <p className="candidate-date">{candidate.occurredAt.replaceAll("-", ".")} · {candidate.contextLabel}</p>
+          <h2 id="candidate-title" className="serif">{candidate.title}</h2>
+          <p>{candidate.description}</p>
+          <dl className="candidate-facts"><div><dt>建议归类</dt><dd>{candidate.suggestedTags.join(" · ")}</dd></div>{candidate.growthInsight ? <div><dt>可能的成长变化</dt><dd>{candidate.growthInsight}</dd></div> : null}<div><dt>Story Draft</dt><dd>“{candidate.storyDraft}”</dd></div></dl>
+          <div className="candidate-actions"><button className="primary-button" type="button" onClick={() => setResult("这段候选记忆已确认保存（Mock）")}>确认保存</button><button type="button" onClick={() => setResult("已打开修改状态（Mock）")}>修改</button><button type="button" onClick={() => setResult("已标记为需要拆开整理（Mock）")}>这些不是一件事</button><button type="button" onClick={() => setResult("已暂时保留在待整理区（Mock）")}>暂时不处理</button></div>
+          {result ? <p className="action-result" role="status">{result}</p> : null}
         </div>
-      </div>
-    </section>
-
-    <div className="inbox-date-heading"><span>今天 · 8 月 28 日</span><span>还在等待你决定去哪里</span></div>
-    <div className="inbox-sources">
-      {groups.map((group) => {
-        const text = group.sources.map((source) => source.text).filter(Boolean).join(" ");
-        const hasWechat = group.sources.some((source) => source.sourceType === "wechat");
-        const state = groupStates[group.key];
-        return <article className="inbox-source" key={group.key}>
-          <div className="inbox-source-heading"><div><span className="source-overline">来自</span><h2 className="serif">{group.label}</h2></div><div className="source-author"><span>{group.authorLabel}</span><time dateTime={group.capturedAt}>{formatDate(group.capturedAt)}</time></div></div>
-          {group.media.length > 0 ? <div className={`inbox-media inbox-media-${group.media.length > 1 ? "photos" : "single"}`}>
-            {group.media.slice(0, 4).map((item, index) => <div className="inbox-media-item" key={item.id}>
-              <Image src={item.src} alt={item.alt} fill sizes="(max-width: 700px) 25vw, 180px" style={{ objectFit: "cover" }} />
-              {item.type === "video" ? <span className="media-chip">Video · {formatDuration(item.durationSeconds)}</span> : null}
-              {index === 3 && group.media.length > 4 ? <span className="media-more">+{group.media.length - 4}</span> : null}
-            </div>)}
-          </div> : null}
-          {text ? <p className={hasWechat ? "inbox-quote" : "inbox-note"}>{hasWechat ? `“${text}”` : text}</p> : null}
-          <div className="inbox-source-footer"><span className="source-count">{sourceSummary(group)}</span><div className="inbox-actions">
-            {hasWechat ? <>
-              <button className="quiet-button" type="button" onClick={() => markGroup(group.key, "已标记为加入已有记忆")}>加入已有记忆</button>
-              <button className="ink-button" type="button" onClick={() => markGroup(group.key, "已准备创建一条记忆")}>创建一条记忆</button>
-            </> : <button className="ink-button" type="button" onClick={() => markGroup(group.key, "已放入整理队列")}>整理{group.media.some((item) => item.type === "video") ? "这段视频" : "成记忆"}</button>}
-            {state ? <span className="inline-confirmation" role="status">{state}</span> : null}
-          </div></div>
-        </article>;
-      })}
-    </div>
-    <p className="inbox-footnote">原材料默认只对家庭可见。整理完成前，它们不会自动出现在时间线里。</p>
+      </section>
+      <section className="source-ledger" aria-labelledby="source-ledger-title"><div className="ledger-heading"><span className="section-mark">原始资料</span><h2 id="source-ledger-title" className="serif">那天真正留下的东西</h2><p>来源、内容和贡献者是三个不同维度；原始资料不会被 Story Draft 覆盖。</p></div>
+        {sources.map((source) => { const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item)); const contributor = contributorById.get(source.contributorId); return <article className="source-row" key={source.id}><div className="source-meta"><time dateTime={source.capturedAt}>{source.capturedAt.slice(11, 16)}</time><strong>{contributor?.displayName ?? "家庭"}</strong><span>{sourceLabels[source.sourceType]}</span></div><div className="source-body">{source.text ? <blockquote>“{source.text}”</blockquote> : null}{sourceMedia.length ? <div className="source-thumbs">{sourceMedia.slice(0, 4).map((item, index) => <div key={item.id}><Image src={item.src} alt={item.alt} fill sizes="120px" />{index === 3 && sourceMedia.length > 4 ? <span>+{sourceMedia.length - 4}</span> : null}</div>)}</div> : null}<p>{source.contentTypes.map((type) => contentLabels[type]).join(" · ")}</p></div></article>; })}
+      </section>
+    </>}
   </div>;
 }
