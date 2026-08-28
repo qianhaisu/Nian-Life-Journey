@@ -34,7 +34,12 @@ function hydrateMedia(store: Store): Store {
 
 async function readStore(): Promise<Store> {
   try { return hydrateMedia(normalizeStore(JSON.parse(await fs.readFile(storeFile, "utf8")) as Partial<Store>)); }
-  catch { await fs.mkdir(dataDir, { recursive: true }); const store = initialStore(); await writeStore(store); return store; }
+  catch {
+    const store = initialStore();
+    // Serverless deployments ship a read-only filesystem; fall back to in-memory seed data instead of crashing the page.
+    try { await writeStore(store); } catch { /* not persisted */ }
+    return store;
+  }
 }
 async function writeStore(store: Store) { await fs.mkdir(dataDir, { recursive: true }); await fs.writeFile(storeFile, JSON.stringify(store, null, 2), "utf8"); }
 
