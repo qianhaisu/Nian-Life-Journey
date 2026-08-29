@@ -16,6 +16,8 @@ export type RawSourceStatus = "uploaded" | "processing" | "organized" | "failed"
 export type MemoryWeight = "trace" | "memory" | "highlight" | "chapter";
 export type TimelineScope = "family" | "daycare" | "outing" | "growth";
 export type CandidateMemoryStatus = "suggested" | "deferred" | "split" | "converted";
+export type MonthlyFocusGoalStatus = "watching" | "progress" | "completed" | "deferred";
+export type MonthlyFocusGoalCategory = "sleep" | "language" | "reading" | "health" | (string & {});
 
 export interface Profile { id: string; displayName: string; birthDate: string; timezone: string; bio: string; visibility: Visibility; }
 export interface Contributor { id: string; profileId: string; role: ContributorRole; displayName: string; }
@@ -29,6 +31,7 @@ export interface GrowthRecord { id: string; profileId: string; lifeEventId?: str
 export interface CareRecord { id: string; profileId: string; careEpisodeId?: string; lifeEventId?: string; kind: CareKind; observedAt: string; status: CareStatus; title: string; note: string; history?: string; nextStep?: string; source: string; sourceIds?: string[]; visibility: Visibility; }
 export interface CareEpisode { id: string; profileId: string; title: string; startedAt: string; endedAt?: string; recordIds: string[]; sourceIds: string[]; status: "open" | "resolved"; visibility: "private"; }
 export interface MonthlySnapshot { id: string; profileId: string; month: string; summary: string; highlights: string[]; visibility: Visibility; }
+export interface MonthlyFocusGoal { id: string; profileId: string; snapshotMonth: string; targetMonth: string; category: MonthlyFocusGoalCategory; title: string; description: string; status: MonthlyFocusGoalStatus; linkedEntryIds?: string[]; completedAt?: string; visibility: Visibility; }
 export interface DailyTrace { id: string; profileId: string; occurredAt: string; entries: string[]; sourceIds: string[]; scopes: TimelineScope[]; visibility: Visibility; }
 export interface CandidateMemory { id: string; profileId: string; occurredAt: string; contextLabel: string; title: string; description: string; sourceIds: string[]; suggestedContentTypes: ContentType[]; suggestedTags: string[]; suggestedMemoryWeight?: MemoryWeight; growthInsight?: string; storyDraft?: string; confidence?: number; reason?: string; status: CandidateMemoryStatus; visibility: Visibility; }
 export interface MonthArchive { id: string; profileId: string; month: string; label: string; coverMediaId: string; summary: string; highlights: string[]; momentCount: number; photoCount: number; videoCount: number; visibility: Visibility; }

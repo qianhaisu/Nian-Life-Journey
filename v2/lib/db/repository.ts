@@ -1,19 +1,19 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { careEpisodes, careRecords, contributors, dailyTraces, events as seedEvents, growthRecords, media as seedMedia, monthlySnapshot, profile, rawSources as seedSources } from "@/lib/mock-data";
-import type { CareEpisode, CareRecord, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlySnapshot, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
+import { careEpisodes, careRecords, contributors, dailyTraces, events as seedEvents, growthRecords, media as seedMedia, monthlyFocusGoals, monthlySnapshot, profile, rawSources as seedSources } from "@/lib/mock-data";
+import type { CareEpisode, CareRecord, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
 import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
 
-export type Store = { profile: Profile; contributors: Contributor[]; media: Media[]; mediaAssets: MediaAsset[]; mediaLocations: MediaLocation[]; connectorStates: ConnectorState[]; rawSources: RawSource[]; events: LifeEvent[]; dailyTraces: DailyTrace[]; growthRecords: GrowthRecord[]; careRecords: CareRecord[]; careEpisodes: CareEpisode[]; links: SourceMemoryLink[]; monthlySnapshot: MonthlySnapshot };
+export type Store = { profile: Profile; contributors: Contributor[]; media: Media[]; mediaAssets: MediaAsset[]; mediaLocations: MediaLocation[]; connectorStates: ConnectorState[]; rawSources: RawSource[]; events: LifeEvent[]; dailyTraces: DailyTrace[]; growthRecords: GrowthRecord[]; careRecords: CareRecord[]; careEpisodes: CareEpisode[]; monthlyFocusGoals: MonthlyFocusGoal[]; links: SourceMemoryLink[]; monthlySnapshot: MonthlySnapshot };
 const dataDir = path.join(process.cwd(), ".data");
 const storeFile = path.join(dataDir, "nian-life.json");
 
-const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
+const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
 
 function normalizeStore(store: Partial<Store>): Store {
-  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [] };
+  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals };
 }
 function hydrateMedia(store: Store): Store {
   store.media = store.media.map((media) => {

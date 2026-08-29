@@ -1,4 +1,4 @@
-import type { CareEpisode, CareRecord, CandidateMemory, Contributor, CurrentPortrait, DailyTrace, GrowthRecord, LifeEvent, Media, MonthArchive, MonthlySnapshot, Profile, RawSource, SleepPhase, YearArchive } from "./types";
+import type { CareEpisode, CareRecord, CandidateMemory, Contributor, CurrentPortrait, DailyTrace, GrowthRecord, LifeEvent, Media, MonthArchive, MonthlyFocusGoal, MonthlySnapshot, Profile, RawSource, SleepPhase, YearArchive } from "./types";
 
 export const profile: Profile = { id: "profile-zhangnian", displayName: "张年", birthDate: "2025-01-03", timezone: "Asia/Shanghai", bio: "把照片、原话和日子，慢慢放回他的时间里。", visibility: "family" };
 
@@ -125,6 +125,12 @@ export const dailyTraces: DailyTrace[] = [
 export const candidateMemories: CandidateMemory[] = [{ id: "candidate-ball-0828", profileId: profile.id, occurredAt: "2026-08-28", contextLabel: "托班", title: "第一次追着哥哥姐姐一起踢球", description: "12 张托班照片、1 段视频、1 条老师记录和 2 条家庭聊天落在了同一条线上。", sourceIds: ["source-inbox-daycare-photos", "source-inbox-daycare-note", "source-inbox-mom-wechat", "source-inbox-dad-wechat", "source-inbox-dad-video"], suggestedContentTypes: ["daycare", "motor", "growth"], suggestedTags: ["托班", "运动", "社交"], growthInsight: "开始主动参与其他孩子的活动。", storyDraft: "户外活动时，他不再只站在旁边看，开始追着球和哥哥姐姐一起跑。", status: "suggested", visibility: "family" }];
 
 export const monthlySnapshot: MonthlySnapshot = { id: "snapshot-2026-08", profileId: profile.id, month: "2026-08", summary: "这个月，他开始说更多话，也越来越会回应我们了。", highlights: ["开始说“车车”", "走路更稳", "主动翻绘本", "会追着球跑"], visibility: "family" };
+export const monthlyFocusGoals: MonthlyFocusGoal[] = [
+  { id: "focus-2026-08-sleep", profileId: profile.id, snapshotMonth: "2026-08", targetMonth: "2026-09", category: "sleep", title: "让入睡的过程慢一点", description: "留意自主入睡时，入睡等待是否会慢慢缩短。", status: "watching", visibility: "family" },
+  { id: "focus-2026-08-language", profileId: profile.id, snapshotMonth: "2026-08", targetMonth: "2026-09", category: "language", title: "把新的话留下来", description: "继续记下主动表达，尤其是越来越清晰的称呼。", status: "watching", visibility: "family" },
+  { id: "focus-2026-08-reading", profileId: profile.id, snapshotMonth: "2026-08", targetMonth: "2026-09", category: "reading", title: "看看他会怎样靠近绘本", description: "留意是否开始主动翻书、听读，或在故事里回应我们。", status: "watching", visibility: "family" },
+  { id: "focus-2026-08-health", profileId: profile.id, snapshotMonth: "2026-08", targetMonth: "2026-09", category: "health", title: "把日常观察带去儿保", description: "留意呼吸道状况是否慢慢恢复；儿保时可一并留意长期的大脚趾甲沟情况。", status: "watching", visibility: "family" },
+];
 export const monthArchives: MonthArchive[] = [{ id: "archive-month-2026-08", profileId: profile.id, month: "2026-08", label: "八月", coverMediaId: "media-lake", summary: monthlySnapshot.summary, highlights: monthlySnapshot.highlights, momentCount: 23, photoCount: 186, videoCount: 12, visibility: "family" }];
 export const yearArchive: YearArchive = { id: "archive-year-2026", profileId: profile.id, year: "2026", title: "正在长成的一年", intro: "这一年还没有结束。我们先把已经留下来的部分，放在这里。", monthIds: monthArchives.map((month) => month.id), visibility: "family" };
 
