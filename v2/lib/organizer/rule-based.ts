@@ -34,7 +34,7 @@ export class RuleBasedMemoryOrganizer {
     const store = await getStore();
     const sources = sourceIds.map((id) => store.rawSources.find((source) => source.id === id)).filter((source): source is RawSource => Boolean(source && !source.deletedAt));
     if (!sources.length || sources.length !== new Set(sourceIds).size) throw new Error("No sources found for organization");
-    const checksums = new Map(store.media.map((media) => [media.id, media.mediaAssetId ? store.mediaAssets.find((asset) => asset.id === media.mediaAssetId)?.checksum : undefined]));
+    const checksums = new Map(store.media.map((media) => [media.id, media.mediaAssetId ? store.mediaAssets.find((asset) => asset.id === media.mediaAssetId)?.checksum ?? undefined : undefined]));
     const organizationFingerprint = options.organizationFingerprint ?? sourceBatchFingerprint(sources, checksums, "rule-v2");
     const prior = options.force ? null : await findOrganizerRun(organizationFingerprint);
     if (prior) return this.resultFromRun(prior);

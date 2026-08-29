@@ -7,6 +7,10 @@ out/
 !.env.example
 .data/
 media-manifest.json
+
+# Protect any WorkBuddy artifact staging copied into this project; the Skill source is outside this scope.
+.quarkclouddrive/
+
 .env*
 !.env.example
 

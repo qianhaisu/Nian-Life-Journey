@@ -10,7 +10,7 @@ export type QuarkScope = { folder?: string; from?: string; to?: string; query?: 
 export type QuarkFile = { providerRef: string; path?: string; filename: string; mimeType: string; mediaType?: MediaType; size?: number; takenAt?: string; checksum?: string; width?: number; height?: number; durationSeconds?: number };
 export type QuarkFolder = { providerRef: string; path?: string; filename: string };
 export type QuarkListPage = { files: QuarkFile[]; folders?: QuarkFolder[]; cursor?: string };
-export type QuarkAdapterErrorCode = "QUARK_AUTH_REQUIRED" | "QUARK_AGENT_UNSUPPORTED" | "QUARK_CLI_UNAVAILABLE" | "QUARK_COMMAND_FAILED" | "QUARK_SCOPE_REQUIRED" | "QUARK_SCOPE_UNSUPPORTED" | "QUARK_SCOPE_LIMIT" | "QUARK_PAGINATION_UNSUPPORTED" | "QUARK_INVALID_OUTPUT" | "QUARK_METADATA_INVALID" | "QUARK_DOWNLOAD_FAILED";
+export type QuarkAdapterErrorCode = "QUARK_AUTH_REQUIRED" | "QUARK_AGENT_UNSUPPORTED" | "QUARK_CLI_UNAVAILABLE" | "QUARK_COMMAND_FAILED" | "QUARK_SCOPE_REQUIRED" | "QUARK_SCOPE_UNSUPPORTED" | "QUARK_SCOPE_LIMIT" | "QUARK_PAGINATION_UNSUPPORTED" | "QUARK_CAPABILITY_UNSUPPORTED" | "QUARK_INVALID_OUTPUT" | "QUARK_METADATA_INVALID" | "QUARK_DOWNLOAD_FAILED" | "QUARK_ARTIFACT_INVALID" | "QUARK_ARTIFACT_TOO_LARGE";
 export type QuarkAuthStatus = { status: "connected" | "auth_required" | "unsupported" | "unavailable"; code?: QuarkAdapterErrorCode; officialCode?: number; officialMessage?: string; message: string };
 
 export class QuarkAdapterError extends Error {

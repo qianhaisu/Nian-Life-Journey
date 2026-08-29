@@ -22,6 +22,13 @@
       "when": 1787920667000,
       "tag": "0002_ai_organizer",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788000000000,
+      "tag": "0003_quark_artifact_ingestion",
+      "breakpoints": true
     }
   ]
 }
