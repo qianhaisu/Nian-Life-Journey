@@ -28,10 +28,9 @@ Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（目�
 
 - Quark CLI 只能由 WorkBuddy 调用；`QuarkCliAdapter` 抛 `QUARK_CAPABILITY_UNSUPPORTED` 是设计，不是 bug。
 - Nianlife 只消费 WorkBuddy 产出的 Quark JSONL artifact，走 `v2/lib/ingest/quark-artifact*.ts`。
-- 幂等键固定：`(provider="quark", variant="original", providerRef=fid)`，不可更改。
 - artifact 导入默认 dry-run；不自动登录、上传、移动或删除网盘文件。
 - WorkBuddy 运行时目录（`workbuddy/storage/`、Quark `search-results/`）已在 `.gitignore` 覆盖；artifact 路径校验已加固，拒绝经由 symlink 或 Windows junction/reparse point 到达的文件。
-- Quark 的 `fid` 是否长期稳定，目前正在另一个 Session 中重新验证，尚无定论；不要在文档或代码注释中把"`fid` 永久稳定"当作既定事实来写，以该 Session 的最终结论为准。
+- **`fid` 已验证为不稳定，结论已定**：对完全相同的搜索重复执行两次，两次返回的文件名集合相同，但 `fid` 交集为 0。因此 `fid`、`check_link`、Quark 路径只是单次任务期下载引用，绝不能作为永久媒体身份或跨任务幂等键；原始文件内容的 SHA-256 才是永久身份，服务端持久化前必须独立重算并核对 SHA-256。`(provider="quark", variant="original", providerRef=fid)` 仅适用于 dry-run 的 artifact-metadata-only 路径（`quark-artifact-asset.ts`，同一任务内单次运行），不是跨任务的永久幂等键；真正下载原图并入库的路径（见 `v2/scripts/quark-photo-init.mjs`）以 SHA-256 派生的确定性 id 去重，而不是 fid。
 
 ## AI Organizer 架构方向
 
