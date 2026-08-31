@@ -12,7 +12,7 @@ const kinds = [
   { value: "parent_note", label: "写一句话" },
 ];
 
-type CaptureResult = { eventId?: string; traceId?: string; careEpisodeId?: string; count: number; action: string };
+type CaptureResult = { count: number };
 
 export function MemoryInbox() {
   const [kind, setKind] = useState("family_photo");
@@ -29,7 +29,7 @@ export function MemoryInbox() {
       startTransition(async () => {
         try {
           const value = await captureSources(formData);
-          setResult({ eventId: value.result.eventId, traceId: value.result.traceId, careEpisodeId: value.result.careEpisodeId, count: value.count, action: value.result.action });
+          setResult({ count: value.count });
         } catch (error) {
           setMessage(error instanceof Error ? error.message : "保存失败，请重试");
         }
@@ -43,9 +43,9 @@ export function MemoryInbox() {
       <button className="primary-button" type="submit" disabled={isPending}>{isPending ? "正在收好…" : "上传并自动整理"}</button>
       {message ? <p className="form-error" role="alert">{message}</p> : null}
     </form> : <section className="capture-done" aria-live="polite">
-      <span className="section-mark">已经收好了</span><h2 className="serif">今天留下了 {result.count} 项东西。</h2><p>系统已经自动整理，原始资料和媒体会一直保留。</p>
-      <div className="done-summary"><strong>{result.action === "attach_existing" || result.action === "merge_existing" ? "已接入已有记忆" : result.action === "care_episode" ? "已归入照护记录" : result.action === "daily_trace" ? "已保留为当天记录" : result.action === "store_only" ? "资料已安全保留" : "已形成一条记忆"}</strong><span>Organizer 已按日期、来源和内容完成整理。</span></div>
-      <div className="candidate-actions">{result.eventId ? <Link className="primary-button" href={`/events/${result.eventId}`}>看看整理结果 ↗</Link> : null}<button type="button" onClick={() => setResult(null)}>继续留下东西</button></div>
+      <span className="section-mark">已经收好了</span><h2 className="serif">今天留下了 {result.count} 项东西。</h2><p>原始资料和媒体已经安全保留，Organizer 正在后台整理，整理完成后会出现在时间线里。</p>
+      <div className="done-summary"><strong>正在整理中</strong><span>不用等待，可以直接继续留下下一项东西。</span></div>
+      <div className="candidate-actions"><Link className="primary-button" href="/">看看时间线 ↗</Link><button type="button" onClick={() => setResult(null)}>继续留下东西</button></div>
     </section>}
     <p className="capture-privacy">医疗资料自动保持 private；公开展示需要家庭成员之后主动设置。自动整理出错时，原始资料不会被删除。</p>
   </div>;

@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
-import { appendUpload, getStore, newId } from "@/lib/db/repository";
+import { appendUpload, enqueueOrganizerJob, getStore, markSourcesProcessing, newId } from "@/lib/db/repository";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
 import { hotStorage } from "@/lib/storage/hot-storage";
-import { organizeSources } from "@/lib/organizer/rule-based";
 import type { Media, MediaAsset, MediaLocation, MediaType, RawSource } from "@/lib/types";
 
 export type QuarkScope = { folder?: string; from?: string; to?: string; query?: string; cursor?: string };
@@ -97,6 +96,7 @@ export async function ingestQuarkFile(file: QuarkFile, options: QuarkImportOptio
   const variant = type === "photo" ? "web" : type === "video" ? "poster" : "document_preview";
   const media: Media = { id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type, src: mediaDeliveryUrl(mediaId, variant), originalFilename: file.filename, mimeType: file.mimeType, fileSize: file.size ?? bytes?.byteLength, alt: file.filename, takenAt: file.takenAt ?? now, visibility, width, height, durationSeconds: file.durationSeconds };
   await appendUpload({ source, media: [media], assets: [asset], locations });
-  await organizeSources([sourceId]);
-  return { sourceId, assetId, mediaId, organized: true };
+  const job = await enqueueOrganizerJob({ sourceIds: [sourceId], profileId: options.profileId });
+  await markSourcesProcessing([sourceId]);
+  return { sourceId, assetId, mediaId, jobId: job.id, organized: false };
 }

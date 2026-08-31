@@ -65,3 +65,26 @@ export interface YearArchive { id: string; profileId: string; year: string; titl
 export interface CurrentPortrait { label: string; summary: string; recordId?: string; private?: boolean; }
 export interface SleepPhase { id: string; label: string; startedAt: string; note: string; current?: boolean; }
 export interface ConnectorState { id: string; provider: "quark"; profileId: string; cursor?: string; lastSuccessfulSync?: string; lastError?: string; pendingArchiveCount: number; scope?: { folder?: string; from?: string; to?: string; query?: string }; connectorVersion: string; status: ConnectorSyncStatus; updatedAt: string; lastKeyword?: string; lastAttemptAt?: string; lastSuccessfulAt?: string; artifactItemCount?: number; importedCount?: number; failedCount?: number; lastErrorCode?: string; }
+
+export type OrganizerJobStatus = "pending" | "processing" | "succeeded" | "failed";
+// A queued unit of Organizer work: one call to organize(sourceIds) worth of sources.
+// jobKey is sha256(sorted(sourceIds).join(",")) — it de-dupes concurrent/retried enqueue calls for
+// the same batch, independent from OrganizerRun.organizationFingerprint, which de-dupes the actual
+// business record creation once a job runs (see lib/organizer/context.ts sourceBatchFingerprint).
+export interface OrganizerJob {
+  id: string;
+  jobKey: string;
+  profileId: string;
+  sourceIds: string[];
+  force: boolean;
+  status: OrganizerJobStatus;
+  attempts: number;
+  availableAt: string;
+  lockedAt?: string;
+  lastError?: string;
+  resultAction?: OrganizerAction;
+  resultTargetId?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}

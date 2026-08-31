@@ -4,7 +4,8 @@
 // in v2/lib/types.ts. Array-of-id and embedded-metadata fields (mediaIds, organizerRun, ...) are kept
 // as jsonb rather than normalized: the app only ever reads/writes them as a whole object today, and
 // mirroring the JSON shape exactly is what makes the JSON/Postgres repository contract tests meaningful.
-import { pgTable, text, timestamp, integer, boolean, real, jsonb, primaryKey, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, boolean, real, jsonb, primaryKey, unique, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { OrganizerRunMetadata } from "@/lib/types";
 
 export const profiles = pgTable("profiles", {
@@ -304,3 +305,30 @@ export const monthlyFocusGoals = pgTable("monthly_focus_goals", {
   visibility: text("visibility").notNull(),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => ({ byProfile: index("monthly_focus_goals_profile_idx").on(table.profileId) }));
+
+// New. The async Organizer queue: one row per organize(sourceIds) call, claimed by
+// lib/organizer/worker.ts with `SELECT ... FOR UPDATE SKIP LOCKED`. jobKey (sha256 of sorted
+// sourceIds) is unique only while a job is pending/processing — a partial index, not a table-wide
+// unique constraint — so a finished job's sourceIds can legitimately be enqueued again later
+// (e.g. an explicit reorganize) without colliding with its own history.
+export const organizerJobs = pgTable("organizer_jobs", {
+  id: text("id").primaryKey(),
+  jobKey: text("job_key").notNull(),
+  profileId: text("profile_id").notNull().references(() => profiles.id),
+  sourceIds: jsonb("source_ids").$type<string[]>().notNull(),
+  force: boolean("force").notNull().default(false),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", { mode: "string" }).defaultNow().notNull(),
+  lockedAt: timestamp("locked_at", { mode: "string" }),
+  lastError: text("last_error"),
+  resultAction: text("result_action"),
+  resultTargetId: text("result_target_id"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { mode: "string" }),
+}, (table) => ({
+  byProfile: index("organizer_jobs_profile_idx").on(table.profileId),
+  claimable: index("organizer_jobs_claimable_idx").on(table.status, table.availableAt),
+  activeJobKey: uniqueIndex("organizer_jobs_active_job_key_idx").on(table.jobKey).where(sql`${table.status} in ('pending', 'processing')`),
+}));

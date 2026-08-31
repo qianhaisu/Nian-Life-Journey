@@ -1,9 +1,10 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { TransactionRollbackError } from "drizzle-orm/errors";
-import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
+import { sql } from "drizzle-orm";
+import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
 import { getDb } from "./client";
 import * as t from "./schema";
-import { newId } from "./repository-interface";
+import { newId, organizerJobKey } from "./repository-interface";
 import type { Repository, Store } from "./repository-interface";
 
 // tx.rollback() doesn't make db.transaction() resolve to whatever the callback returns after it —
@@ -27,7 +28,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
   const db = getDb(env);
 
   async function assembleStore(): Promise<Store> {
-    const [profileRows, contributors, media, mediaAssets, mediaLocations, connectorStates, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns, links, snapshotRows] = await Promise.all([
+    const [profileRows, contributors, media, mediaAssets, mediaLocations, connectorStates, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns, organizerJobs, links, snapshotRows] = await Promise.all([
       db.select().from(t.profiles).limit(1),
       db.select().from(t.contributors),
       db.select().from(t.media),
@@ -42,6 +43,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       db.select().from(t.careEpisodes),
       db.select().from(t.monthlyFocusGoals),
       db.select().from(t.organizerRuns),
+      db.select().from(t.organizerJobs),
       db.select().from(t.sourceMemoryLinks),
       db.select().from(t.monthlySnapshot).limit(1),
     ]);
@@ -61,6 +63,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       careEpisodes: careEpisodes as unknown as Store["careEpisodes"],
       monthlyFocusGoals: monthlyFocusGoals as unknown as Store["monthlyFocusGoals"],
       organizerRuns: organizerRuns as unknown as Store["organizerRuns"],
+      organizerJobs: organizerJobs as unknown as Store["organizerJobs"],
       links: links as Store["links"],
       monthlySnapshot: (snapshotRows[0] ?? null) as Store["monthlySnapshot"],
     };
@@ -298,6 +301,51 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
           await tx.update(t.lifeEvents).set({ sourceIds: nextSourceIds, mediaIds: nextMediaIds }).where(eq(t.lifeEvents.id, eventId));
         }
       });
+    },
+    async enqueueOrganizerJob(input: { sourceIds: string[]; profileId: string; force?: boolean }) {
+      const jobKey = organizerJobKey(input.sourceIds);
+      const now = new Date().toISOString();
+      const job: OrganizerJob = { id: newId("organizer-job"), jobKey, profileId: input.profileId, sourceIds: input.sourceIds.slice(), force: input.force ?? false, status: "pending", attempts: 0, availableAt: now, createdAt: now, updatedAt: now };
+      const rows = await db.insert(t.organizerJobs).values(job)
+        .onConflictDoNothing({ target: t.organizerJobs.jobKey, where: sql`${t.organizerJobs.status} in ('pending', 'processing')` })
+        .returning();
+      if (rows[0]) return rows[0] as unknown as OrganizerJob;
+      const [existing] = await db.select().from(t.organizerJobs).where(and(eq(t.organizerJobs.jobKey, jobKey), inArray(t.organizerJobs.status, ["pending", "processing"])));
+      return existing as unknown as OrganizerJob;
+    },
+    async claimNextOrganizerJob(now: Date = new Date()) {
+      return db.transaction(async (tx) => {
+        const nowIso = now.toISOString();
+        const claimable = await tx.execute(sql`select id from organizer_jobs where status = 'pending' and available_at <= ${nowIso} order by created_at asc limit 1 for update skip locked`);
+        const row = claimable.rows[0] as { id: string } | undefined;
+        if (!row) return null;
+        const [updated] = await tx.update(t.organizerJobs)
+          .set({ status: "processing", lockedAt: nowIso, attempts: sql`${t.organizerJobs.attempts} + 1`, updatedAt: nowIso })
+          .where(eq(t.organizerJobs.id, row.id))
+          .returning();
+        return (updated as unknown as OrganizerJob) ?? null;
+      });
+    },
+    async completeOrganizerJob(id: string, patch: { resultAction?: string; resultTargetId?: string }) {
+      const now = new Date().toISOString();
+      await db.update(t.organizerJobs).set({ status: "succeeded", resultAction: patch.resultAction, resultTargetId: patch.resultTargetId, completedAt: now, updatedAt: now }).where(eq(t.organizerJobs.id, id));
+    },
+    async failOrganizerJob(id: string, error: string, nextAvailableAt: string | null) {
+      const now = new Date().toISOString();
+      if (nextAvailableAt) await db.update(t.organizerJobs).set({ status: "pending", availableAt: nextAvailableAt, lastError: error, lockedAt: null, updatedAt: now }).where(eq(t.organizerJobs.id, id));
+      else await db.update(t.organizerJobs).set({ status: "failed", lastError: error, lockedAt: null, completedAt: now, updatedAt: now }).where(eq(t.organizerJobs.id, id));
+    },
+    async getOrganizerJob(id: string) {
+      const [row] = await db.select().from(t.organizerJobs).where(eq(t.organizerJobs.id, id));
+      return (row as unknown as OrganizerJob) ?? null;
+    },
+    async recoverStuckOrganizerJobs(olderThanMs: number, now: Date = new Date()) {
+      const cutoff = new Date(now.getTime() - olderThanMs).toISOString();
+      const rows = await db.update(t.organizerJobs)
+        .set({ status: "pending", lockedAt: null, updatedAt: now.toISOString() })
+        .where(and(eq(t.organizerJobs.status, "processing"), sql`${t.organizerJobs.lockedAt} < ${cutoff}`))
+        .returning();
+      return rows.length;
     },
   };
 }

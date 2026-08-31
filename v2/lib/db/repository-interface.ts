@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import type { CareEpisode, CareRecord, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, OrganizerRun, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
+import { createHash, randomUUID } from "node:crypto";
+import type { CareEpisode, CareRecord, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, OrganizerJob, OrganizerRun, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
 
 // The full in-memory snapshot both repository implementations produce from getStore(). Every
 // field here is a real, currently-persisted entity (a field of the JSON Store) — not every type
@@ -20,6 +20,7 @@ export type Store = {
   careEpisodes: CareEpisode[];
   monthlyFocusGoals: MonthlyFocusGoal[];
   organizerRuns: OrganizerRun[];
+  organizerJobs: OrganizerJob[];
   links: SourceMemoryLink[];
   monthlySnapshot: MonthlySnapshot;
 };
@@ -60,6 +61,16 @@ export interface Repository {
   findOrganizerRun(organizationFingerprint: string): Promise<OrganizerRun | null>;
   persistOrganizerRun(run: OrganizerRun): Promise<OrganizerRun>;
   undoOrganization(sourceIds: string[], eventId: string): Promise<void>;
+  enqueueOrganizerJob(input: { sourceIds: string[]; profileId: string; force?: boolean }): Promise<OrganizerJob>;
+  claimNextOrganizerJob(now?: Date): Promise<OrganizerJob | null>;
+  completeOrganizerJob(id: string, patch: { resultAction?: string; resultTargetId?: string }): Promise<void>;
+  failOrganizerJob(id: string, error: string, nextAvailableAt: string | null): Promise<void>;
+  getOrganizerJob(id: string): Promise<OrganizerJob | null>;
+  recoverStuckOrganizerJobs(olderThanMs: number, now?: Date): Promise<number>;
+}
+
+export function organizerJobKey(sourceIds: string[]) {
+  return createHash("sha256").update(sourceIds.toSorted().join(",")).digest("hex");
 }
 
 export const newId = (prefix: string) => `${prefix}-${randomUUID()}`;

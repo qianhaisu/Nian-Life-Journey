@@ -1,19 +1,19 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { careEpisodes, careRecords, contributors, dailyTraces, events as seedEvents, growthRecords, media as seedMedia, monthlyFocusGoals, monthlySnapshot, profile, rawSources as seedSources } from "@/lib/mock-data";
-import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
+import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
 import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
-import { newId } from "./repository-interface";
+import { newId, organizerJobKey } from "./repository-interface";
 import type { Repository, Store } from "./repository-interface";
 
 const dataDir = path.join(process.cwd(), ".data");
 const storeFile = path.join(dataDir, "nian-life.json");
 
-const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
+const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], organizerJobs: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
 
 function normalizeStore(store: Partial<Store>): Store {
-  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [] };
+  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [], organizerJobs: store.organizerJobs ?? [] };
 }
 function hydrateMedia(store: Store): Store {
   store.media = store.media.map((media) => {
@@ -71,5 +71,72 @@ export function createJsonRepository(): Repository {
     async findOrganizerRun(organizationFingerprint: string) { const store = await readStore(); return store.organizerRuns.find((run) => run.organizationFingerprint === organizationFingerprint) ?? null; },
     async persistOrganizerRun(run: OrganizerRun) { const store = await readStore(); const existing = store.organizerRuns.find((item) => item.organizationFingerprint === run.organizationFingerprint); if (!existing) store.organizerRuns.push(run); await writeStore(store); return existing ?? run; },
     async undoOrganization(sourceIds: string[], eventId: string) { const store = await readStore(); const event = store.events.find((item) => item.id === eventId); if (!event) return; event.sourceIds = event.sourceIds.filter((id) => !sourceIds.includes(id)); event.mediaIds = event.mediaIds.filter((id) => !store.rawSources.find((source) => source.id === id)?.mediaIds.includes(id)); store.links = store.links.filter((link) => !(link.lifeEventId === eventId && sourceIds.includes(link.rawSourceId))); for (const source of store.rawSources) if (sourceIds.includes(source.id)) { source.status = "uploaded"; source.relatedLifeEventId = undefined; } for (const media of store.media) if (sourceIds.some((sourceId) => store.rawSources.find((source) => source.id === sourceId)?.mediaIds.includes(media.id))) media.lifeEventId = undefined; if (!event.sourceIds.length && event.id.startsWith("event-")) store.events = store.events.filter((item) => item.id !== eventId); await writeStore(store); },
+    async enqueueOrganizerJob(input: { sourceIds: string[]; profileId: string; force?: boolean }) {
+      const store = await readStore();
+      const jobKey = organizerJobKey(input.sourceIds);
+      const existing = store.organizerJobs.find((job) => job.jobKey === jobKey && (job.status === "pending" || job.status === "processing"));
+      if (existing) return existing;
+      const now = new Date().toISOString();
+      const job: OrganizerJob = { id: newId("organizer-job"), jobKey, profileId: input.profileId, sourceIds: input.sourceIds.slice(), force: input.force ?? false, status: "pending", attempts: 0, availableAt: now, createdAt: now, updatedAt: now };
+      store.organizerJobs.push(job);
+      await writeStore(store);
+      return job;
+    },
+    async claimNextOrganizerJob(now: Date = new Date()) {
+      const store = await readStore();
+      const nowIso = now.toISOString();
+      const claimable = store.organizerJobs.filter((job) => job.status === "pending" && job.availableAt <= nowIso).toSorted((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const job = claimable[0];
+      if (!job) return null;
+      job.status = "processing";
+      job.lockedAt = nowIso;
+      job.attempts += 1;
+      job.updatedAt = nowIso;
+      await writeStore(store);
+      return job;
+    },
+    async completeOrganizerJob(id: string, patch: { resultAction?: string; resultTargetId?: string }) {
+      const store = await readStore();
+      const job = store.organizerJobs.find((item) => item.id === id);
+      if (!job) return;
+      const now = new Date().toISOString();
+      job.status = "succeeded";
+      job.resultAction = patch.resultAction as OrganizerJob["resultAction"];
+      job.resultTargetId = patch.resultTargetId;
+      job.completedAt = now;
+      job.updatedAt = now;
+      await writeStore(store);
+    },
+    async failOrganizerJob(id: string, error: string, nextAvailableAt: string | null) {
+      const store = await readStore();
+      const job = store.organizerJobs.find((item) => item.id === id);
+      if (!job) return;
+      const now = new Date().toISOString();
+      job.lastError = error;
+      job.updatedAt = now;
+      job.lockedAt = undefined;
+      if (nextAvailableAt) { job.status = "pending"; job.availableAt = nextAvailableAt; }
+      else { job.status = "failed"; job.completedAt = now; }
+      await writeStore(store);
+    },
+    async getOrganizerJob(id: string) {
+      const store = await readStore();
+      return store.organizerJobs.find((item) => item.id === id) ?? null;
+    },
+    async recoverStuckOrganizerJobs(olderThanMs: number, now: Date = new Date()) {
+      const store = await readStore();
+      const cutoff = now.getTime() - olderThanMs;
+      let count = 0;
+      for (const job of store.organizerJobs) {
+        if (job.status === "processing" && job.lockedAt && Date.parse(job.lockedAt) < cutoff) {
+          job.status = "pending";
+          job.lockedAt = undefined;
+          job.updatedAt = now.toISOString();
+          count += 1;
+        }
+      }
+      if (count) await writeStore(store);
+      return count;
+    },
   };
 }

@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { appendUpload, getStore, newId } from "../lib/db/repository.ts";
 import { archivePendingOriginals } from "../lib/archive/quark-archive.ts";
 import { ingestQuarkFile } from "../lib/ingest/quark.ts";
+import { runOrganizerWorker } from "../lib/organizer/worker.ts";
 import { createDerivatives } from "../lib/media/processing.ts";
 import { LocalHotStorage, selectLocation } from "../lib/storage/hot-storage.ts";
 
@@ -73,16 +74,20 @@ test("authorization loss pauses archive without losing staging", async () => {
   assert.deepEqual(await storage.get(key), Buffer.from("original-bytes"));
 });
 
-test("Quark import is idempotent and runs the existing organizer", async () => {
+test("Quark import enqueues an organizer job (async) and the worker organizes it exactly once", async () => {
   const bytes = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#b27b4d" } }).jpeg().toBuffer();
   const file = { providerRef: "quark://idempotent-test", filename: "import.jpg", mimeType: "image/jpeg", size: bytes.byteLength, takenAt: "2026-08-28T10:00:00.000Z" };
   const options = { profileId: "profile-import-test", contributorId: "contributor-dad", visibility: "family" };
   const client = { download: async () => bytes };
   const first = await ingestQuarkFile(file, options, client);
   const second = await ingestQuarkFile(file, options, client);
-  const store = await getStore();
-  assert.equal(first.organized, true);
+  assert.ok(first.jobId);
   assert.equal(second.duplicate, true);
+  const outcomes = await runOrganizerWorker({ once: true });
+  assert.equal(outcomes.filter((o) => o.job.id === first.jobId).length, 1);
+  assert.equal(outcomes.find((o) => o.job.id === first.jobId)?.ok, true);
+  const store = await getStore();
   assert.equal(store.mediaLocations.filter((item) => item.provider === "quark" && item.providerRef === file.providerRef).length, 1);
   assert.equal(store.rawSources.filter((item) => item.id === first.sourceId).length, 1);
+  assert.notEqual(store.rawSources.find((item) => item.id === first.sourceId)?.status, "uploaded");
 });

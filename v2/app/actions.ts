@@ -1,8 +1,7 @@
 "use server";
 
 import { createHash } from "node:crypto";
-import { appendUpload, newId, undoOrganization } from "@/lib/db/repository";
-import { organizeSources } from "@/lib/organizer/rule-based";
+import { appendUpload, enqueueOrganizerJob, markSourcesProcessing, newId, undoOrganization } from "@/lib/db/repository";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
 import { hotStorage } from "@/lib/storage/hot-storage";
@@ -63,8 +62,9 @@ export async function captureSources(formData: FormData) {
   const sourceType = (kind === "daycare" ? "daycare_photo" : kind) as SourceType;
   const source: RawSource = { id: sourceId, profileId: "profile-zhangnian", sourceType, contentTypes: kind === "medical_document" ? ["health"] : kind === "daycare" ? ["daycare", "daily"] : ["daily", "family"], contributorId, capturedAt, importedAt: new Date().toISOString(), text: note || undefined, mediaIds: media.map((item) => item.id), sourceLabel: kind === "daycare" ? "托班记录" : kind === "medical_document" ? "医疗资料" : "家庭记录", visibility, status: "uploaded", originalFilename: files.length === 1 ? files[0].name : undefined, metadata: { uploadCount: files.length, storage: "hot-staging", archiveStatus: files.length ? "awaiting_archive" : "not_applicable" } };
   await appendUpload({ source, media, assets, locations });
-  const result = await organizeSources([sourceId]);
-  return { sourceId, result, count: files.length + (note ? 1 : 0) };
+  const job = await enqueueOrganizerJob({ sourceIds: [sourceId], profileId: source.profileId });
+  await markSourcesProcessing([sourceId]);
+  return { sourceId, jobId: job.id, count: files.length + (note ? 1 : 0) };
 }
 
 export async function undoCapture(sourceId: string, eventId: string) {
