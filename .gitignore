@@ -4,4 +4,6 @@ node_modules/
 .workbuddy/
 .github/skills/quarkclouddrive/workbuddy/config.json
 .github/skills/quarkclouddrive/workbuddy/storage/
+.github/skills/quarkclouddrive/workbuddy/search/
+.github/skills/quarkclouddrive/workbuddy/download/
 .github/skills/quarkclouddrive/scripts/search-results/
