@@ -5,12 +5,15 @@ import { readFile } from "node:fs/promises";
 const root = new URL("../", import.meta.url);
 const read = (file) => readFile(new URL(file, root), "utf8");
 
-test("migration models assets and locations without binary columns", async () => {
-  const sql = await read("drizzle/0000_real_data_foundation.sql");
-  assert.match(sql, /CREATE TABLE IF NOT EXISTS media_assets/);
-  assert.match(sql, /CREATE TABLE IF NOT EXISTS media_locations/);
-  assert.match(sql, /UNIQUE \(media_asset_id, provider, variant\)/);
-  assert.doesNotMatch(sql, /CREATE TABLE IF NOT EXISTS media \(/);
+test("migration models assets, locations, and the display-layer media table without binary columns", async () => {
+  const sql = await read("drizzle/0000_platform_foundation.sql");
+  assert.match(sql, /CREATE TABLE "media_assets"/);
+  assert.match(sql, /CREATE TABLE "media_locations"/);
+  assert.match(sql, /UNIQUE\("media_asset_id","provider","variant"\)/);
+  // Display-layer Media (src/thumbnailSrc/alt/...) now has its own table — added this slice to
+  // close the schema/type drift where it was a Store field with no PostgreSQL table at all.
+  assert.match(sql, /CREATE TABLE "media"/);
+  assert.doesNotMatch(sql, /\bbytea\b/i, "media tables must stay metadata-only — no binary columns");
 });
 
 test("runtime boundaries keep Quark out of page requests", async () => {
