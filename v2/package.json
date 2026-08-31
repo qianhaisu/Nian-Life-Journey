@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit --pretty false",
     "organizer:eval": "node --import tsx scripts/evaluate-organizer.mjs",
     "organizer:eval:gemini": "node --import tsx scripts/evaluate-organizer-gemini.mjs",
+    "organizer:compare:gemini": "node --import tsx scripts/compare-organizer-gemini.mjs",
     "organizer:smoke:gemini": "node --import tsx scripts/smoke-organizer-gemini.mjs",
     "quark:sync": "tsx tools/quark-connector/sync.ts",
     "quark:ingest-artifact": "tsx tools/quark-connector/ingest-artifact.ts",

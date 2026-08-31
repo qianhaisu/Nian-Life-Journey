@@ -71,6 +71,7 @@ export type AIProviderResponse = {
 export interface AIProvider {
   readonly name: string;
   readonly model?: string;
+  readonly promptVersion?: string;
   organize(context: OrganizerContext): Promise<AIProviderResponse>;
 }
 

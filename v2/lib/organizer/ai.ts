@@ -39,6 +39,10 @@ function safeError(error: unknown) {
   return message.slice(0, 180).replace(/[\r\n]/g, " ");
 }
 
+function organizerVersionFor(provider: AIProvider) {
+  return `ai-${provider.promptVersion ?? ORGANIZER_PROMPT_VERSION}`;
+}
+
 export class AIMemoryOrganizer {
   private readonly fallback = new RuleBasedMemoryOrganizer();
 
@@ -51,7 +55,7 @@ export class AIMemoryOrganizer {
     let startedAt = Date.now();
     let provider = options.provider ?? this.provider;
     try {
-      const current = await buildOrganizerContext(sourceIds, { now: options.now, organizerVersion: "ai-v1" });
+      const current = await buildOrganizerContext(sourceIds, { now: options.now, organizerVersion: organizerVersionFor(provider) });
       built = current;
       const prior = options.force ? null : current.store.organizerRuns.find((run) => run.organizationFingerprint === current.context.organizationFingerprint && run.organizerType === "ai");
       if (prior) return this.resultFromRun(prior);
@@ -76,7 +80,7 @@ export class AIMemoryOrganizer {
   private async persistDecision(context: OrganizerContext, sources: RawSource[], decision: Awaited<ReturnType<typeof applyOrganizerPolicy>>["decision"], input: { input?: { input?: number; output?: number; total?: number }; startedAt: number; provider: AIProvider }) {
     const store = await getStore();
     const now = new Date().toISOString();
-    const runBase = { organizerType: "ai" as const, organizerVersion: "ai-v1", provider: input.provider.name, model: input.provider.model, promptVersion: ORGANIZER_PROMPT_VERSION, processedAt: now, organizationFingerprint: context.organizationFingerprint, sourceCount: context.inputSourceCount, mediaInputCount: context.representativeMediaCount, latencyMs: Date.now() - input.startedAt, tokenUsage: input.input };
+    const runBase = { organizerType: "ai" as const, organizerVersion: organizerVersionFor(input.provider), provider: input.provider.name, model: input.provider.model, promptVersion: input.provider.promptVersion ?? ORGANIZER_PROMPT_VERSION, processedAt: now, organizationFingerprint: context.organizationFingerprint, sourceCount: context.inputSourceCount, mediaInputCount: context.representativeMediaCount, latencyMs: Date.now() - input.startedAt, tokenUsage: input.input };
     if (decision.action === "care_episode") {
       const episode = await persistCareEpisode({ id: newId("care-episode"), profileId: context.profileId, title: `Care record · ${dateOf(decision.occurredAt)}`, startedAt: dateOf(decision.occurredAt), recordIds: [], sourceIds: sources.map((source) => source.id), status: "open", visibility: "private", organizerRun: runBase });
       return this.finish({ profileId: context.profileId, action: decision.action, confidence: decision.confidence, careEpisodeId: episode.id, sourceIds: decision.sourceIds, reason: decision.reason, organizationFingerprint: context.organizationFingerprint, runBase, targetId: episode.id, provider: input.provider });
@@ -91,7 +95,7 @@ export class AIMemoryOrganizer {
     const mediaIds = [...new Set(sources.flatMap((source) => source.mediaIds))];
     const people = [...new Set(sources.map((source) => store.contributors.find((contributor) => contributor.id === source.contributorId)?.displayName).filter((name): name is string => Boolean(name)))];
     const visibility = sources.every((source) => source.visibility === "public") ? "public" : sources.some((source) => source.visibility === "private") ? "private" : "family";
-    const event: LifeEvent = existing ? { ...existing, title: decision.title ?? existing.title, story: decision.shortStory ?? existing.story, occurredAt: existing.occurredAt, contentTypes: [...new Set([...existing.contentTypes, ...decision.contentTypes])], mediaIds: [...new Set([...existing.mediaIds, ...mediaIds])], sourceIds: [...new Set([...existing.sourceIds, ...decision.sourceIds])], tags: [...new Set([...existing.tags, ...decision.contentTypes])], organizerVersion: "ai-v1", organizerRun: runBase, organizationFingerprint: context.organizationFingerprint } : { id: newId("event"), profileId: context.profileId, title: decision.title ?? sources[0].sourceLabel, story: decision.shortStory, occurredAt: dateOf(decision.occurredAt), people, tags: decision.contentTypes, contentTypes: decision.contentTypes, mediaIds, sourceIds: decision.sourceIds, growthRecordIds: [], careRecordIds: [], eventType: eventTypeFor(decision.memoryWeight, decision.contentTypes), memoryWeight: decision.memoryWeight, scopes: scopesFor(decision.contentTypes), heroMediaId: mediaIds[0], visibility, keptInYearbook: false, createdBy: "ai", organizerVersion: "ai-v1", organizerRun: runBase, organizationFingerprint: context.organizationFingerprint };
+    const event: LifeEvent = existing ? { ...existing, title: decision.title ?? existing.title, story: decision.shortStory ?? existing.story, occurredAt: existing.occurredAt, contentTypes: [...new Set([...existing.contentTypes, ...decision.contentTypes])], mediaIds: [...new Set([...existing.mediaIds, ...mediaIds])], sourceIds: [...new Set([...existing.sourceIds, ...decision.sourceIds])], tags: [...new Set([...existing.tags, ...decision.contentTypes])], organizerVersion: runBase.organizerVersion, organizerRun: runBase, organizationFingerprint: context.organizationFingerprint } : { id: newId("event"), profileId: context.profileId, title: decision.title ?? sources[0].sourceLabel, story: decision.shortStory, occurredAt: dateOf(decision.occurredAt), people, tags: decision.contentTypes, contentTypes: decision.contentTypes, mediaIds, sourceIds: decision.sourceIds, growthRecordIds: [], careRecordIds: [], eventType: eventTypeFor(decision.memoryWeight, decision.contentTypes), memoryWeight: decision.memoryWeight, scopes: scopesFor(decision.contentTypes), heroMediaId: mediaIds[0], visibility, keptInYearbook: false, createdBy: "ai", organizerVersion: runBase.organizerVersion, organizerRun: runBase, organizationFingerprint: context.organizationFingerprint };
     const links: SourceMemoryLink[] = sources.map((source, index) => ({ rawSourceId: source.id, lifeEventId: event.id, role: index === 0 ? "primary" : "supporting", createdAt: now }));
     const saved = await persistOrganization(decision.sourceIds, event, links);
     return this.finish({ profileId: context.profileId, action: decision.action, confidence: decision.confidence, eventId: saved.id, sourceIds: decision.sourceIds, reason: decision.reason, organizationFingerprint: context.organizationFingerprint, runBase, targetId: saved.id, provider: input.provider });

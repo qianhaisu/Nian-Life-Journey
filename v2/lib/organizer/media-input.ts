@@ -9,7 +9,7 @@ export interface MediaInputResolver {
 
 function maxImageInputs(env: NodeJS.ProcessEnv = process.env) {
   const value = Number.parseInt(env.AI_ORGANIZER_MAX_IMAGE_INPUTS ?? "6", 10);
-  return Number.isFinite(value) ? Math.min(12, Math.max(1, value)) : 6;
+  return Number.isFinite(value) ? Math.min(6, Math.max(1, value)) : 6;
 }
 
 function canUseAsInput(source: RawSource, asset: MediaAsset) {
@@ -48,7 +48,7 @@ export class HotStorageMediaInputResolver implements MediaInputResolver {
       const sourceOrder = a.source.capturedAt.localeCompare(b.source.capturedAt);
       return sourceOrder || a.mediaId.localeCompare(b.mediaId);
     });
-    const selected = chooseRepresentative(candidates, maxInputs);
+    const selected = chooseRepresentative(candidates, Math.min(6, maxInputs));
     const inputs: OrganizerMediaInput[] = [];
     for (const item of selected) {
       const bytes = await hotStorage.get(item.location.providerRef);

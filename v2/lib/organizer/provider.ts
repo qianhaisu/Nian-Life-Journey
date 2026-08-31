@@ -1,12 +1,18 @@
 import type { ContentType, OrganizerAction, OrganizerGrowthSignal } from "@/lib/types";
 import { ORGANIZER_DECISION_SCHEMA, validateOrganizerDecision } from "./schema";
 import { buildOrganizerPrompt, ORGANIZER_PROMPT_VERSION, ORGANIZER_SYSTEM_PROMPT } from "./prompts/v1";
+import { toGeminiResponseSchema } from "./gemini-schema";
+import { ORGANIZER_DECISION_SCHEMA_V2, validateOrganizerDecisionV2 } from "./schema-v2";
+import { buildOrganizerPromptV2, ORGANIZER_PROMPT_VERSION_V2, ORGANIZER_SYSTEM_PROMPT_V2 } from "./prompts/v2";
 import type { AIProvider, AIProviderResponse, OrganizerContext, OrganizerDecision } from "./types";
 
 export class AIProviderError extends Error {
-  constructor(message: string) {
+  readonly decision?: unknown;
+
+  constructor(message: string, decision?: unknown) {
     super(message);
     this.name = "AIProviderError";
+    this.decision = decision;
   }
 }
 
@@ -22,6 +28,7 @@ function responseText(value: unknown) {
 
 export class OpenAICompatibleProvider implements AIProvider {
   readonly name = "openai-compatible";
+  readonly promptVersion = ORGANIZER_PROMPT_VERSION;
   readonly model: string;
   private readonly env: NodeJS.ProcessEnv;
 
@@ -56,9 +63,105 @@ export class OpenAICompatibleProvider implements AIProvider {
   }
 }
 
+const GEMINI_ORGANIZER_RESPONSE_SCHEMA_V1 = toGeminiResponseSchema(ORGANIZER_DECISION_SCHEMA);
+const GEMINI_ORGANIZER_RESPONSE_SCHEMA_V2 = toGeminiResponseSchema(ORGANIZER_DECISION_SCHEMA_V2);
+const GEMINI_TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504]);
+const GEMINI_MAX_RETRIES = 2;
+const GEMINI_RETRY_BASE_DELAY_MS = 250;
+
+type GeminiPart = { text?: string; inlineData?: { mimeType: string; data: string } };
+type GeminiResponse = {
+  candidates?: Array<{ content?: { parts?: GeminiPart[] }; finishReason?: string }>;
+  promptFeedback?: { blockReason?: string };
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
+};
+
+function geminiText(parts: GeminiPart[] | undefined) {
+  return (parts ?? []).map((part) => part.text ?? "").join("");
+}
+
+export class GeminiAIProvider implements AIProvider {
+  readonly name = "gemini";
+  readonly model: string;
+  readonly promptVersion: typeof ORGANIZER_PROMPT_VERSION | typeof ORGANIZER_PROMPT_VERSION_V2;
+  private readonly apiKey: string;
+  private readonly env: NodeJS.ProcessEnv;
+
+  constructor(env: NodeJS.ProcessEnv = process.env) {
+    if (!env.GEMINI_API_KEY) throw new AIProviderError("AI provider is not configured: GEMINI_API_KEY is missing");
+    if (!env.AI_MODEL) throw new AIProviderError("AI provider is not configured: AI_MODEL is missing");
+    // Matches the AI_ORGANIZER_PROMPT_VERSION default documented in .env.example: v2 is the
+    // supported contract (action-field matrix + validateOrganizerDecisionV2). Falling back to v1
+    // here would silently reintroduce the schema/policy mismatches v2 was built to fix.
+    const promptVersion = (env.AI_ORGANIZER_PROMPT_VERSION ?? "v2").toLowerCase();
+    if (promptVersion !== ORGANIZER_PROMPT_VERSION && promptVersion !== ORGANIZER_PROMPT_VERSION_V2) throw new AIProviderError(`Unsupported organizer prompt version: ${promptVersion}`);
+    this.env = env;
+    this.model = env.AI_MODEL;
+    this.apiKey = env.GEMINI_API_KEY;
+    this.promptVersion = promptVersion;
+  }
+
+  async organize(context: OrganizerContext): Promise<AIProviderResponse> {
+    const mediaInputs = context.mediaInputs.toSorted((a, b) => {
+      const priority = { thumbnail: 0, web: 1, poster: 2 } as const;
+      return priority[a.variant] - priority[b.variant];
+    }).slice(0, 6);
+    const promptContext = mediaInputs.length === context.mediaInputs.length ? context : { ...context, mediaInputs, representativeMediaCount: mediaInputs.length };
+    const prompt = this.promptVersion === ORGANIZER_PROMPT_VERSION_V2 ? buildOrganizerPromptV2(promptContext) : buildOrganizerPrompt(promptContext);
+    const systemPrompt = this.promptVersion === ORGANIZER_PROMPT_VERSION_V2 ? ORGANIZER_SYSTEM_PROMPT_V2 : ORGANIZER_SYSTEM_PROMPT;
+    const responseSchema = this.promptVersion === ORGANIZER_PROMPT_VERSION_V2 ? GEMINI_ORGANIZER_RESPONSE_SCHEMA_V2 : GEMINI_ORGANIZER_RESPONSE_SCHEMA_V1;
+    const parts: GeminiPart[] = [{ text: prompt }];
+    for (const input of mediaInputs) parts.push({ inlineData: { mimeType: input.mimeType, data: Buffer.from(input.bytes).toString("base64") } });
+    try {
+      const request = JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts }],
+        generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema },
+      });
+      let response: Response | undefined;
+      for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt += 1) {
+        const attemptController = new AbortController();
+        const attemptTimeout = setTimeout(() => attemptController.abort(), Math.max(1000, Number.parseInt(this.env.AI_TIMEOUT_MS ?? "30000", 10) || 30000));
+        try {
+          response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey }, body: request, signal: attemptController.signal });
+        } finally {
+          clearTimeout(attemptTimeout);
+        }
+        if (response.ok) break;
+        if (!GEMINI_TRANSIENT_STATUSES.has(response.status) || attempt === GEMINI_MAX_RETRIES) throw new AIProviderError(`AI provider request failed with status ${response.status}`);
+        await new Promise((resolve) => setTimeout(resolve, GEMINI_RETRY_BASE_DELAY_MS * 2 ** attempt));
+      }
+      if (!response) throw new AIProviderError("AI provider returned no response");
+      const body = await response.json() as GeminiResponse;
+      if (body.promptFeedback?.blockReason) throw new AIProviderError(`AI provider blocked the request: ${body.promptFeedback.blockReason}`);
+      const candidate = body.candidates?.[0];
+      if (candidate?.finishReason && !["STOP", "MAX_TOKENS"].includes(candidate.finishReason)) throw new AIProviderError(`AI provider returned finishReason ${candidate.finishReason}`);
+      const content = geminiText(candidate?.content?.parts);
+      if (!content) throw new AIProviderError("AI provider returned empty structured output");
+      let parsed: unknown;
+      try { parsed = JSON.parse(content) as unknown; } catch { throw new AIProviderError("AI provider returned invalid JSON"); }
+      let decision: unknown = parsed;
+      if (this.promptVersion === ORGANIZER_PROMPT_VERSION_V2) {
+        try {
+          decision = validateOrganizerDecisionV2(parsed, context);
+        } catch (error) {
+          throw new AIProviderError(error instanceof Error ? error.message : "Invalid organizer decision", parsed);
+        }
+      }
+      const usage = body.usageMetadata ? { input: body.usageMetadata.promptTokenCount, output: body.usageMetadata.candidatesTokenCount, total: body.usageMetadata.totalTokenCount } : undefined;
+      return { decision, usage };
+    } catch (error) {
+      if (error instanceof AIProviderError) throw error;
+      if (error instanceof Error && error.name === "AbortError") throw new AIProviderError("AI provider request timed out");
+      throw new AIProviderError(`AI provider is unavailable${error instanceof Error && error.message ? `: ${error.message}` : ""}`);
+    }
+  }
+}
+
 export class MockAIProvider implements AIProvider {
   readonly name = "mock";
   readonly model = "synthetic-v1";
+  readonly promptVersion = ORGANIZER_PROMPT_VERSION;
   private readonly responder?: (context: OrganizerContext) => unknown;
 
   constructor(responder?: (context: OrganizerContext) => unknown) {
@@ -104,6 +207,7 @@ function defaultMockDecision(context: OrganizerContext): OrganizerDecision {
 
 export function createConfiguredAIProvider(env: NodeJS.ProcessEnv = process.env) {
   const provider = (env.AI_PROVIDER ?? "openai").toLowerCase();
+  if (provider === "gemini") return new GeminiAIProvider(env);
   if (provider !== "openai" && provider !== "openai-compatible") throw new AIProviderError(`Unsupported AI provider: ${provider}`);
   return new OpenAICompatibleProvider(env);
 }

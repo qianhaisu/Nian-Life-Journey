@@ -1,8 +1,8 @@
 import { applyOrganizerPolicy } from "./policy";
-import { MockAIProvider } from "./provider";
+import { AIProviderError, MockAIProvider } from "./provider";
 import { validateOrganizerDecision } from "./schema";
 import type { ContentType } from "@/lib/types";
-import type { OrganizerContext, OrganizerDecision } from "./types";
+import type { AIProvider, AIProviderResponse, OrganizerContext, OrganizerDecision, ProviderUsage } from "./types";
 
 type EvaluationFixture = { id: string; description: string; expectedActions: OrganizerDecision["action"][]; context: OrganizerContext };
 
@@ -10,7 +10,6 @@ function context(input: Pick<OrganizerContext, "sourceSummaries" | "existingMemo
   const sourceIds = input.sourceSummaries.map((source) => source.id);
   return { profileId: "synthetic-profile", sourceSummaries: input.sourceSummaries, existingMemories: input.existingMemories, mediaInputs: [], inputSourceCount: sourceIds.length, representativeMediaCount: input.representativeMediaCount ?? 0, generatedAt: "2026-08-28T00:00:00.000Z", organizationFingerprint: `synthetic-${sourceIds.join("-")}` };
 }
-
 const photo = (id: string, count = 1, contentTypes: ContentType[] = ["daily", "family"]) => ({ id, sourceType: "family_photo" as const, contentTypes, contributorId: "synthetic-parent", capturedAt: "2026-08-28T10:00:00.000Z", sourceLabel: "Synthetic photos", mediaCount: count, media: [] });
 
 export const AI_ORGANIZER_EVALUATION_FIXTURES: EvaluationFixture[] = [
@@ -24,15 +23,68 @@ export const AI_ORGANIZER_EVALUATION_FIXTURES: EvaluationFixture[] = [
   { id: "uncertain-image", description: "An ordinary image without supporting context is retained only", expectedActions: ["store_only", "daily_trace"], context: context({ sourceSummaries: [{ ...photo("eval-uncertain-image", 1, ["daily", "family"]) }], existingMemories: [], representativeMediaCount: 0 }) },
 ];
 
-export async function evaluateAIOrganizer() {
-  const provider = new MockAIProvider();
-  const results = [];
+export type EvaluationResult = {
+  id: string;
+  description: string;
+  action: OrganizerDecision["action"] | "fallback";
+  proposedAction?: string;
+  expectedActions: OrganizerDecision["action"][];
+  passed: boolean;
+  unsupportedFactCount: number;
+  confidence?: number;
+  story?: string;
+  proposedConfidence?: number;
+  proposedStory?: string;
+  reason?: string;
+  latencyMs: number;
+  usage?: ProviderUsage;
+  fallback: boolean;
+  error?: string;
+};
+
+function reportFields(value: unknown) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  return {
+    proposedAction: typeof record.action === "string" ? record.action : undefined,
+    proposedConfidence: typeof record.confidence === "number" ? record.confidence : undefined,
+    proposedStory: typeof record.shortStory === "string" ? record.shortStory : undefined,
+  };
+}
+
+export async function evaluateAIOrganizer(provider: AIProvider = new MockAIProvider()) {
+  const results: EvaluationResult[] = [];
   for (const fixture of AI_ORGANIZER_EVALUATION_FIXTURES) {
-    const response = await provider.organize(fixture.context);
-    const validated = validateOrganizerDecision(response.decision, fixture.context);
-    const evaluated = applyOrganizerPolicy(validated, fixture.context);
-    results.push({ id: fixture.id, action: evaluated.decision.action, expectedActions: fixture.expectedActions, passed: fixture.expectedActions.includes(evaluated.decision.action), unsupportedFactCount: evaluated.unsupportedFactCount, storyLength: evaluated.decision.shortStory?.length ?? 0 });
+    const startedAt = Date.now();
+    let response: AIProviderResponse | undefined;
+    try {
+      response = await provider.organize(fixture.context);
+      const latencyMs = Date.now() - startedAt;
+      const validated = validateOrganizerDecision(response.decision, fixture.context);
+      const evaluated = applyOrganizerPolicy(validated, fixture.context);
+      results.push({ id: fixture.id, description: fixture.description, action: evaluated.decision.action, expectedActions: fixture.expectedActions, passed: fixture.expectedActions.includes(evaluated.decision.action), unsupportedFactCount: evaluated.unsupportedFactCount, confidence: evaluated.decision.confidence, story: evaluated.decision.shortStory, reason: evaluated.decision.reason, latencyMs, usage: response.usage, fallback: false });
+    } catch (error) {
+      const latencyMs = Date.now() - startedAt;
+      const rejectedDecision = response?.decision ?? (error instanceof AIProviderError ? error.decision : undefined);
+      results.push({ id: fixture.id, description: fixture.description, action: "fallback", ...reportFields(rejectedDecision), expectedActions: fixture.expectedActions, passed: false, unsupportedFactCount: 0, latencyMs, usage: response?.usage, fallback: true, error: error instanceof Error ? error.message : "AI provider failed" });
+    }
   }
-  const stories = results.filter((result) => result.storyLength > 0);
-  return { results, metrics: { memoryCount: results.filter((result) => result.action === "create_memory").length, dailyTraceCount: results.filter((result) => result.action === "daily_trace").length, mergeAccuracy: results.filter((result) => result.expectedActions.includes("attach_existing")).filter((result) => result.action === "attach_existing").length, duplicateCount: 0, unsupportedFactCount: results.reduce((sum, result) => sum + result.unsupportedFactCount, 0), averageStoryLength: stories.length ? stories.reduce((sum, result) => sum + result.storyLength, 0) / stories.length : 0, fallbackCount: 0 } };
+  const stories = results.filter((result) => !result.fallback && (result.story?.length ?? 0) > 0);
+  return {
+    results,
+    metrics: {
+      memoryCount: results.filter((result) => result.action === "create_memory").length,
+      dailyTraceCount: results.filter((result) => result.action === "daily_trace").length,
+      mergeAccuracy: results.filter((result) => result.expectedActions.includes("attach_existing")).filter((result) => result.action === "attach_existing").length,
+      duplicateCount: 0,
+      unsupportedFactCount: results.reduce((sum, result) => sum + result.unsupportedFactCount, 0),
+      averageStoryLength: stories.length ? stories.reduce((sum, result) => sum + (result.story?.length ?? 0), 0) / stories.length : 0,
+      fallbackCount: results.filter((result) => result.fallback).length,
+      averageLatencyMs: results.length ? results.reduce((sum, result) => sum + result.latencyMs, 0) / results.length : 0,
+      firstTimeHallucinationCount: results.filter((result) => result.error?.toLowerCase().includes("first-time") || result.error?.includes("首次")).length,
+      medicalDiagnosisInferenceCount: results.filter((result) => result.error?.toLowerCase().includes("medical inference") || result.error?.includes("医疗推断")).length,
+      ordinaryDaycareOvergenerationCount: results.filter((result) => result.id === "ordinary-daycare" && (result.action === "create_memory" || result.proposedAction === "create_memory")).length,
+      mergeCaseCount: results.filter((result) => result.expectedActions.includes("attach_existing")).length,
+    },
+  };
 }
