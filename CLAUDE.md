@@ -68,11 +68,10 @@ Nianlife 当前按单用户个人项目开发，功能优先。
 
 Teddy 的默认 Git 习惯：
 
-- Teddy 说"commit"时，默认包含 commit 后正常 push 当前功能分支。
-- 功能切片完成且全部验证通过后，默认继续合并到 main 并正常 push main。
-- 不需要为普通 commit、push 功能分支、merge main、push main 反复询问。
+- 不再新建分支（feature branch）或 worktree；直接在 `main` 上开发、commit、push。
+- Teddy 说"commit"时，默认包含 commit 后正常 push `main`。
+- 不需要为普通 commit、push main 反复询问。
 - main push 触发 Vercel 自动部署属于正常结果。
-- 合并前必须更新 main，并在合并后重新运行完整验证。
 - 保留有意义的提交历史，不默认 squash/rebase。
 - 不 force push。
 - 不擅自删除远端分支。
@@ -90,7 +89,7 @@ Teddy 的默认 Git 习惯：
 
 ### 开发执行方式
 
-- 如果实现方式明确，直接修改、验证、commit、push、merge main。
+- 如果实现方式明确，直接修改、验证、commit、push main。
 - 不要先完成一轮只读审计后，又为显而易见的修改重复询问。
 - 只有存在真正影响产品行为、数据模型或迁移路线的歧义时才找 Teddy。
 - 可以使用 Sonnet subagent，但 Teddy 是普通 Pro 用户：
@@ -102,15 +101,11 @@ Teddy 的默认 Git 习惯：
 
 ### 分支与 Worktree
 
-项目统一使用单一 worktree：`C:\Users\teddy\Documents\Nianlife`。
+项目统一使用单一 worktree、单一分支：`C:\Users\teddy\Documents\Nianlife`，始终在 `main` 上。
 
-- 默认只使用这一个 worktree，不再创建 `main-focus`、`postgres-foundation` 或其他额外 worktree。
-- 未经 Teddy 明确要求，不得执行 `git worktree add`。
-- 空闲状态保持在 `main`，并同步 `origin/main`。
-- 从最新 `main` 拉功能分支，在当前目录（同一个 worktree）创建普通 feature branch，不直接改 `main`。
-- 功能完成、验证通过、合并 main 并 push 后，切回 `main`。
-- 看到当前目录仍在功能分支，不代表该功能没有进入 main；必须通过 Git ancestry、main HEAD 和远端状态判断是否已合并。
-- 多个 Session 可以并行做只读规划（阅读、分析、只读命令），但同一时间只能有一个 Session 对仓库做写操作（改文件、commit、push、merge）。开始写操作前确认没有其他 Session 正在改动仓库。
+- 只使用这一个 worktree，不再创建 `main-focus`、`postgres-foundation` 或其他额外 worktree；未经 Teddy 明确要求，不得执行 `git worktree add`。
+- 不再新建 feature branch；直接在 `main` 上开发、commit、push，与 `origin/main` 保持同步。
+- 多个 Session 可以并行做只读规划（阅读、分析、只读命令），但同一时间只能有一个 Session 对仓库做写操作（改文件、commit、push）。开始写操作前确认没有其他 Session 正在改动仓库。
 
 ### 稳定项目边界
 
