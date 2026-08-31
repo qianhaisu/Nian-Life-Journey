@@ -31,10 +31,93 @@ Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（目�
 - 幂等键固定：`(provider="quark", variant="original", providerRef=fid)`，不可更改。
 - artifact 导入默认 dry-run；不自动登录、上传、移动或删除网盘文件。
 - WorkBuddy 运行时目录（`workbuddy/storage/`、Quark `search-results/`）已在 `.gitignore` 覆盖；artifact 路径校验已加固，拒绝经由 symlink 或 Windows junction/reparse point 到达的文件。
+- Quark 的 `fid` 是否长期稳定，目前正在另一个 Session 中重新验证，尚无定论；不要在文档或代码注释中把"`fid` 永久稳定"当作既定事实来写，以该 Session 的最终结论为准。
 
 ## AI Organizer 架构方向
 
 Gemini V2 的语义方向已用真实评测验证（Schema/Policy 叙事泄漏问题已解决），但真实响应延迟不稳定，同一请求在不同时刻可能是几秒也可能超过 30 秒。当前 Capture 链路仍是同步调用、同步 fallback。生产化时应把 AI Organizer 改成基于 PostgreSQL/job/outbox 的异步任务，让用户上传不必等待模型返回；不要通过继续调大同步 `AI_TIMEOUT_MS` 来掩盖这个问题。
+
+## Teddy 的长期开发规则
+
+### 当前产品优先级
+
+Nianlife 当前按单用户个人项目开发，功能优先。
+
+现阶段不做，也不反复提醒：
+
+- 登录和认证
+- User/Account/Session
+- Family/Household/Membership
+- 角色与权限
+- visibility policy
+- 数据安全体系
+- 审计、导出、账号删除
+- 为未来多用户提前进行复杂设计
+
+当前主线顺序：
+
+1. PostgreSQL 正式 Repository
+2. AI Organizer 异步任务
+3. Quark/WorkBuddy 初始化与持续导入
+4. 其他核心产品功能
+5. 核心功能完成后再考虑登录和安全
+
+现有安全防护不要主动删除，但不要让新增安全建设阻塞当前开发。
+
+### Git 长期授权
+
+Teddy 的默认 Git 习惯：
+
+- Teddy 说"commit"时，默认包含 commit 后正常 push 当前功能分支。
+- 功能切片完成且全部验证通过后，默认继续合并到 main 并正常 push main。
+- 不需要为普通 commit、push 功能分支、merge main、push main 反复询问。
+- main push 触发 Vercel 自动部署属于正常结果。
+- 合并前必须更新 main，并在合并后重新运行完整验证。
+- 保留有意义的提交历史，不默认 squash/rebase。
+- 不 force push。
+- 不擅自删除远端分支。
+- 不把不相关改动混入提交。
+
+只有以下操作需要 Teddy 单独确认：
+
+- force push 或改写历史
+- 删除分支、文件或数据
+- 运行生产数据库 migration
+- 修改生产环境变量或密钥
+- 手动部署、回滚生产
+- 调用会产生明显费用的外部 API
+- 无法确定正确处理方式的实质性业务冲突
+
+### 开发执行方式
+
+- 如果实现方式明确，直接修改、验证、commit、push、merge main。
+- 不要先完成一轮只读审计后，又为显而易见的修改重复询问。
+- 只有存在真正影响产品行为、数据模型或迁移路线的歧义时才找 Teddy。
+- 可以使用 Sonnet subagent，但 Teddy 是普通 Pro 用户：
+  - 默认主 Agent 完成
+  - 最多 2 个 subagent
+  - 不重复遍历相同代码
+  - 不为简单任务启用 subagent
+  - 不默认使用 Opus
+
+### 分支与 Worktree
+
+- 从最新 `main` 拉功能分支，不直接改 `main`。
+- 看到当前目录仍在功能分支，不代表该功能没有进入 main。
+- 必须通过 Git ancestry、main HEAD 和远端状态判断是否已合并。
+- main 可能在独立 worktree 中，操作前先检查 `git worktree list`。
+- 多个 Session 并行时，各自使用独立分支/worktree。
+- 只有修改相同文件或依赖同一未稳定契约时才需要等待其他 Session。
+
+### 稳定项目边界
+
+继续保留本文件中原有的稳定边界，不因为上面的“默认执行”规则而放松，例如：
+
+- V1 `index.html` 不删除、不重构（见「V1 / V2 边界」）。
+- Quark CLI 只能由 WorkBuddy 调用（见「WorkBuddy / Quark 边界」）。
+- 不提交凭据和 WorkBuddy 运行时文件。
+- 不删除现有路径、Schema、Policy 和幂等保护。
+- 修改后运行与改动范围匹配的 typecheck、test、lint、build 和 diff check（见「常用验证命令」），而不是每次都跑全套或完全不验证。
 
 ## 现有改动保护规则
 
@@ -51,12 +134,6 @@ npm run build
 ```
 
 不要每次微小改动都跑全套；完成一个切片后再验证。
-
-## 修改、提交与部署纪律
-
-- 从最新 `main` 拉功能分支，不直接改 `main`。
-- 超过 3 个文件的改动，先给简短计划，Teddy 确认后再动手。
-- Teddy 明确授权 `commit` 时，默认同时授权普通 `push` 到当前功能分支，完成 commit 后不需要再次询问。若 Teddy 明确说"只 commit、不 push"才停在本地。`force push`、merge main、创建 PR、部署仍需单独授权。
 
 ## 详细交接文档
 
