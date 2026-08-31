@@ -4,6 +4,7 @@ import { getConnectorState, upsertConnectorState } from "@/lib/db/repository";
 import { ingestQuarkArtifactAsset } from "@/lib/ingest/quark-artifact-asset";
 import { ingestQuarkFile, toQuarkStructuredError, type QuarkFile } from "@/lib/ingest/quark";
 import type { QuarkArtifactMediaInput } from "@/lib/ingest/quark-artifact";
+import { kickOrganizerWorker } from "@/lib/organizer/kick";
 
 const ARTIFACT_CONNECTOR_VERSION = "quark-artifact-ingest/0.1";
 const MAX_ARTIFACT_BATCH_ITEMS = 200;
@@ -99,6 +100,7 @@ export async function POST(request: Request) {
   if (typeof body.file.providerRef !== "string" || typeof body.file.filename !== "string" || typeof body.file.mimeType !== "string") return NextResponse.json({ error: "Invalid Quark file metadata" }, { status: 400 });
   try {
     const result = await ingestQuarkFile(body.file, { profileId: body.profileId, contributorId: body.contributorId, visibility: body.visibility ?? "family" });
+    if (result.jobId) kickOrganizerWorker();
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     const structured = toQuarkStructuredError(error, "ingest");

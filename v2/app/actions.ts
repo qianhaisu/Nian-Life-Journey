@@ -2,6 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { appendUpload, enqueueOrganizerJob, markSourcesProcessing, newId, undoOrganization } from "@/lib/db/repository";
+import { kickOrganizerWorker } from "@/lib/organizer/kick";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
 import { hotStorage } from "@/lib/storage/hot-storage";
@@ -64,6 +65,7 @@ export async function captureSources(formData: FormData) {
   await appendUpload({ source, media, assets, locations });
   const job = await enqueueOrganizerJob({ sourceIds: [sourceId], profileId: source.profileId });
   await markSourcesProcessing([sourceId]);
+  kickOrganizerWorker();
   return { sourceId, jobId: job.id, count: files.length + (note ? 1 : 0) };
 }
 
