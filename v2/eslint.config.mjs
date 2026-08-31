@@ -11,5 +11,5 @@ export default defineConfig([
     plugins: { "@next/next": nextPlugin },
     rules: { ...nextPlugin.configs.recommended.rules },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  globalIgnores([".next/**", ".next-dev-carousel/**", "out/**", "build/**", "next-env.d.ts"]),
 ]);

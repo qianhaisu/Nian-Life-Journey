@@ -35,9 +35,9 @@ export async function archivePendingOriginals(client: QuarkArchiveClient, profil
     try {
       const body = await hotStorage.get(location.providerRef);
       if (!body) throw new Error("staging original is missing");
-      const result = await client.archive({ filename: asset.originalFilename ?? `${asset.id}.${asset.mediaType}`, body, checksum: asset.checksum, size: location.fileSize });
+      const result = await client.archive({ filename: asset.originalFilename ?? `${asset.id}.${asset.mediaType}`, body, checksum: asset.checksum ?? undefined, size: location.fileSize });
       if (!result.providerRef) throw new Error("Quark archive did not return providerRef");
-      const verification = await client.verify({ providerRef: result.providerRef, size: location.fileSize, checksum: asset.checksum });
+      const verification = await client.verify({ providerRef: result.providerRef, size: location.fileSize, checksum: asset.checksum ?? undefined });
       if (!verification.exists || (location.fileSize !== undefined && verification.size !== undefined && verification.size !== location.fileSize) || verification.checksumVerified === false) throw new Error("Quark archive verification failed");
       await recordArchivedOriginal({ assetId: asset.id, providerRef: result.providerRef, path: result.path, fileSize: verification.size ?? location.fileSize, checksumVerified: verification.checksumVerified });
       await hotStorage.delete(location.providerRef);
