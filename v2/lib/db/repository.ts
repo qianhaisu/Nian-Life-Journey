@@ -1,69 +1,42 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
-import { careEpisodes, careRecords, contributors, dailyTraces, events as seedEvents, growthRecords, media as seedMedia, monthlyFocusGoals, monthlySnapshot, profile, rawSources as seedSources } from "@/lib/mock-data";
-import type { CareEpisode, CareRecord, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, OrganizerRun, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
-import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
-import { selectLocation } from "@/lib/storage/hot-storage";
+// Thin facade: resolves REPOSITORY_BACKEND once at module load (throwing here, not later, on a
+// bad config) and re-exports its methods under the same names every existing page, Server Action,
+// Route Handler and Organizer file already imports from "@/lib/db/repository". Swapping backends
+// never means editing a consumer file — only this module picks an implementation.
+import { resolveRepositoryBackend } from "./config";
+import { createJsonRepository } from "./json-repository";
+import { createPostgresRepository } from "./postgres-repository";
+import type { Repository } from "./repository-interface";
 
-export type Store = { profile: Profile; contributors: Contributor[]; media: Media[]; mediaAssets: MediaAsset[]; mediaLocations: MediaLocation[]; connectorStates: ConnectorState[]; rawSources: RawSource[]; events: LifeEvent[]; dailyTraces: DailyTrace[]; growthRecords: GrowthRecord[]; careRecords: CareRecord[]; careEpisodes: CareEpisode[]; monthlyFocusGoals: MonthlyFocusGoal[]; organizerRuns: OrganizerRun[]; links: SourceMemoryLink[]; monthlySnapshot: MonthlySnapshot };
-const dataDir = path.join(process.cwd(), ".data");
-const storeFile = path.join(dataDir, "nian-life.json");
+export type { EventDetail, Store } from "./repository-interface";
+export { newId } from "./repository-interface";
 
-const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
-
-function normalizeStore(store: Partial<Store>): Store {
-  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [] };
-}
-function hydrateMedia(store: Store): Store {
-  store.media = store.media.map((media) => {
-    const asset = store.mediaAssets.find((item) => item.id === media.mediaAssetId);
-    if (!asset) return { ...media, src: normalizeMediaUrl(media.src) };
-    const locations = store.mediaLocations.filter((item) => item.mediaAssetId === asset.id);
-    const webLocation = selectLocation(locations, asset, "web");
-    const thumbnailLocation = selectLocation(locations, asset, "thumbnail");
-    const legacyThumbnailSrc = (media as Media & { thumbnailSrc?: string }).thumbnailSrc;
-    return {
-      ...media,
-      src: webLocation ? mediaDeliveryUrl(media.id, webLocation.variant) : normalizeMediaUrl(media.src),
-      thumbnailSrc: thumbnailLocation ? mediaDeliveryUrl(media.id, thumbnailLocation.variant) : legacyThumbnailSrc ? normalizeMediaUrl(legacyThumbnailSrc) : undefined,
-    };
-  });
-  return store;
+function createRepository(): Repository {
+  const backend = resolveRepositoryBackend();
+  return backend === "postgres" ? createPostgresRepository() : createJsonRepository();
 }
 
-async function readStore(): Promise<Store> {
-  try { return hydrateMedia(normalizeStore(JSON.parse(await fs.readFile(storeFile, "utf8")) as Partial<Store>)); }
-  catch {
-    const store = initialStore();
-    // Serverless deployments ship a read-only filesystem; fall back to in-memory seed data instead of crashing the page.
-    try { await writeStore(store); } catch { /* not persisted */ }
-    return store;
-  }
-}
-async function writeStore(store: Store) { await fs.mkdir(dataDir, { recursive: true }); await fs.writeFile(storeFile, JSON.stringify(store, null, 2), "utf8"); }
+const repository = createRepository();
 
-export async function getHomeEvents() { const store = await readStore(); return store.events.filter((event) => event.visibility !== "private").toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); }
-export async function getAllEvents() { const store = await readStore(); return store.events.toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); }
-export async function getStore() { return readStore(); }
-export async function getEventDetail(id: string) { const store = await readStore(); const event = store.events.find((item) => item.id === id); if (!event) return null; return { event, media: store.media.filter((item) => event.mediaIds.includes(item.id)), sources: store.rawSources.filter((item) => event.sourceIds.includes(item.id) && !item.deletedAt), contributors: store.contributors, growth: store.growthRecords.filter((item) => event.growthRecordIds.includes(item.id)), care: store.careRecords.filter((item) => event.careRecordIds.includes(item.id) && item.visibility !== "private") }; }
-export async function appendUpload(input: { source: RawSource; media: Media[]; assets?: MediaAsset[]; locations?: MediaLocation[] }) { const store = await readStore(); store.rawSources.push(input.source); store.media.push(...input.media); store.mediaAssets.push(...(input.assets ?? [])); store.mediaLocations.push(...(input.locations ?? [])); await writeStore(store); return input.source; }
-export async function updateMediaAsset(id: string, patch: Partial<MediaAsset>) { const store = await readStore(); const asset = store.mediaAssets.find((item) => item.id === id); if (!asset) return null; Object.assign(asset, patch); await writeStore(store); return asset; }
-export async function updateMediaLocation(id: string, patch: Partial<MediaLocation>) { const store = await readStore(); const location = store.mediaLocations.find((item) => item.id === id); if (!location) return null; Object.assign(location, patch, { updatedAt: new Date().toISOString() }); await writeStore(store); return location; }
-export async function removeMediaLocation(id: string) { const store = await readStore(); store.mediaLocations = store.mediaLocations.filter((item) => item.id !== id); await writeStore(store); }
-export async function findMediaLocationByProviderRef(provider: MediaLocation["provider"], providerRef: string) { const store = await readStore(); const location = store.mediaLocations.find((item) => item.provider === provider && item.providerRef === providerRef) ?? null; if (!location) return null; return { location, asset: store.mediaAssets.find((item) => item.id === location.mediaAssetId) ?? null }; }
-export async function appendMediaAssetWithLocation(asset: MediaAsset, location: MediaLocation) { const store = await readStore(); store.mediaAssets.push(asset); store.mediaLocations.push(location); await writeStore(store); return { asset, location }; }
-export async function updateMediaAssetWithLocation(assetId: string, locationId: string, assetPatch: Partial<MediaAsset>, locationPatch: Partial<MediaLocation>) { const store = await readStore(); const asset = store.mediaAssets.find((item) => item.id === assetId); const location = store.mediaLocations.find((item) => item.id === locationId); if (!asset || !location) return null; Object.assign(asset, assetPatch); Object.assign(location, locationPatch, { updatedAt: new Date().toISOString() }); await writeStore(store); return { asset, location }; }
-export async function getConnectorState(provider: "quark", profileId: string) { const store = await readStore(); return store.connectorStates.find((item) => item.provider === provider && item.profileId === profileId) ?? null; }
-export async function upsertConnectorState(input: ConnectorState) { const store = await readStore(); const index = store.connectorStates.findIndex((item) => item.id === input.id); if (index === -1) store.connectorStates.push(input); else store.connectorStates[index] = input; await writeStore(store); return input; }
-export async function markArchiveStatus(assetId: string, status: NonNullable<MediaAsset["archiveStatus"]>, error?: string) { const store = await readStore(); const asset = store.mediaAssets.find((item) => item.id === assetId); if (!asset) return null; asset.archiveStatus = status; asset.archiveLastError = error; const original = store.mediaLocations.find((item) => item.mediaAssetId === assetId && item.provider === "hot" && item.variant === "original"); if (original && status !== "archived") original.status = status === "paused_auth_required" ? "awaiting_archive" : status; await writeStore(store); return asset; }
-export async function recordArchivedOriginal(input: { assetId: string; providerRef: string; path?: string; fileSize?: number; checksumVerified?: boolean }) { const store = await readStore(); const asset = store.mediaAssets.find((item) => item.id === input.assetId); if (!asset) return null; const now = new Date().toISOString(); const existing = store.mediaLocations.find((item) => item.mediaAssetId === input.assetId && item.provider === "quark" && item.variant === "original"); const location: MediaLocation = existing ?? { id: newId("location"), mediaAssetId: input.assetId, provider: "quark", variant: "original", providerRef: input.providerRef, status: "archived", createdAt: now, updatedAt: now }; Object.assign(location, { providerRef: input.providerRef, fileSize: input.fileSize, status: "archived", quarkPathSnapshot: input.path, updatedAt: now }); if (!existing) store.mediaLocations.push(location); asset.archiveStatus = "archived"; asset.archiveVerifiedAt = now; asset.archiveLastError = undefined; await writeStore(store); return location; }
-export async function persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[]) { const store = await readStore(); const existing = store.events.find((event) => event.id === eventInput.id); if (existing) { existing.sourceIds = [...new Set([...existing.sourceIds, ...sourceIds])]; existing.mediaIds = [...new Set([...existing.mediaIds, ...eventInput.mediaIds])]; existing.contentTypes = [...new Set([...existing.contentTypes, ...eventInput.contentTypes])]; existing.story = eventInput.story || existing.story; existing.title = eventInput.title || existing.title; existing.memoryWeight = eventInput.memoryWeight; existing.organizerVersion = eventInput.organizerVersion ?? existing.organizerVersion; existing.organizerRun = eventInput.organizerRun ?? existing.organizerRun; existing.organizationFingerprint = eventInput.organizationFingerprint ?? existing.organizationFingerprint; } else store.events.push({ ...eventInput, sourceIds: [...new Set(eventInput.sourceIds.length ? eventInput.sourceIds : sourceIds)] }); for (const source of store.rawSources) if (sourceIds.includes(source.id)) { source.status = "organized"; source.relatedLifeEventId = eventInput.id; } store.links.push(...links.filter((link) => !store.links.some((old) => old.rawSourceId === link.rawSourceId && old.lifeEventId === link.lifeEventId))); for (const media of store.media) if (eventInput.mediaIds.includes(media.id)) media.lifeEventId = eventInput.id; await writeStore(store); return existing ?? eventInput; }
-export async function persistDailyTrace(trace: DailyTrace) { const store = await readStore(); const existing = store.dailyTraces.find((item) => item.organizationFingerprint === trace.organizationFingerprint) ?? store.dailyTraces.find((item) => item.profileId === trace.profileId && item.occurredAt.slice(0, 10) === trace.occurredAt.slice(0, 10)); if (existing) { existing.entries = [...new Set([...existing.entries, ...trace.entries])]; existing.sourceIds = [...new Set([...existing.sourceIds, ...trace.sourceIds])]; existing.organizerRun = trace.organizerRun ?? existing.organizerRun; existing.organizationFingerprint = existing.organizationFingerprint ?? trace.organizationFingerprint; } else store.dailyTraces.push(trace); for (const source of store.rawSources) if (trace.sourceIds.includes(source.id)) { source.status = "organized"; source.relatedLifeEventId = undefined; } await writeStore(store); return existing ?? trace; }
-export async function persistCareEpisode(episode: CareEpisode) { const store = await readStore(); const existing = store.careEpisodes.find((item) => item.profileId === episode.profileId && item.startedAt.slice(0, 10) === episode.startedAt.slice(0, 10) && item.status === "open"); if (existing) { existing.sourceIds = [...new Set([...existing.sourceIds, ...episode.sourceIds])]; existing.organizerRun = episode.organizerRun ?? existing.organizerRun; } else store.careEpisodes.push(episode); for (const source of store.rawSources) if (episode.sourceIds.includes(source.id)) { source.status = "organized"; source.relatedLifeEventId = undefined; } await writeStore(store); return existing ?? episode; }
-export async function markSourcesOrganized(sourceIds: string[]) { const store = await readStore(); for (const source of store.rawSources) if (sourceIds.includes(source.id)) source.status = "organized"; await writeStore(store); }
-export async function markSourcesProcessing(sourceIds: string[]) { const store = await readStore(); for (const source of store.rawSources) if (sourceIds.includes(source.id) && source.status === "uploaded") source.status = "processing"; await writeStore(store); }
-export async function findOrganizerRun(organizationFingerprint: string) { const store = await readStore(); return store.organizerRuns.find((run) => run.organizationFingerprint === organizationFingerprint) ?? null; }
-export async function persistOrganizerRun(run: OrganizerRun) { const store = await readStore(); const existing = store.organizerRuns.find((item) => item.organizationFingerprint === run.organizationFingerprint); if (!existing) store.organizerRuns.push(run); await writeStore(store); return existing ?? run; }
-export async function undoOrganization(sourceIds: string[], eventId: string) { const store = await readStore(); const event = store.events.find((item) => item.id === eventId); if (!event) return; event.sourceIds = event.sourceIds.filter((id) => !sourceIds.includes(id)); event.mediaIds = event.mediaIds.filter((id) => !store.rawSources.find((source) => source.id === id)?.mediaIds.includes(id)); store.links = store.links.filter((link) => !(link.lifeEventId === eventId && sourceIds.includes(link.rawSourceId))); for (const source of store.rawSources) if (sourceIds.includes(source.id)) { source.status = "uploaded"; source.relatedLifeEventId = undefined; } for (const media of store.media) if (sourceIds.some((sourceId) => store.rawSources.find((source) => source.id === sourceId)?.mediaIds.includes(media.id))) media.lifeEventId = undefined; if (!event.sourceIds.length && event.id.startsWith("event-")) store.events = store.events.filter((item) => item.id !== eventId); await writeStore(store); }
-export const newId = (prefix: string) => `${prefix}-${randomUUID()}`;
+export const getHomeEvents = repository.getHomeEvents.bind(repository);
+export const getAllEvents = repository.getAllEvents.bind(repository);
+export const getStore = repository.getStore.bind(repository);
+export const getEventDetail = repository.getEventDetail.bind(repository);
+export const appendUpload = repository.appendUpload.bind(repository);
+export const updateMediaAsset = repository.updateMediaAsset.bind(repository);
+export const updateMediaLocation = repository.updateMediaLocation.bind(repository);
+export const removeMediaLocation = repository.removeMediaLocation.bind(repository);
+export const findMediaLocationByProviderRef = repository.findMediaLocationByProviderRef.bind(repository);
+export const appendMediaAssetWithLocation = repository.appendMediaAssetWithLocation.bind(repository);
+export const updateMediaAssetWithLocation = repository.updateMediaAssetWithLocation.bind(repository);
+export const getConnectorState = repository.getConnectorState.bind(repository);
+export const upsertConnectorState = repository.upsertConnectorState.bind(repository);
+export const markArchiveStatus = repository.markArchiveStatus.bind(repository);
+export const recordArchivedOriginal = repository.recordArchivedOriginal.bind(repository);
+export const persistOrganization = repository.persistOrganization.bind(repository);
+export const persistDailyTrace = repository.persistDailyTrace.bind(repository);
+export const persistCareEpisode = repository.persistCareEpisode.bind(repository);
+export const markSourcesOrganized = repository.markSourcesOrganized.bind(repository);
+export const markSourcesProcessing = repository.markSourcesProcessing.bind(repository);
+export const findOrganizerRun = repository.findOrganizerRun.bind(repository);
+export const persistOrganizerRun = repository.persistOrganizerRun.bind(repository);
+export const undoOrganization = repository.undoOrganization.bind(repository);
