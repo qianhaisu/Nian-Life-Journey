@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS "chat_import_tasks" ("id" text PRIMARY KEY, "profile_id" text NOT NULL REFERENCES "profiles"("id"), "import_batch_id" text NOT NULL UNIQUE, "status" text NOT NULL, "phase" text NOT NULL, "processed_messages" integer NOT NULL DEFAULT 0, "created_messages" integer NOT NULL DEFAULT 0, "reused_messages" integer NOT NULL DEFAULT 0, "warnings" integer NOT NULL DEFAULT 0, "checkpoint" text, "created_at" timestamptz NOT NULL DEFAULT now(), "updated_at" timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS "chat_import_tasks_profile_idx" ON "chat_import_tasks" ("profile_id");
+CREATE INDEX IF NOT EXISTS "chat_import_tasks_status_idx" ON "chat_import_tasks" ("status");

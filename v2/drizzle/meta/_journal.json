@@ -43,6 +43,13 @@
       "when": 1788166406092,
       "tag": "0005_organizer_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788170000000,
+      "tag": "0006_chat_import_tasks",
+      "breakpoints": true
     }
   ]
 }

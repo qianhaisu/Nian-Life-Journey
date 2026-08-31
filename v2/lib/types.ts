@@ -1,6 +1,6 @@
 export type Visibility = "private" | "family" | "public";
 export type MediaType = "photo" | "video" | "document";
-export type MediaProvider = "quark" | "hot";
+export type MediaProvider = "quark" | "hot" | "wechat";
 export type MediaVariant = "original" | "thumbnail" | "web" | "poster" | "preview" | "document_preview";
 export type ArchiveStatus = "awaiting_archive" | "archiving" | "archived" | "archive_failed" | "paused_auth_required";
 export type MediaLocationStatus = "pending" | "ready" | "awaiting_archive" | "archiving" | "archived" | "archive_failed" | "paused_auth_required";
@@ -67,6 +67,8 @@ export interface SleepPhase { id: string; label: string; startedAt: string; note
 export interface ConnectorState { id: string; provider: "quark"; profileId: string; cursor?: string; lastSuccessfulSync?: string; lastError?: string; pendingArchiveCount: number; scope?: { folder?: string; from?: string; to?: string; query?: string }; connectorVersion: string; status: ConnectorSyncStatus; updatedAt: string; lastKeyword?: string; lastAttemptAt?: string; lastSuccessfulAt?: string; artifactItemCount?: number; importedCount?: number; failedCount?: number; lastErrorCode?: string; }
 
 export type OrganizerJobStatus = "pending" | "processing" | "succeeded" | "failed";
+export type ChatImportTaskStatus = "pending" | "running" | "completed" | "completed_with_warnings" | "failed" | "cancelled";
+export interface ChatImportTask { id: string; profileId: string; importBatchId: string; status: ChatImportTaskStatus; phase: "snapshot_validation" | "bundle_parse" | "raw_source_persist" | "media_validate" | "media_upload" | "media_link" | "finalize"; processedMessages: number; createdMessages: number; reusedMessages: number; warnings: number; checkpoint?: string; createdAt: string; updatedAt: string; }
 // A queued unit of Organizer work: one call to organize(sourceIds) worth of sources.
 // jobKey is sha256(sorted(sourceIds).join(",")) — it de-dupes concurrent/retried enqueue calls for
 // the same batch, independent from OrganizerRun.organizationFingerprint, which de-dupes the actual

@@ -332,3 +332,8 @@ export const organizerJobs = pgTable("organizer_jobs", {
   claimable: index("organizer_jobs_claimable_idx").on(table.status, table.availableAt),
   activeJobKey: uniqueIndex("organizer_jobs_active_job_key_idx").on(table.jobKey).where(sql`${table.status} in ('pending', 'processing')`),
 }));
+
+export const chatImportTasks = pgTable("chat_import_tasks", {
+  id: text("id").primaryKey(), profileId: text("profile_id").notNull().references(() => profiles.id), importBatchId: text("import_batch_id").notNull().unique(),
+  status: text("status").notNull(), phase: text("phase").notNull(), processedMessages: integer("processed_messages").notNull().default(0), createdMessages: integer("created_messages").notNull().default(0), reusedMessages: integer("reused_messages").notNull().default(0), warnings: integer("warnings").notNull().default(0), checkpoint: text("checkpoint"), createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => ({ byProfile: index("chat_import_tasks_profile_idx").on(table.profileId), byStatus: index("chat_import_tasks_status_idx").on(table.status) }));
