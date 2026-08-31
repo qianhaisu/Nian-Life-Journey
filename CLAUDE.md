@@ -102,12 +102,15 @@ Teddy 的默认 Git 习惯：
 
 ### 分支与 Worktree
 
-- 从最新 `main` 拉功能分支，不直接改 `main`。
-- 看到当前目录仍在功能分支，不代表该功能没有进入 main。
-- 必须通过 Git ancestry、main HEAD 和远端状态判断是否已合并。
-- main 可能在独立 worktree 中，操作前先检查 `git worktree list`。
-- 多个 Session 并行时，各自使用独立分支/worktree。
-- 只有修改相同文件或依赖同一未稳定契约时才需要等待其他 Session。
+项目统一使用单一 worktree：`C:\Users\teddy\Documents\Nianlife`。
+
+- 默认只使用这一个 worktree，不再创建 `main-focus`、`postgres-foundation` 或其他额外 worktree。
+- 未经 Teddy 明确要求，不得执行 `git worktree add`。
+- 空闲状态保持在 `main`，并同步 `origin/main`。
+- 从最新 `main` 拉功能分支，在当前目录（同一个 worktree）创建普通 feature branch，不直接改 `main`。
+- 功能完成、验证通过、合并 main 并 push 后，切回 `main`。
+- 看到当前目录仍在功能分支，不代表该功能没有进入 main；必须通过 Git ancestry、main HEAD 和远端状态判断是否已合并。
+- 多个 Session 可以并行做只读规划（阅读、分析、只读命令），但同一时间只能有一个 Session 对仓库做写操作（改文件、commit、push、merge）。开始写操作前确认没有其他 Session 正在改动仓库。
 
 ### 稳定项目边界
 
