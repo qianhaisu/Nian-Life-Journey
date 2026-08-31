@@ -1,6 +1,6 @@
 {
-  "id": "d1e237fb-847e-40c0-8602-a0ffb406aafa",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "c7ffd6c0-967e-45c2-b995-7f78f69b2bc9",
+  "prevId": "d1e237fb-847e-40c0-8602-a0ffb406aafa",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -38,8 +38,27 @@
           "primaryKey": false,
           "notNull": false
         },
-        "version": {
-          "name": "version",
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_archive_count": {
+          "name": "pending_archive_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "scope": {
+          "name": "scope",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "connector_version": {
+          "name": "connector_version",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -276,6 +295,25 @@
         },
         "original_filename": {
           "name": "original_filename",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archive_status": {
+          "name": "archive_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'awaiting_archive'"
+        },
+        "archive_verified_at": {
+          "name": "archive_verified_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archive_last_error": {
+          "name": "archive_last_error",
           "type": "text",
           "primaryKey": false,
           "notNull": false

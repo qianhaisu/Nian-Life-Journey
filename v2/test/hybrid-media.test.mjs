@@ -6,10 +6,17 @@ const root = new URL("../", import.meta.url);
 const read = (file) => readFile(new URL(file, root), "utf8");
 
 test("migration models assets, locations, and the display-layer media table without binary columns", async () => {
-  const sql = await read("drizzle/0000_platform_foundation.sql");
-  assert.match(sql, /CREATE TABLE "media_assets"/);
-  assert.match(sql, /CREATE TABLE "media_locations"/);
-  assert.match(sql, /UNIQUE\("media_asset_id","provider","variant"\)/);
+  const { readdir } = await import("node:fs/promises");
+  const files = (await readdir(new URL("drizzle/", root)))
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  const sql = (await Promise.all(files.map((name) => read(`drizzle/${name}`)))).join("\n");
+  // media_assets/media_locations/their unique constraint were created by the original
+  // 0000_real_data_foundation.sql migration (unquoted identifiers, IF NOT EXISTS) and are
+  // untouched by the later incremental migrations (quoted identifiers) — match both styles.
+  assert.match(sql, /CREATE TABLE (?:IF NOT EXISTS )?"?media_assets"?/);
+  assert.match(sql, /CREATE TABLE (?:IF NOT EXISTS )?"?media_locations"?/);
+  assert.match(sql, /UNIQUE\s*\(\s*"?media_asset_id"?\s*,\s*"?provider"?\s*,\s*"?variant"?\s*\)/);
   // Display-layer Media (src/thumbnailSrc/alt/...) now has its own table — added this slice to
   // close the schema/type drift where it was a Store field with no PostgreSQL table at all.
   assert.match(sql, /CREATE TABLE "media"/);

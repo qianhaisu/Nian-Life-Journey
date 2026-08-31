@@ -159,6 +159,44 @@ runContractSuite("json", () => createJsonRepository());
 
 if (HAS_DATABASE_URL) {
   const { createPostgresRepository } = await import("../lib/db/postgres-repository.ts");
+  const { Client } = await import("pg");
+
+  // The fixtures above reference profile-zhangnian/contributor-dad as foreign keys. The JSON
+  // repository doesn't enforce referential integrity so this was never needed there, but real
+  // PostgreSQL foreign keys reject rows whose parent doesn't exist yet — seed those two parent
+  // rows before the suite runs, and remove everything scoped to this profile afterward so the
+  // suite only ever cleans up what it created.
+  const PROFILE_ID = "profile-zhangnian";
+  const CONTRIBUTOR_ID = "contributor-dad";
+  test.before(async () => {
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+    await client.query(
+      `insert into profiles (id, display_name, birth_date, timezone, visibility) values ($1, 'Contract Test Profile', '2020-01-01', 'UTC', 'private') on conflict (id) do nothing`,
+      [PROFILE_ID],
+    );
+    await client.query(
+      `insert into contributors (id, profile_id, role, display_name) values ($1, $2, 'father', 'Dad') on conflict (id) do nothing`,
+      [CONTRIBUTOR_ID, PROFILE_ID],
+    );
+    await client.end();
+  });
+  test.after(async () => {
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+    await client.query(
+      `delete from source_memory_links where raw_source_id in (select id from raw_sources where profile_id = $1) or life_event_id in (select id from life_events where profile_id = $1)`,
+      [PROFILE_ID],
+    );
+    await client.query(`delete from media_locations where media_asset_id in (select id from media_assets where profile_id = $1)`, [PROFILE_ID]);
+    for (const table of ["media", "media_assets", "raw_sources", "life_events", "daily_traces", "growth_records", "care_records", "care_episodes", "monthly_snapshot", "monthly_focus_goals", "organizer_runs", "connector_states"]) {
+      await client.query(`delete from ${table} where profile_id = $1`, [PROFILE_ID]);
+    }
+    await client.query(`delete from contributors where profile_id = $1`, [PROFILE_ID]);
+    await client.query(`delete from profiles where id = $1`, [PROFILE_ID]);
+    await client.end();
+  });
+
   runContractSuite("postgres", () => createPostgresRepository());
 
   test("[postgres] a failed transaction rolls back cleanly (updateMediaAssetWithLocation with a nonexistent locationId)", async () => {

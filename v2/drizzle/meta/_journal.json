@@ -5,8 +5,36 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1788149424926,
-      "tag": "0000_platform_foundation",
+      "when": 1787907622000,
+      "tag": "0000_real_data_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787907622001,
+      "tag": "0001_storage_phase_2",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787920667000,
+      "tag": "0002_ai_organizer",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788000000000,
+      "tag": "0003_quark_artifact_ingestion",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788159747142,
+      "tag": "0004_platform_foundation",
       "breakpoints": true
     }
   ]

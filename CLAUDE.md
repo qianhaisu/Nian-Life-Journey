@@ -81,7 +81,7 @@ Teddy 的默认 Git 习惯：
 
 - force push 或改写历史
 - 删除分支、文件或数据
-- 运行生产数据库 migration
+- drop 整个数据库，或不可恢复地删除现有业务记录（见下方「Neon/PostgreSQL」，普通 migration 不在此列）
 - 修改生产环境变量或密钥
 - 手动部署、回滚生产
 - 调用会产生明显费用的外部 API
@@ -106,6 +106,15 @@ Teddy 的默认 Git 习惯：
 - 只使用这一个 worktree，不再创建 `main-focus`、`postgres-foundation` 或其他额外 worktree；未经 Teddy 明确要求，不得执行 `git worktree add`。
 - 不再新建 feature branch；直接在 `main` 上开发、commit、push，与 `origin/main` 保持同步。
 - 多个 Session 可以并行做只读规划（阅读、分析、只读命令），但同一时间只能有一个 Session 对仓库做写操作（改文件、commit、push）。开始写操作前确认没有其他 Session 正在改动仓库。
+
+### Neon/PostgreSQL
+
+Nianlife 只有一个 Neon 数据库（integration `neon-citrine-park`），Vercel 里 `DATABASE_URL` 等变量同时挂在 Production 和 Preview 上，两者本来就是同一份连接串——**没有独立的 Development/Test 数据库，也不新建一个**。这个唯一的库同时充当开发库和测试库。
+
+- 不创建新 Neon Project、不建 Neon branch、不建第二个数据库、不要求 Teddy 另配一套连接串。
+- 普通建表、加字段、改约束、跑 migration、contract test 写入/清理测试数据，都已经授权，不用因为"这是 Production"就停下来问。
+- 测试只清理自己创建的记录，不清空整个库；需要 drop 整个数据库或不可逆删除现有业务记录时才停下来找 Teddy。
+- Teddy 可以接受开发期间数据库短暂不可用、migration 期间网站报错——这是单人个人项目当前阶段的正常代价，不必为了避免这个而绕路。
 
 ### 稳定项目边界
 

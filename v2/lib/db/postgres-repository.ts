@@ -1,9 +1,23 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { TransactionRollbackError } from "drizzle-orm/errors";
 import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
 import { getDb } from "./client";
 import * as t from "./schema";
 import { newId } from "./repository-interface";
 import type { Repository, Store } from "./repository-interface";
+
+// tx.rollback() doesn't make db.transaction() resolve to whatever the callback returns after it —
+// it makes the transaction's own promise reject with TransactionRollbackError. Every "rollback and
+// report null" call site below has to catch that one error type and turn it back into a null
+// return; any other error must keep propagating, matching this file's no-silent-fallback contract.
+async function transactionOrNull<T>(run: () => Promise<T>): Promise<T | null> {
+  try {
+    return await run();
+  } catch (err) {
+    if (err instanceof TransactionRollbackError) return null;
+    throw err;
+  }
+}
 
 // Real PostgreSQL, via drizzle-orm/node-postgres. Every method replicates the exact dedup /
 // idempotency decision made by json-repository.ts for the same call — that behavioral parity,
@@ -92,6 +106,13 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       return input.source;
     },
     async updateMediaAsset(id: string, patch: Partial<MediaAsset>) {
+      // An empty patch is a legitimate no-op read in json-repository.ts (Object.assign(asset, {})
+      // is a no-op) — mirror that instead of sending Postgres a SET clause with no columns, which
+      // it rejects outright.
+      if (Object.keys(patch).length === 0) {
+        const [row] = await db.select().from(t.mediaAssets).where(eq(t.mediaAssets.id, id));
+        return (row as unknown as MediaAsset) ?? null;
+      }
       const rows = await db.update(t.mediaAssets).set(patch).where(eq(t.mediaAssets.id, id)).returning();
       return (rows[0] as unknown as MediaAsset) ?? null;
     },
@@ -116,12 +137,12 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       return { asset, location };
     },
     async updateMediaAssetWithLocation(assetId: string, locationId: string, assetPatch: Partial<MediaAsset>, locationPatch: Partial<MediaLocation>) {
-      return db.transaction(async (tx) => {
+      return transactionOrNull(() => db.transaction(async (tx) => {
         const assetRows = await tx.update(t.mediaAssets).set(assetPatch).where(eq(t.mediaAssets.id, assetId)).returning();
         const locationRows = await tx.update(t.mediaLocations).set({ ...locationPatch, updatedAt: new Date().toISOString() }).where(eq(t.mediaLocations.id, locationId)).returning();
-        if (!assetRows[0] || !locationRows[0]) { tx.rollback(); return null; }
+        if (!assetRows[0] || !locationRows[0]) { tx.rollback(); }
         return { asset: assetRows[0] as unknown as MediaAsset, location: locationRows[0] as unknown as MediaLocation };
-      });
+      }));
     },
     async getConnectorState(provider: "quark", profileId: string) {
       const [row] = await db.select().from(t.connectorStates).where(and(eq(t.connectorStates.provider, provider), eq(t.connectorStates.profileId, profileId)));
@@ -132,20 +153,20 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       return input;
     },
     async markArchiveStatus(assetId: string, status: NonNullable<MediaAsset["archiveStatus"]>, error?: string) {
-      return db.transaction(async (tx) => {
+      return transactionOrNull(() => db.transaction(async (tx) => {
         const assetRows = await tx.update(t.mediaAssets).set({ archiveStatus: status, archiveLastError: error }).where(eq(t.mediaAssets.id, assetId)).returning();
-        if (!assetRows[0]) { tx.rollback(); return null; }
+        if (!assetRows[0]) { tx.rollback(); }
         if (status !== "archived") {
           const nextStatus = status === "paused_auth_required" ? "awaiting_archive" : status;
           await tx.update(t.mediaLocations).set({ status: nextStatus, updatedAt: new Date().toISOString() }).where(and(eq(t.mediaLocations.mediaAssetId, assetId), eq(t.mediaLocations.provider, "hot"), eq(t.mediaLocations.variant, "original")));
         }
         return assetRows[0] as unknown as MediaAsset;
-      });
+      }));
     },
     async recordArchivedOriginal(input: { assetId: string; providerRef: string; path?: string; fileSize?: number; checksumVerified?: boolean }) {
-      return db.transaction(async (tx) => {
+      return transactionOrNull(() => db.transaction(async (tx) => {
         const [asset] = await tx.select().from(t.mediaAssets).where(eq(t.mediaAssets.id, input.assetId));
-        if (!asset) { tx.rollback(); return null; }
+        if (!asset) { tx.rollback(); }
         const now = new Date().toISOString();
         const [existing] = await tx.select().from(t.mediaLocations).where(and(eq(t.mediaLocations.mediaAssetId, input.assetId), eq(t.mediaLocations.provider, "quark"), eq(t.mediaLocations.variant, "original")));
         const patch = { providerRef: input.providerRef, fileSize: input.fileSize, status: "archived", quarkPathSnapshot: input.path, updatedAt: now };
@@ -159,7 +180,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         }
         await tx.update(t.mediaAssets).set({ archiveStatus: "archived", archiveVerifiedAt: now, archiveLastError: null }).where(eq(t.mediaAssets.id, input.assetId));
         return location;
-      });
+      }));
     },
     async persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[]) {
       return db.transaction(async (tx) => {
