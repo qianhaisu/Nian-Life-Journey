@@ -70,17 +70,42 @@ test("ordinary daycare material becomes one daily trace", async () => {
   assert.ok(store.dailyTraces.some((trace) => trace.id === result.traceId && trace.sourceIds.includes(item.id)));
 });
 
-test("related video attaches to an existing memory instead of creating a duplicate", async () => {
+test("a video with corroborating text attaches to the one matching existing memory instead of creating a duplicate", async () => {
   const first = await source({ sourceType: "parent_note", contentTypes: ["motor", "family"], text: "第一次主动追球。", capturedAt: "2026-09-20T10:00:00.000Z" });
   const organizer = new AIMemoryOrganizer(new MockAIProvider());
   const created = await organizer.organize([first.id]);
-  const second = await source({ sourceType: "family_video", contentTypes: ["motor", "family"], capturedAt: "2026-09-20T11:00:00.000Z" });
+  const second = await source({ sourceType: "family_video", contentTypes: ["motor", "family"], text: "追球视频，和早上说的是同一次活动。", capturedAt: "2026-09-20T11:00:00.000Z" });
   const attached = await organizer.organize([second.id]);
   assert.equal(created.action, "create_memory");
   assert.equal(attached.action, "attach_existing");
   assert.equal(attached.eventId, created.eventId);
   const store = await getStore();
   assert.equal(store.events.filter((event) => event.id === created.eventId).length, 1);
+});
+
+test("a video with no text or media evidence does not auto-attach to a same-day, same-category memory", async () => {
+  const first = await source({ sourceType: "parent_note", contentTypes: ["motor", "family"], text: "第一次主动追球。", capturedAt: "2026-09-29T10:00:00.000Z" });
+  const organizer = new AIMemoryOrganizer(new MockAIProvider());
+  const created = await organizer.organize([first.id]);
+  const second = await source({ sourceType: "family_video", contentTypes: ["motor", "family"], capturedAt: "2026-09-29T11:00:00.000Z" });
+  const result = await organizer.organize([second.id]);
+  assert.equal(created.action, "create_memory");
+  assert.notEqual(result.action, "attach_existing");
+  const store = await getStore();
+  assert.equal(store.events.filter((event) => event.id === created.eventId).length, 1);
+});
+
+test("attach_existing preserves the existing memory's title and story instead of overwriting them", async () => {
+  const first = await source({ sourceType: "parent_note", contentTypes: ["motor", "family"], text: "第一次主动追球。", capturedAt: "2026-10-01T10:00:00.000Z" });
+  const organizer = new AIMemoryOrganizer(new MockAIProvider());
+  const created = await organizer.organize([first.id]);
+  const beforeAttach = (await getStore()).events.find((event) => event.id === created.eventId);
+  const second = await source({ sourceType: "family_video", contentTypes: ["motor", "family"], text: "追球视频，和早上说的是同一次活动。", capturedAt: "2026-10-01T11:00:00.000Z" });
+  const attached = await organizer.organize([second.id]);
+  assert.equal(attached.action, "attach_existing");
+  const afterAttach = (await getStore()).events.find((event) => event.id === attached.eventId);
+  assert.equal(afterAttach.title, beforeAttach.title);
+  assert.equal(afterAttach.story, beforeAttach.story);
 });
 
 test("invalid schema and provider timeout fall back to rules without failing organization", async () => {

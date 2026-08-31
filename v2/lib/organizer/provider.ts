@@ -190,9 +190,14 @@ function defaultMockDecision(context: OrganizerContext): OrganizerDecision {
   const date = sources[0]?.capturedAt.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
   const medical = types.includes("health") || sources.some((source) => source.sourceType === "medical_document" || source.sourceType === "checkup_document");
   if (medical) return { action: "care_episode", sourceIds: sources.map((source) => source.id), occurredAt: date, contentTypes: ["health"], memoryWeight: "trace", confidence: 0.99, reason: "Health sources are organized as facts only." };
-  const existing = context.existingMemories.find((memory) => memory.contentTypes.some((type) => types.includes(type)));
+  // A same-date/content-type overlap alone does not justify attaching to an existing memory: the
+  // target must be unique (not one of several plausible matches) and there must be text or media
+  // evidence linking this batch to it — matching the store_only gate below.
+  const existingMatches = context.existingMemories.filter((memory) => memory.contentTypes.some((type) => types.includes(type)));
+  const existing = existingMatches.length === 1 ? existingMatches[0] : undefined;
   const video = sources.some((source) => source.sourceType === "family_video");
-  if (existing && video) return { action: "attach_existing", sourceIds: sources.map((source) => source.id), existingLifeEventId: existing.id, occurredAt: date, contentTypes: types, memoryWeight: "memory", confidence: 0.91, reason: "Related video belongs to the nearby existing memory." };
+  const hasEvidence = Boolean(text) || context.representativeMediaCount > 0;
+  if (existing && video && hasEvidence) return { action: "attach_existing", sourceIds: sources.map((source) => source.id), existingLifeEventId: existing.id, occurredAt: date, contentTypes: types, memoryWeight: "memory", confidence: 0.91, reason: "Related video belongs to the nearby existing memory." };
   if (!text && context.representativeMediaCount === 0) return { action: "store_only", sourceIds: sources.map((source) => source.id), occurredAt: date, contentTypes: types, memoryWeight: "trace", confidence: 0.35, reason: "No text or safe derivative input supports a stronger archive claim." };
   const milestone = /第一次|首次|开始|学会|主动|生日|旅行|milestone|first\s*time/i.test(text);
   if (milestone) {

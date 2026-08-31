@@ -32,6 +32,10 @@ Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（目�
 - artifact 导入默认 dry-run；不自动登录、上传、移动或删除网盘文件。
 - WorkBuddy 运行时目录（`workbuddy/storage/`、Quark `search-results/`）已在 `.gitignore` 覆盖；artifact 路径校验已加固，拒绝经由 symlink 或 Windows junction/reparse point 到达的文件。
 
+## AI Organizer 架构方向
+
+Gemini V2 的语义方向已用真实评测验证（Schema/Policy 叙事泄漏问题已解决），但真实响应延迟不稳定，同一请求在不同时刻可能是几秒也可能超过 30 秒。当前 Capture 链路仍是同步调用、同步 fallback。生产化时应把 AI Organizer 改成基于 PostgreSQL/job/outbox 的异步任务，让用户上传不必等待模型返回；不要通过继续调大同步 `AI_TIMEOUT_MS` 来掩盖这个问题。
+
 ## 现有改动保护规则
 
 处理任何新任务前先跑 `git status --short --branch`。工作区里已有的改动在未确认其来源和目的前，不得回滚、覆盖、stash 或混入其他提交。
@@ -52,6 +56,7 @@ npm run build
 
 - 从最新 `main` 拉功能分支，不直接改 `main`。
 - 超过 3 个文件的改动，先给简短计划，Teddy 确认后再动手。
+- Teddy 明确授权 `commit` 时，默认同时授权普通 `push` 到当前功能分支，完成 commit 后不需要再次询问。若 Teddy 明确说"只 commit、不 push"才停在本地。`force push`、merge main、创建 PR、部署仍需单独授权。
 
 ## 详细交接文档
 
