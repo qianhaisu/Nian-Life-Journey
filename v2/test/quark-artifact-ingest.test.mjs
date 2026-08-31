@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -162,6 +162,53 @@ test("ingest-artifact CLI rejects an unsafe artifact path (non-.jsonl, missing f
     }
     const symlinked = await runCli(["--artifact", symlinkPath, "--keyword", "张年照片"]);
     assert.notEqual(symlinked.exitCode, 0);
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+});
+
+test("readQuarkArtifactLines accepts a plain absolute .jsonl file with no reparse point in its path", async () => {
+  const workDir = await mkdtemp(path.join(os.tmpdir(), "nian-quark-plain-"));
+  try {
+    const artifactPath = path.join(workDir, "search.jsonl");
+    await writeFile(artifactPath, `${JSON.stringify(photoItem())}\n`);
+    const lines = await readQuarkArtifactLines(artifactPath);
+    assert.equal(lines.filter(Boolean).length, 1);
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+});
+
+test("readQuarkArtifactLines rejects an artifact reached through a reparse-point ancestor directory", async () => {
+  // A file *symlink* needs Developer Mode or admin on Windows (see the CLI-level symlink test
+  // above), so it is not the realistic attack surface there. A directory reparse point is: Windows
+  // "junction" and POSIX directory symlinks both need no elevated privilege to create. lstat() on
+  // the leaf artifact file reports a plain regular file in this case even though the effective read
+  // target lives outside the tree the caller thinks it's reading from — that's the gap this test
+  // guards, distinct from (and in addition to) the leaf-level symlink check exercised above.
+  const workDir = await mkdtemp(path.join(os.tmpdir(), "nian-quark-junction-"));
+  try {
+    const realDir = path.join(workDir, "real-dir");
+    await mkdir(realDir);
+    const artifactPath = path.join(realDir, "search.jsonl");
+    await writeFile(artifactPath, `${JSON.stringify(photoItem())}\n`);
+
+    const linkDir = path.join(workDir, "via-link");
+    try {
+      await symlink(realDir, linkDir, process.platform === "win32" ? "junction" : "dir");
+    } catch (error) {
+      // Privilege-free reparse points are expected to work on every platform this suite targets
+      // (Windows junction, POSIX dir symlink) — surface a failure instead of silently skipping,
+      // since that would hide the exact bypass this test exists to catch.
+      throw new Error(`expected a privilege-free reparse point on ${process.platform}, but creation failed: ${error.code ?? error.message}`);
+    }
+
+    const accessPath = path.join(linkDir, "search.jsonl");
+    await assert.rejects(readQuarkArtifactLines(accessPath), (error) => {
+      assert.ok(error instanceof QuarkAdapterError);
+      assert.match(error.message, /symlink|reparse/);
+      return true;
+    });
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }

@@ -3,3 +3,5 @@ node_modules/
 # Local WorkBuddy runtime state and credentials.
 .workbuddy/
 .github/skills/quarkclouddrive/workbuddy/config.json
+.github/skills/quarkclouddrive/workbuddy/storage/
+.github/skills/quarkclouddrive/scripts/search-results/

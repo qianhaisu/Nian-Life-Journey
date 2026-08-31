@@ -1,7 +1,7 @@
 // Pure mapping/validation for official Quark search-artifact JSONL rows (BrowseFileItem).
 // This module never spawns the quark CLI, never downloads bytes, and never computes a checksum.
-import { lstat, readFile } from "node:fs/promises";
-import { basename, extname, isAbsolute } from "node:path";
+import { lstat, readFile, realpath } from "node:fs/promises";
+import { basename, extname, isAbsolute, resolve as resolvePath } from "node:path";
 import { QuarkAdapterError } from "./quark";
 import type { MediaType } from "@/lib/types";
 
@@ -86,6 +86,18 @@ export async function readQuarkArtifactLines(artifactPath: string): Promise<stri
   catch { throw new QuarkAdapterError("QUARK_ARTIFACT_INVALID", "Quark artifact file does not exist", { action: "read-artifact", retryable: false }); }
   if (stats.isSymbolicLink()) throw new QuarkAdapterError("QUARK_ARTIFACT_INVALID", "Quark artifact file must not be a symbolic link", { action: "read-artifact", retryable: false });
   if (!stats.isFile()) throw new QuarkAdapterError("QUARK_ARTIFACT_INVALID", "Quark artifact path must be a regular file", { action: "read-artifact", retryable: false });
+  // lstat only inspects the leaf entry: a reparse point on an ANCESTOR directory (e.g. a Windows
+  // junction, which unlike a file symlink needs no elevated privilege to create) still resolves to
+  // a regular file here even though the effective read target lives outside artifactPath's own tree.
+  // realpath canonicalizes the whole chain, so any symlink/junction anywhere in the path shows up as
+  // a mismatch against the plain resolved input. Compare case-insensitively on win32 (case-insensitive
+  // filesystem; a bare casing difference is not a reparse point).
+  let real;
+  try { real = await realpath(artifactPath); }
+  catch { throw new QuarkAdapterError("QUARK_ARTIFACT_INVALID", "Quark artifact path could not be resolved", { action: "read-artifact", retryable: false }); }
+  const resolvedInput = resolvePath(artifactPath);
+  const matchesResolvedInput = process.platform === "win32" ? real.toLowerCase() === resolvedInput.toLowerCase() : real === resolvedInput;
+  if (!matchesResolvedInput) throw new QuarkAdapterError("QUARK_ARTIFACT_INVALID", "Quark artifact path must not traverse a symlink or reparse point", { action: "read-artifact", retryable: false });
   return (await readFile(artifactPath, "utf8")).split(/\r?\n/);
 }
 
