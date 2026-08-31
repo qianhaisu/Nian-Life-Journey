@@ -37,6 +37,8 @@ export const rawSources = pgTable("raw_sources", {
   capturedAt: timestamp("captured_at", { mode: "string" }).notNull(),
   importedAt: timestamp("imported_at", { mode: "string" }).defaultNow().notNull(),
   text: text("text"),
+  provider: text("provider"),
+  providerExternalId: text("provider_external_id"),
   mediaIds: jsonb("media_ids").$type<string[]>().notNull().default([]),
   sourceLabel: text("source_label").notNull(),
   status: text("status").notNull(),
@@ -48,7 +50,7 @@ export const rawSources = pgTable("raw_sources", {
   extractedMedicalFacts: jsonb("extracted_medical_facts").$type<{ hospital?: string; examinationType?: string; recordedAt?: string; facts: string[] }>(),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
-}, (table) => ({ byProfile: index("raw_sources_profile_idx").on(table.profileId), byStatus: index("raw_sources_status_idx").on(table.status) }));
+}, (table) => ({ byProfile: index("raw_sources_profile_idx").on(table.profileId), byStatus: index("raw_sources_status_idx").on(table.status), canonicalIdentity: uniqueIndex("raw_sources_provider_external_id_unique").on(table.provider, table.providerExternalId) }));
 
 export const mediaAssets = pgTable("media_assets", {
   id: text("id").primaryKey(),
@@ -66,10 +68,10 @@ export const mediaAssets = pgTable("media_assets", {
   archiveVerifiedAt: timestamp("archive_verified_at", { mode: "string" }),
   archiveLastError: text("archive_last_error"),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
-}, (table) => ({ byRawSource: index("media_assets_raw_source_idx").on(table.rawSourceId) }));
+}, (table) => ({ byRawSource: index("media_assets_raw_source_idx").on(table.rawSourceId), checksum: uniqueIndex("media_assets_checksum_unique").on(table.checksum) }));
 
-// (mediaAssetId, provider, variant) and (provider, providerRef) are the Quark idempotency
-// boundary — unchanged from the existing migration, not touched by this slice.
+// providerRef is the stable location identity. A checksum can have several WeChat source
+// references, so a location is not unique by (asset, provider, variant).
 export const mediaLocations = pgTable("media_locations", {
   id: text("id").primaryKey(),
   mediaAssetId: text("media_asset_id").notNull().references(() => mediaAssets.id),
@@ -87,10 +89,7 @@ export const mediaLocations = pgTable("media_locations", {
   sourceUpdatedAt: timestamp("source_updated_at", { mode: "string" }),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
-}, (table) => ({
-  assetVariant: unique().on(table.mediaAssetId, table.provider, table.variant),
-  providerRef: unique().on(table.provider, table.providerRef),
-}));
+}, (table) => ({ providerRef: unique().on(table.provider, table.providerRef) }));
 
 // Display-layer records (src/thumbnailSrc/alt/...), distinct from MediaAsset/MediaLocation's
 // storage-provenance layer. Never had a table before this slice.
@@ -335,5 +334,5 @@ export const organizerJobs = pgTable("organizer_jobs", {
 
 export const chatImportTasks = pgTable("chat_import_tasks", {
   id: text("id").primaryKey(), profileId: text("profile_id").notNull().references(() => profiles.id), importBatchId: text("import_batch_id").notNull().unique(),
-  status: text("status").notNull(), phase: text("phase").notNull(), processedMessages: integer("processed_messages").notNull().default(0), createdMessages: integer("created_messages").notNull().default(0), reusedMessages: integer("reused_messages").notNull().default(0), warnings: integer("warnings").notNull().default(0), checkpoint: text("checkpoint"), createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  status: text("status").notNull(), phase: text("phase").notNull(), currentStage: text("current_stage").notNull().default("snapshot_validation"), processedMessages: integer("processed_messages").notNull().default(0), createdMessages: integer("created_messages").notNull().default(0), reusedMessages: integer("reused_messages").notNull().default(0), warnings: integer("warnings").notNull().default(0), warningCounts: jsonb("warning_counts").$type<{ code: string; count: number }[]>().notNull().default([]), checkpoint: text("checkpoint"), leaseOwner: text("lease_owner"), leaseExpiresAt: timestamp("lease_expires_at", { mode: "string" }), attempt: integer("attempt").notNull().default(0), maxAttempts: integer("max_attempts").notNull().default(3), cancelRequestedAt: timestamp("cancel_requested_at", { mode: "string" }), startedAt: timestamp("started_at", { mode: "string" }), completedAt: timestamp("completed_at", { mode: "string" }), safeErrorCode: text("safe_error_code"), createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => ({ byProfile: index("chat_import_tasks_profile_idx").on(table.profileId), byStatus: index("chat_import_tasks_status_idx").on(table.status) }));

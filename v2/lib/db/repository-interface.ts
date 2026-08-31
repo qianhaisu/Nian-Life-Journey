@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { CareEpisode, CareRecord, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, OrganizerJob, OrganizerRun, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
+import type { CareEpisode, CareRecord, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportTaskStatus, ChatImportWarning, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, OrganizerJob, OrganizerRun, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
 
 // The full in-memory snapshot both repository implementations produce from getStore(). Every
 // field here is a real, currently-persisted entity (a field of the JSON Store) — not every type
@@ -21,6 +21,7 @@ export type Store = {
   monthlyFocusGoals: MonthlyFocusGoal[];
   organizerRuns: OrganizerRun[];
   organizerJobs: OrganizerJob[];
+  chatImportTasks: ChatImportTask[];
   links: SourceMemoryLink[];
   monthlySnapshot: MonthlySnapshot;
 };
@@ -37,12 +38,50 @@ export type EventDetail = {
 // The domain contract pages, Server Actions, Route Handlers, and the Organizer depend on — never
 // on PostgreSQL or the JSON file directly. Both json-repository.ts and postgres-repository.ts
 // implement this exactly; repository.ts picks one at module load based on REPOSITORY_BACKEND.
-export interface Repository {
+export type ChatImportTaskCreateInput = {
+  id?: string;
+  profileId: string;
+  importBatchId: string;
+  currentStage?: ChatImportStage;
+  maxAttempts?: number;
+  now?: string;
+};
+export type ChatImportTaskListFilter = { profileId?: string; status?: ChatImportTaskStatus | ChatImportTaskStatus[] };
+export type ChatImportTaskClaimInput = { taskId?: string; leaseOwner: string; leaseMs?: number; now?: string };
+export type ChatImportTaskLeaseInput = { taskId: string; leaseOwner: string; leaseMs?: number; now?: string };
+export type ChatImportTaskAcknowledgeInput = { taskId: string; leaseOwner?: string; now?: string };
+export type ChatImportCheckpointInput = { taskId: string; leaseOwner: string; checkpoint: ChatImportCheckpoint; processedMessages?: number; createdMessages?: number; reusedMessages?: number; warnings?: number; warningCounts?: ChatImportWarning[]; currentStage?: ChatImportStage; now?: string };
+export type ChatImportTaskFailureInput = { taskId: string; leaseOwner: string; safeErrorCode: string; now?: string };
+export type ChatImportTaskCompletionInput = { taskId: string; leaseOwner: string; now?: string };
+export type ChatImportTaskWarningsInput = ChatImportTaskCompletionInput & { warningCounts: ChatImportWarning[] };
+
+export type UploadPersistInput = { source: RawSource; media: Media[]; assets?: MediaAsset[]; locations?: MediaLocation[] };
+export type UploadPersistResult = { source: RawSource; sourceCreated: boolean; createdAssetIds: string[]; reusedAssetIds: string[]; createdLocationIds: string[]; reusedLocationIds: string[]; mediaIds: string[] };
+
+export interface ChatImportRepository {
+  createChatImportTask(input: ChatImportTaskCreateInput): Promise<ChatImportTask>;
+  getChatImportTask(id: string): Promise<ChatImportTask | null>;
+  listChatImportTasks(filter?: ChatImportTaskListFilter): Promise<ChatImportTask[]>;
+  claimChatImportTask(input: ChatImportTaskClaimInput): Promise<ChatImportTask | null>;
+  heartbeatChatImportTask(input: ChatImportTaskLeaseInput): Promise<ChatImportTask | null>;
+  saveChatImportCheckpoint(input: ChatImportCheckpointInput): Promise<ChatImportTask | null>;
+  requestChatImportCancel(taskId: string, now?: string): Promise<ChatImportTask | null>;
+  acknowledgeChatImportCancel(input: ChatImportTaskAcknowledgeInput): Promise<ChatImportTask | null>;
+  failChatImportTask(input: ChatImportTaskFailureInput): Promise<ChatImportTask | null>;
+  retryChatImportTask(taskId: string, now?: string): Promise<ChatImportTask | null>;
+  completeChatImportTask(input: ChatImportTaskCompletionInput): Promise<ChatImportTask | null>;
+  completeChatImportWithWarnings(input: ChatImportTaskWarningsInput): Promise<ChatImportTask | null>;
+  persistChatImportMessage(input: UploadPersistInput): Promise<UploadPersistResult>;
+}
+
+export interface Repository extends ChatImportRepository {
   getHomeEvents(): Promise<LifeEvent[]>;
   getAllEvents(): Promise<LifeEvent[]>;
   getStore(): Promise<Store>;
   getEventDetail(id: string): Promise<EventDetail | null>;
-  appendUpload(input: { source: RawSource; media: Media[]; assets?: MediaAsset[]; locations?: MediaLocation[] }): Promise<RawSource>;
+  appendUpload(input: UploadPersistInput): Promise<RawSource>;
+  persistUpload(input: UploadPersistInput): Promise<UploadPersistResult>;
+  findMediaAssetByChecksum(checksum: string): Promise<MediaAsset | null>;
   updateMediaAsset(id: string, patch: Partial<MediaAsset>): Promise<MediaAsset | null>;
   updateMediaLocation(id: string, patch: Partial<MediaLocation>): Promise<MediaLocation | null>;
   removeMediaLocation(id: string): Promise<void>;

@@ -1,14 +1,20 @@
-import { promises as fs } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, createWriteStream, promises as fs } from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { MediaAsset, MediaLocation, MediaVariant } from "@/lib/types";
 
-export type HotStorageObject = { providerRef: string; mimeType: string; fileSize?: number; width?: number; height?: number };
-export type HotStorageInput = { key: string; body: Uint8Array; mimeType: string };
+export type HotStorageObject = { providerRef: string; mimeType: string; fileSize?: number; width?: number; height?: number; checksum?: string };
+export type HotStorageBody = Uint8Array | AsyncIterable<Uint8Array>;
+export type HotStorageInput = { key: string; body: HotStorageBody; mimeType: string; checksum?: string; fileSize?: number };
+export type HotStorageVerification = { exists: boolean; checksumVerified: boolean; fileSize?: number };
 
 export interface HotStorage {
   put(input: HotStorageInput): Promise<HotStorageObject>;
   get(key: string): Promise<Uint8Array | null>;
   delete(key: string): Promise<void>;
+  verify(key: string, checksum: string): Promise<HotStorageVerification>;
   url(location: MediaLocation): string | null;
 }
 
@@ -25,9 +31,11 @@ export class LocalHotStorage implements HotStorage {
 
   async put(input: HotStorageInput) {
     const key = safeKey(input.key);
-    await fs.mkdir(path.dirname(path.join(this.root, key)), { recursive: true });
-    await fs.writeFile(path.join(this.root, key), input.body);
-    return { providerRef: key, mimeType: input.mimeType, fileSize: input.body.byteLength };
+    const target = path.join(this.root, key);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    if (input.body instanceof Uint8Array) await fs.writeFile(target, input.body);
+    else await pipeline(Readable.from(input.body), createWriteStream(target));
+    return { providerRef: key, mimeType: input.mimeType, fileSize: input.fileSize ?? (input.body instanceof Uint8Array ? input.body.byteLength : undefined), checksum: input.checksum };
   }
 
   async get(key: string) {
@@ -36,6 +44,15 @@ export class LocalHotStorage implements HotStorage {
   }
 
   async delete(key: string) { await fs.rm(path.join(this.root, safeKey(key)), { force: true }); }
+  async verify(key: string, checksum: string) {
+    try {
+      const stream = createReadStream(path.join(this.root, safeKey(key)));
+      const hash = createHash("sha256");
+      let fileSize = 0;
+      for await (const chunk of stream) { hash.update(chunk); fileSize += chunk.byteLength; }
+      return { exists: true, checksumVerified: hash.digest("hex") === checksum.replace(/^sha256:/i, "").toLowerCase(), fileSize };
+    } catch { return { exists: false, checksumVerified: false }; }
+  }
   url(location: MediaLocation) { return location.provider === "hot" && location.variant !== "original" && location.status === "ready" ? "/api/media/" + location.mediaAssetId + "?variant=" + location.variant : null; }
 }
 
@@ -66,8 +83,10 @@ export class R2HotStorage implements HotStorage {
   async put(input: HotStorageInput) {
     const key = safeKey(input.key);
     const { PutObjectCommand } = await import("@aws-sdk/client-s3");
-    await (await this.client).send(new PutObjectCommand({ Bucket: this.config.bucket, Key: key, Body: input.body, ContentType: input.mimeType }));
-    return { providerRef: key, mimeType: input.mimeType, fileSize: input.body.byteLength };
+    const body = input.body instanceof Uint8Array ? input.body : Readable.from(input.body);
+    const fileSize = input.fileSize ?? (input.body instanceof Uint8Array ? input.body.byteLength : undefined);
+    await (await this.client).send(new PutObjectCommand({ Bucket: this.config.bucket, Key: key, Body: body as any, ContentLength: fileSize, ContentType: input.mimeType }));
+    return { providerRef: key, mimeType: input.mimeType, fileSize, checksum: input.checksum };
   }
 
   async get(key: string) {
@@ -80,6 +99,17 @@ export class R2HotStorage implements HotStorage {
   }
 
   async delete(key: string) { const { DeleteObjectCommand } = await import("@aws-sdk/client-s3"); await (await this.client).send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })); }
+  async verify(key: string, checksum: string) {
+    try {
+      const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })) as { Body?: AsyncIterable<Uint8Array> };
+      if (!result.Body) return { exists: false, checksumVerified: false };
+      const hash = createHash("sha256");
+      let fileSize = 0;
+      for await (const chunk of result.Body) { hash.update(chunk); fileSize += chunk.byteLength; }
+      return { exists: true, checksumVerified: hash.digest("hex") === checksum.replace(/^sha256:/i, "").toLowerCase(), fileSize };
+    } catch { return { exists: false, checksumVerified: false }; }
+  }
   url(location: MediaLocation) {
     if (location.provider !== "hot" || location.variant === "original" || location.status !== "ready") return null;
     return this.config.publicBaseUrl ? `${this.config.publicBaseUrl.replace(/\/$/, "")}/${encodeURI(location.providerRef)}` : null;

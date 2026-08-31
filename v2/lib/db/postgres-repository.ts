@@ -1,11 +1,13 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { TransactionRollbackError } from "drizzle-orm/errors";
 import { sql } from "drizzle-orm";
-import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
+import type { CareEpisode, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportWarning, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
 import { getDb } from "./client";
 import * as t from "./schema";
 import { newId, organizerJobKey } from "./repository-interface";
-import type { Repository, Store } from "./repository-interface";
+import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
+import { normalizeSha256 } from "./chat-import-persistence";
+import { ChatImportStateError, acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 
 // tx.rollback() doesn't make db.transaction() resolve to whatever the callback returns after it —
 // it makes the transaction's own promise reject with TransactionRollbackError. Every "rollback and
@@ -20,6 +22,26 @@ async function transactionOrNull<T>(run: () => Promise<T>): Promise<T | null> {
   }
 }
 
+function taskFromRow(row: Record<string, unknown>): ChatImportTask {
+  const timestamp = (value: unknown) => {
+    if (value === null || value === undefined) return undefined;
+    const text = value instanceof Date ? value.toISOString() : String(value);
+    const withTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text) ? text : `${text.replace(" ", "T")}Z`;
+    const parsed = Date.parse(withTimezone);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : text;
+  };
+  let checkpoint: ChatImportCheckpoint | undefined;
+  if (typeof row.checkpoint === "string" && row.checkpoint) {
+    try { checkpoint = JSON.parse(row.checkpoint) as ChatImportCheckpoint; } catch { checkpoint = undefined; }
+  } else if (row.checkpoint && typeof row.checkpoint === "object") checkpoint = row.checkpoint as ChatImportCheckpoint;
+  const currentStage = (row.currentStage ?? row.phase) as ChatImportStage;
+  return { ...(row as unknown as ChatImportTask), phase: currentStage, currentStage, warningCounts: (Array.isArray(row.warningCounts) ? row.warningCounts : []) as ChatImportWarning[], attempt: Number(row.attempt ?? 0), maxAttempts: Number(row.maxAttempts ?? 3), checkpoint, leaseExpiresAt: timestamp(row.leaseExpiresAt), cancelRequestedAt: timestamp(row.cancelRequestedAt), startedAt: timestamp(row.startedAt), completedAt: timestamp(row.completedAt), createdAt: timestamp(row.createdAt) ?? String(row.createdAt), updatedAt: timestamp(row.updatedAt) ?? String(row.updatedAt) };
+}
+
+function taskRowValues(task: ChatImportTask) {
+  return { status: task.status, phase: task.phase, currentStage: task.currentStage, processedMessages: task.processedMessages, createdMessages: task.createdMessages, reusedMessages: task.reusedMessages, warnings: task.warnings, warningCounts: task.warningCounts, checkpoint: task.checkpoint ? JSON.stringify(task.checkpoint) : null, leaseOwner: task.leaseOwner ?? null, leaseExpiresAt: task.leaseExpiresAt ?? null, attempt: task.attempt, maxAttempts: task.maxAttempts, cancelRequestedAt: task.cancelRequestedAt ?? null, startedAt: task.startedAt ?? null, completedAt: task.completedAt ?? null, safeErrorCode: task.safeErrorCode ?? null, updatedAt: task.updatedAt };
+}
+
 // Real PostgreSQL, via drizzle-orm/node-postgres. Every method replicates the exact dedup /
 // idempotency decision made by json-repository.ts for the same call — that behavioral parity,
 // not raw SQL cleverness, is what test/repository-contract.test.mjs verifies against both
@@ -27,8 +49,84 @@ async function transactionOrNull<T>(run: () => Promise<T>): Promise<T | null> {
 export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): Repository {
   const db = getDb(env);
 
+  async function persistUpload(input: UploadPersistInput): Promise<UploadPersistResult> {
+    return db.transaction(async (tx) => {
+      const [sourceIdRow] = await tx.select().from(t.rawSources).where(eq(t.rawSources.id, input.source.id));
+      if (sourceIdRow && input.source.provider && input.source.providerExternalId && (sourceIdRow.provider !== input.source.provider || sourceIdRow.providerExternalId !== input.source.providerExternalId)) throw new Error("RAW_SOURCE_ID_CONFLICT");
+      const sourceRows = input.source.provider && input.source.providerExternalId
+        ? await tx.insert(t.rawSources).values(input.source as any).onConflictDoNothing({ target: [t.rawSources.provider, t.rawSources.providerExternalId] }).returning()
+        : await tx.insert(t.rawSources).values(input.source as any).onConflictDoNothing({ target: t.rawSources.id }).returning();
+      let sourceRow = sourceRows[0];
+      let sourceCreated = Boolean(sourceRow);
+      if (!sourceRow) {
+        const existingRows = input.source.provider && input.source.providerExternalId
+          ? await tx.select().from(t.rawSources).where(and(eq(t.rawSources.provider, input.source.provider), eq(t.rawSources.providerExternalId, input.source.providerExternalId)))
+          : await tx.select().from(t.rawSources).where(eq(t.rawSources.id, input.source.id));
+        sourceRow = existingRows[0];
+        if (!sourceRow) throw new Error("RAW_SOURCE_CONFLICT");
+        sourceCreated = false;
+      }
+
+      const assetsByInputId = new Map<string, MediaAsset>();
+      const createdAssetIds: string[] = [];
+      const reusedAssetIds: string[] = [];
+      for (const assetInput of input.assets ?? []) {
+        const asset = { ...assetInput, checksum: normalizeSha256(assetInput.checksum) };
+        const [assetIdRow] = await tx.select().from(t.mediaAssets).where(eq(t.mediaAssets.id, asset.id));
+        const [assetChecksumRow] = asset.checksum ? await tx.select().from(t.mediaAssets).where(eq(t.mediaAssets.checksum, asset.checksum)) : [undefined];
+        if (assetIdRow && assetChecksumRow && assetIdRow.id !== assetChecksumRow.id) throw new Error("MEDIA_ASSET_ID_CONFLICT");
+        if (assetIdRow && asset.checksum && normalizeSha256(assetIdRow.checksum) !== asset.checksum) throw new Error("MEDIA_ASSET_ID_CONFLICT");
+        const assetRows = asset.checksum
+          ? await tx.insert(t.mediaAssets).values(asset as any).onConflictDoNothing({ target: t.mediaAssets.checksum }).returning()
+          : await tx.insert(t.mediaAssets).values(asset as any).onConflictDoNothing({ target: t.mediaAssets.id }).returning();
+        let actual = assetRows[0] as unknown as MediaAsset | undefined;
+        if (!actual) {
+          const existingRows = asset.checksum
+            ? await tx.select().from(t.mediaAssets).where(eq(t.mediaAssets.checksum, asset.checksum))
+            : await tx.select().from(t.mediaAssets).where(eq(t.mediaAssets.id, asset.id));
+          actual = existingRows[0] as unknown as MediaAsset | undefined;
+        }
+        if (!actual) throw new Error("MEDIA_ASSET_CONFLICT");
+        assetsByInputId.set(asset.id, actual);
+        if (assetRows[0]) createdAssetIds.push(actual.id);
+        else reusedAssetIds.push(actual.id);
+      }
+
+      const mediaIds: string[] = [];
+      for (const mediaInput of input.media) {
+        const mappedAsset = mediaInput.mediaAssetId ? assetsByInputId.get(mediaInput.mediaAssetId) : undefined;
+        const media = mappedAsset && mappedAsset.id !== mediaInput.mediaAssetId ? { ...mediaInput, mediaAssetId: mappedAsset.id } : mediaInput;
+        const mediaRows = await tx.insert(t.media).values(media as any).onConflictDoNothing({ target: t.media.id }).returning();
+        if (!mediaRows[0]) {
+          const [existing] = await tx.select().from(t.media).where(eq(t.media.id, media.id));
+          if (!existing || (existing as unknown as Media).mediaAssetId !== media.mediaAssetId) throw new Error("MEDIA_ID_CONFLICT");
+        }
+        mediaIds.push(media.id);
+      }
+
+      const createdLocationIds: string[] = [];
+      const reusedLocationIds: string[] = [];
+      for (const locationInput of input.locations ?? []) {
+        const mappedAsset = assetsByInputId.get(locationInput.mediaAssetId);
+        const location = mappedAsset && mappedAsset.id !== locationInput.mediaAssetId ? { ...locationInput, mediaAssetId: mappedAsset.id } : locationInput;
+        const [locationIdRow] = await tx.select().from(t.mediaLocations).where(eq(t.mediaLocations.id, location.id));
+        if (locationIdRow && (locationIdRow.provider !== location.provider || locationIdRow.providerRef !== location.providerRef)) throw new Error("MEDIA_LOCATION_ID_CONFLICT");
+        const locationRows = await tx.insert(t.mediaLocations).values(location as any).onConflictDoNothing({ target: [t.mediaLocations.provider, t.mediaLocations.providerRef] }).returning();
+        if (locationRows[0]) {
+          createdLocationIds.push(locationRows[0].id);
+          continue;
+        }
+        const existingRows = await tx.select().from(t.mediaLocations).where(and(eq(t.mediaLocations.provider, location.provider), eq(t.mediaLocations.providerRef, location.providerRef)));
+        const existing = existingRows[0];
+        if (!existing || existing.mediaAssetId !== location.mediaAssetId || existing.variant !== location.variant) throw new Error("MEDIA_LOCATION_CONFLICT");
+        reusedLocationIds.push(existing.id);
+      }
+      return { source: sourceRow as unknown as RawSource, sourceCreated, createdAssetIds, reusedAssetIds, createdLocationIds, reusedLocationIds, mediaIds: (sourceRow as unknown as RawSource).mediaIds.slice() };
+    });
+  }
+
   async function assembleStore(): Promise<Store> {
-    const [profileRows, contributors, media, mediaAssets, mediaLocations, connectorStates, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns, organizerJobs, links, snapshotRows] = await Promise.all([
+    const [profileRows, contributors, media, mediaAssets, mediaLocations, connectorStates, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns, organizerJobs, chatImportTasks, links, snapshotRows] = await Promise.all([
       db.select().from(t.profiles).limit(1),
       db.select().from(t.contributors),
       db.select().from(t.media),
@@ -44,6 +142,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       db.select().from(t.monthlyFocusGoals),
       db.select().from(t.organizerRuns),
       db.select().from(t.organizerJobs),
+      db.select().from(t.chatImportTasks),
       db.select().from(t.sourceMemoryLinks),
       db.select().from(t.monthlySnapshot).limit(1),
     ]);
@@ -64,9 +163,23 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       monthlyFocusGoals: monthlyFocusGoals as unknown as Store["monthlyFocusGoals"],
       organizerRuns: organizerRuns as unknown as Store["organizerRuns"],
       organizerJobs: organizerJobs as unknown as Store["organizerJobs"],
+      chatImportTasks: chatImportTasks.map((task) => taskFromRow(task as unknown as Record<string, unknown>)),
       links: links as Store["links"],
       monthlySnapshot: (snapshotRows[0] ?? null) as Store["monthlySnapshot"],
     };
+  }
+
+  async function lockTask(tx: any, taskId: string) {
+    const locked = await tx.execute(sql`select id from chat_import_tasks where id = ${taskId} for update`);
+    const id = (locked.rows[0] as { id?: string } | undefined)?.id;
+    if (!id) return null;
+    const [row] = await tx.select().from(t.chatImportTasks).where(eq(t.chatImportTasks.id, id));
+    return row ? taskFromRow(row as unknown as Record<string, unknown>) : null;
+  }
+
+  async function storeTask(tx: any, task: ChatImportTask) {
+    const rows = await tx.update(t.chatImportTasks).set(taskRowValues(task) as any).where(eq(t.chatImportTasks.id, task.id)).returning();
+    return rows[0] ? taskFromRow(rows[0] as unknown as Record<string, unknown>) : null;
   }
 
   return {
@@ -99,14 +212,113 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         care: (careRows as unknown as Store["careRecords"]).filter((item) => e.careRecordIds.includes(item.id) && item.visibility !== "private"),
       };
     },
-    async appendUpload(input: { source: RawSource; media: Media[]; assets?: MediaAsset[]; locations?: MediaLocation[] }) {
-      await db.transaction(async (tx) => {
-        await tx.insert(t.rawSources).values(input.source);
-        if (input.media.length) await tx.insert(t.media).values(input.media);
-        if (input.assets?.length) await tx.insert(t.mediaAssets).values(input.assets);
-        if (input.locations?.length) await tx.insert(t.mediaLocations).values(input.locations);
+    async appendUpload(input) { return (await persistUpload(input)).source; },
+    async persistUpload(input) { return persistUpload(input); },
+    async findMediaAssetByChecksum(checksum) {
+      const normalized = normalizeSha256(checksum);
+      if (!normalized) return null;
+      const [row] = await db.select().from(t.mediaAssets).where(eq(t.mediaAssets.checksum, normalized));
+      return (row as unknown as MediaAsset) ?? null;
+    },
+    async persistChatImportMessage(input) { return persistUpload(input); },
+    async createChatImportTask(input: ChatImportTaskCreateInput) {
+      const candidate = createChatImportTask([], input);
+      const rows = await db.insert(t.chatImportTasks).values({ ...candidate, checkpoint: null } as any).onConflictDoNothing({ target: t.chatImportTasks.importBatchId }).returning();
+      if (rows[0]) return taskFromRow(rows[0] as unknown as Record<string, unknown>);
+      const [existing] = await db.select().from(t.chatImportTasks).where(eq(t.chatImportTasks.importBatchId, input.importBatchId));
+      if (!existing) throw new ChatImportStateError("TASK_CREATE_CONFLICT");
+      return taskFromRow(existing as unknown as Record<string, unknown>);
+    },
+    async getChatImportTask(id: string) {
+      const [row] = await db.select().from(t.chatImportTasks).where(eq(t.chatImportTasks.id, id));
+      return row ? taskFromRow(row as unknown as Record<string, unknown>) : null;
+    },
+    async listChatImportTasks(filter: ChatImportTaskListFilter = {}) {
+      const rows = await db.select().from(t.chatImportTasks);
+      return listChatImportTasks(rows.map((row) => taskFromRow(row as unknown as Record<string, unknown>)), filter);
+    },
+    async claimChatImportTask(input: ChatImportTaskClaimInput) {
+      return db.transaction(async (tx) => {
+        const now = input.now ?? new Date().toISOString();
+        const result = input.taskId
+          ? await tx.execute(sql`select id from chat_import_tasks where id = ${input.taskId} and (status in ('pending', 'retry_pending') or (status = 'running' and lease_expires_at is not null and lease_expires_at <= ${now})) for update skip locked`)
+          : await tx.execute(sql`select id from chat_import_tasks where (status in ('pending', 'retry_pending') or (status = 'running' and lease_expires_at is not null and lease_expires_at <= ${now})) order by created_at asc, id asc limit 1 for update skip locked`);
+        const id = (result.rows[0] as { id?: string } | undefined)?.id;
+        if (!id) return null;
+        const [row] = await tx.select().from(t.chatImportTasks).where(eq(t.chatImportTasks.id, id));
+        if (!row) return null;
+        const task = taskFromRow(row as unknown as Record<string, unknown>);
+        const claimed = claimChatImportTask([task], input);
+        if (!claimed) {
+          if (task.status === "failed") await storeTask(tx, task);
+          return null;
+        }
+        return storeTask(tx, claimed);
       });
-      return input.source;
+    },
+    async heartbeatChatImportTask(input: ChatImportTaskLeaseInput) {
+      return db.transaction(async (tx) => {
+        const task = await lockTask(tx, input.taskId);
+        if (!task) return null;
+        const next = heartbeatChatImportTask([task], input);
+        return next ? storeTask(tx, next) : null;
+      });
+    },
+    async saveChatImportCheckpoint(input) {
+      return db.transaction(async (tx) => {
+        const task = await lockTask(tx, input.taskId);
+        if (!task) return null;
+        const next = saveChatImportCheckpoint([task], input);
+        return next ? storeTask(tx, next) : null;
+      });
+    },
+    async requestChatImportCancel(taskId: string, now?: string) {
+      return db.transaction(async (tx) => {
+        const task = await lockTask(tx, taskId);
+        if (!task) return null;
+        const next = requestChatImportCancel([task], taskId, now);
+        return next ? storeTask(tx, next) : null;
+      });
+    },
+    async acknowledgeChatImportCancel(input: ChatImportTaskAcknowledgeInput) {
+      return db.transaction(async (tx) => {
+        const task = await lockTask(tx, input.taskId);
+        if (!task) return null;
+        const next = acknowledgeChatImportCancel([task], input);
+        return next ? storeTask(tx, next) : null;
+      });
+    },
+    async failChatImportTask(input: ChatImportTaskFailureInput) {
+      return db.transaction(async (tx) => {
+        const task = await lockTask(tx, input.taskId);
+        if (!task) return null;
+        const next = failChatImportTask([task], input);
+        return next ? storeTask(tx, next) : null;
+      });
+    },
+    async retryChatImportTask(taskId: string, now?: string) {
+      return db.transaction(async (tx) => {
+        const task = await lockTask(tx, taskId);
+        if (!task) return null;
+        const next = retryChatImportTask([task], taskId, now);
+        return next ? storeTask(tx, next) : null;
+      });
+    },
+    async completeChatImportTask(input: ChatImportTaskCompletionInput) {
+      return db.transaction(async (tx) => {
+        const task = await lockTask(tx, input.taskId);
+        if (!task) return null;
+        const next = completeChatImportTask([task], input);
+        return next ? storeTask(tx, next) : null;
+      });
+    },
+    async completeChatImportWithWarnings(input: ChatImportTaskWarningsInput) {
+      return db.transaction(async (tx) => {
+        const task = await lockTask(tx, input.taskId);
+        if (!task) return null;
+        const next = completeChatImportWithWarnings([task], input);
+        return next ? storeTask(tx, next) : null;
+      });
     },
     async updateMediaAsset(id: string, patch: Partial<MediaAsset>) {
       // An empty patch is a legitimate no-op read in json-repository.ts (Object.assign(asset, {})

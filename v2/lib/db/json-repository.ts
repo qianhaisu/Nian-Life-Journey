@@ -5,15 +5,17 @@ import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocati
 import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
 import { newId, organizerJobKey } from "./repository-interface";
-import type { Repository, Store } from "./repository-interface";
+import type { Repository, Store, UploadPersistInput } from "./repository-interface";
+import { assetByChecksum, normalizeChatImportTask, persistUploadInStore } from "./chat-import-persistence";
+import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 
 const dataDir = path.join(process.cwd(), ".data");
 const storeFile = path.join(dataDir, "nian-life.json");
 
-const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], organizerJobs: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
+const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
 
 function normalizeStore(store: Partial<Store>): Store {
-  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [], organizerJobs: store.organizerJobs ?? [] };
+  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [], organizerJobs: store.organizerJobs ?? [], chatImportTasks: (store.chatImportTasks ?? []).map(normalizeChatImportTask) };
 }
 function hydrateMedia(store: Store): Store {
   store.media = store.media.map((media) => {
@@ -43,6 +45,26 @@ async function readStore(): Promise<Store> {
 }
 async function writeStore(store: Store) { await fs.mkdir(dataDir, { recursive: true }); await fs.writeFile(storeFile, JSON.stringify(store, null, 2), "utf8"); }
 
+let mutationTail: Promise<void> = Promise.resolve();
+
+async function withStoreMutation<T>(operation: (store: Store) => T | Promise<T>) {
+  const next = mutationTail.then(async () => {
+    const store = await readStore();
+    const result = await operation(store);
+    await writeStore(store);
+    return result;
+  }, async () => {
+    const store = await readStore();
+    const result = await operation(store);
+    await writeStore(store);
+    return result;
+  });
+  mutationTail = next.then(() => undefined, () => undefined);
+  return next;
+}
+
+const persistUploadInJson = (input: UploadPersistInput) => withStoreMutation((store) => persistUploadInStore(store, input));
+
 // Local-dev/test adapter: a single JSON file, full read-modify-write per call, no transactions or
 // locking. Behavior — including every dedup/idempotency rule — must match postgres-repository.ts;
 // that equivalence is what test/repository-contract.test.mjs checks.
@@ -52,7 +74,22 @@ export function createJsonRepository(): Repository {
     async getAllEvents() { const store = await readStore(); return store.events.toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); },
     async getStore() { return readStore(); },
     async getEventDetail(id: string) { const store = await readStore(); const event = store.events.find((item) => item.id === id); if (!event) return null; return { event, media: store.media.filter((item) => event.mediaIds.includes(item.id)), sources: store.rawSources.filter((item) => event.sourceIds.includes(item.id) && !item.deletedAt), contributors: store.contributors, growth: store.growthRecords.filter((item) => event.growthRecordIds.includes(item.id)), care: store.careRecords.filter((item) => event.careRecordIds.includes(item.id) && item.visibility !== "private") }; },
-    async appendUpload(input: { source: RawSource; media: Media[]; assets?: MediaAsset[]; locations?: MediaLocation[] }) { const store = await readStore(); store.rawSources.push(input.source); store.media.push(...input.media); store.mediaAssets.push(...(input.assets ?? [])); store.mediaLocations.push(...(input.locations ?? [])); await writeStore(store); return input.source; },
+    async appendUpload(input: UploadPersistInput) { return (await persistUploadInJson(input)).source; },
+    async persistUpload(input: UploadPersistInput) { return persistUploadInJson(input); },
+    async findMediaAssetByChecksum(checksum: string) { const store = await readStore(); return assetByChecksum(store, checksum); },
+    async persistChatImportMessage(input: UploadPersistInput) { return persistUploadInJson(input); },
+    async createChatImportTask(input) { return withStoreMutation((store) => createChatImportTask(store.chatImportTasks, input)); },
+    async getChatImportTask(id) { const store = await readStore(); return store.chatImportTasks.find((task) => task.id === id) ?? null; },
+    async listChatImportTasks(filter) { const store = await readStore(); return listChatImportTasks(store.chatImportTasks, filter); },
+    async claimChatImportTask(input) { return withStoreMutation((store) => claimChatImportTask(store.chatImportTasks, input)); },
+    async heartbeatChatImportTask(input) { return withStoreMutation((store) => heartbeatChatImportTask(store.chatImportTasks, input)); },
+    async saveChatImportCheckpoint(input) { return withStoreMutation((store) => saveChatImportCheckpoint(store.chatImportTasks, input)); },
+    async requestChatImportCancel(taskId, now) { return withStoreMutation((store) => requestChatImportCancel(store.chatImportTasks, taskId, now)); },
+    async acknowledgeChatImportCancel(input) { return withStoreMutation((store) => acknowledgeChatImportCancel(store.chatImportTasks, input)); },
+    async failChatImportTask(input) { return withStoreMutation((store) => failChatImportTask(store.chatImportTasks, input)); },
+    async retryChatImportTask(taskId, now) { return withStoreMutation((store) => retryChatImportTask(store.chatImportTasks, taskId, now)); },
+    async completeChatImportTask(input) { return withStoreMutation((store) => completeChatImportTask(store.chatImportTasks, input)); },
+    async completeChatImportWithWarnings(input) { return withStoreMutation((store) => completeChatImportWithWarnings(store.chatImportTasks, input)); },
     async updateMediaAsset(id: string, patch: Partial<MediaAsset>) { const store = await readStore(); const asset = store.mediaAssets.find((item) => item.id === id); if (!asset) return null; Object.assign(asset, patch); await writeStore(store); return asset; },
     async updateMediaLocation(id: string, patch: Partial<MediaLocation>) { const store = await readStore(); const location = store.mediaLocations.find((item) => item.id === id); if (!location) return null; Object.assign(location, patch, { updatedAt: new Date().toISOString() }); await writeStore(store); return location; },
     async removeMediaLocation(id: string) { const store = await readStore(); store.mediaLocations = store.mediaLocations.filter((item) => item.id !== id); await writeStore(store); },
