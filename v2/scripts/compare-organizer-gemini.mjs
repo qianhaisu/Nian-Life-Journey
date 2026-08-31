@@ -7,7 +7,7 @@ const REQUIRED_MODEL = "gemini-3.6-flash";
 process.env.AI_PROVIDER = "gemini";
 
 const { createConfiguredAIProvider } = await import("../lib/organizer/provider.ts");
-const { evaluateAIOrganizer, AI_ORGANIZER_EVALUATION_FIXTURES } = await import("../lib/organizer/evaluation.ts");
+const { evaluateAIOrganizer, selectEvaluationFixtures } = await import("../lib/organizer/evaluation.ts");
 
 if (!process.env.GEMINI_API_KEY) {
   console.error("GEMINI_API_KEY is not set. Add it to v2/.env.local before running this script.");
@@ -18,15 +18,26 @@ if (process.env.AI_MODEL !== REQUIRED_MODEL) {
   process.exit(1);
 }
 
+// Eval-only knob (not a production organizer setting): narrows a run to specific fixture ids, e.g.
+// AI_ORGANIZER_EVAL_FIXTURES=ordinary-daycare,ordinary-volume. Unset runs every fixture, unchanged.
+let fixtures;
+try {
+  fixtures = selectEvaluationFixtures(process.env.AI_ORGANIZER_EVAL_FIXTURES);
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
+
 const providerEnvironment = (promptVersion) => ({ ...process.env, AI_PROVIDER: "gemini", AI_MODEL: REQUIRED_MODEL, AI_ORGANIZER_PROMPT_VERSION: promptVersion });
 const v1Provider = createConfiguredAIProvider(providerEnvironment("v1"));
 const v2Provider = createConfiguredAIProvider(providerEnvironment("v2"));
 
-console.log(`Comparing ${AI_ORGANIZER_EVALUATION_FIXTURES.length} synthetic fixtures against Gemini model=${REQUIRED_MODEL}`);
+console.log(`Comparing ${fixtures.length} synthetic fixtures against Gemini model=${REQUIRED_MODEL}`);
+if (process.env.AI_ORGANIZER_EVAL_FIXTURES) console.log(`Fixture selection (AI_ORGANIZER_EVAL_FIXTURES): ${fixtures.map((fixture) => fixture.id).join(", ")}`);
 console.log("V1 and V2 use separate provider instances and prompt/schema contracts.\n");
 
-const v1 = await evaluateAIOrganizer(v1Provider);
-const v2 = await evaluateAIOrganizer(v2Provider);
+const v1 = await evaluateAIOrganizer(v1Provider, fixtures);
+const v2 = await evaluateAIOrganizer(v2Provider, fixtures);
 
 function label(result) {
   const parts = [result.passed ? "PASS" : "FAIL", result.action];
@@ -37,8 +48,8 @@ function label(result) {
 
 console.log("fixture                       expected                 v1                         v2");
 console.log("----------------------------  -----------------------  ------------------------  ------------------------");
-for (let index = 0; index < AI_ORGANIZER_EVALUATION_FIXTURES.length; index += 1) {
-  const fixture = AI_ORGANIZER_EVALUATION_FIXTURES[index];
+for (let index = 0; index < fixtures.length; index += 1) {
+  const fixture = fixtures[index];
   console.log(`${fixture.id.padEnd(28)}  ${fixture.expectedActions.join("|").padEnd(23)}  ${label(v1.results[index]).padEnd(24)}  ${label(v2.results[index])}`);
 }
 

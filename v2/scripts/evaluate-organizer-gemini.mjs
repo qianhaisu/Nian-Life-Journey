@@ -7,7 +7,7 @@ process.env.AI_PROVIDER = "gemini";
 process.env.AI_ORGANIZER_PROMPT_VERSION = (process.env.AI_ORGANIZER_PROMPT_VERSION ?? "v2").toLowerCase();
 
 const { createConfiguredAIProvider } = await import("../lib/organizer/provider.ts");
-const { evaluateAIOrganizer, AI_ORGANIZER_EVALUATION_FIXTURES } = await import("../lib/organizer/evaluation.ts");
+const { evaluateAIOrganizer, selectEvaluationFixtures } = await import("../lib/organizer/evaluation.ts");
 
 if (!process.env.GEMINI_API_KEY) {
   console.error("GEMINI_API_KEY is not set. Add it to v2/.env.local before running this script.");
@@ -26,10 +26,22 @@ if (process.env.AI_ORGANIZER_PROMPT_VERSION !== "v2") {
   process.exit(1);
 }
 
-const provider = createConfiguredAIProvider(process.env);
-console.log(`Running ${AI_ORGANIZER_EVALUATION_FIXTURES.length} synthetic fixtures against provider=${provider.name} model=${provider.model}\n`);
+// Eval-only knob (not a production organizer setting): narrows a run to specific fixture ids, e.g.
+// AI_ORGANIZER_EVAL_FIXTURES=ordinary-daycare,ordinary-volume. Unset runs every fixture, unchanged.
+let fixtures;
+try {
+  fixtures = selectEvaluationFixtures(process.env.AI_ORGANIZER_EVAL_FIXTURES);
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
-const evaluation = await evaluateAIOrganizer(provider);
+const provider = createConfiguredAIProvider(process.env);
+console.log(`Running ${fixtures.length} synthetic fixtures against provider=${provider.name} model=${provider.model}`);
+if (process.env.AI_ORGANIZER_EVAL_FIXTURES) console.log(`Fixture selection (AI_ORGANIZER_EVAL_FIXTURES): ${fixtures.map((fixture) => fixture.id).join(", ")}`);
+console.log("");
+
+const evaluation = await evaluateAIOrganizer(provider, fixtures);
 
 for (const result of evaluation.results) {
   console.log(`- [${result.passed ? "PASS" : "FAIL"}] ${result.id}`);

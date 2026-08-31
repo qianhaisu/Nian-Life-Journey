@@ -4,7 +4,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { appendUpload, getStore } from "../lib/db/repository.ts";
 import { AIMemoryOrganizer } from "../lib/organizer/ai.ts";
-import { evaluateAIOrganizer } from "../lib/organizer/evaluation.ts";
+import { AI_ORGANIZER_EVALUATION_FIXTURES, evaluateAIOrganizer, selectEvaluationFixtures } from "../lib/organizer/evaluation.ts";
 import { getConfiguredOrganizer } from "../lib/organizer/index.ts";
 import { MockAIProvider } from "../lib/organizer/provider.ts";
 
@@ -32,6 +32,19 @@ test("synthetic evaluation covers the eight organizer cases with zero unsupporte
   assert.equal(evaluation.metrics.unsupportedFactCount, 0);
   assert.equal(evaluation.metrics.duplicateCount, 0);
   assert.equal(evaluation.metrics.fallbackCount, 0);
+});
+
+test("selectEvaluationFixtures defaults to every fixture and narrows by id", () => {
+  assert.deepEqual(selectEvaluationFixtures(), AI_ORGANIZER_EVALUATION_FIXTURES);
+  assert.deepEqual(selectEvaluationFixtures(""), AI_ORGANIZER_EVALUATION_FIXTURES);
+  const subset = selectEvaluationFixtures("ordinary-daycare,ordinary-volume");
+  assert.deepEqual(subset.map((fixture) => fixture.id), ["ordinary-daycare", "ordinary-volume"]);
+  assert.throws(() => selectEvaluationFixtures("ordinary-daycare,not-a-real-fixture"), /Unknown evaluation fixture id\(s\): not-a-real-fixture/);
+});
+
+test("evaluateAIOrganizer runs only the fixtures it is given", async () => {
+  const evaluation = await evaluateAIOrganizer(new MockAIProvider(), selectEvaluationFixtures("ordinary-daycare,ordinary-volume"));
+  assert.deepEqual(evaluation.results.map((result) => result.id), ["ordinary-daycare", "ordinary-volume"]);
 });
 
 test("AI create_memory keeps source text concise and records an organizer run", async () => {

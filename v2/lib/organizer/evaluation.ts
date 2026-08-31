@@ -23,6 +23,18 @@ export const AI_ORGANIZER_EVALUATION_FIXTURES: EvaluationFixture[] = [
   { id: "uncertain-image", description: "An ordinary image without supporting context is retained only", expectedActions: ["store_only", "daily_trace"], context: context({ sourceSummaries: [{ ...photo("eval-uncertain-image", 1, ["daily", "family"]) }], existingMemories: [], representativeMediaCount: 0 }) },
 ];
 
+// Lets a caller (e.g. a real-Gemini evaluation script) narrow a run to specific fixture ids without
+// touching fixture content, expected actions, or the quality gate. Undefined/empty selection returns
+// every fixture, unchanged from calling evaluateAIOrganizer() with no filter at all.
+export function selectEvaluationFixtures(ids?: string): EvaluationFixture[] {
+  const requested = (ids ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+  if (requested.length === 0) return AI_ORGANIZER_EVALUATION_FIXTURES;
+  const validIds = AI_ORGANIZER_EVALUATION_FIXTURES.map((fixture) => fixture.id);
+  const unknown = requested.filter((id) => !validIds.includes(id));
+  if (unknown.length > 0) throw new Error(`Unknown evaluation fixture id(s): ${unknown.join(", ")}. Valid ids: ${validIds.join(", ")}`);
+  return AI_ORGANIZER_EVALUATION_FIXTURES.filter((fixture) => requested.includes(fixture.id));
+}
+
 export type EvaluationResult = {
   id: string;
   description: string;
@@ -52,9 +64,9 @@ function reportFields(value: unknown) {
   };
 }
 
-export async function evaluateAIOrganizer(provider: AIProvider = new MockAIProvider()) {
+export async function evaluateAIOrganizer(provider: AIProvider = new MockAIProvider(), fixtures: EvaluationFixture[] = AI_ORGANIZER_EVALUATION_FIXTURES) {
   const results: EvaluationResult[] = [];
-  for (const fixture of AI_ORGANIZER_EVALUATION_FIXTURES) {
+  for (const fixture of fixtures) {
     const startedAt = Date.now();
     let response: AIProviderResponse | undefined;
     try {
