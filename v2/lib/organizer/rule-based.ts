@@ -31,7 +31,7 @@ export type RuleBasedOptions = OrganizerOptions & { organizationFingerprint?: st
 
 export class RuleBasedMemoryOrganizer {
   async organize(sourceIds: string[], options: RuleBasedOptions = {}): Promise<OrganizerResult> {
-    const store = await getStore();
+    const store = options.store ?? await getStore();
     const sources = sourceIds.map((id) => store.rawSources.find((source) => source.id === id)).filter((source): source is RawSource => Boolean(source && !source.deletedAt));
     if (!sources.length || sources.length !== new Set(sourceIds).size) throw new Error("No sources found for organization");
     const checksums = new Map(store.media.map((media) => [media.id, media.mediaAssetId ? store.mediaAssets.find((asset) => asset.id === media.mediaAssetId)?.checksum ?? undefined : undefined]));
@@ -49,12 +49,15 @@ export class RuleBasedMemoryOrganizer {
     const confidence = medical ? 0.95 : existing ? 0.86 : signal ? 0.84 : text ? 0.78 : 0.42;
     const now = (options.now ?? new Date()).toISOString();
     const runBase = { organizerType: "rule" as const, organizerVersion: "rule-v2", provider: "rule-based", processedAt: now, organizationFingerprint, sourceCount: sources.length, mediaInputCount: options.mediaInputCount ?? 0, fallbackReason: options.fallbackReason, latencyMs: Date.now() - startedAt };
+    const dryRun = Boolean(options.dryRun);
     if (action === "care_episode") {
+      if (dryRun) return { action, confidence, sourceIds: sourceIds.slice(), reason: "Health sources were organized as private facts without diagnosis.", organizationFingerprint, fallbackReason: options.fallbackReason, debug: this.debug({ action, confidence, sourceIds, runBase, latencyMs: Date.now() - startedAt }), run: { id: "dry-run", profileId: sources[0].profileId, action, sourceIds: sourceIds.slice(), ...runBase } };
       const episode = await persistCareEpisode({ id: newId("care-episode"), profileId: sources[0].profileId, title: `Care record · ${dateOf(sources[0].capturedAt)}`, startedAt: dateOf(sources[0].capturedAt), recordIds: [], sourceIds: sourceIds.slice(), status: "open", visibility: "private", organizerRun: runBase });
       const run = await persistOrganizerRun({ id: newId("organizer-run"), profileId: sources[0].profileId, action, sourceIds: sourceIds.slice(), targetId: episode.id, ...runBase });
       return { action, confidence, careEpisodeId: episode.id, sourceIds: sourceIds.slice(), reason: "Health sources were organized as private facts without diagnosis.", organizationFingerprint, fallbackReason: options.fallbackReason, debug: this.debug({ action, confidence, sourceIds, runBase, latencyMs: Date.now() - startedAt }), run };
     }
     if (action === "daily_trace" || action === "store_only") {
+      if (dryRun) return { action, confidence, sourceIds: sourceIds.slice(), reason: action === "daily_trace" ? "Ordinary material was kept as a compact daily trace." : "Material was retained without creating a timeline memory.", organizationFingerprint, fallbackReason: options.fallbackReason, debug: this.debug({ action, confidence, sourceIds, runBase, latencyMs: Date.now() - startedAt }), run: { id: "dry-run", profileId: sources[0].profileId, action, sourceIds: sourceIds.slice(), ...runBase } };
       const trace = action === "daily_trace" ? await persistDailyTrace({ id: newId("trace"), profileId: sources[0].profileId, occurredAt: dateOf(sources[0].capturedAt), entries: [traceEntry(sources)], sourceIds: sourceIds.slice(), scopes: ["family"], visibility: sources.some((source) => source.visibility === "private") ? "private" : "family", organizerRun: runBase, organizationFingerprint }) : undefined;
       if (!trace) await markSourcesOrganized(sourceIds);
       const run = await persistOrganizerRun({ id: newId("organizer-run"), profileId: sources[0].profileId, action, sourceIds: sourceIds.slice(), targetId: trace?.id, ...runBase });
@@ -64,6 +67,7 @@ export class RuleBasedMemoryOrganizer {
     const mediaIds = [...new Set(sources.flatMap((source) => source.mediaIds))];
     const title = existing?.title ?? text?.slice(0, 80) ?? `${dateOf(sources[0].capturedAt)} · Archive memory`;
     const story = existing?.story ?? text?.slice(0, 420);
+    if (dryRun) return { action, confidence, sourceIds: sourceIds.slice(), reason: existing ? "Related material was attached to the nearby existing memory." : "Sources were organized with conservative deterministic rules.", organizationFingerprint, fallbackReason: options.fallbackReason, debug: this.debug({ action, confidence, sourceIds, runBase, latencyMs: Date.now() - startedAt }), run: { id: "dry-run", profileId: sources[0].profileId, action, sourceIds: sourceIds.slice(), targetId: existing?.id, ...runBase } };
     const event: LifeEvent = existing ? { ...existing, mediaIds: [...new Set([...existing.mediaIds, ...mediaIds])], sourceIds: [...new Set([...existing.sourceIds, ...sourceIds])], contentTypes: [...new Set([...existing.contentTypes, ...types])], title, story, organizerVersion: "rule-v2", organizationFingerprint, organizerRun: runBase } : { id: newId("event"), profileId: sources[0].profileId, title, story, occurredAt: dateOf(sources[0].capturedAt), people: contributorNames, tags: types, contentTypes: types, mediaIds, sourceIds: sourceIds.slice(), growthRecordIds: [], careRecordIds: [], eventType: types.includes("travel") ? "outing" : signal ? "milestone" : "moment", memoryWeight: types.includes("travel") ? "highlight" : signal ? "memory" : "trace", scopes: ["family"], heroMediaId: mediaIds[0], visibility: sources.some((source) => source.visibility === "private") ? "private" : "family", keptInYearbook: false, createdBy: "rule", organizerVersion: "rule-v2", organizationFingerprint, organizerRun: runBase };
     const links: SourceMemoryLink[] = sources.map((source, index) => ({ rawSourceId: source.id, lifeEventId: event.id, role: index === 0 ? "primary" : "supporting", createdAt: now }));
     const saved = await persistOrganization(sourceIds, event, links);

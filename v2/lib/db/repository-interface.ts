@@ -58,6 +58,16 @@ export type ChatImportTaskWarningsInput = ChatImportTaskCompletionInput & { warn
 export type UploadPersistInput = { source: RawSource; media: Media[]; assets?: MediaAsset[]; locations?: MediaLocation[] };
 export type UploadPersistResult = { source: RawSource; sourceCreated: boolean; createdAssetIds: string[]; reusedAssetIds: string[]; createdLocationIds: string[]; reusedLocationIds: string[]; mediaIds: string[] };
 
+// A batch persist processes N UploadPersistInput items in one call. Every implementation
+// (PostgreSQL, JSON, in-memory, async) must return per-item results in the SAME order as the
+// input array, and must resolve a canonical identity that repeats within the batch itself (two
+// items with the same providerExternalId, checksum, or providerRef) exactly the same way a
+// second persistChatImportMessage call would: the second occurrence is "reused", never a
+// duplicate row and never an error. The PostgreSQL implementation is the one where this method
+// actually changes the number of round trips (bulk multi-row INSERT ... ON CONFLICT ... RETURNING
+// instead of one transaction per item); JSON/in-memory/async only need to preserve behavior.
+export type ChatImportBatchResult = { items: UploadPersistResult[] };
+
 export interface ChatImportRepository {
   createChatImportTask(input: ChatImportTaskCreateInput): Promise<ChatImportTask>;
   getChatImportTask(id: string): Promise<ChatImportTask | null>;
@@ -72,12 +82,21 @@ export interface ChatImportRepository {
   completeChatImportTask(input: ChatImportTaskCompletionInput): Promise<ChatImportTask | null>;
   completeChatImportWithWarnings(input: ChatImportTaskWarningsInput): Promise<ChatImportTask | null>;
   persistChatImportMessage(input: UploadPersistInput): Promise<UploadPersistResult>;
+  persistChatImportBatch(inputs: UploadPersistInput[]): Promise<ChatImportBatchResult>;
 }
 
 export interface Repository extends ChatImportRepository {
   getHomeEvents(): Promise<LifeEvent[]>;
   getAllEvents(): Promise<LifeEvent[]>;
   getStore(): Promise<Store>;
+  // A Store scoped to one profile and only the fields the Organizer actually reads (rawSources,
+  // media, mediaAssets, contributors, events — everything else comes back empty). getStore()'s
+  // unfiltered select() across all 18 tables takes ~10 minutes at real WeChat-import data volume
+  // (thousands of raw_sources with large jsonb columns); this is ~80s for the same profile because
+  // it selects only the needed columns and filters by profile_id. Never a substitute for getStore()
+  // in code paths that need the full domain (Quark ingestion, capture, the web app) — only for a
+  // batch Organizer pass over many source-id groups in one run.
+  getOrganizerStore(profileId: string): Promise<Store>;
   getEventDetail(id: string): Promise<EventDetail | null>;
   appendUpload(input: UploadPersistInput): Promise<RawSource>;
   persistUpload(input: UploadPersistInput): Promise<UploadPersistResult>;

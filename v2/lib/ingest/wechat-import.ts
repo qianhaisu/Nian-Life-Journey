@@ -34,6 +34,74 @@ function evidenceState(ref: ChatMediaRef) {
   return { digest: digest(ref.relativePath), state: ref.availability };
 }
 
+// Builds the "wechat" provider side of one message's persistence input — the RawSource, and (for
+// each present media ref with a valid checksum) the wechat-provider MediaAsset/MediaLocation/Media
+// rows — without persisting anything. Pulled out of the loop below so the batch worker
+// (wechat-worker.ts) can build many of these purely in memory, merge in the hot-storage side, and
+// persist a whole batch in one call instead of one persist call per message.
+export function buildWechatMessageItem(bundle: ChatImportBundle, message: ChatImportBundle["messages"][number], options: { profileId: string; contributorId: string; now?: string }): { input: UploadPersistInput; warningCounts: Array<{ code: string; count: number }> } {
+  const now = options.now ?? new Date().toISOString();
+  const importBatchId = chatImportBatchId(bundle.exportSnapshot);
+  const warnings = new Map<string, number>();
+  const sourceId = `wechat-message:${message.messageId}`;
+  const mediaIds: string[] = [];
+  const evidenceRefs: Array<{ digest: string; state: ChatMediaRef["availability"] }> = [];
+  const assets: MediaAsset[] = [];
+  const locations: MediaLocation[] = [];
+  const media: Media[] = [];
+  const documentDigest = digest(message.sourceLocator.document);
+
+  for (const ref of message.mediaRefs) {
+    evidenceRefs.push(evidenceState(ref));
+    const checksum = safeChecksum(ref.checksum);
+    if (ref.availability !== "present") {
+      if (ref.availability !== "deferred_by_limit") addWarning(warnings, `media_${ref.availability}`);
+      continue;
+    }
+    if (!checksum) {
+      addWarning(warnings, "media_invalid_checksum");
+      continue;
+    }
+    const checksumHex = checksum.slice("sha256:".length);
+    const assetId = `media-asset:${checksumHex}`;
+    const mediaId = `wechat-media:${digest(`${message.messageId} ${ref.id}`)}`;
+    const providerRef = `wechat:document:${documentDigest}:path:${digest(ref.relativePath)}:ref:${digest(ref.id)}`;
+    mediaIds.push(mediaId);
+    assets.push({ id: assetId, profileId: options.profileId, rawSourceId: sourceId, mediaType: "photo", mimeType: ref.mimeType ?? "image/jpeg", width: ref.width, height: ref.height, checksum, archiveStatus: "awaiting_archive", createdAt: now });
+    locations.push({ id: `wechat-location:${digest(providerRef)}`, mediaAssetId: assetId, provider: "wechat", variant: "original", providerRef, status: "ready", mimeType: ref.mimeType ?? "image/jpeg", fileSize: ref.fileSize, width: ref.width, height: ref.height, createdAt: now, updatedAt: now });
+    media.push({ id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: "photo", src: mediaDeliveryUrl(mediaId, "web"), mimeType: ref.mimeType ?? "image/jpeg", fileSize: ref.fileSize, alt: "WeChat image", takenAt: message.sentAt, visibility: "private", width: ref.width ?? 1200, height: ref.height ?? 900 });
+  }
+
+  const source: RawSource = {
+    id: sourceId,
+    profileId: options.profileId,
+    sourceType: "wechat",
+    contentTypes: ["family"],
+    contributorId: options.contributorId,
+    capturedAt: message.sentAt,
+    importedAt: now,
+    text: sanitizeText(message.text),
+    mediaIds,
+    sourceLabel: message.conversationId,
+    visibility: "private",
+    status: "uploaded",
+    provider: "wechat",
+    providerExternalId: message.messageId,
+    metadata: {
+      provider: "wechat",
+      conversationDigest: digest(message.conversationId),
+      senderDigest: digest(message.senderId),
+      documentDigest,
+      recordOrdinal: message.sourceLocator.recordOrdinal,
+      importBatchId,
+      parserVersion: bundle.parserVersion,
+      mediaEvidence: evidenceRefs,
+    },
+  };
+  const warningCounts = [...warnings.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, count]) => ({ code, count }));
+  return { input: { source, media, assets, locations }, warningCounts };
+}
+
 export async function importWechatBundle(bundle: ChatImportBundle, repository: Pick<Repository, "persistUpload"> & Partial<Pick<Repository, "persistChatImportMessage">>, options: { profileId: string; contributorId: string; now?: string }): Promise<ChatImportResult> {
   validateChatImportBundle(bundle);
   const now = options.now ?? new Date().toISOString();
@@ -48,65 +116,8 @@ export async function importWechatBundle(bundle: ChatImportBundle, repository: P
   let reusedMediaLocations = 0;
 
   for (const message of bundle.messages) {
-    const sourceId = `wechat-message:${message.messageId}`;
-    const mediaIds: string[] = [];
-    const evidenceRefs: Array<{ digest: string; state: ChatMediaRef["availability"] }> = [];
-    const assets: MediaAsset[] = [];
-    const locations: MediaLocation[] = [];
-    const media: Media[] = [];
-    const documentDigest = digest(message.sourceLocator.document);
-
-    for (const ref of message.mediaRefs) {
-      evidenceRefs.push(evidenceState(ref));
-      const checksum = safeChecksum(ref.checksum);
-      if (ref.availability !== "present") {
-        // deferred_by_limit means the canary's maxMedia cap held this item back, not that
-        // anything is actually wrong with it — it is never a data-quality warning, and a
-        // full (unlimited) import never produces this state at all.
-        if (ref.availability !== "deferred_by_limit") addWarning(warnings, `media_${ref.availability}`);
-        continue;
-      }
-      if (!checksum) {
-        addWarning(warnings, "media_invalid_checksum");
-        continue;
-      }
-      const checksumHex = checksum.slice("sha256:".length);
-      const assetId = `media-asset:${checksumHex}`;
-      const mediaId = `wechat-media:${digest(`${message.messageId}\u0000${ref.id}`)}`;
-      const providerRef = `wechat:document:${documentDigest}:path:${digest(ref.relativePath)}:ref:${digest(ref.id)}`;
-      mediaIds.push(mediaId);
-      assets.push({ id: assetId, profileId: options.profileId, rawSourceId: sourceId, mediaType: "photo", mimeType: ref.mimeType ?? "image/jpeg", width: ref.width, height: ref.height, checksum, archiveStatus: "awaiting_archive", createdAt: now });
-      locations.push({ id: `wechat-location:${digest(providerRef)}`, mediaAssetId: assetId, provider: "wechat", variant: "original", providerRef, status: "ready", mimeType: ref.mimeType ?? "image/jpeg", fileSize: ref.fileSize, width: ref.width, height: ref.height, createdAt: now, updatedAt: now });
-      media.push({ id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: "photo", src: mediaDeliveryUrl(mediaId, "web"), mimeType: ref.mimeType ?? "image/jpeg", fileSize: ref.fileSize, alt: "WeChat image", takenAt: message.sentAt, visibility: "private", width: ref.width ?? 1200, height: ref.height ?? 900 });
-    }
-
-    const source: RawSource = {
-      id: sourceId,
-      profileId: options.profileId,
-      sourceType: "wechat",
-      contentTypes: ["family"],
-      contributorId: options.contributorId,
-      capturedAt: message.sentAt,
-      importedAt: now,
-      text: sanitizeText(message.text),
-      mediaIds,
-      sourceLabel: message.conversationId,
-      visibility: "private",
-      status: "uploaded",
-      provider: "wechat",
-      providerExternalId: message.messageId,
-      metadata: {
-        provider: "wechat",
-        conversationDigest: digest(message.conversationId),
-        senderDigest: digest(message.senderId),
-        documentDigest,
-        recordOrdinal: message.sourceLocator.recordOrdinal,
-        importBatchId,
-        parserVersion: bundle.parserVersion,
-        mediaEvidence: evidenceRefs,
-      },
-    };
-    const input: UploadPersistInput = { source, media, assets, locations };
+    const { input, warningCounts: itemWarnings } = buildWechatMessageItem(bundle, message, { ...options, now });
+    for (const warning of itemWarnings) addWarning(warnings, warning.code, warning.count);
     const persisted = repository.persistChatImportMessage ? await repository.persistChatImportMessage(input) : await repository.persistUpload(input);
     if (persisted.sourceCreated) createdMessages += 1;
     else reusedMessages += 1;

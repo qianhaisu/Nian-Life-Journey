@@ -125,6 +125,174 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     });
   }
 
+  // Bulk equivalent of persistUpload: one transaction for the whole batch, bulk multi-row
+  // INSERT ... ON CONFLICT ... RETURNING per table instead of one transaction (and several selects)
+  // per item — this is the change that actually reduces round trips (see the wechat-worker.ts
+  // batch loop). Requires every item's source to carry provider+providerExternalId, which every
+  // WeChat message does; anything else is out of scope for this method (persistUpload still
+  // handles the general case one item at a time).
+  async function persistChatImportBatch(inputs: UploadPersistInput[]): Promise<{ items: UploadPersistResult[] }> {
+    if (!inputs.length) return { items: [] };
+    return db.transaction(async (tx) => {
+      for (const input of inputs) {
+        if (!input.source.provider || !input.source.providerExternalId) throw new Error("CHAT_IMPORT_BATCH_REQUIRES_PROVIDER_IDENTITY");
+      }
+
+      // --- RawSource: dedupe by (provider, providerExternalId), first occurrence in input order wins ---
+      const sourceKey = (s: { provider?: string; providerExternalId?: string }) => `${s.provider} ${s.providerExternalId}`;
+      const sourceByKey = new Map<string, RawSource>();
+      for (const input of inputs) if (!sourceByKey.has(sourceKey(input.source))) sourceByKey.set(sourceKey(input.source), input.source);
+      const sourceInputs = [...sourceByKey.values()];
+      const insertedSourceRows = (await tx.insert(t.rawSources).values(sourceInputs as any).onConflictDoNothing({ target: [t.rawSources.provider, t.rawSources.providerExternalId] }).returning()) as unknown as RawSource[];
+      const insertedSourceByKey = new Map(insertedSourceRows.map((row) => [sourceKey(row), row] as const));
+      const missingSourceInputs = sourceInputs.filter((s) => !insertedSourceByKey.has(sourceKey(s)));
+      const existingSourceRows = missingSourceInputs.length
+        ? (await tx.select().from(t.rawSources).where(inArray(t.rawSources.providerExternalId, missingSourceInputs.map((s) => s.providerExternalId!)))) as unknown as RawSource[]
+        : [];
+      const sourceRowByKey = new Map<string, { row: RawSource; created: boolean }>();
+      for (const [key, row] of insertedSourceByKey) sourceRowByKey.set(key, { row, created: true });
+      for (const row of existingSourceRows) if (!sourceRowByKey.has(sourceKey(row))) sourceRowByKey.set(sourceKey(row), { row, created: false });
+      for (const key of sourceByKey.keys()) if (!sourceRowByKey.has(key)) throw new Error("RAW_SOURCE_CONFLICT");
+
+      // --- MediaAsset: dedupe by normalized checksum (our callers derive the id from the checksum,
+      // so a checksum collision within the batch is always the same logical asset) ---
+      const allAssetInputs = inputs.flatMap((i) => i.assets ?? []).map((a) => ({ ...a, checksum: normalizeSha256(a.checksum) }));
+      const assetKey = (a: { checksum?: string | null; id: string }) => a.checksum ?? `id:${a.id}`;
+      const assetByKey = new Map<string, MediaAsset>();
+      for (const asset of allAssetInputs) if (!assetByKey.has(assetKey(asset))) assetByKey.set(assetKey(asset), asset as MediaAsset);
+      const assetInputs = [...assetByKey.values()];
+      const assetsWithChecksum = assetInputs.filter((a) => a.checksum);
+      const assetsWithoutChecksum = assetInputs.filter((a) => !a.checksum);
+      const insertedAssetRows: MediaAsset[] = [];
+      if (assetsWithChecksum.length) insertedAssetRows.push(...((await tx.insert(t.mediaAssets).values(assetsWithChecksum as any).onConflictDoNothing({ target: t.mediaAssets.checksum }).returning()) as unknown as MediaAsset[]));
+      if (assetsWithoutChecksum.length) insertedAssetRows.push(...((await tx.insert(t.mediaAssets).values(assetsWithoutChecksum as any).onConflictDoNothing({ target: t.mediaAssets.id }).returning()) as unknown as MediaAsset[]));
+      const insertedAssetByKey = new Map(insertedAssetRows.map((row) => [assetKey({ checksum: normalizeSha256(row.checksum), id: row.id }), row] as const));
+      const missingAssetInputs = assetInputs.filter((a) => !insertedAssetByKey.has(assetKey(a)));
+      const missingChecksums = missingAssetInputs.filter((a) => a.checksum).map((a) => a.checksum!);
+      const missingAssetIds = missingAssetInputs.filter((a) => !a.checksum).map((a) => a.id);
+      const existingAssetRows: MediaAsset[] = [];
+      if (missingChecksums.length) existingAssetRows.push(...((await tx.select().from(t.mediaAssets).where(inArray(t.mediaAssets.checksum, missingChecksums))) as unknown as MediaAsset[]));
+      if (missingAssetIds.length) existingAssetRows.push(...((await tx.select().from(t.mediaAssets).where(inArray(t.mediaAssets.id, missingAssetIds))) as unknown as MediaAsset[]));
+      const assetRowByKey = new Map<string, { row: MediaAsset; created: boolean }>();
+      for (const [key, row] of insertedAssetByKey) assetRowByKey.set(key, { row, created: true });
+      for (const row of existingAssetRows) { const key = assetKey({ checksum: normalizeSha256(row.checksum), id: row.id }); if (!assetRowByKey.has(key)) assetRowByKey.set(key, { row, created: false }); }
+      for (const key of assetByKey.keys()) if (!assetRowByKey.has(key)) throw new Error("MEDIA_ASSET_CONFLICT");
+      // input asset.id -> resolved actual row, so `media`/`locations` referencing mediaAssetId by the
+      // input's own id can be remapped exactly like persistUpload does for a single item.
+      const assetsByInputId = new Map<string, MediaAsset>();
+      for (const asset of allAssetInputs) { const resolved = assetRowByKey.get(assetKey(asset)); if (resolved) assetsByInputId.set(asset.id, resolved.row); }
+
+      // --- Media (display layer): dedupe by id ---
+      const allMediaInputs = inputs.flatMap((i) => i.media).map((m) => {
+        const resolved = m.mediaAssetId ? assetsByInputId.get(m.mediaAssetId) : undefined;
+        return resolved && resolved.id !== m.mediaAssetId ? { ...m, mediaAssetId: resolved.id } : m;
+      });
+      const mediaByKey = new Map<string, Media>();
+      for (const media of allMediaInputs) if (!mediaByKey.has(media.id)) mediaByKey.set(media.id, media);
+      const mediaInputs = [...mediaByKey.values()];
+      const insertedMediaRows = mediaInputs.length ? ((await tx.insert(t.media).values(mediaInputs as any).onConflictDoNothing({ target: t.media.id }).returning()) as unknown as Media[]) : [];
+      const insertedMediaIds = new Set(insertedMediaRows.map((r) => r.id));
+      const missingMediaIds = mediaInputs.filter((m) => !insertedMediaIds.has(m.id)).map((m) => m.id);
+      const existingMediaRows = missingMediaIds.length ? ((await tx.select().from(t.media).where(inArray(t.media.id, missingMediaIds))) as unknown as Media[]) : [];
+      for (const m of mediaInputs) {
+        if (insertedMediaIds.has(m.id)) continue;
+        const existing = existingMediaRows.find((e) => e.id === m.id);
+        if (!existing || existing.mediaAssetId !== m.mediaAssetId) throw new Error("MEDIA_ID_CONFLICT");
+      }
+
+      // --- MediaLocation: dedupe by (provider, providerRef) ---
+      const locationKey = (l: { provider: string; providerRef: string }) => `${l.provider} ${l.providerRef}`;
+      const allLocationInputs = inputs.flatMap((i) => i.locations ?? []).map((l) => {
+        const resolved = assetsByInputId.get(l.mediaAssetId);
+        return resolved && resolved.id !== l.mediaAssetId ? { ...l, mediaAssetId: resolved.id } : l;
+      });
+      const locationByKey = new Map<string, MediaLocation>();
+      for (const location of allLocationInputs) if (!locationByKey.has(locationKey(location))) locationByKey.set(locationKey(location), location);
+      const locationInputs = [...locationByKey.values()];
+      const insertedLocationRows = locationInputs.length ? ((await tx.insert(t.mediaLocations).values(locationInputs as any).onConflictDoNothing({ target: [t.mediaLocations.provider, t.mediaLocations.providerRef] }).returning()) as unknown as MediaLocation[]) : [];
+      const insertedLocationByKey = new Map(insertedLocationRows.map((row) => [locationKey(row), row] as const));
+      const missingLocationInputs = locationInputs.filter((l) => !insertedLocationByKey.has(locationKey(l)));
+      const existingLocationRows = missingLocationInputs.length
+        ? ((await tx.select().from(t.mediaLocations).where(inArray(t.mediaLocations.providerRef, missingLocationInputs.map((l) => l.providerRef)))) as unknown as MediaLocation[])
+        : [];
+      const locationRowByKey = new Map<string, { row: MediaLocation; created: boolean }>();
+      for (const [key, row] of insertedLocationByKey) locationRowByKey.set(key, { row, created: true });
+      for (const row of existingLocationRows) { const key = locationKey(row); if (!locationRowByKey.has(key)) locationRowByKey.set(key, { row, created: false }); }
+      for (const location of locationInputs) {
+        const resolved = locationRowByKey.get(locationKey(location));
+        if (!resolved) throw new Error("MEDIA_LOCATION_CONFLICT");
+        if (!resolved.created && (resolved.row.mediaAssetId !== location.mediaAssetId || resolved.row.variant !== location.variant)) throw new Error("MEDIA_LOCATION_CONFLICT");
+      }
+
+      // --- Assemble per-item results in original order. A canonical identity that repeats within
+      // the batch (same checksum/providerRef/providerExternalId in two items) must attribute
+      // "created" to only the first occurrence — matching what two sequential persistChatImportMessage
+      // calls would report — so the worker's cumulative created/reused counters never double-count. ---
+      const claimedSourceCreated = new Set<string>();
+      const claimedAssetCreated = new Set<string>();
+      const claimedLocationCreated = new Set<string>();
+      const items: UploadPersistResult[] = inputs.map((input) => {
+        const sKey = sourceKey(input.source);
+        const sourceResolved = sourceRowByKey.get(sKey)!;
+        const sourceCreatedForItem = sourceResolved.created && !claimedSourceCreated.has(sKey);
+        if (sourceResolved.created) claimedSourceCreated.add(sKey);
+
+        const createdAssetIds: string[] = [];
+        const reusedAssetIds: string[] = [];
+        for (const raw of input.assets ?? []) {
+          const key = assetKey({ checksum: normalizeSha256(raw.checksum), id: raw.id });
+          const resolved = assetRowByKey.get(key);
+          if (!resolved) continue;
+          const createdForItem = resolved.created && !claimedAssetCreated.has(key);
+          if (resolved.created) claimedAssetCreated.add(key);
+          (createdForItem ? createdAssetIds : reusedAssetIds).push(resolved.row.id);
+        }
+
+        const createdLocationIds: string[] = [];
+        const reusedLocationIds: string[] = [];
+        for (const raw of input.locations ?? []) {
+          const resolvedAsset = assetsByInputId.get(raw.mediaAssetId);
+          const loc = resolvedAsset && resolvedAsset.id !== raw.mediaAssetId ? { ...raw, mediaAssetId: resolvedAsset.id } : raw;
+          const key = locationKey(loc);
+          const resolved = locationRowByKey.get(key);
+          if (!resolved) continue;
+          const createdForItem = resolved.created && !claimedLocationCreated.has(key);
+          if (resolved.created) claimedLocationCreated.add(key);
+          (createdForItem ? createdLocationIds : reusedLocationIds).push(resolved.row.id);
+        }
+
+        return { source: sourceResolved.row, sourceCreated: sourceCreatedForItem, createdAssetIds, reusedAssetIds, createdLocationIds, reusedLocationIds, mediaIds: sourceResolved.row.mediaIds.slice() };
+      });
+      return { items };
+    });
+  }
+
+  // See the Repository interface doc comment: scoped columns + a profile_id filter instead of
+  // getStore()'s unfiltered select() across every table. An empty array/placeholder for every
+  // Store field the Organizer doesn't read keeps this a real (if partial) Store — callers outside
+  // the Organizer's own read path must use getStore() instead, not this.
+  async function assembleOrganizerStore(profileId: string): Promise<Store> {
+    const [profileRows, contributors, rawSources, media, mediaAssets, events] = await Promise.all([
+      db.select({ id: t.profiles.id, displayName: t.profiles.displayName, birthDate: t.profiles.birthDate, timezone: t.profiles.timezone, bio: t.profiles.bio, visibility: t.profiles.visibility }).from(t.profiles).where(eq(t.profiles.id, profileId)).limit(1),
+      db.select({ id: t.contributors.id, profileId: t.contributors.profileId, role: t.contributors.role, displayName: t.contributors.displayName }).from(t.contributors).where(eq(t.contributors.profileId, profileId)),
+      db.select({ id: t.rawSources.id, profileId: t.rawSources.profileId, sourceType: t.rawSources.sourceType, contentTypes: t.rawSources.contentTypes, contributorId: t.rawSources.contributorId, capturedAt: t.rawSources.capturedAt, text: t.rawSources.text, mediaIds: t.rawSources.mediaIds, sourceLabel: t.rawSources.sourceLabel, visibility: t.rawSources.visibility, deletedAt: t.rawSources.deletedAt }).from(t.rawSources).where(eq(t.rawSources.profileId, profileId)),
+      db.select({ id: t.media.id, mediaAssetId: t.media.mediaAssetId }).from(t.media).where(eq(t.media.profileId, profileId)),
+      db.select({ id: t.mediaAssets.id, checksum: t.mediaAssets.checksum }).from(t.mediaAssets).where(eq(t.mediaAssets.profileId, profileId)),
+      db.select({ id: t.lifeEvents.id, profileId: t.lifeEvents.profileId, occurredAt: t.lifeEvents.occurredAt, visibility: t.lifeEvents.visibility, contentTypes: t.lifeEvents.contentTypes, title: t.lifeEvents.title, story: t.lifeEvents.story, mediaIds: t.lifeEvents.mediaIds, sourceIds: t.lifeEvents.sourceIds }).from(t.lifeEvents).where(eq(t.lifeEvents.profileId, profileId)),
+    ]);
+    if (!profileRows[0]) throw new Error("PostgreSQL repository: no profile row found for getOrganizerStore.");
+    return {
+      profile: profileRows[0] as unknown as Store["profile"],
+      contributors: contributors as unknown as Store["contributors"],
+      rawSources: rawSources as unknown as Store["rawSources"],
+      media: media as unknown as Store["media"],
+      mediaAssets: mediaAssets as unknown as Store["mediaAssets"],
+      events: events as unknown as Store["events"],
+      mediaLocations: [], connectorStates: [], dailyTraces: [], growthRecords: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [],
+      monthlySnapshot: { id: "organizer-store-unused", profileId, month: "1970-01", summary: "", highlights: [], visibility: "private" },
+    };
+  }
+
   async function assembleStore(): Promise<Store> {
     const [profileRows, contributors, media, mediaAssets, mediaLocations, connectorStates, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns, organizerJobs, chatImportTasks, links, snapshotRows] = await Promise.all([
       db.select().from(t.profiles).limit(1),
@@ -192,6 +360,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       return (rows as unknown as LifeEvent[]).toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     },
     async getStore() { return assembleStore(); },
+    async getOrganizerStore(profileId: string) { return assembleOrganizerStore(profileId); },
     async getEventDetail(id: string) {
       const [event] = await db.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, id));
       if (!event) return null;
@@ -221,6 +390,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       return (row as unknown as MediaAsset) ?? null;
     },
     async persistChatImportMessage(input) { return persistUpload(input); },
+    async persistChatImportBatch(inputs) { return persistChatImportBatch(inputs); },
     async createChatImportTask(input: ChatImportTaskCreateInput) {
       const candidate = createChatImportTask([], input);
       const rows = await db.insert(t.chatImportTasks).values({ ...candidate, checkpoint: null } as any).onConflictDoNothing({ target: t.chatImportTasks.importBatchId }).returning();

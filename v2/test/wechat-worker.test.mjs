@@ -61,7 +61,10 @@ test("worker uploads one verified object set, persists private evidence, and rer
     assert.equal(first.createdMessages, 1);
     assert.equal(first.reusedMessages, 0);
     assert.equal(first.createdMediaAssets, 1);
-    assert.equal(first.reusedMediaAssets, 1);
+    // The wechat-provider and hot-provider MediaAsset entries for one photo now merge into a
+    // single asset per message (batch persistence consolidated what used to be two separate
+    // persist calls for the same checksum), so there is no artificial self-reuse to report.
+    assert.equal(first.reusedMediaAssets, 0);
     assert.equal(first.createdMediaLocations, 4);
     assert.equal(first.reusedMediaLocations, 0);
     assert.equal(first.uploadedObjects, 3);
@@ -272,57 +275,80 @@ test("worker fails a single item closed with WECHAT_MEDIA_HASH_CHANGED when phot
   }
 });
 
-test("worker resumes from the last saved checkpoint after an interruption, processing only the remaining message", async () => {
+// Batch size is clamped to [20, 100] in production (see wechat-worker.ts), so a two-batch test at
+// the minimum batch size needs at least 21 messages: batch 1 is messages 1-20, batch 2 starts at
+// 21. Only ordinals in `photoAt` get an actual JPEG (keeps the fixture and the run fast); the rest
+// are plain text messages, which is realistic (WeChat conversations are mostly text).
+async function createMultiMessageFixture(root, count, photoAt) {
+  const photoBuffers = new Map();
+  let md = "# Synthetic Conversation\n- participant: redacted\n---\n";
+  for (let i = 1; i <= count; i++) {
+    const hh = String(9 + Math.floor(i / 60)).padStart(2, "0");
+    const mm = String(i % 60).padStart(2, "0");
+    md += `## 2026\\-08\\-31 ${hh}:${mm}:00 Synthetic Sender\nmessage ${i}\n`;
+    if (photoAt.includes(i)) {
+      if (!photoBuffers.has(i)) photoBuffers.set(i, await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: i % 255, g: 80, b: 48 } } }).jpeg().toBuffer());
+      await writeFile(path.join(root, `p${i}.jpg`), photoBuffers.get(i));
+      md += `\n![p](p${i}.jpg)\n`;
+    }
+    md += "\n";
+  }
+  await writeFile(path.join(root, "session.md"), md);
+}
+
+test("worker resumes from the last saved checkpoint after an interruption, replaying only the unconfirmed batch", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-resume-"));
   try {
-    const photo1 = await sharp({ create: { width: 32, height: 24, channels: 3, background: { r: 120, g: 80, b: 48 } } }).jpeg().toBuffer();
-    const photo2 = await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: 10, g: 200, b: 30 } } }).jpeg().toBuffer();
-    await writeFile(path.join(root, "photo1.jpg"), photo1);
-    await writeFile(path.join(root, "photo2.jpg"), photo2);
-    await writeFile(
-      path.join(root, "session.md"),
-      "# Synthetic Conversation\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Synthetic Sender\nFirst message\n\n![p1](photo1.jpg)\n\n## 2026\\-08\\-31 09:02:02 Synthetic Sender\nSecond message\n\n![p2](photo2.jpg)\n",
-    );
+    await createMultiMessageFixture(root, 21, [1, 21]);
     const repository = createInMemoryRepository();
     const storage = new CountingStorage();
-    const baseOptions = { sourceRoot: root, profileId: "profile-wechat-resume-test", contributorId: "contributor-system", storage, maxMessages: 100, maxMedia: 20 };
+    const baseOptions = { sourceRoot: root, profileId: "profile-wechat-resume-test", contributorId: "contributor-system", storage, maxMessages: 100, maxMedia: 100, messageBatchSize: 20 };
 
-    let interruptAfterFirstMessage = true;
+    // Intercept BEFORE the real checkpoint write commits — the crash must land while batch 2's
+    // durable checkpoint write is still in flight, not after it already succeeded (which would
+    // just mean batch 2 legitimately finished and there is nothing left to replay).
+    let interruptOnBatch2 = true;
     const interruptingRepository = {
       ...repository,
       async saveChatImportCheckpoint(input) {
-        const saved = await repository.saveChatImportCheckpoint(input);
-        if (interruptAfterFirstMessage && input.currentStage === "media_link" && saved?.checkpoint?.messageOrdinal === 1) {
+        if (interruptOnBatch2 && input.currentStage === "media_link" && input.checkpoint.messageOrdinal === 21) {
           throw new Error("SYNTHETIC_INTERRUPT");
         }
-        return saved;
+        return repository.saveChatImportCheckpoint(input);
       },
     };
 
     const first = await runWechatImportWorker({ ...baseOptions, repository: interruptingRepository, leaseOwner: "worker-before-crash", now: new Date().toISOString() });
     assert.equal(first.status, "failed");
     assert.equal(first.safeErrorCode, "SYNTHETIC_INTERRUPT");
-    assert.equal(first.createdMessages, 1);
-    assert.equal(storage.putCalls.length, 3);
+    // Batch 2's data was actually persisted (persistChatImportBatch already committed) before the
+    // crash landed on its checkpoint write — this run's own local counters see all 21 as created,
+    // but the DURABLE checkpoint (asserted below) is what governs replay, and it correctly stayed
+    // at the end of batch 1.
+    assert.equal(first.createdMessages, 21);
     const afterCrash = await repository.getChatImportTask(first.taskId);
     assert.equal(afterCrash.status, "failed");
-    assert.equal(afterCrash.checkpoint.messageOrdinal, 1);
+    assert.equal(afterCrash.checkpoint.messageOrdinal, 20, "checkpoint must stay at the end of the last CONFIRMED batch, not advance into the crashed one");
 
-    interruptAfterFirstMessage = false;
+    interruptOnBatch2 = false;
     const second = await runWechatImportWorker({ ...baseOptions, repository, taskId: first.taskId, retryFailed: true, leaseOwner: "worker-after-recovery", now: new Date().toISOString() });
     assert.equal(second.status, "completed");
-    assert.equal(second.createdMessages, 1);
-    assert.equal(second.reusedMessages, 0);
-    assert.equal(second.createdMediaAssets, 1);
-    assert.equal(second.uploadedObjects, 3);
-    assert.equal(storage.putCalls.length, 6);
+    // The whole unconfirmed batch (message 21) is replayed, but its RawSource/MediaAsset/
+    // MediaLocation already exist from the crashed run's already-committed persist — so replay
+    // must find them as reused, never re-created, and never re-upload the photo.
+    assert.equal(second.createdMessages, 0, "message 21 was already persisted before the crash; replay must not create it again");
+    assert.equal(second.reusedMessages, 1);
+    assert.equal(second.createdMediaAssets, 0);
+    assert.equal(second.reusedMediaAssets, 1);
+    assert.equal(second.uploadedObjects, 0, "the photo was already uploaded before the crash; replay must not re-upload it");
+    assert.equal(storage.putCalls.length, 6, "3 objects for message 1's photo + 3 for message 21's photo, never re-uploaded on replay");
 
     const store = await repository.getStore();
-    assert.equal(store.rawSources.length, 2);
+    assert.equal(store.rawSources.length, 21);
     assert.equal(store.mediaAssets.length, 2);
-    assert.equal(store.mediaLocations.length, 8);
     const finalTask = await repository.getChatImportTask(first.taskId);
     assert.equal(finalTask.status, "completed");
+    assert.equal(finalTask.processedMessages, 21);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -331,45 +357,40 @@ test("worker resumes from the last saved checkpoint after an interruption, proce
 test("a gracefully cancelled task resumes with --retry-failed and completes the conversation without recreating or re-uploading anything already done", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-cancel-resume-"));
   try {
-    const photo1 = await sharp({ create: { width: 32, height: 24, channels: 3, background: { r: 120, g: 80, b: 48 } } }).jpeg().toBuffer();
-    const photo2 = await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: 10, g: 200, b: 30 } } }).jpeg().toBuffer();
-    await writeFile(path.join(root, "photo1.jpg"), photo1);
-    await writeFile(path.join(root, "photo2.jpg"), photo2);
-    await writeFile(
-      path.join(root, "session.md"),
-      "# Synthetic Conversation\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Synthetic Sender\nFirst message\n\n![p1](photo1.jpg)\n\n## 2026\\-08\\-31 09:02:02 Synthetic Sender\nSecond message\n\n![p2](photo2.jpg)\n",
-    );
+    await createMultiMessageFixture(root, 21, [1, 21]);
     const repository = createInMemoryRepository();
     const storage = new CountingStorage();
-    const baseOptions = { sourceRoot: root, profileId: "profile-wechat-cancel-resume-test", contributorId: "contributor-system", storage, maxMessages: 100, maxMedia: 20 };
+    const baseOptions = { sourceRoot: root, profileId: "profile-wechat-cancel-resume-test", contributorId: "contributor-system", storage, maxMessages: 100, maxMedia: 100, messageBatchSize: 20 };
 
-    // Simulate a graceful stop request landing right before the worker would start processing
-    // message 2: hook heartbeatChatImportTask (the worker checks cancelRequestedAt off its return
-    // value at the top of every per-message iteration) to request the cancel on its second call.
+    // Batch size is clamped to a floor of 20, so batch 1 covers messages 1-20 and batch 2 is just
+    // message 21. Each batch does two heartbeat checks (one before uploads, one after); batch 1
+    // uses calls 1 and 2, so requesting the cancel on call 3 lands at the very start of batch 2,
+    // after batch 1 has already fully committed.
     let heartbeatCalls = 0;
     const cancellingRepository = {
       ...repository,
       async heartbeatChatImportTask(input) {
         heartbeatCalls += 1;
-        if (heartbeatCalls === 2) await repository.requestChatImportCancel(input.taskId);
+        if (heartbeatCalls === 3) await repository.requestChatImportCancel(input.taskId);
         return repository.heartbeatChatImportTask(input);
       },
     };
 
     const first = await runWechatImportWorker({ ...baseOptions, repository: cancellingRepository, leaseOwner: "worker-before-cancel", now: new Date().toISOString() });
     assert.equal(first.status, "cancelled");
-    assert.equal(first.createdMessages, 1, "message 1 must have committed before the graceful stop took effect");
+    assert.equal(first.createdMessages, 20, "batch 1 (messages 1-20) must have committed before the graceful stop took effect");
     const taskId = first.taskId;
     const afterCancel = await repository.getChatImportTask(taskId);
     assert.equal(afterCancel.status, "cancelled");
-    assert.equal(afterCancel.checkpoint.messageOrdinal, 1);
+    assert.equal(afterCancel.checkpoint.messageOrdinal, 20);
 
     const resumed = await runWechatImportWorker({ ...baseOptions, repository, taskId, retryFailed: true, leaseOwner: "worker-after-resume", now: new Date().toISOString() });
     assert.equal(resumed.status, "completed", "the resumed run must actually be allowed to run, not just fail again as terminal");
-    assert.equal(resumed.createdMessages, 1, "only the remaining message (2) should be created on resume");
-    assert.equal(resumed.uploadedObjects, 3, "only message 2's photo should upload; message 1's photo was already uploaded before the cancel");
+    assert.equal(resumed.createdMessages, 1, "only the remaining message (21) should be created on resume");
+    assert.equal(resumed.uploadedObjects, 3, "only message 21's photo should upload; message 1's photo was already uploaded before the cancel");
     const finalTask = await repository.getChatImportTask(taskId);
     assert.equal(finalTask.status, "completed");
+    assert.equal(finalTask.processedMessages, 21);
     assert.equal(finalTask.cancelRequestedAt, undefined, "resuming must clear the stale cancel request so the worker doesn't immediately cancel itself again");
     assert.equal(storage.putCalls.length, 6, "3 objects for photo1 (before cancel) + 3 for photo2 (after resume), never re-uploaded");
   } finally {

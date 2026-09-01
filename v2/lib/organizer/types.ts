@@ -1,4 +1,5 @@
 import type { ContentType, LifeEvent, MemoryWeight, OrganizerAction, OrganizerGrowthSignal, OrganizerRun, RawSource } from "@/lib/types";
+import type { Store } from "@/lib/db/repository-interface";
 
 export type OrganizerSourceSummary = {
   id: string;
@@ -107,4 +108,16 @@ export type OrganizerOptions = {
   force?: boolean;
   provider?: AIProvider;
   now?: Date;
+  // Compute and return the decision the organizer WOULD make, without calling any persist
+  // function (no DailyTrace/LifeEvent/CareEpisode/OrganizerRun is written). Only RuleBasedMemoryOrganizer
+  // honors this today.
+  dryRun?: boolean;
+  // Reuse an already-fetched Store instead of calling getStore() again. getStore() does an
+  // unfiltered select() across every table — at real WeChat data volume (thousands of rows) that
+  // single call can take minutes, so a caller processing many source-id batches in one run (e.g. a
+  // day-by-day Evidence Window pass) MUST fetch once and pass the same store to every organize()
+  // call, or the run becomes O(batches × minutes) instead of O(minutes). Only RuleBasedMemoryOrganizer
+  // honors this today; findOrganizerRun (idempotency check) still hits the database directly since
+  // organizer_runs isn't part of the passed-in store shape callers typically have on hand.
+  store?: Store;
 };

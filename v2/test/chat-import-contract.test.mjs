@@ -197,7 +197,72 @@ function addTaskTests(name, createRepository, profileIdForTest = () => uid("prof
   });
 }
 
-for (const [name, createRepository] of adapters) addTaskTests(name, createRepository);
+function addBatchTests(name, createRepository, profileIdForTest = () => uid("profile")) {
+  test(`[${name}] persistChatImportBatch: first write creates everything, rerun is fully idempotent`, async () => {
+    const repo = createRepository();
+    const profileId = profileIdForTest();
+    const s1 = source(profileId);
+    const s2 = source(profileId);
+    const a1 = asset(profileId);
+    const items = [
+      { source: s1, media: [], assets: [a1], locations: [location(a1.id, "wechat", uid("ref"))] },
+      { source: s2, media: [], assets: [], locations: [] },
+    ];
+    const first = await repo.persistChatImportBatch(items);
+    assert.equal(first.items.length, 2);
+    assert.equal(first.items[0].sourceCreated, true);
+    assert.equal(first.items[1].sourceCreated, true);
+    assert.equal(first.items[0].createdAssetIds.length, 1);
+
+    const rerun = await repo.persistChatImportBatch(items);
+    assert.ok(rerun.items.every((r) => r.sourceCreated === false), "rerunning the identical batch must find every source already there");
+    assert.equal(rerun.items[0].createdAssetIds.length, 0);
+    assert.equal(rerun.items[0].reusedAssetIds.length, 1);
+  });
+
+  test(`[${name}] persistChatImportBatch: a canonical identity repeated within the SAME batch resolves to one row, attributed as created only once`, async () => {
+    const repo = createRepository();
+    const profileId = profileIdForTest();
+    const sharedAsset = asset(profileId);
+    const s1 = source(profileId);
+    const s2 = source(profileId);
+    const items = [
+      { source: s1, media: [], assets: [sharedAsset], locations: [location(sharedAsset.id, "wechat", uid("ref-a"))] },
+      { source: s2, media: [], assets: [sharedAsset], locations: [location(sharedAsset.id, "wechat", uid("ref-b"))] },
+    ];
+    const result = await repo.persistChatImportBatch(items);
+    const createdCount = result.items.reduce((n, r) => n + r.createdAssetIds.length, 0);
+    const reusedCount = result.items.reduce((n, r) => n + r.reusedAssetIds.length, 0);
+    assert.equal(createdCount, 1, "the shared asset must be created exactly once across the whole batch");
+    assert.equal(reusedCount, 1, "the second item referencing it must see it as reused, not created again");
+    if ("getStore" in repo) {
+      const store = await repo.getStore();
+      assert.equal(store.mediaAssets.filter((a) => a.id === sharedAsset.id).length, 1);
+      assert.equal(store.mediaLocations.filter((l) => l.mediaAssetId === sharedAsset.id).length, 2, "both messages' own locations must persist even though the asset is shared");
+    }
+  });
+
+  test(`[${name}] persistChatImportBatch: one item's identity conflict fails the whole batch atomically, never a silent partial write`, async () => {
+    const repo = createRepository();
+    const profileId = profileIdForTest();
+    const good1 = source(profileId);
+    const good2 = source(profileId);
+    const conflictingAsset = asset(profileId);
+    await repo.persistChatImportBatch([{ source: source(profileId), media: [], assets: [conflictingAsset], locations: [] }]);
+    const clashingAsset = { ...conflictingAsset, checksum: `sha256:${"b".repeat(64)}` };
+    await assert.rejects(() => repo.persistChatImportBatch([
+      { source: good1, media: [], assets: [], locations: [] },
+      { source: good2, media: [], assets: [clashingAsset], locations: [] },
+    ]));
+    if ("getStore" in repo) {
+      const store = await repo.getStore();
+      assert.equal(store.rawSources.some((s) => s.id === good1.id), false, "good1 must not have been partially committed when good2's item later conflicted");
+      assert.equal(store.rawSources.some((s) => s.id === good2.id), false);
+    }
+  });
+}
+
+for (const [name, createRepository] of adapters) { addTaskTests(name, createRepository); addBatchTests(name, createRepository); }
 
 if (process.env.DATABASE_URL) {
   const { createPostgresRepository } = await import("../lib/db/postgres-repository.ts");
@@ -209,6 +274,29 @@ if (process.env.DATABASE_URL) {
   await client.query("insert into profiles (id, display_name, birth_date, timezone, visibility) values ($1, 'Synthetic Contract', '2020-01-01', 'UTC', 'private')", [profileId]);
   await client.end();
   addTaskTests("postgres", () => createPostgresRepository(), () => profileId);
+  addBatchTests("postgres", () => createPostgresRepository(), () => profileId);
+
+  test("[postgres] concurrent persistChatImportBatch calls sharing a canonical identity converge to one row, never a duplicate", async () => {
+    const repo1 = createPostgresRepository();
+    const repo2 = createPostgresRepository();
+    const sharedAsset = asset(profileId);
+    const s1 = source(profileId);
+    const s2 = source(profileId);
+    const items1 = [{ source: s1, media: [], assets: [sharedAsset], locations: [location(sharedAsset.id, "wechat", uid("ref-concurrent-a"))] }];
+    const items2 = [{ source: s2, media: [], assets: [sharedAsset], locations: [location(sharedAsset.id, "wechat", uid("ref-concurrent-b"))] }];
+    const [result1, result2] = await Promise.all([repo1.persistChatImportBatch(items1), repo2.persistChatImportBatch(items2)]);
+    const createdCount = result1.items[0].createdAssetIds.length + result2.items[0].createdAssetIds.length;
+    const reusedCount = result1.items[0].reusedAssetIds.length + result2.items[0].reusedAssetIds.length;
+    assert.equal(createdCount, 1, "exactly one of the two concurrent batches must win the create");
+    assert.equal(reusedCount, 1, "the other must resolve to reused, via the real unique constraint, not a race");
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+    const rows = await client.query("select count(*)::int n from media_assets where id = $1", [sharedAsset.id]);
+    assert.equal(rows.rows[0].n, 1);
+    const locs = await client.query("select count(*)::int n from media_locations where media_asset_id = $1", [sharedAsset.id]);
+    assert.equal(locs.rows[0].n, 2, "both concurrent batches' own locations must still persist even though they share one asset");
+    await client.end();
+  });
   test.after(async () => {
     const cleanup = new Client({ connectionString: process.env.DATABASE_URL });
     await cleanup.connect();

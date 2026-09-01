@@ -99,6 +99,8 @@ try {
       maxMessages = positiveLimit(option("--max-messages"), "max_messages", 200_000) ?? 100;
       maxMedia = positiveLimit(option("--max-media"), "max_media", 200_000) ?? 20;
     }
+    const messageBatchSize = option("--message-batch-size") !== undefined ? Number(option("--message-batch-size")) : undefined;
+    const mediaConcurrency = option("--media-concurrency") !== undefined ? Number(option("--media-concurrency")) : undefined;
     const report = await runWechatImportWorker({
       sourceRoot,
       profileId: option("--profile-id") || "profile-zhangnian",
@@ -108,6 +110,8 @@ try {
       maxMedia,
       conversationIndex: conversationIndexValue,
       retryFailed: hasFlag("--retry-failed"),
+      messageBatchSize,
+      mediaConcurrency,
     });
     process.stdout.write(`${JSON.stringify(redactedReport(report, canary ? "canary" : fullConversation ? "full-conversation" : "import"))}\n`);
     if (report.status === "failed" || report.status === "rejected") process.exitCode = 1;

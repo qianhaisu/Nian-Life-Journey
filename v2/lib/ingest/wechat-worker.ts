@@ -3,12 +3,12 @@ import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import type { ChatImportBundle, ChatMediaRef } from "./chat-import-bundle";
 import { chatImportBatchId } from "./chat-import-bundle";
-import { importWechatBundle } from "./wechat-import";
+import { buildWechatMessageItem } from "./wechat-import";
 import { assertWechatSnapshot, hashWechatFile, loadWechatBundle, type WechatBundleOptions, type WechatSnapshotEntry } from "./wechat-snapshot";
 import { normalizeSha256 } from "@/lib/db/chat-import-persistence";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
 import { hotStorage, type HotStorage } from "@/lib/storage/hot-storage";
-import type { ChatImportTask, MediaAsset, MediaLocation, RawSource } from "@/lib/types";
+import type { ChatImportTask, MediaAsset, MediaLocation } from "@/lib/types";
 import type { Repository, UploadPersistInput } from "@/lib/db/repository-interface";
 import * as defaultRepository from "@/lib/db/repository";
 
@@ -22,9 +22,18 @@ export type WechatWorkerOptions = WechatBundleOptions & {
   retryFailed?: boolean;
   repository?: Repository;
   storage?: HotStorage;
+  // Messages are persisted (RawSource/MediaAsset/MediaLocation) and checkpointed in batches, not
+  // one at a time — see the module doc comment above the main loop for why. Default 50, clamped to
+  // [20, 100] since neither extreme is safe: too small brings back the per-message round-trip cost
+  // this exists to eliminate, too large makes a crash replay (and the lease it must fit inside)
+  // expensive.
+  messageBatchSize?: number;
+  // Bounded R2 upload concurrency within a batch. Default 4, clamped to [2, 4] — never unbounded
+  // Promise.all across a batch's media.
+  mediaConcurrency?: number;
 };
 
-type WechatWorkerRepository = Pick<Repository, "createChatImportTask" | "getChatImportTask" | "claimChatImportTask" | "heartbeatChatImportTask" | "saveChatImportCheckpoint" | "requestChatImportCancel" | "acknowledgeChatImportCancel" | "failChatImportTask" | "retryChatImportTask" | "completeChatImportTask" | "completeChatImportWithWarnings" | "persistUpload" | "persistChatImportMessage">;
+type WechatWorkerRepository = Pick<Repository, "createChatImportTask" | "getChatImportTask" | "claimChatImportTask" | "heartbeatChatImportTask" | "saveChatImportCheckpoint" | "requestChatImportCancel" | "acknowledgeChatImportCancel" | "failChatImportTask" | "retryChatImportTask" | "completeChatImportTask" | "completeChatImportWithWarnings" | "persistUpload" | "persistChatImportMessage" | "persistChatImportBatch">;
 
 export type WechatWorkerReport = {
   taskId?: string;
@@ -49,6 +58,51 @@ const checksumFor = (ref: ChatMediaRef) => {
   const normalized = normalizeSha256(ref.checksum);
   return normalized && /^sha256:[a-f0-9]{64}$/.test(normalized) ? normalized : undefined;
 };
+
+function clamp(value: number | undefined, fallback: number, min: number, max: number) {
+  const n = value ?? fallback;
+  if (!Number.isInteger(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+// Bounded-concurrency map: at most `limit` workers in flight at once, never an unbounded
+// Promise.all over the whole batch. Results come back in input order regardless of completion
+// order. If any worker throws, the error propagates once every already-dispatched worker has
+// settled (in-flight uploads are never abandoned mid-write) — matching "已在进行的上传安全收尾
+// 后再checkpoint": we never persist or checkpoint a batch whose uploads didn't all finish cleanly.
+async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  let firstError: unknown;
+  async function run() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      try {
+        results[index] = await worker(items[index], index);
+      } catch (error) {
+        if (firstError === undefined) firstError = error;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  if (firstError !== undefined) throw firstError;
+  return results;
+}
+
+async function withRetry<T>(attempts: number, run: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      lastError = error;
+      // WECHAT_MEDIA_HASH_CHANGED and identity violations are never transient — retrying them
+      // would just repeat the same fail-closed outcome while masking it as a retry loop.
+      if (error instanceof Error && error.message === "WECHAT_MEDIA_HASH_CHANGED") throw error;
+    }
+  }
+  throw lastError;
+}
 
 function warningCountsFor(bundle: ChatImportBundle) {
   const counts = new Map<string, number>();
@@ -94,28 +148,30 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, stor
     else originalUploaded = false;
   }
   if (!existing.exists || !existing.checksumVerified) {
-    let actualChecksum = "";
-    let actualSize = 0;
-    const body = (async function* () {
-      const stream = createReadStream(entry.absolutePath);
-      const hash = createHash("sha256");
-      for await (const chunk of stream) {
-        hash.update(chunk);
-        actualSize += chunk.byteLength;
-        yield chunk;
+    await withRetry(2, async () => {
+      let actualChecksum = "";
+      let actualSize = 0;
+      const body = (async function* () {
+        const stream = createReadStream(entry.absolutePath);
+        const hash = createHash("sha256");
+        for await (const chunk of stream) {
+          hash.update(chunk);
+          actualSize += chunk.byteLength;
+          yield chunk;
+        }
+        actualChecksum = `sha256:${hash.digest("hex")}`;
+      })();
+      try {
+        await storage.put({ key, body, mimeType: "image/jpeg", checksum, fileSize: entry.size });
+      } catch (error) {
+        await storage.delete(key).catch(() => undefined);
+        throw error;
       }
-      actualChecksum = `sha256:${hash.digest("hex")}`;
-    })();
-    try {
-      await storage.put({ key, body, mimeType: "image/jpeg", checksum, fileSize: entry.size });
-    } catch (error) {
-      await storage.delete(key).catch(() => undefined);
-      throw error;
-    }
-    if (actualChecksum !== checksum || actualSize !== entry.size) {
-      await storage.delete(key).catch(() => undefined);
-      throw new Error("WECHAT_MEDIA_HASH_CHANGED");
-    }
+      if (actualChecksum !== checksum || actualSize !== entry.size) {
+        await storage.delete(key).catch(() => undefined);
+        throw new Error("WECHAT_MEDIA_HASH_CHANGED");
+      }
+    });
     originalUploaded = true;
   }
 
@@ -133,13 +189,15 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, stor
     const derivativeExisting = await storage.verify(derivativeObjectKey, derivativeChecksum);
     let uploaded = false;
     if (!derivativeExisting.exists || !derivativeExisting.checksumVerified) {
-      if (derivativeExisting.exists) await storage.delete(derivativeObjectKey);
-      await storage.put({ key: derivativeObjectKey, body: derivative.body, mimeType: derivative.mimeType, checksum: derivativeChecksum, fileSize: derivative.body.byteLength });
-      const verification = await storage.verify(derivativeObjectKey, derivativeChecksum);
-      if (!verification.exists || !verification.checksumVerified) {
-        await storage.delete(derivativeObjectKey).catch(() => undefined);
-        throw new Error("WECHAT_MEDIA_UPLOAD_VERIFY_FAILED");
-      }
+      await withRetry(2, async () => {
+        if (derivativeExisting.exists) await storage.delete(derivativeObjectKey);
+        await storage.put({ key: derivativeObjectKey, body: derivative.body, mimeType: derivative.mimeType, checksum: derivativeChecksum, fileSize: derivative.body.byteLength });
+        const verification = await storage.verify(derivativeObjectKey, derivativeChecksum);
+        if (!verification.exists || !verification.checksumVerified) {
+          await storage.delete(derivativeObjectKey).catch(() => undefined);
+          throw new Error("WECHAT_MEDIA_UPLOAD_VERIFY_FAILED");
+        }
+      });
       uploaded = true;
     }
     derivativeObjects.push({ key: derivativeObjectKey, variant: derivative.variant as "thumbnail" | "web", mimeType: derivative.mimeType, size: derivative.body.byteLength, width: derivative.width, height: derivative.height, uploaded });
@@ -152,34 +210,93 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, stor
   return { objects: [{ key, variant: "original" as const, mimeType: "image/jpeg", size: verification.fileSize ?? sourceHash.size, width: dimensions.width, height: dimensions.height, uploaded: originalUploaded }, ...derivativeObjects] };
 }
 
-function locationSource(bundle: ChatImportBundle, message: ChatImportBundle["messages"][number], options: WechatWorkerOptions, now: string): RawSource {
-  return { id: `wechat-message:${message.messageId}`, profileId: options.profileId, sourceType: "wechat", contentTypes: ["family"], contributorId: options.contributorId, capturedAt: message.sentAt, importedAt: now, mediaIds: [], sourceLabel: message.conversationId, visibility: "private", status: "uploaded", provider: "wechat", providerExternalId: message.messageId, metadata: { provider: "wechat", conversationDigest: digest(message.conversationId), senderDigest: digest(message.senderId), documentDigest: digest(message.sourceLocator.document), recordOrdinal: message.sourceLocator.recordOrdinal, importBatchId: chatImportBatchId(bundle.exportSnapshot), parserVersion: bundle.parserVersion } };
-}
-
 function hotLocation(assetId: string, object: StoredMediaObject, now: string): MediaLocation {
-  const id = `hot-location:${digest(`${object.variant}\u0000${object.key}`)}`;
+  const id = `hot-location:${digest(`${object.variant} ${object.key}`)}`;
   return { id, mediaAssetId: assetId, provider: "hot", variant: object.variant, providerRef: object.key, status: object.variant === "original" ? "awaiting_archive" : "ready", mimeType: object.mimeType, fileSize: object.size, width: object.width, height: object.height, createdAt: now, updatedAt: now };
-}
-
-async function linkHotLocation(repository: WechatWorkerRepository, bundle: ChatImportBundle, message: ChatImportBundle["messages"][number], checksum: string, objects: StoredMediaObject[], options: WechatWorkerOptions, now: string) {
-  const checksumHex = checksum.slice("sha256:".length);
-  const assetId = `media-asset:${checksumHex}`;
-  const source = locationSource(bundle, message, options, now);
-  const original = objects.find((object) => object.variant === "original");
-  if (!original) throw new Error("WECHAT_MEDIA_ORIGINAL_MISSING");
-  const asset: MediaAsset = { id: assetId, profileId: options.profileId, rawSourceId: source.id, mediaType: "photo", mimeType: "image/jpeg", width: original.width, height: original.height, checksum, archiveStatus: "awaiting_archive", createdAt: now };
-  const input: UploadPersistInput = { source, media: [], assets: [asset], locations: objects.map((object) => hotLocation(assetId, object, now)) };
-  return repository.persistUpload(input);
 }
 
 function reportFrom(task: ChatImportTask | null, values: Omit<WechatWorkerReport, "taskId" | "status" | "safeErrorCode" | "checkpoint"> & { safeErrorCode?: string }): WechatWorkerReport {
   return { ...values, taskId: task?.id, status: task?.status ?? "rejected", safeErrorCode: values.safeErrorCode, checkpoint: task?.checkpoint };
 }
 
+// --- Batch processing ---------------------------------------------------------------------
+// The worker used to do everything per message: a heartbeat, up to three checkpoint saves, and
+// (for a message with media) two separate persist transactions per photo — one for the "wechat"
+// provider location, one for "hot". Measured against real PostgreSQL that was ~55 round trips per
+// message (~8s/message on Neon), because each round trip pays full network latency and each
+// transaction pays its own BEGIN/COMMIT round trip on top.
+//
+// Batching changes the unit of work from "one message" to "one batch of messageBatchSize
+// messages": one heartbeat, bounded-concurrency uploads for the batch's unique media, ONE combined
+// UploadPersistInput per message (wechat + hot provider assets/locations merged, instead of two
+// separate persist calls), ONE persistChatImportBatch call for the whole batch (bulk multi-row
+// INSERT ... ON CONFLICT ... RETURNING per table), and ONE checkpoint save. Crash safety is
+// unchanged in kind, only in granularity: checkpoint only advances past a message once the WHOLE
+// batch's persist call has committed, so a crash mid-batch (during upload or during persist) simply
+// means the entire unconfirmed batch gets replayed on resume — safe because RawSource/MediaAsset/
+// MediaLocation identity is enforced by database unique constraints and R2 object identity is
+// checksum-verified before any object is considered "already there".
+type BatchMediaUpload = { entry: WechatSnapshotEntry; checksum: string };
+type BatchUploadOutcome = { objects: StoredMediaObject[] };
+
+async function uploadBatchMedia(uploads: BatchMediaUpload[], storage: HotStorage, concurrency: number) {
+  const outcomes = await mapWithConcurrency(uploads, concurrency, async (task) => uploadVerified(task.entry, task.checksum, storage));
+  const byChecksum = new Map<string, BatchUploadOutcome>();
+  uploads.forEach((task, index) => byChecksum.set(task.checksum, outcomes[index]));
+  return byChecksum;
+}
+
+function buildBatchItems(
+  bundle: ChatImportBundle,
+  batchMessages: ChatImportBundle["messages"],
+  byPath: Map<string, WechatSnapshotEntry>,
+  uploadedByChecksum: Map<string, BatchUploadOutcome>,
+  options: { profileId: string; contributorId: string; now: string },
+) {
+  const items: UploadPersistInput[] = [];
+  const warningCounts: Array<{ code: string; count: number }> = [];
+  const addWarning = (code: string, count = 1) => {
+    const existing = warningCounts.find((w) => w.code === code);
+    if (existing) existing.count += count;
+    else warningCounts.push({ code, count });
+  };
+  let uploadedObjects = 0;
+  let uploadedBytes = 0;
+  const seenUploadedKeys = new Set<string>();
+
+  for (const message of batchMessages) {
+    const { input, warningCounts: itemWarnings } = buildWechatMessageItem(bundle, message, options);
+    for (const warning of itemWarnings) addWarning(warning.code, warning.count);
+    for (const ref of message.mediaRefs) {
+      const checksum = checksumFor(ref);
+      if (ref.availability !== "present" || !checksum) continue;
+      const entry = byPath.get(ref.relativePath);
+      if (!entry || entry.kind !== "jpeg") continue;
+      const uploaded = uploadedByChecksum.get(checksum);
+      if (!uploaded) continue;
+      const assetId = `media-asset:${checksum.slice("sha256:".length)}`;
+      const original = uploaded.objects.find((object) => object.variant === "original");
+      if (!original) throw new Error("WECHAT_MEDIA_ORIGINAL_MISSING");
+      // buildWechatMessageItem already pushed the "wechat" provider MediaAsset for this exact
+      // checksum (same deterministic id) — only the hot-provider MediaLocation rows are new here.
+      // Pushing a second asset object for the same id/checksum would double-count it as both
+      // created and reused when persistChatImportBatch resolves the per-item result.
+      for (const object of uploaded.objects) {
+        input.locations!.push(hotLocation(assetId, object, options.now));
+        if (object.uploaded && !seenUploadedKeys.has(object.key)) { seenUploadedKeys.add(object.key); uploadedObjects += 1; uploadedBytes += object.size; }
+      }
+    }
+    items.push(input);
+  }
+  return { items, warningCounts, uploadedObjects, uploadedBytes };
+}
+
 export async function runWechatImportWorker(options: WechatWorkerOptions): Promise<WechatWorkerReport> {
   const repository: WechatWorkerRepository = options.repository ?? defaultRepository;
   const storage = options.storage ?? hotStorage;
   const leaseOwner = options.leaseOwner ?? `wechat-worker:${randomUUID()}`;
+  const messageBatchSize = clamp(options.messageBatchSize, 50, 20, 100);
+  const mediaConcurrency = clamp(options.mediaConcurrency, 4, 2, 4);
   const loaded = await loadWechatBundle(options.sourceRoot, options);
   const warningCounts = warningCountsFor(loaded.bundle);
   const now = options.now ?? new Date().toISOString();
@@ -206,9 +323,9 @@ export async function runWechatImportWorker(options: WechatWorkerOptions): Promi
   let reusedMediaAssets = 0;
   let createdMediaLocations = 0;
   let reusedMediaLocations = 0;
-  const uploadedKeys = new Set<string>();
-  const reusedKeys = new Set<string>();
-  let uploadedBytes = 0;
+  let uploadedObjectsTotal = 0;
+  let reusedObjectsTotal = 0;
+  let uploadedBytesTotal = 0;
   let current = task;
   const checkpoint = task.checkpoint;
   const messages = loaded.bundle.messages.filter((message) => !checkpoint || message.sourceLocator.recordOrdinal > checkpoint.messageOrdinal);
@@ -222,62 +339,95 @@ export async function runWechatImportWorker(options: WechatWorkerOptions): Promi
       current = (await repository.saveChatImportCheckpoint({ taskId: task.id, leaseOwner, checkpoint: initialCheckpoint, currentStage: "raw_source_persist", processedMessages: task.processedMessages, createdMessages: task.createdMessages, reusedMessages: task.reusedMessages, warnings: warningTotal(warningCounts), warningCounts, now })) ?? current;
     }
 
-    for (const message of messages) {
+    for (let batchStart = 0; batchStart < messages.length; batchStart += messageBatchSize) {
+      const batchMessages = messages.slice(batchStart, batchStart + messageBatchSize);
+
+      // One heartbeat (and cancel check) per batch, not per message.
       const heartbeat = await repository.heartbeatChatImportTask({ taskId: task.id, leaseOwner, leaseMs: options.leaseMs, now: new Date().toISOString() });
       if (!heartbeat) throw new Error("CHAT_IMPORT_LEASE_LOST");
       if (heartbeat.cancelRequestedAt) {
         const cancelled = await repository.acknowledgeChatImportCancel({ taskId: task.id, leaseOwner, now: new Date().toISOString() });
-        return reportFrom(cancelled ?? heartbeat, { createdMessages, reusedMessages, createdMediaAssets, reusedMediaAssets, createdMediaLocations, reusedMediaLocations, uploadedObjects: uploadedKeys.size, reusedObjects: reusedKeys.size, uploadedBytes, warningCounts });
+        return reportFrom(cancelled ?? heartbeat, { createdMessages, reusedMessages, createdMediaAssets, reusedMediaAssets, createdMediaLocations, reusedMediaLocations, uploadedObjects: uploadedObjectsTotal, reusedObjects: reusedObjectsTotal, uploadedBytes: uploadedBytesTotal, warningCounts });
       }
-      let stage = current.currentStage;
-      if (["raw_source_persist", "bundle_parse", "snapshot_validation"].includes(stage)) stage = "media_validate";
-      current = (await repository.saveChatImportCheckpoint({ taskId: task.id, leaseOwner, checkpoint: { snapshotDigest: loaded.snapshot.rootFingerprint, documentOrdinal: 0, messageOrdinal: message.sourceLocator.recordOrdinal - 1 }, currentStage: stage, processedMessages: current.processedMessages, createdMessages: current.createdMessages, reusedMessages: current.reusedMessages, warnings: warningTotal(warningCounts), warningCounts, now: new Date().toISOString() })) ?? current;
 
-      const singleBundle: ChatImportBundle = { ...loaded.bundle, messages: [message], mediaRefs: message.mediaRefs };
-      const verifiedObjectsByRef = new Map<string, StoredMediaObject[]>();
-      for (const ref of message.mediaRefs) {
+      const stage = ["raw_source_persist", "bundle_parse", "snapshot_validation"].includes(current.currentStage) ? "media_validate" : current.currentStage;
+      const lastMessage = batchMessages[batchMessages.length - 1];
+      current = (await repository.saveChatImportCheckpoint({ taskId: task.id, leaseOwner, checkpoint: { snapshotDigest: loaded.snapshot.rootFingerprint, documentOrdinal: 0, messageOrdinal: batchMessages[0].sourceLocator.recordOrdinal - 1 }, currentStage: stage, processedMessages: current.processedMessages, createdMessages: current.createdMessages, reusedMessages: current.reusedMessages, warnings: warningTotal(warningCounts), warningCounts, now: new Date().toISOString() })) ?? current;
+
+      // Unique media across the whole batch, deduped by checksum — the same photo referenced by
+      // two messages in one batch is uploaded once.
+      const uploadsByChecksum = new Map<string, BatchMediaUpload>();
+      for (const message of batchMessages) for (const ref of message.mediaRefs) {
         const checksum = checksumFor(ref);
-        if (ref.availability !== "present" || !checksum) continue;
+        if (ref.availability !== "present" || !checksum || uploadsByChecksum.has(checksum)) continue;
         const entry = byPath.get(ref.relativePath);
         if (!entry || entry.kind !== "jpeg") continue;
-        const uploaded = await uploadVerified(entry, checksum, storage);
-        verifiedObjectsByRef.set(ref.id, uploaded.objects);
-        for (const object of uploaded.objects) {
-          if (object.uploaded) { if (!uploadedKeys.has(object.key)) { uploadedKeys.add(object.key); uploadedBytes += object.size; } }
-          else reusedKeys.add(object.key);
-        }
+        uploadsByChecksum.set(checksum, { entry, checksum });
       }
-      current = (await repository.saveChatImportCheckpoint({ taskId: task.id, leaseOwner, checkpoint: { snapshotDigest: loaded.snapshot.rootFingerprint, documentOrdinal: 0, messageOrdinal: message.sourceLocator.recordOrdinal }, currentStage: monotonicStage(current.currentStage, "media_upload"), processedMessages: current.processedMessages, createdMessages: current.createdMessages, reusedMessages: current.reusedMessages, warnings: warningTotal(warningCounts), warningCounts, now: new Date().toISOString() })) ?? current;
+      const uploadedByChecksum = await uploadBatchMedia([...uploadsByChecksum.values()], storage, mediaConcurrency);
 
-      const imported = await importWechatBundle(singleBundle, repository, { profileId: options.profileId, contributorId: options.contributorId, now });
-      if (imported.createdMessages) createdMessages += imported.createdMessages;
-      if (imported.reusedMessages) reusedMessages += imported.reusedMessages;
-      createdMediaAssets += imported.mediaAssets;
-      reusedMediaAssets += imported.reusedMediaAssets;
-      createdMediaLocations += imported.mediaLocations;
-      reusedMediaLocations += imported.reusedMediaLocations;
-      imported.warningCounts.forEach((warning) => { if (!warningCounts.some((item) => item.code === warning.code)) warningCounts.push(warning); });
-      for (const ref of message.mediaRefs) {
-        const checksum = checksumFor(ref);
-        if (ref.availability !== "present" || !checksum) continue;
-        const entry = byPath.get(ref.relativePath);
-        if (!entry || entry.kind !== "jpeg") continue;
-        const objects = verifiedObjectsByRef.get(ref.id);
-        if (!objects) continue;
-        const linked = await linkHotLocation(repository, loaded.bundle, message, checksum, objects, options, now);
-        createdMediaAssets += linked.createdAssetIds.length;
-        reusedMediaAssets += linked.reusedAssetIds.length;
-        createdMediaLocations += linked.createdLocationIds.length;
-        reusedMediaLocations += linked.reusedLocationIds.length;
+      // A second heartbeat/cancel check after uploads (the slow phase) finish, before we commit
+      // anything for this batch — "已在进行的上传安全收尾后再checkpoint". If cancellation landed
+      // during uploads, none of this batch's work is persisted or checkpointed; it will be safely
+      // replayed (re-verified, not re-uploaded, since the objects already exist) on resume.
+      const postUploadHeartbeat = await repository.heartbeatChatImportTask({ taskId: task.id, leaseOwner, leaseMs: options.leaseMs, now: new Date().toISOString() });
+      if (!postUploadHeartbeat) throw new Error("CHAT_IMPORT_LEASE_LOST");
+      if (postUploadHeartbeat.cancelRequestedAt) {
+        const cancelled = await repository.acknowledgeChatImportCancel({ taskId: task.id, leaseOwner, now: new Date().toISOString() });
+        return reportFrom(cancelled ?? postUploadHeartbeat, { createdMessages, reusedMessages, createdMediaAssets, reusedMediaAssets, createdMediaLocations, reusedMediaLocations, uploadedObjects: uploadedObjectsTotal, reusedObjects: reusedObjectsTotal, uploadedBytes: uploadedBytesTotal, warningCounts });
       }
-      current = (await repository.saveChatImportCheckpoint({ taskId: task.id, leaseOwner, checkpoint: { snapshotDigest: loaded.snapshot.rootFingerprint, documentOrdinal: 0, messageOrdinal: message.sourceLocator.recordOrdinal, mediaDigest: digest(message.mediaRefs.map((ref) => `${ref.id}:${ref.checksum ?? ref.availability}`).sort().join("\u0000")) }, currentStage: monotonicStage(current.currentStage, "media_link"), processedMessages: current.processedMessages + 1, createdMessages: current.createdMessages + imported.createdMessages, reusedMessages: current.reusedMessages + imported.reusedMessages, warnings: warningTotal(warningCounts), warningCounts, now: new Date().toISOString() })) ?? current;
+
+      current = (await repository.saveChatImportCheckpoint({ taskId: task.id, leaseOwner, checkpoint: { snapshotDigest: loaded.snapshot.rootFingerprint, documentOrdinal: 0, messageOrdinal: batchMessages[0].sourceLocator.recordOrdinal - 1 }, currentStage: monotonicStage(current.currentStage, "media_upload"), processedMessages: current.processedMessages, createdMessages: current.createdMessages, reusedMessages: current.reusedMessages, warnings: warningTotal(warningCounts), warningCounts, now: new Date().toISOString() })) ?? current;
+
+      // warningCountsFor(loaded.bundle) above already computed the complete, authoritative warning
+      // counts for the whole conversation up front (independent of batching/resume position) — the
+      // per-item warnings buildBatchItems returns cover the exact same refs and must NOT be added
+      // on top, or every warning would be double-counted.
+      const built = buildBatchItems(loaded.bundle, batchMessages, byPath, uploadedByChecksum, { profileId: options.profileId, contributorId: options.contributorId, now });
+      uploadedObjectsTotal += built.uploadedObjects;
+      uploadedBytesTotal += built.uploadedBytes;
+
+      const persisted = await repository.persistChatImportBatch(built.items);
+      let batchCreatedMessages = 0;
+      let batchReusedMessages = 0;
+      for (const result of persisted.items) {
+        if (result.sourceCreated) { createdMessages += 1; batchCreatedMessages += 1; }
+        else { reusedMessages += 1; batchReusedMessages += 1; }
+        createdMediaAssets += result.createdAssetIds.length;
+        reusedMediaAssets += result.reusedAssetIds.length;
+        createdMediaLocations += result.createdLocationIds.length;
+        reusedMediaLocations += result.reusedLocationIds.length;
+      }
+      // Objects that already existed (verified, not re-uploaded) count as reused for reporting.
+      for (const outcome of uploadedByChecksum.values()) for (const object of outcome.objects) if (!object.uploaded) reusedObjectsTotal += 1;
+
+      const mediaDigest = digest(batchMessages.flatMap((m) => m.mediaRefs.map((ref) => `${ref.id}:${ref.checksum ?? ref.availability}`)).sort().join(" "));
+      current = (await repository.saveChatImportCheckpoint({
+        taskId: task.id,
+        leaseOwner,
+        checkpoint: { snapshotDigest: loaded.snapshot.rootFingerprint, documentOrdinal: 0, messageOrdinal: lastMessage.sourceLocator.recordOrdinal, mediaDigest },
+        currentStage: monotonicStage(current.currentStage, "media_link"),
+        processedMessages: current.processedMessages + batchMessages.length,
+        createdMessages: current.createdMessages + batchCreatedMessages,
+        reusedMessages: current.reusedMessages + batchReusedMessages,
+        warnings: warningTotal(warningCounts),
+        warningCounts,
+        now: new Date().toISOString(),
+      })) ?? current;
     }
-    current = (await repository.saveChatImportCheckpoint({ taskId: task.id, leaseOwner, checkpoint: current.checkpoint ?? { snapshotDigest: loaded.snapshot.rootFingerprint, documentOrdinal: 0, messageOrdinal: 0 }, currentStage: "finalize", processedMessages: Math.max(current.processedMessages, task.processedMessages + messages.length), createdMessages: current.createdMessages, reusedMessages: current.reusedMessages, warnings: warningTotal(warningCounts), warningCounts, now: new Date().toISOString() })) ?? current;
+
+    // current.processedMessages is already correct here — each batch iteration accumulated it
+    // from the durable per-batch checkpoint, and it's untouched (still whatever the task started
+    // this run at) if there were no messages left to process. Recomputing from the claimed task
+    // snapshot's own processedMessages is NOT a safe fallback: some repository implementations
+    // mutate a task object in place and return the same reference, so `task` (captured once at
+    // claim time) can silently reflect later updates by the time we get here, double-counting.
+    current = (await repository.saveChatImportCheckpoint({ taskId: task.id, leaseOwner, checkpoint: current.checkpoint ?? { snapshotDigest: loaded.snapshot.rootFingerprint, documentOrdinal: 0, messageOrdinal: 0 }, currentStage: "finalize", processedMessages: current.processedMessages, createdMessages: current.createdMessages, reusedMessages: current.reusedMessages, warnings: warningTotal(warningCounts), warningCounts, now: new Date().toISOString() })) ?? current;
     const completed = warningTotal(warningCounts) ? await repository.completeChatImportWithWarnings({ taskId: task.id, leaseOwner, warningCounts, now: new Date().toISOString() }) : await repository.completeChatImportTask({ taskId: task.id, leaseOwner, now: new Date().toISOString() });
-    return reportFrom(completed ?? current, { createdMessages, reusedMessages, createdMediaAssets, reusedMediaAssets, createdMediaLocations, reusedMediaLocations, uploadedObjects: uploadedKeys.size, reusedObjects: reusedKeys.size, uploadedBytes, warningCounts });
+    return reportFrom(completed ?? current, { createdMessages, reusedMessages, createdMediaAssets, reusedMediaAssets, createdMediaLocations, reusedMediaLocations, uploadedObjects: uploadedObjectsTotal, reusedObjects: reusedObjectsTotal, uploadedBytes: uploadedBytesTotal, warningCounts });
   } catch (error) {
     const safeErrorCode = error instanceof Error && /^[A-Z][A-Z0-9_:-]{0,63}$/.test(error.message) ? error.message : "CHAT_IMPORT_WORKER_FAILED";
     const failed = await repository.failChatImportTask({ taskId: task.id, leaseOwner, safeErrorCode, now: new Date().toISOString() }).catch(() => null);
-    return reportFrom(failed ?? current, { safeErrorCode, createdMessages, reusedMessages, createdMediaAssets, reusedMediaAssets, createdMediaLocations, reusedMediaLocations, uploadedObjects: uploadedKeys.size, reusedObjects: reusedKeys.size, uploadedBytes, warningCounts });
+    return reportFrom(failed ?? current, { safeErrorCode, createdMessages, reusedMessages, createdMediaAssets, reusedMediaAssets, createdMediaLocations, reusedMediaLocations, uploadedObjects: uploadedObjectsTotal, reusedObjects: reusedObjectsTotal, uploadedBytes: uploadedBytesTotal, warningCounts });
   }
 }

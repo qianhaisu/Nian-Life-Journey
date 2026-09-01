@@ -1,5 +1,5 @@
 import type { Media, MediaAsset, MediaLocation, RawSource } from "@/lib/types";
-import type { Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
+import type { ChatImportBatchResult, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 
 export function normalizeSha256(value: string | null | undefined) {
   if (!value) return value ?? null;
@@ -68,6 +68,14 @@ export function persistUploadInStore(store: Store, input: UploadPersistInput): U
   }
 
   return { source, sourceCreated: !sourceMatch, createdAssetIds, reusedAssetIds, createdLocationIds, reusedLocationIds, mediaIds: source.mediaIds.slice() };
+}
+
+// Batch persist for the JSON/in-memory backends: no network round trips exist here to save, so
+// this is just persistUploadInStore run in a loop against the SAME store object — which already
+// gives correct behavior for a canonical identity that repeats within the batch itself, because
+// each call sees the previous call's mutations.
+export function persistChatImportBatchInStore(store: Store, inputs: UploadPersistInput[]): ChatImportBatchResult {
+  return { items: inputs.map((input) => persistUploadInStore(store, input)) };
 }
 
 export function sourceByCanonical(store: Store, provider: string, providerExternalId: string) {

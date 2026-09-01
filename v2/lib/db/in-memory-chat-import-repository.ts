@@ -1,5 +1,5 @@
 import type { ChatImportTask } from "@/lib/types";
-import { assetByChecksum, persistUploadInStore } from "./chat-import-persistence";
+import { assetByChecksum, persistChatImportBatchInStore, persistUploadInStore } from "./chat-import-persistence";
 import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 import type { ChatImportRepository, ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 
@@ -37,6 +37,17 @@ export function createInMemoryRepository(initial: Partial<Store> = {}): InMemory
     async persistUpload(input) { return persist(input); },
     async findMediaAssetByChecksum(checksum) { return assetByChecksum(store, checksum); },
     async persistChatImportMessage(input) { return persist(input); },
+    async persistChatImportBatch(inputs) {
+      return mutate(() => {
+        const draft: Store = { ...store, rawSources: store.rawSources.slice(), media: store.media.slice(), mediaAssets: store.mediaAssets.slice(), mediaLocations: store.mediaLocations.slice() };
+        const result = persistChatImportBatchInStore(draft, inputs);
+        store.rawSources = draft.rawSources;
+        store.media = draft.media;
+        store.mediaAssets = draft.mediaAssets;
+        store.mediaLocations = draft.mediaLocations;
+        return result;
+      });
+    },
     async createChatImportTask(input: ChatImportTaskCreateInput) { return mutate(() => createChatImportTask(store.chatImportTasks, input)); },
     async getChatImportTask(id) { return store.chatImportTasks.find((task) => task.id === id) ?? null; },
     async listChatImportTasks(filter?: ChatImportTaskListFilter) { return listChatImportTasks(store.chatImportTasks, filter); },
@@ -76,6 +87,7 @@ export class AsyncChatImportRepository implements ChatImportRepository {
   completeChatImportTask(input: ChatImportTaskCompletionInput) { return this.enqueue(() => this.delegate.completeChatImportTask(input)); }
   completeChatImportWithWarnings(input: ChatImportTaskWarningsInput) { return this.enqueue(() => this.delegate.completeChatImportWithWarnings(input)); }
   persistChatImportMessage(input: UploadPersistInput) { return this.enqueue(() => this.delegate.persistChatImportMessage(input)); }
+  persistChatImportBatch(inputs: UploadPersistInput[]) { return this.enqueue(() => this.delegate.persistChatImportBatch(inputs)); }
 }
 
 export function createAsyncChatImportRepository(repository: ChatImportRepository) {

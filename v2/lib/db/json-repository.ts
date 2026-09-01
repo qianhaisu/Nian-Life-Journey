@@ -6,7 +6,7 @@ import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
 import { newId, organizerJobKey } from "./repository-interface";
 import type { Repository, Store, UploadPersistInput } from "./repository-interface";
-import { assetByChecksum, normalizeChatImportTask, persistUploadInStore } from "./chat-import-persistence";
+import { assetByChecksum, normalizeChatImportTask, persistChatImportBatchInStore, persistUploadInStore } from "./chat-import-persistence";
 import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 
 const dataDir = path.join(process.cwd(), ".data");
@@ -64,6 +64,7 @@ async function withStoreMutation<T>(operation: (store: Store) => T | Promise<T>)
 }
 
 const persistUploadInJson = (input: UploadPersistInput) => withStoreMutation((store) => persistUploadInStore(store, input));
+const persistChatImportBatchInJson = (inputs: UploadPersistInput[]) => withStoreMutation((store) => persistChatImportBatchInStore(store, inputs));
 
 // Local-dev/test adapter: a single JSON file, full read-modify-write per call, no transactions or
 // locking. Behavior — including every dedup/idempotency rule — must match postgres-repository.ts;
@@ -73,11 +74,27 @@ export function createJsonRepository(): Repository {
     async getHomeEvents() { const store = await readStore(); return store.events.filter((event) => event.visibility !== "private").toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); },
     async getAllEvents() { const store = await readStore(); return store.events.toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); },
     async getStore() { return readStore(); },
+    // The JSON backend already holds everything in memory, so "scoped" here is just a profile_id
+    // filter for behavioral parity with the PostgreSQL implementation — no separate performance
+    // concern to address.
+    async getOrganizerStore(profileId: string) {
+      const store = await readStore();
+      if (store.profile.id !== profileId) throw new Error("JSON repository: no profile row found for getOrganizerStore.");
+      return {
+        ...store,
+        contributors: store.contributors.filter((c) => c.profileId === profileId),
+        rawSources: store.rawSources.filter((s) => s.profileId === profileId),
+        media: store.media.filter((m) => m.profileId === profileId),
+        mediaAssets: store.mediaAssets.filter((a) => a.profileId === profileId),
+        events: store.events.filter((e) => e.profileId === profileId),
+      };
+    },
     async getEventDetail(id: string) { const store = await readStore(); const event = store.events.find((item) => item.id === id); if (!event) return null; return { event, media: store.media.filter((item) => event.mediaIds.includes(item.id)), sources: store.rawSources.filter((item) => event.sourceIds.includes(item.id) && !item.deletedAt), contributors: store.contributors, growth: store.growthRecords.filter((item) => event.growthRecordIds.includes(item.id)), care: store.careRecords.filter((item) => event.careRecordIds.includes(item.id) && item.visibility !== "private") }; },
     async appendUpload(input: UploadPersistInput) { return (await persistUploadInJson(input)).source; },
     async persistUpload(input: UploadPersistInput) { return persistUploadInJson(input); },
     async findMediaAssetByChecksum(checksum: string) { const store = await readStore(); return assetByChecksum(store, checksum); },
     async persistChatImportMessage(input: UploadPersistInput) { return persistUploadInJson(input); },
+    async persistChatImportBatch(inputs: UploadPersistInput[]) { return persistChatImportBatchInJson(inputs); },
     async createChatImportTask(input) { return withStoreMutation((store) => createChatImportTask(store.chatImportTasks, input)); },
     async getChatImportTask(id) { const store = await readStore(); return store.chatImportTasks.find((task) => task.id === id) ?? null; },
     async listChatImportTasks(filter) { const store = await readStore(); return listChatImportTasks(store.chatImportTasks, filter); },
