@@ -125,6 +125,27 @@ Nianlife 只有一个 Neon 数据库（integration `neon-citrine-park`），Verc
 - 不删除现有路径、Schema、Policy 和幂等保护。
 - 修改后运行与改动范围匹配的 typecheck、test、lint、build 和 diff check（见「常用验证命令」），而不是每次都跑全套或完全不验证。
 
+## 本地环境文件永久保护
+
+`v2/.env.local` 是持久本地配置，不是可重新生成的临时文件。
+
+1. 未经 Teddy 针对具体文件明确授权，任何 Session 禁止删除、移动、清空或覆盖：
+   - `.env.local`
+   - 任意 `.env*`
+   - `.vercel`
+2. 禁止出现类似操作：
+   - `rm -rf .vercel .env.local`
+   - `rm -f .env.local`
+   - 为测试临时移动或改名 `.env.local`
+3. 测试必须通过单进程环境变量覆盖或隔离环境完成，不得操作真实 `.env.local`。
+4. `vercel env pull` 禁止直接写入 `.env.local`：
+   - 必须先写仓库外临时文件
+   - 验证不是空值或 `[SENSITIVE]`
+   - Sensitive 变量无法拉取时立即停止，不得覆盖原文件
+5. 即使需要重新执行 `vercel link`，也不得删除 `.env.local`。
+6. 任何获准的环境文件修改前，必须先在仓库外创建可恢复备份。
+7. 禁止在日志、聊天、commit 或终端输出中显示 secret 值。
+
 ## 现有改动保护规则
 
 处理任何新任务前先跑 `git status --short --branch`。工作区里已有的改动在未确认其来源和目的前，不得回滚、覆盖、stash 或混入其他提交。
