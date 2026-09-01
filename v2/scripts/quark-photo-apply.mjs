@@ -95,6 +95,9 @@ function eligibleItems(items) {
  * @param {string} [config.visibility]
  * @param {string} [config.sourceLabel]
  * @param {number} [config.maxGeminiJobs]
+ * @param {boolean} [config.requireGemini]       When true (default), an apply that would ingest NEW photos
+ *                                               fails closed before any write unless GEMINI_API_KEY and AI_MODEL
+ *                                               are present. A pure no-op (0 new) never requires Gemini.
  * @param {object} [config.deps]                Injectable dependencies for testing (repo/hotStorage/processing/worker/paths).
  * @returns {Promise<object>} structured summary.
  */
@@ -110,6 +113,7 @@ export async function applyQuarkPhotoArtifact(config) {
     visibility = DEFAULT_VISIBILITY,
     sourceLabel = DEFAULT_SOURCE_LABEL,
     maxGeminiJobs = DEFAULT_MAX_GEMINI_JOBS,
+    requireGemini = true,
     deps = {},
   } = config;
 
@@ -130,6 +134,26 @@ export async function applyQuarkPhotoArtifact(config) {
   const items = eligibleItems(allItems);
 
   const ctx = { repo, sourceImageMetadata, createDerivatives, hotStorage, mediaDeliveryUrl, profileId, contributorId, visibility, sourceLabel, originalsDir: resolvedOriginals, mode };
+
+  // Fail-closed preflight (apply only): if this run would ingest any NEW photo, the Organizer will
+  // be drained and needs Gemini. Refuse BEFORE writing anything when Gemini is missing, so a partial
+  // write can never be left behind. A pure no-op (all reused/skipped) skips this entirely.
+  if (mode === "apply" && requireGemini) {
+    let wouldCreate = 0;
+    for (const item of items) {
+      const skip = permanentSkip.get(item.sha256);
+      if (skip) {
+        const sizeChanged = typeof skip.size === "number" && typeof item.size === "number" && skip.size !== item.size;
+        if (!sizeChanged) continue;
+      }
+      const existing = await repo.findMediaAssetByChecksum(item.sha256);
+      if (!existing) wouldCreate += 1;
+    }
+    if (wouldCreate > 0) {
+      if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required to apply newly-ingested photos (Organizer drain needs it)");
+      if (!process.env.AI_MODEL) throw new Error("AI_MODEL is required to apply newly-ingested photos (Organizer drain needs it)");
+    }
+  }
 
   const created = [];
   const reused = [];
@@ -156,7 +180,7 @@ export async function applyQuarkPhotoArtifact(config) {
   }
 
   const byDate = new Map();
-  for (const record of [...created, ...reused]) {
+  for (const record of created) {
     const date = record.capturedAt.slice(0, 10);
     if (!byDate.has(date)) byDate.set(date, new Set());
     byDate.get(date).add(record.rawSourceId);
@@ -166,14 +190,21 @@ export async function applyQuarkPhotoArtifact(config) {
   let dates = [];
   let workerOutcomes = [];
   if (mode === "apply") {
-    if (dateKeys.length > maxGeminiJobs) console.log(`WARNING: ${dateKeys.length} dates exceed the ${maxGeminiJobs}-call Gemini budget; storage/enqueue still proceeds for all, but only the first ${maxGeminiJobs} jobs will be drained this run.`);
-    for (const date of dateKeys) {
-      const sourceIds = [...byDate.get(date)].sort();
-      const job = await repo.enqueueOrganizerJob({ sourceIds, profileId });
-      dates.push({ date, sourceCount: sourceIds.length, jobId: job.id, jobStatus: job.status });
+    // Organizer work is driven solely by NEW sources. Reused sources were already organized when
+    // they were first ingested, so re-enqueueing them would both duplicate organizer jobs and
+    // re-invoke Gemini on a supposedly-idempotent re-run.
+    if (dateKeys.length === 0) {
+      workerOutcomes = [];
+    } else {
+      if (dateKeys.length > maxGeminiJobs) console.log(`WARNING: ${dateKeys.length} dates exceed the ${maxGeminiJobs}-call Gemini budget; storage/enqueue still proceeds for all, but only the first ${maxGeminiJobs} jobs will be drained this run.`);
+      for (const date of dateKeys) {
+        const sourceIds = [...byDate.get(date)].sort();
+        const job = await repo.enqueueOrganizerJob({ sourceIds, profileId });
+        dates.push({ date, sourceCount: sourceIds.length, jobId: job.id, jobStatus: job.status });
+      }
+      const drainLimit = Math.min(maxGeminiJobs, dates.length);
+      workerOutcomes = await runOrganizerWorker({ once: true, maxJobs: drainLimit });
     }
-    const drainLimit = Math.min(maxGeminiJobs, dates.length);
-    workerOutcomes = await runOrganizerWorker({ once: true, maxJobs: drainLimit });
   } else {
     // dry-run: report which dates WOULD enqueue, but never enqueue or drain.
     dates = dateKeys.map((date) => ({ date, sourceCount: byDate.get(date).size, wouldEnqueue: true }));

@@ -45,6 +45,7 @@ export function applyQuarkPhotoArtifact(config: {
   visibility?: string;
   sourceLabel?: string;
   maxGeminiJobs?: number;
+  requireGemini?: boolean;
   deps?: Record<string, unknown>;
 }): Promise<ApplyResult>;
 

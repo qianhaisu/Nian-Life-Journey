@@ -101,8 +101,10 @@ async function main() {
   requireEnv("DATABASE_URL");
   if (apply) {
     if (process.env.MEDIA_STORAGE_PROVIDER !== "r2") throw new CliUsageError("MEDIA_STORAGE_PROVIDER must be r2 so originals/derivatives land in permanent storage, not local disk");
-    requireEnv("GEMINI_API_KEY");
-    requireEnv("AI_MODEL");
+    // Configure the AI Organizer for this run. GEMINI_API_KEY/AI_MODEL are intentionally NOT
+    // hard-required here: the shared core (scripts/quark-photo-apply.mjs) fails closed BEFORE any
+    // write only if the run would ingest NEW photos that need organizing. A pure no-op apply
+    // (all reused/skipped) legitimately needs no Gemini and must be allowed to complete.
     process.env.MEMORY_ORGANIZER = "ai";
     process.env.AI_ORGANIZER_ENABLED = "true";
     process.env.AI_PROVIDER = "gemini";

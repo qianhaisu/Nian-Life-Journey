@@ -97,7 +97,7 @@ test("dry-run reports new=0 when every candidate is already ingested or permanen
   assert.equal(result.summary.reusedCount, 2);
   assert.equal(result.summary.skippedCount, 1);
   assert.equal(result.summary.failedCount, 0);
-  assert.deepEqual(result.dates.map((d) => d.wouldEnqueue), [true, true]);
+  assert.deepEqual(result.dates, []);
 
   await rm(dir, { recursive: true, force: true });
 });
@@ -132,7 +132,7 @@ test("apply mode writes storage and DB for a new JPEG and is idempotent on rerun
 
   const { deps, calls } = fakeDeps({ checksums: {} });
 
-  const result = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), deps });
+  const result = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), requireGemini: false, deps });
 
   assert.equal(result.summary.newCount, 1);
   assert.equal(result.created[0].status, "created");
@@ -143,10 +143,63 @@ test("apply mode writes storage and DB for a new JPEG and is idempotent on rerun
   // Idempotent rerun: the checksum now resolves to an existing asset.
   const asset = calls.appendUpload[0].assets[0];
   const { deps: deps2, calls: calls2 } = fakeDeps({ checksums: { [newSha]: { id: asset.id, rawSourceId: asset.rawSourceId } } });
-  const rerun = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), deps: deps2 });
+  const rerun = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), requireGemini: false, deps: deps2 });
   assert.equal(rerun.summary.newCount, 0);
   assert.equal(rerun.summary.reusedCount, 1);
   assert.equal(calls2.appendUpload.length, 0);
+  assert.equal(calls2.enqueue.length, 0);
+
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("apply no-op succeeds without Gemini and enqueues nothing", async () => {
+  const ingestedA = sha256Of(Buffer.from("photo-a"));
+  const skipC = sha256Of(Buffer.from("corrupted-heic"));
+  const dir = await buildArtifact([
+    taskItem({ filename: "a.jpg", sha256: ingestedA, capture_time: { text: "2026-08-27 10:00:00", reliable: true } }),
+    taskItem({ filename: "c.heic", sha256: skipC, ext: ".heic", format_type: "image/heic" }),
+  ]);
+  const { deps, calls } = fakeDeps({ checksums: { [ingestedA]: { id: "asset-a", rawSourceId: "source-a" } } });
+  const permanentSkip = new Map([[skipC, { filename: "c.heic", skip_reason: "source_corrupted_or_incomplete", size: 1024 }]]);
+
+  const savedGemini = process.env.GEMINI_API_KEY;
+  const savedModel = process.env.AI_MODEL;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.AI_MODEL;
+  try {
+    const result = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip, deps });
+    assert.equal(result.summary.newCount, 0);
+    assert.equal(result.summary.reusedCount, 1);
+    assert.equal(result.summary.skippedCount, 1);
+    assert.equal(calls.enqueue.length, 0);
+    assert.equal(calls.appendUpload.length, 0);
+    assert.equal(calls.put.length, 0);
+  } finally {
+    if (savedGemini === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = savedGemini;
+    if (savedModel === undefined) delete process.env.AI_MODEL; else process.env.AI_MODEL = savedModel;
+  }
+
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("apply fails closed when a new photo needs organizing but Gemini is missing", async () => {
+  const newSha = sha256Of(Buffer.from("brand-new-jpeg-needs-organizing"));
+  const dir = await buildArtifact([taskItem({ filename: "new.jpg", sha256: newSha })]);
+  const { deps } = fakeDeps({ checksums: {} });
+
+  const savedGemini = process.env.GEMINI_API_KEY;
+  const savedModel = process.env.AI_MODEL;
+  delete process.env.GEMINI_API_KEY;
+  process.env.AI_MODEL = "test-model";
+  try {
+    await assert.rejects(
+      () => applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), deps }),
+      /GEMINI_API_KEY is required/,
+    );
+  } finally {
+    if (savedGemini === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = savedGemini;
+    if (savedModel === undefined) delete process.env.AI_MODEL; else process.env.AI_MODEL = savedModel;
+  }
 
   await rm(dir, { recursive: true, force: true });
 });
