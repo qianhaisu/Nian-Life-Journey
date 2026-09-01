@@ -108,50 +108,60 @@ test("attach_existing preserves the existing memory's title and story instead of
   assert.equal(afterAttach.story, beforeAttach.story);
 });
 
-test("invalid schema and provider timeout fall back to rules without failing organization", async () => {
+// §5.1 of the Organizer V2 task: a failed AI attempt must safely degrade the SAME decision to
+// store_only (organizerType stays "ai", nothing is created), never hand the batch to
+// RuleBasedMemoryOrganizer for a fresh decision — that used to let a rejected/invalid AI decision
+// turn into a freshly created LifeEvent built from a raw-text slice() of the source.
+test("invalid schema and provider timeout safely degrade to store_only, never to a rule-based re-decision", async () => {
   const invalid = await source({ capturedAt: "2026-09-21T10:00:00.000Z" });
   const invalidProvider = { name: "invalid", model: "synthetic", organize: async () => ({ decision: { action: "create_memory", sourceIds: ["missing-source"], occurredAt: "2026-09-21", contentTypes: ["family"], memoryWeight: "memory", confidence: 0.9, reason: "invalid" } }) };
   const invalidResult = await new AIMemoryOrganizer(invalidProvider).organize([invalid.id]);
-  assert.equal(invalidResult.run.organizerType, "rule");
+  assert.equal(invalidResult.action, "store_only");
+  assert.equal(invalidResult.run.organizerType, "ai");
   assert.ok(invalidResult.fallbackReason);
 
   const timedOut = await source({ capturedAt: "2026-09-22T10:00:00.000Z" });
   const timeoutProvider = { name: "timeout", organize: async () => { throw new Error("timeout"); } };
   const timeoutResult = await new AIMemoryOrganizer(timeoutProvider).organize([timedOut.id]);
-  assert.equal(timeoutResult.run.organizerType, "rule");
+  assert.equal(timeoutResult.action, "store_only");
+  assert.equal(timeoutResult.run.organizerType, "ai");
   assert.match(timeoutResult.fallbackReason, /timeout/);
 
   const invalidTarget = await source({ capturedAt: "2026-09-26T10:00:00.000Z" });
   const targetProvider = { name: "invalid-target", organize: async () => ({ decision: { action: "attach_existing", sourceIds: [invalidTarget.id], existingLifeEventId: "missing-event", occurredAt: "2026-09-26", contentTypes: ["family"], memoryWeight: "memory", confidence: 0.9, reason: "invalid target" } }) };
   const targetResult = await new AIMemoryOrganizer(targetProvider).organize([invalidTarget.id]);
-  assert.equal(targetResult.run.organizerType, "rule");
+  assert.equal(targetResult.action, "store_only");
+  assert.equal(targetResult.run.organizerType, "ai");
 
   const invalidDate = await source({ capturedAt: "2026-09-27T10:00:00.000Z" });
   const dateProvider = { name: "invalid-date", organize: async () => ({ decision: { action: "store_only", sourceIds: [invalidDate.id], occurredAt: "2026-02-31", contentTypes: ["family"], memoryWeight: "trace", confidence: 0.4, reason: "invalid date" } }) };
   const dateResult = await new AIMemoryOrganizer(dateProvider).organize([invalidDate.id]);
-  assert.equal(dateResult.run.organizerType, "rule");
+  assert.equal(dateResult.action, "store_only");
+  assert.equal(dateResult.run.organizerType, "ai");
 });
 
-test("a first-time claim without source evidence is not persisted", async () => {
+test("a first-time claim without source evidence safely degrades to store_only and creates nothing", async () => {
   const item = await source({ sourceType: "family_photo", contentTypes: ["daily", "family"], mediaIds: ["synthetic-photo-without-derivative"], capturedAt: "2026-09-28T10:00:00.000Z" });
   const provider = { name: "hallucinating", organize: async () => ({ decision: { action: "create_memory", sourceIds: [item.id], occurredAt: "2026-09-28", contentTypes: ["daily", "family"], memoryWeight: "highlight", title: "第一次参加活动", shortStory: "第一次参加活动，开心地在公园里奔跑。", confidence: 0.99, reason: "unsupported" } }) };
   const result = await new AIMemoryOrganizer(provider).organize([item.id]);
-  assert.equal(result.run.organizerType, "rule");
-  assert.ok(["store_only", "daily_trace"].includes(result.action));
+  assert.equal(result.action, "store_only");
+  assert.equal(result.run.organizerType, "ai");
+  const store = await getStore();
+  assert.equal(store.events.some((event) => event.sourceIds.includes(item.id)), false);
 });
 
-test("medical inference is rejected and the fallback remains a private care episode", async () => {
+test("medical inference is rejected and safely degrades to store_only, no care episode is created", async () => {
   const item = await source({ sourceType: "medical_document", contentTypes: ["health"], visibility: "private", capturedAt: "2026-09-23T10:00:00.000Z", metadata: { filename: "synthetic-checkup.pdf", type: "application/pdf" } });
   const provider = { name: "unsafe-test", organize: async () => ({ decision: { action: "create_memory", sourceIds: [item.id], occurredAt: "2026-09-23", contentTypes: ["health"], memoryWeight: "highlight", title: "诊断结果", shortStory: "建议用药。", confidence: 0.99, reason: "unsafe" } }) };
   const result = await new AIMemoryOrganizer(provider).organize([item.id]);
-  assert.equal(result.action, "care_episode");
-  assert.equal(result.run.organizerType, "rule");
+  assert.equal(result.action, "store_only");
+  assert.equal(result.run.organizerType, "ai");
   const store = await getStore();
   assert.equal(store.events.some((event) => event.sourceIds.includes(item.id)), false);
-  assert.ok(store.careEpisodes.some((episode) => episode.id === result.careEpisodeId && episode.visibility === "private"));
+  assert.equal(store.careEpisodes.some((episode) => episode.sourceIds.includes(item.id)), false);
 });
 
-test("same source batch is idempotent and unavailable AI does not fail capture organization", async () => {
+test("same source batch is idempotent and unavailable AI safely degrades instead of failing capture organization", async () => {
   const item = await source({ capturedAt: "2026-09-24T10:00:00.000Z", text: "今天看到了车。" });
   let calls = 0;
   const provider = { name: "counting", organize: async (context) => { calls += 1; return new MockAIProvider().organize(context); } };
@@ -163,6 +173,7 @@ test("same source batch is idempotent and unavailable AI does not fail capture o
   const unavailableItem = await source({ capturedAt: "2026-09-25T10:00:00.000Z", text: "今天看到了车。" });
   const fallback = getConfiguredOrganizer({ MEMORY_ORGANIZER: "ai", AI_ORGANIZER_ENABLED: "true", AI_PROVIDER: "openai" });
   const result = await fallback.organize([unavailableItem.id]);
-  assert.equal(result.run.organizerType, "rule");
+  assert.equal(result.action, "store_only");
+  assert.equal(result.run.organizerType, "ai");
   assert.ok(result.fallbackReason);
 });

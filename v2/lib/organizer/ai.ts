@@ -4,7 +4,6 @@ import { buildOrganizerContext, isMedicalSource } from "./context";
 import { applyOrganizerPolicy } from "./policy";
 import { ORGANIZER_PROMPT_VERSION } from "./prompts/v1";
 import { validateOrganizerDecision } from "./schema";
-import { RuleBasedMemoryOrganizer, type RuleBasedOptions } from "./rule-based";
 import type { AIProvider, OrganizerContext, OrganizerDebug, OrganizerOptions, OrganizerResult } from "./types";
 
 const dateOf = (value: string) => value.slice(0, 10);
@@ -44,37 +43,40 @@ function organizerVersionFor(provider: AIProvider) {
 }
 
 export class AIMemoryOrganizer {
-  private readonly fallback = new RuleBasedMemoryOrganizer();
-
   constructor(private readonly provider: AIProvider) {}
 
   async organize(sourceIds: string[], options: OrganizerOptions = {}): Promise<OrganizerResult> {
-    let built: Awaited<ReturnType<typeof buildOrganizerContext>> | undefined;
-    let decision: Awaited<ReturnType<typeof applyOrganizerPolicy>>["decision"] | undefined;
-    let usage: { input?: number; output?: number; total?: number } | undefined;
-    let startedAt = Date.now();
-    let provider = options.provider ?? this.provider;
+    // Context construction failures (bad/missing sourceIds) are the caller's problem and propagate
+    // as a thrown error, same as before. Only the provider call, schema validation and policy below
+    // are treated as "the AI attempt failed" — and a failure there safely degrades THIS SAME
+    // decision instead of handing the batch to a different decision maker (see safeDegrade()).
+    // Silently falling back to RuleBasedMemoryOrganizer used to let a rejected/failed AI decision
+    // turn into a freshly created LifeEvent built from a raw-text slice() of the source, which is
+    // exactly the unsafe behavior §5.1 of the Organizer V2 task requires removing.
+    const provider = options.provider ?? this.provider;
+    const current = await buildOrganizerContext(sourceIds, { now: options.now, organizerVersion: organizerVersionFor(provider) });
+    const prior = options.force ? null : current.store.organizerRuns.find((run) => run.organizationFingerprint === current.context.organizationFingerprint && run.organizerType === "ai");
+    if (prior) return this.resultFromRun(prior);
+    const startedAt = Date.now();
     try {
-      const current = await buildOrganizerContext(sourceIds, { now: options.now, organizerVersion: organizerVersionFor(provider) });
-      built = current;
-      const prior = options.force ? null : current.store.organizerRuns.find((run) => run.organizationFingerprint === current.context.organizationFingerprint && run.organizerType === "ai");
-      if (prior) return this.resultFromRun(prior);
-      startedAt = Date.now();
-      provider = options.provider ?? this.provider;
       const providerResponse = await provider.organize(current.context);
       const validated = validateOrganizerDecision(providerResponse.decision, current.context);
       const policyResult = applyOrganizerPolicy(validated, current.context);
-      usage = providerResponse.usage;
-      decision = policyResult.decision;
-      const { unsupportedFactCount } = policyResult;
-      if (unsupportedFactCount !== 0) throw new Error("Policy rejected unsupported facts");
+      if (policyResult.unsupportedFactCount !== 0) throw new Error("Policy rejected unsupported facts");
+      return this.persistDecision(current.context, current.sources, policyResult.decision, { input: providerResponse.usage, startedAt, provider });
     } catch (error) {
-      const fallbackReason = safeError(error);
-      const fallbackOptions: RuleBasedOptions = { ...options, organizationFingerprint: built?.context.organizationFingerprint, fallbackReason, mediaInputCount: built?.context.representativeMediaCount };
-      return this.fallback.organize(sourceIds, fallbackOptions);
+      return this.safeDegrade(current.context, startedAt, safeError(error), provider);
     }
-    if (!built || !decision) throw new Error("Organizer context was not created");
-    return this.persistDecision(built.context, built.sources, decision, { input: usage, startedAt, provider });
+  }
+
+  // Safe-degrade path (§5.1): always resolves to store_only, never creates a LifeEvent or
+  // DailyTrace, never touches source status — the RawSource stays available for a later retry
+  // (e.g. reorganizeSources with force:true once the provider/policy issue is fixed).
+  private async safeDegrade(context: OrganizerContext, startedAt: number, fallbackReason: string, provider: AIProvider): Promise<OrganizerResult> {
+    const now = new Date().toISOString();
+    const runBase = { organizerType: "ai" as const, organizerVersion: organizerVersionFor(provider), provider: provider.name, model: provider.model, promptVersion: provider.promptVersion ?? ORGANIZER_PROMPT_VERSION, processedAt: now, organizationFingerprint: context.organizationFingerprint, sourceCount: context.inputSourceCount, mediaInputCount: context.representativeMediaCount, fallbackReason, latencyMs: Date.now() - startedAt };
+    const run = await persistOrganizerRun({ id: newId("organizer-run"), profileId: context.profileId, action: "store_only", sourceIds: context.sourceSummaries.map((source) => source.id), ...runBase });
+    return { action: "store_only", confidence: 0, sourceIds: run.sourceIds, reason: "AI organizer failed; safely degraded without creating a memory. Sources remain available for retry.", organizationFingerprint: context.organizationFingerprint, fallbackReason, run };
   }
 
   private async persistDecision(context: OrganizerContext, sources: RawSource[], decision: Awaited<ReturnType<typeof applyOrganizerPolicy>>["decision"], input: { input?: { input?: number; output?: number; total?: number }; startedAt: number; provider: AIProvider }) {

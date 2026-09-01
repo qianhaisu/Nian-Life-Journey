@@ -81,6 +81,6 @@ try {
   console.log(`latencyMs: ${latencyMs}`);
   console.log(`usage: ${JSON.stringify(response.usage ?? {})}`);
 } catch (error) {
-  console.error(`Smoke test failed (this is what would trigger RuleBasedMemoryOrganizer fallback in production): ${error instanceof Error ? error.message : error}`);
+  console.error(`Smoke test failed (this is what would safely degrade to store_only in production, per lib/organizer/ai.ts): ${error instanceof Error ? error.message : error}`);
   process.exitCode = 1;
 }
