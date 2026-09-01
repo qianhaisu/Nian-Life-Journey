@@ -41,6 +41,7 @@
     "drizzle-kit": "^0.31.4",
     "eslint": "^9",
     "eslint-config-next": "15.5.24",
+    "playwright": "^1.62.1",
     "postcss": "^8",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
