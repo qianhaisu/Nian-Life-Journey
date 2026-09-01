@@ -6,6 +6,7 @@ import { coerceSubjectRelevance } from "../lib/organizer/deepseek-editor.ts";
 import { containsTechnicalPlaceholder, decisionPublishes, indexReviews, isEventPublishable, isTracePublishable, requiresQualityReview } from "../lib/organizer/quality-review.ts";
 import { extractQuotes, validateFamilyWriterOutput } from "../lib/organizer/family-writer.ts";
 import { presentableEvidenceText, presentableSourceLabel } from "../lib/organizer/evidence-text.ts";
+import { classifyCareTopics, qualifiesAsLifeEvent } from "../lib/organizer/care-topics.ts";
 
 const SUBJECT = { primaryName: "张年", aliases: ["小年", "崽"] };
 
@@ -163,4 +164,52 @@ test("internal identifiers are not shown as a source label", () => {
   assert.equal(presentableSourceLabel("e383c80ad7e302109b1fef036b2c5762"), "");
   assert.equal(presentableSourceLabel("托班老师记录"), "托班老师记录");
   assert.equal(presentableSourceLabel(undefined), "");
+});
+
+test("care topics beat milestone wording: a first is still constipation", () => {
+  const constipation = classifyCareTopics([
+    "张年白天拉了一个很大的大便，很臭",
+    "张年中午用力很久想拉屎，但掀开裤子没有拉出来",
+    "家人称这是张年人生首次便秘",
+    "张年七个月大，家人计划带他去做体检",
+  ]);
+  assert.equal(constipation.careCount, 4);
+  assert.equal(constipation.milestoneCount, 0, "首次 must not promote a care topic");
+  assert.equal(constipation.careDominated, true);
+  assert.equal(constipation.qualifiesAsLifeEvent, false);
+});
+
+test("teething, scalp scratching and sleep scheduling are care, not life events", () => {
+  for (const statements of [
+    ["张年今天开始抓头，抓得很用力，头部被抓得发红", "家人计划明天用婴儿油给张年去头垢", "张年抓头主要在快睡着时"],
+    ["家人决定把辅食排敏时间缩短到两天", "张小年最近牙疼爱哭唧唧", "家人觉得比上次出牙好多了"],
+    ["家人今天开始做年年的睡眠记录", "家人计划晚上十点不弄醒年年直接喂奶", "年年六点半喝奶洗了澡后睡着了"],
+  ]) {
+    assert.equal(qualifiesAsLifeEvent(statements), false, statements[0]);
+  }
+});
+
+test("a real new ability still qualifies even next to a care detail", () => {
+  assert.equal(qualifiesAsLifeEvent([
+    "把崽放在床上他自己就会爬，只是没录下来",
+    "下楼拿张小年的尿不湿时，他很开心，脚一直在踹",
+    "他三点半喝的奶",
+  ]), true, "会爬 is a milestone and 尿不湿 is a nappy, not a care event");
+
+  assert.equal(qualifiesAsLifeEvent([
+    "崽现在很想站起来，会各种扶墙站，手一撑就起来了",
+    "崽已经不满足于坐了",
+  ]), true);
+});
+
+test("everyday texture with no care content at all still qualifies", () => {
+  assert.equal(qualifiesAsLifeEvent([
+    "张小年今天吃面，吃的是西红柿鸡蛋面",
+    "张小年吃面时把面和身上、餐椅弄得全是面",
+  ]), true);
+});
+
+test("an empty fact list never qualifies", () => {
+  assert.equal(qualifiesAsLifeEvent([]), false);
+  assert.equal(classifyCareTopics([]).careDominated, false);
 });
