@@ -77,3 +77,14 @@ export function containsTechnicalPlaceholder(text: string | undefined | null): b
 export function eventRendersCleanly(event: LifeEvent): boolean {
   return !containsTechnicalPlaceholder(event.title) && !containsTechnicalPlaceholder(event.story);
 }
+
+// A MonthlySnapshot is a written summary of a month. It may only be shown when that month actually
+// has published memories behind it. The archive shipped with a seeded snapshot for 2026-08 whose
+// highlights ("开始说车车", "走路更稳") are demo strings, and it was being used as the month
+// container for memories that happened in 2025. Fail closed: no approved LifeEvent in the month,
+// no summary. The row itself is kept for audit — this only decides display.
+export function isSnapshotPublishable(snapshotMonth: string | undefined, approvedEventMonths: Iterable<string>): boolean {
+  if (!snapshotMonth) return false;
+  for (const month of approvedEventMonths) if (month === snapshotMonth) return true;
+  return false;
+}
