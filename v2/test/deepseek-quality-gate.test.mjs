@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { coerceSubjectRelevance } from "../lib/organizer/deepseek-editor.ts";
 import { containsTechnicalPlaceholder, decisionPublishes, indexReviews, isEventPublishable, isTracePublishable, requiresQualityReview } from "../lib/organizer/quality-review.ts";
 import { extractQuotes, validateFamilyWriterOutput } from "../lib/organizer/family-writer.ts";
+import { presentableEvidenceText } from "../lib/organizer/evidence-text.ts";
 
 const SUBJECT = { primaryName: "张年", aliases: ["小年", "崽"] };
 
@@ -127,4 +128,25 @@ test("extractQuotes finds every quoting style the writer may emit", () => {
   assert.deepEqual(extractQuotes("他说「车车」然后指着窗外。"), ["车车"]);
   assert.deepEqual(extractQuotes("他说“车车”。"), ["车车"]);
   assert.deepEqual(extractQuotes("没有引号。"), []);
+});
+
+test("evidence text drops exporter plumbing but keeps the real message", () => {
+  assert.equal(presentableEvidenceText("[视频文件](media/videos/20250812_061636_3430.mp4)"), "");
+  assert.equal(presentableEvidenceText("[media]"), "");
+  assert.equal(presentableEvidenceText("[表情包]"), "");
+  assert.equal(presentableEvidenceText('"hxx\." 撤回了一条消息'), "");
+  assert.equal(presentableEvidenceText('你邀请"$names$"加入了群聊  $revoke$'), "");
+  assert.equal(presentableEvidenceText("4条聊天记录"), "");
+  assert.equal(presentableEvidenceText(undefined), "");
+});
+
+test("evidence text unescapes WeChat markdown without losing content", () => {
+  assert.equal(presentableEvidenceText("@hxx\. 我带崽去吃劳了"), "@hxx. 我带崽去吃劳了");
+  assert.equal(presentableEvidenceText("今天去公司 周三在家\[皱眉\]"), "今天去公司 周三在家[皱眉]");
+  assert.equal(presentableEvidenceText("小年今天自己扶着墙站起来了"), "小年今天自己扶着墙站起来了");
+});
+
+test("evidence text keeps the caption when a message mixes words and a media placeholder", () => {
+  assert.equal(presentableEvidenceText("张小年今天吃面 [图片]"), "张小年今天吃面");
+  assert.equal(presentableEvidenceText("[视频文件](media/videos/a.mp4) 他自己会爬了"), "他自己会爬了");
 });

@@ -1,0 +1,29 @@
+// Presentation-only cleaning for raw evidence shown on an event page.
+//
+// The evidence layer exists so the family can see what was actually there ("故事可以修改；当时真正
+// 留下的东西永远保留"), so this NEVER edits a RawSource — it only decides how one reads on screen.
+// WeChat exports carry markdown escaping, media placeholders, markdown paths into media/, and
+// template tokens from the exporter. Rendering those verbatim shows the reader plumbing, not
+// evidence: the photo or video itself is already displayed by the media grid next to the text.
+const MEDIA_MARKDOWN = /!?\[[^\]]*\]\(\s*media\/[^)]*\)/g;
+const PLACEHOLDER_TOKEN = /\[(media|图片|视频|视频文件|表情包|动画表情|语音|文件|位置|链接|链接分享|名片|转账|红包)\]/g;
+const EXPORTER_TOKEN = /\$(names|username|revoke|emoji)\$/g;
+const WECHAT_ESCAPE = /\\([[\]().*_~`>#+\-!\\])/g;
+const RECALL_NOTICE = /撤回了一条消息|你邀请.*加入了群聊|邀请你和.*加入了群聊|^\s*\d+\s*条聊天记录\s*$/;
+
+// Returns the text as it should be displayed, or an empty string when nothing readable is left.
+// An empty result means "render the media, not a caption" — never "hide the evidence item".
+export function presentableEvidenceText(text: string | undefined | null): string {
+  if (!text) return "";
+  const unescaped = text.replace(WECHAT_ESCAPE, "$1");
+  if (RECALL_NOTICE.test(unescaped.trim())) return "";
+  const cleaned = unescaped
+    .replace(MEDIA_MARKDOWN, " ")
+    .replace(PLACEHOLDER_TOKEN, " ")
+    .replace(EXPORTER_TOKEN, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+  // A line that was only a quote marker or punctuation once the plumbing is gone is not text.
+  return /[\p{L}\p{N}]/u.test(cleaned) ? cleaned : "";
+}
