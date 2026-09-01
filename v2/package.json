@@ -16,6 +16,7 @@
     "organizer:smoke:gemini": "node --import tsx scripts/smoke-organizer-gemini.mjs",
     "quark:sync": "tsx tools/quark-connector/sync.ts",
     "quark:ingest-artifact": "tsx tools/quark-connector/ingest-artifact.ts",
+    "quark:sync:apply": "tsx tools/quark-connector/apply-artifact.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
     "db:migrate-json": "node --import tsx scripts/migrate-json-to-postgres.mjs",
