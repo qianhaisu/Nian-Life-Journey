@@ -1,6 +1,6 @@
 import Image from "next/image";
 import type { Contributor, Media, RawSource, SourceType } from "@/lib/types";
-import { presentableEvidenceText } from "@/lib/organizer/evidence-text";
+import { presentableEvidenceText, presentableSourceLabel } from "@/lib/organizer/evidence-text";
 import { isThumbnailEligible } from "@/lib/media/hero";
 
 function formatTime(value: string) {
@@ -34,10 +34,11 @@ export function EvidenceList({ sources, media, contributors }: { sources: RawSou
       const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter(isThumbnailEligible);
       // Display text only. The RawSource itself is never modified — see lib/organizer/evidence-text.ts.
       const text = presentableEvidenceText(source.text);
+      const label = presentableSourceLabel(source.sourceLabel);
       return <article className="evidence-item" key={source.id}>
         <div className="evidence-time"><time dateTime={source.capturedAt}>{formatTime(source.capturedAt)}</time><span>{contributorById.get(source.contributorId)?.displayName ?? "家庭"}</span></div>
         <div className="evidence-content">
-          <div className="evidence-source"><span>{sourceTypeLabel(source.sourceType)}</span><span>{source.sourceLabel}</span></div>
+          <div className="evidence-source"><span>{sourceTypeLabel(source.sourceType)}</span>{label ? <span>{label}</span> : null}</div>
           {text ? <p className={source.sourceType === "wechat" ? "evidence-quote" : "evidence-note"}>{source.sourceType === "wechat" ? `“${text}”` : text}</p> : null}
           {sourceMedia.length > 0 ? <div className="evidence-media">
             {sourceMedia.map((item) => <div className="evidence-media-item" key={item.id}>

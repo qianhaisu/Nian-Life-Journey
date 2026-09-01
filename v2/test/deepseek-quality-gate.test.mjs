@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { coerceSubjectRelevance } from "../lib/organizer/deepseek-editor.ts";
 import { containsTechnicalPlaceholder, decisionPublishes, indexReviews, isEventPublishable, isTracePublishable, requiresQualityReview } from "../lib/organizer/quality-review.ts";
 import { extractQuotes, validateFamilyWriterOutput } from "../lib/organizer/family-writer.ts";
-import { presentableEvidenceText } from "../lib/organizer/evidence-text.ts";
+import { presentableEvidenceText, presentableSourceLabel } from "../lib/organizer/evidence-text.ts";
 
 const SUBJECT = { primaryName: "张年", aliases: ["小年", "崽"] };
 
@@ -149,4 +149,18 @@ test("evidence text unescapes WeChat markdown without losing content", () => {
 test("evidence text keeps the caption when a message mixes words and a media placeholder", () => {
   assert.equal(presentableEvidenceText("张小年今天吃面 [图片]"), "张小年今天吃面");
   assert.equal(presentableEvidenceText("[视频文件](media/videos/a.mp4) 他自己会爬了"), "他自己会爬了");
+});
+
+test("service SMS and links never reach a published evidence layer", () => {
+  assert.equal(presentableEvidenceText("【某某医院】尊敬的张年：某某医院向您发送了《满意度调查问卷》，点击 https://example.com/s 填写"), "");
+  assert.equal(presentableEvidenceText("您的验证码是 123456"), "");
+  assert.equal(presentableEvidenceText("看看这个 https://example.com/article 挺好的"), "看看这个 挺好的");
+});
+
+test("internal identifiers are not shown as a source label", () => {
+  assert.equal(presentableSourceLabel("conversation:856b8ec2b8f3ec2871782ca6"), "");
+  assert.equal(presentableSourceLabel("wechat-import:abc123"), "");
+  assert.equal(presentableSourceLabel("e383c80ad7e302109b1fef036b2c5762"), "");
+  assert.equal(presentableSourceLabel("托班老师记录"), "托班老师记录");
+  assert.equal(presentableSourceLabel(undefined), "");
 });
