@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { Contributor, Media, RawSource, SourceType } from "@/lib/types";
 import { presentableEvidenceText } from "@/lib/organizer/evidence-text";
+import { isThumbnailEligible } from "@/lib/media/hero";
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
@@ -28,7 +29,9 @@ export function EvidenceList({ sources, media, contributors }: { sources: RawSou
 
   return <div className="evidence-list">
     {orderedSources.map((source) => {
-      const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
+      // Display filter only, nothing is deleted: sticker/icon-sized media would be upscaled into a
+      // grid cell and read as a broken fragment.
+      const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter(isThumbnailEligible);
       // Display text only. The RawSource itself is never modified — see lib/organizer/evidence-text.ts.
       const text = presentableEvidenceText(source.text);
       return <article className="evidence-item" key={source.id}>

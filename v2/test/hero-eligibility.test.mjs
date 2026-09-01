@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isHeroEligible, heroCandidates, selectHeroMedia } from "../lib/media/hero.ts";
+import { isHeroEligible, heroCandidates, selectHeroMedia, isThumbnailEligible, THUMBNAIL_MIN_SIDE } from "../lib/media/hero.ts";
 
 function photo(id, width, height, overrides = {}) {
   return { id, profileId: "p", type: "photo", src: `/api/media/${id}`, alt: id, takenAt: "2026-01-01T00:00:00.000Z", visibility: "family", width, height, ...overrides };
@@ -52,4 +52,22 @@ test("heroCandidates returns an empty list when no photo in the event qualifies"
 
 test("selectHeroMedia returns undefined (not a thrown error or a tiny image) when nothing qualifies", () => {
   assert.equal(selectHeroMedia("a", [photo("a", 90, 120)]), undefined);
+});
+
+test("thumbnail eligibility rejects sticker- and icon-sized media", () => {
+  // Sizes taken from what the WeChat import actually produced.
+  assert.equal(isThumbnailEligible(photo("icon", 20, 20)), false);
+  assert.equal(isThumbnailEligible(photo("sticker", 67, 120)), false);
+  assert.equal(isThumbnailEligible(photo("sticker-wide", 120, 55)), false);
+  assert.equal(isThumbnailEligible(photo("just-under", 159, 400)), false);
+  assert.equal(isThumbnailEligible(photo("at-floor", THUMBNAIL_MIN_SIDE, THUMBNAIL_MIN_SIDE)), true);
+  assert.equal(isThumbnailEligible(photo("real", 1080, 1440)), true);
+  assert.equal(isThumbnailEligible(undefined), false);
+  assert.equal(isThumbnailEligible(photo("unknown", undefined, undefined)), false);
+});
+
+test("thumbnail floor is lower than the hero floor", () => {
+  const midsize = photo("midsize", 300, 300);
+  assert.equal(isThumbnailEligible(midsize), true, "usable in a grid cell");
+  assert.equal(isHeroEligible(midsize), false, "but not at full page width");
 });

@@ -30,3 +30,15 @@ export function heroCandidates(preferredId: string | undefined, candidates: Medi
 export function selectHeroMedia(preferredId: string | undefined, candidates: Media[]): Media | undefined {
   return heroCandidates(preferredId, candidates)[0];
 }
+
+// A gallery/evidence thumbnail is rendered into a fixed cell (~135–426px wide). WeChat exports carry
+// 20x20 UI icons and ~67x120 sticker thumbnails; stretched into that cell they read as broken
+// fragments rather than photos. Same idea as the hero floor, one step lower: this is the smallest
+// image that can fill a grid cell without obvious upscaling.
+export const THUMBNAIL_MIN_SIDE = 160;
+
+export function isThumbnailEligible(media: Media | undefined | null): media is Media {
+  if (!media) return false;
+  if (!media.width || !media.height) return false;
+  return Math.min(media.width, media.height) >= THUMBNAIL_MIN_SIDE;
+}
