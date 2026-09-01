@@ -69,7 +69,7 @@ export function buildWechatMessageItem(bundle: ChatImportBundle, message: ChatIm
     mediaIds.push(mediaId);
     assets.push({ id: assetId, profileId: options.profileId, rawSourceId: sourceId, mediaType: "photo", mimeType: ref.mimeType ?? "image/jpeg", width: ref.width, height: ref.height, checksum, archiveStatus: "awaiting_archive", createdAt: now });
     locations.push({ id: `wechat-location:${digest(providerRef)}`, mediaAssetId: assetId, provider: "wechat", variant: "original", providerRef, status: "ready", mimeType: ref.mimeType ?? "image/jpeg", fileSize: ref.fileSize, width: ref.width, height: ref.height, createdAt: now, updatedAt: now });
-    media.push({ id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: "photo", src: mediaDeliveryUrl(mediaId, "web"), mimeType: ref.mimeType ?? "image/jpeg", fileSize: ref.fileSize, alt: "WeChat image", takenAt: message.sentAt, visibility: "private", width: ref.width ?? 1200, height: ref.height ?? 900 });
+    media.push({ id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: "photo", src: mediaDeliveryUrl(mediaId, "web"), mimeType: ref.mimeType ?? "image/jpeg", fileSize: ref.fileSize, alt: "WeChat image", takenAt: message.sentAt, visibility: "family", width: ref.width ?? 1200, height: ref.height ?? 900 });
   }
 
   const source: RawSource = {
@@ -83,7 +83,7 @@ export function buildWechatMessageItem(bundle: ChatImportBundle, message: ChatIm
     text: sanitizeText(message.text),
     mediaIds,
     sourceLabel: message.conversationId,
-    visibility: "private",
+    visibility: "family",
     status: "uploaded",
     provider: "wechat",
     providerExternalId: message.messageId,

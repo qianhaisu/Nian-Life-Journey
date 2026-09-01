@@ -50,7 +50,7 @@ async function createFixture() {
   return root;
 }
 
-test("worker uploads one verified object set, persists private evidence, and reruns idempotently", async () => {
+test("worker uploads one verified object set, persists family-visible evidence, and reruns idempotently", async () => {
   const root = await createFixture();
   const repository = createInMemoryRepository();
   const storage = new CountingStorage();
@@ -76,7 +76,7 @@ test("worker uploads one verified object set, persists private evidence, and rer
 
     const storeAfterFirst = await repository.getStore();
     assert.equal(storeAfterFirst.rawSources.length, 1);
-    assert.equal(storeAfterFirst.rawSources[0].visibility, "private");
+    assert.equal(storeAfterFirst.rawSources[0].visibility, "family");
     assert.equal(storeAfterFirst.mediaAssets.length, 1);
     assert.equal(storeAfterFirst.mediaLocations.length, 4);
     assert.equal(storeAfterFirst.mediaLocations.filter((location) => location.provider === "hot" && location.variant === "original")[0].status, "awaiting_archive");
