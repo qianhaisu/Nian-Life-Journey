@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Timeline } from "@/components/timeline";
 import { getAllEvents, getStore } from "@/lib/db/repository";
-import { availableMonths, availableYears, monthLabel } from "@/lib/timeline-dates";
+import { availableMonths, availableYears } from "@/lib/timeline-dates";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +21,12 @@ export default async function MemoryPage() {
       {latestMonth ? <Link href={`/memory/${latestMonth.slice(0, 4)}/${latestMonth.slice(5, 7)}`}>月</Link> : null}
       {latestYear ? <Link href={`/memory/${latestYear}`}>年</Link> : null}
     </nav>
-    {years.length > 1 ? <nav className="memory-years" aria-label="按年份翻看">
-      {years.map((year) => <Link key={year} href={`/memory/${year}`}>{year}</Link>)}
+    {/* One entry per year that actually has records. The page used to carry a single "2026 / 八月"
+        divider here, which read as a heading for everything below it — including four months of
+        2025. The stream now emits its own heading each time the calendar month changes. */}
+    {years.length > 0 ? <nav className="memory-years" aria-label="按年份翻看">
+      {years.map((year) => <Link key={year} href={`/memory/${year}`}>{year} 年度回顾 ↗</Link>)}
     </nav> : null}
-    {latestYear ? <div className="year-divider"><strong className="serif">{latestYear}</strong><Link href={`/memory/${latestYear}`}>年度回顾 ↗</Link></div> : null}
-    {latestMonth ? <div className="month-divider"><span>{monthLabel(latestMonth)}</span><Link href={`/memory/${latestMonth.slice(0, 4)}/${latestMonth.slice(5, 7)}`}>月度回顾 ↗</Link></div> : null}
     <Timeline events={events} media={store.media} traces={store.dailyTraces} />
   </div>;
 }
