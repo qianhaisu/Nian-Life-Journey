@@ -5,6 +5,7 @@ import Link from "next/link";
 import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LifeEvent, Media } from "@/lib/types";
+import { heroCandidates } from "@/lib/media/hero";
 
 const formatEventDate = (value: string) => value.slice(5).replace("-", ".");
 const eventTitle = (event: LifeEvent) => event.title?.trim() || "文字记录";
@@ -22,8 +23,9 @@ export function RecentMemoryCanvas({ events, media }: { events: LifeEvent[]; med
   const safeIndex = events.length ? activeIndex % events.length : 0;
   const isPaused = isInteractionPaused || isManuallyPaused;
   const event = events[safeIndex];
-  const hero = event ? mediaById.get(event.heroMediaId ?? event.mediaIds[0]) : undefined;
-  const displayHero = hero && !failedMediaIds.has(hero.id) ? hero : undefined;
+  const eventCandidates = event ? event.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item)) : [];
+  const candidates = event ? heroCandidates(event.heroMediaId, eventCandidates) : [];
+  const displayHero = candidates.find((item) => !failedMediaIds.has(item.id));
   const isTextMemory = Boolean(event && !displayHero);
 
   useEffect(() => {
