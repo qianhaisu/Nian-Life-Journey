@@ -7,6 +7,7 @@ import * as t from "./schema";
 import { newId, organizerJobKey } from "./repository-interface";
 import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 import { normalizeSha256 } from "./chat-import-persistence";
+import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
 import { ChatImportStateError, acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 
 // tx.rollback() doesn't make db.transaction() resolve to whatever the callback returns after it —
@@ -315,6 +316,11 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       db.select().from(t.monthlySnapshot).limit(1),
     ]);
     if (!profileRows[0]) throw new Error("PostgreSQL repository: no profile row found. Run the JSON→Postgres migration first.");
+    // Same publication gate as getHomeEvents/getAllEvents: the store feeds the memory timeline and
+    // the homepage canvas, so unreviewed rule-derived artifacts must not reach it either.
+    const reviews = indexReviews((await db.select().from(t.contentQualityReviews)) as unknown as QualityReview[]);
+    const publishableEvents = (events as unknown as LifeEvent[]).filter((event) => isEventPublishable(event, reviews));
+    const publishableTraces = (dailyTraces as unknown as DailyTrace[]).filter((trace) => isTracePublishable(trace, reviews));
     return {
       profile: profileRows[0] as Store["profile"],
       contributors: contributors as Store["contributors"],
@@ -323,8 +329,8 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       mediaLocations: mediaLocations as unknown as Store["mediaLocations"],
       connectorStates: connectorStates as unknown as Store["connectorStates"],
       rawSources: rawSources as unknown as Store["rawSources"],
-      events: events as unknown as Store["events"],
-      dailyTraces: dailyTraces as unknown as Store["dailyTraces"],
+      events: publishableEvents as unknown as Store["events"],
+      dailyTraces: publishableTraces as unknown as Store["dailyTraces"],
       growthRecords: growthRecords as unknown as Store["growthRecords"],
       careRecords: careRecords as unknown as Store["careRecords"],
       careEpisodes: careEpisodes as unknown as Store["careEpisodes"],
@@ -350,14 +356,25 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     return rows[0] ? taskFromRow(rows[0] as unknown as Record<string, unknown>) : null;
   }
 
+  // The quality ledger is small (one row per reviewed artifact) and read alongside every event
+  // listing, so it is fetched whole rather than joined per row.
+  async function reviewIndex() {
+    const rows = await db.select().from(t.contentQualityReviews);
+    return indexReviews(rows as unknown as QualityReview[]);
+  }
+
   return {
     async getHomeEvents() {
-      const rows = await db.select().from(t.lifeEvents);
-      return (rows as unknown as LifeEvent[]).filter((event) => event.visibility !== "private").toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+      const [rows, reviews] = await Promise.all([db.select().from(t.lifeEvents), reviewIndex()]);
+      return (rows as unknown as LifeEvent[])
+        .filter((event) => event.visibility !== "private" && isEventPublishable(event, reviews))
+        .toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     },
     async getAllEvents() {
-      const rows = await db.select().from(t.lifeEvents);
-      return (rows as unknown as LifeEvent[]).toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+      const [rows, reviews] = await Promise.all([db.select().from(t.lifeEvents), reviewIndex()]);
+      return (rows as unknown as LifeEvent[])
+        .filter((event) => isEventPublishable(event, reviews))
+        .toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     },
     async getStore() { return assembleStore(); },
     async getOrganizerStore(profileId: string) { return assembleOrganizerStore(profileId); },
@@ -365,6 +382,8 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       const [event] = await db.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, id));
       if (!event) return null;
       const e = event as unknown as LifeEvent;
+      // An unreviewed rule-derived event must 404 rather than stay reachable by direct URL.
+      if (!isEventPublishable(e, await reviewIndex())) return null;
       const [mediaRows, sourceRows, contributorRows, growthRows, careRows] = await Promise.all([
         db.select().from(t.media),
         db.select().from(t.rawSources),

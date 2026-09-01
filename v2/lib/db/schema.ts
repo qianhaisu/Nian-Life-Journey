@@ -336,3 +336,28 @@ export const chatImportTasks = pgTable("chat_import_tasks", {
   id: text("id").primaryKey(), profileId: text("profile_id").notNull().references(() => profiles.id), importBatchId: text("import_batch_id").notNull().unique(),
   status: text("status").notNull(), phase: text("phase").notNull(), currentStage: text("current_stage").notNull().default("snapshot_validation"), processedMessages: integer("processed_messages").notNull().default(0), createdMessages: integer("created_messages").notNull().default(0), reusedMessages: integer("reused_messages").notNull().default(0), warnings: integer("warnings").notNull().default(0), warningCounts: jsonb("warning_counts").$type<{ code: string; count: number }[]>().notNull().default([]), checkpoint: text("checkpoint"), leaseOwner: text("lease_owner"), leaseExpiresAt: timestamp("lease_expires_at", { mode: "string" }), attempt: integer("attempt").notNull().default(0), maxAttempts: integer("max_attempts").notNull().default(3), cancelRequestedAt: timestamp("cancel_requested_at", { mode: "string" }), startedAt: timestamp("started_at", { mode: "string" }), completedAt: timestamp("completed_at", { mode: "string" }), safeErrorCode: text("safe_error_code"), createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => ({ byProfile: index("chat_import_tasks_profile_idx").on(table.profileId), byStatus: index("chat_import_tasks_status_idx").on(table.status) }));
+
+// Quality review ledger (additive, auditable, reversible). Records a per-artifact verdict from the
+// DeepSeek quality gate. Nothing is ever hard-deleted and `visibility` is left alone: publication is
+// decided by joining this ledger, so a review can be revisited or rolled back without touching the
+// artifact. Rule-derived artifacts are fail-closed — no approved row here means not published.
+export const contentQualityReviews = pgTable("content_quality_reviews", {
+  id: text("id").primaryKey(),
+  profileId: text("profile_id").notNull().references(() => profiles.id),
+  targetKind: text("target_kind").notNull(),
+  targetId: text("target_id").notNull(),
+  decision: text("decision").notNull(),
+  gateA: text("gate_a"),
+  subjectRelevance: text("subject_relevance"),
+  worthinessScore: integer("worthiness_score"),
+  reasonCodes: jsonb("reason_codes").$type<string[]>().notNull().default([]),
+  provider: text("provider").notNull(),
+  model: text("model"),
+  promptVersion: text("prompt_version").notNull(),
+  policyVersion: text("policy_version").notNull(),
+  reviewFingerprint: text("review_fingerprint").notNull(),
+  reviewedAt: timestamp("reviewed_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  byTarget: uniqueIndex("content_quality_reviews_target_idx").on(table.targetKind, table.targetId, table.promptVersion),
+  byProfile: index("content_quality_reviews_profile_idx").on(table.profileId),
+}));
