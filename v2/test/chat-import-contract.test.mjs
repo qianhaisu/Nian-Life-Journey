@@ -108,6 +108,39 @@ function addTaskTests(name, createRepository, profileIdForTest = () => uid("prof
     assert.equal(final.safeErrorCode, "MAX_ATTEMPTS_EXCEEDED");
   });
 
+  test(`[${name}] a gracefully cancelled task can be resumed (retry), and the resume clears the stale cancel request instead of re-cancelling itself`, async () => {
+    const repo = createRepository();
+    const profileId = profileIdForTest();
+    const task = await repo.createChatImportTask({ profileId, importBatchId: uid("batch"), maxAttempts: 3, now: "2026-08-31T10:00:00.000Z" });
+    await repo.claimChatImportTask({ taskId: task.id, leaseOwner: "worker", leaseMs: 60_000, now: "2026-08-31T10:00:00.000Z" });
+    await repo.requestChatImportCancel(task.id, "2026-08-31T10:00:01.000Z");
+    const cancelled = await repo.acknowledgeChatImportCancel({ taskId: task.id, leaseOwner: "worker", now: "2026-08-31T10:00:02.000Z" });
+    assert.equal(cancelled.status, "cancelled");
+    assert.equal(cancelled.attempt, 1);
+    // retryChatImportTask used to reject any status other than "failed" (INVALID_RETRY_TRANSITION);
+    // a gracefully cancelled task must be resumable the same way, and must not carry the stale
+    // cancelRequestedAt forward (or the resumed worker would cancel itself again on its first
+    // heartbeat).
+    const resumed = await repo.retryChatImportTask(task.id, "2026-08-31T10:00:03.000Z");
+    assert.equal(resumed.status, "retry_pending");
+    assert.equal(resumed.cancelRequestedAt, undefined);
+    const reclaimed = await repo.claimChatImportTask({ taskId: task.id, leaseOwner: "worker-2", leaseMs: 60_000, now: "2026-08-31T10:00:04.000Z" });
+    assert.equal(reclaimed.status, "running");
+    assert.equal(reclaimed.cancelRequestedAt, undefined);
+    assert.equal(reclaimed.attempt, 2);
+  });
+
+  test(`[${name}] resuming a cancelled task whose failure-retry budget is already exhausted still transitions to retry_pending (the budget only gates future claims, not the cancel-resume itself)`, async () => {
+    const repo = createRepository();
+    const profileId = profileIdForTest();
+    const task = await repo.createChatImportTask({ profileId, importBatchId: uid("batch"), maxAttempts: 1, now: "2026-08-31T10:00:00.000Z" });
+    await repo.claimChatImportTask({ taskId: task.id, leaseOwner: "worker", leaseMs: 60_000, now: "2026-08-31T10:00:00.000Z" });
+    await repo.requestChatImportCancel(task.id, "2026-08-31T10:00:01.000Z");
+    await repo.acknowledgeChatImportCancel({ taskId: task.id, leaseOwner: "worker", now: "2026-08-31T10:00:02.000Z" });
+    const resumed = await repo.retryChatImportTask(task.id, "2026-08-31T10:00:03.000Z");
+    assert.equal(resumed.status, "retry_pending", "unlike a failed task at maxAttempts, resuming a cancel must not throw MAX_ATTEMPTS_EXCEEDED");
+  });
+
   test(`[${name}] source and media persistence is idempotent across WeChat and Quark locations`, async () => {
     const repo = createRepository();
     const profileId = profileIdForTest();

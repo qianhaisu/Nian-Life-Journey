@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import type { ChatImportBundle, ChatMediaRef } from "./chat-import-bundle";
+import { chatImportBatchId } from "./chat-import-bundle";
 import { importWechatBundle } from "./wechat-import";
 import { assertWechatSnapshot, hashWechatFile, loadWechatBundle, type WechatBundleOptions, type WechatSnapshotEntry } from "./wechat-snapshot";
 import { normalizeSha256 } from "@/lib/db/chat-import-persistence";
@@ -54,7 +55,7 @@ function warningCountsFor(bundle: ChatImportBundle) {
   const add = (code: string, count = 1) => counts.set(code, (counts.get(code) ?? 0) + count);
   for (const warning of bundle.warnings) add(warning.code, warning.count);
   for (const message of bundle.messages) for (const ref of message.mediaRefs) {
-    if (ref.availability !== "present") add(`media_${ref.availability}`);
+    if (ref.availability !== "present") { if (ref.availability !== "deferred_by_limit") add(`media_${ref.availability}`); }
     else if (!checksumFor(ref)) add("media_invalid_checksum");
   }
   return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, count]) => ({ code, count }));
@@ -152,7 +153,7 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, stor
 }
 
 function locationSource(bundle: ChatImportBundle, message: ChatImportBundle["messages"][number], options: WechatWorkerOptions, now: string): RawSource {
-  return { id: `wechat-message:${message.messageId}`, profileId: options.profileId, sourceType: "wechat", contentTypes: ["family"], contributorId: options.contributorId, capturedAt: message.sentAt, importedAt: now, mediaIds: [], sourceLabel: message.conversationId, visibility: "private", status: "uploaded", provider: "wechat", providerExternalId: message.messageId, metadata: { provider: "wechat", conversationDigest: digest(message.conversationId), senderDigest: digest(message.senderId), documentDigest: digest(message.sourceLocator.document), recordOrdinal: message.sourceLocator.recordOrdinal, importBatchId: `wechat-import:${bundle.exportSnapshot.rootFingerprint}`, parserVersion: bundle.parserVersion } };
+  return { id: `wechat-message:${message.messageId}`, profileId: options.profileId, sourceType: "wechat", contentTypes: ["family"], contributorId: options.contributorId, capturedAt: message.sentAt, importedAt: now, mediaIds: [], sourceLabel: message.conversationId, visibility: "private", status: "uploaded", provider: "wechat", providerExternalId: message.messageId, metadata: { provider: "wechat", conversationDigest: digest(message.conversationId), senderDigest: digest(message.senderId), documentDigest: digest(message.sourceLocator.document), recordOrdinal: message.sourceLocator.recordOrdinal, importBatchId: chatImportBatchId(bundle.exportSnapshot), parserVersion: bundle.parserVersion } };
 }
 
 function hotLocation(assetId: string, object: StoredMediaObject, now: string): MediaLocation {
@@ -182,11 +183,11 @@ export async function runWechatImportWorker(options: WechatWorkerOptions): Promi
   const loaded = await loadWechatBundle(options.sourceRoot, options);
   const warningCounts = warningCountsFor(loaded.bundle);
   const now = options.now ?? new Date().toISOString();
-  const importBatchId = `wechat-import:${loaded.snapshot.rootFingerprint}`;
+  const importBatchId = chatImportBatchId(loaded.bundle.exportSnapshot);
   let task = options.taskId ? await repository.getChatImportTask(options.taskId) : await repository.createChatImportTask({ profileId: options.profileId, importBatchId, maxAttempts: 3, now });
   if (!task) return reportFrom(null, { safeErrorCode: "CHAT_IMPORT_TASK_NOT_FOUND", createdMessages: 0, reusedMessages: 0, createdMediaAssets: 0, reusedMediaAssets: 0, createdMediaLocations: 0, reusedMediaLocations: 0, uploadedObjects: 0, reusedObjects: 0, uploadedBytes: 0, warningCounts });
   if (options.taskId && task.importBatchId !== importBatchId) return reportFrom(task, { safeErrorCode: "WECHAT_SNAPSHOT_MISMATCH", createdMessages: 0, reusedMessages: 0, createdMediaAssets: 0, reusedMediaAssets: 0, createdMediaLocations: 0, reusedMediaLocations: 0, uploadedObjects: 0, reusedObjects: 0, uploadedBytes: 0, warningCounts });
-  if (task.status === "failed" && options.retryFailed) {
+  if ((task.status === "failed" || task.status === "cancelled") && options.retryFailed) {
     task = (await repository.retryChatImportTask(task.id, now)) ?? task;
   }
   if (task.status === "completed" || task.status === "completed_with_warnings" || task.status === "cancelled" || task.status === "failed") return reportFrom(task, { createdMessages: 0, reusedMessages: 0, createdMediaAssets: 0, reusedMediaAssets: 0, createdMediaLocations: 0, reusedMediaLocations: 0, uploadedObjects: 0, reusedObjects: 0, uploadedBytes: 0, warningCounts });

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
 import type { ChatImportBundle, ChatMediaRef } from "./chat-import-bundle";
-import { validateChatImportBundle } from "./chat-import-bundle";
+import { chatImportBatchId, validateChatImportBundle } from "./chat-import-bundle";
 import { normalizeSha256 } from "@/lib/db/chat-import-persistence";
 import type { Media, MediaAsset, MediaLocation, RawSource } from "@/lib/types";
 import type { Repository, UploadPersistInput } from "@/lib/db/repository-interface";
@@ -37,7 +37,7 @@ function evidenceState(ref: ChatMediaRef) {
 export async function importWechatBundle(bundle: ChatImportBundle, repository: Pick<Repository, "persistUpload"> & Partial<Pick<Repository, "persistChatImportMessage">>, options: { profileId: string; contributorId: string; now?: string }): Promise<ChatImportResult> {
   validateChatImportBundle(bundle);
   const now = options.now ?? new Date().toISOString();
-  const importBatchId = `wechat-import:${bundle.exportSnapshot.rootFingerprint}`;
+  const importBatchId = chatImportBatchId(bundle.exportSnapshot);
   const warnings = new Map<string, number>();
   for (const warning of bundle.warnings) addWarning(warnings, warning.code, warning.count);
   let createdMessages = 0;
@@ -60,7 +60,10 @@ export async function importWechatBundle(bundle: ChatImportBundle, repository: P
       evidenceRefs.push(evidenceState(ref));
       const checksum = safeChecksum(ref.checksum);
       if (ref.availability !== "present") {
-        addWarning(warnings, `media_${ref.availability}`);
+        // deferred_by_limit means the canary's maxMedia cap held this item back, not that
+        // anything is actually wrong with it — it is never a data-quality warning, and a
+        // full (unlimited) import never produces this state at all.
+        if (ref.availability !== "deferred_by_limit") addWarning(warnings, `media_${ref.availability}`);
         continue;
       }
       if (!checksum) {

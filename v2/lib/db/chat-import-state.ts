@@ -215,13 +215,17 @@ export function failChatImportTask(tasks: ChatImportTask[], input: ChatImportTas
 export function retryChatImportTask(tasks: ChatImportTask[], taskId: string, nowInput?: string) {
   const task = findTask(tasks, taskId);
   if (!task) return null;
-  if (task.status !== "failed") throw new ChatImportStateError("INVALID_RETRY_TRANSITION");
-  if (task.attempt >= task.maxAttempts) throw new ChatImportStateError("MAX_ATTEMPTS_EXCEEDED");
+  if (task.status !== "failed" && task.status !== "cancelled") throw new ChatImportStateError("INVALID_RETRY_TRANSITION");
+  // A cancelled task was deliberately paused, not failed — resuming it must not consume the
+  // failure-retry budget (maxAttempts), and any stale cancelRequestedAt from the prior run must be
+  // cleared so the resumed worker's first heartbeat doesn't immediately cancel itself again.
+  if (task.status === "failed" && task.attempt >= task.maxAttempts) throw new ChatImportStateError("MAX_ATTEMPTS_EXCEEDED");
   const now = nowValue(nowInput);
   task.status = "retry_pending";
   task.completedAt = undefined;
   task.leaseOwner = undefined;
   task.leaseExpiresAt = undefined;
+  task.cancelRequestedAt = undefined;
   task.updatedAt = now;
   return task;
 }

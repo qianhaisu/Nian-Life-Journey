@@ -1,12 +1,19 @@
 import { createHash } from "node:crypto";
 
 export const CHAT_IMPORT_SCHEMA_VERSION = "chat-import-bundle/v1" as const;
-export type MediaAvailability = "present" | "missing" | "needs_review" | "invalid" | "hash_changed";
+export type MediaAvailability = "present" | "missing" | "needs_review" | "invalid" | "hash_changed" | "deferred_by_limit";
 export type ChatMessageType = "text" | "image" | "mixed";
 export interface ChatMediaRef { id: string; relativePath: string; checksum?: string; availability: MediaAvailability; mimeType?: string; fileSize?: number; width?: number; height?: number; }
 export interface ChatMessage { messageId: string; conversationId: string; senderId: string; direction: "unknown"; sentAt: string; messageType: ChatMessageType; text: string; mediaRefs: ChatMediaRef[]; sourceLocator: { document: string; recordOrdinal: number }; occurrenceRank?: number; }
 export interface ChatConversation { id: string; name: string; participantIds: string[]; }
-export interface ChatImportBundle { schemaVersion: typeof CHAT_IMPORT_SCHEMA_VERSION; parserVersion: string; sourceProvider: "wechat-official-markdown"; sourceTimezone: "Asia/Shanghai"; exportSnapshot: { rootFingerprint: string; capturedAt: string; fileCount: number }; conversations: ChatConversation[]; participants: Array<{ id: string; displayName: string }>; messages: ChatMessage[]; mediaRefs: ChatMediaRef[]; warnings: Array<{ code: string; count: number }>; }
+export interface ChatImportBundle { schemaVersion: typeof CHAT_IMPORT_SCHEMA_VERSION; parserVersion: string; sourceProvider: "wechat-official-markdown"; sourceTimezone: "Asia/Shanghai"; exportSnapshot: { rootFingerprint: string; conversationDigest: string; capturedAt: string; fileCount: number }; conversations: ChatConversation[]; participants: Array<{ id: string; displayName: string }>; messages: ChatMessage[]; mediaRefs: ChatMediaRef[]; warnings: Array<{ code: string; count: number }>; }
+
+// A batch id must be unique per (export snapshot, selected conversation) pair — two different
+// conversations from the same source-root snapshot are two different imports, not the same one,
+// and must not collide on (and short-circuit against) the same ChatImportTask row.
+export function chatImportBatchId(exportSnapshot: { rootFingerprint: string; conversationDigest: string }): string {
+  return `wechat-import:${exportSnapshot.rootFingerprint}:${exportSnapshot.conversationDigest}`;
+}
 
 export function canonicalMessageId(input: Omit<ChatMessage, "messageId">, occurrenceRank: number): string {
   const documentDigest = createHash("sha256").update(input.sourceLocator.document.replaceAll("\\", "/"), "utf8").digest("hex");

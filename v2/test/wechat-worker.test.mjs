@@ -10,6 +10,7 @@ import { promisify } from "node:util";
 import { createInMemoryRepository } from "../lib/db/in-memory-chat-import-repository.ts";
 import { assertWechatSnapshot, loadWechatBundle, scanWechatSnapshot } from "../lib/ingest/wechat-snapshot.ts";
 import { runWechatImportWorker } from "../lib/ingest/wechat-worker.ts";
+import { importWechatBundle } from "../lib/ingest/wechat-import.ts";
 
 const execFileAsync = promisify(execFile);
 const cliScript = path.join(process.cwd(), "scripts", "wechat-import-worker.mjs");
@@ -97,13 +98,67 @@ test("worker uploads one verified object set, persists private evidence, and rer
   }
 });
 
+test("conversationIndex selects a specific conversation deterministically, and an out-of-range index is rejected instead of silently falling back", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-conv-index-"));
+  try {
+    const image = await sharp({ create: { width: 10, height: 10, channels: 3, background: { r: 1, g: 2, b: 3 } } }).jpeg().toBuffer();
+    await writeFile(path.join(root, "a.jpg"), image);
+    await writeFile(path.join(root, "b.jpg"), image);
+    await writeFile(path.join(root, "conversation-a.md"), "# A\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Sender A\nmessage in conversation A\n\n![a](a.jpg)\n");
+    await writeFile(path.join(root, "conversation-b.md"), "# B\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Sender B\nmessage in conversation B\n\n![b](b.jpg)\n");
+    const first = await loadWechatBundle(root, { maxMessages: 100, maxMedia: 20, conversationIndex: 0 });
+    const second = await loadWechatBundle(root, { maxMessages: 100, maxMedia: 20, conversationIndex: 1 });
+    assert.notEqual(first.selectedDocument, second.selectedDocument, "index 0 and index 1 must resolve to different conversations");
+    // Selecting the same index again must be stable (same document each time), matching the
+    // requirement that a chosen medium-scale conversation stays chosen across process restarts.
+    const firstAgain = await loadWechatBundle(root, { maxMessages: 100, maxMedia: 20, conversationIndex: 0 });
+    assert.equal(first.selectedDocument, firstAgain.selectedDocument);
+    await assert.rejects(() => loadWechatBundle(root, { maxMessages: 100, maxMedia: 20, conversationIndex: 2 }), /WECHAT_NO_VALID_SESSION/);
+    await assert.rejects(() => loadWechatBundle(root, { maxMessages: 100, maxMedia: 20, conversationIndex: -1 }), /WECHAT_CONVERSATION_INDEX_INVALID/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("two different conversations from the same source-root snapshot get independent ChatImportTask rows, never colliding on the same batch id", async () => {
+  // Root cause of a real bug found while calibrating throughput on a medium-scale conversation:
+  // importBatchId used to be derived only from the whole-directory snapshot fingerprint, so ANY
+  // conversation picked via conversationIndex from the same source root collided with whichever
+  // conversation had already been imported first — a later index's "full conversation" run would
+  // just find that already-terminal task and short-circuit with all-zero counts, never doing any
+  // work at all. The batch id must include the selected conversation's own identity.
+  const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-batch-id-"));
+  try {
+    const image = await sharp({ create: { width: 10, height: 10, channels: 3, background: { r: 1, g: 2, b: 3 } } }).jpeg().toBuffer();
+    await writeFile(path.join(root, "a.jpg"), image);
+    await writeFile(path.join(root, "b.jpg"), image);
+    await writeFile(path.join(root, "conversation-a.md"), "# A\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Sender A\nmessage in conversation A\n\n![a](a.jpg)\n");
+    await writeFile(path.join(root, "conversation-b.md"), "# B\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Sender B\nmessage in conversation B\n\n![b](b.jpg)\n");
+    const repository = createInMemoryRepository();
+    const options = { sourceRoot: root, profileId: "profile-wechat-batch-id-test", contributorId: "contributor-system", repository, storage: new CountingStorage(), maxMessages: 100, maxMedia: 20, now: new Date().toISOString() };
+    const first = await runWechatImportWorker({ ...options, conversationIndex: 0, leaseOwner: "worker-conv-a" });
+    assert.equal(first.status, "completed");
+    assert.equal(first.createdMessages, 1);
+    const second = await runWechatImportWorker({ ...options, conversationIndex: 1, leaseOwner: "worker-conv-b" });
+    assert.equal(second.status, "completed", "the second conversation must actually run, not short-circuit against the first one's already-terminal task");
+    assert.equal(second.createdMessages, 1);
+    assert.notEqual(first.taskId, second.taskId);
+    const store = await repository.getStore();
+    assert.equal(store.chatImportTasks.length, 2);
+    assert.equal(store.rawSources.length, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("snapshot validation detects source mutation and enforces canary bounds", async () => {
   const root = await createFixture();
   try {
     const snapshot = await scanWechatSnapshot(root);
     await assertWechatSnapshot(root, snapshot.rootFingerprint);
-    await assert.rejects(() => loadWechatBundle(root, { maxMessages: 101 }), /WECHAT_MESSAGE_LIMIT_INVALID/);
-    await assert.rejects(() => loadWechatBundle(root, { maxMedia: 21 }), /WECHAT_MEDIA_LIMIT_INVALID/);
+    await assert.rejects(() => loadWechatBundle(root, { maxMessages: 200_001 }), /WECHAT_MESSAGE_LIMIT_INVALID/);
+    await assert.rejects(() => loadWechatBundle(root, { maxMedia: 200_001 }), /WECHAT_MEDIA_LIMIT_INVALID/);
+    await assert.rejects(() => loadWechatBundle(root, { maxMessages: 0 }), /WECHAT_MESSAGE_LIMIT_INVALID/);
     const markdown = await readFile(path.join(root, "session.md"), "utf8");
     await writeFile(path.join(root, "session.md"), `${markdown}\nsynthetic mutation\n`);
     await assert.rejects(() => assertWechatSnapshot(root, snapshot.rootFingerprint), /WECHAT_SNAPSHOT_MISMATCH/);
@@ -137,7 +192,7 @@ test("worker records snapshot drift as a failed task before any media upload", a
   }
 });
 
-test("loadWechatBundle classifies invalid, present, needs_review, and missing media in one pass", async () => {
+test("loadWechatBundle classifies invalid, present, deferred_by_limit, and missing media in one pass", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-classify-"));
   try {
     const image = await sharp({ create: { width: 32, height: 24, channels: 3, background: { r: 120, g: 80, b: 48 } } }).jpeg().toBuffer();
@@ -152,8 +207,32 @@ test("loadWechatBundle classifies invalid, present, needs_review, and missing me
     const byPath = new Map(loaded.bundle.mediaRefs.map((ref) => [ref.relativePath, ref]));
     assert.equal(byPath.get("bad.jpg")?.availability, "invalid");
     assert.equal(byPath.get("photo1.jpg")?.availability, "present");
-    assert.equal(byPath.get("photo2.jpg")?.availability, "needs_review");
+    assert.equal(byPath.get("photo2.jpg")?.availability, "deferred_by_limit");
     assert.equal(byPath.get("missing.jpg")?.availability, "missing");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a media item deferred by the canary's maxMedia cap is never counted as a data-quality warning, and never appears once the cap is lifted", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-deferred-"));
+  try {
+    const image = await sharp({ create: { width: 32, height: 24, channels: 3, background: { r: 120, g: 80, b: 48 } } }).jpeg().toBuffer();
+    await writeFile(path.join(root, "photo1.jpg"), image);
+    await writeFile(path.join(root, "photo2.jpg"), image);
+    await writeFile(
+      path.join(root, "session.md"),
+      "# Synthetic Conversation\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Synthetic Sender\n![p1](photo1.jpg)\n\n![p2](photo2.jpg)\n",
+    );
+    const repository = createInMemoryRepository();
+    const storage = new CountingStorage();
+    const capped = await runWechatImportWorker({ sourceRoot: root, profileId: "profile-wechat-deferred-capped", contributorId: "contributor-system", repository, storage, leaseOwner: "worker-capped", maxMessages: 100, maxMedia: 1, now: new Date().toISOString() });
+    assert.equal(capped.status, "completed", "a cap-deferred item is not a data-quality issue and must not flip the task to completed_with_warnings");
+    assert.deepEqual(capped.warningCounts, []);
+
+    const uncapped = await runWechatImportWorker({ sourceRoot: root, profileId: "profile-wechat-deferred-uncapped", contributorId: "contributor-system", repository: createInMemoryRepository(), storage: new CountingStorage(), leaseOwner: "worker-uncapped", maxMessages: 100, maxMedia: 20, now: new Date().toISOString() });
+    assert.equal(uncapped.status, "completed");
+    assert.deepEqual(uncapped.warningCounts, [], "a full (unlimited) import must never produce deferred_by_limit at all");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -249,6 +328,55 @@ test("worker resumes from the last saved checkpoint after an interruption, proce
   }
 });
 
+test("a gracefully cancelled task resumes with --retry-failed and completes the conversation without recreating or re-uploading anything already done", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-cancel-resume-"));
+  try {
+    const photo1 = await sharp({ create: { width: 32, height: 24, channels: 3, background: { r: 120, g: 80, b: 48 } } }).jpeg().toBuffer();
+    const photo2 = await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: 10, g: 200, b: 30 } } }).jpeg().toBuffer();
+    await writeFile(path.join(root, "photo1.jpg"), photo1);
+    await writeFile(path.join(root, "photo2.jpg"), photo2);
+    await writeFile(
+      path.join(root, "session.md"),
+      "# Synthetic Conversation\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Synthetic Sender\nFirst message\n\n![p1](photo1.jpg)\n\n## 2026\\-08\\-31 09:02:02 Synthetic Sender\nSecond message\n\n![p2](photo2.jpg)\n",
+    );
+    const repository = createInMemoryRepository();
+    const storage = new CountingStorage();
+    const baseOptions = { sourceRoot: root, profileId: "profile-wechat-cancel-resume-test", contributorId: "contributor-system", storage, maxMessages: 100, maxMedia: 20 };
+
+    // Simulate a graceful stop request landing right before the worker would start processing
+    // message 2: hook heartbeatChatImportTask (the worker checks cancelRequestedAt off its return
+    // value at the top of every per-message iteration) to request the cancel on its second call.
+    let heartbeatCalls = 0;
+    const cancellingRepository = {
+      ...repository,
+      async heartbeatChatImportTask(input) {
+        heartbeatCalls += 1;
+        if (heartbeatCalls === 2) await repository.requestChatImportCancel(input.taskId);
+        return repository.heartbeatChatImportTask(input);
+      },
+    };
+
+    const first = await runWechatImportWorker({ ...baseOptions, repository: cancellingRepository, leaseOwner: "worker-before-cancel", now: new Date().toISOString() });
+    assert.equal(first.status, "cancelled");
+    assert.equal(first.createdMessages, 1, "message 1 must have committed before the graceful stop took effect");
+    const taskId = first.taskId;
+    const afterCancel = await repository.getChatImportTask(taskId);
+    assert.equal(afterCancel.status, "cancelled");
+    assert.equal(afterCancel.checkpoint.messageOrdinal, 1);
+
+    const resumed = await runWechatImportWorker({ ...baseOptions, repository, taskId, retryFailed: true, leaseOwner: "worker-after-resume", now: new Date().toISOString() });
+    assert.equal(resumed.status, "completed", "the resumed run must actually be allowed to run, not just fail again as terminal");
+    assert.equal(resumed.createdMessages, 1, "only the remaining message (2) should be created on resume");
+    assert.equal(resumed.uploadedObjects, 3, "only message 2's photo should upload; message 1's photo was already uploaded before the cancel");
+    const finalTask = await repository.getChatImportTask(taskId);
+    assert.equal(finalTask.status, "completed");
+    assert.equal(finalTask.cancelRequestedAt, undefined, "resuming must clear the stale cancel request so the worker doesn't immediately cancel itself again");
+    assert.equal(storage.putCalls.length, 6, "3 objects for photo1 (before cancel) + 3 for photo2 (after resume), never re-uploaded");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("an incremental bundle (more messages added to the same export) only creates the new messages, not duplicates of the old ones", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-incremental-"));
   try {
@@ -295,6 +423,43 @@ test("an incremental bundle (more messages added to the same export) only create
   }
 });
 
+test("a message persisted by a worker that then loses its lease is never lost: the takeover worker finds it as reused, never re-created, never missing", async () => {
+  // Root-causing a historical count mismatch (task said createdMessages:100, only 99 distinct
+  // RawSource rows existed): the worker only advances checkpoint.messageOrdinal past a message
+  // AFTER that message's persistChatImportMessage call has already committed, so a crash or lease
+  // loss between "persist succeeds" and "checkpoint commits" cannot lose the row — a takeover
+  // worker reprocesses that same message and correctly finds it (reused), never re-creating or
+  // dropping it. This test proves that invariant holds for the current code.
+  const repository = createInMemoryRepository();
+  const bundle = {
+    schemaVersion: "chat-import-bundle/v1",
+    parserVersion: "wechat-official-markdown/1",
+    sourceProvider: "wechat-official-markdown",
+    sourceTimezone: "Asia/Shanghai",
+    exportSnapshot: { rootFingerprint: "fp", capturedAt: "2026-08-31T00:00:00.000Z", fileCount: 1 },
+    conversations: [{ id: "conversation:1", name: "c", participantIds: [] }],
+    participants: [],
+    messages: [{ messageId: "canonical:msg-1", conversationId: "conversation:1", senderId: "sender:1", direction: "unknown", sentAt: "2026-08-31T09:00:00+08:00", messageType: "text", text: "hello", mediaRefs: [], sourceLocator: { document: "session.md", recordOrdinal: 1 } }],
+    mediaRefs: [],
+    warnings: [],
+  };
+  const options = { profileId: "profile-lease-race-test", contributorId: "contributor-system", now: "2026-08-31T09:00:00.000Z" };
+
+  // Worker A persists message 1 successfully...
+  const firstAttempt = await importWechatBundle(bundle, repository, options);
+  assert.equal(firstAttempt.createdMessages, 1);
+  // ...but before A's own checkpoint-save can commit, its lease is deemed lost (crash, network
+  // partition, etc). A takeover worker B resumes from the last COMMITTED checkpoint (still 0,
+  // since A's checkpoint-save never happened) and reprocesses the same message.
+  const secondAttempt = await importWechatBundle(bundle, repository, options);
+  assert.equal(secondAttempt.createdMessages, 0);
+  assert.equal(secondAttempt.reusedMessages, 1);
+
+  const store = await repository.getStore();
+  const matching = store.rawSources.filter((source) => source.providerExternalId === "canonical:msg-1");
+  assert.equal(matching.length, 1, "the message must exist exactly once: never duplicated, never lost");
+});
+
 test("capacity-audit CLI reports bounded metadata without importing or leaking source root", async () => {
   const root = await createFixture();
   try {
@@ -308,6 +473,48 @@ test("capacity-audit CLI reports bounded metadata without importing or leaking s
     assert.equal(JSON.stringify(report).includes(root), false);
     assert.equal(JSON.stringify(report).includes("session.md"), false);
     assert.equal(JSON.stringify(report).includes("Synthetic"), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("real (non-audit) CLI import fails closed instead of silently defaulting to the local JSON store when REPOSITORY_BACKEND is unset", async () => {
+  const root = await createFixture();
+  try {
+    const env = { ...process.env };
+    delete env.REPOSITORY_BACKEND;
+    const result = await execFileAsync(process.execPath, ["--import", "tsx", cliScript, "--source-root", root, "--profile-id", "profile-zhangnian"], { env }).catch((error) => error);
+    assert.notEqual(result.code, 0);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.status, "rejected");
+    assert.equal(report.safeErrorCode, "WECHAT_BACKEND_NOT_SPECIFIED");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("real (non-audit) CLI import fails closed when REPOSITORY_BACKEND is explicitly json, not just when it's unset", async () => {
+  const root = await createFixture();
+  try {
+    const env = { ...process.env, REPOSITORY_BACKEND: "json" };
+    const result = await execFileAsync(process.execPath, ["--import", "tsx", cliScript, "--source-root", root, "--profile-id", "profile-zhangnian"], { env }).catch((error) => error);
+    assert.notEqual(result.code, 0);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.status, "rejected");
+    assert.equal(report.safeErrorCode, "WECHAT_BACKEND_NOT_SPECIFIED");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("capacity-audit CLI never requires a backend at all — it only reads the source, it never persists", async () => {
+  const root = await createFixture();
+  try {
+    const env = { ...process.env };
+    delete env.REPOSITORY_BACKEND;
+    const result = await execFileAsync(process.execPath, ["--import", "tsx", cliScript, "--source-root", root, "--capacity-audit"], { env });
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.status, "ok");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

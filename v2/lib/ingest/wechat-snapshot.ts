@@ -8,9 +8,9 @@ import { parseWechatMarkdown } from "./wechat-markdown";
 
 export type WechatSnapshotEntry = { relativePath: string; absolutePath: string; kind: "markdown" | "jpeg" | "other"; size: number; mtimeMs: number; contentDigest?: string };
 export type WechatSnapshot = { rootFingerprint: string; fileCount: number; files: WechatSnapshotEntry[] };
-export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string };
+export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number };
 export type WechatBundleLoad = { snapshot: WechatSnapshot; bundle: ChatImportBundle; selectedDocument: string; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number };
-export type WechatCapacityAudit = { fileCount: number; markdownFileCount: number; jpegFileCount: number; otherFileCount: number; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number; presentMediaCount: number; missingMediaCount: number; needsReviewMediaCount: number; invalidMediaCount: number; hashChangedMediaCount: number; messageLimitReached: boolean; mediaLimitReached: boolean; maxMessages: number; maxMedia: number };
+export type WechatCapacityAudit = { fileCount: number; markdownFileCount: number; jpegFileCount: number; otherFileCount: number; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number; presentMediaCount: number; missingMediaCount: number; needsReviewMediaCount: number; invalidMediaCount: number; hashChangedMediaCount: number; deferredByLimitMediaCount: number; messageLimitReached: boolean; mediaLimitReached: boolean; maxMessages: number; maxMedia: number };
 
 const digest = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 const normalizeRelative = (value: string) => value.replaceAll("\\", "/");
@@ -75,7 +75,7 @@ export async function hashWechatFile(entry: WechatSnapshotEntry) {
 
 async function mediaStatus(entry: WechatSnapshotEntry | undefined, limitReached: boolean): Promise<{ checksum?: string; availability: MediaAvailability; mimeType?: string; fileSize?: number; width?: number; height?: number }> {
   if (!entry) return { availability: "missing" };
-  if (limitReached) return { availability: "needs_review" };
+  if (limitReached) return { availability: "deferred_by_limit" };
   try {
     const metadata = await sharp(entry.absolutePath).metadata();
     if (metadata.format !== "jpeg") return { availability: "invalid" };
@@ -96,8 +96,12 @@ function refsFromMessages(messages: Array<{ mediaRefs: ChatMediaRef[] }>) {
 export async function loadWechatBundle(sourceRoot: string, options: WechatBundleOptions = {}): Promise<WechatBundleLoad> {
   const maxMessages = options.maxMessages ?? 100;
   const maxMedia = options.maxMedia ?? 20;
-  if (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 100) throw new Error("WECHAT_MESSAGE_LIMIT_INVALID");
-  if (!Number.isInteger(maxMedia) || maxMedia < 1 || maxMedia > 20) throw new Error("WECHAT_MEDIA_LIMIT_INVALID");
+  // The canary's own defaults stay 100/20 (see WechatBundleOptions callers); this ceiling only
+  // guards against a nonsensical or unbounded value, so a full-conversation import (which passes
+  // the conversation's true message/media count, discovered up front, not a guessed sentinel)
+  // is never truncated by an arbitrary canary-era cap.
+  if (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 200_000) throw new Error("WECHAT_MESSAGE_LIMIT_INVALID");
+  if (!Number.isInteger(maxMedia) || maxMedia < 1 || maxMedia > 200_000) throw new Error("WECHAT_MEDIA_LIMIT_INVALID");
   const snapshot = await scanWechatSnapshot(sourceRoot);
   const markdown = snapshot.files.filter((file) => file.kind === "markdown").toSorted((a, b) => digest(a.relativePath).localeCompare(digest(b.relativePath)));
   const candidates: Array<{ entry: WechatSnapshotEntry; text: string; conversationId: string; messages: ReturnType<typeof parseWechatMarkdown>["messages"] }> = [];
@@ -107,7 +111,12 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
     const parsed = parseWechatMarkdown({ root: path.resolve(sourceRoot), document: entry.relativePath, media: new Map(), text });
     if (parsed.messages.length) candidates.push({ entry, text, conversationId: parsed.conversationId, messages: parsed.messages });
   }
-  const selected = candidates.toSorted((a, b) => digest(a.entry.relativePath).localeCompare(digest(b.entry.relativePath)))[0];
+  // candidates is already in the deterministic (relativePath-digest) order established above;
+  // conversationIndex picks a specific position in that same stable order instead of always
+  // taking position 0, so a chosen medium-scale conversation stays chosen across process restarts.
+  const conversationIndex = options.conversationIndex ?? 0;
+  if (!Number.isInteger(conversationIndex) || conversationIndex < 0) throw new Error("WECHAT_CONVERSATION_INDEX_INVALID");
+  const selected = candidates[conversationIndex];
   if (!selected) throw new Error("WECHAT_NO_VALID_SESSION");
   const availableMessageCount = selected.messages.length;
   const selectedMessages = selected.messages.slice(0, maxMessages);
@@ -134,7 +143,7 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
     parserVersion: "wechat-official-markdown/1",
     sourceProvider: "wechat-official-markdown",
     sourceTimezone: "Asia/Shanghai",
-    exportSnapshot: { rootFingerprint: snapshot.rootFingerprint, capturedAt: options.now ?? new Date().toISOString(), fileCount: snapshot.fileCount },
+    exportSnapshot: { rootFingerprint: snapshot.rootFingerprint, conversationDigest: digest(selected.entry.relativePath), capturedAt: options.now ?? new Date().toISOString(), fileCount: snapshot.fileCount },
     conversations: [{ id: reparsed.conversationId, name: "conversation", participantIds: [] }],
     participants: [],
     messages,
@@ -148,7 +157,7 @@ export async function auditWechatCapacity(sourceRoot: string, options: WechatBun
   const maxMessages = options.maxMessages ?? 100;
   const maxMedia = options.maxMedia ?? 20;
   const loaded = await loadWechatBundle(sourceRoot, { ...options, maxMessages, maxMedia });
-  const counts = new Map<"present" | "missing" | "needs_review" | "invalid" | "hash_changed", number>();
+  const counts = new Map<"present" | "missing" | "needs_review" | "invalid" | "hash_changed" | "deferred_by_limit", number>();
   for (const ref of loaded.bundle.mediaRefs) counts.set(ref.availability, (counts.get(ref.availability) ?? 0) + 1);
   const markdownFileCount = loaded.snapshot.files.filter((file) => file.kind === "markdown").length;
   const jpegFileCount = loaded.snapshot.files.filter((file) => file.kind === "jpeg").length;
@@ -166,8 +175,9 @@ export async function auditWechatCapacity(sourceRoot: string, options: WechatBun
     needsReviewMediaCount: counts.get("needs_review") ?? 0,
     invalidMediaCount: counts.get("invalid") ?? 0,
     hashChangedMediaCount: counts.get("hash_changed") ?? 0,
+    deferredByLimitMediaCount: counts.get("deferred_by_limit") ?? 0,
     messageLimitReached: loaded.availableMessageCount > loaded.selectedMessageCount,
-    mediaLimitReached: (counts.get("needs_review") ?? 0) > 0,
+    mediaLimitReached: (counts.get("deferred_by_limit") ?? 0) > 0,
     maxMessages,
     maxMedia,
   };
