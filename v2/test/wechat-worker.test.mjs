@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
@@ -132,6 +132,164 @@ test("worker records snapshot drift as a failed task before any media upload", a
     assert.equal(report.safeErrorCode, "WECHAT_SNAPSHOT_MISMATCH");
     assert.equal(storage.putCalls.length, 0);
     assert.equal((await baseRepository.getChatImportTask(report.taskId)).status, "failed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("loadWechatBundle classifies invalid, present, needs_review, and missing media in one pass", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-classify-"));
+  try {
+    const image = await sharp({ create: { width: 32, height: 24, channels: 3, background: { r: 120, g: 80, b: 48 } } }).jpeg().toBuffer();
+    await writeFile(path.join(root, "bad.jpg"), Buffer.from("this is not a jpeg"));
+    await writeFile(path.join(root, "photo1.jpg"), image);
+    await writeFile(path.join(root, "photo2.jpg"), image);
+    await writeFile(
+      path.join(root, "session.md"),
+      "# Synthetic Conversation\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Synthetic Sender\n![bad](bad.jpg)\n\n![p1](photo1.jpg)\n\n![p2](photo2.jpg)\n\n![missing](missing.jpg)\n",
+    );
+    const loaded = await loadWechatBundle(root, { maxMessages: 100, maxMedia: 1 });
+    const byPath = new Map(loaded.bundle.mediaRefs.map((ref) => [ref.relativePath, ref]));
+    assert.equal(byPath.get("bad.jpg")?.availability, "invalid");
+    assert.equal(byPath.get("photo1.jpg")?.availability, "present");
+    assert.equal(byPath.get("photo2.jpg")?.availability, "needs_review");
+    assert.equal(byPath.get("missing.jpg")?.availability, "missing");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("worker fails a single item closed with WECHAT_MEDIA_HASH_CHANGED when photo bytes mutate without a snapshot-visible change", async () => {
+  const root = await createFixture();
+  const repository = createInMemoryRepository();
+  const storage = new CountingStorage();
+  const photoPath = path.join(root, "photo.jpg");
+  // fs mtime carries sub-millisecond precision on file creation that a Date-based utimes() call
+  // cannot reproduce exactly; pin the mtime via utimes() once so the later restore (same code path,
+  // same numeric input) round-trips bit-for-bit instead of drifting the snapshot fingerprint.
+  const pinnedSeconds = Date.now() / 1000;
+  await utimes(photoPath, pinnedSeconds, pinnedSeconds);
+  const originalStat = await stat(photoPath);
+  const originalBytes = await readFile(photoPath);
+  const hookedRepository = {
+    ...repository,
+    async claimChatImportTask(input) {
+      const claimed = await repository.claimChatImportTask(input);
+      const mutated = Buffer.from(originalBytes);
+      mutated[mutated.length - 5] ^= 0xff;
+      await writeFile(photoPath, mutated);
+      await utimes(photoPath, originalStat.mtimeMs / 1000, originalStat.mtimeMs / 1000);
+      return claimed;
+    },
+  };
+  try {
+    const report = await runWechatImportWorker({ sourceRoot: root, profileId: "profile-wechat-hash-changed-test", contributorId: "contributor-system", repository: hookedRepository, storage, leaseOwner: "synthetic-hash-worker", now: new Date().toISOString() });
+    assert.equal(report.status, "failed");
+    assert.equal(report.safeErrorCode, "WECHAT_MEDIA_HASH_CHANGED");
+    assert.equal(storage.putCalls.length, 0);
+    assert.equal((await repository.getChatImportTask(report.taskId)).status, "failed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("worker resumes from the last saved checkpoint after an interruption, processing only the remaining message", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-resume-"));
+  try {
+    const photo1 = await sharp({ create: { width: 32, height: 24, channels: 3, background: { r: 120, g: 80, b: 48 } } }).jpeg().toBuffer();
+    const photo2 = await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: 10, g: 200, b: 30 } } }).jpeg().toBuffer();
+    await writeFile(path.join(root, "photo1.jpg"), photo1);
+    await writeFile(path.join(root, "photo2.jpg"), photo2);
+    await writeFile(
+      path.join(root, "session.md"),
+      "# Synthetic Conversation\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Synthetic Sender\nFirst message\n\n![p1](photo1.jpg)\n\n## 2026\\-08\\-31 09:02:02 Synthetic Sender\nSecond message\n\n![p2](photo2.jpg)\n",
+    );
+    const repository = createInMemoryRepository();
+    const storage = new CountingStorage();
+    const baseOptions = { sourceRoot: root, profileId: "profile-wechat-resume-test", contributorId: "contributor-system", storage, maxMessages: 100, maxMedia: 20 };
+
+    let interruptAfterFirstMessage = true;
+    const interruptingRepository = {
+      ...repository,
+      async saveChatImportCheckpoint(input) {
+        const saved = await repository.saveChatImportCheckpoint(input);
+        if (interruptAfterFirstMessage && input.currentStage === "media_link" && saved?.checkpoint?.messageOrdinal === 1) {
+          throw new Error("SYNTHETIC_INTERRUPT");
+        }
+        return saved;
+      },
+    };
+
+    const first = await runWechatImportWorker({ ...baseOptions, repository: interruptingRepository, leaseOwner: "worker-before-crash", now: new Date().toISOString() });
+    assert.equal(first.status, "failed");
+    assert.equal(first.safeErrorCode, "SYNTHETIC_INTERRUPT");
+    assert.equal(first.createdMessages, 1);
+    assert.equal(storage.putCalls.length, 3);
+    const afterCrash = await repository.getChatImportTask(first.taskId);
+    assert.equal(afterCrash.status, "failed");
+    assert.equal(afterCrash.checkpoint.messageOrdinal, 1);
+
+    interruptAfterFirstMessage = false;
+    const second = await runWechatImportWorker({ ...baseOptions, repository, taskId: first.taskId, retryFailed: true, leaseOwner: "worker-after-recovery", now: new Date().toISOString() });
+    assert.equal(second.status, "completed");
+    assert.equal(second.createdMessages, 1);
+    assert.equal(second.reusedMessages, 0);
+    assert.equal(second.createdMediaAssets, 1);
+    assert.equal(second.uploadedObjects, 3);
+    assert.equal(storage.putCalls.length, 6);
+
+    const store = await repository.getStore();
+    assert.equal(store.rawSources.length, 2);
+    assert.equal(store.mediaAssets.length, 2);
+    assert.equal(store.mediaLocations.length, 8);
+    const finalTask = await repository.getChatImportTask(first.taskId);
+    assert.equal(finalTask.status, "completed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an incremental bundle (more messages added to the same export) only creates the new messages, not duplicates of the old ones", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-incremental-"));
+  try {
+    const photo1 = await sharp({ create: { width: 32, height: 24, channels: 3, background: { r: 120, g: 80, b: 48 } } }).jpeg().toBuffer();
+    await writeFile(path.join(root, "photo1.jpg"), photo1);
+    await writeFile(
+      path.join(root, "session.md"),
+      "# Synthetic Conversation\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Synthetic Sender\nFirst message\n\n![p1](photo1.jpg)\n",
+    );
+    const repository = createInMemoryRepository();
+    const storage = new CountingStorage();
+    const baseOptions = { sourceRoot: root, profileId: "profile-wechat-incremental-test", contributorId: "contributor-system", repository, storage, maxMessages: 100, maxMedia: 20 };
+
+    const firstRun = await runWechatImportWorker({ ...baseOptions, leaseOwner: "worker-batch-1", now: new Date().toISOString() });
+    assert.equal(firstRun.status, "completed");
+    assert.equal(firstRun.createdMessages, 1);
+
+    const photo2 = await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: 10, g: 200, b: 30 } } }).jpeg().toBuffer();
+    await writeFile(path.join(root, "photo2.jpg"), photo2);
+    await writeFile(
+      path.join(root, "session.md"),
+      "# Synthetic Conversation\n- participant: redacted\n---\n## 2026\\-08\\-31 09:01:02 Synthetic Sender\nFirst message\n\n![p1](photo1.jpg)\n\n## 2026\\-08\\-31 09:02:02 Synthetic Sender\nSecond message\n\n![p2](photo2.jpg)\n",
+    );
+
+    const secondRun = await runWechatImportWorker({ ...baseOptions, leaseOwner: "worker-batch-2", now: new Date().toISOString() });
+    assert.equal(secondRun.status, "completed");
+    assert.equal(secondRun.createdMessages, 1);
+    assert.equal(secondRun.reusedMessages, 1);
+    assert.equal(secondRun.createdMediaAssets, 1);
+    assert.equal(secondRun.uploadedObjects, 3);
+
+    const store = await repository.getStore();
+    assert.equal(store.rawSources.length, 2);
+    assert.equal(store.mediaAssets.length, 2);
+    assert.equal(storage.putCalls.length, 6);
+
+    const rerun = await runWechatImportWorker({ ...baseOptions, leaseOwner: "worker-batch-2-rerun", now: new Date().toISOString() });
+    assert.equal(rerun.status, "completed");
+    assert.equal(rerun.createdMessages, 0);
+    assert.equal(rerun.uploadedObjects, 0);
+    assert.equal((await repository.getStore()).rawSources.length, 2);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -80,6 +80,34 @@ function addTaskTests(name, createRepository, profileIdForTest = () => uid("prof
     assert.equal(reclaimed.status, "running");
   });
 
+  test(`[${name}] an expired lease can be reclaimed by a different worker, and the stale owner's writes are then rejected`, async () => {
+    const repo = createRepository();
+    const profileId = profileIdForTest();
+    const task = await repo.createChatImportTask({ profileId, importBatchId: uid("batch"), now: "2026-08-31T10:00:00.000Z" });
+    const claimed = await repo.claimChatImportTask({ taskId: task.id, leaseOwner: "worker-a", leaseMs: 5_000, now: "2026-08-31T10:00:00.000Z" });
+    assert.equal(claimed.leaseOwner, "worker-a");
+    const stillLeased = await repo.claimChatImportTask({ taskId: task.id, leaseOwner: "worker-b", leaseMs: 5_000, now: "2026-08-31T10:00:02.000Z" });
+    assert.equal(stillLeased, null);
+    const takenOver = await repo.claimChatImportTask({ taskId: task.id, leaseOwner: "worker-b", leaseMs: 5_000, now: "2026-08-31T10:00:06.000Z" });
+    assert.equal(takenOver.leaseOwner, "worker-b");
+    assert.equal(takenOver.attempt, 2);
+    await assert.rejects(() => repo.heartbeatChatImportTask({ taskId: task.id, leaseOwner: "worker-a", now: "2026-08-31T10:00:07.000Z" }), /LEASE_NOT_OWNED|LEASE_EXPIRED/);
+    await assert.rejects(() => repo.saveChatImportCheckpoint({ taskId: task.id, leaseOwner: "worker-a", checkpoint: { snapshotDigest: "s", documentOrdinal: 0, messageOrdinal: 1 }, now: "2026-08-31T10:00:07.000Z" }), /LEASE_NOT_OWNED|LEASE_EXPIRED/);
+  });
+
+  test(`[${name}] maxAttempts exhaustion fails the task closed instead of claiming it forever`, async () => {
+    const repo = createRepository();
+    const profileId = profileIdForTest();
+    const task = await repo.createChatImportTask({ profileId, importBatchId: uid("batch"), maxAttempts: 1, now: "2026-08-31T10:00:00.000Z" });
+    const claimed = await repo.claimChatImportTask({ taskId: task.id, leaseOwner: "worker", leaseMs: 1_000, now: "2026-08-31T10:00:00.000Z" });
+    assert.equal(claimed.attempt, 1);
+    const notReclaimable = await repo.claimChatImportTask({ taskId: task.id, leaseOwner: "worker-2", leaseMs: 1_000, now: "2026-08-31T10:00:05.000Z" });
+    assert.equal(notReclaimable, null);
+    const final = await repo.getChatImportTask(task.id);
+    assert.equal(final.status, "failed");
+    assert.equal(final.safeErrorCode, "MAX_ATTEMPTS_EXCEEDED");
+  });
+
   test(`[${name}] source and media persistence is idempotent across WeChat and Quark locations`, async () => {
     const repo = createRepository();
     const profileId = profileIdForTest();

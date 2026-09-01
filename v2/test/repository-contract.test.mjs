@@ -7,8 +7,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { config as loadDotenv } from "dotenv";
 import { createJsonRepository } from "../lib/db/json-repository.ts";
 import { resolveRepositoryBackend } from "../lib/db/config.ts";
+
+loadDotenv({ path: path.resolve(process.cwd(), ".env.local"), quiet: true });
+loadDotenv({ path: path.resolve(process.cwd(), "../.env.local"), quiet: true });
 
 const HAS_DATABASE_URL = Boolean(process.env.DATABASE_URL);
 
