@@ -18,7 +18,7 @@ process.env.ORGANIZER_CANDIDATE_STORE_PATH = candidateStoreFile;
 test.after(async () => { await rm(candidateStoreFile, { force: true }); });
 
 function src(overrides) {
-  return { id: overrides.id, profileId: "p", sourceType: overrides.sourceType ?? "wechat", contentTypes: overrides.contentTypes ?? ["daily", "family"], contributorId: overrides.contributorId ?? `c-${overrides.contributorRole}`, capturedAt: overrides.capturedAt, text: overrides.text ?? "", mediaIds: overrides.mediaIds ?? [], visibility: "private", metadata: {}, sourceLabel: "conv", contributorRole: overrides.contributorRole };
+  return { id: overrides.id, profileId: "p", sourceType: overrides.sourceType ?? "wechat", contentTypes: overrides.contentTypes ?? ["daily", "family"], contributorId: overrides.contributorId ?? `c-${overrides.contributorRole}`, capturedAt: overrides.capturedAt, text: overrides.text ?? "", mediaIds: overrides.mediaIds ?? [], visibility: "private", metadata: overrides.metadata ?? {}, sourceLabel: "conv", contributorRole: overrides.contributorRole };
 }
 
 test("24 synthetic fixtures pass, including a dedicated negative-fixture gate", async () => {
@@ -166,4 +166,31 @@ test("worthiness routing: below-threshold windows route to store_only, high-sign
   const worthiness = computeWorthiness({ window, verdict, recentSameTypeCount: 0, boundImageCount: 0 });
   const routed = route(worthiness, verdict);
   assert.ok(["store_only", "daily_trace"].includes(routed.action));
+});
+
+// Regression: the WeChat importer stores one contributorId for the whole import and keeps the real
+// per-message speaker in metadata.senderDigest. Hashing contributorId collapsed every message of the
+// family group into a single sender, so senderCount was always 1 and every "same sender" media
+// binding rule matched an unrelated person's message.
+test("evidence items take their sender identity from metadata.senderDigest when the importer provides one", () => {
+  const sources = [
+    src({ id: "m1", capturedAt: "2026-08-20T10:00:00+08:00", text: "他自己爬过来了", contributorId: "contributor-system", metadata: { senderDigest: "digest-mother" } }),
+    src({ id: "m2", capturedAt: "2026-08-20T10:05:00+08:00", text: "我也看到了", contributorId: "contributor-system", metadata: { senderDigest: "digest-father" } }),
+    src({ id: "m3", capturedAt: "2026-08-20T10:07:00+08:00", text: "哈哈哈", contributorId: "contributor-system", metadata: { senderDigest: "digest-mother" } }),
+  ];
+  const [window] = buildEvidenceWindows("conv-senders", "p", sources, { dailyTraces: [], lifeEvents: [] });
+  assert.equal(window.stats.senderCount, 2);
+  assert.equal(window.items[0].senderDigest, "digest-mother");
+  assert.equal(window.items[1].senderDigest, "digest-father");
+  assert.equal(window.items[0].senderDigest, window.items[2].senderDigest);
+  // No family role is asserted for an unknown speaker, but the two speakers stay distinguishable.
+  assert.notEqual(window.items[0].senderRole, window.items[1].senderRole);
+  assert.match(window.items[0].senderRole, /^speaker-/);
+});
+
+test("a known contributorRole still wins over the derived speaker pseudonym", () => {
+  const sources = [src({ id: "k1", contributorRole: "mother", capturedAt: "2026-08-20T10:00:00+08:00", text: "今天出门了", metadata: { senderDigest: "digest-mother" } })];
+  const [window] = buildEvidenceWindows("conv-role", "p", sources, { dailyTraces: [], lifeEvents: [] });
+  assert.equal(window.items[0].senderRole, "mother");
+  assert.equal(window.items[0].senderDigest, "digest-mother");
 });

@@ -44,14 +44,33 @@ export function activityDateOf(iso: string, timezone: string, dayBoundaryHour = 
   return local.toISOString().slice(0, 10);
 }
 
+// Real per-speaker identity. The WeChat importer records one `contributorId` for the whole import
+// ("contributor-system") and keeps the actual per-message speaker in `metadata.senderDigest`, so
+// hashing contributorId collapsed all 8,550 messages of the family group into a single sender:
+// stats.senderCount was always 1, and every "same sender" media-binding rule matched everyone.
+export function senderIdentityOf(source: WindowSource): string {
+  const fromMetadata = source.metadata?.senderDigest;
+  return typeof fromMetadata === "string" && fromMetadata ? fromMetadata : digest(source.contributorId);
+}
+
+// senderRole carries a family role ("mother") when the importer knew one. Real WeChat imports do
+// not, and inventing one would be an unsupported claim about who said what — so an unknown role
+// falls back to a stable per-speaker pseudonym. That is enough to prove several different people
+// described something (which is what evidence strength actually asks) without asserting who they are.
+function senderRoleOf(source: WindowSource, senderDigest: string): string {
+  if (source.contributorRole) return source.contributorRole;
+  return `speaker-${senderDigest.slice(0, 8)}`;
+}
+
 function toEvidenceItem(source: WindowSource, index: number): EvidenceItem {
   const mediaRefs = source.mediaIds.map((mediaId) => ({ mediaId, hasHotDerivative: false }));
+  const senderDigest = senderIdentityOf(source);
   return {
     itemId: `item:${digest(`${source.id}:${index}`).slice(0, 24)}`,
     sourceId: source.id,
     sentAt: source.capturedAt,
-    senderRole: source.contributorRole ?? "unknown",
-    senderDigest: digest(source.contributorId),
+    senderRole: senderRoleOf(source, senderDigest),
+    senderDigest,
     text: source.text ?? "",
     contentTypes: source.contentTypes,
     mediaRefs,
