@@ -267,6 +267,20 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .trace-disclosure time { color: var(--color-accent); font-size: .76rem; font-weight: 700; }
 .trace-disclosure ul { margin: 0; padding: 0; list-style: none; color: var(--color-muted); font-size: .92rem; }
 .trace-disclosure ul li::before { margin-right: 8px; color: var(--color-secondary); content: "—"; }
+.trace-disclosure .trace-more { font-size: .8rem; }
+.trace-disclosure .trace-more::before { content: "…"; }
+.trace-disclosure .trace-more a { border-bottom: 1px solid currentColor; }
+.month-chapter .chapter-meta .text-link, .year-month .chapter-meta .text-link { min-height: 36px; font-weight: 600; }
+
+/* Year / age navigation */
+.archive-nav { margin-top: 8px; }
+.archive-nav ol { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; padding: 0 0 12px; list-style: none; border-bottom: 1px solid var(--color-border); }
+.archive-nav a { display: inline-flex; flex-direction: column; min-height: 44px; justify-content: center; line-height: 1.2; }
+.archive-nav a span { font-size: 1.15rem; font-weight: 600; }
+.archive-nav a small { color: var(--color-muted); font-size: .74rem; }
+.archive-nav li[aria-current] a span { color: var(--color-accent); }
+.archive-nav a:hover span { color: var(--color-accent); }
+.year-page .archive-nav { margin-top: 48px; padding: 0; }
 
 /* Detail */
 .detail-head { display: grid; gap: 10px; padding: clamp(28px, 5vw, 56px) 0 clamp(24px, 4vw, 40px); }
