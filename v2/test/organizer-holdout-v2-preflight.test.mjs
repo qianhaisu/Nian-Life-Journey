@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import pg from "pg";
 import { CONTRACT_DATABASE_URL, SKIP_REASON } from "./fixtures/contract-database.mjs";
 import { buildEvidenceWindows } from "../lib/organizer/evidence/window.ts";
-import { shanghaiCalendarDate } from "../lib/organizer/life-date.ts";
+import { shanghaiCalendarDate, SHANGHAI_LIFE_DATE_SQL } from "../lib/organizer/life-date.ts";
 import { HOLDOUT_V2_SET } from "../lib/organizer/calibration-sets-v2.ts";
 
 // Guards Holdout V2's one property that can silently rot as data or migrations change: each frozen
@@ -21,14 +21,14 @@ if (!CONTRACT_DATABASE_URL) {
     try {
       assert.equal(HOLDOUT_V2_SET.length, 19, "the frozen set must not grow or shrink silently");
       for (const tc of HOLDOUT_V2_SET) {
-        const anchorRow = (await client.query(`select captured_at, to_char(captured_at,'YYYY-MM-DD') d from raw_sources where id=$1`, [tc.anchorSourceId])).rows[0];
+        const anchorRow = (await client.query(`select captured_at, ${SHANGHAI_LIFE_DATE_SQL} d from raw_sources where id=$1`, [tc.anchorSourceId])).rows[0];
         assert.ok(anchorRow, `${tc.id}: anchorSourceId no longer exists`);
-        assert.equal(anchorRow.d, tc.lifeDate, `${tc.id}: to_char life date drifted from the frozen fixture`);
-        assert.equal(shanghaiCalendarDate(anchorRow.captured_at.toISOString()), tc.lifeDate, `${tc.id}: JS-side Shanghai date disagrees with to_char`);
+        assert.equal(anchorRow.d, tc.lifeDate, `${tc.id}: authoritative Shanghai life date drifted from the frozen fixture`);
+        assert.equal(shanghaiCalendarDate(anchorRow.captured_at.toISOString()), tc.lifeDate, `${tc.id}: JS-side Shanghai date disagrees with the authoritative SQL date`);
 
         const { rows } = await client.query(
           `select ${COLS} from raw_sources where source_type='wechat' and deleted_at is null
-             and source_label=$1 and to_char(captured_at,'YYYY-MM-DD')=$2 order by captured_at limit 400`,
+             and source_label=$1 and ${SHANGHAI_LIFE_DATE_SQL}=$2 order by captured_at limit 400`,
           [tc.conversation, tc.lifeDate]);
         assert.ok(rows.length > 0, `${tc.id}: no sources on the frozen life date`);
 

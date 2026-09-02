@@ -4,9 +4,13 @@
 //   - Every case is identified by (conversation, lifeDate, anchorSourceId), never by a LifeEvent id
 //     and never by a day derived through JS `Date` + `.toISOString()` (the defect that invalidated
 //     the first Holdout V2 attempt — see life-date.ts). Every lifeDate here was read via
-//     to_char(captured_at, 'YYYY-MM-DD') on a TIMESTAMP WITHOUT TIME ZONE column storing literal
-//     Shanghai wall-clock digits, and cross-checked against shanghaiCalendarDate() on the anchor's
-//     own captured_at.
+//     the authoritative Shanghai life-date SQL and cross-checked against shanghaiCalendarDate() on
+//     the anchor's own captured_at. (That SQL was originally written as a bare
+//     to_char(captured_at, ...) on the belief that captured_at was tz-naive Shanghai wall clock; it
+//     is in fact timestamptz, so the expression has since been corrected to convert AT TIME ZONE
+//     'Asia/Shanghai' first — see life-date.ts. The cross-check against shanghaiCalendarDate() was
+//     part of preflight from the start and passes for all 19 anchors under BOTH expressions, which
+//     is the evidence that no Holdout V2 anchor ever fell in the affected 00:00-07:59 band.)
 //   - Candidates were drawn two ways, both mechanical and reproducible: a keyword scan for
 //     capability/transition/recurrence/negation language across the full archive, and deterministic
 //     per-month quartile sampling (days at the 20th/50th/80th percentile position) for ordinary/dense

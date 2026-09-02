@@ -82,7 +82,10 @@ await pgClient.connect();
 let uploadedRows;
 if (targetMonth) {
   uploadedRows = await pgClient.query(
-    `SELECT id FROM raw_sources WHERE source_type='wechat' AND status='uploaded' AND to_char(captured_at,'YYYY-MM')=$1`,
+    // captured_at is timestamptz: it MUST be converted into Shanghai before the month is read,
+    // otherwise a message sent between Shanghai 00:00 and 07:59 on the 1st is filed in the previous
+    // month (Postgres renders a timestamptz through the session TimeZone, which is GMT here).
+    `SELECT id FROM raw_sources WHERE source_type='wechat' AND status='uploaded' AND to_char(captured_at AT TIME ZONE 'Asia/Shanghai','YYYY-MM')=$1`,
     [targetMonth]
   );
 } else {
