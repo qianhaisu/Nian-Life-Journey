@@ -32,7 +32,9 @@ const SERVICE_MESSAGE = /满意度调查|问卷|退订|回复\s*TD|验证码|【
 // An empty result means "render the media, not a caption" — never "hide the evidence item".
 export function presentableEvidenceText(text: string | undefined | null): string {
   if (!text) return "";
-  const unescaped = text.replace(WECHAT_ESCAPE, "$1");
+  // The exporter writes line breaks as the two characters backslash-n rather than a real newline,
+  // so they have to be normalised before anything can reason about lines.
+  const unescaped = text.replace(/\\n/g, String.fromCharCode(10)).replace(WECHAT_ESCAPE, "$1");
   if (RECALL_NOTICE.test(unescaped.trim())) return "";
   if (SERVICE_MESSAGE.test(unescaped)) return "";
   const cleaned = stripQuotedReply(unescaped)
