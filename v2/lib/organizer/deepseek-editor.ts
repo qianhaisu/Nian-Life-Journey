@@ -13,6 +13,8 @@
 import type { EvidenceWindow } from "./evidence/types";
 import type { MemoryEditorProvider } from "./pipeline";
 import { buildMemoryEditorPrompt, MEMORY_EDITOR_PROMPT_VERSION, MEMORY_EDITOR_SYSTEM_PROMPT, MEMORY_EDITOR_TOOL_NAME, MEMORY_EDITOR_TOOL_SCHEMA } from "./prompts/memory-editor-v1";
+import { buildMemoryEditorPromptV2, MEMORY_EDITOR_V2_PROMPT_VERSION, MEMORY_EDITOR_V2_SYSTEM_PROMPT, MEMORY_EDITOR_V2_TOOL_NAME, MEMORY_EDITOR_V2_TOOL_SCHEMA, type PriorObservation } from "./prompts/memory-editor-v2";
+import { toV1WorthinessDimensions, type EvidenceAxis, type WorthinessAxis } from "./worthiness-v2";
 
 export class DeepSeekEditorError extends Error {
   constructor(message: string, readonly code: string, readonly fatal = false) {
@@ -95,17 +97,38 @@ export function coerceSubjectRelevance(raw: Record<string, unknown>, window: Evi
   return { subjectRelevance: "primary" };
 }
 
+export type MemoryEditorVariant = "v1" | "v2";
+
+export type DeepSeekEditorOptions = {
+  /** v1 is the production publication-ledger contract. v2 splits provenance from worthiness. */
+  variant?: MemoryEditorVariant;
+  /** v2 only: bounded, topic-linked baseline used to justify a developmental-transition claim. */
+  priorObservationsFor?: (window: EvidenceWindow) => PriorObservation[];
+};
+
 export class DeepSeekMemoryEditor implements MemoryEditorProvider {
   readonly name = "deepseek";
   readonly model: string;
-  readonly promptVersion = MEMORY_EDITOR_PROMPT_VERSION;
+  readonly promptVersion: string;
+  readonly variant: MemoryEditorVariant;
   readonly stats: DeepSeekCallStats[] = [];
+  /**
+   * v2 emits two axes that the v1 contract does not carry, and validateMemoryEditorVerdict returns
+   * a rebuilt object, so they would otherwise be dropped before anything could score them. Keeping
+   * them here (keyed by windowId) preserves them for scoring and observability without widening the
+   * contract.
+   */
+  readonly axesByWindowId = new Map<string, { evidenceAxis: EvidenceAxis; worthinessAxis: WorthinessAxis }>();
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly subject: { primaryName: string; aliases: string[] };
+  private readonly priorObservationsFor?: (window: EvidenceWindow) => PriorObservation[];
 
-  constructor(env: NodeJS.ProcessEnv, subject: { primaryName: string; aliases: string[] }) {
+  constructor(env: NodeJS.ProcessEnv, subject: { primaryName: string; aliases: string[] }, options: DeepSeekEditorOptions = {}) {
+    this.variant = options.variant ?? "v1";
+    this.promptVersion = this.variant === "v2" ? MEMORY_EDITOR_V2_PROMPT_VERSION : MEMORY_EDITOR_PROMPT_VERSION;
+    this.priorObservationsFor = options.priorObservationsFor;
     if (!env.DEEPSEEK_API_KEY) throw new DeepSeekEditorError("DeepSeek is not configured: DEEPSEEK_API_KEY is missing", "missing_api_key", true);
     if (!env.AI_MODEL) throw new DeepSeekEditorError("DeepSeek is not configured: AI_MODEL is missing", "missing_model", true);
     this.apiKey = env.DEEPSEEK_API_KEY;
@@ -119,15 +142,17 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
   describe() { return { provider: this.name, model: this.model, promptVersion: this.promptVersion }; }
 
   async organize(window: EvidenceWindow): Promise<{ verdict: unknown }> {
+    const isV2 = this.variant === "v2";
+    const toolName = isV2 ? MEMORY_EDITOR_V2_TOOL_NAME : MEMORY_EDITOR_TOOL_NAME;
     const body = JSON.stringify({
       model: this.model,
       max_tokens: 4000,
       temperature: 0,
       thinking: { type: "disabled" },
-      system: MEMORY_EDITOR_SYSTEM_PROMPT,
-      tools: [{ name: MEMORY_EDITOR_TOOL_NAME, description: "输出记忆编辑的结构化判断", input_schema: MEMORY_EDITOR_TOOL_SCHEMA }],
-      tool_choice: { type: "tool", name: MEMORY_EDITOR_TOOL_NAME },
-      messages: [{ role: "user", content: buildMemoryEditorPrompt(window, this.subject) }],
+      system: isV2 ? MEMORY_EDITOR_V2_SYSTEM_PROMPT : MEMORY_EDITOR_SYSTEM_PROMPT,
+      tools: [{ name: toolName, description: "输出记忆编辑的结构化判断", input_schema: isV2 ? MEMORY_EDITOR_V2_TOOL_SCHEMA : MEMORY_EDITOR_TOOL_SCHEMA }],
+      tool_choice: { type: "tool", name: toolName },
+      messages: [{ role: "user", content: isV2 ? buildMemoryEditorPromptV2(window, this.subject, this.priorObservationsFor?.(window) ?? []) : buildMemoryEditorPrompt(window, this.subject) }],
     });
 
     const startedAt = Date.now();
@@ -148,10 +173,20 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         }
         const payload = await response.json() as AnthropicResponse;
         if (payload.error) throw new DeepSeekEditorError(`DeepSeek error: ${payload.error.type ?? "unknown"}`, "api_error");
-        const toolUse = payload.content?.find((block) => block.type === "tool_use" && block.name === MEMORY_EDITOR_TOOL_NAME);
+        const toolUse = payload.content?.find((block) => block.type === "tool_use" && block.name === toolName);
         if (!toolUse || typeof toolUse.input !== "object" || toolUse.input === null) throw new DeepSeekEditorError("DeepSeek returned no tool_use block", "no_tool_use");
 
         const raw = { ...(toolUse.input as Record<string, unknown>) };
+        if (isV2) {
+          const worthinessAxis = raw.worthinessAxis as WorthinessAxis | undefined;
+          const evidenceAxis = raw.evidenceAxis as EvidenceAxis | undefined;
+          if (!worthinessAxis || !evidenceAxis) throw new DeepSeekEditorError("DeepSeek v2 verdict is missing an axis", "missing_axis");
+          this.axesByWindowId.set(window.windowId, { evidenceAxis, worthinessAxis });
+          // The H1–H9 validator speaks v1 dimension names and remains the safety authority, so the
+          // worthiness axis is projected onto them. H8 then re-checks the transition claim against
+          // the text independently of the model's own `basis`.
+          raw.worthinessDimensions = toV1WorthinessDimensions(worthinessAxis);
+        }
         const temporal = coerceTemporalStatus(raw.temporalStatus);
         raw.temporalStatus = temporal.temporalStatus;
         const { subjectRelevance, gateAReason } = coerceSubjectRelevance(raw, window, this.subject);
@@ -187,8 +222,8 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
 
 // Fail closed: an unconfigured or unsupported DeepSeek setup must stop AI writes, never silently
 // hand the work to the rule-based organizer.
-export function createDeepSeekMemoryEditor(env: NodeJS.ProcessEnv, subject: { primaryName: string; aliases: string[] }) {
+export function createDeepSeekMemoryEditor(env: NodeJS.ProcessEnv, subject: { primaryName: string; aliases: string[] }, options: DeepSeekEditorOptions = {}) {
   const provider = (env.AI_PROVIDER ?? "").toLowerCase();
   if (provider !== "deepseek") throw new DeepSeekEditorError(`AI_PROVIDER is "${provider || "unset"}", expected "deepseek"`, "wrong_provider", true);
-  return new DeepSeekMemoryEditor(env, subject);
+  return new DeepSeekMemoryEditor(env, subject, options);
 }
