@@ -1,43 +1,54 @@
 import Link from "next/link";
-import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
-import { RecentMemoryCanvas } from "@/components/recent-memory-canvas";
-import { getHomeEvents, getStore } from "@/lib/db/repository";
-import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
-import { isSnapshotPublishable } from "@/lib/organizer/quality-review";
-import { calendarMonthOf, monthLabel } from "@/lib/timeline-dates";
+import { EditorialMemory } from "@/components/editorial-memory";
+import { PhotoStrip } from "@/components/media-sequence";
+import { loadFamilyArchive } from "@/lib/family-archive";
+import { latestGrowthNote } from "@/lib/growth-notes";
+import { findMonth, latestMemory } from "@/lib/memory-chapters";
 
 export const dynamic = "force-dynamic";
 
+// The front page is a quiet cover: the most recent memory, at most one recent change, and this
+// month's chapter. Nothing rotates, nothing counts, nothing asks the reader to upload.
 export default async function HomePage() {
-  const [events, store] = await Promise.all([getHomeEvents(), getStore()]); const canvasEvents = events.slice(0, 4);
-  // The masthead month must be the month of the memory actually on screen. It was the hardcoded
-  // string "2026 年 8 月", which labelled a 2025-08-11 hero as 2026.
-  const leadMonth = calendarMonthOf(canvasEvents[0]?.occurredAt);
-  // A seeded snapshot must not act as a container for another month's memories: it is shown only
-  // when its own month has published memories behind it.
-  const publishedMonths = new Set(events.map((event) => calendarMonthOf(event.occurredAt)).filter((value): value is string => Boolean(value)));
-  const snapshot = store.monthlySnapshot && isSnapshotPublishable(store.monthlySnapshot.month, publishedMonths) ? store.monthlySnapshot : undefined;
-  const snapshotMonth = snapshot ? snapshot.month : "";
-  const focusGoals = snapshot ? focusGoalsForSnapshot(store.monthlyFocusGoals, snapshot.month) : [];
-  // Derived from real GrowthRecords only. This block used to be a hardcoded demo array plus a lookup
-  // for two seed ids that no longer exist, which is what rendered "undefined cm · undefined kg" and
-  // two growth claims that no evidence in the archive supports. With no records, the section is
-  // simply not rendered — an empty section is honest, an invented one is not.
-  const recentChanges = store.growthRecords
-    .toSorted((a, b) => b.observedAt.localeCompare(a.observedAt))
-    .slice(0, 3)
-    .map((record) => ({
-      date: record.observedAt.slice(5, 10).replace("-", "."),
-      label: record.kind,
-      title: [record.value, record.unit].filter(Boolean).join(" "),
-      note: record.note ?? "",
-    }))
-    .filter((change) => change.title.trim().length > 0);
+  const { chapters, store, birthDay, snapshot } = await loadFamilyArchive();
+  const lead = latestMemory(chapters);
+  const leadMonth = lead ? findMonth(chapters, lead.signature.day.slice(0, 7)) : undefined;
+  const alternates = leadMonth ? leadMonth.memories.filter((memory) => memory.id !== lead?.id).slice(0, 2) : [];
+  const change = latestGrowthNote(store.growthRecords, birthDay);
+  // "This month" is the most recent month that has anything at all; when a summary was written for
+  // it, it is quoted in the month's own words.
+  const thisMonth = chapters[0]?.months[0];
+  const summary = thisMonth && snapshot?.month === thisMonth.month ? snapshot.summary : undefined;
+  const monthHref = thisMonth ? `/memory/${thisMonth.month.slice(0, 4)}/${thisMonth.month.slice(5, 7)}` : "/memory";
+
   return <div className="home-page">
-    <header className="home-masthead wide-wrap reveal"><span className="section-mark">{leadMonth ? `${leadMonth.slice(0, 4)} 年 ${Number(leadMonth.slice(5, 7))} 月 · 最近` : "最近"}</span><h1 className="serif"><span className="home-title-line">最近怎么样，</span><span className="home-title-line"><em>张年。</em></span></h1></header>
-    <div className="wide-wrap"><RecentMemoryCanvas events={canvasEvents} media={store.media} /></div>
-    {recentChanges.length > 0 && <section className="home-changes reading-wrap" aria-labelledby="changes-title"><div className="section-heading"><span className="section-mark">最近</span><h2 id="changes-title" className="serif">有什么新变化</h2></div><ol>{recentChanges.map((change) => <li key={change.title}><time>{change.date}</time><div><span>{change.label}</span><h3 className="serif">{change.title}</h3><p>{change.note}</p></div></li>)}</ol><Link className="text-link" href="/about">去看看最近的变化 <span>↗</span></Link></section>}
-    <MonthlyFocusGoals goals={focusGoals} snapshotMonth={snapshotMonth} />
-    <section className="month-encounter wide-wrap"><div><span className="section-mark">这个月</span>{snapshot ? <p className="serif">&ldquo;{snapshot.summary}&rdquo;</p> : null}{leadMonth ? <Link className="text-link" href={`/memory/${leadMonth.slice(0, 4)}/${leadMonth.slice(5, 7)}`}>翻回{monthLabel(leadMonth)} <span>↗</span></Link> : null}</div><aside><span className="section-mark">一年前的今天</span><h2 className="serif">回头看看那一天。</h2><p>不是每天提醒，只在有想再看一次的日子时出现。</p><Link href="/memory">去以前看看</Link></aside></section>
+    <header className="home-masthead reading-wrap reveal">
+      <span className="section-mark">{leadMonth ? `${leadMonth.label} · 最近` : "最近"}</span>
+      <h1 className="serif"><span className="home-title-line">最近怎么样，</span><span className="home-title-line"><em>张年。</em></span></h1>
+    </header>
+
+    {lead ? <section className="home-lead reading-wrap" aria-labelledby="lead-title">
+      <h2 id="lead-title" className="section-mark">最近的一段生活</h2>
+      <EditorialMemory memory={lead} size="lead" priority />
+      {alternates.length > 0 ? <ul className="memory-lines home-alternates">{alternates.map((memory) => <EditorialMemory memory={memory} size="line" key={memory.id} />)}</ul> : null}
+    </section> : <section className="home-lead reading-wrap"><p className="serif archive-empty">档案还是空的。等时间再走一会儿。</p></section>}
+
+    {change ? <section className="home-change reading-wrap" aria-labelledby="change-title">
+      <h2 id="change-title" className="section-mark">最近长大的一点</h2>
+      <p className="home-change-note serif">{change.note}</p>
+      <p className="home-change-meta"><span>{change.label}</span><time dateTime={change.signature.day}>{change.signature.dateLabel}</time></p>
+    </section> : null}
+
+    {thisMonth ? <section className="home-month reading-wrap" aria-labelledby="month-title">
+      <header className="month-anchor">
+        <h2 id="month-title" className="serif"><Link href={monthHref}>{thisMonth.label}</Link></h2>
+        {thisMonth.ageLabel ? <p>当时 {thisMonth.ageLabel}</p> : null}
+      </header>
+      <PhotoStrip photos={thisMonth.photos} />
+      {summary ? <p className="chapter-summary serif">{summary}</p> : null}
+      {thisMonth.memories.length > 0 ? <ul className="memory-lines">{thisMonth.memories.slice(0, 3).map((memory) => <EditorialMemory memory={memory} size="line" key={memory.id} />)}</ul> : null}
+      {thisMonth.traceDays.length > 0 ? <p className="chapter-meta">{thisMonth.memories.length > 0 ? "还有 " : ""}{thisMonth.traceDays.length} 天留下了生活痕迹</p> : null}
+      <Link className="text-link" href={monthHref}>翻看这个月</Link>
+    </section> : null}
   </div>;
 }

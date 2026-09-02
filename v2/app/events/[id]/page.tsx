@@ -1,29 +1,59 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { EventHeroImage } from "@/components/event-hero-image";
 import { EvidenceList } from "@/components/evidence-list";
-import { getAllEvents, getEventDetail } from "@/lib/db/repository";
-import { heroCandidates } from "@/lib/media/hero";
+import { MediaSequence } from "@/components/media-sequence";
+import { TimeSignature } from "@/components/time-signature";
+import { getAllEvents, getEventDetail, getStore } from "@/lib/db/repository";
+import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
+import { sequenceFor } from "@/lib/media/presentation";
+import { timeSignatureFor } from "@/lib/time-signature";
+
 export async function generateStaticParams() { return (await getAllEvents()).map((event) => ({ id: event.id })); }
-function weightLabel(weight: "trace" | "memory" | "highlight" | "chapter") { return weight === "chapter" ? "人生章节" : weight === "highlight" ? "值得再看" : weight === "trace" ? "生活痕迹" : "一段记忆"; }
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const detail = await getEventDetail(id);
+  return { title: detail ? memoryTitle(detail.event) : "这一页不在档案里" };
+}
+
+const GROWTH_LABEL: Record<string, string> = { language: "那时会说", motor: "那时会做", social: "那时的样子", interest: "那时喜欢", sleep: "那时的睡眠", food: "那时的吃饭", personality: "那时的性格", height: "身高", weight: "体重" };
+
+// Three layers, in reading order: when and what; the photos and the story; and, folded away, the
+// material the day actually left behind. The story is the family's; the material is untouched.
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
-	const { id } = await params;
-	const detail = await getEventDetail(id);
-	if (!detail) notFound();
-	const { event, media: eventMedia, sources: eventSources, contributors, growth, care } = detail;
-	const heroCandidateList = heroCandidates(event.heroMediaId, eventMedia);
-	const photoCount = eventMedia.filter((item) => item.type === "photo").length;
-	const videoCount = eventMedia.filter((item) => item.type === "video").length;
-	const chatCount = eventSources.filter((source) => source.sourceType === "wechat").length;
-	const noteCount = eventSources.filter((source) => source.sourceType === "parent_note" || source.sourceType === "daycare_note").length;
-	return <article className="detail-page">
-		<div className="reading-wrap detail-top"><Link className="back-link" href="/memory">← 回到记忆</Link><span className="section-mark">{weightLabel(event.memoryWeight)} · {event.occurredAt.replaceAll("-", ".")}</span><h1 className="serif">{event.title}</h1><div className="detail-meta"><span>{event.occurredAt.replaceAll("-", ".")}</span><span>{event.locationLabel}</span></div></div>
-		<EventHeroImage candidates={heroCandidateList} />
-		<section className="story-layer reading-wrap" aria-labelledby="story-title">
-			<div className="story-column"><span className="layer-label">故事</span><h2 id="story-title" className="serif">多年以后，我们会这样记住它。</h2><p className="story-lead">{event.story}</p>{event.storySections?.map((section) => <p key={section}>{section}</p>)}</div>
-			<aside className="detail-aside"><section><h3 className="aside-label">同行的人</h3><p>{event.people.join(" · ")}</p></section><section><h3 className="aside-label">地点</h3><p>{event.locationLabel}</p></section><section><h3 className="aside-label">标签</h3><div className="detail-tags">{event.tags.map((tag) => <span key={tag}>{tag}</span>)}</div></section>{growth.length > 0 && <section><h3 className="aside-label">相关成长</h3>{growth.map((record) => <div className="related-record" key={record.id}><strong>{record.kind === "social" ? "观察与专注" : record.kind === "motor" ? "大运动" : "语言表达"}</strong><p>{record.note}</p></div>)}</section>}{care.length > 0 && <section><h3 className="aside-label">照护记录</h3>{care.map((record) => <div className="related-record" key={record.id}><strong>{record.status}</strong><p>{record.note}</p></div>)}</section>}</aside>
-		</section>
-		<section className="evidence-layer" aria-labelledby="evidence-title"><div className="reading-wrap evidence-inner"><div className="evidence-heading"><div><span className="layer-label">原始材料</span><h2 id="evidence-title" className="serif">那天留下的东西</h2></div><p>故事可以修改；当时真正留下的东西永远保留。</p></div><div className="evidence-summary"><span><strong>{photoCount}</strong> 张照片</span><span><strong>{videoCount}</strong> 个视频</span><span><strong>{chatCount}</strong> 条聊天记录</span><span><strong>{noteCount}</strong> 条原话与备注</span></div><EvidenceList sources={eventSources} media={eventMedia} contributors={contributors} /></div></section>
-		<div className="detail-footer reading-wrap"><Link className="text-link" href="/memory">继续翻看下一段生活 <b>↗</b></Link></div>
-	</article>;
+  const { id } = await params;
+  const [detail, store] = await Promise.all([getEventDetail(id), getStore()]);
+  if (!detail) notFound();
+  const { event, media: eventMedia, sources: eventSources, contributors, growth, care } = detail;
+  const signature = timeSignatureFor(event.occurredAt, store.profile?.birthDate || undefined);
+  const title = memoryTitle(event);
+  const raw = sequenceFor(eventMedia, event.heroMediaId);
+  const sequence = { layout: raw.layout, shown: raw.shown.map((item) => toMediaRef(item, title)), remaining: raw.remaining };
+  const paragraphs = [event.story, ...(event.storySections ?? [])].map((text) => text?.trim()).filter((text): text is string => Boolean(text));
+  const people = event.people.filter(Boolean);
+  const location = event.locationLabel?.trim();
+  const materialCount = eventSources.length;
+
+  return <article className="detail-page">
+    <header className="reading-wrap detail-head">
+      <Link className="back-link" href="/memory">← 回到记忆</Link>
+      {signature ? <TimeSignature signature={signature} className="detail-signature" /> : null}
+      <h1 className="serif">{title}</h1>
+      {people.length > 0 || location ? <p className="detail-context">{[people.join("、"), location].filter(Boolean).join(" · ")}</p> : null}
+    </header>
+    {sequence.shown.length > 0 ? <div className={sequence.layout === "single" ? "reading-wrap" : "photo-wrap"}><MediaSequence sequence={sequence} title={title} /></div> : null}
+    {paragraphs.length > 0 || growth.length > 0 || care.length > 0 ? <section className="story-layer reading-wrap">
+      {paragraphs.length > 0 ? <div className="story-column">{paragraphs.map((text, index) => <p key={index} className={index === 0 ? "story-lead" : undefined}>{text}</p>)}</div> : null}
+      {growth.length > 0 || care.length > 0 ? <aside className="story-aside">
+        {growth.map((record) => <div className="story-note" key={record.id}><span className="section-mark">{GROWTH_LABEL[record.kind] ?? "那时"}</span><p>{record.note}</p></div>)}
+        {care.map((record) => <div className="story-note" key={record.id}><span className="section-mark">{record.title}</span><p>{record.note}</p></div>)}
+      </aside> : null}
+    </section> : null}
+    {materialCount > 0 ? <details className="evidence-disclosure reading-wrap">
+      <summary><span className="serif">当时留下的资料</span><small>{materialCount} 项</small></summary>
+      <EvidenceList sources={eventSources} media={eventMedia} contributors={contributors} />
+    </details> : null}
+    <footer className="detail-footer reading-wrap"><Link className="text-link" href="/memory">回到记忆</Link></footer>
+  </article>;
 }

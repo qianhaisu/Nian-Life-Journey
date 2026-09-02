@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { listMemoryCandidates } from "@/lib/organizer/candidate-store";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "候选记忆", robots: { index: false, follow: false } };
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "待处理",

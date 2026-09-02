@@ -1,50 +1,49 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { EditorialMemory } from "@/components/editorial-memory";
+import { PhotoStrip } from "@/components/media-sequence";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
-import { getAllEvents, getStore } from "@/lib/db/repository";
+import { TraceDisclosure } from "@/components/trace-disclosure";
+import { loadFamilyArchive } from "@/lib/family-archive";
+import { findMonth } from "@/lib/memory-chapters";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
-import { isSnapshotPublishable } from "@/lib/organizer/quality-review";
-import { availableMonths, availableYears, calendarMonthOf, dayOfMonth, inMonth, monthLabel } from "@/lib/timeline-dates";
+import { formatMonth } from "@/lib/time-signature";
 
 export const dynamic = "force-dynamic";
 
-// Replaces the former literal app/memory/2026/08 directory, which read counts and a summary from
-// lib/mock-data (186 photos, 23 moments) regardless of what the month actually contained.
+export async function generateMetadata({ params }: { params: Promise<{ year: string; month: string }> }): Promise<Metadata> {
+  const { year, month } = await params;
+  return { title: formatMonth(`${year}-${month}`) };
+}
+
+// One month as a chapter: its anchor, the month's own words when a summary exists, a few photos,
+// then the memories and the folded ordinary days.
 export default async function MonthPage({ params }: { params: Promise<{ year: string; month: string }> }) {
   const { year, month: monthSegment } = await params;
   if (!/^\d{4}$/.test(year) || !/^\d{2}$/.test(monthSegment)) notFound();
   const month = `${year}-${monthSegment}`;
-  const [events, store] = await Promise.all([getAllEvents(), getStore()]);
-  if (!availableMonths([events, store.dailyTraces], year).includes(month)) notFound();
+  const { chapters, store, snapshot } = await loadFamilyArchive();
+  const chapter = findMonth(chapters, month);
+  if (!chapter) notFound();
 
-  const monthEvents = inMonth(events, month);
-  const monthTraces = inMonth(store.dailyTraces, month);
-  const mediaIds = new Set(monthEvents.flatMap((event) => event.mediaIds));
-  const monthMedia = store.media.filter((item) => mediaIds.has(item.id));
-  const photoCount = monthMedia.filter((item) => item.type === "photo").length;
-  const videoCount = monthMedia.filter((item) => item.type === "video").length;
+  const summary = snapshot?.month === month ? snapshot : undefined;
+  const focusGoals = summary ? focusGoalsForSnapshot(store.monthlyFocusGoals, month) : [];
+  const yearChapter = chapters.find((item) => item.year === year);
+  const siblings = yearChapter?.months.filter((item) => item.month !== month) ?? [];
 
-  // The summary is only shown when this month has published memories behind it, so a seeded
-  // snapshot can never act as a container for another month's content.
-  const publishedMonths = new Set(events.map((event) => calendarMonthOf(event.occurredAt)).filter((value): value is string => Boolean(value)));
-  const snapshot = store.monthlySnapshot?.month === month && isSnapshotPublishable(month, publishedMonths) ? store.monthlySnapshot : undefined;
-  const focusGoals = snapshot ? focusGoalsForSnapshot(store.monthlyFocusGoals, month) : [];
-  const years = availableYears([events, store.dailyTraces]);
-
-  return <div className="review-page wide-wrap">
-    <header className="month-masthead">
-      <Link className="back-link" href="/memory">← 回到连续时间流</Link>
-      <div><span>{year} / {monthSegment}</span><h1 className="serif">{monthLabel(month)}</h1></div>
-      {snapshot ? <p className="serif">&ldquo;{snapshot.summary}&rdquo;</p> : null}
+  return <div className="month-page reading-wrap">
+    <header className="chapter-masthead">
+      <Link className="back-link" href={`/memory/${year}`}>← {year} 年</Link>
+      <span className="section-mark">月份章节</span>
+      <h1 className="serif">{chapter.label}</h1>
+      {chapter.ageLabel ? <p className="chapter-age">当时 {chapter.ageLabel}</p> : null}
+      {summary ? <p className="chapter-summary serif">{summary.summary}</p> : null}
     </header>
-    <section className="month-review-grid">
-      <div><span className="section-mark">这个月留下</span><strong>{photoCount}</strong><p>张照片 · {videoCount} 段视频<br />{monthEvents.length} 个值得记住的时刻 · {monthTraces.length} 天生活痕迹</p></div>
-      <ol>{monthEvents.map((event) => <li key={event.id}><time>{dayOfMonth(event.occurredAt)}</time><Link href={`/events/${event.id}`}>{event.title}</Link></li>)}</ol>
-    </section>
-    {snapshot ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}
-    <footer className="future-years">
-      <span>其他年份</span>
-      <p className="serif">{years.map((item) => <Link key={item} href={`/memory/${item}`}>{item}</Link>).flatMap((node, index) => index ? [" · ", node] : [node])}</p>
-    </footer>
+    <PhotoStrip photos={chapter.photos} sizes="(max-width: 700px) 46vw, 300px" />
+    {chapter.memories.length > 0 ? <div className="month-memories">{chapter.memories.map((memory, index) => <EditorialMemory memory={memory} priority={index === 0} key={memory.id} />)}</div> : null}
+    <TraceDisclosure traceDays={chapter.traceDays} hasMemories={chapter.memories.length > 0} />
+    {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}
+    {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`}>{item.shortLabel}</Link>).flatMap((node, index) => index ? [" · ", node] : [node])}</p></footer> : null}
   </div>;
 }
