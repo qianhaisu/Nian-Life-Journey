@@ -8,6 +8,7 @@ import {
 } from "../lib/organizer/identity.ts";
 import { buildEvidenceWindows } from "../lib/organizer/evidence/window.ts";
 
+const NANNY_EXPORT_NAME = "hxx" + String.fromCharCode(92) + ".";
 const sha = (v) => createHash("sha256").update(v, "utf8").digest("hex");
 
 test("senderDigestForDisplayName reproduces the importer's hash chain exactly", () => {
@@ -27,9 +28,9 @@ test("recovery matches forward only: an unknown speaker stays unknown", () => {
 
 // The archive's second-largest speaker (3,140 messages) only matched in its escaped spelling.
 test("a markdown-escaped display name is recovered from its unescaped mention", () => {
-  const digest = senderDigestForDisplayName("hxx\.");
-  assert.ok(displayNameVariants("hxx").includes("hxx\."));
-  assert.equal(recoverDisplayNames([digest], ["hxx"]).get(digest), "hxx\.");
+  const digest = senderDigestForDisplayName(NANNY_EXPORT_NAME);
+  assert.ok(displayNameVariants("hxx").includes(NANNY_EXPORT_NAME));
+  assert.equal(recoverDisplayNames([digest], ["hxx"]).get(digest), NANNY_EXPORT_NAME);
 });
 
 test("candidates are harvested from mentions, quoted replies and withdrawal lines", () => {
@@ -50,7 +51,7 @@ const registry = {
     // Same human, later display name. Canonical id keeps them one person.
     { sourceParticipantDigest: senderDigestForDisplayName("静静"), displayName: "静静", canonicalPersonId: "person-b", relationshipToSubject: "mother", narrativeLabel: "妈妈" },
     // Recovered name, but the family has not confirmed who this is.
-    { sourceParticipantDigest: senderDigestForDisplayName("hxx\."), displayName: "hxx\." },
+    { sourceParticipantDigest: senderDigestForDisplayName(NANNY_EXPORT_NAME), displayName: NANNY_EXPORT_NAME },
   ],
 };
 
@@ -66,7 +67,7 @@ test("a mapped speaker resolves to its narrative label; an unmapped one is expli
 });
 
 test("a recovered display name alone does not authorise naming the person in a story", () => {
-  const hxx = resolveSpeaker(senderDigestForDisplayName("hxx\."), registry);
+  const hxx = resolveSpeaker(senderDigestForDisplayName(NANNY_EXPORT_NAME), registry);
   assert.equal(hxx.known, true);
   assert.equal(mayNameInNarrative(hxx), false);
   assert.equal(hxx.relationshipToSubject, undefined, "relationship is never inferred");
@@ -101,4 +102,37 @@ test("one speaker's photo and another's unrelated text stay separate speakers in
   assert.equal(distinctSpeakerCount(window.items.map((i) => i.senderDigest), registry), 2);
   const binding = window.mediaBindings.find((b) => b.mediaId === "photo-1");
   assert.ok(binding.confidence < 0.75, `an unrelated speaker's text must not strongly bind the photo (got ${binding.confidence})`);
+});
+
+// --- Verified family registry -------------------------------------------------------------------
+test("the verified registry resolves all three confirmed speakers and nobody else", async () => {
+  const { FAMILY_REGISTRY, relationshipForSender } = await import("../lib/organizer/family-registry.ts");
+  const ted = resolveSpeaker(senderDigestForDisplayName("Ted"), FAMILY_REGISTRY);
+  const mother = resolveSpeaker(senderDigestForDisplayName("阿静"), FAMILY_REGISTRY);
+  const nanny = resolveSpeaker(senderDigestForDisplayName(NANNY_EXPORT_NAME), FAMILY_REGISTRY);
+  assert.equal(displayLabelFor(ted), "爸爸");
+  assert.equal(displayLabelFor(mother), "妈妈");
+  assert.equal(displayLabelFor(nanny), "雪姨");
+  assert.equal(mother.canonicalPersonId, "person-sujing");
+  assert.equal(relationshipForSender(senderDigestForDisplayName(NANNY_EXPORT_NAME)), "nanny");
+  const stranger = resolveSpeaker("c".repeat(64), FAMILY_REGISTRY);
+  assert.equal(stranger.known, false);
+  assert.equal(displayLabelFor(stranger), UNKNOWN_SPEAKER_LABEL);
+  assert.equal(relationshipForSender("c".repeat(64)), undefined);
+});
+
+test("父母与育儿嫂的转述都算亲历观察，未知发言人不算", async () => {
+  const { classifyTier } = await import("../lib/organizer/evidence/tier.ts");
+  const base = { id: "s", profileId: "p", sourceType: "wechat", contentTypes: ["family"], contributorId: "c", capturedAt: "2026-08-20T10:00:00+08:00", mediaIds: [], visibility: "family", sourceLabel: "conv" };
+  assert.equal(classifyTier({ ...base, contributorRole: "father" }), "firsthand_observation");
+  assert.equal(classifyTier({ ...base, contributorRole: "mother" }), "firsthand_observation");
+  assert.equal(classifyTier({ ...base, contributorRole: "nanny" }), "firsthand_observation");
+  assert.equal(classifyTier({ ...base, contributorRole: undefined }), "reported_speech");
+});
+
+test("三位家人各自的描述算三个见证人，同一人的两个显示名只算一个", async () => {
+  const { FAMILY_REGISTRY } = await import("../lib/organizer/family-registry.ts");
+  const digests = [senderDigestForDisplayName("Ted"), senderDigestForDisplayName("阿静"), senderDigestForDisplayName(NANNY_EXPORT_NAME)];
+  assert.equal(distinctSpeakerCount(digests, FAMILY_REGISTRY), 3);
+  assert.equal(distinctSpeakerCount([digests[1], digests[1]], FAMILY_REGISTRY), 1);
 });

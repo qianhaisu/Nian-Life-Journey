@@ -7,6 +7,9 @@ export function classifyTier(source: WindowSource): EvidenceTier {
   if (source.sourceType === "growth_measurement") return "user_direct_input";
   if (source.contributorRole === "father" || source.contributorRole === "mother") return "firsthand_observation";
   if (source.contributorRole === "teacher" || source.contributorRole === "grandfather" || source.contributorRole === "grandmother") return "firsthand_observation";
+  // A live-in carer (育儿嫂) is with the child for most of the day and reports what she saw
+  // herself — the same kind of direct witness as a parent or a teacher, not hearsay.
+  if (source.contributorRole === "nanny" || source.contributorRole === "caregiver") return "firsthand_observation";
   return "reported_speech";
 }
 
