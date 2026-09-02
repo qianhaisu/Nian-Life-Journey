@@ -17,12 +17,13 @@ import pg from "pg";
 
 for (const file of [".env", ".env.local"]) if (existsSync(file)) config({ path: file, override: true });
 
-const { selectCentralFact, reconcileSupport, meetsMinimumSupport } = await import("../lib/organizer/central-fact.ts");
+const { selectCentralFact, reconcileSupport, meetsMinimumSupport, evidenceKindOf } = await import("../lib/organizer/central-fact.ts");
 const { FAMILY_WRITER_PROMPT_VERSION, FAMILY_WRITER_SYSTEM_PROMPT, FAMILY_WRITER_TOOL_NAME, FAMILY_WRITER_TOOL_SCHEMA, buildFamilyWriterPrompt, validateFamilyWriterOutput } = await import("../lib/organizer/family-writer.ts");
 const { QUALITY_REVIEW_POLICY_VERSION } = await import("../lib/organizer/quality-review.ts");
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
+const onlyId = args.find((a) => a.startsWith("--only="))?.slice("--only=".length);
 const outArg = args.find((a) => a.startsWith("--out="))?.slice("--out=".length);
 if (!outArg) { console.error("--out=<absolute path outside the repo> is required"); process.exit(1); }
 const outPath = path.resolve(outArg);
@@ -114,11 +115,14 @@ const { rows: events } = await client.query(
   `select e.id, e.title, e.story, e.occurred_at, e.source_ids
    from life_events e join content_quality_reviews r on r.target_kind='life_event' and r.target_id=e.id
    where r.decision='approved' order by e.occurred_at`);
-console.log(`Focusing ${events.length} published life events.\n`);
+// --only re-runs a single event without re-spending calls on the others.
+const targets = onlyId ? events.filter((event) => event.id === onlyId) : events;
+if (onlyId && targets.length === 0) { console.error(`--only=${onlyId} matched no published event.`); process.exit(1); }
+console.log(`Focusing ${targets.length} published life event(s)${onlyId ? ` (--only)` : ""}.\n`);
 
 const results = [];
 let calls = 0;
-for (const event of events) {
+for (const event of targets) {
   const { rows: sources } = await client.query(
     `select id, text, captured_at from raw_sources where id = any($1::text[]) and deleted_at is null order by captured_at`,
     [event.source_ids]);
@@ -145,7 +149,7 @@ for (const event of events) {
     const keptTexts = candidates.filter((c) => kept.includes(c.id));
     const input = {
       occurredAt: event.occurred_at.toISOString().slice(0, 10), centralFact,
-      coreFacts: keptTexts.map((c) => ({ statement: c.text.replace(/\s+/g, " ").slice(0, 60), assertionKind: "raw_fact" })),
+      coreFacts: keptTexts.map((c) => ({ statement: c.text.replace(/\s+/g, " ").trim().slice(0, 60), assertionKind: "raw_fact", kind: evidenceKindOf(c.text) })),
       quotableLines: keptTexts.map((c) => ({ text: c.text.replace(/\s+/g, " ").trim(), speakerRole: "家人" })),
       mediaCount: 0,
     };
@@ -153,7 +157,11 @@ for (const event of events) {
       let output;
       try { output = await writeStory(input); calls += 1; } catch (error) { writerIssues.push(`call_failed:${error.message}`); continue; }
       if (output.insufficient) { writerIssues.push("model_declared_insufficient"); break; }
-      const validation = validateFamilyWriterOutput({ title: output.title ?? "", story: output.story ?? "", quotableLines: input.quotableLines, evidenceTexts: keptTexts.map((c) => c.text) });
+      const validation = validateFamilyWriterOutput({
+        title: output.title ?? "", story: output.story ?? "", quotableLines: input.quotableLines,
+        evidenceTexts: keptTexts.map((c) => c.text),
+        hasHypotheticalEvidence: keptTexts.some((c) => evidenceKindOf(c.text) === "hypothetical"),
+      });
       if (validation.ok) rewritten = output; else writerIssues.push(...validation.issues);
     }
     if (!rewritten) { decision = "needs_human_review"; writerIssues.push("writer_rejected"); }

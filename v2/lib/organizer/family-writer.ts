@@ -37,6 +37,8 @@ export const FAMILY_WRITER_SYSTEM_PROMPT = `你在为一个孩子的人生档案
 - **严禁**写「第一次」「首次」「终于」「学会了」，除非「已核实事实」或「原话」里本来就出现了这些字。没有证据的里程碑说法是最严重的错误。
 - story 必须达到 60 个汉字以上。事实少的时候，把每一条事实展开成完整、自然的句子，并把家人的原话放进去——但**不得添加任何新信息**。宁可句子朴素，也不要补写没发生的事。
 - story 不要重复 title 的句子。
+- 「已核实事实」中标注为〔设想〕的条目，是家人的计划、讨论或想象，**并没有真的发生**。写进 story 时必须明确用「家人商量」「家人打算」「家人想象」「家人计划」这类措辞框住它，绝不能写成已经发生的事。标注为〔观察〕的条目才是真实发生过的。
+- 只有〔观察〕可以用来说明事情发生了。〔设想〕不能用来支持「第一次」「已经学会」「真的做了」。
 - 不要解释系统实现，不要出现文件路径、[图片]、[视频]、undefined 等技术文字。
 
 如果给定事实不足以写出符合上述要求的内容，把 insufficient 设为 true，不要硬写。`;
@@ -78,7 +80,11 @@ const CLICHES = ["这一天值得被记住", "在爱的陪伴下", "悄悄长大
 
 const countHan = (text: string) => (text.match(/[一-鿿]/g) ?? []).length;
 
-export type WriterValidationInput = { title: string; story: string; quotableLines: Array<{ text: string }>; evidenceTexts: string[] };
+export type WriterValidationInput = { title: string; story: string; quotableLines: Array<{ text: string }>; evidenceTexts: string[]; hasHypotheticalEvidence?: boolean };
+
+// When a plan or an imagined scene is among the evidence, the story has to say so. Without one of
+// these framings the reader cannot tell a thing the family discussed from a thing the child did.
+const HYPOTHETICAL_FRAMING = /商量|讨论|计划|打算|想象|设想|准备|琢磨|说好|决定/;
 
 // A story is usually 60-180 characters, but the floor has to follow the evidence. When the verified
 // evidence is itself only a handful of fragments ("各种扶墙站", "手一撑", "然后就起来了"), demanding
@@ -116,6 +122,7 @@ export function validateFamilyWriterOutput(input: WriterValidationInput): Writer
   for (const quote of extractQuotes(input.story)) {
     if (!haystack.includes(quote)) issues.push(`unsupported_quote:${quote.slice(0, 12)}`);
   }
+  if (input.hasHypotheticalEvidence && !HYPOTHETICAL_FRAMING.test(input.story)) issues.push("unframed_hypothetical");
   const claimed = `${input.title}${input.story}`.match(MILESTONE_CLAIM)?.[0];
   if (claimed && !MILESTONE_CLAIM.test(haystack)) issues.push(`unsupported_milestone_claim:${claimed}`);
   return { ok: issues.length === 0, issues };

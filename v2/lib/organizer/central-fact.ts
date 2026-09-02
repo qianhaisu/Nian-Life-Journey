@@ -17,6 +17,16 @@ const MILESTONE_TOPIC = /第一次|首次|学会|会爬|会走|会站|扶墙站|
 // 自己吃 and is not evidence that he ate by himself.
 const HYPOTHETICAL = /想象|如果|要不要|以后|打算|准备|计划|建议|不如|应该会|可能会|等他/;
 
+// Evidence kind. A family's plans, reactions and imaginings belong in a memory — they are part of
+// its warmth — but they cannot establish that something happened. Only an observation can support
+// "第一次", "已经学会", "实际做了". The writer is told which is which so it can frame a plan as a
+// plan instead of narrating it as an event.
+export type EvidenceKind = "observation" | "hypothetical";
+
+export function evidenceKindOf(text: string): EvidenceKind {
+  return HYPOTHETICAL.test(text) ? "hypothetical" : "observation";
+}
+
 export type CoreFactLike = { statement: string; evidenceRefs: string[] };
 
 // The central fact is the new ability when there is one, because that is what earned the event its

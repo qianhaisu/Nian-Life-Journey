@@ -8,7 +8,7 @@ import { extractQuotes, validateFamilyWriterOutput } from "../lib/organizer/fami
 import { presentableEvidenceText, presentableSourceLabel } from "../lib/organizer/evidence-text.ts";
 import { classifyCareTopics, qualifiesAsLifeEvent } from "../lib/organizer/care-topics.ts";
 import { storyMinimumFor, STORY_PREFERRED_MIN, STORY_ABSOLUTE_MIN } from "../lib/organizer/family-writer.ts";
-import { selectCentralFact, reconcileSupport } from "../lib/organizer/central-fact.ts";
+import { selectCentralFact, reconcileSupport, evidenceKindOf } from "../lib/organizer/central-fact.ts";
 
 const SUBJECT = { primaryName: "张年", aliases: ["小年", "崽"] };
 
@@ -324,4 +324,36 @@ test("a quoted reply after a leading blank line still loses its blockquote", () 
   const stored = "\n> hxx\\.: \\[图片\\]\n\n他没牙能吃吗\n";
   assert.equal(presentableEvidenceText(stored), "他没牙能吃吗");
   assert.equal(presentableEvidenceText("\n\n> 老师: 可以的\n\n好\n"), "好");
+});
+
+test("plans and imagined scenes are evidence of context, not of what happened", () => {
+  assert.equal(evidenceKindOf("张小年今天吃面，吃的是西红柿鸡蛋面"), "observation");
+  assert.equal(evidenceKindOf("吃的身上和餐椅全是面"), "observation");
+  assert.equal(evidenceKindOf("我想象了一个画面。光溜溜的张小年坐在地垫上自己吃"), "hypothetical");
+  assert.equal(evidenceKindOf("给他铺一张一次性地垫，以后吃这个就做地上"), "hypothetical");
+});
+
+test("a story built on a plan must frame it as a plan", () => {
+  const evidence = ["张小年今天吃面", "计时半小时结束，带他去洗澡换纸尿裤，一次性地垫一卷扔掉"];
+  const asFact = validateFamilyWriterOutput({
+    title: "张小年吃西红柿鸡蛋面",
+    story: "张小年今天吃面，吃得身上和餐椅全是面。计时半小时结束，带他去洗澡换纸尿裤，一次性地垫一卷扔掉，这一天就这样过去了。",
+    quotableLines: [], evidenceTexts: evidence, hasHypotheticalEvidence: true,
+  });
+  assert.equal(asFact.ok, false);
+  assert.ok(asFact.issues.includes("unframed_hypothetical"), JSON.stringify(asFact.issues));
+
+  const framed = validateFamilyWriterOutput({
+    title: "张小年吃西红柿鸡蛋面",
+    story: "张小年今天吃面，吃得身上和餐椅全是面。家人已经商量好下次的流程：让他在地垫上自己吃一会儿，吃完就抱去洗澡换纸尿裤。",
+    quotableLines: [], evidenceTexts: evidence, hasHypotheticalEvidence: true,
+  });
+  assert.equal(framed.ok, true, JSON.stringify(framed.issues));
+
+  // With no hypothetical evidence in play the framing requirement does not apply.
+  assert.equal(validateFamilyWriterOutput({
+    title: "张小年吃西红柿鸡蛋面",
+    story: "张小年今天吃面，吃得身上和餐椅全是面，家里人看着他把面糊得到处都是，谁也没有急着去擦，就让他自己吃完了这一碗。",
+    quotableLines: [], evidenceTexts: evidence,
+  }).ok, true);
 });
