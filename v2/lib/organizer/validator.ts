@@ -20,6 +20,9 @@ export type ValidatorContext = {
   existingLifeEvents: Array<{ id: string; occurredAt: string; contentTypes: ContentType[]; visibility: string }>;
   recentSameTypeCount: number;
   otherChildDigests?: string[];
+  /** Source ids of the prior observations the pipeline actually supplied to the editor. Only a
+   *  baseline drawn from this list can support a transition claim (H8 path B). */
+  supportedPriorSourceIds?: string[];
 };
 
 export type ValidatorResult = { outcome: OrganizerOutcome; degradeReason?: string; reasonCodes: string[] };
@@ -107,10 +110,26 @@ export function validate(window: EvidenceWindow, verdict: MemoryEditorVerdict, c
   // A hedged claim ("好像是第一次") was already downgraded to attributed_claim above; it must not
   // count as text evidence for a milestone — only an unhedged raw_fact can (H2 + H8 combined).
   const milestoneHasText = facts.some((fact) => fact.assertionKind === "raw_fact" && /第一次|首次|first\s*time/i.test(fact.statement));
-  const cappedVerdict: MemoryEditorVerdict = milestoneScore >= 2 && !milestoneHasText
+  // Path B (v3): a dated earlier baseline plus current-window evidence of the new state supports a
+  // transition just as well as the literal word "第一次" — often better. It is accepted only when
+  // the baseline is one the PIPELINE supplied: `supportedPriorSourceIds` comes from deterministic
+  // retrieval, so a model that cites a baseline it was never shown fails this check. Without that
+  // list nothing can qualify, which keeps the default behaviour exactly as strict as before.
+  const supportedPriorIds = new Set(context.supportedPriorSourceIds ?? []);
+  const support = verdict.transitionSupport;
+  const citedPriorIds = support?.priorEvidence.map((entry) => entry.sourceId) ?? [];
+  const milestoneHasLongitudinalSupport =
+    support?.basis === "supported_by_prior_context" &&
+    citedPriorIds.length > 0 &&
+    citedPriorIds.every((sourceId) => supportedPriorIds.has(sourceId)) &&
+    (support?.currentEvidenceRefs.length ?? 0) > 0 &&
+    support.currentEvidenceRefs.every((ref) => spanText(window, ref).trim().length > 0);
+  if (support?.basis === "supported_by_prior_context" && !milestoneHasLongitudinalSupport) reasons.push("unverified_prior_baseline");
+  const milestoneSupported = milestoneHasText || milestoneHasLongitudinalSupport;
+  const cappedVerdict: MemoryEditorVerdict = milestoneScore >= 2 && !milestoneSupported
     ? { ...verdict, worthinessDimensions: { ...verdict.worthinessDimensions, milestone: { score: 0, evidenceRefs: [] } } }
     : verdict;
-  if (milestoneScore >= 2 && !milestoneHasText) reasons.push("media_binding_too_weak");
+  if (milestoneScore >= 2 && !milestoneSupported) reasons.push("media_binding_too_weak");
 
   if (facts.length === 0 && factsRelyOnWeakMedia(window, verdict.coreFacts)) reasons.push("media_binding_too_weak");
 
@@ -129,7 +148,7 @@ export function validate(window: EvidenceWindow, verdict: MemoryEditorVerdict, c
   let routed = route(worthiness, cappedVerdict);
   // "第一次/milestone" claims always get a human look, even if the rest of the window scores low —
   // this is a floor on review, never an automatic promotion to auto_accept (§4.2).
-  if (milestoneScore >= 2 && milestoneHasText && routed.action !== "life_event_candidate") routed = { action: "life_event_candidate", reviewRequirement: "needs_review", toGlimmerPool: false };
+  if (milestoneScore >= 2 && milestoneSupported && routed.action !== "life_event_candidate") routed = { action: "life_event_candidate", reviewRequirement: "needs_review", toGlimmerPool: false };
   if (routed.action === "store_only") return { outcome: { ...base, action: "store_only", selectionReason: reasons.length ? reasons.join(",") : "Below worthiness threshold", worthinessScore: worthiness.score }, degradeReason: reasons.length ? reasons.join(",") : undefined, reasonCodes: reasons };
 
   if (routed.action === "daily_trace") {

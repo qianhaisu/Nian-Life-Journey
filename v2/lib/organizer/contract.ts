@@ -15,6 +15,23 @@ export type MemoryEditorProposedAction = "store_only" | "daily_trace" | "life_ev
 const MEMORY_EDITOR_ACTIONS = new Set<MemoryEditorProposedAction>(["store_only", "daily_trace", "life_event_candidate", "attach_existing", "care_observation"]);
 
 export type CoreFact = { statement: string; assertionKind: "raw_fact" | "attributed_claim"; claimant?: string; claimantRole?: string; evidenceRefs: string[] };
+
+// Longitudinal support for a developmental-transition claim (Memory Editor v3).
+//
+// H8 originally demanded the literal words 第一次/首次 in the window, which is right when the window
+// is the only evidence but wrong once a verified earlier baseline exists: 「他现在自己会爬」 plus a
+// dated earlier observation that he could not is a stronger case for a transition than the word
+// "第一次" alone ever was. So the validator accepts either route — but path B has to be checkable,
+// not merely asserted. `priorEvidence` cites the baseline observations BY SOURCE ID, and the
+// validator confirms those ids were actually among the ones the pipeline supplied, so the model
+// cannot invent a baseline it was never shown.
+export type TransitionSupport = {
+  basis: "explicit_in_window" | "supported_by_prior_context" | "unknown";
+  /** Baseline observations, cited by the sourceId of the message they came from. */
+  priorEvidence: Array<{ sourceId: string; observedAt: string; statement: string }>;
+  /** Spans in THIS window showing the new capability/state. Validated like any other ref. */
+  currentEvidenceRefs: string[];
+};
 export type QuotableLine = { text: string; speakerRole: string; evidenceRef: string };
 export type DimensionScore = { score: 0 | 1 | 2 | 3; evidenceRefs: string[] };
 
@@ -36,6 +53,8 @@ export type MemoryEditorVerdict = {
   proposedTargetId?: string;
   selectionReason: string;
   confidence: number;
+  /** v3 only. Absent on v1 verdicts, which the production ledger is keyed to. */
+  transitionSupport?: TransitionSupport;
 };
 
 const FORBIDDEN_NARRATIVE_KEYS = /^(title|story|shortStory|narrative|summary|growthSignals)$/i;
@@ -123,6 +142,23 @@ export function validateMemoryEditorVerdict(raw: unknown, window: EvidenceRefWin
   const subjectIds = Array.isArray(value.subjectIds) ? value.subjectIds.filter((id): id is string => typeof id === "string") : [];
   if (subjectRelevance === "ambiguous" && subjectIds.length > 0) throw new Error("Invalid memory editor verdict: subjectIds must be empty when subjectRelevance is ambiguous");
 
+  let transitionSupport: TransitionSupport | undefined;
+  if (value.transitionSupport !== undefined && value.transitionSupport !== null) {
+    const support = value.transitionSupport;
+    if (!isObject(support)) throw new Error("Invalid memory editor verdict: transitionSupport");
+    if (support.basis !== "explicit_in_window" && support.basis !== "supported_by_prior_context" && support.basis !== "unknown") throw new Error("Invalid memory editor verdict: transitionSupport.basis");
+    const priorEvidence = Array.isArray(support.priorEvidence) ? support.priorEvidence : [];
+    const cleanedPrior = priorEvidence.map((entry, index) => {
+      if (!isObject(entry) || typeof entry.sourceId !== "string" || typeof entry.observedAt !== "string" || typeof entry.statement !== "string") throw new Error(`Invalid memory editor verdict: transitionSupport.priorEvidence[${index}]`);
+      return { sourceId: entry.sourceId, observedAt: entry.observedAt, statement: entry.statement };
+    });
+    // Current-window refs are validated exactly like a coreFact's: an invented ref is rejected here,
+    // before it can be offered to H8 as support.
+    const currentRefs = Array.isArray(support.currentEvidenceRefs) ? support.currentEvidenceRefs : [];
+    if (currentRefs.length > 0 && !validSpanRefs(currentRefs, window)) throw new Error("Invalid memory editor verdict: transitionSupport.currentEvidenceRefs");
+    transitionSupport = { basis: support.basis, priorEvidence: cleanedPrior, currentEvidenceRefs: currentRefs as string[] };
+  }
+
   return {
     windowId: window.windowId,
     subjectRelevance,
@@ -141,6 +177,7 @@ export function validateMemoryEditorVerdict(raw: unknown, window: EvidenceRefWin
     proposedTargetId: value.proposedTargetId as string | undefined,
     selectionReason: value.selectionReason,
     confidence: value.confidence,
+    transitionSupport,
   };
 }
 

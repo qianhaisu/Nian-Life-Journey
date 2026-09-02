@@ -15,6 +15,9 @@ import type { MemoryEditorProvider } from "./pipeline";
 import { buildMemoryEditorPrompt, MEMORY_EDITOR_PROMPT_VERSION, MEMORY_EDITOR_SYSTEM_PROMPT, MEMORY_EDITOR_TOOL_NAME, MEMORY_EDITOR_TOOL_SCHEMA } from "./prompts/memory-editor-v1";
 import { buildMemoryEditorPromptV2, MEMORY_EDITOR_V2_PROMPT_VERSION, MEMORY_EDITOR_V2_SYSTEM_PROMPT, MEMORY_EDITOR_V2_TOOL_NAME, MEMORY_EDITOR_V2_TOOL_SCHEMA, type PriorObservation } from "./prompts/memory-editor-v2";
 import { toV1WorthinessDimensions, type EvidenceAxis, type WorthinessAxis } from "./worthiness-v2";
+import { buildMemoryEditorPromptV3, MEMORY_EDITOR_V3_PROMPT_VERSION, MEMORY_EDITOR_V3_SYSTEM_PROMPT, MEMORY_EDITOR_V3_TOOL_NAME, MEMORY_EDITOR_V3_TOOL_SCHEMA } from "./prompts/memory-editor-v3";
+import { toV1WorthinessDimensionsV3, type WorthinessAxisV3 } from "./worthiness-v3";
+import type { SelectedPriorObservation } from "./prior-observations";
 
 export class DeepSeekEditorError extends Error {
   constructor(message: string, readonly code: string, readonly fatal = false) {
@@ -97,13 +100,13 @@ export function coerceSubjectRelevance(raw: Record<string, unknown>, window: Evi
   return { subjectRelevance: "primary" };
 }
 
-export type MemoryEditorVariant = "v1" | "v2";
+export type MemoryEditorVariant = "v1" | "v2" | "v3";
 
 export type DeepSeekEditorOptions = {
   /** v1 is the production publication-ledger contract. v2 splits provenance from worthiness. */
   variant?: MemoryEditorVariant;
   /** v2 only: bounded, topic-linked baseline used to justify a developmental-transition claim. */
-  priorObservationsFor?: (window: EvidenceWindow) => PriorObservation[];
+  priorObservationsFor?: (window: EvidenceWindow) => PriorObservation[] | SelectedPriorObservation[];
 };
 
 export class DeepSeekMemoryEditor implements MemoryEditorProvider {
@@ -118,16 +121,16 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
    * them here (keyed by windowId) preserves them for scoring and observability without widening the
    * contract.
    */
-  readonly axesByWindowId = new Map<string, { evidenceAxis: EvidenceAxis; worthinessAxis: WorthinessAxis }>();
+  readonly axesByWindowId = new Map<string, { evidenceAxis: EvidenceAxis; worthinessAxis: WorthinessAxis | WorthinessAxisV3 }>();
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly subject: { primaryName: string; aliases: string[] };
-  private readonly priorObservationsFor?: (window: EvidenceWindow) => PriorObservation[];
+  private readonly priorObservationsFor?: (window: EvidenceWindow) => PriorObservation[] | SelectedPriorObservation[];
 
   constructor(env: NodeJS.ProcessEnv, subject: { primaryName: string; aliases: string[] }, options: DeepSeekEditorOptions = {}) {
     this.variant = options.variant ?? "v1";
-    this.promptVersion = this.variant === "v2" ? MEMORY_EDITOR_V2_PROMPT_VERSION : MEMORY_EDITOR_PROMPT_VERSION;
+    this.promptVersion = this.variant === "v3" ? MEMORY_EDITOR_V3_PROMPT_VERSION : this.variant === "v2" ? MEMORY_EDITOR_V2_PROMPT_VERSION : MEMORY_EDITOR_PROMPT_VERSION;
     this.priorObservationsFor = options.priorObservationsFor;
     if (!env.DEEPSEEK_API_KEY) throw new DeepSeekEditorError("DeepSeek is not configured: DEEPSEEK_API_KEY is missing", "missing_api_key", true);
     if (!env.AI_MODEL) throw new DeepSeekEditorError("DeepSeek is not configured: AI_MODEL is missing", "missing_model", true);
@@ -143,16 +146,23 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
 
   async organize(window: EvidenceWindow): Promise<{ verdict: unknown }> {
     const isV2 = this.variant === "v2";
-    const toolName = isV2 ? MEMORY_EDITOR_V2_TOOL_NAME : MEMORY_EDITOR_TOOL_NAME;
+    const isV3 = this.variant === "v3";
+    const priors = this.priorObservationsFor?.(window) ?? [];
+    const toolName = isV3 ? MEMORY_EDITOR_V3_TOOL_NAME : isV2 ? MEMORY_EDITOR_V2_TOOL_NAME : MEMORY_EDITOR_TOOL_NAME;
+    const systemPrompt = isV3 ? MEMORY_EDITOR_V3_SYSTEM_PROMPT : isV2 ? MEMORY_EDITOR_V2_SYSTEM_PROMPT : MEMORY_EDITOR_SYSTEM_PROMPT;
+    const schema = isV3 ? MEMORY_EDITOR_V3_TOOL_SCHEMA : isV2 ? MEMORY_EDITOR_V2_TOOL_SCHEMA : MEMORY_EDITOR_TOOL_SCHEMA;
+    const userPrompt = isV3
+      ? buildMemoryEditorPromptV3(window, this.subject, priors as SelectedPriorObservation[])
+      : isV2 ? buildMemoryEditorPromptV2(window, this.subject, priors as PriorObservation[]) : buildMemoryEditorPrompt(window, this.subject);
     const body = JSON.stringify({
       model: this.model,
       max_tokens: 4000,
       temperature: 0,
       thinking: { type: "disabled" },
-      system: isV2 ? MEMORY_EDITOR_V2_SYSTEM_PROMPT : MEMORY_EDITOR_SYSTEM_PROMPT,
-      tools: [{ name: toolName, description: "输出记忆编辑的结构化判断", input_schema: isV2 ? MEMORY_EDITOR_V2_TOOL_SCHEMA : MEMORY_EDITOR_TOOL_SCHEMA }],
+      system: systemPrompt,
+      tools: [{ name: toolName, description: "输出记忆编辑的结构化判断", input_schema: schema }],
       tool_choice: { type: "tool", name: toolName },
-      messages: [{ role: "user", content: isV2 ? buildMemoryEditorPromptV2(window, this.subject, this.priorObservationsFor?.(window) ?? []) : buildMemoryEditorPrompt(window, this.subject) }],
+      messages: [{ role: "user", content: userPrompt }],
     });
 
     const startedAt = Date.now();
@@ -177,7 +187,18 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         if (!toolUse || typeof toolUse.input !== "object" || toolUse.input === null) throw new DeepSeekEditorError("DeepSeek returned no tool_use block", "no_tool_use");
 
         const raw = { ...(toolUse.input as Record<string, unknown>) };
-        if (isV2) {
+        if (isV3) {
+          const worthinessAxis = raw.worthinessAxis as WorthinessAxisV3 | undefined;
+          const evidenceAxis = raw.evidenceAxis as EvidenceAxis | undefined;
+          if (!worthinessAxis || !evidenceAxis) throw new DeepSeekEditorError("DeepSeek v3 verdict is missing an axis", "missing_axis");
+          // v3 splits the transition's score (on the worthiness axis) from its justification (in
+          // transitionSupport). Rejoin them so the contract and H8 see one coherent claim.
+          const support = raw.transitionSupport as { basis?: string } | undefined;
+          const transition = worthinessAxis.developmentalTransition as unknown as { score: number; evidenceRefs: string[] };
+          worthinessAxis.developmentalTransition = { score: transition.score as 0 | 1 | 2 | 3, basis: (support?.basis as "explicit_in_window" | "supported_by_prior_context" | "unknown") ?? "unknown", evidenceRefs: transition.evidenceRefs ?? [] };
+          this.axesByWindowId.set(window.windowId, { evidenceAxis, worthinessAxis });
+          raw.worthinessDimensions = toV1WorthinessDimensionsV3(worthinessAxis);
+        } else if (isV2) {
           const worthinessAxis = raw.worthinessAxis as WorthinessAxis | undefined;
           const evidenceAxis = raw.evidenceAxis as EvidenceAxis | undefined;
           if (!worthinessAxis || !evidenceAxis) throw new DeepSeekEditorError("DeepSeek v2 verdict is missing an axis", "missing_axis");

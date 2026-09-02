@@ -12,7 +12,11 @@
 // inviting the same invention, and it costs tokens on every call.
 export type ObservationTopic = "sleep" | "crawl" | "stand" | "walk" | "speech" | "feeding" | "selfcare" | "teeth";
 
-const TOPIC_PATTERNS: Record<ObservationTopic, RegExp> = {
+// Exported so a retrieval layer can filter BY TOPIC IN THE QUERY rather than fetching by recency
+// and filtering afterwards. That ordering matters: at 50-150 messages a day, the 400 most recent
+// messages cover about five days of a thirty-day lookback, so recency-first retrieval returned zero
+// crawling baselines for the crawling case even though seven existed.
+export const TOPIC_PATTERNS: Record<ObservationTopic, RegExp> = {
   sleep: /睡|醒|哄睡|夜醒|接觉|入睡/,
   crawl: /爬/,
   stand: /站|扶站/,
@@ -33,8 +37,10 @@ export function topicsForWindow(texts: Iterable<string>): ObservationTopic[] {
   return [...topics];
 }
 
-export type PriorObservationCandidate = { observedAt: string; text: string };
-export type SelectedPriorObservation = { observedAt: string; topic: ObservationTopic; statement: string };
+export type PriorObservationCandidate = { sourceId: string; observedAt: string; text: string };
+// sourceId travels with every baseline line so the validator can later confirm that a transition
+// claim cited a baseline the pipeline actually supplied (H8 path B).
+export type SelectedPriorObservation = { sourceId: string; observedAt: string; topic: ObservationTopic; statement: string };
 
 export type PriorObservationOptions = {
   /** Most recent N per topic. Recency matters more than volume for a baseline. */
@@ -75,7 +81,7 @@ export function selectPriorObservations(
       })
       .toSorted((a, b) => b.observedAt.localeCompare(a.observedAt))
       .slice(0, maxPerTopic)
-      .map((candidate) => ({ observedAt: candidate.observedAt.slice(0, 10), topic, statement: candidate.text.replace(/\s+/g, " ").trim().slice(0, maxStatementLength) }));
+      .map((candidate) => ({ sourceId: candidate.sourceId, observedAt: candidate.observedAt.slice(0, 10), topic, statement: candidate.text.replace(/\s+/g, " ").trim().slice(0, maxStatementLength) }));
     selected.push(...forTopic);
   }
   return selected.slice(0, maxTotal);
