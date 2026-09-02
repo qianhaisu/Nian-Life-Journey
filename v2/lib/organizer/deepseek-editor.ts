@@ -39,9 +39,42 @@ type AnthropicResponse = { content?: AnthropicContentBlock[]; stop_reason?: stri
 // span IN THIS WINDOW literally names the child. A window whose only reference is a bare pronoun
 // cannot be promoted on the model's say-so — that is the exact rule ("只有他/她而没有可解析前文
 // 不能证明相关") that the benchmark caught the prompt alone failing to hold.
-function windowNamesSubject(window: EvidenceWindow, subject: { primaryName: string; aliases: string[] }) {
+// Another child in the conversation makes a bare pronoun unresolvable, whatever the neighbours say.
+const COMPETING_PERSON = /其他小朋友|别的孩子|别的小朋友|另一个孩子|同学|哥哥|姐姐|弟弟|妹妹|双胞胎|同伴|小伙伴/;
+
+function namesSubject(text: string, names: string[]) {
+  return names.some((name) => text.includes(name));
+}
+
+// Resolution scope, deliberately narrow:
+//   in_window   — a span in this window names the child. Strongest, always allowed.
+//   in_neighbor — no span names the child, but one of the ±5 adjacent messages does, so the
+//                 pronoun has a real antecedent. Neighbours are used for RESOLUTION ONLY. They can
+//                 never be cited, linked or displayed: the contract validates every evidenceRef
+//                 against window.items alone, so a neighbour span has no addressable ref at all.
+//   contested   — a competing person is in play, so "他" cannot be pinned to one child.
+//   none        — nothing names the child anywhere nearby.
+export type SubjectResolution = "in_window" | "in_neighbor" | "contested" | "none";
+
+export function resolveSubject(window: EvidenceWindow, subject: { primaryName: string; aliases: string[] }): SubjectResolution {
   const names = [subject.primaryName, ...subject.aliases].filter(Boolean);
-  return window.items.some((item) => names.some((name) => item.text.includes(name)));
+  if (window.items.some((item) => namesSubject(item.text, names))) return "in_window";
+  const neighbors = [...window.neighbors.before, ...window.neighbors.after];
+  if (!neighbors.some((item) => namesSubject(item.text, names))) return "none";
+  const nearbyText = [...window.items, ...neighbors].map((item) => item.text).join(String.fromCharCode(10));
+  if (COMPETING_PERSON.test(nearbyText)) return "contested";
+  return "in_neighbor";
+}
+
+const TEMPORAL_STATUSES = new Set(["past", "present", "planned", "uncertain"]);
+
+// The tool schema declares the enum, but the model occasionally returns a value outside it, and the
+// contract rightly rejects the whole verdict when it does. Normalising to "uncertain" at the
+// provider boundary keeps the contract strict while making the failure safe rather than total:
+// "uncertain" raises the uncertainty penalty and can never promote a window on its own.
+export function coerceTemporalStatus(raw: unknown): { temporalStatus: string; coerced: boolean } {
+  if (typeof raw === "string" && TEMPORAL_STATUSES.has(raw)) return { temporalStatus: raw, coerced: false };
+  return { temporalStatus: "uncertain", coerced: true };
 }
 
 export function coerceSubjectRelevance(raw: Record<string, unknown>, window: EvidenceWindow, subject: { primaryName: string; aliases: string[] }): { subjectRelevance: string; gateAReason?: string } {
@@ -56,7 +89,9 @@ export function coerceSubjectRelevance(raw: Record<string, unknown>, window: Evi
     const ref = raw.subjectResolutionRef;
     if (typeof ref !== "string" || !ref.includes("#")) return { subjectRelevance: "ambiguous", gateAReason: "gate_a_unresolved_pronoun" };
   }
-  if (!windowNamesSubject(window, subject)) return { subjectRelevance: "ambiguous", gateAReason: "gate_a_no_name_in_window" };
+  const resolution = resolveSubject(window, subject);
+  if (resolution === "none") return { subjectRelevance: "ambiguous", gateAReason: "gate_a_no_name_in_window" };
+  if (resolution === "contested") return { subjectRelevance: "ambiguous", gateAReason: "gate_a_competing_person" };
   return { subjectRelevance: "primary" };
 }
 
@@ -117,6 +152,8 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         if (!toolUse || typeof toolUse.input !== "object" || toolUse.input === null) throw new DeepSeekEditorError("DeepSeek returned no tool_use block", "no_tool_use");
 
         const raw = { ...(toolUse.input as Record<string, unknown>) };
+        const temporal = coerceTemporalStatus(raw.temporalStatus);
+        raw.temporalStatus = temporal.temporalStatus;
         const { subjectRelevance, gateAReason } = coerceSubjectRelevance(raw, window, this.subject);
         raw.subjectRelevance = subjectRelevance;
         // H9 alignment: an unrelated/ambiguous subject may not carry subjectIds, and the contract

@@ -2,16 +2,22 @@
 // chat text must never enter the repository, so these assert the RULES, not the corpus.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { coerceSubjectRelevance } from "../lib/organizer/deepseek-editor.ts";
+import { coerceSubjectRelevance, coerceTemporalStatus, resolveSubject } from "../lib/organizer/deepseek-editor.ts";
 import { containsTechnicalPlaceholder, decisionPublishes, indexReviews, isEventPublishable, isTracePublishable, requiresQualityReview } from "../lib/organizer/quality-review.ts";
 import { extractQuotes, validateFamilyWriterOutput } from "../lib/organizer/family-writer.ts";
 import { presentableEvidenceText, presentableSourceLabel } from "../lib/organizer/evidence-text.ts";
 import { classifyCareTopics, qualifiesAsLifeEvent } from "../lib/organizer/care-topics.ts";
+import { storyMinimumFor, STORY_PREFERRED_MIN, STORY_ABSOLUTE_MIN } from "../lib/organizer/family-writer.ts";
+import { selectCentralFact, reconcileSupport } from "../lib/organizer/central-fact.ts";
 
 const SUBJECT = { primaryName: "张年", aliases: ["小年", "崽"] };
 
-function windowWith(texts) {
-  return { windowId: "window:test", items: texts.map((text, index) => ({ itemId: `item-${index}`, text })) };
+function windowWith(texts, neighborTexts = []) {
+  return {
+    windowId: "window:test",
+    items: texts.map((text, index) => ({ itemId: `item-${index}`, text })),
+    neighbors: { before: neighborTexts.map((text, index) => ({ itemId: `n-${index}`, text })), after: [] },
+  };
 }
 
 test("Gate A maps the fine-grained relevance label onto the canonical enum", () => {
@@ -36,13 +42,36 @@ test("Gate A refuses a resolved_child claim with no resolution reference", () =>
   assert.equal(result.gateAReason, "gate_a_unresolved_pronoun");
 });
 
-test("Gate A refuses any window that never names the child, whatever the model says", () => {
+test("Gate A refuses a window where nothing nearby names the child", () => {
   const pronounOnly = windowWith(["你们白天会给他喝一顿鲜奶是吗", "早点的时候会倒一点"]);
   for (const detail of ["explicit_child", "resolved_child"]) {
     const result = coerceSubjectRelevance({ subjectRelevanceDetail: detail, subjectResolutionRef: "item-0#span-0" }, pronounOnly, SUBJECT);
-    assert.equal(result.subjectRelevance, "ambiguous", `${detail} must not pass without a name in the window`);
+    assert.equal(result.subjectRelevance, "ambiguous", `${detail} must not pass with no antecedent anywhere`);
     assert.equal(result.gateAReason, "gate_a_no_name_in_window");
   }
+});
+
+test("a neighbouring message may resolve a pronoun, and is still never citable", () => {
+  const resolved = windowWith(["他今天自己翻身了", "翻了好几次"], ["小年今天精神特别好"]);
+  assert.equal(resolveSubject(resolved, SUBJECT), "in_neighbor");
+  const verdict = coerceSubjectRelevance({ subjectRelevanceDetail: "resolved_child", subjectResolutionRef: "n-0#span-0" }, resolved, SUBJECT);
+  assert.equal(verdict.subjectRelevance, "primary");
+  // Neighbours resolve identity only. They are not part of window.items, which is the only thing
+  // the contract validates an evidenceRef against, so they can never be cited, linked or displayed.
+  assert.equal(resolved.items.some((item) => item.itemId.startsWith("n-")), false);
+});
+
+test("a competing person makes a bare pronoun unresolvable", () => {
+  const contested = windowWith(["他today玩得很开心", "哥哥也一起玩了"], ["小年今天去了托班"]);
+  assert.equal(resolveSubject(contested, SUBJECT), "contested");
+  const verdict = coerceSubjectRelevance({ subjectRelevanceDetail: "resolved_child", subjectResolutionRef: "n-0#span-0" }, contested, SUBJECT);
+  assert.equal(verdict.subjectRelevance, "ambiguous");
+  assert.equal(verdict.gateAReason, "gate_a_competing_person");
+});
+
+test("a name in the window itself still outranks neighbour resolution", () => {
+  assert.equal(resolveSubject(windowWith(["小年今天自己爬上了沙发"], ["无关的话"]), SUBJECT), "in_window");
+  assert.equal(resolveSubject(windowWith(["他今天很开心"]), SUBJECT), "none");
 });
 
 test("Gate A fails closed when the relevance label is missing or unknown", () => {
@@ -212,4 +241,71 @@ test("everyday texture with no care content at all still qualifies", () => {
 test("an empty fact list never qualifies", () => {
   assert.equal(qualifiesAsLifeEvent([]), false);
   assert.equal(classifyCareTopics([]).careDominated, false);
+});
+
+test("a milestone claim the evidence never makes is rejected", () => {
+  const evidence = ["张小年今天吃面，吃的是西红柿鸡蛋面", "吃的身上和餐椅全是面"];
+  const invented = validateFamilyWriterOutput({
+    title: "张小年第一次吃西红柿鸡蛋面",
+    story: "张小年今天吃面，吃得身上和餐椅全是面，家人商量以后给他铺一张一次性地垫，让他坐在地上自己吃，吃完再带去洗澡。",
+    quotableLines: [], evidenceTexts: evidence,
+  });
+  assert.equal(invented.ok, false);
+  assert.ok(invented.issues.some((issue) => issue.startsWith("unsupported_milestone_claim:")), JSON.stringify(invented.issues));
+
+  const supported = validateFamilyWriterOutput({
+    title: "张小年第一次吃西红柿鸡蛋面",
+    story: "家人说这是他第一次吃西红柿鸡蛋面，他吃得身上和餐椅全是面，家人商量以后给他铺一张一次性地垫，让他坐在地上自己吃，吃完再带去洗澡换衣服。",
+    quotableLines: [], evidenceTexts: [...evidence, "这是他第一次吃西红柿鸡蛋面"],
+  });
+  assert.equal(supported.ok, true, JSON.stringify(supported.issues));
+});
+
+test("an out-of-enum temporalStatus degrades to uncertain instead of failing the verdict", () => {
+  assert.deepEqual(coerceTemporalStatus("past"), { temporalStatus: "past", coerced: false });
+  assert.deepEqual(coerceTemporalStatus("uncertain"), { temporalStatus: "uncertain", coerced: false });
+  for (const bad of ["mixed", "ongoing", "", undefined, null, 3]) {
+    assert.deepEqual(coerceTemporalStatus(bad), { temporalStatus: "uncertain", coerced: true }, String(bad));
+  }
+});
+
+test("the story floor follows the evidence instead of forcing padding", () => {
+  const sparse = ["他现在好想站起来啊", "各种扶墙站", "手一撑", "然后就起来了", "已经不满足于坐了"];
+  assert.ok(storyMinimumFor(sparse) < STORY_PREFERRED_MIN, "sparse evidence lowers the floor");
+  assert.ok(storyMinimumFor(sparse) >= STORY_ABSOLUTE_MIN, "but never below the absolute floor");
+  const result = validateFamilyWriterOutput({
+    title: "扶墙站起来的崽",
+    story: "崽现在很想站起来，会「各种扶墙站」，「手一撑」「然后就起来了」。家人说他「已经不满足于坐了」。",
+    quotableLines: [], evidenceTexts: sparse,
+  });
+  assert.equal(result.ok, true, JSON.stringify(result.issues));
+
+  // Rich evidence keeps the usual 60-character floor.
+  const rich = Array.from({ length: 12 }, () => "张小年今天吃了西红柿鸡蛋面还弄得到处都是");
+  assert.equal(storyMinimumFor(rich), STORY_PREFERRED_MIN);
+  assert.ok(validateFamilyWriterOutput({ title: "张小年吃面了", story: "他吃了面。", quotableLines: [], evidenceTexts: rich })
+    .issues.some((i) => i.startsWith("story_length_")));
+});
+
+test("the central fact is something that happened, not something imagined", () => {
+  const facts = [
+    { statement: "张小年今天吃面", evidenceRefs: [] },
+    { statement: "我想象了一个画面。光溜溜的张小年坐在地垫上，这个面放在他面前让他自己吃。", evidenceRefs: [] },
+  ];
+  assert.equal(selectCentralFact(facts).statement, "张小年今天吃面", "an imagined scene is not the event");
+
+  const withMilestone = [
+    { statement: "这两天都没有爬行训练的视频了", evidenceRefs: [] },
+    { statement: "放在床上他就自己会爬，就没录下来", evidenceRefs: [] },
+  ];
+  assert.equal(selectCentralFact(withMilestone).statement, "放在床上他就自己会爬，就没录下来", "the new ability wins");
+  assert.equal(selectCentralFact([]), undefined);
+});
+
+test("unjudged sources are dropped rather than kept", () => {
+  const { kept, resolved } = reconcileSupport(["a", "b", "c"], [{ sourceId: "a", keep: true, reason: "ok" }]);
+  assert.deepEqual(kept, ["a"]);
+  assert.equal(resolved.find((r) => r.sourceId === "b").reason, "not_judged_by_model");
+  // A source the model was never given cannot smuggle itself in.
+  assert.deepEqual(reconcileSupport(["a"], [{ sourceId: "z", keep: true, reason: "x" }]).kept, []);
 });

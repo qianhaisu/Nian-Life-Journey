@@ -38,7 +38,9 @@ const SUBJECT = { primaryName: "张年", aliases: ["张小年", "小年", "崽",
 //   tight   — the seed message plus anything within +/-3 minutes, capped at 6 items. This reproduces
 //             the live-site failure mode, where a lone adult-logistics message became a LifeEvent
 //             titled with its own raw text. A tight negative window MUST end as store_only.
-//   natural — the real +/-90 minute conversation window. A negative seed here is a *mixed* window:
+//   natural — a +/-180 minute slice of the conversation. Deliberately wider than one window: the
+//             builder splits it on gap/span, so the window under test has real neighbouring
+//             messages, which is what pronoun resolution needs to work with. A negative seed here is a *mixed* window:
 //             the correct behaviour is not "reject the window" but "drop the adult message and keep
 //             only the child facts", which `leakedNegativeSeed` checks explicitly.
 const PROBES = [
@@ -72,13 +74,13 @@ const PROBES = [
   { label: "pos:named_child", expect: "related", mode: "natural", like: "%张小年%" },
   { label: "pos:named_child2", expect: "related", mode: "natural", like: "%小年%" },
   { label: "pos:sleep", expect: "related", mode: "natural", like: "%睡%" },
-  { label: "pos:抓握", expect: "related", mode: "natural", like: "%抓握%" },
+  { label: "pos:小年会", expect: "related", mode: "natural", like: "%小年%会%" },
   { label: "pos:扶站", expect: "related", mode: "natural", like: "%扶站%" },
   { label: "pos:笑出声", expect: "related", mode: "natural", like: "%笑出声%" },
   { label: "pos:拍手", expect: "related", mode: "natural", like: "%拍手%" },
-  { label: "pos:认人", expect: "related", mode: "natural", like: "%认人%" },
-  { label: "pos:指", expect: "related", mode: "natural", like: "%指%" },
-  { label: "pos:teeth", expect: "related", mode: "natural", like: "%牙%" },
+  { label: "pos:崽自己", expect: "related", mode: "natural", like: "%崽%自己%" },
+  { label: "pos:宝宝会", expect: "related", mode: "natural", like: "%宝宝%会%" },
+  { label: "pos:年年自己", expect: "related", mode: "natural", like: "%年年%自己%" },
   { label: "bound:zai", expect: "boundary", mode: "tight", like: "%崽%" },
   { label: "bound:baby", expect: "boundary", mode: "tight", like: "%宝宝%" },
   { label: "bound:pickup", expect: "boundary", mode: "tight", like: "%接%回来%" },
@@ -126,7 +128,7 @@ for (const { probe, seed } of seeds) {
      where profile_id = $1 and source_label = $2 and deleted_at is null
        and captured_at between $3::timestamptz - $4::interval and $3::timestamptz + $4::interval
      order by captured_at limit $5`,
-    [PROFILE_ID, seed.source_label, seed.captured_at, tight ? "3 minutes" : "90 minutes", tight ? 6 : 40],
+    [PROFILE_ID, seed.source_label, seed.captured_at, tight ? "3 minutes" : "180 minutes", tight ? 6 : 80],
   );
 
   const sources = rows.map((row) => ({
