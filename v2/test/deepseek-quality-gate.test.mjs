@@ -309,3 +309,10 @@ test("unjudged sources are dropped rather than kept", () => {
   // A source the model was never given cannot smuggle itself in.
   assert.deepEqual(reconcileSupport(["a"], [{ sourceId: "z", keep: true, reason: "x" }]).kept, []);
 });
+
+test("a quoted-reply header is exporter syntax and is not displayed", () => {
+  assert.equal(presentableEvidenceText("> hxx\.: \[图片\]\n\n他没牙能吃吗"), "他没牙能吃吗");
+  assert.equal(presentableEvidenceText("> 13372529311好奇星大兵老师: 可以的，小脸盆带一个\n\n好"), "好");
+  // A normal message that merely contains a colon is untouched.
+  assert.equal(presentableEvidenceText("他说：今天想吃面"), "他说：今天想吃面");
+});

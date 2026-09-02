@@ -14,6 +14,18 @@ const URL_PATTERN = /https?:\/\/\S+/g;
 // Service/marketing SMS that happens to address the child by name is not a family memory, and it
 // arrives carrying a link. A hospital satisfaction-survey SMS was being rendered inside a published
 // event's evidence layer.
+// A quoted reply arrives as a markdown blockquote header naming the person being replied to
+// ("> hxx.:"). That header is exporter syntax, not something the family wrote; the reply's own text
+// follows it and is what belongs on the page.
+// The blockquote line holds the name AND the text being replied to; the reply itself follows on a
+// later line. Dropping the leading blockquote lines keeps the reply and discards the duplicate.
+function stripQuotedReply(text: string): string {
+  const lines = text.split(/\r?\n/);
+  let start = 0;
+  while (start < lines.length && /^[ \t]*>/.test(lines[start])) start += 1;
+  return lines.slice(start).join("\n");
+}
+
 const SERVICE_MESSAGE = /满意度调查|问卷|退订|回复\s*TD|验证码|【[^】]{2,12}】.{0,40}(?:您|尊敬的)/;
 
 // Returns the text as it should be displayed, or an empty string when nothing readable is left.
@@ -23,7 +35,7 @@ export function presentableEvidenceText(text: string | undefined | null): string
   const unescaped = text.replace(WECHAT_ESCAPE, "$1");
   if (RECALL_NOTICE.test(unescaped.trim())) return "";
   if (SERVICE_MESSAGE.test(unescaped)) return "";
-  const cleaned = unescaped
+  const cleaned = stripQuotedReply(unescaped)
     .replace(MEDIA_MARKDOWN, " ")
     .replace(PLACEHOLDER_TOKEN, " ")
     .replace(EXPORTER_TOKEN, " ")
