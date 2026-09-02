@@ -71,7 +71,39 @@ material also has narrative, so there is no month silently dropped by the Organi
 The gaps are import coverage, not processing failures. Backfill is out of scope tonight and is not
 started.
 
-## 4. What was NOT done
+## 4. Repository performance — `getStore()` loads the whole archive
+
+`assembleStore()` in `lib/db/postgres-repository.ts` issues 18 parallel `select * from <table>` with
+no `LIMIT` and no column projection. Measured against the live database:
+
+| table | rows | payload |
+| --- | --- | --- |
+| raw_sources | 8,796 | 11.6 MB |
+| media_locations | 3,840 | 2.4 MB |
+| media | 1,032 | 0.8 MB |
+| organizer_runs | 299 | 1.0 MB |
+| source_memory_links | 2,793 | 0.6 MB |
+| media_assets | 1,011 | 0.6 MB |
+| daily_traces + life_events | 253 | 1.0 MB |
+| **total** | **18,042** | **17.2 MB** |
+
+Every page render that reaches `getStore()` pays that. `raw_sources` alone is 67% of it, and it is
+there mainly so the Organizer and ingest paths can look rows up by id — a page showing a memory does
+not need 8,796 WeChat message bodies. The cost grows with the archive, so it gets worse every import.
+
+Two cheap, additive observations rather than a rewrite:
+
+- `raw_sources` has indexes on the primary key, `profile_id`, `status` and `provider_external_id` —
+  but **not on `captured_at`**, which is what almost every Organizer and window query orders by.
+  `daily_traces.occurred_at` is likewise unindexed. Both are additive index adds, safe to do
+  independently of any refactor.
+- The scoped read paths already exist (`scopeStoreToProfile`, `getHomeEvents`, `getAllEvents`); the
+  problem is that the full-store assembly is the default entry point rather than the exception.
+
+Deliberately **not** rewritten tonight — the brief scoped this to inventory and safe profiling only,
+and a repository refactor during an Organizer freeze is the wrong order.
+
+## 5. What was NOT done
 
 No LifeEvent or DailyTrace was created, updated or deleted. No media was downloaded, moved, repaired
 or re-derived. No Quark search was run. The publication ledger was not touched. All counts verified
