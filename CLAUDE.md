@@ -5,15 +5,15 @@
 ## V1 / V2 边界
 
 - 根目录 `index.html` 是 V1：历史静态页面和视觉参考，**不要**把它重构成 React 或删除。
-- V2 位于 `v2/`，是独立的 Next.js App Router 应用（`basePath: "/v2"`），新功能只在这里做。
+- V2 位于 `v2/`，是独立的 Next.js App Router 应用，生产站直接运行在根路径（nianlife.cn），新功能只在这里做。
 - 不要把 V1 的 DOM/CSS 结构当成 V2 的实现基础。
 
 ## 技术栈与目录
 
-Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（目标持久化，尚未接入运行时）+ Sharp + AWS S3 SDK（R2）。
+Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（Neon，已在运行时接入）+ Sharp + AWS S3 SDK（R2）。
 
 - `v2/app`：页面、Server Action、Route Handler
-- `v2/lib/db`：Repository（当前实际是 JSON 文件存储，见下）
+- `v2/lib/db`：Repository（默认走 PostgreSQL，JSON file store 保留仅供本地无凭据开发）
 - `v2/lib/organizer`：Rule/AI Organizer（`MEMORY_ORGANIZER`/`AI_ORGANIZER_ENABLED` 默认关闭，走 RuleBased；AI 路径启用后，Gemini provider 缺省用 V2 Prompt/Schema 契约，OpenAI-compatible provider 仍用 V1）
 - `v2/lib/ingest`、`v2/tools/quark-connector`：Quark/WorkBuddy artifact 边界
 - `v2/lib/media`、`v2/lib/storage`、`v2/lib/archive`：媒体派生与存储
