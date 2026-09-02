@@ -5,9 +5,25 @@ import type { ContentType } from "@/lib/types";
 import type { EvidenceWindow } from "./evidence/types";
 import type { CoreFact, MemoryEditorVerdict, OrganizerOutcome, QuotableLine, SensitivityFlag } from "./contract";
 import { CONTRACT_POLICY_VERSION } from "./contract";
-import { computeWorthiness, route, type WorthinessInput } from "./worthiness";
+import { computeWorthiness, route, type RouteDecision, type WorthinessInput, type WorthinessResult } from "./worthiness";
 
 export const VALIDATOR_VERSION = "evidence-validator-v1";
+
+// Routing is an explicit, injectable policy rather than a hard-wired call.
+//
+// This exists because of a real and costly mistake: routeV2/V3/V4 were computed BESIDE the pipeline
+// while validate() went on calling the v1 route(), so several rounds of "positives rescued" numbers
+// described a layer production never consulted. A policy object makes the router a visible
+// dependency — and `expectedRoutingPolicyId` makes a silent fallback to v1 impossible to repeat.
+export type RoutingPolicy = {
+  id: string;
+  decide(input: { window: EvidenceWindow; verdict: MemoryEditorVerdict; worthiness: WorthinessResult }): RouteDecision;
+};
+
+export const V1_ROUTING_POLICY: RoutingPolicy = {
+  id: "worthiness-v1",
+  decide: ({ verdict, worthiness }) => route(worthiness, verdict),
+};
 
 const HEDGE_WORDS = /可能|好像|听说|据说|大概|应该是|估计|似乎|我觉得/;
 const MEDICAL_WORDS = /诊断|病因|治疗建议|用药建议|处方|药物剂量|确诊|痊愈|diagnos|treatment recommendation|prescription/i;
@@ -23,6 +39,13 @@ export type ValidatorContext = {
   /** Source ids of the prior observations the pipeline actually supplied to the editor. Only a
    *  baseline drawn from this list can support a transition claim (H8 path B). */
   supportedPriorSourceIds?: string[];
+  /** Defaults to the production v1 router. Evaluation injects an alternative explicitly. */
+  routingPolicy?: RoutingPolicy;
+  /**
+   * When set, validate() throws unless the active policy has this id. An evaluation that means to
+   * measure v4 therefore cannot quietly measure v1 instead — it fails loudly at the boundary.
+   */
+  expectedRoutingPolicyId?: string;
 };
 
 export type ValidatorResult = { outcome: OrganizerOutcome; degradeReason?: string; reasonCodes: string[] };
@@ -75,6 +98,10 @@ function subjectUncertain(window: EvidenceWindow, verdict: MemoryEditorVerdict, 
 }
 
 export function validate(window: EvidenceWindow, verdict: MemoryEditorVerdict, context: ValidatorContext): ValidatorResult {
+  const routingPolicy = context.routingPolicy ?? V1_ROUTING_POLICY;
+  if (context.expectedRoutingPolicyId && routingPolicy.id !== context.expectedRoutingPolicyId) {
+    throw new Error(`Routing policy mismatch: expected "${context.expectedRoutingPolicyId}", active policy is "${routingPolicy.id}". Refusing to route — this is the silent-fallback-to-v1 failure.`);
+  }
   const reasons: string[] = [];
   const base = { sourceIds: window.items.map((item) => item.sourceId), windowId: window.windowId, policyVersion: CONTRACT_POLICY_VERSION, modelVersion: context.modelVersion };
 
@@ -145,7 +172,7 @@ export function validate(window: EvidenceWindow, verdict: MemoryEditorVerdict, c
     }
   }
 
-  let routed = route(worthiness, cappedVerdict);
+  let routed = routingPolicy.decide({ window, verdict: cappedVerdict, worthiness });
   // "第一次/milestone" claims always get a human look, even if the rest of the window scores low —
   // this is a floor on review, never an automatic promotion to auto_accept (§4.2).
   if (milestoneScore >= 2 && milestoneSupported && routed.action !== "life_event_candidate") routed = { action: "life_event_candidate", reviewRequirement: "needs_review", toGlimmerPool: false };

@@ -32,6 +32,65 @@ export class DeepSeekEditorError extends Error {
 
 export type DeepSeekCallStats = { windowId: string; latencyMs: number; inputTokens: number; outputTokens: number; retries: number; ok: boolean; errorCode?: string };
 
+export type RequestManifest = {
+  windowId: string;
+  windowSourceIds: string[];
+  neighbourSourceIds: string[];
+  priorObservationSourceIds: string[];
+  existingMemoryIds: string[];
+  /** Every source-shaped id found in the serialized request body. The ground truth. */
+  serializedSourceIds: string[];
+  /** Every evidence ref (itemId#spanId) found in the serialized request body. */
+  serializedEvidenceRefs: string[];
+  returnedSourceIds: string[];
+  returnedEvidenceRefs: string[];
+  /** returnedSourceIds ⊆ serializedSourceIds && returnedEvidenceRefs ⊆ serializedEvidenceRefs */
+  subsetHolds: boolean;
+  unexplainedSourceIds: string[];
+  unexplainedEvidenceRefs: string[];
+};
+
+// Ids are matched against the request body itself, so anything the model returns can be traced to a
+// section that actually carried it, whatever that section was.
+const SOURCE_ID_PATTERN = /(?:wechat-message:canonical:[0-9a-f]{64}|quark-[A-Za-z0-9_:-]{8,}|source-[A-Za-z0-9_:-]{8,})/g;
+const EVIDENCE_REF_PATTERN = /item:[0-9a-f]{24}#span-\d+/g;
+
+function uniqueMatches(text: string, pattern: RegExp): string[] {
+  return [...new Set(text.match(pattern) ?? [])];
+}
+
+export function buildRequestManifest(input: {
+  windowId: string;
+  requestBody: string;
+  windowSourceIds: string[];
+  neighbourSourceIds: string[];
+  priorObservationSourceIds: string[];
+  existingMemoryIds: string[];
+  returnedSourceIds: string[];
+  returnedEvidenceRefs: string[];
+}): RequestManifest {
+  const serializedSourceIds = uniqueMatches(input.requestBody, SOURCE_ID_PATTERN);
+  const serializedEvidenceRefs = uniqueMatches(input.requestBody, EVIDENCE_REF_PATTERN);
+  const serializedSourceSet = new Set(serializedSourceIds);
+  const serializedRefSet = new Set(serializedEvidenceRefs);
+  const unexplainedSourceIds = input.returnedSourceIds.filter((id) => !serializedSourceSet.has(id));
+  const unexplainedEvidenceRefs = input.returnedEvidenceRefs.filter((ref) => !serializedRefSet.has(ref));
+  return {
+    windowId: input.windowId,
+    windowSourceIds: input.windowSourceIds,
+    neighbourSourceIds: input.neighbourSourceIds,
+    priorObservationSourceIds: input.priorObservationSourceIds,
+    existingMemoryIds: input.existingMemoryIds,
+    serializedSourceIds,
+    serializedEvidenceRefs,
+    returnedSourceIds: input.returnedSourceIds,
+    returnedEvidenceRefs: input.returnedEvidenceRefs,
+    subsetHolds: unexplainedSourceIds.length === 0 && unexplainedEvidenceRefs.length === 0,
+    unexplainedSourceIds,
+    unexplainedEvidenceRefs,
+  };
+}
+
 const RETRY_DELAYS_MS = [2000, 10000, 30000];
 const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504]);
 
@@ -138,6 +197,13 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
   readonly axesByWindowId = new Map<string, { evidenceAxis: EvidenceAxis; worthinessAxis: WorthinessAxis | WorthinessAxisV3 | WorthinessAxisV4 }>();
   /** v4: the deterministic subject resolution behind each window, for auditing. */
   readonly subjectResolutionByWindowId = new Map<string, BoundedSubjectResolution>();
+  /**
+   * Provenance manifest per window: every id actually serialized into the request, and every id the
+   * model returned. Derived from the FINAL request body, never from reconstruction — reconstructing
+   * "what the model must have seen" is exactly how a plumbing bug was mistaken for the model citing
+   * evidence it was never shown.
+   */
+  readonly requestManifestByWindowId = new Map<string, RequestManifest>();
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
@@ -246,6 +312,19 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         if (subjectRelevance !== "primary") raw.subjectIds = [];
         if (gateAReason) raw.selectionReason = `${gateAReason}: ${String(raw.selectionReason ?? "").slice(0, 100)}`.slice(0, 120);
         raw.windowId = window.windowId;
+
+        const support = raw.transitionSupport as { priorEvidence?: Array<{ sourceId?: string }> } | undefined;
+        const facts = (raw.coreFacts as Array<{ evidenceRefs?: string[] }> | undefined) ?? [];
+        this.requestManifestByWindowId.set(window.windowId, buildRequestManifest({
+          windowId: window.windowId,
+          requestBody: body,
+          windowSourceIds: window.items.map((item) => item.sourceId),
+          neighbourSourceIds: [...window.neighbors.before, ...window.neighbors.after].map((item) => item.sourceId),
+          priorObservationSourceIds: (priors as SelectedPriorObservation[]).map((observation) => observation.sourceId).filter(Boolean),
+          existingMemoryIds: window.priorContext.lifeEvents.map((event) => event.id),
+          returnedSourceIds: (support?.priorEvidence ?? []).map((entry) => entry.sourceId ?? "").filter(Boolean),
+          returnedEvidenceRefs: [...new Set(facts.flatMap((fact) => fact.evidenceRefs ?? []))],
+        }));
 
         this.stats.push({ windowId: window.windowId, latencyMs: Date.now() - startedAt, inputTokens: payload.usage?.input_tokens ?? 0, outputTokens: payload.usage?.output_tokens ?? 0, retries, ok: true });
         return { verdict: raw };

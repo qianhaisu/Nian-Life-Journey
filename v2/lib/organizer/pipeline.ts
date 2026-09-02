@@ -48,7 +48,12 @@ export async function runPipeline(window: EvidenceWindow, options: PipelineOptio
   }
 
   try {
-    const validatorContext: ValidatorContext = { now: options.context.now ?? new Date().toISOString(), modelVersion: options.provider.model ?? options.provider.name, existingLifeEvents: options.context.existingLifeEvents, recentSameTypeCount: options.context.recentSameTypeCount, otherChildDigests: options.context.otherChildDigests };
+    // Spread, never whitelist. This line used to enumerate five fields, which silently dropped
+    // `supportedPriorSourceIds` on its way to the validator: H8 path B then saw an empty supplied
+    // set and rejected every longitudinal transition claim as "unverified", including one where the
+    // model had cited three real, correct baselines it genuinely had been shown. A field added to
+    // ValidatorContext must reach the validator by default, not by remembering to extend a list.
+    const validatorContext: ValidatorContext = { ...options.context, now: options.context.now ?? new Date().toISOString(), modelVersion: options.provider.model ?? options.provider.name };
     const result = validate(window, verdict, validatorContext);
     const candidate = options.persist === false ? undefined : await upsertMemoryCandidate({ profileId: window.profileId, conversationId: window.conversationId, windowId: window.windowId, windowFingerprint: options.windowFingerprint, sourceIds: window.items.map((item) => item.sourceId), proposedAction: verdict.proposedAction, outcome: result.outcome, degradeReason: result.degradeReason, reasonCodes: result.reasonCodes, promptVersion: WINDOW_POLICY_VERSION });
     return { window, verdict, outcome: result.outcome, degradeReason: result.degradeReason, reasonCodes: result.reasonCodes, skippedByRecall: false, candidate };
