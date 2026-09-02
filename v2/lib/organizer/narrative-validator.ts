@@ -38,6 +38,13 @@ const CLICHES = [
   "见证了", "留下了美好", "满满的爱", "治愈了", "小小的身体里", "成长的印记",
 ];
 
+// The pipeline's own reasoning must never reach the family. Found in the first Writer v2 shadow:
+// asked to be careful about an unresolved subject, the model wrote the CAUTION into the story —
+// 「家里聊起他已经学会欢迎欢迎，但这句话说的是谁，没法确认。」 A reader of 张年's archive should
+// never learn that a subject resolver exists, let alone that one was uncertain. The right response
+// to unverifiable material is to leave it out, not to narrate the doubt.
+const PIPELINE_LANGUAGE = /没法确认|无法确认|不能确认|无法核实|未能确认|证据(不足|不支持|显示|表明)|无法归属|主语|指代不明|系统|模型|置信度|claim|sourceId|evidenceRef/i;
+
 // Emotional and causal assertions the evidence almost never supports.
 const EMOTION_INFERENCE = /一定很(开心|高兴|难过|激动)|肯定很|特别感动|满心欢喜|由衷地|心里一定/;
 const CAUSAL_INFERENCE = /因为.{0,12}所以|正是因为|这说明|这意味着|标志着|说明他已经/;
@@ -177,6 +184,8 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
   if (emotion) add("unsupported_emotional_inference", emotion);
   const causal = story.match(CAUSAL_INFERENCE)?.[0];
   if (causal) add("unsupported_causal_link", causal);
+  const pipeline = `${title}${story}`.match(PIPELINE_LANGUAGE)?.[0];
+  if (pipeline) add("pipeline_reasoning_in_prose", pipeline);
 
   // ---------------------------------------------------------------- shape
 

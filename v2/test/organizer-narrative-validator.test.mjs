@@ -134,6 +134,27 @@ test("unsupported emotion, causality and clichés are rejected", () => {
   assert.ok(codes(cliche).includes("cliche"), codes(cliche).join(","));
 });
 
+// The exact string the first Writer v2 shadow produced. Asked to be careful about an unresolved
+// subject, the model narrated the caution instead of omitting the material.
+test("the pipeline's own reasoning must never reach the family", () => {
+  const r = validateNarrative({ pkg: pkg(), output: out({
+    story: "妈妈提到，他现在不扶着也能站几秒。家里聊起他已经学会欢迎欢迎，但这句话说的是谁，没法确认。",
+  }) });
+  assert.ok(codes(r).includes("pipeline_reasoning_in_prose"), codes(r).join(","));
+
+  for (const leak of ["证据不足，所以只写到这里。", "系统无法归属这句话。", "这条 claim 的置信度不高。"]) {
+    const one = validateNarrative({ pkg: pkg(), output: out({ story: `他现在不扶着也能站几秒。${leak}` }) });
+    assert.ok(codes(one).includes("pipeline_reasoning_in_prose"), `${leak} -> ${codes(one).join(",")}`);
+  }
+});
+
+test("ordinary careful phrasing is not mistaken for pipeline language", () => {
+  const r = validateNarrative({ pkg: pkg(), output: out({
+    story: "雪姨说他现在不扶着也能站上几秒，站得还挺稳，妈妈在群里追着问了好几句细节。",
+  }) });
+  assert.equal(r.ok, true, JSON.stringify(r.issues));
+});
+
 test("there is no story-length floor — few facts may honestly mean a short page", () => {
   const r = validateNarrative({ pkg: pkg(), output: out({ story: "他现在不扶着也能站几秒。" }) });
   assert.ok(!codes(r).some((c) => c.startsWith("story_too")), codes(r).join(","));
