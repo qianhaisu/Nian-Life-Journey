@@ -2,6 +2,8 @@
 
 依据：[`nianlife-product-aesthetic-ia-audit-2026-09-02.md`](nianlife-product-aesthetic-ia-audit-2026-09-02.md)。本文件是实施级计划，不重复审查论证。
 
+长期产品原则见 [`nianlife-product-principles.md`](nianlife-product-principles.md)；本计划之后的 P2 产品 / UI / 信息架构工作（含下方 Deferred / Phase B 各项）在实现前必须先读并遵循那份文档。
+
 ## Phase 0 · Reality Check（2026-09-02，`origin/main` = `a149cf6`）
 
 - 工作区干净，单一 worktree 在 `main`，与 `origin/main` 一致。存在一个不属于本任务的 stash（`wip: pre-organizer-branch-switch`），不动。

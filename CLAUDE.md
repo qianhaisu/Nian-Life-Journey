@@ -32,6 +32,10 @@ Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（Neon�
 - WorkBuddy 运行时目录（`workbuddy/storage/`、Quark `search-results/`）已在 `.gitignore` 覆盖；artifact 路径校验已加固，拒绝经由 symlink 或 Windows junction/reparse point 到达的文件。
 - **`fid` 已验证为不稳定，结论已定**：对完全相同的搜索重复执行两次，两次返回的文件名集合相同，但 `fid` 交集为 0。因此 `fid`、`check_link`、Quark 路径只是单次任务期下载引用，绝不能作为永久媒体身份或跨任务幂等键；原始文件内容的 SHA-256 才是永久身份，服务端持久化前必须独立重算并核对 SHA-256。`(provider="quark", variant="original", providerRef=fid)` 仅适用于 dry-run 的 artifact-metadata-only 路径（`quark-artifact-asset.ts`，同一任务内单次运行），不是跨任务的永久幂等键；真正下载原图并入库的路径（见 `v2/scripts/quark-photo-init.mjs`）以 SHA-256 派生的确定性 id 去重，而不是 fid。
 
+## 产品原则（P2 必读）
+
+任何 P2 及之后的产品、UI、UX、信息架构工作，动手前必须先读 [`docs/nianlife-product-principles.md`](docs/nianlife-product-principles.md) 并以它为准。原则只在那份文档里维护，本文件不复述。
+
 ## AI Organizer 架构方向
 
 Gemini V2 的语义方向已用真实评测验证（Schema/Policy 叙事泄漏问题已解决），但真实响应延迟不稳定，同一请求在不同时刻可能是几秒也可能超过 30 秒。当前 Capture 链路仍是同步调用、同步 fallback。生产化时应把 AI Organizer 改成基于 PostgreSQL/job/outbox 的异步任务，让用户上传不必等待模型返回；不要通过继续调大同步 `AI_TIMEOUT_MS` 来掩盖这个问题。
@@ -166,5 +170,6 @@ npm run build
 
 - [`docs/CLAUDE_CODE_HANDOFF.md`](docs/CLAUDE_CODE_HANDOFF.md) — Nianlife 仓库全面审计（功能状态矩阵、P0-P3 路线图）
 - [`docs/WORKBUDDY_NIANLIFE_INTEGRATION_HANDOFF.md`](docs/WORKBUDDY_NIANLIFE_INTEGRATION_HANDOFF.md) — WorkBuddy/Quark 集成契约审计
+- [`docs/nianlife-product-aesthetic-ia-audit-2026-09-02.md`](docs/nianlife-product-aesthetic-ia-audit-2026-09-02.md) 与 [`docs/editorial-refactor-plan-2026-09-02.md`](docs/editorial-refactor-plan-2026-09-02.md) — 2026-09-02 产品审查与对应实施计划
 
-这两份文档记录的是某一时刻的快照，读之前先用 `git status` 核实是否仍然成立。
+以上文档记录的是某一时刻的快照，读之前先用 `git status` 核实是否仍然成立。长期有效的产品原则见上方「产品原则（P2 必读）」。
