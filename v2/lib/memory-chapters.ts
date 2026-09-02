@@ -85,9 +85,27 @@ const WEIGHT_RANK: Record<MemoryWeight, number> = { chapter: 0, highlight: 1, me
 
 export type ChapterInput = { events: LifeEvent[]; traces: DailyTrace[]; media: Media[]; birthDay?: string };
 
+// Pre-bucket orphaned media (not referenced by any event) by month so buildChapters can fill
+// month photo strips from DailyTrace days that have photos but no LifeEvent.
+function orphanedMediaByMonth(events: LifeEvent[], media: Media[]): Map<string, Media[]> {
+  const claimedByEvent = new Set(events.flatMap((e) => e.mediaIds));
+  const byMonth = new Map<string, Media[]>();
+  for (const item of media) {
+    if (claimedByEvent.has(item.id)) continue;
+    if (item.visibility === "private") continue;
+    const month = calendarMonthOf(item.takenAt);
+    if (!month) continue;
+    const bucket = byMonth.get(month) ?? [];
+    if (!byMonth.has(month)) byMonth.set(month, bucket);
+    bucket.push(item);
+  }
+  return byMonth;
+}
+
 export function buildChapters({ events, traces, media, birthDay }: ChapterInput): YearChapter[] {
   const mediaById = new Map(media.map((item) => [item.id, item]));
   const eventById = new Map(events.map((item) => [item.id, item]));
+  const orphanedByMonth = orphanedMediaByMonth(events, media);
   const months = new Map<string, MonthChapter>();
   const monthOf = (month: string) => {
     let chapter = months.get(month);
@@ -138,6 +156,14 @@ export function buildChapters({ events, traces, media, birthDay }: ChapterInput)
     const byRank = [...chapter.memories].sort((a, b) => WEIGHT_RANK[a.weight] - WEIGHT_RANK[b.weight]);
     for (const memory of byRank) if (memory.lead) push(mediaById.get(memory.lead.id), memory.title);
     for (const memory of byRank) for (const id of eventById.get(memory.id)?.mediaIds ?? []) push(mediaById.get(id), memory.title);
+    // Fill remaining slots with orphaned photos (media with takenAt in this month but not
+    // referenced by any event — typically DailyTrace days with Quark/WeChat photos).
+    if (photos.length < MONTH_PHOTO_LIMIT) {
+      for (const item of orphanedByMonth.get(chapter.month) ?? []) {
+        if (photos.length >= MONTH_PHOTO_LIMIT) break;
+        push(item, chapter.label);
+      }
+    }
     chapter.photos = photos.slice(0, MONTH_PHOTO_LIMIT);
   }
 
