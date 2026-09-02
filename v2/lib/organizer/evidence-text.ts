@@ -18,12 +18,15 @@ const URL_PATTERN = /https?:\/\/\S+/g;
 // ("> hxx.:"). That header is exporter syntax, not something the family wrote; the reply's own text
 // follows it and is what belongs on the page.
 // The blockquote line holds the name AND the text being replied to; the reply itself follows on a
-// later line. Dropping the leading blockquote lines keeps the reply and discards the duplicate.
+// later line. Exported messages routinely begin with a blank line, so leading blanks have to be
+// skipped too — otherwise the scan stops on line 0 and never reaches the blockquote at all.
 function stripQuotedReply(text: string): string {
   const lines = text.split(/\r?\n/);
   let start = 0;
-  while (start < lines.length && /^[ \t]*>/.test(lines[start])) start += 1;
-  return lines.slice(start).join("\n");
+  while (start < lines.length && (lines[start].trim() === "" || /^[ \t]*>/.test(lines[start]))) start += 1;
+  // Nothing but blockquote and blank lines: hand back the original and let the placeholder/URL
+  // rules below decide, rather than silently emptying the item here.
+  return start >= lines.length ? text : lines.slice(start).join(String.fromCharCode(10));
 }
 
 const SERVICE_MESSAGE = /满意度调查|问卷|退订|回复\s*TD|验证码|【[^】]{2,12}】.{0,40}(?:您|尊敬的)/;
@@ -32,9 +35,7 @@ const SERVICE_MESSAGE = /满意度调查|问卷|退订|回复\s*TD|验证码|【
 // An empty result means "render the media, not a caption" — never "hide the evidence item".
 export function presentableEvidenceText(text: string | undefined | null): string {
   if (!text) return "";
-  // The exporter writes line breaks as the two characters backslash-n rather than a real newline,
-  // so they have to be normalised before anything can reason about lines.
-  const unescaped = text.replace(/\\n/g, String.fromCharCode(10)).replace(WECHAT_ESCAPE, "$1");
+  const unescaped = text.replace(WECHAT_ESCAPE, "$1");
   if (RECALL_NOTICE.test(unescaped.trim())) return "";
   if (SERVICE_MESSAGE.test(unescaped)) return "";
   const cleaned = stripQuotedReply(unescaped)

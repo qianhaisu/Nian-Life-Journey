@@ -317,10 +317,11 @@ test("a quoted-reply header is exporter syntax and is not displayed", () => {
   assert.equal(presentableEvidenceText("他说：今天想吃面"), "他说：今天想吃面");
 });
 
-test("exporter line breaks written as literal backslash-n are normalised", () => {
-  // String.raw matters here: the export stores line breaks as the two characters backslash-n, with
-  // no real newline anywhere. Writing this with a normal escape tests the wrong thing entirely —
-  // it passed against a no-op implementation until this was corrected.
-  assert.equal(presentableEvidenceText(String.raw`> hxx\.: \[图片\]\n\n他没牙能吃吗`), "他没牙能吃吗");
-  assert.equal(presentableEvidenceText(String.raw`第一行\n第二行`), `第一行${String.fromCharCode(10)}第二行`);
+test("a quoted reply after a leading blank line still loses its blockquote", () => {
+  // Exactly how the archive stores it: a leading blank line, then the blockquote carrying the name
+  // and a copy of the quoted message, then the reply. The leading blank made an earlier version
+  // stop scanning at line 0 and publish "> hxx.:" verbatim.
+  const stored = "\n> hxx\\.: \\[图片\\]\n\n他没牙能吃吗\n";
+  assert.equal(presentableEvidenceText(stored), "他没牙能吃吗");
+  assert.equal(presentableEvidenceText("\n\n> 老师: 可以的\n\n好\n"), "好");
 });
