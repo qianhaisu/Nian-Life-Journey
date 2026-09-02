@@ -1,9 +1,13 @@
 # Writer v2 — handoff for Fable 5.1 editorial calibration (2026-09-03)
 
-> **Status: architecture ready, editorially uncalibrated.** Writer v2's contracts and validator are
-> built and tested. **The Writer itself has never been run** — no prompt was written, no model was
-> called, no story exists. This is a handoff of the machinery and the open questions, not of output
-> to review.
+> **Status: WRITER V2 SHADOW READY, editorially uncalibrated.** The contracts and validator are
+> built and tested, and the Writer has now been run in shadow over 16 real cases across two rounds.
+> 8 of 10 stories were accepted by the Narrative Validator with no truth failures. Nothing was
+> written to production and nothing is production-ready.
+>
+> A sample pack of all 16 cases — raw verified evidence, the v1 baseline, the v2 story, the claim
+> map and the validation result — is at `<scratchpad>/fable-sample-pack.md`. It contains family chat
+> text, so it lives outside the repository.
 >
 > Read this together with [`organizer-v6-freeze-2026-09-03.md`](organizer-v6-freeze-2026-09-03.md),
 > and [`nianlife-product-principles.md`](nianlife-product-principles.md), which wins on any conflict.
@@ -11,8 +15,8 @@
 ## 0. What you own
 
 Final editorial calibration of Writer v2: what a page in 张年's archive should actually read like.
-Specifically the five things this session could not settle and deliberately did not guess at —
-§7.
+Specifically the five open questions in §7, plus a sixth the shadow surfaced (§8.1) — all of them
+things this session could have guessed at and deliberately did not.
 
 What you do **not** own, because it is settled and enforced in code: which windows become Memories
 (V6 decides, the Writer has no vote), and what a sentence is allowed to assert (the Narrative
@@ -103,7 +107,8 @@ invention.
 
 ## 7. The open editorial decisions — your call
 
-These are the five this session refused to settle by personal taste. Each has a real tension.
+These are the ones this session refused to settle by personal taste. Each has a real tension.
+Decision 6 is in §8.1, because it only became visible once the Writer had actually run.
 
 1. **How much family voice, how often.** "妈妈发现……" is warmer and more specific than "家人".
    But naming a speaker in every sentence reads like a transcript. Where is the line, and does it
@@ -121,20 +126,65 @@ These are the five this session refused to settle by personal taste. Each has a 
    changed only where evidence supports the change. How much continuity belongs on one page before
    it stops being a moment and becomes a report?
 
-## 8. What is NOT in this handoff, and why
+## 8. What the shadow actually produced
 
-**No Writer v2 outputs, and no v1/v2 comparison.** The night's priority order put correctness gates
-first — Time Truth, Claim Grounding, trace retention, the fresh shadow, the V6 freeze, Holdout V3 —
-and the Writer sits behind all of them. Two of those gates turned up defects that had to be fixed
-and re-verified (see §9), which consumed the time the Writer shadow would have used.
+Two rounds over 16 cases drawn from existing production LifeEvents (`scripts/writer-v2-shadow.mjs`,
+persist false). Round 2 is the current state.
 
-So there is no sample pack of 8–12 real stories to react to. That is the honest state, and the
-alternative — a rushed prompt producing stories nobody had time to validate — would have been worse
-than nothing, because it would have anchored your calibration on output that was never checked.
+| | round 1 | round 2 |
+| --- | --- | --- |
+| cases built | 16 | 16 |
+| skipped — nothing assertable | 6 | 6 |
+| writer runs | 10 | 10 |
+| accepted | 8 | 8 |
+| rejected | 2 | 2 |
 
-**What to do first**, therefore: write the Writer v2 prompt against the contract in §2–§4, run it in
-shadow over V6-approved candidates, and calibrate from real output. The machinery to build packages
-and to reject bad stories is ready and tested; only the prompt and the taste are missing.
+Round 1's rejections were both `title_repeated_in_story`, plus one defect the validator did **not**
+catch: asked to be careful about an unresolved subject, the model narrated the caution into the
+story — 「家里聊起他已经学会欢迎欢迎，但这句话说的是谁，没法确认。」 That is now a hard validator
+rule (`pipeline_reasoning_in_prose`) and a prompt instruction, and round 2 produced none. Round 2's
+two rejections are one `title_repeated_in_story` and one `unsupported_quote` — a quote reproduced
+with a trailing 。 that is not in the source, which is the verbatim rule working exactly as intended.
+
+**The v1 baseline comparison is lopsided, and you should know why.** Only 10 of the 82 production
+LifeEvents ever went through Family Writer v1; 72 came from the rule-based organizer, which used a
+raw message as both title and story. So most baselines in the pack are strings like `\[视频\]` or
+`[media]`. v2 beating those is not evidence of good writing — it is evidence that the bar in
+production is currently on the floor. Judge the v2 stories on their own terms.
+
+Representative round-2 output, for calibration rather than approval:
+
+- 「从抬头不稳到快要跑起来」 — real longitudinal contrast, both halves evidenced.
+- 「张小年的假笑到了新境界」 — specific, funny, two verbatim quotes, both parents' voices.
+- 「新润肤露怎么用，他不喜欢戴」 — ordinary domestic day, honestly small.
+- 「妈妈说张年的眼睛也是眯的」 — one sentence. This is what the removed length floor allows; decide
+  whether it reads as a page or as a stub.
+
+### 8.1 The gap the shadow found that is YOURS to close
+
+One accepted story opens: 「张小年想回到杭州雪姨身边。」 The evidence is a caregiver typing
+「张小年想回到杭州，雪姨身边了」 — her speculation about what the child wanted. Claim Grounding
+correctly classified it as a supported assertion with `observationMode: "reported"`, and the package
+carried that mode through. The Writer then dropped the attribution and stated the child's inner
+state as flat fact. Same shape in another story: 「他太爱妈妈了」.
+
+A mechanical rule does not fix this. In this archive essentially *every* claim is `reported` —
+someone typed it into WeChat — so "a reported claim must name its speaker" would fire on almost
+every sentence, including 「张小年刚吃完辅食」. The distinction that matters is between an
+observable action and an attributed inner state, and that is a semantic and editorial judgement, not
+a regex. It was deliberately left open rather than guessed at.
+
+**Decision 6, therefore:** when may a story state something about what 张年 wanted, felt or liked,
+and when must it stay attributed — 「雪姨觉得他想回杭州」 rather than 「他想回杭州」? Whatever you
+decide, the package already carries `observationMode` per claim, so the rule is enforceable once the
+rule exists.
+
+### 8.2 Six of sixteen cases produced no story at all
+
+Not a Writer failure — the package had nothing assertable, because no claim in the window resolved
+to 张年. That is the same subject-resolution conservatism that cost Holdout V3 both its positives
+(see `organizer-holdout-v3-result-2026-09-03.md` §3). It is upstream of the Writer and is Teddy's
+call, not yours, but it caps how much material the Writer will ever see.
 
 ## 9. Two defects found last night that change how you should read old artifacts
 
