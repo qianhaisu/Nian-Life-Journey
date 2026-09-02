@@ -113,7 +113,7 @@ test("a question about a capability plus a backchannel cannot ground a capabilit
   assert.equal(grounding.claims[0].assertionStatus, "question");
   assert.equal(grounding.claims[0].mayContributeToWorthiness, false);
   assert.equal(grounding.claims[0].mayGroundDevelopmentalSignal, false);
-  assert.equal(grounding.groundedRawFactCount, 0);
+  assert.equal(grounding.promotableGroundedFactCount, 0);
 
   const gated = applyGroundingToAxis(verdict.worthinessAxis, grounding);
   assert.equal(gated.axis.newCapabilityOrIndependence.score, 0, "the strong signal must not survive grounding");
@@ -187,7 +187,7 @@ test("a pronoun-only claim RESOLVES through a bounded antecedent when no one com
   assert.equal(grounding.claims[0].subject.resolved, true, "a supported pronoun claim must not be refused");
   assert.equal(grounding.claims[0].subject.basis, "antecedent_in_window");
   assert.equal(grounding.claims[0].mayGroundDevelopmentalSignal, true);
-  assert.equal(grounding.groundedRawFactCount, 1);
+  assert.equal(grounding.promotableGroundedFactCount, 1);
   const gated = applyGroundingToAxis(verdict.worthinessAxis, grounding);
   assert.equal(gated.axis.newCapabilityOrIndependence.score, 2, "a genuine grounded capability must survive");
   assert.deepEqual(gated.zeroed, []);
@@ -311,7 +311,7 @@ test("with grounding, a genuine asserted fact still survives", () => {
   const g = groundClaims(w, verdict, SUBJECT, OPTS);
   const after = validate(w, verdict, { now: "2026-03-02T00:00:00Z", modelVersion: "m", existingLifeEvents: [], recentSameTypeCount: 0, claimGrounding: g });
   assert.ok(!after.reasonCodes.some((c) => c.startsWith("claim_not_an_assertion")), "a real assertion must not be dropped");
-  assert.equal(g.groundedRawFactCount, 1);
+  assert.equal(g.promotableGroundedFactCount, 1);
 });
 
 test("a negated fact is kept as a fact — it is real, it is just not an acquired ability", () => {

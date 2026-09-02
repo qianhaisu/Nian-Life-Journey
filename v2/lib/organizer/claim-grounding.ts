@@ -227,8 +227,19 @@ export type GroundingResult = {
   claims: GroundedClaim[];
   /** Grounding for every ref cited by a worthiness dimension, keyed by ref. */
   refGrounding: Map<string, { span: GroundedSpan; subject: ClaimSubject; status: AssertionStatus; polarity: Polarity; mayContributeToWorthiness: boolean; mayGroundDevelopmentalSignal: boolean }>;
-  /** raw_facts that survived grounding. Replaces routeV4's ungrounded rawFactCount. */
-  groundedRawFactCount: number;
+  /**
+   * raw_facts that survived grounding and may therefore drive a MEMORY PROMOTION. Replaces
+   * routeV4's ungrounded rawFactCount.
+   */
+  promotableGroundedFactCount: number;
+  /**
+   * Evidence that may keep the window as a DailyTrace. Deliberately a WEAKER test than promotion:
+   * the subject must still resolve — an ordinary day belonging to another child is not 张年's trace
+   * — but the speech act does not have to be an assertion. A window whose only claim came from
+   * 「会自己站了？」 is not a Memory and never will be, yet the family really did spend that day
+   * wondering, and that is a true thing about the day.
+   */
+  traceEvidenceCount: number;
   reasonCodes: string[];
 };
 
@@ -291,9 +302,12 @@ export function groundClaims(
     refGrounding.set(ref, { span, subject: refSubject, status, polarity, mayContributeToWorthiness, mayGroundDevelopmentalSignal: mayContributeToWorthiness && polarity === "affirmative" && settlesItsProposition(span) });
   }
 
-  const groundedRawFactCount = claims.filter((claim, index) => verdict.coreFacts[index]?.assertionKind === "raw_fact" && claim.mayContributeToWorthiness).length;
+  const promotableGroundedFactCount = claims.filter((claim, index) => verdict.coreFacts[index]?.assertionKind === "raw_fact" && claim.mayContributeToWorthiness).length;
+  // Subject resolved + something that actually carries content. A backchannel-only claim supplies
+  // no proposition of its own (see assertionStatusOf) and so cannot evidence a trace either.
+  const traceEvidenceCount = claims.filter((claim) => claim.subject.resolved && claim.supportingSpans.some((span) => span.contentBearing)).length;
 
-  return { version: CLAIM_GROUNDING_VERSION, claims, refGrounding, groundedRawFactCount, reasonCodes: [...new Set(reasonCodes)] };
+  return { version: CLAIM_GROUNDING_VERSION, claims, refGrounding, promotableGroundedFactCount, traceEvidenceCount, reasonCodes: [...new Set(reasonCodes)] };
 }
 
 export type AxisGatingResult = { axis: WorthinessAxisV4; zeroed: string[]; reasonCodes: string[] };

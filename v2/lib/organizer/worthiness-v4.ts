@@ -70,7 +70,24 @@ export type RoutingInputV4 = {
   subjectRelevance: string;
   subjectResolution: SubjectResolution["level"];
   temporalStatus: string;
+  /**
+   * Facts that may drive a MEMORY PROMOTION. Under v6 this is the claim-grounded count: a claim
+   * only counts once its evidence is a supported assertion about a resolved subject.
+   */
   rawFactCount: number;
+  /**
+   * Evidence that may keep this window as a DailyTrace, independent of whether anything in it is
+   * promotable. Optional, and OMITTED by v4/v5 — when it is undefined the routing below behaves
+   * exactly as it always has, which is what keeps frozen v5 frozen.
+   *
+   * Why it exists: `rawFactCount` was doing two unrelated jobs. Claim Grounding correctly zeroes it
+   * for a window whose only "fact" came from a question, and because `no_unhedged_fact` is one of
+   * the gates whose failure returns store_only, a real ordinary day was being thrown away as well
+   * as being refused a Memory. Evidence confidence and Memory worthiness are orthogonal (and so are
+   * "nothing here is promotable" and "nothing here happened"): a day the family spent wondering
+   * whether he could stand yet is not a Memory, but it IS a true trace of that day.
+   */
+  traceEvidenceCount?: number;
 };
 
 export type RoutingDecisionV4 = {
@@ -79,7 +96,25 @@ export type RoutingDecisionV4 = {
   strongSignals: string[];
   mediumSignals: string[];
   blockedBy: string[];
+  /** Set when a promotion-only gate failed but the window was still kept as a trace. */
+  retainedDespitePromotionGate?: boolean;
 };
+
+/**
+ * The gates that decide only whether something may become a MEMORY. Every other gate is also a
+ * retention gate, and deliberately so:
+ *
+ *   subject_unresolved / subject_not_primary  the window may not be about 张年 at all — writing it
+ *                                             into his archive as a trace is the other-child
+ *                                             leakage this whole layer exists to prevent
+ *   not_observed                              a plan is not a record of a day that happened
+ *   low_evidence_confidence                   the evidence itself is not trustworthy enough to
+ *                                             assert anything, including "this happened today"
+ *
+ * `no_unhedged_fact` is the only one that is purely about promotion material. It says nothing about
+ * whether the day was real or whose it was.
+ */
+const PROMOTION_ONLY_GATES: ReadonlySet<string> = new Set(["no_unhedged_fact"]);
 
 function gateFailures(input: RoutingInputV4): string[] {
   const failures: string[] = [];
@@ -111,7 +146,14 @@ export function routeV4(input: RoutingInputV4): RoutingDecisionV4 {
   if (transition === 1) mediumSignals.push("possible_transition");
   if (capability === 1) mediumSignals.push("partial_capability");
 
-  if (blockedBy.length) return { action: "store_only", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy };
+  if (blockedBy.length) {
+    // Retention is decided separately from promotion, but ONLY when the caller supplied the trace
+    // evidence count. v4/v5 never do, so their behaviour here is unchanged.
+    const retentionBlockers = blockedBy.filter((gate) => !PROMOTION_ONLY_GATES.has(gate));
+    const mayRetain = input.traceEvidenceCount !== undefined && retentionBlockers.length === 0 && input.traceEvidenceCount >= 1;
+    if (!mayRetain) return { action: "store_only", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy };
+    return { action: "daily_trace", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy, retainedDespitePromotionGate: true };
+  }
   if (strongSignals.length >= 1) return { action: "life_event_candidate", reviewRequirement: "needs_review", strongSignals, mediumSignals, blockedBy };
   if (mediumSignals.length >= 2) return { action: "life_event_candidate", reviewRequirement: "needs_review", strongSignals, mediumSignals, blockedBy };
   if (mediumSignals.length === 1) return { action: "daily_trace", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy };

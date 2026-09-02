@@ -65,7 +65,7 @@ export type V6RoutingLookup = (windowId: string) => {
   grounding: GroundingResult;
 } | undefined;
 
-export function createV6RoutingPolicy(lookup: V6RoutingLookup, onDecision?: (windowId: string, detail: { zeroed: string[]; reasonCodes: string[]; groundedRawFactCount: number }) => void): RoutingPolicy {
+export function createV6RoutingPolicy(lookup: V6RoutingLookup, onDecision?: (windowId: string, detail: { zeroed: string[]; reasonCodes: string[]; promotableGroundedFactCount: number; traceEvidenceCount: number }) => void): RoutingPolicy {
   return {
     id: V6_ROUTING_POLICY_ID,
     decide({ window, verdict }): RouteDecision {
@@ -74,7 +74,7 @@ export function createV6RoutingPolicy(lookup: V6RoutingLookup, onDecision?: (win
         throw new Error(`V6 routing policy has no axis for window ${window.windowId}. Refusing to route rather than falling back to v1.`);
       }
       const gated = applyGroundingToAxis(context.worthiness, context.grounding);
-      onDecision?.(window.windowId, { zeroed: gated.zeroed, reasonCodes: gated.reasonCodes, groundedRawFactCount: context.grounding.groundedRawFactCount });
+      onDecision?.(window.windowId, { zeroed: gated.zeroed, reasonCodes: gated.reasonCodes, promotableGroundedFactCount: context.grounding.promotableGroundedFactCount, traceEvidenceCount: context.grounding.traceEvidenceCount });
       const decision = routeV5({
         worthiness: gated.axis,
         evidence: context.evidence,
@@ -82,7 +82,10 @@ export function createV6RoutingPolicy(lookup: V6RoutingLookup, onDecision?: (win
         subjectRelevance: verdict.subjectRelevance,
         temporalStatus: verdict.temporalStatus,
         // Grounded facts only: an ungrounded "fact" must not satisfy the no_unhedged_fact gate.
-        rawFactCount: context.grounding.groundedRawFactCount,
+        rawFactCount: context.grounding.promotableGroundedFactCount,
+        // ...but failing that gate must cost the window its Memory, not its existence. Supplying
+        // this is what separates "not promotable" from "not real" (see worthiness-v4.ts).
+        traceEvidenceCount: context.grounding.traceEvidenceCount,
       });
       return { action: decision.action, reviewRequirement: decision.reviewRequirement, toGlimmerPool: false };
     },

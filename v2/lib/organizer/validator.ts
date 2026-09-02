@@ -56,7 +56,43 @@ export type ValidatorContext = {
 
 /** The narrow slice of claim-grounding.ts's GroundingResult the validator needs. Kept structural so
  *  the validator does not depend on the grounding module. */
-export type ClaimGroundingView = { claims: Array<{ assertionStatus: string; mayContributeToWorthiness: boolean; polarity: string }> };
+export type ClaimGroundingView = {
+  claims: Array<{
+    assertionStatus: string;
+    mayContributeToWorthiness: boolean;
+    polarity: string;
+    subject: { resolved: boolean };
+    supportingSpans: Array<{ ref: string; text: string; contentBearing: boolean }>;
+  }>;
+  traceEvidenceCount: number;
+};
+
+// A DailyTrace line for a window whose claims were all refused as facts. It must record that the
+// family discussed something without asserting the something — so it carries the evidence span
+// VERBATIM and frames it as talk, which is the one thing the evidence does establish. This is a
+// deterministic template, not narrative: the Writer is the only thing that writes prose, and it
+// never sees a trace line.
+const TRACE_DISCUSSION_PREFIX = "家里聊到：";
+const TRACE_SPAN_MAX = 60;
+
+function discussionTraceLines(grounding: ClaimGroundingView): Array<{ text: string; evidenceRefs: string[] }> {
+  const lines: Array<{ text: string; evidenceRefs: string[] }> = [];
+  const seen = new Set<string>();
+  for (const claim of grounding.claims) {
+    // Another child's day is not 张年's trace, and a backchannel supplies no content of its own.
+    if (!claim.subject.resolved) continue;
+    for (const span of claim.supportingSpans) {
+      if (!span.contentBearing) continue;
+      const text = span.text.trim();
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      const clipped = text.length > TRACE_SPAN_MAX ? `${text.slice(0, TRACE_SPAN_MAX)}…` : text;
+      lines.push({ text: `${TRACE_DISCUSSION_PREFIX}「${clipped}」`, evidenceRefs: [span.ref] });
+      if (lines.length >= 2) return lines;
+    }
+  }
+  return lines;
+}
 
 export type ValidatorResult = { outcome: OrganizerOutcome; degradeReason?: string; reasonCodes: string[] };
 
@@ -196,7 +232,18 @@ export function validate(window: EvidenceWindow, verdict: MemoryEditorVerdict, c
   if (routed.action === "store_only") return { outcome: { ...base, action: "store_only", selectionReason: reasons.length ? reasons.join(",") : "Below worthiness threshold", worthinessScore: worthiness.score }, degradeReason: reasons.length ? reasons.join(",") : undefined, reasonCodes: reasons };
 
   if (routed.action === "daily_trace") {
-    const traceLines = facts.length ? facts.slice(0, 2).map((fact) => ({ text: fact.statement, evidenceRefs: fact.evidenceRefs })) : [{ text: `${window.stats.messageCount} 条消息 · ${window.stats.imageCount} 张媒体`, evidenceRefs: [] }];
+    // Trace text, in descending order of how much the evidence supports:
+    //   1. facts that survived grounding — stated as facts, because they are;
+    //   2. otherwise, verbatim discussion lines, which assert only that it was talked about;
+    //   3. otherwise the old count string. That last one is a Media-First violation ("N 条消息" in
+    //      place of content) and is now genuinely a last resort rather than the routine outcome of
+    //      grounding having refused every claim.
+    const discussion = facts.length === 0 && context.claimGrounding ? discussionTraceLines(context.claimGrounding) : [];
+    const traceLines = facts.length
+      ? facts.slice(0, 2).map((fact) => ({ text: fact.statement, evidenceRefs: fact.evidenceRefs }))
+      : discussion.length
+        ? discussion
+        : [{ text: `${window.stats.messageCount} 条消息 · ${window.stats.imageCount} 张媒体`, evidenceRefs: [] }];
     return { outcome: { ...base, action: "daily_trace", occurredAt: occurredDateOf(window, verdict), scopes: ["family"], contentTypes: uniqueContentTypes(window), traceLines, evidenceStrength: worthiness.dimensions.evidenceStrength, selectionReason: routed.toGlimmerPool ? "everyday_glimmer_pool" : "ordinary_day", worthinessScore: worthiness.score }, reasonCodes: reasons };
   }
 
