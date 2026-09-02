@@ -1,32 +1,34 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { Timeline } from "@/components/timeline";
-import { getAllEvents, getStore } from "@/lib/db/repository";
-import { availableMonths, availableYears } from "@/lib/timeline-dates";
+import { MonthChapter } from "@/components/month-chapter";
+import { loadFamilyArchive } from "@/lib/family-archive";
+import { splitOpenMonths } from "@/lib/memory-chapters";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "记忆" };
 
+// The archive read as a publication: years, then months, then the memories inside them. Ordinary
+// days are folded under each month. Recent months open in full; older ones are an index that
+// links to the month page.
 export default async function MemoryPage() {
-  const [events, store] = await Promise.all([getAllEvents(), getStore()]);
-  // Year/month navigation is derived from the records that actually exist. It used to be a
-  // hardcoded "2026 / 八月" divider sitting above a stream of 2025 memories, which is what filed
-  // every 2025 event under 2026.
-  const years = availableYears([events, store.dailyTraces]);
-  const latestYear = years[0];
-  const latestMonth = latestYear ? availableMonths([events, store.dailyTraces], latestYear)[0] : undefined;
+  const { chapters } = await loadFamilyArchive();
+  const { open } = splitOpenMonths(chapters);
+  const openMonths = new Set(open.flatMap((year) => year.months.map((month) => month.month)));
 
-  return <div className="memory-page reading-wrap">
-    <header className="page-masthead"><span className="section-mark">记忆</span><h1 className="serif">往回翻翻，<br /><em>张年。</em></h1><p>那些已经过去、但还想再看一次的日子。</p></header>
-    <nav className="time-scales" aria-label="记忆的时间尺度">
-      <span aria-current="page">日 / 事件</span>
-      {latestMonth ? <Link href={`/memory/${latestMonth.slice(0, 4)}/${latestMonth.slice(5, 7)}`}>月</Link> : null}
-      {latestYear ? <Link href={`/memory/${latestYear}`}>年</Link> : null}
-    </nav>
-    {/* One entry per year that actually has records. The page used to carry a single "2026 / 八月"
-        divider here, which read as a heading for everything below it — including four months of
-        2025. The stream now emits its own heading each time the calendar month changes. */}
-    {years.length > 0 ? <nav className="memory-years" aria-label="按年份翻看">
-      {years.map((year) => <Link key={year} href={`/memory/${year}`}>{year} 年度回顾 ↗</Link>)}
-    </nav> : null}
-    <Timeline events={events} media={store.media} traces={store.dailyTraces} />
+  return <div className="memory-page">
+    <header className="page-masthead reading-wrap"><span className="section-mark">记忆</span><h1 className="serif">往回翻翻，<br /><em>张年。</em></h1><p>那些已经过去、但还想再看一次的日子。</p></header>
+    {chapters.length === 0 ? <section className="reading-wrap archive-empty"><p className="serif">档案还是空的。等时间再走一会儿。</p></section> : null}
+    {chapters.map((year) => {
+      const openHere = year.months.filter((month) => openMonths.has(month.month));
+      const indexHere = year.months.filter((month) => !openMonths.has(month.month));
+      return <section className="year-chapter reading-wrap" key={year.year} aria-labelledby={`year-${year.year}`}>
+        <header className="year-anchor">
+          <h2 id={`year-${year.year}`} className="serif"><Link href={`/memory/${year.year}`}>{year.year}</Link></h2>
+          {year.ageSpan ? <p>{year.ageSpan}</p> : null}
+        </header>
+        {openHere.map((month) => <MonthChapter chapter={month} open key={month.month} />)}
+        {indexHere.length > 0 ? <ol className="month-index">{indexHere.map((month) => <MonthChapter chapter={month} open={false} key={month.month} />)}</ol> : null}
+      </section>;
+    })}
   </div>;
 }

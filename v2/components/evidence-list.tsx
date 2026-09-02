@@ -2,6 +2,7 @@ import Image from "next/image";
 import type { Contributor, Media, RawSource, SourceType } from "@/lib/types";
 import { presentableEvidenceText, presentableSourceLabel } from "@/lib/organizer/evidence-text";
 import { isThumbnailEligible } from "@/lib/media/hero";
+import { presentableAlt } from "@/lib/media/presentation";
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
@@ -9,7 +10,7 @@ function formatTime(value: string) {
 
 function formatDuration(seconds?: number) {
   if (!seconds) return "";
-  return `00:${String(seconds).padStart(2, "0")}`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 function sourceTypeLabel(sourceType: SourceType) {
@@ -42,8 +43,8 @@ export function EvidenceList({ sources, media, contributors }: { sources: RawSou
           {text ? <p className={source.sourceType === "wechat" ? "evidence-quote" : "evidence-note"}>{source.sourceType === "wechat" ? `“${text}”` : text}</p> : null}
           {sourceMedia.length > 0 ? <div className="evidence-media">
             {sourceMedia.map((item) => <div className="evidence-media-item" key={item.id}>
-              <Image src={item.thumbnailSrc ?? item.src} alt={item.alt} fill sizes="(max-width: 700px) 42vw, 220px" style={{ objectFit: "cover" }} />
-              <span className="evidence-media-label">{item.type === "video" ? `Video · ${formatDuration(item.durationSeconds)}` : "Photo"}</span>
+              <Image src={item.thumbnailSrc ?? item.src} alt={presentableAlt(item)} fill sizes="(max-width: 700px) 42vw, 220px" style={{ objectFit: "cover" }} />
+              <span className="evidence-media-label">{item.type === "video" ? `视频 ${formatDuration(item.durationSeconds)}`.trim() : "照片"}</span>
             </div>)}
           </div> : null}
         </div>
