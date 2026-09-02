@@ -18,6 +18,10 @@ import { toV1WorthinessDimensions, type EvidenceAxis, type WorthinessAxis } from
 import { buildMemoryEditorPromptV3, MEMORY_EDITOR_V3_PROMPT_VERSION, MEMORY_EDITOR_V3_SYSTEM_PROMPT, MEMORY_EDITOR_V3_TOOL_NAME, MEMORY_EDITOR_V3_TOOL_SCHEMA } from "./prompts/memory-editor-v3";
 import { toV1WorthinessDimensionsV3, type WorthinessAxisV3 } from "./worthiness-v3";
 import type { SelectedPriorObservation } from "./prior-observations";
+import { buildMemoryEditorPromptV4, MEMORY_EDITOR_V4_PROMPT_VERSION, MEMORY_EDITOR_V4_SYSTEM_PROMPT, MEMORY_EDITOR_V4_TOOL_NAME, MEMORY_EDITOR_V4_TOOL_SCHEMA } from "./prompts/memory-editor-v4";
+import { toV1WorthinessDimensionsV4, type WorthinessAxisV4 } from "./worthiness-v4";
+import { resolveSubjectBounded, type SubjectResolution as BoundedSubjectResolution } from "./subject-resolver";
+import type { IdentityRegistry } from "./identity";
 
 export class DeepSeekEditorError extends Error {
   constructor(message: string, readonly code: string, readonly fatal = false) {
@@ -82,7 +86,7 @@ export function coerceTemporalStatus(raw: unknown): { temporalStatus: string; co
   return { temporalStatus: "uncertain", coerced: true };
 }
 
-export function coerceSubjectRelevance(raw: Record<string, unknown>, window: EvidenceWindow, subject: { primaryName: string; aliases: string[] }): { subjectRelevance: string; gateAReason?: string } {
+export function coerceSubjectRelevance(raw: Record<string, unknown>, window: EvidenceWindow, subject: { primaryName: string; aliases: string[] }, bounded?: BoundedSubjectResolution): { subjectRelevance: string; gateAReason?: string } {
   const detail = raw.subjectRelevanceDetail;
   if (detail === "family_context_only" || detail === "unrelated") return { subjectRelevance: "unrelated", gateAReason: `gate_a_${detail}` };
   if (detail === "insufficient_evidence") return { subjectRelevance: "ambiguous", gateAReason: "gate_a_insufficient_evidence" };
@@ -94,19 +98,29 @@ export function coerceSubjectRelevance(raw: Record<string, unknown>, window: Evi
     const ref = raw.subjectResolutionRef;
     if (typeof ref !== "string" || !ref.includes("#")) return { subjectRelevance: "ambiguous", gateAReason: "gate_a_unresolved_pronoun" };
   }
+  // v4 supplies a bounded resolution computed deterministically before this point; it supersedes the
+  // older in-window-name test, which refused every pronoun-only window however well anchored.
+  if (bounded) {
+    if (bounded.level === "unresolved") return { subjectRelevance: "ambiguous", gateAReason: `gate_a_${bounded.blockers[0] ?? "unresolved"}` };
+    return { subjectRelevance: "primary" };
+  }
   const resolution = resolveSubject(window, subject);
   if (resolution === "none") return { subjectRelevance: "ambiguous", gateAReason: "gate_a_no_name_in_window" };
   if (resolution === "contested") return { subjectRelevance: "ambiguous", gateAReason: "gate_a_competing_person" };
   return { subjectRelevance: "primary" };
 }
 
-export type MemoryEditorVariant = "v1" | "v2" | "v3";
+export type MemoryEditorVariant = "v1" | "v2" | "v3" | "v4";
 
 export type DeepSeekEditorOptions = {
   /** v1 is the production publication-ledger contract. v2 splits provenance from worthiness. */
   variant?: MemoryEditorVariant;
-  /** v2 only: bounded, topic-linked baseline used to justify a developmental-transition claim. */
+  /** v2+: bounded, topic-linked baseline used to justify a developmental-transition claim. */
   priorObservationsFor?: (window: EvidenceWindow) => PriorObservation[] | SelectedPriorObservation[];
+  /** v4: verified identities, used by the Subject Resolver to count caregiver continuity. */
+  registry?: IdentityRegistry;
+  /** v4: raises the resolver's prior only. Never sufficient to resolve a pronoun by itself. */
+  singleChildHousehold?: boolean;
 };
 
 export class DeepSeekMemoryEditor implements MemoryEditorProvider {
@@ -121,16 +135,22 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
    * them here (keyed by windowId) preserves them for scoring and observability without widening the
    * contract.
    */
-  readonly axesByWindowId = new Map<string, { evidenceAxis: EvidenceAxis; worthinessAxis: WorthinessAxis | WorthinessAxisV3 }>();
+  readonly axesByWindowId = new Map<string, { evidenceAxis: EvidenceAxis; worthinessAxis: WorthinessAxis | WorthinessAxisV3 | WorthinessAxisV4 }>();
+  /** v4: the deterministic subject resolution behind each window, for auditing. */
+  readonly subjectResolutionByWindowId = new Map<string, BoundedSubjectResolution>();
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly subject: { primaryName: string; aliases: string[] };
   private readonly priorObservationsFor?: (window: EvidenceWindow) => PriorObservation[] | SelectedPriorObservation[];
+  private readonly registry?: IdentityRegistry;
+  private readonly singleChildHousehold: boolean;
 
   constructor(env: NodeJS.ProcessEnv, subject: { primaryName: string; aliases: string[] }, options: DeepSeekEditorOptions = {}) {
     this.variant = options.variant ?? "v1";
-    this.promptVersion = this.variant === "v3" ? MEMORY_EDITOR_V3_PROMPT_VERSION : this.variant === "v2" ? MEMORY_EDITOR_V2_PROMPT_VERSION : MEMORY_EDITOR_PROMPT_VERSION;
+    this.promptVersion = this.variant === "v4" ? MEMORY_EDITOR_V4_PROMPT_VERSION : this.variant === "v3" ? MEMORY_EDITOR_V3_PROMPT_VERSION : this.variant === "v2" ? MEMORY_EDITOR_V2_PROMPT_VERSION : MEMORY_EDITOR_PROMPT_VERSION;
+    this.registry = options.registry;
+    this.singleChildHousehold = options.singleChildHousehold ?? false;
     this.priorObservationsFor = options.priorObservationsFor;
     if (!env.DEEPSEEK_API_KEY) throw new DeepSeekEditorError("DeepSeek is not configured: DEEPSEEK_API_KEY is missing", "missing_api_key", true);
     if (!env.AI_MODEL) throw new DeepSeekEditorError("DeepSeek is not configured: AI_MODEL is missing", "missing_model", true);
@@ -147,11 +167,20 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
   async organize(window: EvidenceWindow): Promise<{ verdict: unknown }> {
     const isV2 = this.variant === "v2";
     const isV3 = this.variant === "v3";
+    const isV4 = this.variant === "v4";
+    // Deterministic, bounded and auditable — computed before the model is asked anything, so Gate A
+    // never rests on the model's own claim about who "他" is.
+    const boundedResolution = isV4
+      ? resolveSubjectBounded(window, this.subject, { registry: this.registry, singleChildHousehold: this.singleChildHousehold })
+      : undefined;
+    if (boundedResolution) this.subjectResolutionByWindowId.set(window.windowId, boundedResolution);
     const priors = this.priorObservationsFor?.(window) ?? [];
-    const toolName = isV3 ? MEMORY_EDITOR_V3_TOOL_NAME : isV2 ? MEMORY_EDITOR_V2_TOOL_NAME : MEMORY_EDITOR_TOOL_NAME;
-    const systemPrompt = isV3 ? MEMORY_EDITOR_V3_SYSTEM_PROMPT : isV2 ? MEMORY_EDITOR_V2_SYSTEM_PROMPT : MEMORY_EDITOR_SYSTEM_PROMPT;
-    const schema = isV3 ? MEMORY_EDITOR_V3_TOOL_SCHEMA : isV2 ? MEMORY_EDITOR_V2_TOOL_SCHEMA : MEMORY_EDITOR_TOOL_SCHEMA;
-    const userPrompt = isV3
+    const toolName = isV4 ? MEMORY_EDITOR_V4_TOOL_NAME : isV3 ? MEMORY_EDITOR_V3_TOOL_NAME : isV2 ? MEMORY_EDITOR_V2_TOOL_NAME : MEMORY_EDITOR_TOOL_NAME;
+    const systemPrompt = isV4 ? MEMORY_EDITOR_V4_SYSTEM_PROMPT : isV3 ? MEMORY_EDITOR_V3_SYSTEM_PROMPT : isV2 ? MEMORY_EDITOR_V2_SYSTEM_PROMPT : MEMORY_EDITOR_SYSTEM_PROMPT;
+    const schema = isV4 ? MEMORY_EDITOR_V4_TOOL_SCHEMA : isV3 ? MEMORY_EDITOR_V3_TOOL_SCHEMA : isV2 ? MEMORY_EDITOR_V2_TOOL_SCHEMA : MEMORY_EDITOR_TOOL_SCHEMA;
+    const userPrompt = isV4
+      ? buildMemoryEditorPromptV4(window, this.subject, priors as SelectedPriorObservation[])
+      : isV3
       ? buildMemoryEditorPromptV3(window, this.subject, priors as SelectedPriorObservation[])
       : isV2 ? buildMemoryEditorPromptV2(window, this.subject, priors as PriorObservation[]) : buildMemoryEditorPrompt(window, this.subject);
     const body = JSON.stringify({
@@ -187,8 +216,8 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         if (!toolUse || typeof toolUse.input !== "object" || toolUse.input === null) throw new DeepSeekEditorError("DeepSeek returned no tool_use block", "no_tool_use");
 
         const raw = { ...(toolUse.input as Record<string, unknown>) };
-        if (isV3) {
-          const worthinessAxis = raw.worthinessAxis as WorthinessAxisV3 | undefined;
+        if (isV3 || isV4) {
+          const worthinessAxis = raw.worthinessAxis as (WorthinessAxisV3 & WorthinessAxisV4) | undefined;
           const evidenceAxis = raw.evidenceAxis as EvidenceAxis | undefined;
           if (!worthinessAxis || !evidenceAxis) throw new DeepSeekEditorError("DeepSeek v3 verdict is missing an axis", "missing_axis");
           // v3 splits the transition's score (on the worthiness axis) from its justification (in
@@ -197,7 +226,7 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
           const transition = worthinessAxis.developmentalTransition as unknown as { score: number; evidenceRefs: string[] };
           worthinessAxis.developmentalTransition = { score: transition.score as 0 | 1 | 2 | 3, basis: (support?.basis as "explicit_in_window" | "supported_by_prior_context" | "unknown") ?? "unknown", evidenceRefs: transition.evidenceRefs ?? [] };
           this.axesByWindowId.set(window.windowId, { evidenceAxis, worthinessAxis });
-          raw.worthinessDimensions = toV1WorthinessDimensionsV3(worthinessAxis);
+          raw.worthinessDimensions = isV4 ? toV1WorthinessDimensionsV4(worthinessAxis) : toV1WorthinessDimensionsV3(worthinessAxis);
         } else if (isV2) {
           const worthinessAxis = raw.worthinessAxis as WorthinessAxis | undefined;
           const evidenceAxis = raw.evidenceAxis as EvidenceAxis | undefined;
@@ -210,7 +239,7 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         }
         const temporal = coerceTemporalStatus(raw.temporalStatus);
         raw.temporalStatus = temporal.temporalStatus;
-        const { subjectRelevance, gateAReason } = coerceSubjectRelevance(raw, window, this.subject);
+        const { subjectRelevance, gateAReason } = coerceSubjectRelevance(raw, window, this.subject, boundedResolution);
         raw.subjectRelevance = subjectRelevance;
         // H9 alignment: an unrelated/ambiguous subject may not carry subjectIds, and the contract
         // rejects subjectIds on "ambiguous" outright.

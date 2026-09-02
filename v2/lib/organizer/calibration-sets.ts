@@ -41,8 +41,11 @@ export type CalibrationCase = {
 export const DEVELOPMENT_SET: CalibrationCase[] = [
   { id: "D-P1-crawls-unaided", eventId: "event-0226c115-1006-41dc-8d34-2f4ec991a619", cls: "positive", rationale: "「放在床上他就自己会爬」— independent crawling stated outright." },
   { id: "D-P2-wants-to-stand", eventId: "event-dc7193ad-8217-46c4-8ace-b2cc7602add8", cls: "positive", rationale: "「各种扶墙站，手一撑，然后就起来了」+「不满足于坐了」— pulling to stand, with the prior baseline named." },
-  { id: "D-P3-slept-through", eventId: "event-a9623b23-786c-43c7-9922-032ec95542c5", cls: "positive", rationale: "「一觉睡到了5点，没有醒一下，我也没有哄一下」— unassisted night sleep. The hard case: no explicit novelty marker in the window." },
 
+  // Re-labelled after the v3 run and Teddy's review: the evidence proves a good night, not a
+  // transition. There is no novelty marker in the window and no usable sleep baseline in the
+  // archive, so trace/borderline is the honest class — it is not a recall failure to leave it here.
+  { id: "D-B0-slept-through", eventId: "event-a9623b23-786c-43c7-9922-032ec95542c5", cls: "borderline", rationale: "「一觉睡到了5点，没有醒一下」proves a good night; nothing in evidence establishes it as new." },
   { id: "D-B1-tomato-noodles", eventId: "event-7f060955-2ac9-42e4-982a-a9cee5cab62b", cls: "borderline", rationale: "Charming and rich, but the content is a messy meal plus plans the family only discussed. Ordinary-but-pleasant." },
   { id: "D-B2-sleep-cues", eventId: "event-d7acbf51-315e-44d0-8b97-194cd15af258", cls: "borderline", rationale: "Observational chat about reading his sleep signals; no capability changes hands." },
   { id: "D-B3-june24-batch", eventId: "event-5f122471-250f-4184-aad6-151215a3c1ee", cls: "borderline", rationale: "Large mixed day, some child content among household talk." },
