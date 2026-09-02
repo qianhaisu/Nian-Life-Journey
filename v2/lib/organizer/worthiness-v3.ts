@@ -101,9 +101,15 @@ export function routeV3(input: RoutingInputV3): RoutingDecisionV3 {
   if (strongSignals.length >= 1) return { action: "life_event_candidate", reviewRequirement: "needs_review", strongSignals, mediumSignals, blockedBy };
   if (mediumSignals.length >= 2) return { action: "life_event_candidate", reviewRequirement: "needs_review", strongSignals, mediumSignals, blockedBy };
   if (mediumSignals.length === 1) return { action: "daily_trace", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy };
-  // Nothing positive fired. This is the only place routineness is consulted, and all it decides is
+  // Nothing positive fired. This is the only place the flag is consulted, and all it decides is
   // whether an ordinary day about the child is worth a trace or worth nothing.
-  return { action: axis.noDistinctiveMemorySignal ? "daily_trace" : "store_only", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy };
+  //
+  // Polarity matters and I had it backwards in the first cut: `true` means there is NOTHING
+  // distinctive here, which is the case for keeping nothing. `false` means the window does hold
+  // something about the child that simply did not reach a scoring threshold — an ordinary day, which
+  // is exactly what a daily_trace is for. The inverted version sent real child-related days
+  // (a night's sleep, two dense chat days) to store_only while reserving traces for empty ones.
+  return { action: axis.noDistinctiveMemorySignal ? "store_only" : "daily_trace", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy };
 }
 
 export function toV1WorthinessDimensionsV3(axis: WorthinessAxisV3) {

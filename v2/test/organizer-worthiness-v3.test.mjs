@@ -38,10 +38,12 @@ test("an ordinary day with a real capability gain is still Memory-eligible", () 
 });
 
 test("noDistinctiveMemorySignal is consulted only when nothing positive fired", () => {
-  assert.equal(routing({ nothing: true }).action, "daily_trace");
-  assert.equal(routing({ nothing: false }).action, "store_only");
+  // true = nothing distinctive here at all -> keep nothing.
+  assert.equal(routing({ nothing: true }).action, "store_only");
+  // false = something about the child that just did not reach a threshold -> an ordinary day.
+  assert.equal(routing({ nothing: false }).action, "daily_trace");
   // With a medium signal present it is irrelevant either way.
-  assert.equal(routing({ relationship: 2, nothing: true }).action, "daily_trace");
+  assert.equal(routing({ relationship: 2, nothing: true }).action, "daily_trace", "a medium signal outranks the flag entirely");
   assert.equal(routing({ relationship: 2, futureRecall: 2, nothing: true }).action, "life_event_candidate");
 });
 
@@ -107,4 +109,15 @@ test("H8 path A is unchanged: explicit novelty text alone still supports a miles
   const verdict = { ...base, coreFacts: [{ statement: "他第一次自己站起来了", assertionKind: "raw_fact", evidenceRefs: [ref] }], worthinessDimensions: { ...base.worthinessDimensions, milestone: { score: 3, evidenceRefs: [ref] } } };
   const result = validate(window, verdict, ctx([]));
   assert.equal(result.outcome.action, "life_event_candidate");
+});
+
+// Regression for the polarity bug found in the v3 development run: a dense day of real chat about
+// the child scored every dimension at 1 (below every threshold) and was being discarded entirely,
+// while a window with nothing in it would have been kept as a trace.
+test("a child-related day below every threshold is kept as a trace, not discarded", () => {
+  const belowThreshold = routing({ distinctive: 1, relationship: 1, futureRecall: 1, nothing: false });
+  assert.deepEqual(belowThreshold.mediumSignals, []);
+  assert.equal(belowThreshold.action, "daily_trace");
+  const empty = routing({ nothing: true });
+  assert.equal(empty.action, "store_only");
 });
