@@ -31,11 +31,36 @@ excluded by construction (V1 development set, spent Holdout 1, spent Holdout V2)
 - 671 EvidenceWindows built from the live archive
 - 220 excluded as spent → 451 fresh → 369 with ≥ 3 messages
 - **30 selected**, one per stratum, across 42 available strata
+- of those 30, **26 are genuinely untouched**; 4 turned out to sit on real Holdout 1 days — see §2.1
 
 Coverage: 8 months (2025-05 … 2026-08), 3 conversations, sparse 16 / medium 10 / dense 4,
 single-sender 6 / pair 9 / multi-speaker 15, 20 windows carrying images.
 
-A selection bug was found and fixed while building this. Strata were visited in alphabetical key
+### 2.1 A contamination found afterwards, and what it does to the numbers
+
+While drawing Holdout V3 candidates, several candidates turned out to repeat spent Holdout 1
+content exactly one day later. The cause is that **every day recorded in Holdout 1 was one day
+early** — built before life-date.ts existed, by the local-Date + `.toISOString()` route that module
+replaced. Verified: for all 7 Holdout 1 cases carrying an anchor text, that text occurs on `day + 1`
+in Asia/Shanghai and not on `day` — 7 shifted, 0 exact, 0 unmatched.
+
+Consequence for this shadow: exclusion removed an unrelated day and left the real spent day in the
+pool, so **4 of the 30 windows sit on real Holdout 1 days** (2025-09-23, 2025-10-20, 2025-11-04 ×2).
+The corpus is therefore 26/30 genuinely untouched, not 30/30.
+
+It does not change the conclusions, and the reason is checkable rather than convenient: **none of
+the 4 produced a divergence.** All four routed identically under V5 and V6. Every one of the 6
+deltas — the demotion and all five promotions — came from an uncontaminated window. The contaminated
+windows are also the weaker kind of contamination: Holdout 1 was a spent one-shot *evaluation*, not
+a tuning set, so those days were measured once and never tuned against.
+
+DEVELOPMENT_SET and HOLDOUT_V2_SET are unaffected — 19/19 exact each, verified against their own
+anchors. The difference is that both carry an `anchorSourceId` and Holdout 1 does not, which is the
+whole lesson: a case identified only by a date has nothing to catch it when the date is wrong.
+Holdout 1's days are now corrected with the original preserved, exclusion covers both days, and
+`organizer-calibration-dates.test.mjs` pins all of it.
+
+A selection bug was also found and fixed while building this. Strata were visited in alphabetical key
 order and the key begins with the month, so with more strata than the target, round 0 never reached
 the end of the list: the "stratified" sample was silently just the earliest months, and 2025-11 and
 2026-08 drew zero windows. Strata are now visited in hash order — still deterministic and

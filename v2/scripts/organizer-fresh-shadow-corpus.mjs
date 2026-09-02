@@ -45,8 +45,14 @@ const MAIN = "conversation:856b8ec2b8f3ec2871782ca6";
 
 for (const c of DEVELOPMENT_SET) { spentDays.add(`${c.conversation}|${c.day}`); if (c.anchorSourceId) spentAnchors.add(c.anchorSourceId); }
 for (const c of HOLDOUT_V2_SET) { spentDays.add(`${c.conversation}|${c.lifeDate}`); if (c.anchorSourceId) spentAnchors.add(c.anchorSourceId); }
-// Holdout 1 records a day but not a conversation; it was drawn from the main conversation.
-for (const c of HOLDOUT_SET) spentDays.add(`${MAIN}|${c.day}`);
+// Holdout 1 records a day but not a conversation; it was drawn from the main conversation. Its
+// days were recorded one day early (see calibration-sets.ts) and have been corrected; the
+// originally-recorded day is excluded too, because a set identified only by dates has nothing to
+// catch it if the correction itself is ever off, and over-excluding costs nothing here.
+for (const c of HOLDOUT_SET) {
+  spentDays.add(`${MAIN}|${c.day}`);
+  spentDays.add(`${MAIN}|${c.dayAsOriginallyRecorded}`);
+}
 
 console.log(`Spent material excluded: ${spentDays.size} (conversation, day) pairs, ${spentAnchors.size} anchor sourceIds.`);
 

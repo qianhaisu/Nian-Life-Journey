@@ -36,7 +36,7 @@ const MAIN = "conversation:856b8ec2b8f3ec2871782ca6";
 const spentDays = new Set(), spentAnchors = new Set(), spentWindowIds = new Set();
 for (const c of DEVELOPMENT_SET) { spentDays.add(`${c.conversation}|${c.day}`); if (c.anchorSourceId) spentAnchors.add(c.anchorSourceId); }
 for (const c of HOLDOUT_V2_SET) { spentDays.add(`${c.conversation}|${c.lifeDate}`); if (c.anchorSourceId) spentAnchors.add(c.anchorSourceId); }
-for (const c of HOLDOUT_SET) spentDays.add(`${MAIN}|${c.day}`);
+for (const c of HOLDOUT_SET) { spentDays.add(`${MAIN}|${c.day}`); spentDays.add(`${MAIN}|${c.dayAsOriginallyRecorded}`); }
 if (SPENT_CORPUS) {
   const { manifest } = JSON.parse(readFileSync(SPENT_CORPUS, "utf8"));
   for (const w of manifest.windows) { spentWindowIds.add(w.windowId); spentDays.add(`${w.conversationId}|${w.activityDate}`); }

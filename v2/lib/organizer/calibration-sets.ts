@@ -73,24 +73,55 @@ export const DEVELOPMENT_SET: CalibrationCase[] = [
   { id: "D-N8-dense-chat-0812", conversation: CONVERSATION, day: "2025-08-12", anchorSourceId: "wechat-message:canonical:6ed5484348ee99fb7b2839bcece6e01ae652a9647765286869dba14688b90d3b", cls: "negative", rationale: "186-message day, same trap." },
 ];
 
-// NEVER used for prompt design, few-shot examples, or tuning. Left exactly as frozen: these cases
-// were already day-anchored rather than event-derived, and nothing here has been inspected or run.
-export type HoldoutCase = { id: string; day: string; anchor?: string; cls: CalibrationClass; rationale: string };
+// NEVER used for prompt design, few-shot examples, or tuning. Spent: run once, never re-run.
+//
+// DATE CORRECTION (2026-09-03). Every `day` in this set was recorded one calendar day EARLIER than
+// the day its evidence actually falls on, and has been corrected below. `dayAsOriginallyRecorded`
+// preserves what was written at freeze time.
+//
+// Cause: this set was built before life-date.ts existed, by the local-Date + `.toISOString()` route
+// that module was created to replace — `pg`'s DATE parser builds a JS Date from LOCAL
+// machine-timezone components, and formatting that back out as UTC rolls the day back by one
+// wherever the host sits ahead of UTC. It is the same defect that invalidated the first Holdout V2
+// attempt; Holdout 1 was simply never re-checked afterwards.
+//
+// Evidence: for all 7 cases carrying an `anchor` text, that exact text occurs in the archive on
+// `day + 1` in Asia/Shanghai and NOT on `day` — 7 shifted, 0 exact, 0 unmatched. The 6 cases with no
+// anchor text cannot be verified individually; they were produced by the same build in the same run
+// and are corrected on that basis, which is recorded in `dayCorrectionBasis`.
+//
+// Why this matters beyond bookkeeping: these days are how "already spent" is excluded when a fresh
+// corpus is drawn. While they were wrong, exclusion removed an unrelated day and left the real one
+// in the pool. DEVELOPMENT_SET and HOLDOUT_V2_SET are unaffected — both carry `anchorSourceId`, both
+// verify 19/19 exact against their own anchors, which is precisely why they never drifted. The
+// lesson is in organizer-calibration-dates.test.mjs: a case identified only by a date has nothing to
+// catch it when the date is wrong.
+export type HoldoutCase = {
+  id: string;
+  /** Asia/Shanghai calendar day the evidence actually falls on. Corrected 2026-09-03. */
+  day: string;
+  /** What was frozen originally. Kept so the correction is auditable, never used for matching. */
+  dayAsOriginallyRecorded: string;
+  dayCorrectionBasis: "anchor_text_verified" | "same_build_inferred";
+  anchor?: string;
+  cls: CalibrationClass;
+  rationale: string;
+};
 
 export const HOLDOUT_SET: HoldoutCase[] = [
-  { id: "H-P1-self-feeding", day: "2025-08-31", anchor: "会自己吃了", cls: "positive", rationale: "「会自己吃了」— new independent capability, explicit in the window." },
-  { id: "H-P2-learned-welcome", day: "2025-10-03", anchor: "已经学会欢迎欢迎", cls: "positive", rationale: "「已经学会欢迎欢迎」, contrasted with「还没学会拜拜」— a learned gesture with its own baseline." },
-  { id: "H-P3-finds-pillow", day: "2025-10-10", anchor: "他现在会找枕头睡", cls: "positive", rationale: "「他现在会找枕头睡」—「现在会」marks the change explicitly." },
-  { id: "H-P4-walking", day: "2026-02-22", anchor: "会走路了", cls: "positive", rationale: "「小年宝贝会走路了」— walking, plus his first day away from family." },
+  { id: "H-P1-self-feeding", day: "2025-09-01", dayAsOriginallyRecorded: "2025-08-31", dayCorrectionBasis: "anchor_text_verified", anchor: "会自己吃了", cls: "positive", rationale: "「会自己吃了」— new independent capability, explicit in the window." },
+  { id: "H-P2-learned-welcome", day: "2025-10-04", dayAsOriginallyRecorded: "2025-10-03", dayCorrectionBasis: "anchor_text_verified", anchor: "已经学会欢迎欢迎", cls: "positive", rationale: "「已经学会欢迎欢迎」, contrasted with「还没学会拜拜」— a learned gesture with its own baseline." },
+  { id: "H-P3-finds-pillow", day: "2025-10-11", dayAsOriginallyRecorded: "2025-10-10", dayCorrectionBasis: "anchor_text_verified", anchor: "他现在会找枕头睡", cls: "positive", rationale: "「他现在会找枕头睡」—「现在会」marks the change explicitly." },
+  { id: "H-P4-walking", day: "2026-02-23", dayAsOriginallyRecorded: "2026-02-22", dayCorrectionBasis: "anchor_text_verified", anchor: "会走路了", cls: "positive", rationale: "「小年宝贝会走路了」— walking, plus his first day away from family." },
 
-  { id: "H-B1-teething-again", day: "2025-09-22", anchor: "他又要长牙了", cls: "borderline", rationale: "「又」marks recurrence, not novelty." },
-  { id: "H-B2-not-yet-mama", day: "2025-11-12", anchor: "但还不会叫妈", cls: "borderline", rationale: "An explicit NOT-yet: a capability named but denied." },
-  { id: "H-B3-ordinary-pleasant-0916", day: "2025-09-16", cls: "borderline", rationale: "Ordinary pleasant day of family chat around the child." },
-  { id: "H-B4-ordinary-pleasant-1013", day: "2025-10-13", cls: "borderline", rationale: "Ordinary pleasant day, moderate volume." },
+  { id: "H-B1-teething-again", day: "2025-09-23", dayAsOriginallyRecorded: "2025-09-22", dayCorrectionBasis: "anchor_text_verified", anchor: "他又要长牙了", cls: "borderline", rationale: "「又」marks recurrence, not novelty." },
+  { id: "H-B2-not-yet-mama", day: "2025-11-13", dayAsOriginallyRecorded: "2025-11-12", dayCorrectionBasis: "anchor_text_verified", anchor: "但还不会叫妈", cls: "borderline", rationale: "An explicit NOT-yet: a capability named but denied." },
+  { id: "H-B3-ordinary-pleasant-0916", day: "2025-09-17", dayAsOriginallyRecorded: "2025-09-16", dayCorrectionBasis: "same_build_inferred", cls: "borderline", rationale: "Ordinary pleasant day of family chat around the child." },
+  { id: "H-B4-ordinary-pleasant-1013", day: "2025-10-14", dayAsOriginallyRecorded: "2025-10-13", dayCorrectionBasis: "same_build_inferred", cls: "borderline", rationale: "Ordinary pleasant day, moderate volume." },
 
-  { id: "H-N1-neighbour-logistics", day: "2025-09-21", anchor: "邻居", cls: "negative", rationale: "Adult talk about neighbours and noise." },
-  { id: "H-N2-dense-chat-1001", day: "2025-10-01", cls: "negative", rationale: "124-message day; density without a moment." },
-  { id: "H-N3-dense-chat-1019", day: "2025-10-19", cls: "negative", rationale: "121-message day." },
-  { id: "H-N4-dense-chat-1030", day: "2025-10-30", cls: "negative", rationale: "124-message day." },
-  { id: "H-N5-dense-chat-1103", day: "2025-11-03", cls: "negative", rationale: "101-message day." },
+  { id: "H-N1-neighbour-logistics", day: "2025-09-22", dayAsOriginallyRecorded: "2025-09-21", dayCorrectionBasis: "anchor_text_verified", anchor: "邻居", cls: "negative", rationale: "Adult talk about neighbours and noise." },
+  { id: "H-N2-dense-chat-1001", day: "2025-10-02", dayAsOriginallyRecorded: "2025-10-01", dayCorrectionBasis: "same_build_inferred", cls: "negative", rationale: "124-message day; density without a moment." },
+  { id: "H-N3-dense-chat-1019", day: "2025-10-20", dayAsOriginallyRecorded: "2025-10-19", dayCorrectionBasis: "same_build_inferred", cls: "negative", rationale: "121-message day." },
+  { id: "H-N4-dense-chat-1030", day: "2025-10-31", dayAsOriginallyRecorded: "2025-10-30", dayCorrectionBasis: "same_build_inferred", cls: "negative", rationale: "124-message day." },
+  { id: "H-N5-dense-chat-1103", day: "2025-11-04", dayAsOriginallyRecorded: "2025-11-03", dayCorrectionBasis: "same_build_inferred", cls: "negative", rationale: "101-message day." },
 ];
