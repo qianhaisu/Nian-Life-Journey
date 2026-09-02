@@ -5,6 +5,7 @@ import type { CareEpisode, ChatImportCheckpoint, ChatImportStage, ChatImportTask
 import { getDb } from "./client";
 import * as t from "./schema";
 import { newId, organizerJobKey } from "./repository-interface";
+import { CANONICAL_PROFILE_ID } from "./config";
 import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 import { normalizeSha256 } from "./chat-import-persistence";
 import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
@@ -294,9 +295,13 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     };
   }
 
+  // The profile row is pinned by id — never `profiles limit 1`, which once handed a stranded
+  // contract-test profile (born 2020) to the whole site as 张年. The collections stay the full
+  // backend view (Organizer, archive and ingest pipelines read them by source/asset id); pages
+  // narrow them to the profile with scopeStoreToProfile.
   async function assembleStore(): Promise<Store> {
     const [profileRows, contributors, media, mediaAssets, mediaLocations, connectorStates, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns, organizerJobs, chatImportTasks, links, snapshotRows] = await Promise.all([
-      db.select().from(t.profiles).limit(1),
+      db.select().from(t.profiles).where(eq(t.profiles.id, CANONICAL_PROFILE_ID)).limit(1),
       db.select().from(t.contributors),
       db.select().from(t.media),
       db.select().from(t.mediaAssets),
@@ -313,12 +318,12 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       db.select().from(t.organizerJobs),
       db.select().from(t.chatImportTasks),
       db.select().from(t.sourceMemoryLinks),
-      db.select().from(t.monthlySnapshot).limit(1),
+      db.select().from(t.monthlySnapshot).where(eq(t.monthlySnapshot.profileId, CANONICAL_PROFILE_ID)).limit(1),
     ]);
-    if (!profileRows[0]) throw new Error("PostgreSQL repository: no profile row found. Run the JSON→Postgres migration first.");
+    if (!profileRows[0]) throw new Error(`PostgreSQL repository: no profile row "${CANONICAL_PROFILE_ID}" found. Run the JSON→Postgres migration first.`);
     // Same publication gate as getHomeEvents/getAllEvents: the store feeds the memory timeline and
     // the homepage canvas, so unreviewed rule-derived artifacts must not reach it either.
-    const reviews = indexReviews((await db.select().from(t.contentQualityReviews)) as unknown as QualityReview[]);
+    const reviews = await reviewIndex();
     const publishableEvents = (events as unknown as LifeEvent[]).filter((event) => isEventPublishable(event, reviews));
     const publishableTraces = (dailyTraces as unknown as DailyTrace[]).filter((trace) => isTracePublishable(trace, reviews));
     return {
@@ -362,16 +367,18 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     const rows = await db.select().from(t.contentQualityReviews);
     return indexReviews(rows as unknown as QualityReview[]);
   }
+  // Page-facing event listings belong to the canonical profile only.
+  const canonicalEvents = () => db.select().from(t.lifeEvents).where(eq(t.lifeEvents.profileId, CANONICAL_PROFILE_ID));
 
   return {
     async getHomeEvents() {
-      const [rows, reviews] = await Promise.all([db.select().from(t.lifeEvents), reviewIndex()]);
+      const [rows, reviews] = await Promise.all([canonicalEvents(), reviewIndex()]);
       return (rows as unknown as LifeEvent[])
         .filter((event) => event.visibility !== "private" && isEventPublishable(event, reviews))
         .toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     },
     async getAllEvents() {
-      const [rows, reviews] = await Promise.all([db.select().from(t.lifeEvents), reviewIndex()]);
+      const [rows, reviews] = await Promise.all([canonicalEvents(), reviewIndex()]);
       return (rows as unknown as LifeEvent[])
         .filter((event) => isEventPublishable(event, reviews))
         .toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt));

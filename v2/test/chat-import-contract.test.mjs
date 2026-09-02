@@ -3,12 +3,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { config as loadDotenv } from "dotenv";
+import { CONTRACT_DATABASE_URL, SKIP_REASON } from "./fixtures/contract-database.mjs";
 import { createInMemoryRepository, createAsyncChatImportRepository } from "../lib/db/in-memory-chat-import-repository.ts";
 import { createJsonRepository } from "../lib/db/json-repository.ts";
-
-loadDotenv({ path: path.resolve(process.cwd(), ".env.local"), quiet: true });
-loadDotenv({ path: path.resolve(process.cwd(), "../.env.local"), quiet: true });
 
 const dataFile = path.join(process.cwd(), ".data", "nian-life.json");
 let originalStore;
@@ -264,12 +261,12 @@ function addBatchTests(name, createRepository, profileIdForTest = () => uid("pro
 
 for (const [name, createRepository] of adapters) { addTaskTests(name, createRepository); addBatchTests(name, createRepository); }
 
-if (process.env.DATABASE_URL) {
+if (CONTRACT_DATABASE_URL) {
   const { createPostgresRepository } = await import("../lib/db/postgres-repository.ts");
   const { closePool } = await import("../lib/db/client.ts");
   const { Client } = await import("pg");
   const profileId = uid("profile-chat-contract");
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({ connectionString: CONTRACT_DATABASE_URL });
   await client.connect();
   await client.query("insert into profiles (id, display_name, birth_date, timezone, visibility) values ($1, 'Synthetic Contract', '2020-01-01', 'UTC', 'private')", [profileId]);
   await client.end();
@@ -289,7 +286,7 @@ if (process.env.DATABASE_URL) {
     const reusedCount = result1.items[0].reusedAssetIds.length + result2.items[0].reusedAssetIds.length;
     assert.equal(createdCount, 1, "exactly one of the two concurrent batches must win the create");
     assert.equal(reusedCount, 1, "the other must resolve to reused, via the real unique constraint, not a race");
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    const client = new Client({ connectionString: CONTRACT_DATABASE_URL });
     await client.connect();
     const rows = await client.query("select count(*)::int n from media_assets where id = $1", [sharedAsset.id]);
     assert.equal(rows.rows[0].n, 1);
@@ -298,7 +295,7 @@ if (process.env.DATABASE_URL) {
     await client.end();
   });
   test.after(async () => {
-    const cleanup = new Client({ connectionString: process.env.DATABASE_URL });
+    const cleanup = new Client({ connectionString: CONTRACT_DATABASE_URL });
     await cleanup.connect();
     await cleanup.query("delete from media_locations where media_asset_id in (select id from media_assets where profile_id = $1)", [profileId]);
     for (const table of ["media", "media_assets", "raw_sources", "chat_import_tasks"]) await cleanup.query(`delete from ${table} where profile_id = $1`, [profileId]);
@@ -307,5 +304,5 @@ if (process.env.DATABASE_URL) {
     await closePool();
   });
 } else {
-  test("[postgres] real contract skipped when DATABASE_URL is unavailable", { skip: true }, () => {});
+  test("[postgres] chat import contract suite", { skip: SKIP_REASON }, () => {});
 }

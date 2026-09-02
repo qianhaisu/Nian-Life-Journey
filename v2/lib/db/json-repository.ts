@@ -5,6 +5,7 @@ import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocati
 import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
 import { newId, organizerJobKey } from "./repository-interface";
+import { CANONICAL_PROFILE_ID } from "./config";
 import type { Repository, Store, UploadPersistInput } from "./repository-interface";
 import { assetByChecksum, normalizeChatImportTask, persistChatImportBatchInStore, persistUploadInStore } from "./chat-import-persistence";
 import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
@@ -43,6 +44,13 @@ async function readStore(): Promise<Store> {
     return store;
   }
 }
+// The JSON file holds exactly one Profile object; it must be 张年's, the same pin as the
+// PostgreSQL backend's profile lookup by id.
+async function readCanonicalStore(): Promise<Store> {
+  const store = await readStore();
+  if (store.profile.id !== CANONICAL_PROFILE_ID) throw new Error(`JSON repository: store profile is "${store.profile.id}", expected "${CANONICAL_PROFILE_ID}".`);
+  return store;
+}
 async function writeStore(store: Store) { await fs.mkdir(dataDir, { recursive: true }); await fs.writeFile(storeFile, JSON.stringify(store, null, 2), "utf8"); }
 
 let mutationTail: Promise<void> = Promise.resolve();
@@ -71,9 +79,10 @@ const persistChatImportBatchInJson = (inputs: UploadPersistInput[]) => withStore
 // that equivalence is what test/repository-contract.test.mjs checks.
 export function createJsonRepository(): Repository {
   return {
-    async getHomeEvents() { const store = await readStore(); return store.events.filter((event) => event.visibility !== "private").toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); },
-    async getAllEvents() { const store = await readStore(); return store.events.toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); },
-    async getStore() { return readStore(); },
+    // Page-facing event listings belong to the canonical profile only, as in postgres-repository.ts.
+    async getHomeEvents() { const store = await readCanonicalStore(); return store.events.filter((event) => event.profileId === CANONICAL_PROFILE_ID && event.visibility !== "private").toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); },
+    async getAllEvents() { const store = await readCanonicalStore(); return store.events.filter((event) => event.profileId === CANONICAL_PROFILE_ID).toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); },
+    async getStore() { return readCanonicalStore(); },
     // The JSON backend already holds everything in memory, so "scoped" here is just a profile_id
     // filter for behavioral parity with the PostgreSQL implementation — no separate performance
     // concern to address.

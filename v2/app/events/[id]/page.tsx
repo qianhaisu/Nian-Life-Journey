@@ -7,7 +7,7 @@ import { TimeSignature } from "@/components/time-signature";
 import { getAllEvents, getEventDetail, getStore } from "@/lib/db/repository";
 import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
 import { sequenceFor } from "@/lib/media/presentation";
-import { timeSignatureFor } from "@/lib/time-signature";
+import { birthDayOf, timeSignatureFor } from "@/lib/time-signature";
 
 export async function generateStaticParams() { return (await getAllEvents()).map((event) => ({ id: event.id })); }
 
@@ -24,9 +24,10 @@ const GROWTH_LABEL: Record<string, string> = { language: "那时会说", motor: 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [detail, store] = await Promise.all([getEventDetail(id), getStore()]);
-  if (!detail) notFound();
+  // An event that is not 张年's (a fixture profile's row reached by URL) is not a page in this book.
+  if (!detail || detail.event.profileId !== store.profile.id) notFound();
   const { event, media: eventMedia, sources: eventSources, contributors, growth, care } = detail;
-  const signature = timeSignatureFor(event.occurredAt, store.profile?.birthDate || undefined);
+  const signature = timeSignatureFor(event.occurredAt, birthDayOf(store.profile));
   const title = memoryTitle(event);
   const raw = sequenceFor(eventMedia, event.heroMediaId);
   const sequence = { layout: raw.layout, shown: raw.shown.map((item) => toMediaRef(item, title)), remaining: raw.remaining };

@@ -18,9 +18,10 @@ test("chapters are newest first, grouped year → month, with age anchors", () =
   assert.equal(y2026.months[0].month, "2026-12");
   assert.equal(y2026.months[y2026.months.length - 1].month, "2026-01");
   assert.equal(y2026.months.length, 11, "June is empty and must not appear");
-  assert.equal(y2026.ageSpan, "11 个月 到 1 岁 10 个月");
+  // A year shows the range its months cover; a month, the age reached in it (no false day precision).
+  assert.equal(y2026.ageSpan, "1 岁 到 1 岁 11 个月");
   assert.equal(findMonth(chapters, "2026-08").label, "2026 年 8 月");
-  assert.equal(findMonth(chapters, "2026-08").ageLabel, "1 岁 6 个月");
+  assert.equal(findMonth(chapters, "2026-08").ageLabel, "1 岁 7 个月");
 });
 
 test("ordinary days fold to one entry per day, memories stay first", () => {

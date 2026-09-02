@@ -1,20 +1,15 @@
 // Runs the same behavioral contract against both repository backends. The JSON suite always runs
-// (no external dependency). The PostgreSQL suite runs only when DATABASE_URL points at a reachable
-// database — it is skipped, not faked, when one isn't available: this file never substitutes an
-// in-memory/behaviorally-different simulator and calls that "PostgreSQL verified".
+// (no external dependency). The PostgreSQL suite runs only when CONTRACT_DATABASE_URL is set
+// explicitly (see test/fixtures/contract-database.mjs) — it is skipped, not faked, otherwise: this
+// file never substitutes an in-memory/behaviorally-different simulator and calls that "PostgreSQL verified".
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { config as loadDotenv } from "dotenv";
+import { CONTRACT_DATABASE_URL, SKIP_REASON } from "./fixtures/contract-database.mjs";
 import { createJsonRepository } from "../lib/db/json-repository.ts";
 import { resolveRepositoryBackend } from "../lib/db/config.ts";
-
-loadDotenv({ path: path.resolve(process.cwd(), ".env.local"), quiet: true });
-loadDotenv({ path: path.resolve(process.cwd(), "../.env.local"), quiet: true });
-
-const HAS_DATABASE_URL = Boolean(process.env.DATABASE_URL);
 
 // The JSON repository writes to a single shared .data/nian-life.json — same convention as
 // test/ai-organizer.test.mjs and test/quark-artifact-ingest.test.mjs. Without this restore, rows
@@ -30,23 +25,26 @@ test.after(async () => {
 
 function uid(prefix) { return `${prefix}-${randomUUID()}`; }
 
+// Every row this file writes carries this synthetic profile id, so the read layer never shows it as 张年.
+const PROFILE_ID = "profile-contract-test-fixture";
+
 function fixtureSource(overrides = {}) {
   const id = uid("source");
-  return { id, profileId: "profile-contract-test-fixture", sourceType: "parent_note", contentTypes: ["family"], contributorId: "contributor-dad", capturedAt: "2026-11-01T10:00:00.000Z", importedAt: "2026-11-01T10:00:00.000Z", mediaIds: [], sourceLabel: "Contract test source", visibility: "family", status: "uploaded", ...overrides };
+  return { id, profileId: PROFILE_ID, sourceType: "parent_note", contentTypes: ["family"], contributorId: "contributor-dad", capturedAt: "2026-11-01T10:00:00.000Z", importedAt: "2026-11-01T10:00:00.000Z", mediaIds: [], sourceLabel: "Contract test source", visibility: "family", status: "uploaded", ...overrides };
 }
 function fixtureEvent(overrides = {}) {
   const id = uid("event");
-  return { id, profileId: "profile-contract-test-fixture", title: "Contract test event", story: "story", occurredAt: "2026-11-01", people: [], tags: [], contentTypes: ["family"], mediaIds: [], sourceIds: [], growthRecordIds: [], careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"], visibility: "family", keptInYearbook: false, createdBy: "user", ...overrides };
+  return { id, profileId: PROFILE_ID, title: "Contract test event", story: "story", occurredAt: "2026-11-01", people: [], tags: [], contentTypes: ["family"], mediaIds: [], sourceIds: [], growthRecordIds: [], careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"], visibility: "family", keptInYearbook: false, createdBy: "user", ...overrides };
 }
 function fixtureAsset(overrides = {}) {
-  return { id: uid("asset"), profileId: "profile-contract-test-fixture", mediaType: "photo", mimeType: "image/jpeg", archiveStatus: "awaiting_archive", createdAt: "2026-11-01T10:00:00.000Z", ...overrides };
+  return { id: uid("asset"), profileId: PROFILE_ID, mediaType: "photo", mimeType: "image/jpeg", archiveStatus: "awaiting_archive", createdAt: "2026-11-01T10:00:00.000Z", ...overrides };
 }
 function fixtureLocation(assetId, overrides = {}) {
   const now = "2026-11-01T10:00:00.000Z";
   return { id: uid("location"), mediaAssetId: assetId, provider: "hot", variant: "web", providerRef: uid("ref"), status: "ready", createdAt: now, updatedAt: now, ...overrides };
 }
 function fixtureRun(fingerprint, overrides = {}) {
-  return { id: uid("run"), profileId: "profile-contract-test-fixture", organizationFingerprint: fingerprint, organizerType: "rule", organizerVersion: "rule-v1", provider: "rule", action: "daily_trace", sourceIds: [], sourceCount: 0, mediaInputCount: 0, processedAt: "2026-11-01T10:00:00.000Z", ...overrides };
+  return { id: uid("run"), profileId: PROFILE_ID, organizationFingerprint: fingerprint, organizerType: "rule", organizerVersion: "rule-v1", provider: "rule", action: "daily_trace", sourceIds: [], sourceCount: 0, mediaInputCount: 0, processedAt: "2026-11-01T10:00:00.000Z", ...overrides };
 }
 
 function runContractSuite(name, createRepo) {
@@ -103,9 +101,9 @@ function runContractSuite(name, createRepo) {
   test(`[${name}] DailyTrace: same organizationFingerprint merges into one trace, not two`, async () => {
     const repo = createRepo();
     const fingerprint = uid("fp");
-    const first = { id: uid("trace"), profileId: "profile-contract-test-fixture", occurredAt: "2026-11-02", entries: ["a"], sourceIds: [], scopes: ["family"], visibility: "family", organizationFingerprint: fingerprint };
+    const first = { id: uid("trace"), profileId: PROFILE_ID, occurredAt: "2026-11-02", entries: ["a"], sourceIds: [], scopes: ["family"], visibility: "family", organizationFingerprint: fingerprint };
     await repo.persistDailyTrace(first);
-    const second = { id: uid("trace"), profileId: "profile-contract-test-fixture", occurredAt: "2026-11-02", entries: ["b"], sourceIds: [], scopes: ["family"], visibility: "family", organizationFingerprint: fingerprint };
+    const second = { id: uid("trace"), profileId: PROFILE_ID, occurredAt: "2026-11-02", entries: ["b"], sourceIds: [], scopes: ["family"], visibility: "family", organizationFingerprint: fingerprint };
     await repo.persistDailyTrace(second);
     const store = await repo.getStore();
     const matches = store.dailyTraces.filter((item) => item.organizationFingerprint === fingerprint);
@@ -172,8 +170,8 @@ function runContractSuite(name, createRepo) {
   test(`[${name}] enqueueOrganizerJob is idempotent for the same source batch while a job is active`, async () => {
     const repo = createRepo();
     const sourceIds = [uid("source"), uid("source")];
-    const first = await repo.enqueueOrganizerJob({ sourceIds, profileId: "profile-contract-test-fixture" });
-    const second = await repo.enqueueOrganizerJob({ sourceIds: sourceIds.toReversed(), profileId: "profile-contract-test-fixture" });
+    const first = await repo.enqueueOrganizerJob({ sourceIds, profileId: PROFILE_ID });
+    const second = await repo.enqueueOrganizerJob({ sourceIds: sourceIds.toReversed(), profileId: PROFILE_ID });
     assert.equal(first.id, second.id, "re-enqueuing the same batch (any order) while pending must return the existing job, not a duplicate");
     assert.equal(first.status, "pending");
   });
@@ -181,9 +179,9 @@ function runContractSuite(name, createRepo) {
   test(`[${name}] claimNextOrganizerJob claims oldest-first, sets processing, and increments attempts`, async () => {
     const repo = createRepo();
     await drainPendingOrganizerJobs(repo);
-    const jobA = await repo.enqueueOrganizerJob({ sourceIds: [uid("source")], profileId: "profile-contract-test-fixture" });
+    const jobA = await repo.enqueueOrganizerJob({ sourceIds: [uid("source")], profileId: PROFILE_ID });
     await new Promise((resolve) => setTimeout(resolve, 5));
-    await repo.enqueueOrganizerJob({ sourceIds: [uid("source")], profileId: "profile-contract-test-fixture" });
+    await repo.enqueueOrganizerJob({ sourceIds: [uid("source")], profileId: PROFILE_ID });
     const claimed = await repo.claimNextOrganizerJob();
     assert.equal(claimed.id, jobA.id);
     assert.equal(claimed.status, "processing");
@@ -195,7 +193,7 @@ function runContractSuite(name, createRepo) {
     const repo = createRepo();
     await drainPendingOrganizerJobs(repo);
     const sourceIds = [uid("source")];
-    const job = await repo.enqueueOrganizerJob({ sourceIds, profileId: "profile-contract-test-fixture" });
+    const job = await repo.enqueueOrganizerJob({ sourceIds, profileId: PROFILE_ID });
     await repo.claimNextOrganizerJob();
     const future = new Date(Date.now() + 60_000).toISOString();
     await repo.failOrganizerJob(job.id, "transient error", future);
@@ -213,19 +211,19 @@ function runContractSuite(name, createRepo) {
   test(`[${name}] a job that fails permanently (nextAvailableAt: null) is marked failed and stops blocking re-enqueue`, async () => {
     const repo = createRepo();
     const sourceIds = [uid("source")];
-    const job = await repo.enqueueOrganizerJob({ sourceIds, profileId: "profile-contract-test-fixture" });
+    const job = await repo.enqueueOrganizerJob({ sourceIds, profileId: PROFILE_ID });
     await repo.claimNextOrganizerJob();
     await repo.failOrganizerJob(job.id, "permanent error", null);
     const reread = await repo.getOrganizerJob(job.id);
     assert.equal(reread.status, "failed");
     assert.ok(reread.completedAt);
-    const requeued = await repo.enqueueOrganizerJob({ sourceIds, profileId: "profile-contract-test-fixture" });
+    const requeued = await repo.enqueueOrganizerJob({ sourceIds, profileId: PROFILE_ID });
     assert.notEqual(requeued.id, job.id, "a failed job must not block enqueuing the same batch again");
   });
 
   test(`[${name}] completeOrganizerJob marks the job succeeded with its result`, async () => {
     const repo = createRepo();
-    const job = await repo.enqueueOrganizerJob({ sourceIds: [uid("source")], profileId: "profile-contract-test-fixture" });
+    const job = await repo.enqueueOrganizerJob({ sourceIds: [uid("source")], profileId: PROFILE_ID });
     await repo.claimNextOrganizerJob();
     await repo.completeOrganizerJob(job.id, { resultAction: "daily_trace", resultTargetId: "trace-1" });
     const reread = await repo.getOrganizerJob(job.id);
@@ -238,7 +236,7 @@ function runContractSuite(name, createRepo) {
   test(`[${name}] recoverStuckOrganizerJobs resets a processing job whose lock is older than the threshold`, async () => {
     const repo = createRepo();
     await drainPendingOrganizerJobs(repo);
-    const job = await repo.enqueueOrganizerJob({ sourceIds: [uid("source")], profileId: "profile-contract-test-fixture" });
+    const job = await repo.enqueueOrganizerJob({ sourceIds: [uid("source")], profileId: PROFILE_ID });
     await repo.claimNextOrganizerJob();
     // Simulate 20 minutes passing (rather than backdating the claim itself, which would also
     // make the job's own availableAt land in the future relative to that earlier "now" and make
@@ -254,7 +252,7 @@ function runContractSuite(name, createRepo) {
 
 runContractSuite("json", () => createJsonRepository());
 
-if (HAS_DATABASE_URL) {
+if (CONTRACT_DATABASE_URL) {
   const { createPostgresRepository } = await import("../lib/db/postgres-repository.ts");
   const { Client } = await import("pg");
 
@@ -263,10 +261,10 @@ if (HAS_DATABASE_URL) {
   // PostgreSQL foreign keys reject rows whose parent doesn't exist yet — seed those two parent
   // rows before the suite runs, and remove everything scoped to this profile afterward so the
   // suite only ever cleans up what it created.
-  const PROFILE_ID = "profile-contract-test-fixture";
+
   const CONTRIBUTOR_ID = "contributor-dad";
   test.before(async () => {
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    const client = new Client({ connectionString: CONTRACT_DATABASE_URL });
     await client.connect();
     await client.query(
       `insert into profiles (id, display_name, birth_date, timezone, visibility) values ($1, 'Contract Test Profile', '2020-01-01', 'UTC', 'private') on conflict (id) do nothing`,
@@ -279,7 +277,7 @@ if (HAS_DATABASE_URL) {
     await client.end();
   });
   test.after(async () => {
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    const client = new Client({ connectionString: CONTRACT_DATABASE_URL });
     await client.connect();
     await client.query(
       `delete from source_memory_links where raw_source_id in (select id from raw_sources where profile_id = $1) or life_event_id in (select id from life_events where profile_id = $1)`,
@@ -306,14 +304,20 @@ if (HAS_DATABASE_URL) {
     assert.notEqual(reread.archiveStatus, "archived", "the asset update must have rolled back alongside the failed location update");
   });
 
-  test("[postgres] concurrent claimNextOrganizerJob calls never double-claim the same job (real FOR UPDATE SKIP LOCKED)", async () => {
+  test("[postgres] concurrent claimNextOrganizerJob calls never double-claim the same job (real FOR UPDATE SKIP LOCKED)", async (t) => {
     const repo = createPostgresRepository();
-    // Drain whatever earlier tests left pending/claimable first — this test's attempts===1
-    // assertion only holds for jobs it creates itself.
-    for (;;) {
-      const stray = await repo.claimNextOrganizerJob();
-      if (!stray) break;
-      await repo.completeOrganizerJob(stray.id, {});
+    // claimNextOrganizerJob() is global, not per profile, and this test's attempts===1 assertion
+    // only holds for jobs it creates itself. Earlier tests' fixture jobs are removed by SQL under
+    // this profile only; a real pending 张年 job is never claimed-and-completed by a test — if one
+    // exists the test steps aside instead of consuming it with an empty result.
+    const client = new Client({ connectionString: CONTRACT_DATABASE_URL });
+    await client.connect();
+    try {
+      await client.query(`delete from organizer_jobs where profile_id = $1 and status in ('pending', 'processing')`, [PROFILE_ID]);
+      const { rows } = await client.query(`select count(*)::int as n from organizer_jobs where profile_id <> $1 and status = 'pending'`, [PROFILE_ID]);
+      if (rows[0].n > 0) { t.skip(`${rows[0].n} real pending organizer job(s) present — not draining them`); return; }
+    } finally {
+      await client.end();
     }
     const sourceIdBatches = Array.from({ length: 8 }, () => [uid("source")]);
     for (const sourceIds of sourceIdBatches) await repo.enqueueOrganizerJob({ sourceIds, profileId: PROFILE_ID });
@@ -328,8 +332,7 @@ if (HAS_DATABASE_URL) {
     assert.ok(claimed.every((job) => job.status === "processing" && job.attempts === 1));
   });
 } else {
-  test("[postgres] contract suite skipped — DATABASE_URL is not set", { skip: true }, () => {});
-  console.log("\n[repository-contract] DATABASE_URL not set — PostgreSQL contract suite skipped, not faked. Set DATABASE_URL to a reachable Postgres 15+ instance and re-run to verify the real backend.\n");
+  test("[postgres] repository contract suite", { skip: SKIP_REASON }, () => {});
 }
 
 test("resolveRepositoryBackend never silently falls back: postgres without DATABASE_URL throws", () => {

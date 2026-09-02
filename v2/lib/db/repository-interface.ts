@@ -88,6 +88,8 @@ export interface ChatImportRepository {
 export interface Repository extends ChatImportRepository {
   getHomeEvents(): Promise<LifeEvent[]>;
   getAllEvents(): Promise<LifeEvent[]>;
+  // `profile` is always the canonical one (lib/db/config.ts), never "whichever row comes first";
+  // the collections are the whole backend view — pages narrow them with lib/db/profile-scope.ts.
   getStore(): Promise<Store>;
   // A Store scoped to one profile and only the fields the Organizer actually reads (rawSources,
   // media, mediaAssets, contributors, events — everything else comes back empty). getStore()'s

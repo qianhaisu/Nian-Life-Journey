@@ -3,15 +3,14 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { config as loadDotenv } from "dotenv";
+import { CONTRACT_DATABASE_URL, SKIP_REASON } from "./fixtures/contract-database.mjs";
 
-loadDotenv({ path: path.resolve(process.cwd(), ".env.local"), quiet: true });
-loadDotenv({ path: path.resolve(process.cwd(), "../.env.local"), quiet: true });
 // lib/db/repository.ts (the facade rule-based.ts imports for its persist calls) resolves
 // REPOSITORY_BACKEND once at module load and caches the module afterward — it can't be switched
 // mid-process. Pin it to postgres here (when available) before anything imports rule-based.ts, the
-// same way every other ad hoc script in this project's history has had to.
-if (process.env.DATABASE_URL) process.env.REPOSITORY_BACKEND = "postgres";
+// same way every other ad hoc script in this project's history has had to. The opt-in helper above
+// has already exported CONTRACT_DATABASE_URL as DATABASE_URL for this process.
+if (CONTRACT_DATABASE_URL) process.env.REPOSITORY_BACKEND = "postgres";
 
 // getOrganizerStore exists specifically because getStore()'s unfiltered select() across every
 // table takes ~10 minutes at real WeChat-import data volume (thousands of raw_sources). This is a
@@ -43,14 +42,14 @@ test("[json] getOrganizerStore scopes rawSources/media/mediaAssets/events to the
   await checkScopedRead(() => createJsonRepository(), "profile-zhangnian");
 });
 
-if (process.env.DATABASE_URL) {
+if (CONTRACT_DATABASE_URL) {
   const { createPostgresRepository } = await import("../lib/db/postgres-repository.ts");
   const { closePool } = await import("../lib/db/client.ts");
   const pg = await import("pg");
   const profileId = uid("profile-organizer-store");
 
   test("[postgres] getOrganizerStore scopes rawSources/media/mediaAssets/events to the requested profile", async () => {
-    const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+    const client = new pg.Client({ connectionString: CONTRACT_DATABASE_URL });
     await client.connect();
     await client.query("insert into profiles (id, display_name, birth_date, timezone, visibility) values ($1, 'Synthetic OrganizerStore', '2020-01-01', 'UTC', 'private') on conflict (id) do nothing", [profileId]);
     await client.end();
@@ -81,7 +80,7 @@ if (process.env.DATABASE_URL) {
   });
 
   test.after(async () => {
-    const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+    const client = new pg.Client({ connectionString: CONTRACT_DATABASE_URL });
     await client.connect();
     await client.query("delete from source_memory_links where life_event_id in (select id from life_events where profile_id = $1)", [profileId]);
     for (const table of ["life_events", "daily_traces", "organizer_runs", "raw_sources"]) await client.query(`delete from ${table} where profile_id = $1`, [profileId]);
@@ -90,5 +89,5 @@ if (process.env.DATABASE_URL) {
     await closePool();
   });
 } else {
-  test("[postgres] getOrganizerStore contract skipped — DATABASE_URL is not set", { skip: true }, () => {});
+  test("[postgres] getOrganizerStore contract", { skip: SKIP_REASON }, () => {});
 }
