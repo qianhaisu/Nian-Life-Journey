@@ -46,7 +46,17 @@ export type ValidatorContext = {
    * measure v4 therefore cannot quietly measure v1 instead — it fails loudly at the boundary.
    */
   expectedRoutingPolicyId?: string;
+  /**
+   * Claim Grounding output, index-aligned with `verdict.coreFacts`. When supplied, a claim whose
+   * evidence is a question, a plan/hypothetical or nothing at all never becomes an emitted fact.
+   * Omitted (production v1 today) leaves every existing decision byte-identical.
+   */
+  claimGrounding?: ClaimGroundingView;
 };
+
+/** The narrow slice of claim-grounding.ts's GroundingResult the validator needs. Kept structural so
+ *  the validator does not depend on the grounding module. */
+export type ClaimGroundingView = { claims: Array<{ assertionStatus: string; mayContributeToWorthiness: boolean; polarity: string }> };
 
 export type ValidatorResult = { outcome: OrganizerOutcome; degradeReason?: string; reasonCodes: string[] };
 
@@ -64,9 +74,16 @@ function evidenceText(window: EvidenceWindow, refs: string[]): string {
 
 // Checks 1–2, 6–7: every fact must be traceable and must not upgrade a hedge or an unsupported
 // emotion/motive/causal claim into a raw_fact.
-function sanitizeFacts(window: EvidenceWindow, facts: CoreFact[], reasons: string[]): CoreFact[] {
+//
+// `grounding`, when supplied, adds the speech-act check the hedge list cannot make: HEDGE_WORDS
+// matches 可能/好像/听说…, none of which appear in an interrogative like 「会自己站了？」, so a
+// question could be emitted as a settled fact. A claim whose evidence performs a non-assertive
+// speech act is dropped here. Omitted grounding leaves this function byte-identical to before.
+function sanitizeFacts(window: EvidenceWindow, facts: CoreFact[], reasons: string[], grounding?: ClaimGroundingView): CoreFact[] {
   const kept: CoreFact[] = [];
-  for (const fact of facts) {
+  for (const [index, fact] of facts.entries()) {
+    const claim = grounding?.claims[index];
+    if (claim && claim.assertionStatus !== "supported_assertion") { reasons.push(`claim_not_an_assertion:${claim.assertionStatus}`); continue; }
     const text = evidenceText(window, fact.evidenceRefs);
     if (!text.trim()) { reasons.push("unsupported_evidence_ref"); continue; }
     if (fact.assertionKind === "raw_fact" && HEDGE_WORDS.test(text)) { kept.push({ ...fact, assertionKind: "attributed_claim", claimant: fact.claimant ?? "来源" }); reasons.push("hedged_claim"); continue; }
@@ -109,7 +126,7 @@ export function validate(window: EvidenceWindow, verdict: MemoryEditorVerdict, c
   const healthItems = window.items.filter((item) => item.contentTypes.includes("health"));
   if (healthItems.length > 0 && healthItems.length === window.items.length) {
     if (MEDICAL_WORDS.test(verdict.coreFacts.map((fact) => fact.statement).join(" "))) { reasons.push("health_inference"); return { outcome: { ...base, action: "store_only", selectionReason: "Rejected: medical inference attempted", worthinessScore: 0 }, degradeReason: "health_inference", reasonCodes: reasons }; }
-    const facts = sanitizeFacts(window, verdict.coreFacts, reasons);
+    const facts = sanitizeFacts(window, verdict.coreFacts, reasons, context.claimGrounding);
     const symptomsVerbatim = quotesToText(window, verdict.quotableLines);
     return { outcome: { ...base, action: "care_observation", observedAt: occurredDateOf(window, verdict), symptomsVerbatim, attributedClaims: facts, reviewRequirement: "needs_review", sensitivityFlags: ["health", ...verdict.sensitivityFlags.filter((flag) => flag !== "health")], selectionReason: "Health content is kept as facts only, never a diagnosis", worthinessScore: 0 }, reasonCodes: reasons };
   }
@@ -127,7 +144,7 @@ export function validate(window: EvidenceWindow, verdict: MemoryEditorVerdict, c
     return { outcome: { ...base, action: "store_only", selectionReason: "Subject could not be confirmed", worthinessScore: 0 }, degradeReason: "subject_ambiguous", reasonCodes: reasons };
   }
 
-  const facts = sanitizeFacts(window, verdict.coreFacts, reasons);
+  const facts = sanitizeFacts(window, verdict.coreFacts, reasons, context.claimGrounding);
   const quotes = sanitizeQuotes(window, verdict.quotableLines, reasons);
   if (verdict.emotionalAnchor && !spanText(window, verdict.emotionalAnchor.evidenceRef).trim()) reasons.push("unsupported_evidence_ref");
   const emotionalAnchor = verdict.emotionalAnchor && spanText(window, verdict.emotionalAnchor.evidenceRef).trim() ? verdict.emotionalAnchor : undefined;
