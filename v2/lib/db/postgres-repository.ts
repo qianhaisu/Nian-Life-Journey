@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { TransactionRollbackError } from "drizzle-orm/errors";
 import { sql } from "drizzle-orm";
 import type { CareEpisode, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportWarning, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
@@ -318,7 +318,9 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       db.select().from(t.organizerJobs),
       db.select().from(t.chatImportTasks),
       db.select().from(t.sourceMemoryLinks),
-      db.select().from(t.monthlySnapshot).where(eq(t.monthlySnapshot.profileId, CANONICAL_PROFILE_ID)).limit(1),
+      // Store carries one snapshot: the latest month's. Ordered so the choice does not depend on
+      // physical row order once more than one month has a summary.
+      db.select().from(t.monthlySnapshot).where(eq(t.monthlySnapshot.profileId, CANONICAL_PROFILE_ID)).orderBy(desc(t.monthlySnapshot.month)).limit(1),
     ]);
     if (!profileRows[0]) throw new Error(`PostgreSQL repository: no profile row "${CANONICAL_PROFILE_ID}" found. Run the JSON→Postgres migration first.`);
     // Same publication gate as getHomeEvents/getAllEvents: the store feeds the memory timeline and

@@ -5,19 +5,21 @@ import { Photo } from "@/components/photo";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
 import { latestLeadPhoto } from "@/lib/memory-chapters";
-import { currentAge, formatDay } from "@/lib/time-signature";
+import { ageOn, formatDay } from "@/lib/time-signature";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "张年" };
 
 // Who 张年 is right now, from records that exist: age, one recent photo, and the handful of things
 // that recently changed. Measurements and care notes are deeper material, folded by default. When a
-// section has no real record behind it, it is not rendered — never filled in.
+// section has no real record behind it, it is not rendered — never filled in. "Now" is the
+// archive's product today (lib/time-truth.ts); changes are called recent only while they are.
 export default async function AboutPage() {
-  const { chapters, store, birthDay } = await loadFamilyArchive();
-  const age = currentAge(birthDay);
+  const { chapters, store, birthDay, time } = await loadFamilyArchive();
+  const age = birthDay ? ageOn(birthDay, time.today) : undefined;
   const portrait = latestLeadPhoto(chapters);
-  const notes = recentGrowthNotes(store.growthRecords, birthDay);
+  const notes = recentGrowthNotes(store.growthRecords, birthDay, 4, time);
+  const notesHeading = notes.some((note) => note.recent) ? "最近的变化" : "记下来的变化";
   const heights = measurements(store.growthRecords, "height", birthDay);
   const weights = measurements(store.growthRecords, "weight", birthDay);
   const care = store.careRecords.filter((record) => record.visibility !== "private").sort((a, b) => b.observedAt.localeCompare(a.observedAt));
@@ -33,7 +35,7 @@ export default async function AboutPage() {
     {portrait ? <div className="about-portrait"><Photo media={portrait} priority sizes="(max-width: 700px) 100vw, 760px" /></div> : null}
 
     {notes.length > 0 ? <section className="about-notes" aria-labelledby="notes-title">
-      <h2 id="notes-title" className="section-mark">最近的变化</h2>
+      <h2 id="notes-title" className="section-mark">{notesHeading}</h2>
       <dl>{notes.map((note) => <div key={note.id}><dt>{note.label}</dt><dd><p className="serif">{note.note}</p><time dateTime={note.signature.day}>{note.signature.dateLabel}</time></dd></div>)}</dl>
     </section> : null}
 

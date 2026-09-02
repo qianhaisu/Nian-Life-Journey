@@ -98,7 +98,15 @@ export function buildChapters({ events, traces, media, birthDay }: ChapterInput)
     return chapter;
   };
 
-  const sortedEvents = [...events].sort((a, b) => (calendarDayOf(b.occurredAt) ?? "").localeCompare(calendarDayOf(a.occurredAt) ?? ""));
+  // Life time only: the day it happened, newest first, never createdAt (a late-imported 2023 chat
+  // must sort into 2023). Same-day ties break by weight, then id, so the order — and therefore the
+  // front page — is identical whichever backend and row order produced `events`.
+  const sortedEvents = [...events].sort((a, b) => {
+    const byDay = (calendarDayOf(b.occurredAt) ?? "").localeCompare(calendarDayOf(a.occurredAt) ?? "");
+    if (byDay) return byDay;
+    const byWeight = WEIGHT_RANK[a.memoryWeight] - WEIGHT_RANK[b.memoryWeight];
+    return byWeight || a.id.localeCompare(b.id);
+  });
   for (const event of sortedEvents) {
     const month = calendarMonthOf(event.occurredAt);
     if (!month) continue;
@@ -163,6 +171,8 @@ export function splitOpenMonths(chapters: YearChapter[], target = DEFAULT_OPEN_M
   return { open, index };
 }
 
+// The newest memory by life time, whatever its weight. The front page does not use this — it goes
+// through lib/time-truth.ts selectHomeLead, which also decides whether "最近" may be said.
 export function latestMemory(chapters: YearChapter[]): EditorialMemory | undefined {
   for (const year of chapters) for (const month of year.months) if (month.memories[0]) return month.memories[0];
   return undefined;
