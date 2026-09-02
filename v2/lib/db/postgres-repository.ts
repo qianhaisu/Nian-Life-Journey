@@ -597,7 +597,12 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     },
     async persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[]) {
       return db.transaction(async (tx) => {
-        const [existing] = await tx.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, eventInput.id));
+        // Fingerprint guard: prevents parallel workers from creating duplicate events.
+        // Mirrors persistDailyTrace's fingerprint-first lookup pattern.
+        const fpRow = eventInput.organizationFingerprint
+          ? (await tx.select().from(t.lifeEvents).where(eq(t.lifeEvents.organizationFingerprint, eventInput.organizationFingerprint)))[0]
+          : undefined;
+        const [existing] = fpRow ? [fpRow] : await tx.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, eventInput.id));
         let result: LifeEvent;
         if (existing) {
           const e = existing as unknown as LifeEvent;
@@ -612,18 +617,29 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
             organizerRun: eventInput.organizerRun ?? e.organizerRun,
             organizationFingerprint: eventInput.organizationFingerprint ?? e.organizationFingerprint,
           };
-          const rows = await tx.update(t.lifeEvents).set(merged).where(eq(t.lifeEvents.id, eventInput.id)).returning();
+          const rows = await tx.update(t.lifeEvents).set(merged).where(eq(t.lifeEvents.id, e.id)).returning();
           result = rows[0] as unknown as LifeEvent;
         } else {
           const toInsert = { ...eventInput, sourceIds: [...new Set(eventInput.sourceIds.length ? eventInput.sourceIds : sourceIds)] };
-          const rows = await tx.insert(t.lifeEvents).values(toInsert).returning();
-          result = rows[0] as unknown as LifeEvent;
+          // Safety-net: the unique fingerprint index prevents a concurrent INSERT from slipping past
+          // the SELECT-then-INSERT gap when two workers race for the same batch.
+          const rows = eventInput.organizationFingerprint
+            ? await tx.insert(t.lifeEvents).values(toInsert).onConflictDoNothing({ target: t.lifeEvents.organizationFingerprint }).returning()
+            : await tx.insert(t.lifeEvents).values(toInsert).returning();
+          if (rows[0]) {
+            result = rows[0] as unknown as LifeEvent;
+          } else {
+            // Concurrent INSERT won; read back the winning event.
+            const [reread] = await tx.select().from(t.lifeEvents).where(eq(t.lifeEvents.organizationFingerprint, eventInput.organizationFingerprint!));
+            result = reread as unknown as LifeEvent;
+          }
         }
-        await tx.update(t.rawSources).set({ status: "organized", relatedLifeEventId: eventInput.id }).where(inArray(t.rawSources.id, sourceIds));
+        // Use result.id — the single winning event's ID — so all downstream refs converge.
+        await tx.update(t.rawSources).set({ status: "organized", relatedLifeEventId: result.id }).where(inArray(t.rawSources.id, sourceIds));
         for (const link of links) {
-          await tx.insert(t.sourceMemoryLinks).values(link).onConflictDoNothing({ target: [t.sourceMemoryLinks.rawSourceId, t.sourceMemoryLinks.lifeEventId] });
+          await tx.insert(t.sourceMemoryLinks).values({ ...link, lifeEventId: result.id }).onConflictDoNothing({ target: [t.sourceMemoryLinks.rawSourceId, t.sourceMemoryLinks.lifeEventId] });
         }
-        if (eventInput.mediaIds.length) await tx.update(t.media).set({ lifeEventId: eventInput.id }).where(inArray(t.media.id, eventInput.mediaIds));
+        if (eventInput.mediaIds.length) await tx.update(t.media).set({ lifeEventId: result.id }).where(inArray(t.media.id, eventInput.mediaIds));
         return result;
       });
     },

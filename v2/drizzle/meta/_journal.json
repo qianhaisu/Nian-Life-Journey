@@ -64,6 +64,13 @@
       "when": 1788278877764,
       "tag": "0008_organic_miek",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788341393839,
+      "tag": "0009_le_fingerprint_unique",
+      "breakpoints": true
     }
   ]
 }

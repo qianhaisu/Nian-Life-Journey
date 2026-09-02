@@ -152,7 +152,7 @@ export const lifeEvents = pgTable("life_events", {
 }, (table) => ({
   byProfile: index("life_events_profile_idx").on(table.profileId),
   byOccurredAt: index("life_events_occurred_idx").on(table.occurredAt),
-  byFingerprint: index("life_events_fingerprint_idx").on(table.organizationFingerprint),
+  byFingerprint: uniqueIndex("life_events_fingerprint_unique_idx").on(table.organizationFingerprint),
 }));
 
 export const sourceMemoryLinks = pgTable("source_memory_links", {

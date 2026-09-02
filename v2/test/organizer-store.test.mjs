@@ -79,6 +79,43 @@ if (CONTRACT_DATABASE_URL) {
     assert.equal(rerun.action, real.action);
   });
 
+  test("[postgres] concurrent organize() for the same source batch creates exactly 1 LifeEvent + 1 organizer_run with a coherent downstream graph", async () => {
+    const { RuleBasedMemoryOrganizer } = await import("../lib/organizer/rule-based.ts");
+    const repository = createPostgresRepository();
+    // Milestone signal forces create_memory so we get a LifeEvent, not a DailyTrace
+    const sourceC = {
+      id: uid("source"), profileId, sourceType: "parent_note", contentTypes: ["family"],
+      contributorId: "contributor-dad", capturedAt: "2026-06-15T10:00:00.000Z",
+      importedAt: "2026-06-15T10:00:00.000Z", text: "宝宝今天第一次叫爸爸！",
+      mediaIds: [], sourceLabel: "note", visibility: "family", status: "uploaded",
+    };
+    await repository.persistUpload({ source: sourceC, media: [], assets: [], locations: [] });
+    const store = await repository.getOrganizerStore(profileId);
+
+    // Fire two organize() calls concurrently with identical inputs
+    const [r1, r2] = await Promise.all([
+      new RuleBasedMemoryOrganizer().organize([sourceC.id], { store, dryRun: false }),
+      new RuleBasedMemoryOrganizer().organize([sourceC.id], { store, dryRun: false }),
+    ]);
+
+    // The second call should converge on the first's fingerprint (idempotent or merge)
+    const fp = r1.organizationFingerprint ?? r2.organizationFingerprint;
+    const client = new pg.Client({ connectionString: CONTRACT_DATABASE_URL });
+    await client.connect();
+    const { rows: events } = await client.query("SELECT id FROM life_events WHERE organization_fingerprint = $1", [fp]);
+    const { rows: runs } = await client.query("SELECT id, target_id FROM organizer_runs WHERE organization_fingerprint = $1", [fp]);
+    const winningId = events[0]?.id;
+    const { rows: smlRows } = await client.query("SELECT count(*) AS cnt FROM source_memory_links WHERE life_event_id = $1", [winningId]);
+    const { rows: rsRows } = await client.query("SELECT count(*) AS cnt FROM raw_sources WHERE related_life_event_id = $1 AND id = $2", [winningId, sourceC.id]);
+    await client.end();
+
+    assert.equal(events.length, 1, `concurrent organize must create exactly 1 LifeEvent, got ${events.length}`);
+    assert.equal(runs.length, 1, `concurrent organize must create exactly 1 organizer_run, got ${runs.length}`);
+    assert.equal(runs[0]?.target_id, winningId, "organizer_run must target the surviving LifeEvent");
+    assert.equal(Number(smlRows[0]?.cnt), 1, "source_memory_links must link the source to the surviving event exactly once");
+    assert.equal(Number(rsRows[0]?.cnt), 1, "raw_sources.related_life_event_id must point to the surviving event");
+  });
+
   test.after(async () => {
     const client = new pg.Client({ connectionString: CONTRACT_DATABASE_URL });
     await client.connect();

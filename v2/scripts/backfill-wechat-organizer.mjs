@@ -9,6 +9,8 @@
 //   node --import tsx scripts/backfill-wechat-organizer.mjs --limit=200
 //   node --import tsx scripts/backfill-wechat-organizer.mjs --dry-run
 import path from "node:path";
+import { openSync, closeSync, unlinkSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 // dotenv MUST run before any repository module is dynamically imported — repository.ts creates its
 // singleton at module-load time and reads process.env then.
@@ -35,6 +37,22 @@ const targetMonth = monthArg ? monthArg.slice("--month=".length) : undefined;
 if (dryRun) console.log("DRY-RUN mode: no data will be written.");
 if (targetMonth) console.log(`Month filter: ${targetMonth}`);
 if (limit < Infinity) console.log(`Limit: first ${limit} groups`);
+
+// Exclusive lock file — prevents two concurrent backfill runs from racing and creating
+// duplicate LifeEvents. The TOCTOU race in persistOrganization is fixed at the DB level,
+// but this guards the shared store (loaded once) from being processed twice in parallel.
+const LOCK_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "backfill-wechat-organizer.lock");
+let lockFd;
+try {
+  lockFd = openSync(LOCK_FILE, "wx"); // exclusive create — fails if file exists
+} catch {
+  console.error(`\nAnother backfill instance is already running (lock file: ${LOCK_FILE}).\nIf no instance is running, delete the lock file and retry.`);
+  process.exit(1);
+}
+const releaseLock = () => { try { closeSync(lockFd); unlinkSync(LOCK_FILE); } catch { /**/ } };
+process.on("exit", releaseLock);
+process.on("SIGINT", () => { releaseLock(); process.exit(130); });
+process.on("SIGTERM", () => { releaseLock(); process.exit(143); });
 
 // Step 1: query the set of uploaded wechat source IDs from DB directly
 // (getOrganizerStore's rawSources select omits the `status` column)
