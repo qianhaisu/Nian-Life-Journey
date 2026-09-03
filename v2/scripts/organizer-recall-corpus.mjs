@@ -69,7 +69,11 @@ for (const file of EXCLUDE) {
   // prior corpus silently excluded nothing and produced a contaminated "fresh" sample that still
   // called itself fresh. Hence the assertion below: a format this parser does not understand must
   // fail the build, never quietly weaken it.
-  const rows = [...(data.worksheet ?? []), ...(data.results ?? []), ...(data.scored ?? []), ...(data.cases ?? []), ...(data.windows ?? []), ...(data.manifest?.windows ?? []), ...(data.records ?? [])];
+  // `candidates` is the holdout candidate-pool shape (organizer-holdout-v3-candidates.mjs). It was
+  // missing too, and unlike `worksheet` that gap was REALISED: the 47-window recall corpus passed
+  // hv3-candidates.json as --exclude and got 0 rows from it, so 8 of its 47 windows came from that
+  // pool. See docs/organizer-coupled-shadow-2026-09-03.md for the impact assessment.
+  const rows = [...(data.worksheet ?? []), ...(data.candidates ?? []), ...(data.results ?? []), ...(data.scored ?? []), ...(data.cases ?? []), ...(data.windows ?? []), ...(data.manifest?.windows ?? []), ...(data.records ?? [])];
   if (rows.length === 0) {
     console.error(`--exclude=${file} yielded 0 rows. Top-level keys: ${Object.keys(data).join(", ")}. Refusing to build a corpus that would call itself fresh while excluding nothing.`);
     process.exit(1);
@@ -178,7 +182,15 @@ console.log(`Built ${built} windows; ${spent} spent (${spentByWindow} by window/
 // ---------------------------------------------------------------- stratified draw
 // Quotas favour the strata that can answer the recall question, while keeping real negatives and
 // ambiguous cases in the sample so precision damage would still be visible.
-const QUOTA = {
+//
+// Overridable with --quota=stratum:n,stratum:n. That is not a way to shop for a flattering sample —
+// the draw inside a stratum is still fingerprint-ordered and content-blind — but the capability
+// strata deplete first (they are the rarest shape in the archive and every prior corpus drew from
+// them), and once they are exhausted the only way to keep a run useful is to spend the remaining
+// budget on the strata that detect PRECISION damage: ordinary, relationship and ambiguous windows,
+// which is where routine inflation from looser subject resolution would show. The manifest records
+// the quota actually used.
+const DEFAULT_QUOTA = {
   capability_named: 16,
   capability_pronoun: 8,
   relationship_named: 6,
@@ -189,6 +201,13 @@ const QUOTA = {
   negative_media_only: 2,
   ordinary_unnamed: 0,
 };
+const QUOTA = { ...DEFAULT_QUOTA };
+for (const pair of (argOf("quota", "") || "").split(",").filter(Boolean)) {
+  const [key, value] = pair.split(":");
+  if (!(key in QUOTA)) { console.error(`--quota: unknown stratum "${key}". Known: ${Object.keys(QUOTA).join(", ")}`); process.exit(1); }
+  if (!Number.isInteger(Number(value)) || Number(value) < 0) { console.error(`--quota: ${key} needs a non-negative integer, got "${value}".`); process.exit(1); }
+  QUOTA[key] = Number(value);
+}
 const byStratum = new Map();
 for (const c of candidates) byStratum.set(c.stratum, [...(byStratum.get(c.stratum) ?? []), c]);
 // Deterministic and calendar-free: sort by fingerprint, which carries no date information.
