@@ -25,6 +25,15 @@ export type MemoryIaPolicy = {
   traceDaysInline: number;
   // And each day shows at most this many entries before "还有 N 条".
   traceEntriesPerDay: number;
+  // /memory also stops opening months after this many, whatever their memory count: an archive
+  // whose months are mostly photographs would otherwise never close the window (three curated
+  // memories total never reaches openMemoriesTarget) and the index would render every month of
+  // every year in full.
+  openMonthsMax: number;
+  // A day on the month page shows at most this many photographs before "这一天还有 N 张". The
+  // complete eligible set stays behind the chapter — the month is an edited publication, not a
+  // dump of the archive.
+  monthPhotosPerDay: number;
 };
 
 export const DEFAULT_MEMORY_IA_POLICY: MemoryIaPolicy = {
@@ -33,4 +42,6 @@ export const DEFAULT_MEMORY_IA_POLICY: MemoryIaPolicy = {
   yearTitlesPerMonth: 6,
   traceDaysInline: 10,
   traceEntriesPerDay: 6,
+  openMonthsMax: 6,
+  monthPhotosPerDay: 8,
 };

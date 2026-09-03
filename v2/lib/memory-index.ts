@@ -1,7 +1,7 @@
 // The read model behind /memory, /memory/[year] and /memory/[year]/[month]: chapters (already
 // ordered by life time in lib/memory-chapters.ts) narrowed to what each layer shows under
 // lib/memory-ia-policy.ts. Pure and deterministic; pages lay it out and never re-sort or re-count.
-import type { EditorialMemory, MonthChapter, TraceDay, YearChapter } from "@/lib/memory-chapters";
+import type { EditorialMemory, MediaRef, MonthChapter, PhotoDay, TraceDay, YearChapter } from "@/lib/memory-chapters";
 import { DEFAULT_MEMORY_IA_POLICY, type MemoryIaPolicy } from "@/lib/memory-ia-policy";
 
 const WEIGHT_RANK: Record<EditorialMemory["weight"], number> = { chapter: 0, highlight: 1, memory: 2, trace: 3 };
@@ -60,15 +60,22 @@ export function monthHref(month: string): string {
 }
 
 // /memory: the newest months open until roughly `openMemoriesTarget` curated memories are on the
-// page; months after that are index rows. Months with only traces count as open while inside the
-// window so the fold appears naturally, and never push the window forward by themselves.
+// page or `openMonthsMax` months are open, whichever comes first — in a photograph-heavy archive
+// the memory target alone would never close the window. Months after that are index rows. Months
+// with only traces count as open while inside the window so the fold appears naturally, and never
+// push the memory window forward by themselves.
 export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY): MemoryIndex {
   let shown = 0;
+  let opened = 0;
   const years = chapters.map((year) => {
     const months = year.months.map((chapter): MonthIndexEntry => {
-      const open = shown < policy.openMemoriesTarget;
+      // A month with nothing it can currently show (every photo withheld, nothing written) is an
+      // index row even inside the open window: the month exists and keeps its page, but /memory
+      // does not print an empty section — and it does not consume the window.
+      const bare = chapter.memories.length === 0 && chapter.photos.length === 0 && chapter.traceDays.length === 0;
+      const open = !bare && shown < policy.openMemoriesTarget && opened < policy.openMonthsMax;
       const featured = open ? curateMemories(chapter.memories, policy.curatedPerMonth) : [];
-      if (open) shown += featured.length;
+      if (open) { shown += featured.length; opened += 1; }
       return {
         chapter,
         mode: open ? "open" : "index",
@@ -94,16 +101,51 @@ export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy
 // /memory/[year]: every month of the year with a few titles each; the month page has the rest.
 export type YearMonthEntry = { chapter: MonthChapter; titles: EditorialMemory[]; hiddenMemoryCount: number; traceDayCount: number; href: string };
 
-export function buildYearView(year: YearChapter, policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY): { months: YearMonthEntry[]; memoryCount: number; traceDayCount: number } {
+export function buildYearView(year: YearChapter, policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY): { months: YearMonthEntry[]; memoryCount: number; traceDayCount: number; photoCount: number } {
   const months = year.months.map((chapter): YearMonthEntry => {
     const titles = curateMemories(chapter.memories, policy.yearTitlesPerMonth);
     return { chapter, titles, hiddenMemoryCount: chapter.memories.length - titles.length, traceDayCount: chapter.traceDays.length, href: monthHref(chapter.month) };
   });
-  return { months, memoryCount: months.reduce((sum, month) => sum + month.chapter.memories.length, 0), traceDayCount: months.reduce((sum, month) => sum + month.traceDayCount, 0) };
+  return { months, memoryCount: months.reduce((sum, month) => sum + month.chapter.memories.length, 0), traceDayCount: months.reduce((sum, month) => sum + month.traceDayCount, 0), photoCount: months.reduce((sum, month) => sum + month.chapter.photoCount, 0) };
 }
 
-// /memory/[year]/[month]: the chapter whole — every memory (a month bounds it), traces folded with
-// every day present but entries per day capped.
-export function buildMonthView(chapter: MonthChapter, policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY): { memories: EditorialMemory[]; traces: TraceFold } {
-  return { memories: chapter.memories, traces: foldTraces(chapter.traceDays, policy, chapter.traceDays.length) };
+// One day as the month chapter prints it: its date and age, the day's photographs (capped by
+// policy — the chapter is an edited publication, the rest of the day stays behind it), and
+// whatever the archive wrote about the day (trace entries, capped as everywhere else).
+export type MonthDayView = {
+  day: string;
+  dateLabel: string;
+  ageLabel?: string;
+  photos: MediaRef[];
+  morePhotoCount: number;
+  entries: string[];
+  hiddenEntryCount: number;
+};
+
+// /memory/[year]/[month]: the chapter whole — every memory (a month bounds it), then the month's
+// days, newest first: every day that was photographed or noticed is present, photographs and the
+// day's own words together. This replaces reading "photos" and "traces" as two separate systems;
+// a reader turns the pages of a month day by day.
+export function buildMonthView(chapter: MonthChapter, policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY): { memories: EditorialMemory[]; days: MonthDayView[]; traces: TraceFold } {
+  const byDay = new Map<string, MonthDayView>();
+  const dayOf = (day: string, dateLabel: string, ageLabel?: string) => {
+    let entry = byDay.get(day);
+    if (!entry) {
+      entry = { day, dateLabel, ageLabel, photos: [], morePhotoCount: 0, entries: [], hiddenEntryCount: 0 };
+      byDay.set(day, entry);
+    }
+    return entry;
+  };
+  for (const photoDay of chapter.photoDays) {
+    const entry = dayOf(photoDay.day, photoDay.dateLabel, photoDay.ageLabel);
+    entry.photos = photoDay.photos.slice(0, policy.monthPhotosPerDay);
+    entry.morePhotoCount = Math.max(0, photoDay.photos.length - entry.photos.length);
+  }
+  for (const traceDay of chapter.traceDays) {
+    const entry = dayOf(traceDay.day, traceDay.dateLabel);
+    entry.entries = traceDay.entries.slice(0, policy.traceEntriesPerDay);
+    entry.hiddenEntryCount = Math.max(0, traceDay.entries.length - entry.entries.length);
+  }
+  const days = [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day));
+  return { memories: chapter.memories, days, traces: foldTraces(chapter.traceDays, policy, chapter.traceDays.length) };
 }

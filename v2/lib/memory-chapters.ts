@@ -7,7 +7,7 @@
 // photo on the server and the client receives only that.
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
-import { heroCandidates, isHeroEligible } from "@/lib/media/hero";
+import { HERO_MIN_LONG_SIDE, HERO_MIN_SHORT_SIDE, heroCandidates, isHeroEligible } from "@/lib/media/hero";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
 
@@ -137,21 +137,30 @@ export function familyMediaByMonth(media: Media[]): Map<string, Media[]> {
   return byMonth;
 }
 
-// One month's pictures as the days they were taken on, newest first. Every day the month holds is
-// present; a page decides how many days and how many pictures per day it prints.
+// One month's pictures as the days they were taken on, days newest first. Within a day the
+// pictures are explicitly re-sorted takenAt ascending (id tiebreak) — a day reads morning to
+// evening, and the order must hold whatever order the caller's array arrived in; no page needs to
+// reverse or trust an upstream sort.
 export function groupPhotoDays(media: Media[], context: string, birthDay?: string): PhotoDay[] {
-  const days = new Map<string, PhotoDay>();
+  const byDay = new Map<string, { day: string; ageLabel?: string; items: Media[] }>();
   for (const item of media) {
     const day = calendarDayOf(item.takenAt);
     if (!day) continue;
-    let entry = days.get(day);
+    let entry = byDay.get(day);
     if (!entry) {
-      entry = { day, dateLabel: formatDay(day), ageLabel: timeSignatureFor(item.takenAt, birthDay)?.ageLabel, photos: [] };
-      days.set(day, entry);
+      entry = { day, ageLabel: timeSignatureFor(item.takenAt, birthDay)?.ageLabel, items: [] };
+      byDay.set(day, entry);
     }
-    entry.photos.push(toMediaRef(item, context));
+    entry.items.push(item);
   }
-  return [...days.values()].sort((a, b) => b.day.localeCompare(a.day));
+  return [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day)).map(({ day, ageLabel, items }) => ({
+    day,
+    dateLabel: formatDay(day),
+    ageLabel,
+    photos: items
+      .sort((a, b) => (a.takenAt ?? "").localeCompare(b.takenAt ?? "") || a.id.localeCompare(b.id))
+      .map((item) => toMediaRef(item, context)),
+  }));
 }
 
 export function buildChapters({ events, traces, media, deliverable, birthDay }: ChapterInput): YearChapter[] {
@@ -278,8 +287,42 @@ export function findMonth(chapters: YearChapter[], month: string): MonthChapter 
   return undefined;
 }
 
-// The most recent lead photo in the archive — "the photo that looks most like 张年 now".
+// The most recent lead photo in the archive — "the photo that looks most like 张年 now". Walks
+// photographed days and memory leads together, newest life first: before photographs could stand
+// on their own this could only answer with the newest *memory's* photo, which in production was
+// thirteen months older than the newest pictures of him.
 export function latestLeadPhoto(chapters: YearChapter[]): MediaRef | undefined {
-  for (const year of chapters) for (const month of year.months) for (const memory of month.memories) if (memory.lead) return memory.lead;
+  for (const year of chapters) for (const month of year.months) {
+    const memoryLead = month.memories.find((memory) => memory.lead);
+    const photoDay = month.photoDays.find((day) => day.photos.some(heroSized));
+    if (photoDay && (!memoryLead || photoDay.day >= memoryLead.signature.day)) return photoDay.photos.find(heroSized);
+    if (memoryLead) return memoryLead.lead;
+  }
   return undefined;
+}
+
+// Hero rule over a MediaRef (isHeroEligible wants a full Media row; the ref carries what matters).
+function heroSized(photo: MediaRef): boolean {
+  if (photo.type !== "photo" || !photo.width || !photo.height) return false;
+  return Math.min(photo.width, photo.height) >= HERO_MIN_SHORT_SIDE && Math.max(photo.width, photo.height) >= HERO_MIN_LONG_SIDE;
+}
+
+// A few of the archive's most recent written notices of ordinary days, for "who is he right now".
+// Purely display selection: the synthetic photo-count sentences some traces carry ("这一天留下了
+// 10 张照片。") describe the archive, not the child, and the pictures themselves already say it —
+// the rows stay untouched.
+export type RecentTraceNote = { day: string; dateLabel: string; entry: string };
+
+const ARCHIVE_COUNT_ENTRY = /留下了\s*\d+\s*张照片|留下了\s*\d+\s*段视频/;
+
+export function recentTraceNotes(chapters: YearChapter[], limit = 4): RecentTraceNote[] {
+  const notes: RecentTraceNote[] = [];
+  for (const year of chapters) for (const month of year.months) for (const day of month.traceDays) {
+    for (const entry of day.entries) {
+      if (ARCHIVE_COUNT_ENTRY.test(entry)) continue;
+      notes.push({ day: day.day, dateLabel: day.dateLabel, entry });
+      if (notes.length >= limit) return notes;
+    }
+  }
+  return notes;
 }

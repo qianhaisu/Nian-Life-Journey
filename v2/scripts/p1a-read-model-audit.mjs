@@ -51,6 +51,7 @@ console.log("change:", h.change ? `${h.change.label} @ ${h.change.signature.day}
 console.log("thisMonth:", h.thisMonth ? `${h.thisMonth.month} photos=${h.thisMonth.photos.length} mem=${h.thisMonth.memories.length} traceDays=${h.thisMonth.traceDays.length}` : "NONE");
 console.log("summary:", h.summary ? `len ${h.summary.length}` : "NONE");
 console.log("monthHref:", h.monthHref);
+console.log("recentLife:", h.recentLife ? `${h.recentLife.month.month} days=[${h.recentLife.days.map(d=>`${d.day}:${d.photos.length}`).join(", ")}] more=${h.recentLife.moreDayCount}` : "NONE");
 
 console.log("\n=== /memory ===");
 const idx = buildMemoryIndex(a.chapters);

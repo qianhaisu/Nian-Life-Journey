@@ -4,20 +4,22 @@ import { GrowthChart } from "@/components/growth-chart";
 import { Photo } from "@/components/photo";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
-import { latestLeadPhoto } from "@/lib/memory-chapters";
+import { latestLeadPhoto, recentTraceNotes } from "@/lib/memory-chapters";
 import { ageOn, formatDay } from "@/lib/time-signature";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "张年" };
 
-// Who 张年 is right now, from records that exist: age, one recent photo, and the handful of things
-// that recently changed. Measurements and care notes are deeper material, folded by default. When a
-// section has no real record behind it, it is not rendered — never filled in. "Now" is the
-// archive's product today (lib/time-truth.ts); changes are called recent only while they are.
+// Who 张年 is right now, from records that exist: age, the newest photo of him the archive can
+// deliver, the handful of things that recently changed, and the last few ordinary-day notes in his
+// book. Measurements and care notes are deeper material, folded by default. When a section has no
+// real record behind it, it is not rendered — never filled in. "Now" is the archive's product
+// today (lib/time-truth.ts); changes are called recent only while they are.
 export default async function AboutPage() {
   const { chapters, store, birthDay, time } = await loadFamilyArchive();
   const age = birthDay ? ageOn(birthDay, time.today) : undefined;
   const portrait = latestLeadPhoto(chapters);
+  const traceNotes = recentTraceNotes(chapters, 4);
   const notes = recentGrowthNotes(store.growthRecords, birthDay, 4, time);
   const notesHeading = notes.some((note) => note.recent) ? "最近的变化" : "记下来的变化";
   const heights = measurements(store.growthRecords, "height", birthDay);
@@ -37,6 +39,11 @@ export default async function AboutPage() {
     {notes.length > 0 ? <section className="about-notes" aria-labelledby="notes-title">
       <h2 id="notes-title" className="section-mark">{notesHeading}</h2>
       <dl>{notes.map((note) => <div key={note.id}><dt>{note.label}</dt><dd><p className="serif">{note.note}</p><time dateTime={note.signature.day}>{note.signature.dateLabel}</time></dd></div>)}</dl>
+    </section> : null}
+
+    {traceNotes.length > 0 ? <section className="about-notes about-traces" aria-labelledby="traces-title">
+      <h2 id="traces-title" className="section-mark">档案最近记下的</h2>
+      <dl>{traceNotes.map((note, index) => <div key={`${note.day}-${index}`}><dt><time dateTime={note.day}>{note.dateLabel}</time></dt><dd><p className="serif">{note.entry}</p></dd></div>)}</dl>
     </section> : null}
 
     {hasDeeper ? <details className="about-deeper">
