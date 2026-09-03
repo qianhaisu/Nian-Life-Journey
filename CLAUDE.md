@@ -129,6 +129,78 @@ Nianlife 只有一个 Neon 数据库（integration `neon-citrine-park`），Verc
 - 不删除现有路径、Schema、Policy 和幂等保护。
 - 修改后运行与改动范围匹配的 typecheck、test、lint、build 和 diff check（见「常用验证命令」），而不是每次都跑全套或完全不验证。
 
+## 工程执行质量与状态报告原则
+
+先看真实数据，再看真实调用链，再看真实写入链，最后才设计。不要因为代码存在就认为产品拥有该能力，不要因为测试通过就认为生产走过该路径，不要因为本阶段成功就推断下一阶段已经准备好。
+
+这一节要求的是「Session 自己先核实事实」，不是「多问 Teddy」。核实由 Session 自己完成，不改变上面「开发执行方式」和「Neon/PostgreSQL」里已经给出的授权。
+
+### Ground Truth First
+
+- 设计前先查真实数据、真实文件字节、真实 production call graph、真实 persistence path。
+- 代码、接口、类型、测试存在，不等于生产真的走这条路径；先确认调用方，再确认写入方。
+
+### Verify Before Building
+
+- DB 没资产 ≠ 文件不存在。
+- 测试通过 ≠ production 已接通。
+- dry-run 通过 ≠ Canary 通过。
+- fixture 能写 ≠ worker 能写。
+- 先用证据证明缺口存在，再为缺口设计方案；不要为想象中的缺口写代码。
+
+### Trace Existing Architecture First
+
+新增 adapter / binder / repository API / worker path 之前，先完整 trace 现有的 entrypoint、写入、transaction、identity、retry、review、provenance，优先复用现有实现，不要在旁边另起一条平行链路。
+
+### Stop on Architectural Blockers
+
+一旦发现任务前提不成立——pipeline 没有 production entrypoint、persistence 不存在、source data 实际缺失、evaluation independence 不成立——立即停止下游工作并报告 blocker。
+
+不得为了「把任务做完」继续跑没有意义的 Shadow / Writer / Canary，也不得降低标准让它通过。
+
+### Proven / Inferred / Unknown
+
+重要结论必须区分「已证明 / 推断 / 未知」，并说明证据来源。禁止把 likely、expected、inferred 写成 confirmed。
+
+### 状态用词必须保守
+
+- TESTS PASS ≠ PRODUCTION READY
+- DRY RUN PASS ≠ CANARY READY
+- CANARY PASS ≠ CUTOVER READY
+- CUTOVER READY ≠ CUTOVER COMPLETE
+
+状态标题必须反映所有已知 blocker；禁止用阶段性胜利掩盖未完成项。
+
+### End-to-End Completion
+
+一项生产能力只有在 entrypoint → business logic → persistence → provenance → review/publication → retry/replay/idempotency → rollback 这条链按任务要求验证之后，才能称为完成。
+
+仅由 script / mock / fixture / evaluation 验证过的能力，必须明确标注为**非 production-complete**。
+
+### Bounded Production Writes
+
+- 写入前 predeclare：exact inputs、expected DB delta、rollback identities。
+- 写入后：核对 actual delta、replay、确认 zero unexpected drift。
+- actual delta 与预期不符时立即停止，不扩大范围。
+
+### 不要为「完成任务」优化
+
+优先级固定：**correctness > truthfulness > reversibility > architectural coherence > completion speed**。
+
+不得为了让测试变绿、让 Canary 有结果、凑够样本数、输出 READY 或完成原始任务，而降低事实、subject、worthiness、media、review、identity 或 safety 标准。
+
+### 最终报告纪律
+
+最终报告必须写清：
+
+- 本轮证明了什么
+- 没证明什么
+- 最大的已知 blocker
+- 是否存在 production-only / fixture-only / script-only 差异
+- 下一个 Gate
+
+如果结论依赖 workaround、raw SQL、临时脚本、mock、placeholder 或 Canary-only path，必须写在状态标题附近，不能藏在正文末尾。
+
 ## 本地环境文件永久保护
 
 `v2/.env.local` 是持久本地配置，不是可重新生成的临时文件。
