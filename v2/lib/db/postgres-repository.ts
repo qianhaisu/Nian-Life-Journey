@@ -645,12 +645,21 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     },
     async persistDailyTrace(trace: DailyTrace) {
       return db.transaction(async (tx) => {
-        const byFingerprint = trace.organizationFingerprint ? (await tx.select().from(t.dailyTraces).where(eq(t.dailyTraces.organizationFingerprint, trace.organizationFingerprint)))[0] : undefined;
-        const day = trace.occurredAt.slice(0, 10);
-        const byDay = byFingerprint ?? (await tx.select().from(t.dailyTraces).where(eq(t.dailyTraces.profileId, trace.profileId))).find((row) => (row as unknown as DailyTrace).occurredAt.slice(0, 10) === day);
+        // Fingerprint is the whole identity. There used to be a `(profileId, day)` fallback here,
+        // and it was a cutover blocker: every day the evidence organizer will ever write already
+        // holds a rule-derived trace, so the fallback made a new artifact adopt the legacy row —
+        // inheriting its id, its ledger binding and therefore its publication state, while
+        // `organizerRun` was overwritten with the incoming run. Because requiresQualityReview()
+        // reads `organizerRun.organizerType`, that overwrite also flipped the legacy row from
+        // rule-derived (fail closed) to AI-derived (fail open): of 171 production traces, 101 are
+        // hidden only by that check and would have published themselves on merge, and 33 approved
+        // rows would have absorbed unreviewed entries. Same evidence → same fingerprint → same
+        // artifact; different evidence → a separate artifact, grouped with it only for display.
+        const existing = trace.organizationFingerprint
+          ? ((await tx.select().from(t.dailyTraces).where(eq(t.dailyTraces.organizationFingerprint, trace.organizationFingerprint)))[0] as unknown as DailyTrace | undefined)
+          : undefined;
         let result: DailyTrace;
-        if (byDay) {
-          const existing = byDay as unknown as DailyTrace;
+        if (existing) {
           const merged = {
             entries: [...new Set([...existing.entries, ...trace.entries])],
             sourceIds: [...new Set([...existing.sourceIds, ...trace.sourceIds])],

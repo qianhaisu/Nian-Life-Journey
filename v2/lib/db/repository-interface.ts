@@ -114,6 +114,11 @@ export interface Repository extends ChatImportRepository {
   markArchiveStatus(assetId: string, status: NonNullable<MediaAsset["archiveStatus"]>, error?: string): Promise<MediaAsset | null>;
   recordArchivedOriginal(input: { assetId: string; providerRef: string; path?: string; fileSize?: number; checksumVerified?: boolean }): Promise<MediaLocation | null>;
   persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[]): Promise<LifeEvent>;
+  // Identity is `organizationFingerprint` and nothing else. A calendar day is a presentation
+  // grouping key (see buildChapters in lib/memory-chapters.ts, which folds every trace on a day
+  // into one TraceDay), never an artifact identity: two organizers looking at different evidence
+  // on the same day produce two artifacts, each with its own provenance and review lifecycle.
+  // A trace with no fingerprint has no identity to dedup on and always becomes a new row.
   persistDailyTrace(trace: DailyTrace): Promise<DailyTrace>;
   persistCareEpisode(episode: CareEpisode): Promise<CareEpisode>;
   markSourcesOrganized(sourceIds: string[]): Promise<void>;

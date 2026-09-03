@@ -204,10 +204,18 @@ export const organizerRuns = pgTable("organizer_runs", {
   tokenUsage: jsonb("token_usage").$type<{ input?: number; output?: number; total?: number }>(),
 });
 
-// New. persistDailyTrace() dedups first by organizationFingerprint, then falls back to
-// (profileId, day). Both are indexed, neither is a hard unique constraint — the fallback match
-// means two traces can legitimately share a fingerprint-less day during that lookup window, and a
-// DB constraint would change that existing app-level semantics rather than just storing it.
+// New. persistDailyTrace() dedups by organizationFingerprint alone: that is the artifact identity.
+// A calendar day is only a presentation grouping key — buildChapters() folds every trace on a day
+// into one TraceDay — so several rows per (profileId, day) are a normal, supported state and 17
+// such days already exist in production.
+//
+// `organization_fingerprint` is indexed but NOT unique, unlike lifeEvents and organizerRuns. That
+// is a known gap, not a design choice: persistDailyTrace() does SELECT-then-INSERT under READ
+// COMMITTED with no constraint to catch a lost race, and production holds 17 fingerprint collision
+// pairs — same fingerprint, same day, inserted seconds apart by concurrent backfill workers, 6 of
+// them byte-identical. Making the index unique requires resolving those 17 pairs first (a
+// destructive write on existing rows) or a partial unique index scoped to new rows; both need
+// Teddy's authorisation. See docs/organizer-dailytrace-identity-2026-09-03.md.
 export const dailyTraces = pgTable("daily_traces", {
   id: text("id").primaryKey(),
   profileId: text("profile_id").notNull().references(() => profiles.id),

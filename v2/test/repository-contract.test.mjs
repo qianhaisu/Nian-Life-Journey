@@ -13,8 +13,8 @@ import { resolveRepositoryBackend } from "../lib/db/config.ts";
 
 // The JSON repository writes to a single shared .data/nian-life.json — same convention as
 // test/ai-organizer.test.mjs and test/quark-artifact-ingest.test.mjs. Without this restore, rows
-// this file writes (e.g. a DailyTrace dated 2026-11-02) persist across runs and can be picked up
-// by a later run's day-based fallback match, corrupting what looks like a fresh fixture.
+// this file writes (e.g. a DailyTrace dated 2026-11-02) accumulate across runs and are counted by
+// the day-scoped assertions below, which expect to see only the rows their own case wrote.
 const dataFile = path.join(process.cwd(), ".data", "nian-life.json");
 let originalStore;
 try { originalStore = await readFile(dataFile); } catch { originalStore = null; }
@@ -109,6 +109,79 @@ function runContractSuite(name, createRepo) {
     const matches = store.dailyTraces.filter((item) => item.organizationFingerprint === fingerprint);
     assert.equal(matches.length, 1);
     assert.ok(matches[0].entries.includes("a") && matches[0].entries.includes("b"));
+  });
+
+  // The cutover case. At cutover the evidence organizer writes traces on days the rule organizer
+  // already covered — which is every day. A `(profileId, day)` fallback made the new artifact adopt
+  // the legacy row: its id, its ledger binding, its publication state, with `organizerRun`
+  // overwritten by the incoming run. These four cases pin that the day is a grouping key only.
+  //
+  // Every fixture here carries AI provenance so that getStore()'s publication gate lets it through
+  // on both backends: rule-derived rows are fail-closed without a ledger row, and this suite has no
+  // way to write the ledger. What the gate does to rule provenance — and what a merge did to it —
+  // is pinned separately, over pure functions, in test/organizer-dailytrace-identity.test.mjs.
+  // The two artifacts are told apart here by `organizerVersion`, which is what a merge overwrote.
+  const traceFixture = (day, fingerprint, organizerVersion, overrides = {}) => ({
+    id: uid("trace"), profileId: PROFILE_ID, occurredAt: day, entries: [], sourceIds: [],
+    scopes: ["family"], visibility: "family", organizationFingerprint: fingerprint,
+    organizerRun: { organizerType: "ai", organizerVersion }, ...overrides,
+  });
+  // All four scenarios share ONE getStore(). On PostgreSQL that call reads the entire store
+  // (17.2 MB — see docs/, "repository performance inventory") and takes minutes, so four separate
+  // reads would add roughly a quarter of an hour to the suite for no extra coverage.
+  //
+  // Rows are looked up by their own id rather than by counting everything on a day: this database
+  // is shared and long-lived, so a count is a claim about other tests' leftovers as much as about
+  // this one. `notEqual(a.id, b.id)` plus each row's own untouched content is the actual proof that
+  // no merge happened.
+  test(`[${name}] DailyTrace: the calendar day is a grouping key, not an artifact identity`, async () => {
+    const repo = createRepo();
+    const stamp = randomUUID().slice(0, 8);
+
+    // 1. A new evidence trace lands on a day that already holds another organizer's trace.
+    const dayA = "2026-11-11";
+    const legacy = traceFixture(dayA, `fp-legacy-${stamp}`, "legacy-v2", { entries: [`legacy ${stamp}`], sourceIds: [uid("source")] });
+    await repo.persistDailyTrace(legacy);
+    const evidence = traceFixture(dayA, `fp-evidence-${stamp}`, "evidence-v6", { entries: [`evidence ${stamp}`], sourceIds: [uid("source")] });
+    const saved = await repo.persistDailyTrace(evidence);
+    assert.notEqual(saved.id, legacy.id, "the evidence trace must be its own artifact");
+
+    // 2. Replaying the very same evidence resolves to the same artifact.
+    const replay = await repo.persistDailyTrace(traceFixture(dayA, `fp-evidence-${stamp}`, "evidence-v6", { entries: [`evidence ${stamp}`] }));
+    assert.equal(replay.id, saved.id, "same evidence, same artifact");
+
+    // 3. Different evidence on one day yields distinct artifacts.
+    const dayB = "2027-01-07";
+    const morning = await repo.persistDailyTrace(traceFixture(dayB, `fp-morning-${stamp}`, "evidence-v6", { entries: [`morning ${stamp}`] }));
+    const evening = await repo.persistDailyTrace(traceFixture(dayB, `fp-evening-${stamp}`, "evidence-v6", { entries: [`evening ${stamp}`] }));
+    assert.notEqual(morning.id, evening.id, "different evidence is a different artifact");
+
+    // 4. A trace with no fingerprint has no identity to dedup on, so it never adopts a row.
+    const anonymous = await repo.persistDailyTrace({ ...traceFixture(dayB, undefined, "evidence-v6", { entries: [`anonymous ${stamp}`] }), organizationFingerprint: undefined });
+    assert.notEqual(anonymous.id, morning.id, "no identity means no dedup claim, never adoption");
+    assert.notEqual(anonymous.id, evening.id);
+
+    const store = await repo.getStore();
+    const row = (id) => store.dailyTraces.find((item) => item.id === id);
+
+    // The pre-existing artifact is exactly what it was: no adopted entries, no adopted sources, and
+    // — the field whose overwrite used to decide publication — its own provenance.
+    const after = row(legacy.id);
+    assert.ok(after, "the legacy trace must still be readable");
+    assert.deepEqual(after.entries, [`legacy ${stamp}`], "legacy entries must not absorb the evidence trace");
+    assert.deepEqual(after.sourceIds, legacy.sourceIds, "legacy sourceIds must not absorb the evidence trace");
+    assert.equal(after.organizerRun.organizerVersion, "legacy-v2", "organizerRun must not be overwritten");
+    assert.equal(after.organizationFingerprint, legacy.organizationFingerprint);
+
+    assert.deepEqual(row(saved.id).entries, [`evidence ${stamp}`], "a replay must not duplicate entries");
+    assert.deepEqual(row(morning.id).entries, [`morning ${stamp}`]);
+    assert.deepEqual(row(evening.id).entries, [`evening ${stamp}`]);
+    assert.deepEqual(row(anonymous.id).entries, [`anonymous ${stamp}`]);
+
+    // Both artifacts really do sit on one calendar day — the read layer (buildChapters) is what
+    // folds them back into a single TraceDay for the family.
+    assert.equal(after.occurredAt.slice(0, 10), dayA);
+    assert.equal(row(saved.id).occurredAt.slice(0, 10), dayA);
   });
 
   test(`[${name}] OrganizerRun: persistOrganizerRun is idempotent by organizationFingerprint`, async () => {
