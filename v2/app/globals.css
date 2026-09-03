@@ -139,6 +139,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .evidence-media { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 16px; }
 .evidence-media-item { position: relative; aspect-ratio: 4 / 3; overflow: hidden; }
 .evidence-media-item img { object-fit: cover; }
+/* A picture the day left behind whose derivative is not ready yet: named, never drawn broken. */
+.evidence-media-pending { margin-top: 10px; font-size: 0.8rem; color: var(--color-muted); }
 .evidence-media-label, .media-chip { position: absolute; right: 8px; bottom: 8px; padding: 3px 7px; background: var(--color-primary); color: var(--color-bg); font-size: .62rem; }
 @media (hover: hover) {
   button:not(:disabled) { cursor: pointer; }

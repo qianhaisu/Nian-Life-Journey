@@ -23,16 +23,21 @@ function sourceTypeLabel(sourceType: SourceType) {
   return "资料";
 }
 
-export function EvidenceList({ sources, media, contributors }: { sources: RawSource[]; media: Media[]; contributors: Contributor[] }) {
+// `deliverableIds` absent means every item is treated as deliverable (existing callers/tests).
+export function EvidenceList({ sources, media, contributors, deliverableIds }: { sources: RawSource[]; media: Media[]; contributors: Contributor[]; deliverableIds?: ReadonlySet<string> }) {
   const mediaById = new Map(media.map((item) => [item.id, item]));
   const contributorById = new Map(contributors.map((item) => [item.id, item]));
   const orderedSources = [...sources].sort((first, second) => first.capturedAt.localeCompare(second.capturedAt));
 
   return <div className="evidence-list">
     {orderedSources.map((source) => {
-      // Display filter only, nothing is deleted: sticker/icon-sized media would be upscaled into a
-      // grid cell and read as a broken fragment.
-      const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter(isThumbnailEligible);
+      // Evidence is provenance: everything the source left behind stays listed. But the two display
+      // decisions differ — sticker/icon-sized media would upscale into broken fragments (display
+      // filter, as before), while an undeliverable derivative is drawn as its facts (type, length)
+      // instead of a broken image. Neither removes the record.
+      const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
+      const withImages = sourceMedia.filter((item) => isThumbnailEligible(item) && (!deliverableIds || deliverableIds.has(item.id)));
+      const withoutImages = sourceMedia.filter((item) => deliverableIds && !deliverableIds.has(item.id));
       // Display text only. The RawSource itself is never modified — see lib/organizer/evidence-text.ts.
       const text = presentableEvidenceText(source.text);
       const label = presentableSourceLabel(source.sourceLabel);
@@ -41,12 +46,13 @@ export function EvidenceList({ sources, media, contributors }: { sources: RawSou
         <div className="evidence-content">
           <div className="evidence-source"><span>{sourceTypeLabel(source.sourceType)}</span>{label ? <span>{label}</span> : null}</div>
           {text ? <p className={source.sourceType === "wechat" ? "evidence-quote" : "evidence-note"}>{source.sourceType === "wechat" ? `“${text}”` : text}</p> : null}
-          {sourceMedia.length > 0 ? <div className="evidence-media">
-            {sourceMedia.map((item) => <div className="evidence-media-item" key={item.id}>
+          {withImages.length > 0 ? <div className="evidence-media">
+            {withImages.map((item) => <div className="evidence-media-item" key={item.id}>
               <Image src={item.thumbnailSrc ?? item.src} alt={presentableAlt(item)} fill sizes="(max-width: 700px) 42vw, 220px" style={{ objectFit: "cover" }} />
               <span className="evidence-media-label">{item.type === "video" ? `视频 ${formatDuration(item.durationSeconds)}`.trim() : "照片"}</span>
             </div>)}
           </div> : null}
+          {withoutImages.length > 0 ? <p className="evidence-media-pending">{withoutImages.map((item) => item.type === "video" ? `一段视频${item.durationSeconds ? ` ${formatDuration(item.durationSeconds)}` : ""}` : "一张照片").join("、")}，还没整理成可以翻看的样子</p> : null}
         </div>
       </article>;
     })}

@@ -26,6 +26,11 @@ export type EditorialMemory = {
 
 export type TraceDay = { day: string; dateLabel: string; entries: string[] };
 
+// A day that was photographed, with the pictures that survive the delivery gate. This is the unit
+// the archive actually has most of: 989 publishable pictures against 3 published memories, spread
+// over the days they were taken. A day needs no memory and no trace to be here.
+export type PhotoDay = { day: string; dateLabel: string; ageLabel?: string; photos: MediaRef[] };
+
 export type MonthChapter = {
   month: string;
   // "2026 年 8 月" and, inside a year, just "8 月".
@@ -34,8 +39,24 @@ export type MonthChapter = {
   ageLabel?: string;
   memories: EditorialMemory[];
   traceDays: TraceDay[];
-  // Representative photos drawn from this month's memories, lead photos first.
+  // Representative photos drawn from this month's memories, lead photos first. Bounded by
+  // MONTH_PHOTO_LIMIT for index surfaces; the month page reads the month's photography whole
+  // through monthPhotoDays().
   photos: MediaRef[];
+  // What the month actually holds, however the pictures reached the archive — attached to a
+  // memory, noticed as an ordinary day, or standing on their own. Index pages say the number;
+  // only the month page shows them all.
+  photoCount: number;
+  videoCount: number;
+  // Every photographed day of the month, newest first, each carrying all of its publishable
+  // pictures. This is the month's real spine. Building it is cheap (small objects, server side);
+  // what reaches the browser is whatever a page chooses to render, and index surfaces render
+  // none of it — they show `photos` and the counts above.
+  photoDays: PhotoDay[];
+  // Family-visible pictures this month holds that cannot be delivered yet. Never rendered — the
+  // family is not shown the state of the derivative pipeline — but it keeps the distinction
+  // between "withheld" and "never existed" available to audits and tests.
+  withheldMediaCount: number;
 };
 
 export type YearChapter = { year: string; ageSpan?: string; months: MonthChapter[] };
@@ -83,38 +104,78 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
 
 const WEIGHT_RANK: Record<MemoryWeight, number> = { chapter: 0, highlight: 1, memory: 2, trace: 3 };
 
-export type ChapterInput = { events: LifeEvent[]; traces: DailyTrace[]; media: Media[]; birthDay?: string };
+// `media` is every family-visible picture the month actually holds — archive truth, used to decide
+// that a month happened. `deliverable` is the subset that can be shown right now
+// (lib/media/deliverability.ts). The two are deliberately separate: a February whose twenty photos
+// are still waiting for derivatives is a February that happened, not a February that does not
+// exist, and it must keep its chapter and its URL. Eligibility governs what is displayed and
+// counted inside a month; it never governs whether the month is in the book.
+export type ChapterInput = { events: LifeEvent[]; traces: DailyTrace[]; media: Media[]; deliverable?: ReadonlySet<string>; birthDay?: string };
 
-// Pre-bucket orphaned media (not referenced by any event) by month so buildChapters can fill
-// month photo strips from DailyTrace days that have photos but no LifeEvent.
-function orphanedMediaByMonth(events: LifeEvent[], media: Media[]): Map<string, Media[]> {
-  const claimedByEvent = new Set(events.flatMap((e) => e.mediaIds));
+// Every family-visible picture the archive holds, bucketed by the month it was taken in and
+// ordered newest first inside each month.
+//
+// This is deliberately *all* of them, not only the ones no LifeEvent claimed. A photograph is
+// family material in its own right: it is not organizer output, it passes through no quality
+// gate, and it does not need to be promoted into a memory to deserve a place in the book. The
+// archive's 1153 pictures outnumber its published memories several hundred to one, and four
+// months of them — 2025-09, 2025-10, 2025-11, 2026-02 — existed at no URL at all before this,
+// because a month used to be born only from a published event or trace.
+export function familyMediaByMonth(media: Media[]): Map<string, Media[]> {
   const byMonth = new Map<string, Media[]>();
   for (const item of media) {
-    if (claimedByEvent.has(item.id)) continue;
     if (item.visibility === "private") continue;
     const month = calendarMonthOf(item.takenAt);
     if (!month) continue;
-    const bucket = byMonth.get(month) ?? [];
-    if (!byMonth.has(month)) byMonth.set(month, bucket);
-    bucket.push(item);
+    const bucket = byMonth.get(month);
+    if (bucket) bucket.push(item);
+    else byMonth.set(month, [item]);
+  }
+  for (const bucket of byMonth.values()) {
+    bucket.sort((a, b) => (b.takenAt ?? "").localeCompare(a.takenAt ?? "") || a.id.localeCompare(b.id));
   }
   return byMonth;
 }
 
-export function buildChapters({ events, traces, media, birthDay }: ChapterInput): YearChapter[] {
-  const mediaById = new Map(media.map((item) => [item.id, item]));
+// One month's pictures as the days they were taken on, newest first. Every day the month holds is
+// present; a page decides how many days and how many pictures per day it prints.
+export function groupPhotoDays(media: Media[], context: string, birthDay?: string): PhotoDay[] {
+  const days = new Map<string, PhotoDay>();
+  for (const item of media) {
+    const day = calendarDayOf(item.takenAt);
+    if (!day) continue;
+    let entry = days.get(day);
+    if (!entry) {
+      entry = { day, dateLabel: formatDay(day), ageLabel: timeSignatureFor(item.takenAt, birthDay)?.ageLabel, photos: [] };
+      days.set(day, entry);
+    }
+    entry.photos.push(toMediaRef(item, context));
+  }
+  return [...days.values()].sort((a, b) => b.day.localeCompare(a.day));
+}
+
+export function buildChapters({ events, traces, media, deliverable, birthDay }: ChapterInput): YearChapter[] {
+  // Absent `deliverable`, every family-visible row is treated as showable — the shape callers that
+  // build a Store by hand (tests, fixtures) already expect.
+  const canShow = (item: Media) => !deliverable || deliverable.has(item.id);
+  const shown = media.filter(canShow);
+  const mediaById = new Map(shown.map((item) => [item.id, item]));
   const eventById = new Map(events.map((item) => [item.id, item]));
-  const orphanedByMonth = orphanedMediaByMonth(events, media);
+  const mediaByMonth = familyMediaByMonth(media);
   const months = new Map<string, MonthChapter>();
   const monthOf = (month: string) => {
     let chapter = months.get(month);
     if (!chapter) {
-      chapter = { month, label: formatMonth(month), shortLabel: `${Number(month.slice(5, 7))} 月`, ageLabel: ageAtMonth(birthDay, month), memories: [], traceDays: [], photos: [] };
+      chapter = { month, label: formatMonth(month), shortLabel: `${Number(month.slice(5, 7))} 月`, ageLabel: ageAtMonth(birthDay, month), memories: [], traceDays: [], photos: [], photoCount: 0, videoCount: 0, photoDays: [], withheldMediaCount: 0 };
       months.set(month, chapter);
     }
     return chapter;
   };
+
+  // A month exists if life left anything of it behind: a published memory, a day the archive
+  // noticed, or simply pictures — deliverable or not. Photographs come first so that a month which
+  // was only ever photographed still gets a chapter and a page.
+  for (const month of mediaByMonth.keys()) monthOf(month);
 
   // Life time only: the day it happened, newest first, never createdAt (a late-imported 2023 chat
   // must sort into 2023). Same-day ties break by weight, then id, so the order — and therefore the
@@ -156,15 +217,23 @@ export function buildChapters({ events, traces, media, birthDay }: ChapterInput)
     const byRank = [...chapter.memories].sort((a, b) => WEIGHT_RANK[a.weight] - WEIGHT_RANK[b.weight]);
     for (const memory of byRank) if (memory.lead) push(mediaById.get(memory.lead.id), memory.title);
     for (const memory of byRank) for (const id of eventById.get(memory.id)?.mediaIds ?? []) push(mediaById.get(id), memory.title);
-    // Fill remaining slots with orphaned photos (media with takenAt in this month but not
-    // referenced by any event — typically DailyTrace days with Quark/WeChat photos).
+    // Then the rest of the month's pictures, newest first. In a month with no published memory
+    // these are the whole strip, which is the point: the month is shown by what was photographed.
+    const monthMedia = mediaByMonth.get(chapter.month) ?? [];
+    const showable = monthMedia.filter(canShow);
     if (photos.length < MONTH_PHOTO_LIMIT) {
-      for (const item of orphanedByMonth.get(chapter.month) ?? []) {
+      for (const item of showable) {
         if (photos.length >= MONTH_PHOTO_LIMIT) break;
         push(item, chapter.label);
       }
     }
     chapter.photos = photos.slice(0, MONTH_PHOTO_LIMIT);
+    // Counts are of what the family can actually open. A number beside pictures that cannot be
+    // delivered would be a number the reader can never reconcile with the page.
+    chapter.photoCount = showable.filter((item) => item.type === "photo").length;
+    chapter.videoCount = showable.filter((item) => item.type === "video").length;
+    chapter.photoDays = groupPhotoDays(showable, chapter.label, birthDay);
+    chapter.withheldMediaCount = monthMedia.length - showable.length;
   }
 
   const years = new Map<string, MonthChapter[]>();

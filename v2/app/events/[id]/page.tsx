@@ -6,6 +6,7 @@ import { MediaSequence } from "@/components/media-sequence";
 import { TimeSignature } from "@/components/time-signature";
 import { getAllEvents, getEventDetail, getStore } from "@/lib/db/repository";
 import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
+import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { sequenceFor } from "@/lib/media/presentation";
 import { birthDayOf, timeSignatureFor } from "@/lib/time-signature";
 
@@ -27,9 +28,16 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   // An event that is not 张年's (a fixture profile's row reached by URL) is not a page in this book.
   if (!detail || detail.event.profileId !== store.profile.id) notFound();
   const { event, media: eventMedia, sources: eventSources, contributors, growth, care } = detail;
+  // Two layers, two rules. The story layer (MediaSequence, counts) is publication: only pictures
+  // that can actually be delivered are laid out or counted — "那天还有 N 张照片" must be N the
+  // reader can open. The evidence disclosure below is provenance: what the day really left behind,
+  // where an undeliverable picture keeps its existence (type, time) but is never drawn as a broken
+  // frame. The rows themselves stay in the archive untouched.
+  const deliverable = deliverableMediaIds({ media: eventMedia, mediaAssets: store.mediaAssets, mediaLocations: store.mediaLocations });
+  const shownMedia = eventMedia.filter((item) => item.visibility !== "private" && deliverable.has(item.id));
   const signature = timeSignatureFor(event.occurredAt, birthDayOf(store.profile));
   const title = memoryTitle(event);
-  const raw = sequenceFor(eventMedia, event.heroMediaId);
+  const raw = sequenceFor(shownMedia, event.heroMediaId);
   const sequence = { layout: raw.layout, shown: raw.shown.map((item) => toMediaRef(item, title)), remaining: raw.remaining };
   const paragraphs = [event.story, ...(event.storySections ?? [])].map((text) => text?.trim()).filter((text): text is string => Boolean(text));
   const people = event.people.filter(Boolean);
@@ -53,7 +61,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
     </section> : null}
     {materialCount > 0 ? <details className="evidence-disclosure reading-wrap">
       <summary><span className="serif">当时留下的资料</span><small>{materialCount} 项</small></summary>
-      <EvidenceList sources={eventSources} media={eventMedia} contributors={contributors} />
+      <EvidenceList sources={eventSources} media={eventMedia} contributors={contributors} deliverableIds={deliverable} />
     </details> : null}
     <footer className="detail-footer reading-wrap"><Link className="text-link" href="/memory">回到记忆</Link></footer>
   </article>;
