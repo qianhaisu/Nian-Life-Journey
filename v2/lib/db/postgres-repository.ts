@@ -6,9 +6,9 @@ import { getDb } from "./client";
 import * as t from "./schema";
 import { newId, organizerJobKey } from "./repository-interface";
 import { CANONICAL_PROFILE_ID } from "./config";
-import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
+import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, OrganizerWindowInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 import { normalizeSha256 } from "./chat-import-persistence";
-import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
+import { indexReviews, isEventPublishable, isTracePublishable, normalizeQualityDecision, type QualityReview } from "@/lib/organizer/quality-review";
 import { ChatImportStateError, acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 
 // tx.rollback() doesn't make db.transaction() resolve to whatever the callback returns after it —
@@ -304,9 +304,27 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       media: media as unknown as Store["media"],
       mediaAssets: mediaAssets as unknown as Store["mediaAssets"],
       events: events as unknown as Store["events"],
-      mediaLocations: [], connectorStates: [], dailyTraces: [], growthRecords: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [],
+      mediaLocations: [], connectorStates: [], dailyTraces: [], growthRecords: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [], qualityReviews: [],
       monthlySnapshot: { id: "organizer-store-unused", profileId, month: "1970-01", summary: "", highlights: [], visibility: "private" },
     };
+  }
+
+  // One job's evidence, read by id. Four small keyed selects instead of a whole-profile (or
+  // whole-database) load — the V2 organizer runs inside a queue worker with a request budget, so
+  // its read has to be proportional to the job rather than to the archive.
+  async function assembleOrganizerWindowInput(sourceIds: string[]): Promise<OrganizerWindowInput> {
+    if (!sourceIds.length) throw new Error("PostgreSQL repository: getOrganizerWindowInput needs at least one source id.");
+    const sources = (await db.select().from(t.rawSources).where(inArray(t.rawSources.id, sourceIds))) as unknown as RawSource[];
+    const live = sources.filter((source) => !source.deletedAt);
+    const profileIds = [...new Set(live.map((source) => source.profileId))];
+    if (profileIds.length > 1) throw new Error(`PostgreSQL repository: getOrganizerWindowInput spans ${profileIds.length} profiles; one job is one profile's evidence.`);
+    const [profileRow] = profileIds.length ? await db.select().from(t.profiles).where(eq(t.profiles.id, profileIds[0])).limit(1) : [];
+    const mediaIds = [...new Set(live.flatMap((source) => source.mediaIds))];
+    const media = mediaIds.length ? ((await db.select().from(t.media).where(inArray(t.media.id, mediaIds))) as unknown as Media[]) : [];
+    const assetIds = [...new Set(media.map((item) => item.mediaAssetId).filter((id): id is string => Boolean(id)))];
+    const mediaAssets = assetIds.length ? ((await db.select().from(t.mediaAssets).where(inArray(t.mediaAssets.id, assetIds))) as unknown as MediaAsset[]) : [];
+    const mediaLocations = assetIds.length ? ((await db.select().from(t.mediaLocations).where(inArray(t.mediaLocations.mediaAssetId, assetIds))) as unknown as MediaLocation[]) : [];
+    return { profile: (profileRow as unknown as Store["profile"]) ?? null, sources: live, media, mediaAssets, mediaLocations };
   }
 
   // The profile row is pinned by id — never `profiles limit 1`, which once handed a stranded
@@ -314,7 +332,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
   // backend view (Organizer, archive and ingest pipelines read them by source/asset id); pages
   // narrow them to the profile with scopeStoreToProfile.
   async function assembleStore(): Promise<Store> {
-    const [profileRows, contributors, media, mediaAssets, mediaLocations, connectorStates, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns, organizerJobs, chatImportTasks, links, snapshotRows] = await Promise.all([
+    const [profileRows, contributors, media, mediaAssets, mediaLocations, connectorStates, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns, organizerJobs, chatImportTasks, links, qualityReviewRows, snapshotRows] = await Promise.all([
       db.select().from(t.profiles).where(eq(t.profiles.id, CANONICAL_PROFILE_ID)).limit(1),
       db.select().from(t.contributors),
       db.select().from(t.media),
@@ -332,6 +350,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       db.select().from(t.organizerJobs),
       db.select().from(t.chatImportTasks),
       db.select().from(t.sourceMemoryLinks),
+      db.select().from(t.contentQualityReviews),
       // Store carries one snapshot: the latest month's. Ordered so the choice does not depend on
       // physical row order once more than one month has a summary.
       db.select().from(t.monthlySnapshot).where(eq(t.monthlySnapshot.profileId, CANONICAL_PROFILE_ID)).orderBy(desc(t.monthlySnapshot.month)).limit(1),
@@ -360,6 +379,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       organizerJobs: organizerJobs as unknown as Store["organizerJobs"],
       chatImportTasks: chatImportTasks.map((task) => taskFromRow(task as unknown as Record<string, unknown>)),
       links: links as Store["links"],
+      qualityReviews: qualityReviewRows.map((row) => reviewFromRow(row as unknown as Record<string, unknown>)),
       monthlySnapshot: (snapshotRows[0] ?? null) as Store["monthlySnapshot"],
     };
   }
@@ -381,8 +401,11 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
   // listing, so it is fetched whole rather than joined per row.
   async function reviewIndex() {
     const rows = await db.select().from(t.contentQualityReviews);
-    return indexReviews(rows as unknown as QualityReview[]);
+    return indexReviews(rows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>);
   }
+  // `decision` is a text column, so what comes back is interpreted through the one canonical
+  // mapping (normalizeQualityDecision) rather than cast and believed.
+  const reviewFromRow = (row: Record<string, unknown>): QualityReview => ({ ...(row as unknown as QualityReview), decision: normalizeQualityDecision(row.decision) });
   // Page-facing event listings belong to the canonical profile only.
   const canonicalEvents = () => db.select().from(t.lifeEvents).where(eq(t.lifeEvents.profileId, CANONICAL_PROFILE_ID));
 
@@ -445,6 +468,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     },
     async getStore() { return assembleStore(); },
     async getOrganizerStore(profileId: string) { return assembleOrganizerStore(profileId); },
+    async getOrganizerWindowInput(sourceIds: string[]) { return assembleOrganizerWindowInput(sourceIds); },
     async getEventDetail(id: string) {
       const [event] = await db.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, id));
       if (!event) return null;
@@ -737,6 +761,30 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         if (episode.sourceIds.length) await tx.update(t.rawSources).set({ status: "organized", relatedLifeEventId: null }).where(inArray(t.rawSources.id, episode.sourceIds));
         return result;
       });
+    },
+    // Idempotent on the ledger's own unique key. `onConflictDoNothing` + read-back rather than an
+    // UPDATE: a second write of the same decision must be a no-op, and a row a human has since
+    // revisited must not be silently reverted by a retrying worker.
+    async persistQualityReview(review: QualityReview) {
+      const rows = await db.insert(t.contentQualityReviews).values(review as any)
+        .onConflictDoNothing({ target: [t.contentQualityReviews.targetKind, t.contentQualityReviews.targetId, t.contentQualityReviews.promptVersion] })
+        .returning();
+      if (rows[0]) return reviewFromRow(rows[0] as unknown as Record<string, unknown>);
+      const [existing] = await db.select().from(t.contentQualityReviews).where(and(
+        eq(t.contentQualityReviews.targetKind, review.targetKind),
+        eq(t.contentQualityReviews.targetId, review.targetId),
+        eq(t.contentQualityReviews.promptVersion, review.promptVersion),
+      ));
+      if (!existing) throw new Error("PostgreSQL repository: quality review insert reported a conflict but no row was found.");
+      return reviewFromRow(existing as unknown as Record<string, unknown>);
+    },
+    async findQualityReview(targetKind: QualityReview["targetKind"], targetId: string, promptVersion: string) {
+      const [row] = await db.select().from(t.contentQualityReviews).where(and(
+        eq(t.contentQualityReviews.targetKind, targetKind),
+        eq(t.contentQualityReviews.targetId, targetId),
+        eq(t.contentQualityReviews.promptVersion, promptVersion),
+      ));
+      return row ? reviewFromRow(row as unknown as Record<string, unknown>) : null;
     },
     async markSourcesOrganized(sourceIds: string[]) {
       if (!sourceIds.length) return;

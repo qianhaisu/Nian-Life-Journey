@@ -5,6 +5,7 @@ import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocati
 import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
 import { newId, organizerJobKey } from "./repository-interface";
+import { normalizeQualityDecision, type QualityReview } from "@/lib/organizer/quality-review";
 import { CANONICAL_PROFILE_ID } from "./config";
 import type { Repository, Store, UploadPersistInput } from "./repository-interface";
 import { assetByChecksum, normalizeChatImportTask, persistChatImportBatchInStore, persistUploadInStore } from "./chat-import-persistence";
@@ -13,10 +14,10 @@ import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTas
 const dataDir = path.join(process.cwd(), ".data");
 const storeFile = path.join(dataDir, "nian-life.json");
 
-const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
+const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], organizerJobs: [], chatImportTasks: [], qualityReviews: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
 
 function normalizeStore(store: Partial<Store>): Store {
-  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [], organizerJobs: store.organizerJobs ?? [], chatImportTasks: (store.chatImportTasks ?? []).map(normalizeChatImportTask) };
+  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [], organizerJobs: store.organizerJobs ?? [], chatImportTasks: (store.chatImportTasks ?? []).map(normalizeChatImportTask), qualityReviews: (store.qualityReviews ?? []).map((review) => ({ ...review, decision: normalizeQualityDecision(review.decision) })) };
 }
 function hydrateMedia(store: Store): Store {
   store.media = store.media.map((media) => {
@@ -98,6 +99,28 @@ export function createJsonRepository(): Repository {
         events: store.events.filter((e) => e.profileId === profileId),
       };
     },
+    // Same contract as the PostgreSQL implementation: one job's sources, their media, and nothing
+    // else. Deleted sources are dropped rather than handed to the Evidence Builder.
+    async getOrganizerWindowInput(sourceIds: string[]) {
+      if (!sourceIds.length) throw new Error("JSON repository: getOrganizerWindowInput needs at least one source id.");
+      const store = await readStore();
+      const sources = store.rawSources.filter((source) => sourceIds.includes(source.id) && !source.deletedAt);
+      const profileIds = [...new Set(sources.map((source) => source.profileId))];
+      if (profileIds.length > 1) throw new Error(`JSON repository: getOrganizerWindowInput spans ${profileIds.length} profiles; one job is one profile's evidence.`);
+
+      const mediaIds = new Set(sources.flatMap((source) => source.mediaIds));
+      const media = store.media.filter((item) => mediaIds.has(item.id));
+      const assetIds = new Set(media.map((item) => item.mediaAssetId).filter((id): id is string => Boolean(id)));
+      return {
+        // The JSON store holds exactly one profile; sources belonging to any other (contract-test
+        // fixtures) simply have no profile row here, which is the same answer PostgreSQL gives.
+        profile: profileIds.length && store.profile.id === profileIds[0] ? store.profile : null,
+        sources,
+        media,
+        mediaAssets: store.mediaAssets.filter((asset) => assetIds.has(asset.id)),
+        mediaLocations: store.mediaLocations.filter((location) => assetIds.has(location.mediaAssetId)),
+      };
+    },
     async getEventDetail(id: string) { const store = await readStore(); const event = store.events.find((item) => item.id === id); if (!event) return null; return { event, media: store.media.filter((item) => event.mediaIds.includes(item.id)), sources: store.rawSources.filter((item) => event.sourceIds.includes(item.id) && !item.deletedAt), contributors: store.contributors, growth: store.growthRecords.filter((item) => event.growthRecordIds.includes(item.id)), care: store.careRecords.filter((item) => event.careRecordIds.includes(item.id) && item.visibility !== "private") }; },
     async appendUpload(input: UploadPersistInput) { return (await persistUploadInJson(input)).source; },
     async persistUpload(input: UploadPersistInput) { return persistUploadInJson(input); },
@@ -133,6 +156,21 @@ export function createJsonRepository(): Repository {
     // other trace that happens to have `organizationFingerprint === undefined`.
     async persistDailyTrace(trace: DailyTrace) { const store = await readStore(); const existing = trace.organizationFingerprint ? store.dailyTraces.find((item) => item.organizationFingerprint === trace.organizationFingerprint) : undefined; if (existing) { existing.entries = [...new Set([...existing.entries, ...trace.entries])]; existing.sourceIds = [...new Set([...existing.sourceIds, ...trace.sourceIds])]; existing.organizerRun = trace.organizerRun ?? existing.organizerRun; existing.organizationFingerprint = existing.organizationFingerprint ?? trace.organizationFingerprint; } else store.dailyTraces.push(trace); for (const source of store.rawSources) if (trace.sourceIds.includes(source.id)) { source.status = "organized"; source.relatedLifeEventId = undefined; } await writeStore(store); return existing ?? trace; },
     async persistCareEpisode(episode: CareEpisode) { const store = await readStore(); const existing = store.careEpisodes.find((item) => item.profileId === episode.profileId && item.startedAt.slice(0, 10) === episode.startedAt.slice(0, 10) && item.status === "open"); if (existing) { existing.sourceIds = [...new Set([...existing.sourceIds, ...episode.sourceIds])]; existing.organizerRun = episode.organizerRun ?? existing.organizerRun; } else store.careEpisodes.push(episode); for (const source of store.rawSources) if (episode.sourceIds.includes(source.id)) { source.status = "organized"; source.relatedLifeEventId = undefined; } await writeStore(store); return existing ?? episode; },
+    // Identity is (targetKind, targetId, promptVersion), the PostgreSQL ledger's own unique key: a
+    // repeat returns the stored row untouched instead of writing a second one or overwriting a
+    // decision that may since have been revisited.
+    async persistQualityReview(review: QualityReview) {
+      return withStoreMutation((store) => {
+        const existing = store.qualityReviews.find((item) => item.targetKind === review.targetKind && item.targetId === review.targetId && item.promptVersion === review.promptVersion);
+        if (existing) return existing;
+        store.qualityReviews.push({ ...review, decision: normalizeQualityDecision(review.decision) });
+        return review;
+      });
+    },
+    async findQualityReview(targetKind: QualityReview["targetKind"], targetId: string, promptVersion: string) {
+      const store = await readStore();
+      return store.qualityReviews.find((item) => item.targetKind === targetKind && item.targetId === targetId && item.promptVersion === promptVersion) ?? null;
+    },
     async markSourcesOrganized(sourceIds: string[]) { const store = await readStore(); for (const source of store.rawSources) if (sourceIds.includes(source.id)) source.status = "organized"; await writeStore(store); },
     async markSourcesProcessing(sourceIds: string[]) { const store = await readStore(); for (const source of store.rawSources) if (sourceIds.includes(source.id) && source.status === "uploaded") source.status = "processing"; await writeStore(store); },
     async findOrganizerRun(organizationFingerprint: string) { const store = await readStore(); return store.organizerRuns.find((run) => run.organizationFingerprint === organizationFingerprint) ?? null; },

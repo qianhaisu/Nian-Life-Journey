@@ -1,6 +1,6 @@
 import { claimNextOrganizerJob, completeOrganizerJob, failOrganizerJob, recoverStuckOrganizerJobs } from "@/lib/db/repository";
 import type { OrganizerJob } from "@/lib/types";
-import { getConfiguredOrganizer } from "./index";
+import { getOrganizerForJob } from "./index";
 
 // Retry policy for a job that throws (provider error, transient DB issue, ...). After the last
 // attempt the job is marked "failed" permanently — never silently dropped, never retried forever.
@@ -21,20 +21,29 @@ export type WorkerRunOptions = {
   now?: () => Date;
 };
 
-export type WorkerJobOutcome = { job: OrganizerJob; ok: true; action: string } | { job: OrganizerJob; ok: false; error: string; permanent: boolean };
+export type WorkerJobOutcome = { job: OrganizerJob; ok: true; action: string; organizer: string } | { job: OrganizerJob; ok: false; error: string; permanent: boolean; organizer?: string };
 
 async function processOneJob(job: OrganizerJob): Promise<WorkerJobOutcome> {
+  // Routed per job: the V2 cutover is bounded by a source allowlist or by the job's creation time,
+  // so which organizer runs is a property of the job, not of the process. A misconfigured V2 throws
+  // here rather than silently running legacy — the job then fails visibly and retries.
+  let organizer = "unrouted";
   try {
-    const result = await getConfiguredOrganizer().organize(job.sourceIds, { force: job.force });
+    const routing = getOrganizerForJob({ sourceIds: job.sourceIds, createdAt: job.createdAt, force: job.force });
+    organizer = routing.description;
+    // The one line that answers "what organized this?" in a production log: implementation id,
+    // Judgment policy, Writer version, prompt/policy versions, boundary, and the job's own route.
+    console.log(`[organizer] job=${job.id} sources=${job.sourceIds.length} ${routing.description}`);
+    const result = await routing.organizer.organize(job.sourceIds, { force: job.force });
     await completeOrganizerJob(job.id, { resultAction: result.action, resultTargetId: result.eventId ?? result.traceId ?? result.careEpisodeId });
-    return { job, ok: true, action: result.action };
+    return { job, ok: true, action: result.action, organizer };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const permanent = job.attempts >= MAX_ATTEMPTS;
     const delay = RETRY_DELAYS_MS[Math.min(job.attempts - 1, RETRY_DELAYS_MS.length - 1)];
     const nextAvailableAt = permanent ? null : new Date(Date.now() + delay).toISOString();
     await failOrganizerJob(job.id, message, nextAvailableAt);
-    return { job, ok: false, error: message, permanent };
+    return { job, ok: false, error: message, permanent, organizer };
   }
 }
 

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { QualityReview } from "@/lib/organizer/quality-review";
 import type { CareEpisode, CareRecord, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportTaskStatus, ChatImportWarning, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, OrganizerJob, OrganizerRun, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
 
 // The full in-memory snapshot both repository implementations produce from getStore(). Every
@@ -23,6 +24,10 @@ export type Store = {
   organizerJobs: OrganizerJob[];
   chatImportTasks: ChatImportTask[];
   links: SourceMemoryLink[];
+  // The quality ledger. Persisted since the DeepSeek quality gate shipped, but it used to be
+  // readable only through the PostgreSQL backend's own private helper — so the JSON backend had
+  // nowhere to put a review and the Organizer had to reach past the repository to write one.
+  qualityReviews: QualityReview[];
   monthlySnapshot: MonthlySnapshot;
 };
 
@@ -54,6 +59,21 @@ export type ChatImportCheckpointInput = { taskId: string; leaseOwner: string; ch
 export type ChatImportTaskFailureInput = { taskId: string; leaseOwner: string; safeErrorCode: string; now?: string };
 export type ChatImportTaskCompletionInput = { taskId: string; leaseOwner: string; now?: string };
 export type ChatImportTaskWarningsInput = ChatImportTaskCompletionInput & { warningCounts: ChatImportWarning[] };
+
+// Everything the Evidence Builder needs for ONE Organizer job, read by source id. The V2 pipeline
+// needs a RawSource's `metadata` (per-message sender digest and document locator) plus the media
+// rows, assets and locations behind its `mediaIds` — none of which getOrganizerStore's whole-profile
+// projection carries, and all of which getStore() only supplies by loading every table. Keyed by
+// the job's own ids so the read stays proportional to the work.
+export type OrganizerWindowInput = {
+  /** The sources' own profile, when the backend holds a row for it. Only the birth date is read
+   *  (a story may say how old he was); a missing row means the age is simply not stated. */
+  profile: Profile | null;
+  sources: RawSource[];
+  media: Media[];
+  mediaAssets: MediaAsset[];
+  mediaLocations: MediaLocation[];
+};
 
 export type UploadPersistInput = { source: RawSource; media: Media[]; assets?: MediaAsset[]; locations?: MediaLocation[] };
 export type UploadPersistResult = { source: RawSource; sourceCreated: boolean; createdAssetIds: string[]; reusedAssetIds: string[]; createdLocationIds: string[]; reusedLocationIds: string[]; mediaIds: string[] };
@@ -99,6 +119,8 @@ export interface Repository extends ChatImportRepository {
   // in code paths that need the full domain (Quark ingestion, capture, the web app) — only for a
   // batch Organizer pass over many source-id groups in one run.
   getOrganizerStore(profileId: string): Promise<Store>;
+  /** Evidence-window input for one job's sources. See OrganizerWindowInput. */
+  getOrganizerWindowInput(sourceIds: string[]): Promise<OrganizerWindowInput>;
   getEventDetail(id: string): Promise<EventDetail | null>;
   appendUpload(input: UploadPersistInput): Promise<RawSource>;
   persistUpload(input: UploadPersistInput): Promise<UploadPersistResult>;
@@ -121,6 +143,16 @@ export interface Repository extends ChatImportRepository {
   // A trace with no fingerprint has no identity to dedup on and always becomes a new row.
   persistDailyTrace(trace: DailyTrace): Promise<DailyTrace>;
   persistCareEpisode(episode: CareEpisode): Promise<CareEpisode>;
+  // Quality ledger writes go through the repository like every other artifact write — the V2
+  // adapter must never need a raw SQL statement of its own to record why a Memory is unpublished.
+  //
+  // Identity is the table's own unique key `(targetKind, targetId, promptVersion)`, the semantics
+  // the RC-12 canary proved: a repeat is a NO-OP that returns the row already there, so a retry
+  // after a partial failure repairs the batch instead of duplicating the ledger or overwriting a
+  // decision someone has since revisited. A new decision on the same artifact is a new
+  // promptVersion, never a silent overwrite of the old one.
+  persistQualityReview(review: QualityReview): Promise<QualityReview>;
+  findQualityReview(targetKind: QualityReview["targetKind"], targetId: string, promptVersion: string): Promise<QualityReview | null>;
   markSourcesOrganized(sourceIds: string[]): Promise<void>;
   markSourcesProcessing(sourceIds: string[]): Promise<void>;
   findOrganizerRun(organizationFingerprint: string): Promise<OrganizerRun | null>;

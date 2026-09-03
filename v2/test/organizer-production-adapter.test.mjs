@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planArtifacts, assertPolicy, AdapterContractError, PRODUCTION_ADAPTER_VERSION } from "../lib/organizer/production-adapter.ts";
+import { planArtifacts, assertPolicy, AdapterContractError, ADAPTER_REVIEW_DECISION, PRODUCTION_ADAPTER_VERSION } from "../lib/organizer/production-adapter.ts";
 import { buildEvidenceWindows } from "../lib/organizer/evidence/window.ts";
 import { buildMediaIndex } from "../lib/organizer/evidence/media-index.ts";
 
@@ -207,7 +207,10 @@ test("11b. the review row is keyed to its own artifact and always needs review",
   const result = plan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-11b", story: storyOf([]), judgment: { reasonCodes: ["x"], gateA: "explicit", subjectRelevance: "primary" } });
   assert.equal(result.review.targetKind, "life_event");
   assert.equal(result.review.targetId, result.lifeEvent.event.id, "the review belongs to THIS artifact");
-  assert.equal(result.review.decision, "needs_review", "AI prose is never auto-published");
+  // One canonical vocabulary: the ledger decision is a QualityDecision, not the Memory Editor's
+  // own `reviewRequirement`. Fail-closed either way — only "approved" publishes.
+  assert.equal(result.review.decision, ADAPTER_REVIEW_DECISION);
+  assert.equal(result.review.decision, "needs_human_review", "AI prose is never auto-published");
   assert.equal(result.review.reviewFingerprint, "fp-11b:life_event");
   assert.deepEqual(result.review.reasonCodes, ["x"]);
   assert.equal(result.review.gateA, "explicit");

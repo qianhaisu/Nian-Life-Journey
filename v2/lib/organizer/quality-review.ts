@@ -14,6 +14,26 @@ export const QUALITY_REVIEW_POLICY_VERSION = "quality-review-v1";
 
 export type QualityDecision = "approved" | "downgrade_to_daily_trace" | "store_only" | "rejected_unrelated" | "needs_human_review";
 
+export const QUALITY_DECISIONS: readonly QualityDecision[] = ["approved", "downgrade_to_daily_trace", "store_only", "rejected_unrelated", "needs_human_review"];
+
+export function isQualityDecision(value: unknown): value is QualityDecision {
+  return typeof value === "string" && (QUALITY_DECISIONS as readonly string[]).includes(value);
+}
+
+/**
+ * The ONE typed representation of a ledger decision. `decision` is a text column, so a row can hold
+ * a string this union does not name — the V2 adapter wrote "needs_review" for the RC-12 canary
+ * before the union and the writer were aligned, and a future tool could write anything at all.
+ *
+ * Unknown text becomes `needs_human_review`, never `approved`: an unrecognised decision must keep
+ * the artifact hidden and ask for a human, which is the same direction every other rule in this file
+ * fails. Nothing here rewrites the stored row — the mapping is a read-time interpretation, so an
+ * existing ledger row stays exactly as it was written and stays auditable.
+ */
+export function normalizeQualityDecision(value: unknown): QualityDecision {
+  return isQualityDecision(value) ? value : "needs_human_review";
+}
+
 export type QualityReview = {
   id: string;
   profileId: string;
@@ -61,9 +81,9 @@ export function requiresQualityReview(artifact: { createdBy?: string; organizerV
 
 export type ReviewIndex = Map<string, QualityDecision>;
 
-export function indexReviews(reviews: QualityReview[]): ReviewIndex {
+export function indexReviews(reviews: Array<Omit<QualityReview, "decision"> & { decision: unknown }>): ReviewIndex {
   const index: ReviewIndex = new Map();
-  for (const review of reviews) index.set(`${review.targetKind}:${review.targetId}`, review.decision);
+  for (const review of reviews) index.set(`${review.targetKind}:${review.targetId}`, normalizeQualityDecision(review.decision));
   return index;
 }
 

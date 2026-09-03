@@ -7,7 +7,7 @@ import { createJsonRepository } from "./json-repository";
 import { createPostgresRepository } from "./postgres-repository";
 import type { Repository } from "./repository-interface";
 
-export type { EventDetail, Store } from "./repository-interface";
+export type { EventDetail, OrganizerWindowInput, Store } from "./repository-interface";
 export { newId } from "./repository-interface";
 
 function createRepository(): Repository {
@@ -21,6 +21,7 @@ export const getHomeEvents = repository.getHomeEvents.bind(repository);
 export const getAllEvents = repository.getAllEvents.bind(repository);
 export const getStore = repository.getStore.bind(repository);
 export const getOrganizerStore = repository.getOrganizerStore.bind(repository);
+export const getOrganizerWindowInput = repository.getOrganizerWindowInput.bind(repository);
 export const getEventDetail = repository.getEventDetail.bind(repository);
 export const appendUpload = repository.appendUpload.bind(repository);
 export const persistUpload = repository.persistUpload.bind(repository);
@@ -52,6 +53,8 @@ export const recordArchivedOriginal = repository.recordArchivedOriginal.bind(rep
 export const persistOrganization = repository.persistOrganization.bind(repository);
 export const persistDailyTrace = repository.persistDailyTrace.bind(repository);
 export const persistCareEpisode = repository.persistCareEpisode.bind(repository);
+export const persistQualityReview = repository.persistQualityReview.bind(repository);
+export const findQualityReview = repository.findQualityReview.bind(repository);
 export const markSourcesOrganized = repository.markSourcesOrganized.bind(repository);
 export const markSourcesProcessing = repository.markSourcesProcessing.bind(repository);
 export const findOrganizerRun = repository.findOrganizerRun.bind(repository);

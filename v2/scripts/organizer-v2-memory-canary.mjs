@@ -272,21 +272,17 @@ if (STAGE === "apply" || STAGE === "replay") {
   const { createPostgresRepository } = await import("../lib/db/postgres-repository.ts");
   const { closePool } = await import("../lib/db/client.ts");
   const real = createPostgresRepository();
-  // The production Repository has no persistQualityReview yet; the ledger upsert is the table's own
-  // unique key, same statement deepseek-family-writer.mjs uses.
+  // Repository APIs only. The ledger write used to be a raw pg statement carried by this script,
+  // which meant the canary proved a path the worker could not take; persistQualityReview is now a
+  // first-class Repository method and this is the same surface production uses. The two throwing
+  // stubs are the canary's own scope guard, not a substitute implementation.
   const repo = {
     findOrganizerRun: (x) => real.findOrganizerRun(x),
     persistOrganization: (a, b, c) => real.persistOrganization(a, b, c),
     persistDailyTrace: () => { throw new Error("Memory canary must not write a DailyTrace"); },
     persistOrganizerRun: (r) => real.persistOrganizerRun(r),
     markSourcesOrganized: () => { throw new Error("Memory canary must not take the store_only branch"); },
-    async persistQualityReview(r) {
-      await client.query(
-        `insert into content_quality_reviews (id, profile_id, target_kind, target_id, decision, gate_a, subject_relevance, worthiness_score, reason_codes, provider, model, prompt_version, policy_version, review_fingerprint, reviewed_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15)
-         on conflict (target_kind, target_id, prompt_version) do nothing`,
-        [r.id, r.profileId, r.targetKind, r.targetId, r.decision, r.gateA ?? null, r.subjectRelevance ?? null, r.worthinessScore ?? null, JSON.stringify(r.reasonCodes), r.provider, r.model ?? null, r.promptVersion, r.policyVersion, r.reviewFingerprint, r.reviewedAt]);
-    },
+    persistQualityReview: (r) => real.persistQualityReview(r),
   };
   const before = await snapshot();
   const pointersBefore = await pointerState(plan.sourceIds, ev.mediaIds);

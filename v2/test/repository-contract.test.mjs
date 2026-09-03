@@ -43,6 +43,9 @@ function fixtureLocation(assetId, overrides = {}) {
   const now = "2026-11-01T10:00:00.000Z";
   return { id: uid("location"), mediaAssetId: assetId, provider: "hot", variant: "web", providerRef: uid("ref"), status: "ready", createdAt: now, updatedAt: now, ...overrides };
 }
+function fixtureReview(overrides = {}) {
+  return { id: uid("quality-review"), profileId: PROFILE_ID, targetKind: "life_event", targetId: uid("event"), decision: "needs_human_review", reasonCodes: ["contract-test"], provider: "contract-test", promptVersion: "memory-editor-v4", policyVersion: "evidence-contract-v1", reviewFingerprint: uid("fp"), reviewedAt: "2026-11-01T10:00:00.000Z", ...overrides };
+}
 function fixtureRun(fingerprint, overrides = {}) {
   return { id: uid("run"), profileId: PROFILE_ID, organizationFingerprint: fingerprint, organizerType: "rule", organizerVersion: "rule-v1", provider: "rule", action: "daily_trace", sourceIds: [], sourceCount: 0, mediaInputCount: 0, processedAt: "2026-11-01T10:00:00.000Z", ...overrides };
 }
@@ -304,6 +307,78 @@ function runContractSuite(name, createRepo) {
     assert.equal(reread.resultAction, "daily_trace");
     assert.equal(reread.resultTargetId, "trace-1");
     assert.ok(reread.completedAt);
+  });
+
+  // ---------------------------------------------------------------- quality ledger
+  //
+  // The V2 adapter writes a review row for every Memory it creates, and until this method existed
+  // the only implementation was a raw SQL statement carried by the canary script — a path the
+  // production worker could not take. These cases pin the semantics the RC-12 canary proved, on
+  // BOTH backends: identity is (targetKind, targetId, promptVersion), a repeat is a no-op that
+  // returns the stored row, and two artifacts never share a decision.
+
+  test(`[${name}] persistQualityReview creates a review readable by its own identity`, async () => {
+    const repo = createRepo();
+    const review = fixtureReview();
+    const saved = await repo.persistQualityReview(review);
+    assert.equal(saved.targetId, review.targetId);
+    const found = await repo.findQualityReview("life_event", review.targetId, review.promptVersion);
+    assert.equal(found.id, review.id);
+    assert.equal(found.decision, "needs_human_review");
+    assert.deepEqual(found.reasonCodes, review.reasonCodes);
+  });
+
+  test(`[${name}] persistQualityReview replayed with the same identity writes no second row and returns the stored one`, async () => {
+    const repo = createRepo();
+    const review = fixtureReview();
+    await repo.persistQualityReview(review);
+    // A retry after a partial failure re-runs applyPlan with a freshly minted row id: same artifact,
+    // same prompt version, different id. It must land on the existing row, not beside it.
+    const retry = await repo.persistQualityReview({ ...review, id: uid("quality-review"), decision: "approved" });
+    assert.equal(retry.id, review.id, "the stored row is returned, not the retry's row");
+    assert.equal(retry.decision, "needs_human_review", "a replay never overwrites a decision");
+    // Read back through the ledger's own identity rather than getStore(): the row that is there is
+    // the row that was first written, which is what "no second row" means for a unique key.
+    const reread = await repo.findQualityReview(review.targetKind, review.targetId, review.promptVersion);
+    assert.equal(reread.id, review.id);
+    assert.equal(reread.decision, "needs_human_review");
+  });
+
+  test(`[${name}] independent artifacts get independent reviews`, async () => {
+    const repo = createRepo();
+    const a = fixtureReview();
+    const b = fixtureReview();
+    await repo.persistQualityReview(a);
+    await repo.persistQualityReview({ ...b, decision: "approved" });
+    assert.equal((await repo.findQualityReview("life_event", a.targetId, a.promptVersion)).decision, "needs_human_review");
+    assert.equal((await repo.findQualityReview("life_event", b.targetId, b.promptVersion)).decision, "approved");
+    // Same artifact, a later review round: a new promptVersion is a new row, never a silent
+    // overwrite of the decision that is already on the record.
+    await repo.persistQualityReview({ ...a, id: uid("quality-review"), promptVersion: "human-review-round-2", decision: "approved" });
+    assert.equal((await repo.findQualityReview("life_event", a.targetId, a.promptVersion)).decision, "needs_human_review");
+    assert.equal((await repo.findQualityReview("life_event", a.targetId, "human-review-round-2")).decision, "approved");
+  });
+
+  test(`[${name}] findQualityReview returns null for an artifact with no ledger row`, async () => {
+    const repo = createRepo();
+    assert.equal(await repo.findQualityReview("life_event", uid("event"), "memory-editor-v4"), null);
+  });
+
+  test(`[${name}] getOrganizerWindowInput returns one job's sources and their media, and nothing else`, async () => {
+    const repo = createRepo();
+    const asset = fixtureAsset();
+    const location = fixtureLocation(asset.id);
+    const mediaId = uid("media");
+    const source = fixtureSource({ mediaIds: [mediaId] });
+    const other = fixtureSource();
+    await repo.persistUpload({ source, media: [{ id: mediaId, profileId: PROFILE_ID, rawSourceId: source.id, mediaAssetId: asset.id, type: "photo", src: "", mimeType: "image/jpeg", alt: "", takenAt: source.capturedAt, visibility: "family", width: 100, height: 100 }], assets: [asset], locations: [location] });
+    await repo.appendUpload({ source: other, media: [] });
+    const input = await repo.getOrganizerWindowInput([source.id]);
+    assert.deepEqual(input.sources.map((item) => item.id), [source.id], "only the job's own sources");
+    assert.ok(input.profile === null || input.profile.id === PROFILE_ID, "a profile, when the backend has one, is the sources' own");
+    assert.deepEqual(input.media.map((item) => item.id), [mediaId]);
+    assert.deepEqual(input.mediaAssets.map((item) => item.id), [asset.id]);
+    assert.ok(input.mediaLocations.some((item) => item.mediaAssetId === asset.id));
   });
 
   test(`[${name}] recoverStuckOrganizerJobs resets a processing job whose lock is older than the threshold`, async () => {

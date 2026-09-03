@@ -30,6 +30,9 @@ export function scopeStoreToProfile(store: Store, profileId: string): Store {
     organizerRuns: own(store.organizerRuns),
     organizerJobs: own(store.organizerJobs),
     chatImportTasks: own(store.chatImportTasks),
+    // Tolerant of a caller-built Store that predates this field: an absent ledger scopes to none,
+    // which is the same fail-closed answer as an empty one.
+    qualityReviews: own(store.qualityReviews ?? []),
     links: store.links.filter((link) => sourceIds.has(link.rawSourceId) && eventIds.has(link.lifeEventId)),
   };
 }

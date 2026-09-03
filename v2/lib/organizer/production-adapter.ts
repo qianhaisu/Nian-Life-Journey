@@ -19,9 +19,18 @@ import { createHash } from "node:crypto";
 import type { EvidenceWindow } from "./evidence/types";
 import { mayAttachToMemory, type MediaBindingTier } from "./evidence/media-tier";
 import type { OrganizerOutcome } from "./contract";
+import type { QualityDecision, QualityReview } from "./quality-review";
 import type { LifeEvent, DailyTrace, SourceMemoryLink, OrganizerRun, ContentType } from "@/lib/types";
 
 export const PRODUCTION_ADAPTER_VERSION = "organizer-v2-adapter-v1";
+
+/**
+ * The only ledger decision the V2 adapter ever writes. AI-authored prose is fail-closed
+ * (quality-review.ts): it publishes when, and only when, a human replaces this with "approved".
+ * The Memory Editor's own `reviewRequirement` ("auto_accept" | "needs_review") is the model's
+ * opinion about its own output and is deliberately NOT trusted as a publication decision.
+ */
+export const ADAPTER_REVIEW_DECISION: QualityDecision = "needs_human_review";
 
 /** Everything the adapter must be told explicitly. No silent defaults — see `assertPolicy`. */
 export type AdapterPolicy = {
@@ -47,7 +56,15 @@ export type AdapterPolicy = {
 export type QualityReviewPlan = {
   targetKind: "life_event" | "daily_trace";
   targetId: string;
-  decision: "needs_review" | "auto_accept";
+  /**
+   * A ledger decision from the ONE canonical union (quality-review.ts), never a literal of this
+   * module's own. The adapter used to write "needs_review", which reads like the Memory Editor's
+   * `reviewRequirement` and is not a QualityDecision at all: it happened to stay unpublished only
+   * because everything that is not "approved" is unpublished. That is a coincidence, not a
+   * guarantee, so the decision is now typed and `ADAPTER_REVIEW_DECISION` is the single value the
+   * V2 path writes.
+   */
+  decision: QualityDecision;
   gateA?: string;
   subjectRelevance?: string;
   worthinessScore?: number;
@@ -215,7 +232,7 @@ export function planArtifacts(input: PlanInput): PersistencePlan {
     // artifact on the same day, and AI-authored prose is never auto-published.
     const review: QualityReviewPlan = {
       targetKind: "life_event", targetId: eventId,
-      decision: "needs_review",
+      decision: ADAPTER_REVIEW_DECISION,
       gateA: input.judgment?.gateA, subjectRelevance: input.judgment?.subjectRelevance,
       worthinessScore: outcome.worthinessScore ?? 0,
       reasonCodes: input.judgment?.reasonCodes ?? [],
@@ -262,9 +279,30 @@ export type ArtifactRepository = {
   persistDailyTrace(trace: DailyTrace): Promise<DailyTrace>;
   persistOrganizerRun(run: OrganizerRun): Promise<OrganizerRun>;
   markSourcesOrganized(sourceIds: string[]): Promise<void>;
-  /** Upserted on (targetKind, targetId, promptVersion) — the table's own unique key. */
-  persistQualityReview(review: QualityReviewPlan & { id: string; profileId: string; reviewedAt: string }): Promise<void>;
+  /**
+   * Idempotent on (targetKind, targetId, promptVersion) — the ledger's own unique key. This is a
+   * first-class Repository method (see repository-interface.ts), so the production worker and the
+   * canary write a review through exactly the same surface; nothing here needs SQL of its own.
+   */
+  persistQualityReview(review: QualityReview): Promise<QualityReview>;
 };
+
+/** The subset of a Repository the adapter is allowed to touch. Nothing wider is ever passed in. */
+export function artifactRepositoryOf(repository: ArtifactRepository): ArtifactRepository {
+  return {
+    findOrganizerRun: (fingerprint) => repository.findOrganizerRun(fingerprint),
+    persistOrganization: (sourceIds, event, links) => repository.persistOrganization(sourceIds, event, links),
+    persistDailyTrace: (trace) => repository.persistDailyTrace(trace),
+    persistOrganizerRun: (run) => repository.persistOrganizerRun(run),
+    markSourcesOrganized: (sourceIds) => repository.markSourcesOrganized(sourceIds),
+    persistQualityReview: (review) => repository.persistQualityReview(review),
+  };
+}
+
+/** Actions that mean "this run produced a LifeEvent". The V2 route keeps the Judgment layer's own
+ *  name (`life_event_candidate`); the legacy organizer writes `create_memory`. A replay has to
+ *  recognise both, or a re-run of an already-written V2 Memory reports no target id. */
+const MEMORY_RUN_ACTIONS = new Set(["create_memory", "life_event_candidate"]);
 
 export type ApplyResult = { applied: boolean; reason: string; run?: OrganizerRun; eventId?: string; traceId?: string };
 
@@ -281,7 +319,7 @@ export type ApplyResult = { applied: boolean; reason: string; run?: OrganizerRun
  */
 export async function applyPlan(plan: PersistencePlan, repository: ArtifactRepository, options: { newId: (prefix: string) => string; now: string }): Promise<ApplyResult> {
   const prior = await repository.findOrganizerRun(plan.organizationFingerprint);
-  if (prior) return { applied: false, reason: "already organized under this fingerprint", run: prior, eventId: prior.action === "create_memory" ? prior.targetId : undefined, traceId: prior.action === "daily_trace" ? prior.targetId : undefined };
+  if (prior) return { applied: false, reason: "already organized under this fingerprint", run: prior, eventId: MEMORY_RUN_ACTIONS.has(prior.action) ? prior.targetId : undefined, traceId: prior.action === "daily_trace" ? prior.targetId : undefined };
 
   let eventId: string | undefined;
   let traceId: string | undefined;
