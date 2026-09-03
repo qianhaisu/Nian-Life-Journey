@@ -3,7 +3,7 @@ import { mediaDeliveryUrl } from "@/lib/media/paths";
 import type { ChatImportBundle, ChatMediaRef } from "./chat-import-bundle";
 import { chatImportBatchId, validateChatImportBundle } from "./chat-import-bundle";
 import { normalizeSha256 } from "@/lib/db/chat-import-persistence";
-import type { Media, MediaAsset, MediaLocation, RawSource } from "@/lib/types";
+import type { Media, MediaAsset, MediaLocation, MediaType, RawSource } from "@/lib/types";
 import type { Repository, UploadPersistInput } from "@/lib/db/repository-interface";
 
 export interface ChatImportResult {
@@ -25,6 +25,19 @@ const safeChecksum = (value: string | undefined) => {
   const normalized = normalizeSha256(value);
   return normalized && /^sha256:[a-f0-9]{64}$/.test(normalized) ? normalized : undefined;
 };
+
+// The media kind, from the ref's own mime type and failing that its extension. This used to be
+// hardcoded `photo` / `image/jpeg`, which was harmless only because the parser could not produce a
+// video ref in the first place (it matches image markdown only). Both halves of that have to be
+// right before a corrected parser lands, or videos would arrive labelled as photos.
+const VIDEO_EXT = /\.(mp4|mov|m4v|webm|3gp)$/i;
+const VIDEO_MIME = { ".mp4": "video/mp4", ".mov": "video/quicktime", ".m4v": "video/x-m4v", ".webm": "video/webm", ".3gp": "video/3gpp" } as const;
+function mediaKindOf(ref: ChatMediaRef): { mediaType: MediaType; mimeType: string } {
+  if (ref.mimeType?.startsWith("video/")) return { mediaType: "video", mimeType: ref.mimeType };
+  const match = VIDEO_EXT.exec(ref.relativePath);
+  if (match) return { mediaType: "video", mimeType: ref.mimeType ?? VIDEO_MIME[match[0].toLowerCase() as keyof typeof VIDEO_MIME] ?? "video/mp4" };
+  return { mediaType: "photo", mimeType: ref.mimeType ?? "image/jpeg" };
+}
 
 function addWarning(counts: Map<string, number>, code: string, count = 1) {
   counts.set(code, (counts.get(code) ?? 0) + count);
@@ -67,9 +80,10 @@ export function buildWechatMessageItem(bundle: ChatImportBundle, message: ChatIm
     const mediaId = `wechat-media:${digest(`${message.messageId} ${ref.id}`)}`;
     const providerRef = `wechat:document:${documentDigest}:path:${digest(ref.relativePath)}:ref:${digest(ref.id)}`;
     mediaIds.push(mediaId);
-    assets.push({ id: assetId, profileId: options.profileId, rawSourceId: sourceId, mediaType: "photo", mimeType: ref.mimeType ?? "image/jpeg", width: ref.width, height: ref.height, checksum, archiveStatus: "awaiting_archive", createdAt: now });
-    locations.push({ id: `wechat-location:${digest(providerRef)}`, mediaAssetId: assetId, provider: "wechat", variant: "original", providerRef, status: "ready", mimeType: ref.mimeType ?? "image/jpeg", fileSize: ref.fileSize, width: ref.width, height: ref.height, createdAt: now, updatedAt: now });
-    media.push({ id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: "photo", src: mediaDeliveryUrl(mediaId, "web"), mimeType: ref.mimeType ?? "image/jpeg", fileSize: ref.fileSize, alt: "WeChat image", takenAt: message.sentAt, visibility: "family", width: ref.width ?? 1200, height: ref.height ?? 900 });
+    const { mediaType, mimeType } = mediaKindOf(ref);
+    assets.push({ id: assetId, profileId: options.profileId, rawSourceId: sourceId, mediaType, mimeType, width: ref.width, height: ref.height, checksum, archiveStatus: "awaiting_archive", createdAt: now });
+    locations.push({ id: `wechat-location:${digest(providerRef)}`, mediaAssetId: assetId, provider: "wechat", variant: "original", providerRef, status: "ready", mimeType, fileSize: ref.fileSize, width: ref.width, height: ref.height, createdAt: now, updatedAt: now });
+    media.push({ id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: mediaType, src: mediaDeliveryUrl(mediaId, "web"), mimeType, fileSize: ref.fileSize, alt: mediaType === "video" ? "WeChat video" : "WeChat image", takenAt: message.sentAt, visibility: "family", width: ref.width ?? (mediaType === "video" ? 0 : 1200), height: ref.height ?? (mediaType === "video" ? 0 : 900) });
   }
 
   const source: RawSource = {
