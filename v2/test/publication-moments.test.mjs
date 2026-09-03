@@ -43,16 +43,15 @@ test("tiny production sizes never gain publication privilege anywhere, and stay 
   assert.equal(composition.smallImageCount, 4, "…but they are counted, never deleted");
 });
 
-test("a big but unvouched chat image is never a hero or a cover; it may sit small and lives whole in the archive", () => {
+test("a big but unvouched chat image never reaches the reading layer: no hero, no cover, no moment — a quiet line and the archive", () => {
   const media = [photo("wx-big", "2025-10-14T08:00:00.000Z"), photo("wx-2", "2025-10-14T10:00:00.000Z")];
   const composition = buildMonthComposition(monthOf({ media }, "2025-10"));
   assert.equal(composition.cover, undefined, "no vouched picture → the month shows type, not a guess");
   assert.deepEqual(composition.preview, []);
   assert.equal(composition.mode, "typography");
-  assert.ok(composition.chronicle.every((moment) => moment.hero === undefined), "no hero without provenance");
-  const small = composition.chronicle.flatMap((moment) => moment.supporting.map((item) => item.id));
-  assert.deepEqual(small.sort(), ["wx-2", "wx-big"], "it can still appear small under its own day");
-  assert.equal(composition.archiveDays.flatMap((day) => day.photos).length, 2);
+  assert.deepEqual(composition.chronicle, [], "uncertain pictures cannot carry the month's main matter");
+  assert.deepEqual(composition.quietDays.map((day) => day.day), ["2025-10-14"]);
+  assert.equal(composition.archiveDays.flatMap((day) => day.photos).length, 2, "…but every picture stays reachable");
 });
 
 test("text-only is a first-class moment, and a month can publish with zero representative photos", () => {
@@ -91,9 +90,10 @@ test("a photo-only month becomes a weighted chronicle, not a wall: bounded momen
   assert.ok(composition.chronicle.length <= CHRONICLE_MOMENTS_MAX);
   assert.equal(composition.quietDays.length, 14 - composition.chronicle.length, "the rest of the days fold to lines, they do not disappear");
   for (const moment of composition.chronicle) {
-    assert.ok(moment.supporting.length <= MOMENT_SUPPORTING_MAX + 1);
-    const shownHere = (moment.hero ? 1 : 0) + moment.supporting.length;
-    assert.ok(shownHere <= 4, `a day shows a scene, not a roll (got ${shownHere})`);
+    assert.ok(moment.hero, "a reading moment is anchored by a vouched hero");
+    assert.ok(moment.supporting.length <= MOMENT_SUPPORTING_MAX);
+    const shownHere = 1 + moment.supporting.length;
+    assert.ok(shownHere <= 3, `a day shows a scene, not a roll (got ${shownHere})`);
   }
   const archiveTotal = composition.archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
   assert.equal(archiveTotal, media.length, "every deliverable drawable photo remains accessible in the archive layer");
@@ -114,14 +114,17 @@ test("burst grouping is temporal redundancy only: one representative reads, ever
   assert.equal(burstGroups(spaced.map((item) => ({ ...item, alt: "" }))).length, 2);
 });
 
-test("same-day words and pictures stay siblings: trace text never becomes a caption or an alt", () => {
+test("same day alone never binds text to image: a text moment is text only, the day's photos read elsewhere", () => {
   const media = [photo("m", "2026-08-05T08:00:00.000Z")];
   const traces = [trace("t", "2026-08-05 00:00:00", ["第一次自己扶着栏杆站了一会儿"])];
   const composition = buildMonthComposition(monthOf({ media, traces }, "2026-08"), trust(media));
-  const moment = composition.chapter[0];
-  assert.equal(moment.kind, "text_led");
-  assert.ok(moment.hero, "the day's photo may sit beside the day's words");
-  assert.ok(!moment.hero.alt.includes("栏杆"), "…but the words never describe the photo");
+  const textMoment = composition.chapter[0];
+  assert.equal(textMoment.kind, "text_led");
+  assert.equal(textMoment.hero, undefined, "sharing a calendar day is not a binding");
+  assert.equal(textMoment.supporting.length, 0);
+  // The photograph is not lost: it earns its own photo moment (vouched) and its archive place.
+  assert.deepEqual(composition.chronicle.map((moment) => [moment.day, moment.hero.id]), [["2026-08-05", "m"]]);
+  assert.ok(!composition.chronicle[0].hero.alt.includes("栏杆"), "and the words never describe the photo");
 });
 
 test("a published memory's own lead is the month's face, above loose photography", () => {
@@ -134,6 +137,17 @@ test("a published memory's own lead is the month's face, above loose photography
   assert.equal(composition.cover.id, "lead");
   assert.equal(composition.chapter[0].kind, "memory_led");
   assert.equal(composition.chapter[0].memory.id, "e");
+});
+
+test("a rule-organizer event cannot lend its harvested media a face: no lead, text-only memory moment", () => {
+  // Production case: 好想站起来的这一天 carries a same-day flight-booking screenshot bound by the
+  // legacy rule organizer. Approved TEXT does not vouch the pictures.
+  const screenshot = photo("shot", "2025-08-11T08:00:00.000Z", { width: 1280, height: 1708 });
+  const events = [event("stand", "2025-08-11 00:00:00+00", ["shot"], { heroMediaId: "shot", createdBy: "rule", organizerVersion: "rule-based-v1" })];
+  const composition = buildMonthComposition(monthOf({ media: [screenshot], events }, "2025-08"));
+  const moment = composition.chapter.find((m) => m.kind === "memory_led");
+  assert.equal(moment.memory.lead, undefined, "the memory reads as text; its pictures stay in the evidence layer");
+  assert.equal(composition.cover, undefined, "an unvouched screenshot never becomes the month's face");
 });
 
 test("composition is deterministic and read-only: same archive, same book; the chapter input is not mutated", () => {

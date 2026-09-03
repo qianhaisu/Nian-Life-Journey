@@ -8,7 +8,7 @@ import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
-import { isSnapshotPublishable } from "@/lib/organizer/quality-review";
+import { isSnapshotPublishable, mediaBindingTrusted } from "@/lib/organizer/quality-review";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
 import type { MediaPrivilege } from "@/lib/publication-moments";
 import type { LifeEvent, Media, MonthlySnapshot, RawSource } from "@/lib/types";
@@ -40,11 +40,13 @@ export type FamilyArchive = {
   time: ArchiveTime;
 };
 
-// `confirmed`: claimed by a published (quality-approved) event — `events` here is already the
-// publishable set. `trusted`: the picture's RawSource is a family_photo import (the Quark album
-// initialization), i.e. the family's own photo collection rather than an image scraped from chat.
+// `confirmed`: claimed by a published (quality-approved) event WHOSE MEDIA BINDING is trusted —
+// the legacy rule organizer bound every same-day chat image to its events, and that harvest must
+// not vouch a screenshot into a hero slot (quality-review.ts mediaBindingTrusted). `trusted`: the
+// picture's RawSource is a family_photo import (the Quark album initialization), i.e. the
+// family's own photo collection rather than an image scraped from chat.
 export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources: Pick<RawSource, "id" | "sourceType">[]): MediaPrivilege {
-  const confirmed = new Set<string>(events.flatMap((event) => event.mediaIds));
+  const confirmed = new Set<string>(events.filter(mediaBindingTrusted).flatMap((event) => event.mediaIds));
   const familySources = new Set(rawSources.filter((source) => source.sourceType === "family_photo").map((source) => source.id));
   const trusted = new Set<string>(media.filter((item) => item.rawSourceId && familySources.has(item.rawSourceId)).map((item) => item.id));
   return { confirmed, trusted };

@@ -8,6 +8,7 @@
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
+import { mediaBindingTrusted } from "@/lib/organizer/quality-review";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
 
@@ -89,7 +90,10 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
   if (!signature) return undefined;
   const media = event.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
   const title = memoryTitle(event);
-  const lead = heroCandidates(event.heroMediaId, media)[0];
+  // A lead photo claims "this picture is this story". Only a trusted binding may claim that
+  // (lib/organizer/quality-review.ts mediaBindingTrusted); a rule-harvested same-day image—in
+  // production, a flight-booking screenshot—must not become the memory's face. Text-only is valid.
+  const lead = mediaBindingTrusted(event) ? heroCandidates(event.heroMediaId, media)[0] : undefined;
   return {
     id: event.id,
     title,

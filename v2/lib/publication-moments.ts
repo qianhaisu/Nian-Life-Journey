@@ -131,13 +131,15 @@ export function readableEntries(entries: string[]): string[] {
   return entries.filter((entry) => typeof entry === "string" && entry.trim().length > 0 && !containsTechnicalPlaceholder(entry) && !isArchiveCountNote(entry));
 }
 
+// A photographed day earns a reading moment only when a vouched hero can anchor it. A day of
+// pictures nothing vouches for — chat-stream images that could as easily be a screenshot as a
+// scene — folds to a quiet line and stays whole in the archive layer, rather than becoming the
+// month's main matter by default.
 function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMoment | undefined {
   const representatives = burstRepresentatives(day.photos);
-  if (representatives.length === 0) return undefined;
   const hero = representatives.find((item) => heroEligibleRef(item, privilege));
-  const supporting = representatives.filter((item) => item !== hero && thumbnailSized(item)).slice(0, MOMENT_SUPPORTING_MAX + (hero ? 0 : 1));
-  if (!hero && supporting.length === 0) return undefined;
-  const shownCount = (hero ? 1 : 0) + supporting.length;
+  if (!hero) return undefined;
+  const supporting = representatives.filter((item) => item !== hero && isPrivileged(item, privilege) && thumbnailSized(item)).slice(0, MOMENT_SUPPORTING_MAX);
   return {
     kind: "photo_led",
     day: day.day,
@@ -146,7 +148,7 @@ function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMo
     text: [],
     hero,
     supporting,
-    morePhotoCount: Math.max(0, day.photos.length - shownCount),
+    morePhotoCount: Math.max(0, day.photos.length - 1 - supporting.length),
   };
 }
 
@@ -169,24 +171,23 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
       morePhotoCount: 0,
     });
   }
-  const textDays = new Set<string>();
+  // Text moments are TEXT ONLY. The day's photographs are not laid beside the words: sharing a
+  // calendar day is not a binding, and rendering them as one block would visually claim the photo
+  // illustrates the sentence. The day's pictures keep their own place (a photo moment when one is
+  // earned, and always the archive layer).
   for (const traceDay of [...chapter.traceDays].sort((a, b) => a.day.localeCompare(b.day))) {
     const text = readableEntries(traceDay.entries).slice(0, MOMENT_TEXT_MAX);
     if (text.length === 0) continue;
-    textDays.add(traceDay.day);
     const photoDay = photoDaysAsc.find((day) => day.day === traceDay.day);
-    const representatives = photoDay ? burstRepresentatives(photoDay.photos) : [];
-    const hero = representatives.find((item) => heroEligibleRef(item, privilege));
-    const supporting = representatives.filter((item) => item !== hero && thumbnailSized(item)).slice(0, MOMENT_SUPPORTING_MAX);
     chapterMoments.push({
       kind: "text_led",
       day: traceDay.day,
       dateLabel: traceDay.dateLabel,
       ageLabel: photoDay?.ageLabel,
       text,
-      hero,
-      supporting,
-      morePhotoCount: photoDay ? Math.max(0, photoDay.photos.length - (hero ? 1 : 0) - supporting.length) : 0,
+      hero: undefined,
+      supporting: [],
+      morePhotoCount: 0,
     });
   }
   const kindRank = (moment: PublicationMoment) => (moment.kind === "memory_led" ? 0 : 1);
@@ -196,8 +197,11 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // CHRONICLE_MOMENTS_MAX days become moments, the rest fold to quiet lines. Strength is real and
   // boring: a vouched hero first, then how much of the day was photographed; ties go to the
   // earlier day so the outcome is stable across backends.
+  // A day with words in the chapter may still earn a photo moment here — the two sections make
+  // no claim on each other. Only memory days are excluded: their photographs already read inside
+  // the memory itself.
   const memoryDays = new Set(chapter.memories.map((memory) => memory.signature.day));
-  const candidates = photoDaysAsc.filter((day) => !textDays.has(day.day) && !memoryDays.has(day.day));
+  const candidates = photoDaysAsc.filter((day) => !memoryDays.has(day.day));
   const scored = candidates
     .map((day) => ({ day, moment: photoLedMoment(day, privilege) }))
     .filter((item): item is { day: PhotoDay; moment: PublicationMoment } => Boolean(item.moment));

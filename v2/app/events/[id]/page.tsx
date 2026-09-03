@@ -9,6 +9,7 @@ import { getAllEvents, getEventDetail, getStore } from "@/lib/db/repository";
 import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { storyLayout } from "@/lib/media/presentation";
+import { mediaBindingTrusted } from "@/lib/organizer/quality-review";
 import { birthDayOf, timeSignatureFor } from "@/lib/time-signature";
 
 export async function generateStaticParams() { return (await getAllEvents()).map((event) => ({ id: event.id })); }
@@ -40,7 +41,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const shownMedia = eventMedia.filter((item) => item.visibility !== "private" && deliverable.has(item.id));
   const signature = timeSignatureFor(event.occurredAt, birthDayOf(store.profile));
   const title = memoryTitle(event);
-  const layout = storyLayout(shownMedia, event.heroMediaId);
+  // Story-layer media only when the binding can be believed (quality-review.ts). The legacy rule
+  // organizer's same-day harvest bound flight screenshots to this archive's memories; those
+  // pictures keep their place in the evidence disclosure below, never beside the story.
+  const layout = mediaBindingTrusted(event) ? storyLayout(shownMedia, event.heroMediaId) : { hero: undefined, supporting: [], remaining: 0 };
   const hero = layout.hero ? toMediaRef(layout.hero, title) : undefined;
   const supporting = layout.supporting.map((item) => toMediaRef(item, title));
   const paragraphs = [event.story, ...(event.storySections ?? [])].map((text) => text?.trim()).filter((text): text is string => Boolean(text));

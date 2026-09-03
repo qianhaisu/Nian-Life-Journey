@@ -117,6 +117,20 @@ export function eventRendersCleanly(event: LifeEvent): boolean {
   return !containsTechnicalPlaceholder(event.title) && !containsTechnicalPlaceholder(event.story);
 }
 
+/**
+ * Whether an event's media BINDING may be presented as part of its story. The legacy rule
+ * organizer attached every same-day chat image to the event it created — production's
+ * "好想站起来的这一天" carries a flight-booking screenshot bound that way, and its heroMediaId is a
+ * 120x67 sticker. Sharing a calendar day is not evidence a picture belongs to a story, so
+ * rule-bound media never reach a story layer, a memory lead, or a month cover; they remain intact
+ * and reachable in the evidence disclosure. A human-authored event, or a future pipeline that
+ * grades bindings (confirmed / strong_contextual), is trusted. Approving an event's TEXT through
+ * the quality ledger says nothing about its pictures — the two decisions stay separate.
+ */
+export function mediaBindingTrusted(event: Pick<LifeEvent, "createdBy" | "organizerVersion" | "organizerRun">): boolean {
+  return !requiresQualityReview(event);
+}
+
 // A MonthlySnapshot is a written summary of a month. It may only be shown when that month actually
 // has published memories behind it. The archive shipped with a seeded snapshot for 2026-08 whose
 // highlights ("开始说车车", "走路更稳") are demo strings, and it was being used as the month

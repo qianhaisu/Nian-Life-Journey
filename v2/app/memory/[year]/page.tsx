@@ -20,11 +20,11 @@ export async function generateMetadata({ params }: { params: Promise<{ year: str
 export default async function YearPage({ params }: { params: Promise<{ year: string }> }) {
   const { year } = await params;
   if (!/^\d{4}$/.test(year)) notFound();
-  const { chapters } = await loadFamilyArchive();
+  const { chapters, privilege } = await loadFamilyArchive();
   const chapter = chapters.find((item) => item.year === year);
   if (!chapter) notFound();
 
-  const view = buildYearView(chapter);
+  const view = buildYearView(chapter, undefined, privilege);
   const { nav } = buildMemoryIndex(chapters);
 
   return <div className="year-page reading-wrap">
@@ -40,11 +40,10 @@ export default async function YearPage({ params }: { params: Promise<{ year: str
         <h2 id={`month-${month.chapter.month}`} className="serif"><Link href={month.href}>{month.chapter.shortLabel}</Link></h2>
         {month.chapter.ageLabel ? <p>当时 {month.chapter.ageLabel}</p> : null}
       </header>
-      <PhotoStrip photos={month.chapter.photos.slice(0, 3)} />
+      {month.preview.length > 0 ? <PhotoStrip photos={month.preview} /> : null}
       {month.titles.length > 0 ? <ul className="memory-lines">{month.titles.map((memory) => <EditorialMemory memory={memory} size="line" key={memory.id} />)}</ul> : null}
       {month.hiddenMemoryCount > 0 ? <p className="chapter-meta"><Link className="text-link" href={month.href}>还有 {month.hiddenMemoryCount} 段记忆 · 翻看整个月</Link></p> : null}
-      {month.chapter.photoCount > month.chapter.photos.length ? <p className="chapter-meta"><Link className="text-link" href={month.href}>这个月一共 {month.chapter.photoCount} 张照片 · 翻看整个月</Link></p> : null}
-      {month.traceDayCount > 0 ? <p className="chapter-meta">{month.chapter.memories.length > 0 || month.chapter.photoCount > 0 ? "还有" : ""} {month.traceDayCount} 天留下了生活痕迹</p> : null}
+      <p className="chapter-meta"><Link className="text-link" href={month.href}>翻看整个月{month.chapter.photoCount > 0 ? ` · ${month.chapter.photoCount} 张照片` : ""}</Link></p>
     </section>)}
     <ArchiveNav nav={nav} current={year} />
   </div>;

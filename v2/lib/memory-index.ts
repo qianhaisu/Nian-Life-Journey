@@ -79,10 +79,18 @@ export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy
       // index row even inside the open window: the month exists and keeps its page, but /memory
       // does not print an empty section — and it does not consume the window.
       const bare = chapter.memories.length === 0 && chapter.photos.length === 0 && chapter.traceDays.length === 0;
-      const open = !bare && shown < policy.openMemoriesTarget && opened < policy.openMonthsMax;
+      let open = !bare && shown < policy.openMemoriesTarget && opened < policy.openMonthsMax;
+      let composition = open ? buildMonthComposition(chapter, privilege) : undefined;
+      // An open section must have something to say: a memory, a readable moment, or a vouched
+      // picture. A month of nothing but unvouched photography is a real month with a real page,
+      // but on the directory it is one row — it neither prints an empty section nor consumes the
+      // open window.
+      if (open && composition && composition.chapter.length === 0 && composition.preview.length === 0) {
+        open = false;
+        composition = undefined;
+      }
       const featured = open ? curateMemories(chapter.memories, policy.curatedPerMonth) : [];
       if (open) { shown += featured.length; opened += 1; }
-      const composition = open ? buildMonthComposition(chapter, privilege) : undefined;
       return {
         chapter,
         mode: open ? "open" : "index",
@@ -108,12 +116,13 @@ export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy
 }
 
 // /memory/[year]: every month of the year with a few titles each; the month page has the rest.
-export type YearMonthEntry = { chapter: MonthChapter; titles: EditorialMemory[]; hiddenMemoryCount: number; traceDayCount: number; href: string };
+// Month pictures are the composition's vouched preview, same rule as /memory.
+export type YearMonthEntry = { chapter: MonthChapter; titles: EditorialMemory[]; hiddenMemoryCount: number; traceDayCount: number; href: string; preview: MediaRef[] };
 
-export function buildYearView(year: YearChapter, policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY): { months: YearMonthEntry[]; memoryCount: number; traceDayCount: number; photoCount: number } {
+export function buildYearView(year: YearChapter, policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY, privilege: MediaPrivilege = NO_PRIVILEGE): { months: YearMonthEntry[]; memoryCount: number; traceDayCount: number; photoCount: number } {
   const months = year.months.map((chapter): YearMonthEntry => {
     const titles = curateMemories(chapter.memories, policy.yearTitlesPerMonth);
-    return { chapter, titles, hiddenMemoryCount: chapter.memories.length - titles.length, traceDayCount: chapter.traceDays.length, href: monthHref(chapter.month) };
+    return { chapter, titles, hiddenMemoryCount: chapter.memories.length - titles.length, traceDayCount: chapter.traceDays.length, href: monthHref(chapter.month), preview: buildMonthComposition(chapter, privilege).preview };
   });
   return { months, memoryCount: months.reduce((sum, month) => sum + month.chapter.memories.length, 0), traceDayCount: months.reduce((sum, month) => sum + month.traceDayCount, 0), photoCount: months.reduce((sum, month) => sum + month.chapter.photoCount, 0) };
 }

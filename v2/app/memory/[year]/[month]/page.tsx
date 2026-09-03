@@ -78,8 +78,10 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       </ol>
     </section> : null}
 
-    {composition.quietDays.length > 0 ? <p className="month-quiet-days serif">
-      {composition.quietDays.map((day) => day.dateLabel.replace(`${year} 年 `, "")).join("、")}也留下了零散的照片，收在下面的档案里。
+    {composition.quietDays.length > 0 && (composition.chapter.length > 0 || composition.chronicle.length > 0) ? <p className="month-quiet-days serif">
+      {composition.quietDays.length > 8
+        ? `这个月还有 ${composition.quietDays.length} 天留下了零散的照片，收在下面的档案里。`
+        : `${composition.quietDays.map((day) => day.dateLabel.replace(`${year} 年 `, "")).join("、")}也留下了零散的照片，收在下面的档案里。`}
     </p> : null}
 
     {archivePhotoCount > 0 ? <details className="month-archive">
