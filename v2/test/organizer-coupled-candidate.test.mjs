@@ -299,6 +299,51 @@ test("no case is exempted: the embedded-interrogative guard still applies under 
   assert.equal(coupled.grounding.promotionEligibleFactCount, 0);
 });
 
+// ---------------------------------------------------------------- KNOWN DEFECTS
+//
+// Both were found by the 2026-09-03 fresh shadow and both are why the coupled candidate was
+// REJECTED. They are pinned here as skipped tests rather than deleted, so the fix flips them
+// deliberately and nobody re-measures the candidate without noticing them first. Each asserts the
+// behaviour we WANT; each currently fails. See docs/organizer-coupled-shadow-2026-09-03.md.
+//
+// Neither is caused by the candidate. Frozen V6 refuses both windows for the `attributed_claim`
+// label, not because a guard caught anything — the label was doing unearned protective work, and
+// removing it (which is semantically correct) exposes guards that were never load-bearing.
+
+test("DEFECT: a volition verb must not settle a proposition", { skip: "known defect — INNER_STATE_MATRIX omits 想; blocks coupled-candidate adoption" }, () => {
+  // Shadow RC-06: 「他其实都挺想站起来的」 — wanting to stand became a developmental_ability Memory.
+  const wants = item("他其实都挺想站起来的，就站我腿上。");
+  const named = item("小年今天很精神。");
+  const window = windowOf([named, wants]);
+  const verdict = verdictOf(
+    [{ statement: "张小年想站起来", assertionKind: "attributed_claim", evidenceRefs: [ref(wants)] }],
+    AXIS_STRONG_CAPABILITY([ref(wants)]),
+  );
+  const coupled = route(COUPLED_CANDIDATE_JUDGMENT, window, verdict);
+  assert.equal(coupled.grounding.claims[0].epistemicStatus, "hedged", "a desire is not an observation");
+  assert.equal(coupled.grounding.promotionEligibleFactCount, 0);
+  assert.notEqual(coupled.action, "life_event_candidate");
+});
+
+test("DEFECT: a subjectless span must not inherit the child from an adult discourse topic", { skip: "known defect — COMPETING_PERSON covers no adults; blocks coupled-candidate adoption" }, () => {
+  // Shadow RC-01: a span about the FATHER was resolved to the child by the zero-anaphora walk,
+  // because the competing-person list enumerates other children only and the span has no 我.
+  const aboutDad = item("夸下海口说要走7公里，说不需要雪姨抱一下。");
+  const dadTopic = item("他爸已经要没电了。");
+  const named = item("小年今天也走了很久。");
+  const window = windowOf([named, dadTopic, aboutDad]);
+  const verdict = verdictOf(
+    [{ statement: "张小年爸爸夸口要走7公里", assertionKind: "attributed_claim", evidenceRefs: [ref(aboutDad)] }],
+    AXIS_STRONG_CAPABILITY([ref(aboutDad)]),
+  );
+  const coupled = route(COUPLED_CANDIDATE_JUDGMENT, window, verdict);
+  assert.equal(
+    coupled.grounding.claims[0].subject.resolved,
+    false,
+    "the nearest named referent is the father, so this span is not about the child",
+  );
+});
+
 test("the coupled policy promotes on grounded evidence alone, with no case-specific rule", () => {
   // The positive control: a subjectless span in a window that names the child, a settled
   // affirmative assertion by a known caregiver. This is what the candidate is FOR, and it must work
