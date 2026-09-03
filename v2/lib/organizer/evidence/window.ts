@@ -2,7 +2,7 @@
 // into EvidenceWindow batches using gap/count/duration rules only — no model call, no value
 // judgement. Same input + same policy version must always produce the same windows and fingerprint.
 import { createHash } from "node:crypto";
-import type { EvidenceItem, EvidenceWindow, WindowSource } from "./types";
+import type { EvidenceItem, EvidenceWindow, MediaRef, WindowSource } from "./types";
 import { bindMedia } from "./media-binding";
 import { classifyTier } from "./tier";
 
@@ -62,8 +62,22 @@ function senderRoleOf(source: WindowSource, senderDigest: string): string {
   return `speaker-${senderDigest.slice(0, 8)}`;
 }
 
-function toEvidenceItem(source: WindowSource, index: number): EvidenceItem {
-  const mediaRefs = source.mediaIds.map((mediaId) => ({ mediaId, hasHotDerivative: false }));
+/**
+ * Media the Organizer can look up, keyed by mediaId. Supplied by the caller from the repository
+ * (see `buildMediaIndex`), because the Evidence Builder is given RawSources and a RawSource carries
+ * only ids. A caller that supplies nothing gets `unknown` availability — never a confident `false`.
+ */
+export type MediaIndex = ReadonlyMap<string, Omit<MediaRef, "mediaId" | "derivative" | "original"> & {
+  derivative?: MediaRef["derivative"];
+  original?: MediaRef["original"];
+}>;
+
+function toEvidenceItem(source: WindowSource, index: number, mediaIndex?: MediaIndex): EvidenceItem {
+  const mediaRefs: MediaRef[] = source.mediaIds.map((mediaId) => {
+    const known = mediaIndex?.get(mediaId);
+    if (!known) return { mediaId, derivative: "unknown", original: "unknown" };
+    return { ...known, mediaId, derivative: known.derivative ?? "unknown", original: known.original ?? "unknown" };
+  });
   const senderDigest = senderIdentityOf(source);
   return {
     itemId: `item:${digest(`${source.id}:${index}`).slice(0, 24)}`,
@@ -85,7 +99,7 @@ export function windowFingerprint(window: Pick<EvidenceWindow, "items" | "mediaB
   return createHash("sha256").update(`${versions.policyVersion}\n${versions.promptVersion}\n${versions.modelVersion}\n${material}`).digest("hex");
 }
 
-export type BuildWindowsOptions = { timezone?: string; dayBoundaryHour?: number; maxGapMs?: number; maxSpanMs?: number; maxItems?: number };
+export type BuildWindowsOptions = { timezone?: string; dayBoundaryHour?: number; maxGapMs?: number; maxSpanMs?: number; maxItems?: number; mediaIndex?: MediaIndex };
 
 // Groups a single conversation's already-sorted-by-time sources into windows. Splits at the
 // largest gap when the count/duration caps would otherwise be exceeded, per §7.3.
@@ -96,7 +110,7 @@ export function buildEvidenceWindows(conversationId: string, profileId: string, 
   const maxSpanMs = options.maxSpanMs ?? MAX_SPAN_MS;
   const maxItems = options.maxItems ?? MAX_ITEMS;
   const sorted = [...sources].sort((a, b) => a.capturedAt.localeCompare(b.capturedAt) || a.id.localeCompare(b.id));
-  const items = sorted.map((source, index) => toEvidenceItem(source, index));
+  const items = sorted.map((source, index) => toEvidenceItem(source, index, options.mediaIndex));
 
   const groups: EvidenceItem[][] = [];
   for (const item of items) {

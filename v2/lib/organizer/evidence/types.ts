@@ -14,10 +14,39 @@ export type EvidenceItem = {
   senderDigest: string;
   text: string;
   contentTypes: ContentType[];
-  mediaRefs: Array<{ mediaId: string; assetSha256?: string; hasHotDerivative: boolean }>;
+  mediaRefs: MediaRef[];
   locator: { document: string; recordOrdinal: number };
   spans: Array<{ id: string; start: number; end: number }>;
   tier: EvidenceTier;
+};
+
+/**
+ * What the Organizer knows about one piece of media attached to a message.
+ *
+ * `hasHotDerivative` used to be a plain boolean hardcoded to `false` at the only construction site,
+ * so the pipeline could not distinguish "no renderable copy" from "nobody looked". Those must not
+ * collapse: the first is a fact the Writer has to respect, the second is a caller that did not
+ * supply a media index, and silently reporting the second as the first is a fail-OPEN in the
+ * direction of "media is unavailable" — which sounds safe but is how you lose real photos.
+ *
+ * So availability is three-state, and `provider`/`mediaType` are present because a Quark photo and
+ * a WeChat photo are different evidence and the Organizer could not previously tell them apart.
+ * Everything except `mediaId` is optional, because a caller with no media index knows only the id.
+ */
+export type MediaRef = {
+  mediaId: string;
+  mediaAssetId?: string;
+  provider?: string;
+  mediaType?: "photo" | "video" | "document";
+  mimeType?: string;
+  /** The asset's own SHA-256 — the permanent identity, never a provider reference. */
+  assetSha256?: string;
+  /** When the media itself was taken/sent, distinct from the message's sentAt. */
+  takenAt?: string;
+  /** Whether a renderable derivative exists. `unknown` means no media index was supplied. */
+  derivative: "available" | "unavailable" | "unknown";
+  /** Whether the original bytes are known to be retrievable. */
+  original: "available" | "unavailable" | "unknown";
 };
 
 export type MediaBinding = {
