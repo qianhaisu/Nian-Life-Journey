@@ -24,11 +24,17 @@ import { resolveByConversationContinuity, type SubjectResolutionEvidence } from 
 import type { WorthinessAxisV4 } from "./worthiness-v4";
 
 export const CLAIM_GROUNDING_VERSION = "claim-grounding-v1";
+/** Emitted instead of the above when `zeroAnaphoraAntecedent` is on, so every stored run says which it was. */
+export const CLAIM_GROUNDING_V7_VERSION = "claim-grounding-v7-zero-anaphora";
 
 export type ClaimSubjectBasis =
   | "explicit_in_span"
   | "antecedent_in_window"
   | "antecedent_in_neighbour"
+  // V7 only, and deliberately its own basis rather than reusing antecedent_in_window: a zero-anaphora
+  // resolution is a weaker inference than a pronoun's, and every result must stay able to tell them
+  // apart without re-deriving why.
+  | "antecedent_in_window_zero_anaphora"
   | "conversation_continuity"
   | "unresolved_no_reference"
   | "unresolved_competing_person"
@@ -84,6 +90,28 @@ export type GroundingOptions = {
   registry?: IdentityRegistry;
   /** Raises the prior only; never resolves a claim by itself (same rule as the window resolver). */
   singleChildHousehold?: boolean;
+  /**
+   * V7 (`zeroAnaphoraAntecedent`). Lets a claim whose span carries NO pronoun and NO name take the
+   * same bounded antecedent path a pronoun-bearing claim already takes. Opt-in, default off, so the
+   * frozen V6 path is byte-for-byte unchanged — the same construction subject-continuity.ts uses.
+   *
+   * Why it exists. Frozen V6 returns `unresolved_no_reference` from a guard that sits BEFORE the
+   * competing-person check and before the antecedent walk, so 「已经学会欢迎欢迎」 is refused while
+   * 「他已经学会欢迎欢迎」 in the identical window resolves. Chinese family chat drops subjects
+   * constantly, and the labelled recall corpus (2026-09-03) measured the cost: 67 of 146 claims —
+   * 46%, the single largest category — died here; the claim text written by the editor names 张年 in
+   * 34 of those 67; and 25 of 47 windows had Gate A resolve the child while a claim in the same
+   * window did not. Five of the six strong worthiness signals grounding zeroed were this one cause.
+   *
+   * Why it is safe. It reuses, rather than relaxes, every existing guard: the competing-person check
+   * still runs at window+neighbour scope, and an antecedent still has to be an explicit naming
+   * inside the same episode (the Evidence Builder cuts a window at 45 minutes / 3 hours / 40
+   * messages). It adds one guard of its own — a first-person span is never attributed to the child.
+   * On the labelled corpus exactly four windows could change, all of them likely_memory or
+   * ambiguous; no negative and no daily_trace window can, because all nine negatives are refused by
+   * `subjectRelevance !== "primary"`, a gate no claim-level basis can reach.
+   */
+  zeroAnaphoraAntecedent?: boolean;
 };
 
 // Anyone whose presence makes a pronoun genuinely ambiguous. Extends the window resolver's list
@@ -93,6 +121,11 @@ export type GroundingOptions = {
 const COMPETING_PERSON = /其他小朋友|别的孩子|别的小朋友|另一个孩子|同学|哥哥|姐姐|弟弟|妹妹|双胞胎|同伴|小伙伴|表弟|表妹|堂弟|堂妹|小女孩|小男孩|别人家的孩子|人家的孩子|人家孩子|同龄|邻居家/;
 
 const PRONOUN = /他|她|娃|崽|宝/;
+
+// V7 only. A dropped subject in Chinese defaults to the discourse topic, but the one systematic
+// exception is the speaker talking about themselves — 「累死了」, 「等下就去买」. Those spans must
+// never inherit the child as their subject, so a first-person marker blocks the zero-anaphora walk.
+const FIRST_PERSON = /我|咱|俺/;
 
 function namesSubject(text: string, names: string[]): boolean {
   return names.some((name) => name && text.includes(name));
@@ -148,8 +181,17 @@ export function resolveClaimSubject(
   }
 
   const claimText = spans.map((span) => span.text).join("\n");
-  if (!PRONOUN.test(normalizeSpanText(claimText))) {
-    return { resolved: false, basis: "unresolved_no_reference", supportingSourceIds: [], blockers: ["no_subject_reference"] };
+  const hasPronoun = PRONOUN.test(normalizeSpanText(claimText));
+  // Zero anaphora: the span carries neither a name nor a pronoun. Frozen V6 stops here. V7 lets it
+  // continue into the same competing-person check and bounded antecedent walk a pronoun would get —
+  // but never past them, and never when the span is the speaker talking about themselves.
+  if (!hasPronoun) {
+    if (!options.zeroAnaphoraAntecedent) {
+      return { resolved: false, basis: "unresolved_no_reference", supportingSourceIds: [], blockers: ["no_subject_reference"] };
+    }
+    if (FIRST_PERSON.test(normalizeSpanText(claimText))) {
+      return { resolved: false, basis: "unresolved_no_reference", supportingSourceIds: [], blockers: ["no_subject_reference", "first_person_span"] };
+    }
   }
 
   // Competing-person check spans the whole window plus its neighbours, deliberately wider than the
@@ -172,7 +214,13 @@ export function resolveClaimSubject(
   // what makes the rule coherent, not looser.
   const inWindow = window.items.filter((item) => namesSubject(item.text, names));
   if (inWindow.length > 0) {
-    return { resolved: true, subjectId, basis: "antecedent_in_window", supportingSourceIds: inWindow.map((item) => item.sourceId), blockers: [] };
+    return { resolved: true, subjectId, basis: hasPronoun ? "antecedent_in_window" : "antecedent_in_window_zero_anaphora", supportingSourceIds: inWindow.map((item) => item.sourceId), blockers: [] };
+  }
+  // A zero-anaphora claim stops at the window. A neighbour is outside the episode the span belongs
+  // to, and without even a pronoun tying the span to a third person there is nothing to carry the
+  // reference across that boundary — so V7 extends the walk by one step, not two.
+  if (!hasPronoun) {
+    return { resolved: false, basis: "unresolved_no_reference", supportingSourceIds: [], blockers: ["no_subject_reference", "no_antecedent_in_window"] };
   }
   const inNeighbour = neighbours.filter((item) => namesSubject(item.text, names));
   if (inNeighbour.length > 0) {
@@ -330,7 +378,7 @@ export function groundClaims(
   // no proposition of its own (see assertionStatusOf) and so cannot evidence a trace either.
   const traceEvidenceCount = claims.filter((claim) => claim.subject.resolved && claim.supportingSpans.some((span) => span.contentBearing)).length;
 
-  return { version: CLAIM_GROUNDING_VERSION, claims, refGrounding, promotableGroundedFactCount, traceEvidenceCount, reasonCodes: [...new Set(reasonCodes)] };
+  return { version: options.zeroAnaphoraAntecedent ? CLAIM_GROUNDING_V7_VERSION : CLAIM_GROUNDING_VERSION, claims, refGrounding, promotableGroundedFactCount, traceEvidenceCount, reasonCodes: [...new Set(reasonCodes)] };
 }
 
 export type AxisGatingResult = { axis: WorthinessAxisV4; zeroed: string[]; reasonCodes: string[] };
