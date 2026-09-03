@@ -13,8 +13,8 @@ export const metadata: Metadata = { title: "记忆" };
 // links to the month chapter. How much opens is lib/memory-ia-policy.ts, applied once in
 // lib/memory-index.ts — this page only lays the result out.
 export default async function MemoryPage() {
-  const { chapters } = await loadFamilyArchive();
-  const index = buildMemoryIndex(chapters);
+  const { chapters, privilege } = await loadFamilyArchive();
+  const index = buildMemoryIndex(chapters, undefined, privilege);
 
   return <div className="memory-page">
     <header className="page-masthead reading-wrap"><span className="section-mark">记忆</span><h1 className="serif">往回翻翻，<br /><em>张年。</em></h1><p>那些已经过去、但还想再看一次的日子。</p></header>

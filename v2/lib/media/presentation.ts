@@ -47,28 +47,19 @@ export function presentableAlt(media: Pick<Media, "alt" | "type">, context?: str
   return context ? `${context} · ${noun}` : noun;
 }
 
-// One editorial layout per photo count. Counts are folded into the nearest rule, not into "grid
-// of everything": a day with 14 photos reads as 8 chosen ones plus "还有 6 张".
-export type SequenceLayout = "single" | "triptych" | "spread" | "contact";
+// A memory page's pictures, in the order the page reads: at most ONE hero between the title and
+// the story (the event's own heroMediaId when it qualifies, else the first photo that does), a few
+// supporting frames after the story, and a count for the rest — they stay reachable through the
+// evidence disclosure. A story with no qualifying hero is a text page, which is a valid page: no
+// picture is stretched to fill the slot.
+export const STORY_SUPPORTING_MAX = 6;
 
-export const SEQUENCE_LIMITS: Record<SequenceLayout, number> = { single: 1, triptych: 3, spread: 8, contact: 20 };
+export type StoryMediaLayout = { hero?: Media; supporting: Media[]; remaining: number };
 
-export type MediaSequence = {
-  layout: SequenceLayout;
-  shown: Media[];
-  // Photos beyond the layout's limit, still reachable via the evidence disclosure.
-  remaining: number;
-};
-
-export function sequenceFor(candidates: Media[], preferredId?: string): MediaSequence {
-  const photos = candidates.filter(isThumbnailEligible);
-  const preferred = preferredId ? photos.find((item) => item.id === preferredId) : undefined;
-  const ordered = preferred ? [preferred, ...photos.filter((item) => item.id !== preferredId)] : photos;
-  // A lead photo must stand on its own at page width; the rest only need to survive a grid cell.
-  const lead = ordered.find(isHeroEligible);
-  const sequence = lead ? [lead, ...ordered.filter((item) => item.id !== lead.id)] : ordered;
-  const count = sequence.length;
-  const layout: SequenceLayout = count <= 1 ? "single" : count <= 3 ? "triptych" : count <= 8 ? "spread" : "contact";
-  const shown = sequence.slice(0, SEQUENCE_LIMITS[layout]);
-  return { layout, shown, remaining: count - shown.length };
+export function storyLayout(candidates: Media[], preferredId?: string): StoryMediaLayout {
+  const drawable = candidates.filter(isThumbnailEligible);
+  const preferred = preferredId ? drawable.find((item) => item.id === preferredId) : undefined;
+  const hero = preferred && isHeroEligible(preferred) ? preferred : drawable.find(isHeroEligible);
+  const supporting = drawable.filter((item) => item.id !== hero?.id).slice(0, STORY_SUPPORTING_MAX);
+  return { hero, supporting, remaining: drawable.length - (hero ? 1 : 0) - supporting.length };
 }

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildChapters, splitOpenMonths, latestMemory, findMonth, excerptOf, memoryTitle, editorialMemory } from "../lib/memory-chapters.ts";
-import { sequenceFor, presentableAlt, orientationOf, aspectRatioOf } from "../lib/media/presentation.ts";
+import { storyLayout, STORY_SUPPORTING_MAX, presentableAlt, orientationOf, aspectRatioOf } from "../lib/media/presentation.ts";
 import { BIRTH, buildFixture, photo, event } from "./fixtures/editorial-archive.mjs";
 
 const fixture = buildFixture();
@@ -77,7 +77,7 @@ test("editorialMemory drops undated events instead of guessing", () => {
   assert.equal(editorialMemory(event("x", "", []), new Map(), BIRTH), undefined);
 });
 
-test("media presentation: alt fallback, orientation, and the 1/3/8/20 sequence rule", () => {
+test("media presentation: alt fallback, orientation, and the one-hero story layout", () => {
   assert.equal(presentableAlt({ alt: "WeChat image", type: "photo" }), "一张照片");
   assert.equal(presentableAlt({ alt: "WeChat image", type: "photo" }, "去动物园"), "去动物园 · 一张照片");
   assert.equal(presentableAlt({ alt: "", type: "video" }), "一段视频");
@@ -86,19 +86,23 @@ test("media presentation: alt fallback, orientation, and the 1/3/8/20 sequence r
   assert.equal(orientationOf({ width: 1000, height: 1000 }), "square");
   assert.equal(aspectRatioOf({ width: 1080, height: 1920 }), "1080 / 1920");
 
+  // A memory page shows at most ONE hero and a bounded supporting strip; the rest is a count.
   const many = Array.from({ length: 14 }, (_, i) => photo(`m${i}`));
-  const seq = sequenceFor(many);
-  assert.equal(seq.layout, "contact");
-  assert.equal(seq.shown.length, 14);
-  assert.equal(seq.remaining, 0);
-  const thirty = sequenceFor(Array.from({ length: 30 }, (_, i) => photo(`n${i}`)));
-  assert.equal(thirty.shown.length, 20);
-  assert.equal(thirty.remaining, 10);
-  assert.equal(sequenceFor(many.slice(0, 3)).layout, "triptych");
-  assert.equal(sequenceFor(many.slice(0, 6)).layout, "spread");
-  assert.equal(sequenceFor(many.slice(0, 1)).layout, "single");
-  // a preferred hero moves to the front; stickers are filtered out
-  const withSticker = [photo("s", { width: 90, height: 120 }), photo("a"), photo("b")];
-  const preferred = sequenceFor(withSticker, "b");
-  assert.deepEqual(preferred.shown.map((item) => item.id), ["b", "a"]);
+  const layout = storyLayout(many);
+  assert.equal(layout.hero.id, "m0");
+  assert.equal(layout.supporting.length, STORY_SUPPORTING_MAX);
+  assert.equal(layout.remaining, 14 - 1 - STORY_SUPPORTING_MAX);
+  // The event's own heroMediaId leads when it qualifies.
+  const preferred = storyLayout(many, "m3");
+  assert.equal(preferred.hero.id, "m3");
+  assert.ok(!preferred.supporting.some((item) => item.id === "m3"));
+  // A tiny heroMediaId (production: the 120x67 hero of 好想站起来的这一天) is never drawn as the
+  // hero — the first qualifying photo takes its place and the sticker is not shown at all.
+  const withSticker = [photo("s", { width: 120, height: 67 }), photo("a"), photo("b")];
+  const tinyPreferred = storyLayout(withSticker, "s");
+  assert.equal(tinyPreferred.hero.id, "a");
+  assert.deepEqual(tinyPreferred.supporting.map((item) => item.id), ["b"]);
+  // No qualifying photo at all → a text page, not an upscaled fragment.
+  assert.equal(storyLayout([photo("only", { width: 90, height: 120 })]).hero, undefined);
+  assert.equal(storyLayout([photo("only", { width: 90, height: 120 })]).supporting.length, 0);
 });

@@ -14,7 +14,9 @@ function indexCount(entry: MonthIndexEntry): string | undefined {
 }
 
 // A month as it appears on /memory: its anchor (month + age), the few memories curated for the
-// index, and the folded ordinary days. In "index" mode the month is one row. The month page itself
+// index, and its editorial face — the composition's vouched preview pictures, or none. A month
+// without a vouched picture reads as type; the photo total is quiet metadata inside the month
+// link, never the visual. In "index" mode the month is one row. The month page itself
 // (/memory/[year]/[month]) is the only place a month is shown whole.
 export function MonthChapter({ entry }: { entry: MonthIndexEntry }) {
   const { chapter, href } = entry;
@@ -34,9 +36,9 @@ export function MonthChapter({ entry }: { entry: MonthIndexEntry }) {
       {chapter.ageLabel ? <p>当时 {chapter.ageLabel}</p> : null}
     </header>
     {entry.featured.length > 0 ? <div className="month-memories">{entry.featured.map((memory) => <EditorialMemory memory={memory} key={memory.id} />)}</div> : null}
-    <PhotoStrip photos={chapter.photos} />
-    {chapter.photoCount > chapter.photos.length ? <p className="chapter-meta"><Link className="text-link" href={href}>这个月一共 {chapter.photoCount} 张照片 · 翻看整个月</Link></p> : null}
+    {entry.preview.length > 0 ? <PhotoStrip photos={entry.preview} /> : null}
     {entry.hiddenMemoryCount > 0 ? <p className="chapter-meta"><Link className="text-link" href={href}>这个月还有 {entry.hiddenMemoryCount} 段记忆 · 翻看整个月</Link></p> : null}
     <TraceDisclosure traces={entry.traces} hasMemories={entry.memoryCount > 0} moreHref={href} />
+    <p className="chapter-meta"><Link className="text-link" href={href}>翻看整个月{chapter.photoCount > 0 ? ` · ${chapter.photoCount} 张照片` : ""}</Link></p>
   </section>;
 }

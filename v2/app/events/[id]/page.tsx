@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EvidenceList } from "@/components/evidence-list";
-import { MediaSequence } from "@/components/media-sequence";
+import { PhotoStrip } from "@/components/media-sequence";
+import { Photo } from "@/components/photo";
 import { TimeSignature } from "@/components/time-signature";
 import { getAllEvents, getEventDetail, getStore } from "@/lib/db/repository";
 import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
-import { sequenceFor } from "@/lib/media/presentation";
+import { storyLayout } from "@/lib/media/presentation";
 import { birthDayOf, timeSignatureFor } from "@/lib/time-signature";
 
 export async function generateStaticParams() { return (await getAllEvents()).map((event) => ({ id: event.id })); }
@@ -20,8 +21,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 const GROWTH_LABEL: Record<string, string> = { language: "那时会说", motor: "那时会做", social: "那时的样子", interest: "那时喜欢", sleep: "那时的睡眠", food: "那时的吃饭", personality: "那时的性格", height: "身高", weight: "体重" };
 
-// Three layers, in reading order: when and what; the photos and the story; and, folded away, the
-// material the day actually left behind. The story is the family's; the material is untouched.
+// Reading order, fixed: the time signature, the title, at most ONE strongly relevant hero, then
+// the story, then a few supporting frames, and — folded away — the material the day actually left
+// behind. A memory without a qualifying photo is a text page, and that is a valid page. The story
+// is the family's; the material is untouched.
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [detail, store] = await Promise.all([getEventDetail(id), getStore()]);
@@ -37,8 +40,9 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const shownMedia = eventMedia.filter((item) => item.visibility !== "private" && deliverable.has(item.id));
   const signature = timeSignatureFor(event.occurredAt, birthDayOf(store.profile));
   const title = memoryTitle(event);
-  const raw = sequenceFor(shownMedia, event.heroMediaId);
-  const sequence = { layout: raw.layout, shown: raw.shown.map((item) => toMediaRef(item, title)), remaining: raw.remaining };
+  const layout = storyLayout(shownMedia, event.heroMediaId);
+  const hero = layout.hero ? toMediaRef(layout.hero, title) : undefined;
+  const supporting = layout.supporting.map((item) => toMediaRef(item, title));
   const paragraphs = [event.story, ...(event.storySections ?? [])].map((text) => text?.trim()).filter((text): text is string => Boolean(text));
   const people = event.people.filter(Boolean);
   const location = event.locationLabel?.trim();
@@ -51,7 +55,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       <h1 className="serif">{title}</h1>
       {people.length > 0 || location ? <p className="detail-context">{[people.join("、"), location].filter(Boolean).join(" · ")}</p> : null}
     </header>
-    {sequence.shown.length > 0 ? <div className={sequence.layout === "single" ? "reading-wrap" : "photo-wrap"}><MediaSequence sequence={sequence} title={title} /></div> : null}
+    {hero ? <div className="reading-wrap"><Photo media={hero} priority sizes="(max-width: 700px) 100vw, 1120px" className="detail-hero" /></div> : null}
     {paragraphs.length > 0 || growth.length > 0 || care.length > 0 ? <section className="story-layer reading-wrap">
       {paragraphs.length > 0 ? <div className="story-column">{paragraphs.map((text, index) => <p key={index} className={index === 0 ? "story-lead" : undefined}>{text}</p>)}</div> : null}
       {growth.length > 0 || care.length > 0 ? <aside className="story-aside">
@@ -59,6 +63,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         {care.map((record) => <div className="story-note" key={record.id}><span className="section-mark">{record.title}</span><p>{record.note}</p></div>)}
       </aside> : null}
     </section> : null}
+    {supporting.length > 0 ? <div className="reading-wrap detail-supporting">
+      <PhotoStrip photos={supporting} />
+      {layout.remaining > 0 ? <p className="sequence-more">那天还有 {layout.remaining} 张照片，收在下面的资料里。</p> : null}
+    </div> : null}
     {materialCount > 0 ? <details className="evidence-disclosure reading-wrap">
       <summary><span className="serif">当时留下的资料</span><small>{materialCount} 项</small></summary>
       <EvidenceList sources={eventSources} media={eventMedia} contributors={contributors} deliverableIds={deliverable} />

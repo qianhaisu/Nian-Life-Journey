@@ -4,26 +4,28 @@ import { GrowthChart } from "@/components/growth-chart";
 import { Photo } from "@/components/photo";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
-import { latestLeadPhoto, recentTraceNotes } from "@/lib/memory-chapters";
-import { ageOn, formatDay } from "@/lib/time-signature";
+import { latestPortrait, recentTraceNotes } from "@/lib/memory-chapters";
+import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
 import { isRecent } from "@/lib/time-truth";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "张年" };
 
-// Who 张年 is right now, from records that exist: age, the newest photo of him the archive can
-// deliver, the handful of things that recently changed, and the last few ordinary-day notes in his
-// book. Measurements and care notes are deeper material, folded by default. When a section has no
-// real record behind it, it is not rendered — never filled in. "Now" is the archive's product
-// today (lib/time-truth.ts); changes are called recent only while they are.
+// Who 张年 is right now — and only then, who he was earlier. The page is split in two eras with
+// the same recency contract as every "最近" (lib/time-truth.ts): CURRENT holds what recent
+// evidence actually supports (his age, the newest deliverable photo of him, stamped with the day
+// it was taken, and any recent notes), and everything older sits under an explicit 更早的时候
+// heading with its real dates — a year-old note may be read, but never mistaken for now. When a
+// section has no real record behind it, it is not rendered — never filled in.
 export default async function AboutPage() {
   const { chapters, store, birthDay, time } = await loadFamilyArchive();
   const age = birthDay ? ageOn(birthDay, time.today) : undefined;
-  const portrait = latestLeadPhoto(chapters);
+  const portrait = latestPortrait(chapters);
+  const portraitRecent = portrait ? isRecent(portrait.day, time) : false;
   const traceNotes = recentTraceNotes(chapters, 4);
-  // "最近" is earned, never assumed: in production the newest child-facing notes are from 2025-08
-  // (August 2026 traces only count photographs), and a year-old note must not be called recent.
-  const traceHeading = traceNotes.some((note) => isRecent(note.day, time)) ? "档案最近记下的" : "档案里记下的一些小事";
+  const currentNotes = traceNotes.filter((note) => isRecent(note.day, time));
+  const earlierNotes = traceNotes.filter((note) => !isRecent(note.day, time));
+  const earlierSpan = earlierNotes.length > 0 ? formatMonth(earlierNotes[0].day.slice(0, 7)) : undefined;
   const notes = recentGrowthNotes(store.growthRecords, birthDay, 4, time);
   const notesHeading = notes.some((note) => note.recent) ? "最近的变化" : "记下来的变化";
   const heights = measurements(store.growthRecords, "height", birthDay);
@@ -38,16 +40,24 @@ export default async function AboutPage() {
       {age ? <p className="about-age">现在 {age}{birthDay ? `，${formatDay(birthDay)}出生` : ""}。</p> : null}
     </header>
 
-    {portrait ? <div className="about-portrait"><Photo media={portrait} priority sizes="(max-width: 700px) 100vw, 760px" /></div> : null}
+    {portrait ? <div className="about-portrait">
+      <Photo media={portrait.photo} priority sizes="(max-width: 700px) 100vw, 760px" />
+      <p className="about-portrait-date"><time dateTime={portrait.day}>摄于 {portrait.dateLabel}</time>{portraitRecent ? null : <span> · 档案里最新的一张</span>}</p>
+    </div> : null}
 
     {notes.length > 0 ? <section className="about-notes" aria-labelledby="notes-title">
       <h2 id="notes-title" className="section-mark">{notesHeading}</h2>
       <dl>{notes.map((note) => <div key={note.id}><dt>{note.label}</dt><dd><p className="serif">{note.note}</p><time dateTime={note.signature.day}>{note.signature.dateLabel}</time></dd></div>)}</dl>
     </section> : null}
 
-    {traceNotes.length > 0 ? <section className="about-notes about-traces" aria-labelledby="traces-title">
-      <h2 id="traces-title" className="section-mark">{traceHeading}</h2>
-      <dl>{traceNotes.map((note, index) => <div key={`${note.day}-${index}`}><dt><time dateTime={note.day}>{note.dateLabel}</time></dt><dd><p className="serif">{note.entry}</p></dd></div>)}</dl>
+    {currentNotes.length > 0 ? <section className="about-notes about-traces" aria-labelledby="traces-title">
+      <h2 id="traces-title" className="section-mark">档案最近记下的</h2>
+      <dl>{currentNotes.map((note, index) => <div key={`${note.day}-${index}`}><dt><time dateTime={note.day}>{note.dateLabel}</time></dt><dd><p className="serif">{note.entry}</p></dd></div>)}</dl>
+    </section> : null}
+
+    {earlierNotes.length > 0 ? <section className="about-notes about-traces about-earlier" aria-labelledby="earlier-title">
+      <h2 id="earlier-title" className="section-mark">更早的时候{earlierSpan ? ` · ${earlierSpan}` : ""}</h2>
+      <dl>{earlierNotes.map((note, index) => <div key={`${note.day}-${index}`}><dt><time dateTime={note.day}>{note.dateLabel}</time></dt><dd><p className="serif">{note.entry}</p></dd></div>)}</dl>
     </section> : null}
 
     {hasDeeper ? <details className="about-deeper">

@@ -5,15 +5,28 @@ import type { Media } from "@/lib/types";
 export const HERO_MIN_SHORT_SIDE = 480;
 export const HERO_MIN_LONG_SIDE = 720;
 
+// The same size rules, usable on any object that carries type and dimensions (Media rows and the
+// MediaRef view model alike). Production has shipped 20x20 WeChat UI icons, 67x120 sticker thumbs
+// and 21x16 fragments as real rows; a size floor is the one signal that rules all of them out
+// without pretending to understand image content.
+export function heroSized(item: { type?: string; width?: number; height?: number }): boolean {
+  if (item.type !== undefined && item.type !== "photo") return false;
+  if (!item.width || !item.height) return false;
+  const shortSide = Math.min(item.width, item.height);
+  const longSide = Math.max(item.width, item.height);
+  return shortSide >= HERO_MIN_SHORT_SIDE && longSide >= HERO_MIN_LONG_SIDE;
+}
+
+export function thumbnailSized(item: { width?: number; height?: number }): boolean {
+  if (!item.width || !item.height) return false;
+  return Math.min(item.width, item.height) >= THUMBNAIL_MIN_SIDE;
+}
+
 // Unknown dimensions, non-photo media (video posters, documents), and anything under the size
 // floor are excluded — the floor alone already rules out stickers/emoji/thumbnails in practice.
 export function isHeroEligible(media: Media | undefined | null): media is Media {
   if (!media) return false;
-  if (media.type !== "photo") return false;
-  if (!media.width || !media.height) return false;
-  const shortSide = Math.min(media.width, media.height);
-  const longSide = Math.max(media.width, media.height);
-  return shortSide >= HERO_MIN_SHORT_SIDE && longSide >= HERO_MIN_LONG_SIDE;
+  return heroSized(media);
 }
 
 // Eligible candidates in preference order: the event's own heroMediaId first (if it qualifies),
@@ -39,6 +52,5 @@ export const THUMBNAIL_MIN_SIDE = 160;
 
 export function isThumbnailEligible(media: Media | undefined | null): media is Media {
   if (!media) return false;
-  if (!media.width || !media.height) return false;
-  return Math.min(media.width, media.height) >= THUMBNAIL_MIN_SIDE;
+  return thumbnailSized(media);
 }

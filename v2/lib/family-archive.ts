@@ -10,7 +10,8 @@ import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
 import { isSnapshotPublishable } from "@/lib/organizer/quality-review";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
-import type { LifeEvent, Media, MonthlySnapshot } from "@/lib/types";
+import type { MediaPrivilege } from "@/lib/publication-moments";
+import type { LifeEvent, Media, MonthlySnapshot, RawSource } from "@/lib/types";
 
 // The one set of clocks every page reads (lib/time-truth.ts). Pages never compute their own "now".
 export type ArchiveTime = RecencyReference & {
@@ -32,8 +33,22 @@ export type FamilyArchive = {
   birthDay?: string;
   // Only when real published memories stand behind it (see quality-review.ts).
   snapshot?: MonthlySnapshot;
+  // Which pictures something real vouches for (lib/publication-moments.ts): media of a published
+  // memory, and media that arrived from the family's own photo archive. Derived from existing
+  // rows only — no content is judged here.
+  privilege: MediaPrivilege;
   time: ArchiveTime;
 };
+
+// `confirmed`: claimed by a published (quality-approved) event — `events` here is already the
+// publishable set. `trusted`: the picture's RawSource is a family_photo import (the Quark album
+// initialization), i.e. the family's own photo collection rather than an image scraped from chat.
+export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources: Pick<RawSource, "id" | "sourceType">[]): MediaPrivilege {
+  const confirmed = new Set<string>(events.flatMap((event) => event.mediaIds));
+  const familySources = new Set(rawSources.filter((source) => source.sourceType === "family_photo").map((source) => source.id));
+  const trusted = new Set<string>(media.filter((item) => item.rawSourceId && familySources.has(item.rawSourceId)).map((item) => item.id));
+  return { confirmed, trusted };
+}
 
 export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: Date = new Date()): FamilyArchive {
   // Pages read the book about 张年 only: rows another profile id owns (contract-test fixtures,
@@ -51,13 +66,14 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   const chapters = buildChapters({ events, traces, media: familyMedia, deliverable, birthDay });
   const publishedMonths = new Set(events.map((event) => calendarMonthOf(event.occurredAt)).filter((value): value is string => Boolean(value)));
   const snapshot = store.monthlySnapshot && isSnapshotPublishable(store.monthlySnapshot.month, publishedMonths) ? store.monthlySnapshot : undefined;
+  const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources);
   const time: ArchiveTime = {
     today: productToday(now),
     activityDay: latestActivityDay({ rawSources: store.rawSources, dailyTraces: traces, events }),
     traceDay: latestTraceDay(traces),
     memoryDay: latestMemoryDay(events),
   };
-  return { store, media, events, chapters, birthDay, snapshot, time };
+  return { store, media, events, chapters, birthDay, snapshot, privilege, time };
 }
 
 export async function loadFamilyArchive(): Promise<FamilyArchive> {

@@ -7,11 +7,11 @@
 // photo on the server and the client receives only that.
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
-import { HERO_MIN_LONG_SIDE, HERO_MIN_SHORT_SIDE, heroCandidates, isHeroEligible } from "@/lib/media/hero";
+import { heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
 
-export type MediaRef = Pick<Media, "id" | "src" | "thumbnailSrc" | "width" | "height" | "type" | "posterSrc"> & { alt: string };
+export type MediaRef = Pick<Media, "id" | "src" | "thumbnailSrc" | "width" | "height" | "type" | "posterSrc" | "takenAt"> & { alt: string };
 
 export type EditorialMemory = {
   id: string;
@@ -65,7 +65,7 @@ export const EXCERPT_LIMIT = 80;
 export const MONTH_PHOTO_LIMIT = 5;
 
 export function toMediaRef(media: Media, context?: string): MediaRef {
-  return { id: media.id, src: media.src, thumbnailSrc: media.thumbnailSrc, width: media.width, height: media.height, type: media.type, posterSrc: media.posterSrc, alt: presentableAlt(media, context) };
+  return { id: media.id, src: media.src, thumbnailSrc: media.thumbnailSrc, width: media.width, height: media.height, type: media.type, posterSrc: media.posterSrc, takenAt: media.takenAt, alt: presentableAlt(media, context) };
 }
 
 // First paragraph of the story, trimmed to a reading length. Titles are not repeated into it.
@@ -301,10 +301,19 @@ export function latestLeadPhoto(chapters: YearChapter[]): MediaRef | undefined {
   return undefined;
 }
 
-// Hero rule over a MediaRef (isHeroEligible wants a full Media row; the ref carries what matters).
-function heroSized(photo: MediaRef): boolean {
-  if (photo.type !== "photo" || !photo.width || !photo.height) return false;
-  return Math.min(photo.width, photo.height) >= HERO_MIN_SHORT_SIDE && Math.max(photo.width, photo.height) >= HERO_MIN_LONG_SIDE;
+// The same photo with the day it was taken, so a page can say when "now" was photographed instead
+// of letting an undated portrait imply the present.
+export function latestPortrait(chapters: YearChapter[]): { photo: MediaRef; day: string; dateLabel: string } | undefined {
+  for (const year of chapters) for (const month of year.months) {
+    const memoryLead = month.memories.find((memory) => memory.lead);
+    const photoDay = month.photoDays.find((day) => day.photos.some(heroSized));
+    if (photoDay && (!memoryLead || photoDay.day >= memoryLead.signature.day)) {
+      const photo = photoDay.photos.find(heroSized);
+      if (photo) return { photo, day: photoDay.day, dateLabel: photoDay.dateLabel };
+    }
+    if (memoryLead?.lead) return { photo: memoryLead.lead, day: memoryLead.signature.day, dateLabel: memoryLead.signature.dateLabel };
+  }
+  return undefined;
 }
 
 // A few of the archive's most recent written notices of ordinary days, for "who is he right now".

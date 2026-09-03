@@ -1,8 +1,9 @@
 // The read model behind /memory, /memory/[year] and /memory/[year]/[month]: chapters (already
 // ordered by life time in lib/memory-chapters.ts) narrowed to what each layer shows under
 // lib/memory-ia-policy.ts. Pure and deterministic; pages lay it out and never re-sort or re-count.
-import { isArchiveCountNote, type EditorialMemory, type MediaRef, type MonthChapter, type PhotoDay, type TraceDay, type YearChapter } from "@/lib/memory-chapters";
+import type { EditorialMemory, MonthChapter, MediaRef, TraceDay, YearChapter } from "@/lib/memory-chapters";
 import { DEFAULT_MEMORY_IA_POLICY, type MemoryIaPolicy } from "@/lib/memory-ia-policy";
+import { buildMonthComposition, NO_PRIVILEGE, type MediaPrivilege, type MonthComposition } from "@/lib/publication-moments";
 
 const WEIGHT_RANK: Record<EditorialMemory["weight"], number> = { chapter: 0, highlight: 1, memory: 2, trace: 3 };
 
@@ -45,6 +46,11 @@ export type MonthIndexEntry = {
   hiddenMemoryCount: number;
   traces: TraceFold;
   href: string;
+  // Open months only: the month's editorial face from lib/publication-moments.ts — vouched
+  // pictures or none. The index never slices month.media/photos itself; a month without a vouched
+  // picture shows type, and the photo total is quiet metadata, not the visual.
+  preview: MediaRef[];
+  compositionMode: MonthComposition["mode"];
 };
 
 export type YearIndexEntry = { year: string; ageSpan?: string; href: string; months: MonthIndexEntry[]; memoryCount: number; traceDayCount: number };
@@ -64,7 +70,7 @@ export function monthHref(month: string): string {
 // the memory target alone would never close the window. Months after that are index rows. Months
 // with only traces count as open while inside the window so the fold appears naturally, and never
 // push the memory window forward by themselves.
-export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY): MemoryIndex {
+export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY, privilege: MediaPrivilege = NO_PRIVILEGE): MemoryIndex {
   let shown = 0;
   let opened = 0;
   const years = chapters.map((year) => {
@@ -76,6 +82,7 @@ export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy
       const open = !bare && shown < policy.openMemoriesTarget && opened < policy.openMonthsMax;
       const featured = open ? curateMemories(chapter.memories, policy.curatedPerMonth) : [];
       if (open) { shown += featured.length; opened += 1; }
+      const composition = open ? buildMonthComposition(chapter, privilege) : undefined;
       return {
         chapter,
         mode: open ? "open" : "index",
@@ -84,6 +91,8 @@ export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy
         hiddenMemoryCount: chapter.memories.length - featured.length,
         traces: foldTraces(chapter.traceDays, policy),
         href: monthHref(chapter.month),
+        preview: composition?.preview ?? [],
+        compositionMode: composition?.mode ?? "typography",
       };
     });
     return {
@@ -109,47 +118,6 @@ export function buildYearView(year: YearChapter, policy: MemoryIaPolicy = DEFAUL
   return { months, memoryCount: months.reduce((sum, month) => sum + month.chapter.memories.length, 0), traceDayCount: months.reduce((sum, month) => sum + month.traceDayCount, 0), photoCount: months.reduce((sum, month) => sum + month.chapter.photoCount, 0) };
 }
 
-// One day as the month chapter prints it: its date and age, the day's photographs (capped by
-// policy — the chapter is an edited publication, the rest of the day stays behind it), and
-// whatever the archive wrote about the day (trace entries, capped as everywhere else).
-export type MonthDayView = {
-  day: string;
-  dateLabel: string;
-  ageLabel?: string;
-  photos: MediaRef[];
-  morePhotoCount: number;
-  entries: string[];
-  hiddenEntryCount: number;
-};
-
-// /memory/[year]/[month]: the chapter whole — every memory (a month bounds it), then the month's
-// days, newest first: every day that was photographed or noticed is present, photographs and the
-// day's own words together. This replaces reading "photos" and "traces" as two separate systems;
-// a reader turns the pages of a month day by day.
-export function buildMonthView(chapter: MonthChapter, policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY): { memories: EditorialMemory[]; days: MonthDayView[]; traces: TraceFold } {
-  const byDay = new Map<string, MonthDayView>();
-  const dayOf = (day: string, dateLabel: string, ageLabel?: string) => {
-    let entry = byDay.get(day);
-    if (!entry) {
-      entry = { day, dateLabel, ageLabel, photos: [], morePhotoCount: 0, entries: [], hiddenEntryCount: 0 };
-      byDay.set(day, entry);
-    }
-    return entry;
-  };
-  for (const photoDay of chapter.photoDays) {
-    const entry = dayOf(photoDay.day, photoDay.dateLabel, photoDay.ageLabel);
-    entry.photos = photoDay.photos.slice(0, policy.monthPhotosPerDay);
-    entry.morePhotoCount = Math.max(0, photoDay.photos.length - entry.photos.length);
-  }
-  for (const traceDay of chapter.traceDays) {
-    const entry = dayOf(traceDay.day, traceDay.dateLabel);
-    // A day that shows its photographs does not also say "这一天留下了 N 张照片" — the sentence
-    // describes what is already on the page. Days whose pictures are not on the page keep it:
-    // there it is the only word of them. Display filter only; the trace rows are untouched.
-    const entries = entry.photos.length > 0 ? traceDay.entries.filter((text) => !isArchiveCountNote(text)) : traceDay.entries;
-    entry.entries = entries.slice(0, policy.traceEntriesPerDay);
-    entry.hiddenEntryCount = Math.max(0, entries.length - entry.entries.length);
-  }
-  const days = [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day));
-  return { memories: chapter.memories, days, traces: foldTraces(chapter.traceDays, policy, chapter.traceDays.length) };
-}
+// /memory/[year]/[month] no longer builds its own day view here: the month page reads
+// lib/publication-moments.ts (chapter / chronicle / quiet days / archive) so the month is a
+// publication with hierarchy rather than an equal-weight walk of every photographed day.

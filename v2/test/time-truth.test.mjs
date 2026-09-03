@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { CANONICAL_PROFILE_ID } from "../lib/db/config.ts";
 import { composeFamilyArchive } from "../lib/family-archive.ts";
-import { buildHomeView, DATED_LEAD_HEADING, RECENT_LEAD_HEADING } from "../lib/home-view.ts";
+import { buildHomeView } from "../lib/home-view.ts";
 import { latestGrowthNote, recentGrowthNotes } from "../lib/growth-notes.ts";
 import { buildChapters } from "../lib/memory-chapters.ts";
 import { ageOn } from "../lib/time-signature.ts";
@@ -36,6 +36,9 @@ function store({ events = [], dailyTraces = [], rawSources = [], media = [], gro
 }
 // The page read: getAllEvents() is the publishable event list; the store is the backend view.
 const home = (s, now = TODAY) => buildHomeView(composeFamilyArchive(s, s.events, now));
+// The memory behind the cover, whether it is presented as recent or dated; undefined for a moment
+// cover or an empty cover — the shape assertions below say which kind they expect.
+const leadOf = (view) => (view.cover.kind === "memory" || view.cover.kind === "dated" ? view.cover.lead : undefined);
 
 test("productToday is the Asia/Shanghai calendar day, never the UTC date", () => {
   assert.equal(productToday(new Date("2026-09-01T16:00:00Z")), "2026-09-02");
@@ -73,10 +76,10 @@ test("latestActivityDay is life time: capturedAt, never importedAt; deleted sour
 test("Case 1 — 2025-08 and 2026-08 memories on 2026-09-02: the cover is 2026-08 and may say 最近", () => {
   const s = store({ events: [event("old", "2025-08-11"), event("new", "2026-08-20")], rawSources: [source("s", "2026-08-31T10:00:00Z")] });
   const view = home(s);
-  assert.equal(view.lead.memory.id, "new");
-  assert.equal(view.lead.recent, true);
+  assert.equal(view.cover.kind, "memory");
+  assert.equal(leadOf(view).memory.id, "new");
+  assert.equal(leadOf(view).recent, true);
   assert.equal(view.mark, "2026 年 8 月 · 最近");
-  assert.equal(view.leadHeading, RECENT_LEAD_HEADING);
   assert.equal(view.laterLifeNote, undefined);
 });
 
@@ -84,9 +87,10 @@ test("Case 2 — a text-only 2026-08 memory beats a 2025-08 memory with a photo:
   const pic = photo("p", "2025-08-11T03:00:00Z");
   const s = store({ events: [event("old-photo", "2025-08-11", { mediaIds: ["p"], memoryWeight: "highlight" }), event("new-text", "2026-08-20")], media: [pic] });
   const view = home(s);
-  assert.equal(view.lead.memory.id, "new-text");
-  assert.equal(view.lead.memory.lead, undefined, "the recent lead has no photo and does not borrow one");
-  assert.equal(view.lead.recent, true);
+  assert.equal(view.cover.kind, "memory");
+  assert.equal(leadOf(view).memory.id, "new-text");
+  assert.equal(leadOf(view).memory.lead, undefined, "the recent lead has no photo and does not borrow one");
+  assert.equal(leadOf(view).recent, true);
 });
 
 test("Case 3 — latest trace 2026-08-31, latest worthy memory 2026-08-20: the memory is recent and leads", () => {
@@ -97,8 +101,9 @@ test("Case 3 — latest trace 2026-08-31, latest worthy memory 2026-08-20: the m
   assert.equal(archive.time.memoryDay, "2026-08-20");
   assert.equal(archive.time.activityDay, "2026-08-31");
   const view = buildHomeView(archive);
-  assert.equal(view.lead.memory.id, "m");
-  assert.equal(view.lead.recent, true);
+  assert.equal(view.cover.kind, "memory");
+  assert.equal(leadOf(view).memory.id, "m");
+  assert.equal(leadOf(view).recent, true);
   // The latest month is August (traces included) even though the lead memory is 08-20.
   assert.equal(view.thisMonth.month, "2026-08");
   assert.equal(view.thisMonth.traceDays.length, 1);
@@ -111,12 +116,11 @@ test("Case 4 — production shape: activity in 2026-08, newest worthy memory 202
     rawSources: [source("s", "2026-08-31T12:00:00Z")],
   });
   const view = home(s);
-  assert.equal(view.lead.memory.id, "stand", "still the family's newest real memory, ordered by life time");
-  assert.equal(view.lead.recent, false);
+  assert.equal(view.cover.kind, "dated", "no recent memory and no recent presentable moment: the cover is the dated memory, never a photo wall");
+  assert.equal(leadOf(view).memory.id, "stand", "still the family's newest real memory, ordered by life time");
+  assert.equal(leadOf(view).recent, false);
   assert.equal(view.mark, `2025 年 8 月 · 当时 ${ageOn(BIRTH, "2025-08-11")}`);
   assert.ok(!view.mark.includes("最近"));
-  assert.equal(view.leadHeading, DATED_LEAD_HEADING);
-  assert.ok(!view.leadHeading.includes("最近"));
   assert.equal(view.laterLifeNote, "2026 年 8 月还有新的生活留在档案里，只是还没有整理成一段记忆。");
   // "这个月" section is the latest month with anything, and it is August 2026, not 2025.
   assert.equal(view.thisMonth.month, "2026-08");
@@ -128,7 +132,8 @@ test("Case 4 — production shape: activity in 2026-08, newest worthy memory 202
 test("Case 5 — the current month (2026-09) is empty: an August memory is still recent, not stale", () => {
   const s = store({ events: [event("aug", "2026-08-20")], dailyTraces: [trace("t", "2026-08-28")] });
   const view = home(s);
-  assert.equal(view.lead.recent, true);
+  assert.equal(view.cover.kind, "memory");
+  assert.equal(leadOf(view).recent, true);
   assert.equal(view.mark, "2026 年 8 月 · 最近");
   assert.equal(view.thisMonth.month, "2026-08");
 });
@@ -136,13 +141,13 @@ test("Case 5 — the current month (2026-09) is empty: an August memory is still
 test("Case 6 — a MonthlySnapshot for 2025-08 never overrides a newer 2026-08 memory, and never leads by itself", () => {
   const snapshot = { id: "snapshot-2025-08", profileId: CANONICAL_PROFILE_ID, month: "2025-08", summary: "这个月他学会了翻身。", highlights: ["翻身"], visibility: "family" };
   const withNewer = home(store({ events: [event("old", "2025-08-11"), event("new", "2026-08-20")], monthlySnapshot: snapshot }));
-  assert.equal(withNewer.lead.memory.id, "new");
+  assert.equal(leadOf(withNewer).memory.id, "new");
   assert.equal(withNewer.summary, undefined, "the snapshot is about 2025-08, the latest month is 2026-08");
   // A snapshot with no published memory in its month is not shown at all (quality-review gate),
   // and a snapshot alone does not make a month "this month".
   const seedOnly = home(store({ events: [event("old", "2025-08-11")], dailyTraces: [trace("t", "2026-08-28")], monthlySnapshot: { ...snapshot, month: "2026-08" } }));
   assert.equal(seedOnly.summary, undefined);
-  assert.equal(seedOnly.lead.recent, false);
+  assert.equal(leadOf(seedOnly).recent, false);
   // Shown only when it is the latest month's own summary and memories stand behind it.
   const honest = home(store({ events: [event("new", "2026-08-20")], monthlySnapshot: { ...snapshot, month: "2026-08" } }));
   assert.equal(honest.summary, "这个月他学会了翻身。");
@@ -155,16 +160,16 @@ test("Case 7 — a late-imported old chat (createdAt/importedAt 2026, occurredAt
     rawSources: [source("chat", "2023-03-04T02:00:00Z", "2026-09-01T12:00:00Z")],
   });
   const view = home(s);
-  assert.equal(view.lead.memory.id, "aug", "life time (occurredAt) wins over ingestion time (createdAt)");
+  assert.equal(leadOf(view).memory.id, "aug", "life time (occurredAt) wins over ingestion time (createdAt)");
   const chapters = composeFamilyArchive(s, s.events, TODAY).chapters;
   assert.deepEqual(chapters.map((year) => year.year), ["2026", "2023"]);
   // Same order even if the backend returned rows newest-created-first.
   const reversed = composeFamilyArchive({ ...s, events: [...s.events].reverse() }, [...s.events].reverse(), TODAY);
-  assert.equal(buildHomeView(reversed).lead.memory.id, "aug");
+  assert.equal(leadOf(buildHomeView(reversed)).memory.id, "aug");
   // And when the late import is the only memory, it is shown but dated, never recent.
   const only = home(store({ events: [late], rawSources: s.rawSources, dailyTraces: [trace("t", "2026-08-28")] }));
-  assert.equal(only.lead.memory.id, "late-2023");
-  assert.equal(only.lead.recent, false);
+  assert.equal(leadOf(only).memory.id, "late-2023");
+  assert.equal(leadOf(only).recent, false);
   assert.ok(!only.mark.includes("最近"));
 });
 
@@ -183,7 +188,8 @@ test("trace-weight events do not carry the cover; with nothing worthy the cover 
   const chapters = buildChapters({ events: [event("folded", "2026-08-25", { memoryWeight: "trace" }), event("real", "2026-08-10")], traces: [], media: [], birthDay: BIRTH });
   assert.equal(selectHomeLead(chapters, { today: "2026-09-02" }).memory.id, "real");
   const view = home(store({ events: [event("folded", "2026-08-25", { memoryWeight: "trace" })] }));
-  assert.equal(view.lead, undefined);
+  assert.equal(view.cover.kind, "empty");
+  assert.equal(leadOf(view), undefined);
   assert.equal(view.mark, "最近");
 });
 

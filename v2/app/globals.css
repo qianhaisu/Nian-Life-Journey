@@ -185,7 +185,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-day + .home-day { border-top: 1px solid var(--color-border); }
 .home-day-date { display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px; font-size: .8rem; color: var(--color-muted); }
 .home-day-date time { color: var(--color-secondary); font-weight: 700; }
-.home-life .chapter-meta { margin-top: 20px; }
+/* The cover as ONE recent moment: its date, its words at cover size, one hero, a few small frames. */
+.home-moment .home-day-date { margin: 0 0 16px; }
+.home-moment .moment-text { max-width: 30ch; }
+.home-moment .moment-text p { font-size: clamp(1.5rem, 4vw, 2.2rem); line-height: 1.4; }
+.home-moment .moment-hero { margin-top: 0; }
+.home-moment .moment-text + .moment-hero { margin-top: 20px; }
+.home-moment .photo-strip { margin-top: 8px; }
+.home-moment .chapter-meta { margin-top: 20px; }
 .home-past { padding: clamp(40px, 6vw, 64px) 0; border-top: 1px solid var(--color-primary); }
 .home-past .memory { margin-top: 20px; }
 .home-change { padding: clamp(40px, 6vw, 64px) 0; border-top: 1px solid var(--color-primary); }
@@ -223,6 +230,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .chapter-age { margin: 4px 0 0; color: var(--color-muted); font-size: .95rem; }
 .chapter-masthead .chapter-meta { margin: 0; }
 .chapter-summary { max-width: 30ch; margin: 18px 0 0; font-size: clamp(1.35rem, 3.4vw, 1.9rem); font-weight: 500; line-height: 1.4; }
+.chapter-narration { max-width: 30ch; margin: 18px 0 0; color: var(--color-muted); font-size: clamp(1.1rem, 2.8vw, 1.4rem); line-height: 1.5; }
 .month-page .photo-strip { margin-top: 28px; }
 /* The month's days: one bordered block per day, date and age as a quiet running head. */
 .month-days { margin-top: clamp(32px, 5vw, 56px); }
@@ -233,6 +241,35 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-day-date time { color: var(--color-secondary); font-weight: 700; }
 .month-day-notes { margin: 12px 0 4px; padding-left: 1.2em; font-size: .9rem; color: var(--color-text); }
 .month-day-notes li { margin: 4px 0; }
+
+/* ---------- Publication moments ---------- */
+/* CHAPTER — what the month wrote down. Words lead at reading size; a day's photos follow them. */
+.month-reading { margin-top: clamp(24px, 4vw, 40px); }
+.month-reading > .section-mark { display: block; margin-bottom: 8px; }
+.month-moment { padding: clamp(24px, 4vw, 36px) 0 clamp(16px, 3vw, 24px); border-bottom: 1px solid var(--color-border); }
+.moment-text { max-width: 34ch; }
+.moment-text p { margin: 0 0 10px; font-size: clamp(1.25rem, 3.2vw, 1.7rem); line-height: 1.5; }
+.moment-hero { margin-top: 18px; max-height: 76vh; }
+.moment-hero.photo-portrait { max-width: min(100%, 480px); }
+.month-moment .photo-strip { margin-top: 12px; }
+.month-moment .chapter-meta { margin: 12px 0 0; }
+/* CHRONICLE — photographed days as weighted moments, not equal blocks: a day with a hero breathes,
+   a day without one stays a compact strip. */
+.month-days .month-moment { padding: 0; border-bottom: 0; }
+.moment-photo_led .photo-strip { margin-top: 0; }
+.month-quiet-days { margin: clamp(24px, 4vw, 36px) 0 0; max-width: 42ch; color: var(--color-muted); font-size: .95rem; line-height: 1.8; }
+/* ARCHIVE — the whole month, folded shut. Small frames on purpose: it is a record, not the read. */
+.month-archive { margin: clamp(32px, 5vw, 48px) 0 24px; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
+.month-archive > summary { display: flex; align-items: baseline; gap: 14px; min-height: 64px; padding: 12px 0; cursor: pointer; list-style: none; }
+.month-archive > summary::-webkit-details-marker { display: none; }
+.month-archive > summary span { font-size: 1.3rem; }
+.month-archive > summary small { color: var(--color-muted); font-size: .8rem; }
+.month-archive > summary::after { margin-left: auto; color: var(--color-accent); content: "＋"; }
+.month-archive[open] > summary::after { content: "－"; }
+.month-archive > ol { margin: 0; padding: 0 0 16px; list-style: none; }
+.month-archive .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.month-archive .photo { max-height: 220px; }
+.month-archive > .chapter-meta { padding-bottom: 16px; }
 .month-chapter .photo-strip { margin-top: 18px; }
 .month-page .month-memories { margin-top: 8px; }
 .month-page .trace-disclosure { margin-top: 8px; }
@@ -268,15 +305,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .photo-strip .photo img { object-fit: cover; }
 .photo-strip-1 { grid-template-columns: minmax(0, 480px); }
 .photo-strip-1 .photo { max-height: none; }
-.media-sequence { display: grid; gap: 10px; }
-.media-sequence .sequence-lead { max-height: 88vh; }
-.media-sequence-single .sequence-lead.photo-portrait { max-width: min(100%, 640px); margin-inline: auto; }
-.sequence-rest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; align-items: start; }
-.sequence-rest .photo img { object-fit: cover; }
-.media-sequence-spread .sequence-rest .photo, .media-sequence-triptych .sequence-rest .photo { max-height: 56vh; }
-.media-sequence-contact .sequence-rest { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-.media-sequence-contact .sequence-rest .photo { aspect-ratio: 1 !important; }
-.sequence-more { margin: 4px 0 0; color: var(--color-muted); font-size: .8rem; }
+.sequence-more { margin: 10px 0 0; color: var(--color-muted); font-size: .8rem; }
 
 /* Traces, folded */
 .trace-disclosure { margin: 4px 0 0; border-bottom: 1px solid var(--color-border); }
@@ -309,6 +338,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .detail-head .back-link { justify-self: start; margin-bottom: 20px; }
 .detail-head h1 { max-width: 16ch; margin: 4px 0 0; font-size: clamp(2.2rem, 7vw, 4.2rem); line-height: 1.08; }
 .detail-context { margin: 0; color: var(--color-muted); font-size: .9rem; }
+/* ONE hero between the title and the story; a small supporting strip after the story. */
+.detail-hero { max-height: 82vh; }
+.detail-hero.photo-portrait { max-width: min(100%, 560px); }
+.detail-supporting { padding-bottom: clamp(24px, 4vw, 40px); }
+.detail-supporting .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.detail-supporting .photo { max-height: 300px; }
 .story-layer { display: grid; gap: 40px; padding: clamp(40px, 6vw, 72px) 0 clamp(40px, 6vw, 64px); }
 .story-column > p { margin: 0 0 22px; font-size: 1.05rem; line-height: 1.85; }
 .story-column .story-lead { font-family: var(--font-heading); font-size: clamp(1.4rem, 3.4vw, 1.9rem); line-height: 1.5; }
@@ -336,6 +371,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .about-notes dd { margin: 0; }
 .about-notes dd p { margin: 0 0 6px; font-size: clamp(1.25rem, 3.2vw, 1.7rem); line-height: 1.4; }
 .about-notes dd time { color: var(--color-muted); font-size: .78rem; }
+.about-portrait-date { margin: 10px 0 0; color: var(--color-muted); font-size: .78rem; }
+/* 更早的时候 — visibly a different era: quieter type, clearly dated. */
+.about-earlier dd p { font-size: 1.05rem; color: var(--color-muted); }
 .about-deeper { margin-bottom: 96px; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
 .about-deeper > summary { display: flex; align-items: baseline; gap: 14px; min-height: 64px; padding: 12px 0; cursor: pointer; list-style: none; }
 .about-deeper > summary::-webkit-details-marker { display: none; }
@@ -382,11 +420,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .photo-strip-4, .photo-strip-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .photo-strip-2 { grid-template-columns: repeat(2, minmax(0, 360px)); }
   .photo-strip .photo { max-height: 320px; }
-  .media-sequence-triptych { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
-  .media-sequence-triptych .sequence-rest { grid-template-columns: 1fr; }
-  .media-sequence-spread .sequence-rest { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .media-sequence-spread .sequence-rest .photo, .media-sequence-triptych .sequence-rest .photo { max-height: 420px; }
-  .media-sequence-contact .sequence-rest { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
   .story-layer { grid-template-columns: minmax(0, 1fr) 200px; gap: 56px; }
   .story-layer:not(:has(.story-aside)) { grid-template-columns: 1fr; }
   .monthly-focus-heading { grid-template-columns: minmax(0, 1fr) 280px; align-items: end; gap: 48px; }

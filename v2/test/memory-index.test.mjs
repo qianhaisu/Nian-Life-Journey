@@ -5,7 +5,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildChapters } from "../lib/memory-chapters.ts";
-import { buildMemoryIndex, buildMonthView, buildYearView, curateMemories, foldTraces } from "../lib/memory-index.ts";
+import { buildMemoryIndex, buildYearView, curateMemories, foldTraces } from "../lib/memory-index.ts";
+import { buildMonthComposition } from "../lib/publication-moments.ts";
 import { DEFAULT_MEMORY_IA_POLICY } from "../lib/memory-ia-policy.ts";
 import { BIRTH, buildFixture, event, photo, trace } from "./fixtures/editorial-archive.mjs";
 
@@ -89,10 +90,9 @@ test("traces fold to a bounded preview; the month page keeps every day but caps 
   assert.equal(fold.days[0].entries.length, DEFAULT_MEMORY_IA_POLICY.traceEntriesPerDay);
   assert.equal(fold.days[0].hiddenEntryCount, 8 - DEFAULT_MEMORY_IA_POLICY.traceEntriesPerDay);
   assert.equal(fold.days[0].day, "2027-12-28", "newest day first");
-  const view = buildMonthView(month);
-  assert.equal(view.memories.length, 12, "the month chapter shows the month whole");
-  assert.equal(view.traces.days.length, 28);
-  assert.equal(view.traces.hiddenDayCount, 0);
+  const composition = buildMonthComposition(month);
+  assert.equal(composition.chapter.filter((moment) => moment.kind === "memory_led").length, 12, "the month chapter reads every memory");
+  assert.equal(composition.chapter.filter((moment) => moment.kind === "text_led").length, 28, "every day with real words is readable");
 });
 
 test("the annual chapter lists a few titles per month and counts the rest", () => {
