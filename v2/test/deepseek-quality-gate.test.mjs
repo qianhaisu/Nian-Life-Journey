@@ -105,6 +105,20 @@ test("rule-derived artifacts are fail closed and human ones are untouched", () =
   assert.equal(isEventPublishable(ruleEvent, rejected), false);
 });
 
+test("an explicit ledger decision binds AI-derived content too, so a canary Memory can stay gated", () => {
+  const aiEvent = { id: "e3", createdBy: "ai", organizerVersion: "deepseek-v6", visibility: "family" };
+  const aiTrace = { id: "t3", createdBy: "ai", organizerRun: { organizerType: "ai" } };
+  assert.equal(isEventPublishable(aiEvent, indexReviews([])), true, "no row: AI content publishes as before");
+  const held = indexReviews([
+    { targetKind: "life_event", targetId: "e3", decision: "needs_human_review" },
+    { targetKind: "daily_trace", targetId: "t3", decision: "needs_human_review" },
+  ]);
+  assert.equal(isEventPublishable(aiEvent, held), false, "needs_human_review must hide an AI event");
+  assert.equal(isTracePublishable(aiTrace, held), false);
+  const approved = indexReviews([{ targetKind: "life_event", targetId: "e3", decision: "approved" }]);
+  assert.equal(isEventPublishable(aiEvent, approved), true);
+});
+
 test("technical placeholders are detected in every form seen in production", () => {
   for (const text of ["[media]", "[视频文件](media/videos/x.mp4)", "[图片]", "[表情包]", "undefined cm · undefined kg", "Quark 照片初始化 · 10 media", "https://example.com/a"]) {
     assert.equal(containsTechnicalPlaceholder(text), true, `${text} must be detected`);

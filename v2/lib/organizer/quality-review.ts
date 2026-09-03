@@ -54,14 +54,20 @@ export function indexReviews(reviews: QualityReview[]): ReviewIndex {
   return index;
 }
 
+// An explicit ledger decision binds whoever created the artifact. AI-derived content is not fail
+// closed (there is no row until someone writes one), but once a row says needs_human_review or
+// rejected, the page must not show the artifact — that is how an Organizer canary stays gated
+// without pretending to be rule-derived. Only a missing row falls back to provenance.
 export function isEventPublishable(event: LifeEvent, reviews: ReviewIndex): boolean {
-  if (!requiresQualityReview(event)) return true;
-  return decisionPublishes(reviews.get(`life_event:${event.id}`));
+  const decision = reviews.get(`life_event:${event.id}`);
+  if (decision !== undefined) return decisionPublishes(decision);
+  return !requiresQualityReview(event);
 }
 
 export function isTracePublishable(trace: DailyTrace, reviews: ReviewIndex): boolean {
-  if (!requiresQualityReview(trace)) return true;
-  return decisionPublishes(reviews.get(`daily_trace:${trace.id}`));
+  const decision = reviews.get(`daily_trace:${trace.id}`);
+  if (decision !== undefined) return decisionPublishes(decision);
+  return !requiresQualityReview(trace);
 }
 
 // Belt-and-braces text gate. Even an approved artifact must never render an import label, a markdown
