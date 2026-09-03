@@ -92,6 +92,51 @@ export function createV6RoutingPolicy(lookup: V6RoutingLookup, onDecision?: (win
   };
 }
 
+// v7 = v6 with ONE substitution: the promotion fact count.
+//
+// Naming, because there are now two things called v7 and they live in different namespaces:
+//
+//   claim-grounding-v7-zero-anaphora   a GROUNDING option (subject resolution). Built, measured,
+//                                      NOT adopted; opt-in via `zeroAnaphoraAntecedent`, default
+//                                      off. It is not a routing policy and has no policy id.
+//   worthiness-v7-promotion-grounded   this ROUTING POLICY. Independent of the above and usable
+//                                      with it off, which is how it is measured and shipped.
+//
+// What changes. V6 feeds routeV5 `promotableGroundedFactCount` — grounded facts the editor happened
+// to label `raw_fact`. This feeds `promotionEligibleFactCount`, which asks what grounding proved
+// instead: supported assertion, resolved subject, affirmative, settles its own proposition,
+// epistemically settled, and attributable when reported. See claim-grounding.ts for the full
+// argument and for why that is stricter, not looser, everywhere except the label.
+//
+// Everything else is deliberately identical — same axis, same grounding gates, same routeV5, same
+// thresholds, same signal definitions, same trace-retention count. A route that moves between V6 and
+// V7 moved for exactly one reason.
+export const V7_PROMOTION_ROUTING_POLICY_ID = "worthiness-v7-promotion-grounded";
+
+export function createV7PromotionRoutingPolicy(lookup: V6RoutingLookup, onDecision?: (windowId: string, detail: { zeroed: string[]; reasonCodes: string[]; promotionEligibleFactCount: number; traceEvidenceCount: number }) => void): RoutingPolicy {
+  return {
+    id: V7_PROMOTION_ROUTING_POLICY_ID,
+    decide({ window, verdict }): RouteDecision {
+      const context = lookup(window.windowId);
+      if (!context) {
+        throw new Error(`V7 promotion routing policy has no axis for window ${window.windowId}. Refusing to route rather than falling back to v1.`);
+      }
+      const gated = applyGroundingToAxis(context.worthiness, context.grounding);
+      onDecision?.(window.windowId, { zeroed: gated.zeroed, reasonCodes: gated.reasonCodes, promotionEligibleFactCount: context.grounding.promotionEligibleFactCount, traceEvidenceCount: context.grounding.traceEvidenceCount });
+      const decision = routeV5({
+        worthiness: gated.axis,
+        evidence: context.evidence,
+        subjectResolution: context.subjectResolution,
+        subjectRelevance: verdict.subjectRelevance,
+        temporalStatus: verdict.temporalStatus,
+        rawFactCount: context.grounding.promotionEligibleFactCount,
+        traceEvidenceCount: context.grounding.traceEvidenceCount,
+      });
+      return { action: decision.action, reviewRequirement: decision.reviewRequirement, toGlimmerPool: false };
+    },
+  };
+}
+
 // v5 = v4 plus the rule that a promotion requires a strong signal. Same lookup, same axis.
 export function createV5RoutingPolicy(lookup: V4RoutingLookup): RoutingPolicy {
   return {

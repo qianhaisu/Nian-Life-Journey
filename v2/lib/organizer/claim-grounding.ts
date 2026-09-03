@@ -19,7 +19,7 @@ import type { EvidenceItem, EvidenceWindow } from "./evidence/types";
 import type { CoreFact, MemoryEditorVerdict } from "./contract";
 import type { IdentityRegistry } from "./identity";
 import { resolveSpeaker } from "./identity";
-import { analyzeSpan, normalizeSpanText, type Polarity, type SpeechAct, type SpanAnalysis } from "./speech-act";
+import { analyzeEpistemicStatus, analyzeSpan, normalizeSpanText, type EpistemicStatus, type Polarity, type SpeechAct, type SpanAnalysis } from "./speech-act";
 import { resolveByConversationContinuity, type SubjectResolutionEvidence } from "./subject-continuity";
 import type { WorthinessAxisV4 } from "./worthiness-v4";
 
@@ -83,6 +83,19 @@ export type GroundedClaim = {
   mayContributeToWorthiness: boolean;
   /** Additionally requires affirmative polarity — a not-yet state is a fact, not an ability. */
   mayGroundDevelopmentalSignal: boolean;
+  /**
+   * Whether the supporting evidence COMMITS to the proposition (speech-act.analyzeEpistemicStatus).
+   * Recorded for every claim under every policy; only the v7 promotion count reads it.
+   */
+  epistemicStatus: EpistemicStatus;
+  epistemicMarkers: string[];
+  /**
+   * v7 promotion eligibility. Never read by frozen V6, which counts `raw_fact` instead — see
+   * `promotionEligibleFactCount` for what this requires and why assertionKind is not part of it.
+   */
+  mayGroundPromotion: boolean;
+  /** Why `mayGroundPromotion` is false. Empty when it is true. Auditable, per claim. */
+  promotionBlockers: string[];
   reasons: string[];
 };
 
@@ -286,6 +299,18 @@ function settlesItsProposition(span: GroundedSpan): boolean {
   return !span.markers.some((marker) => EMBEDDED_INTERROGATIVE.has(marker));
 }
 
+/**
+ * A claim is hedged if ANY span that could supply its proposition is hedged. Fail-closed on purpose:
+ * a settled span sitting beside 「我觉得他可能饿了」 must not launder the speculation into a fact.
+ * Backchannels are excluded because they supply no proposition of their own to hedge.
+ */
+function epistemicStatusOf(spans: GroundedSpan[]): { status: EpistemicStatus; markers: string[] } {
+  const contentful = spans.filter((span) => span.contentBearing);
+  const analyses = contentful.map((span) => analyzeEpistemicStatus(span.text));
+  const markers = [...new Set(analyses.flatMap((a) => a.markers))];
+  return { status: markers.length > 0 ? "hedged" : "settled", markers };
+}
+
 function polarityOf(spans: GroundedSpan[]): Polarity {
   const contentful = spans.filter((span) => span.contentBearing);
   const deciding = contentful.filter((span) => span.speechAct === "assertion");
@@ -303,6 +328,32 @@ export type GroundingResult = {
    * routeV4's ungrounded rawFactCount.
    */
   promotableGroundedFactCount: number;
+  /**
+   * v7. The same question `promotableGroundedFactCount` asks — may anything here drive a MEMORY
+   * PROMOTION — decided by what grounding proved rather than by the editor's contract label.
+   *
+   * The defect it replaces. `promotableGroundedFactCount` counts a claim only when the editor wrote
+   * `assertionKind === "raw_fact"`. On the 47-window labelled corpus 85 claims carried
+   * `mayGroundDevelopmentalSignal = true` and 47 of them were not `raw_fact`, so a claim could be
+   * evidence-supported, affirmative, resolved to 张年, settled and observed, and still be refused
+   * promotion material purely for its label. That label is not a truth signal: validator.ts
+   * *demotes* a hedged raw_fact to attributed_claim, so the class holds both 「好像是第一次」 and a
+   * verified caregiver's 「小年现在已经会自己吃了」, which are not remotely the same claim.
+   *
+   * What replaces it is strictly STRONGER than the old test on every axis except the label:
+   *
+   *   supported assertion + resolved subject   (= mayContributeToWorthiness, as before)
+   *   + affirmative polarity                   NEW — a not-yet state could satisfy the old count
+   *   + settles its own proposition            NEW — no embedded interrogative (HV2-N03's guard)
+   *   + epistemically settled                  NEW — no hedge, no inner-state matrix verb
+   *   + a known speaker when the claim is       NEW — an unverifiable quote may not promote
+   *     reported rather than firsthand
+   *
+   * So this is not "attributed_claim now counts as fact". 「妈妈觉得他可能饿了」 is refused twice
+   * over (hedge + inner-state matrix) and stays what it is: a true fact about what 妈妈 said, good
+   * for a trace, never evidence that he was hungry.
+   */
+  promotionEligibleFactCount: number;
   /**
    * Evidence that may keep the window as a DailyTrace. Deliberately a WEAKER test than promotion:
    * the subject must still resolve — an ordinary day belonging to another child is not 张年's trace
@@ -331,6 +382,25 @@ export function groundClaims(
     const mayContributeToWorthiness = status === "supported_assertion" && claimSubject.resolved;
     const mayGroundDevelopmentalSignal = mayContributeToWorthiness && polarity === "affirmative"
       && spans.some((span) => span.contentBearing && span.speechAct === "assertion" && settlesItsProposition(span));
+
+    // v7 promotion eligibility. Computed for every claim under every policy — recording it costs
+    // nothing and frozen V6 never reads it — so the two policies can always be compared on one
+    // verdict without a second model call.
+    const epistemic = epistemicStatusOf(spans);
+    const promotionBlockers: string[] = [];
+    if (!claimSubject.resolved) promotionBlockers.push(`subject_${claimSubject.basis}`);
+    if (status !== "supported_assertion") promotionBlockers.push(`not_a_supported_assertion:${status}`);
+    if (polarity === "negated") promotionBlockers.push("negated_or_not_yet");
+    if (mayContributeToWorthiness && polarity === "affirmative" && !mayGroundDevelopmentalSignal) promotionBlockers.push("unsettled_proposition");
+    if (epistemic.status === "hedged") promotionBlockers.push(...epistemic.markers);
+    // A reported claim has to come from someone the registry knows. A firsthand observation by a
+    // verified caregiver already satisfies this through observationMode; an unattributable quote
+    // does not, and Phase B lists an unsupported attribution as non-promotable.
+    const mode = observationModeOf(status, fact, spans);
+    const speakerKnown = spans.some((span) => span.speaker.known);
+    if (mode === "reported" && !speakerKnown) promotionBlockers.push("reported_by_unknown_speaker");
+    const mayGroundPromotion = mayGroundDevelopmentalSignal && promotionBlockers.length === 0;
+
     if (status === "question") reasonCodes.push("claim_is_question");
     if (status === "plan_or_hypothetical") reasonCodes.push("claim_is_plan_or_hypothetical");
     if (status === "unsupported") reasonCodes.push("claim_unsupported_by_span");
@@ -347,10 +417,14 @@ export function groundClaims(
       speakers: [...new Map(spans.map((span) => [span.speakerDigest, { digest: span.speakerDigest, canonicalPersonId: span.speaker.canonicalPersonId, relationshipToSubject: span.speaker.relationshipToSubject }])).values()],
       subject: claimSubject,
       assertionStatus: status,
-      observationMode: observationModeOf(status, fact, spans),
+      observationMode: mode,
       polarity,
       mayContributeToWorthiness,
       mayGroundDevelopmentalSignal,
+      epistemicStatus: epistemic.status,
+      epistemicMarkers: epistemic.markers,
+      mayGroundPromotion,
+      promotionBlockers,
       reasons,
     });
   });
@@ -374,11 +448,12 @@ export function groundClaims(
   }
 
   const promotableGroundedFactCount = claims.filter((claim, index) => verdict.coreFacts[index]?.assertionKind === "raw_fact" && claim.mayContributeToWorthiness).length;
+  const promotionEligibleFactCount = claims.filter((claim) => claim.mayGroundPromotion).length;
   // Subject resolved + something that actually carries content. A backchannel-only claim supplies
   // no proposition of its own (see assertionStatusOf) and so cannot evidence a trace either.
   const traceEvidenceCount = claims.filter((claim) => claim.subject.resolved && claim.supportingSpans.some((span) => span.contentBearing)).length;
 
-  return { version: options.zeroAnaphoraAntecedent ? CLAIM_GROUNDING_V7_VERSION : CLAIM_GROUNDING_VERSION, claims, refGrounding, promotableGroundedFactCount, traceEvidenceCount, reasonCodes: [...new Set(reasonCodes)] };
+  return { version: options.zeroAnaphoraAntecedent ? CLAIM_GROUNDING_V7_VERSION : CLAIM_GROUNDING_VERSION, claims, refGrounding, promotableGroundedFactCount, promotionEligibleFactCount, traceEvidenceCount, reasonCodes: [...new Set(reasonCodes)] };
 }
 
 export type AxisGatingResult = { axis: WorthinessAxisV4; zeroed: string[]; reasonCodes: string[] };

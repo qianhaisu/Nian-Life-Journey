@@ -96,6 +96,46 @@ const DIRECTIVE = /(^|[，,。.\s])(请|麻烦|帮我|帮忙|记得|别忘|不�
 const NEGATION = /(不会|不能|不肯|不想|不敢|没有|还没|还不|尚未|未曾|从来不|从未|不再|没能|没法|无法)/;
 const NOT_YET = /(还不会|还没有|还没|尚未|暂时不|目前还不)/;
 
+// ---------------------------------------------------------------------------------------------
+// Epistemic status. Deliberately a SEPARATE function from analyzeSpan, and deliberately additive:
+// analyzeSpan's four outputs are frozen V6 inputs, so nothing below may touch them.
+//
+// Why it exists. Grounding verifies WHO a claim is about, WHAT speech act supports it, and WHETHER
+// the polarity is affirmative. It never asks how strongly the speaker committed to the proposition,
+// because analyzeSpan has no hedge rule: 可能 / 好像 / 我觉得 produce no marker at all, and
+// MODAL_PROJECTION matches only 可能会, never bare 可能. The one place that check lived was
+// validator.sanitizeFacts, which applies HEDGE_WORDS *only to a fact labelled raw_fact* and demotes
+// it to attributed_claim. So "not raw_fact" was doing duty as a proxy for "hedged" — badly, because
+// the same label also covers a verified caregiver reporting something she watched happen.
+//
+// Replacing the proxy with the thing it proxied for is what lets promotion stop reading
+// assertionKind. HEDGE mirrors validator.ts's HEDGE_WORDS verbatim so the two can never drift apart
+// silently; the rest is the closed class of epistemic adverbs and mental-state matrix verbs the
+// same construction admits.
+export type EpistemicStatus = "settled" | "hedged";
+
+// Epistemic adverbs / evidential markers: the speaker is reporting a possibility or hearsay, not
+// asserting a state. Superset of validator.ts HEDGE_WORDS, which is inlined first, verbatim.
+const HEDGE = /可能|好像|听说|据说|大概|应该是|估计|似乎|我觉得|也许|或许|说不定|搞不好|多半|八成|恐怕|貌似|感觉像|像是|疑似/;
+
+// Mental-state matrix verbs. 「妈妈觉得他饿了」 asserts what 妈妈 thinks; it does not assert that he
+// is hungry. The embedded proposition is unsettled however confidently the matrix clause is stated,
+// which is why this is tested independently of HEDGE and of polarity.
+const INNER_STATE_MATRIX = /(觉得|以为|感觉|怀疑|担心|怕|希望|盼|猜|估摸|寻思|认为|感觉到)/;
+
+/**
+ * Whether a span COMMITS to the proposition it carries. `hedged` never means the span is worthless
+ * — it stays perfectly good trace evidence, and the grounded fact "妈妈觉得他饿了" remains true. It
+ * means the span may not be the evidence that establishes something happened to 张年.
+ */
+export function analyzeEpistemicStatus(text: string): { status: EpistemicStatus; markers: string[] } {
+  const normalized = normalizeSpanText(text);
+  const markers: string[] = [];
+  if (HEDGE.test(normalized)) markers.push("epistemic_hedge");
+  if (INNER_STATE_MATRIX.test(normalized)) markers.push("inner_state_matrix");
+  return { status: markers.length > 0 ? "hedged" : "settled", markers };
+}
+
 export function analyzeSpan(text: string): SpanAnalysis {
   const normalized = normalizeSpanText(text);
   const markers: string[] = [];
