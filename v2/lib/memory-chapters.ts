@@ -315,6 +315,11 @@ export type RecentTraceNote = { day: string; dateLabel: string; entry: string };
 
 const ARCHIVE_COUNT_ENTRY = /留下了\s*\d+\s*张照片|留下了\s*\d+\s*段视频/;
 
+// Whether a trace entry describes the archive rather than the child. Display decision only.
+export function isArchiveCountNote(entry: string): boolean {
+  return ARCHIVE_COUNT_ENTRY.test(entry);
+}
+
 export function recentTraceNotes(chapters: YearChapter[], limit = 4): RecentTraceNote[] {
   const notes: RecentTraceNote[] = [];
   for (const year of chapters) for (const month of year.months) for (const day of month.traceDays) {

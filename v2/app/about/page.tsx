@@ -6,6 +6,7 @@ import { loadFamilyArchive } from "@/lib/family-archive";
 import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
 import { latestLeadPhoto, recentTraceNotes } from "@/lib/memory-chapters";
 import { ageOn, formatDay } from "@/lib/time-signature";
+import { isRecent } from "@/lib/time-truth";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "张年" };
@@ -20,6 +21,9 @@ export default async function AboutPage() {
   const age = birthDay ? ageOn(birthDay, time.today) : undefined;
   const portrait = latestLeadPhoto(chapters);
   const traceNotes = recentTraceNotes(chapters, 4);
+  // "最近" is earned, never assumed: in production the newest child-facing notes are from 2025-08
+  // (August 2026 traces only count photographs), and a year-old note must not be called recent.
+  const traceHeading = traceNotes.some((note) => isRecent(note.day, time)) ? "档案最近记下的" : "档案里记下的一些小事";
   const notes = recentGrowthNotes(store.growthRecords, birthDay, 4, time);
   const notesHeading = notes.some((note) => note.recent) ? "最近的变化" : "记下来的变化";
   const heights = measurements(store.growthRecords, "height", birthDay);
@@ -42,7 +46,7 @@ export default async function AboutPage() {
     </section> : null}
 
     {traceNotes.length > 0 ? <section className="about-notes about-traces" aria-labelledby="traces-title">
-      <h2 id="traces-title" className="section-mark">档案最近记下的</h2>
+      <h2 id="traces-title" className="section-mark">{traceHeading}</h2>
       <dl>{traceNotes.map((note, index) => <div key={`${note.day}-${index}`}><dt><time dateTime={note.day}>{note.dateLabel}</time></dt><dd><p className="serif">{note.entry}</p></dd></div>)}</dl>
     </section> : null}
 

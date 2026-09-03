@@ -1,7 +1,7 @@
 // The read model behind /memory, /memory/[year] and /memory/[year]/[month]: chapters (already
 // ordered by life time in lib/memory-chapters.ts) narrowed to what each layer shows under
 // lib/memory-ia-policy.ts. Pure and deterministic; pages lay it out and never re-sort or re-count.
-import type { EditorialMemory, MediaRef, MonthChapter, PhotoDay, TraceDay, YearChapter } from "@/lib/memory-chapters";
+import { isArchiveCountNote, type EditorialMemory, type MediaRef, type MonthChapter, type PhotoDay, type TraceDay, type YearChapter } from "@/lib/memory-chapters";
 import { DEFAULT_MEMORY_IA_POLICY, type MemoryIaPolicy } from "@/lib/memory-ia-policy";
 
 const WEIGHT_RANK: Record<EditorialMemory["weight"], number> = { chapter: 0, highlight: 1, memory: 2, trace: 3 };
@@ -143,8 +143,12 @@ export function buildMonthView(chapter: MonthChapter, policy: MemoryIaPolicy = D
   }
   for (const traceDay of chapter.traceDays) {
     const entry = dayOf(traceDay.day, traceDay.dateLabel);
-    entry.entries = traceDay.entries.slice(0, policy.traceEntriesPerDay);
-    entry.hiddenEntryCount = Math.max(0, traceDay.entries.length - entry.entries.length);
+    // A day that shows its photographs does not also say "这一天留下了 N 张照片" — the sentence
+    // describes what is already on the page. Days whose pictures are not on the page keep it:
+    // there it is the only word of them. Display filter only; the trace rows are untouched.
+    const entries = entry.photos.length > 0 ? traceDay.entries.filter((text) => !isArchiveCountNote(text)) : traceDay.entries;
+    entry.entries = entries.slice(0, policy.traceEntriesPerDay);
+    entry.hiddenEntryCount = Math.max(0, entries.length - entry.entries.length);
   }
   const days = [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day));
   return { memories: chapter.memories, days, traces: foldTraces(chapter.traceDays, policy, chapter.traceDays.length) };
