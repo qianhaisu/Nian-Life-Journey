@@ -2,6 +2,7 @@
 // lib/organizer/types.ts (OrganizerContext/OrganizerDecision, still used by the V1/rule path) so
 // this module can land without touching files another session may be editing concurrently.
 import type { ContentType, RawSource } from "@/lib/types";
+import type { MediaBindingTier } from "./media-tier";
 
 export type EvidenceTier = "authoritative_document" | "user_direct_input" | "firsthand_observation" | "reported_speech" | "media_metadata" | "ai_visual_description" | "ai_inference";
 
@@ -19,7 +20,20 @@ export type EvidenceItem = {
   tier: EvidenceTier;
 };
 
-export type MediaBinding = { mediaId: string; boundItemId?: string; confidence: number; rule: string };
+export type MediaBinding = {
+  mediaId: string;
+  boundItemId?: string;
+  confidence: number;
+  rule: string;
+  /**
+   * Named tier derived from `rule` (media-tier.ts). Carried alongside `confidence`, not instead of
+   * it: the number answers "how sure", the tier answers "may the Writer say this picture shows
+   * this moment" — and only `confirmed` ever licenses that.
+   */
+  tier: MediaBindingTier;
+  /** Why this tier, in words, for the audit trail and review UI. Never parsed. */
+  basis: string;
+};
 
 export type TraceRef = { id: string; occurredAt: string };
 export type EventRef = { id: string; occurredAt: string; title?: string; contentTypes: ContentType[] };
