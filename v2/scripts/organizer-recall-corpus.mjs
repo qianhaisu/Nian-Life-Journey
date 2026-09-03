@@ -64,12 +64,27 @@ for (const c of HOLDOUT_SET) { spentDays.add(`${MAIN}|${c.day}`); spentDays.add(
 // Every window any earlier shadow, holdout or canary already scored, by fingerprint AND by day.
 for (const file of EXCLUDE) {
   const data = JSON.parse(readFileSync(file, "utf8"));
-  const rows = [...(data.results ?? []), ...(data.scored ?? []), ...(data.cases ?? []), ...(data.windows ?? []), ...(data.manifest?.windows ?? []), ...(data.records ?? [])];
+  // `worksheet` is how THIS script writes a corpus, so a corpus produced here is the most likely
+  // thing anyone passes back as --exclude. It was missing from this list, which meant excluding a
+  // prior corpus silently excluded nothing and produced a contaminated "fresh" sample that still
+  // called itself fresh. Hence the assertion below: a format this parser does not understand must
+  // fail the build, never quietly weaken it.
+  const rows = [...(data.worksheet ?? []), ...(data.results ?? []), ...(data.scored ?? []), ...(data.cases ?? []), ...(data.windows ?? []), ...(data.manifest?.windows ?? []), ...(data.records ?? [])];
+  if (rows.length === 0) {
+    console.error(`--exclude=${file} yielded 0 rows. Top-level keys: ${Object.keys(data).join(", ")}. Refusing to build a corpus that would call itself fresh while excluding nothing.`);
+    process.exit(1);
+  }
+  let identified = 0;
   for (const w of rows) {
-    if (w.fingerprint) spentFingerprints.add(w.fingerprint);
-    for (const id of w.sourceIds ?? []) spentAnchors.add(id);
+    if (w.fingerprint) { spentFingerprints.add(w.fingerprint); identified += 1; }
+    for (const id of w.sourceIds ?? []) { spentAnchors.add(id); identified += 1; }
     for (const d of [w.activityDate, w.lifeDate, w.day, w.windowLifeDate]) if (d) spentDays.add(`${w.conversationId ?? MAIN}|${d}`);
   }
+  if (identified === 0) {
+    console.error(`--exclude=${file} matched ${rows.length} rows but none carried a fingerprint or sourceIds, so nothing can actually be excluded by window. Refusing to build.`);
+    process.exit(1);
+  }
+  console.log(`  --exclude=${file}: ${rows.length} rows, ${identified} window identifiers.`);
 }
 console.log(`Excluded as spent: ${spentDays.size} (conversation, day) pairs, ${spentAnchors.size} sourceIds, ${spentFingerprints.size} fingerprints, from ${EXCLUDE.length} files.`);
 
