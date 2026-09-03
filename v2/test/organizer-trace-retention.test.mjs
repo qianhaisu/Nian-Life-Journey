@@ -122,6 +122,95 @@ test("a retention blocker alongside a promotion-only blocker still blocks retent
   assert.deepEqual(routed.blockedBy.sort(), ["no_unhedged_fact", "subject_unresolved"]);
 });
 
+// ---------------------------------------------------------------- retention must be MONOTONE
+//
+// RC-25. The retention floor above lived only inside the `blockedBy` branch, so a window was kept as
+// a trace *because* it failed `no_unhedged_fact` — retention was a side effect of being refused a
+// Memory. Pass that gate and the window fell through to the terminal branch, which has no floor and
+// hands `noDistinctiveMemorySignal` straight to store_only.
+//
+// The observable result on the labelled corpus: RC-25 held explicit/primary subject, temporalStatus
+// present, one fully grounded claim and traceEvidenceCount 1, and moved daily_trace -> store_only
+// when the promotion policy changed. Nothing about whose day it was, whether it happened, or whether
+// the evidence was trustworthy changed — only whether something in it could become a Memory.
+//
+// The invariant: a window's trace survives on the retention inputs alone. More promotion evidence
+// may only ever gain a Memory, never cost a day.
+
+const AXIS_NO_MEMORY_SIGNAL = { ...AXIS_ORDINARY, noDistinctiveMemorySignal: true };
+
+test("RC-25: passing the promotion gate must not delete a trace the same window would have kept", () => {
+  const retention = { ...BASE_INPUT, worthiness: AXIS_NO_MEMORY_SIGNAL, traceEvidenceCount: 1 };
+
+  const refused = routeV5({ ...retention, rawFactCount: 0 });
+  const eligible = routeV5({ ...retention, rawFactCount: 1 });
+
+  assert.equal(refused.action, "daily_trace", "no promotable fact, but a real day: kept");
+  assert.deepEqual(refused.blockedBy, ["no_unhedged_fact"]);
+  assert.equal(
+    eligible.action,
+    "daily_trace",
+    "the SAME day with strictly more promotion evidence must not be thrown away",
+  );
+  assert.deepEqual(eligible.blockedBy, [], "and it passes the gate rather than being rescued by it");
+});
+
+test("retention is monotone in promotion evidence across every signal shape", () => {
+  for (const axis of [AXIS_ORDINARY, AXIS_NO_MEMORY_SIGNAL]) {
+    for (const traceEvidenceCount of [0, 1, 4]) {
+      const base = { ...BASE_INPUT, worthiness: axis, traceEvidenceCount };
+      const refused = routeV5({ ...base, rawFactCount: 0 });
+      const eligible = routeV5({ ...base, rawFactCount: 1 });
+      const rank = { store_only: 0, daily_trace: 1, life_event_candidate: 2 };
+      assert.ok(
+        rank[eligible.action] >= rank[refused.action],
+        `noDistinctiveMemorySignal=${axis.noDistinctiveMemorySignal} trace=${traceEvidenceCount}: ` +
+          `promotion evidence downgraded ${refused.action} -> ${eligible.action}`,
+      );
+    }
+  }
+});
+
+test("the terminal retention floor still refuses a day with no attributable evidence", () => {
+  // The floor is evidence, not optimism: nothing to cite means nothing to keep, exactly as in the
+  // blocked branch. This is the guard that keeps the fix from becoming "retain everything".
+  const routed = routeV5({ ...BASE_INPUT, worthiness: AXIS_NO_MEMORY_SIGNAL, rawFactCount: 1, traceEvidenceCount: 0 });
+  assert.equal(routed.action, "store_only");
+});
+
+test("the terminal retention floor never overrides a truth, subject or temporal gate", () => {
+  for (const blocking of [
+    { subjectResolution: "unresolved" },
+    { subjectRelevance: "ambiguous" },
+    { temporalStatus: "planned" },
+    { evidence: { evidenceConfidence: "low", evidenceRefs: [] } },
+  ]) {
+    const routed = routeV5({
+      ...BASE_INPUT, worthiness: AXIS_NO_MEMORY_SIGNAL, rawFactCount: 1, traceEvidenceCount: 9, ...blocking,
+    });
+    assert.equal(routed.action, "store_only", `${JSON.stringify(blocking)} must still block retention`);
+  }
+});
+
+test("the retention floor cannot manufacture a promotion", () => {
+  // It only ever converts store_only -> daily_trace. No input to it can reach life_event_candidate,
+  // so no Memory precision guard is touched by this fix.
+  for (const rawFactCount of [0, 1, 3]) {
+    for (const traceEvidenceCount of [0, 1, 9]) {
+      const routed = routeV5({ ...BASE_INPUT, worthiness: AXIS_NO_MEMORY_SIGNAL, rawFactCount, traceEvidenceCount });
+      assert.notEqual(routed.action, "life_event_candidate", "a signal-less axis must never promote");
+    }
+  }
+});
+
+test("v4/v5 without traceEvidenceCount keep the old terminal behaviour exactly", () => {
+  // The floor is opt-in through the same field as before: callers that never supply it (v4, v5) are
+  // byte-for-byte unchanged, including the store_only their terminal branch has always produced.
+  const routed = routeV5({ ...BASE_INPUT, worthiness: AXIS_NO_MEMORY_SIGNAL, rawFactCount: 1 });
+  assert.equal(routed.action, "store_only");
+  assert.equal(routed.retainedByTraceEvidence, undefined);
+});
+
 // ---------------------------------------------------------------- end to end through grounding
 
 function questionWindow() {

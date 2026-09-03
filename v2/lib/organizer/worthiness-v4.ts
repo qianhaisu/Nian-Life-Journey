@@ -98,6 +98,12 @@ export type RoutingDecisionV4 = {
   blockedBy: string[];
   /** Set when a promotion-only gate failed but the window was still kept as a trace. */
   retainedDespitePromotionGate?: boolean;
+  /**
+   * Set when no gate failed at all, the window carried no worthiness signal, and it was kept as a
+   * trace on its evidence rather than discarded by `noDistinctiveMemorySignal`. The counterpart of
+   * the flag above for windows that PASSED the promotion gate — see the retention floor below.
+   */
+  retainedByTraceEvidence?: boolean;
 };
 
 /**
@@ -146,17 +152,35 @@ export function routeV4(input: RoutingInputV4): RoutingDecisionV4 {
   if (transition === 1) mediumSignals.push("possible_transition");
   if (capability === 1) mediumSignals.push("partial_capability");
 
+  // Retention is decided by the RETENTION inputs alone — whose day it was, whether it happened,
+  // whether the evidence can be trusted, and whether anything in it is attributable. Deliberately
+  // computed before the branches below and never from `blockedBy.length`, because the promotion gate
+  // is not one of those inputs. Still opt-in through `traceEvidenceCount`: v4/v5 never supply it, so
+  // their behaviour is unchanged everywhere.
+  const retentionBlockers = blockedBy.filter((gate) => !PROMOTION_ONLY_GATES.has(gate));
+  const mayRetain = input.traceEvidenceCount !== undefined && retentionBlockers.length === 0 && input.traceEvidenceCount >= 1;
+
   if (blockedBy.length) {
-    // Retention is decided separately from promotion, but ONLY when the caller supplied the trace
-    // evidence count. v4/v5 never do, so their behaviour here is unchanged.
-    const retentionBlockers = blockedBy.filter((gate) => !PROMOTION_ONLY_GATES.has(gate));
-    const mayRetain = input.traceEvidenceCount !== undefined && retentionBlockers.length === 0 && input.traceEvidenceCount >= 1;
     if (!mayRetain) return { action: "store_only", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy };
     return { action: "daily_trace", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy, retainedDespitePromotionGate: true };
   }
   if (strongSignals.length >= 1) return { action: "life_event_candidate", reviewRequirement: "needs_review", strongSignals, mediumSignals, blockedBy };
   if (mediumSignals.length >= 2) return { action: "life_event_candidate", reviewRequirement: "needs_review", strongSignals, mediumSignals, blockedBy };
   if (mediumSignals.length === 1) return { action: "daily_trace", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy };
+  // The same floor, on the path where NOTHING was blocked (RC-25).
+  //
+  // Without it the floor was reachable only by FAILING `no_unhedged_fact`: a window was kept as a
+  // trace because it had been refused a Memory, and passing that gate dropped it into this branch
+  // where `noDistinctiveMemorySignal` discards it. Retention was therefore anti-monotone in
+  // promotion evidence — the same day, with strictly more grounded evidence, was thrown away. That
+  // is a coupling between two questions worthiness-v4 already separates in the block above, not a
+  // threshold, and the fix is to ask the retention question the same way on both paths.
+  //
+  // It weakens nothing: `mayRetain` already requires no subject, temporal or evidence-confidence
+  // blocker and at least one claim with a resolved subject and a content-bearing span, and this
+  // branch is only reached when every gate passed. It can only ever turn store_only into
+  // daily_trace — no input here can reach life_event_candidate, so no promotion guard is touched.
+  if (mayRetain) return { action: "daily_trace", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy, retainedByTraceEvidence: true };
   return { action: axis.noDistinctiveMemorySignal ? "store_only" : "daily_trace", reviewRequirement: "n/a", strongSignals, mediumSignals, blockedBy };
 }
 
