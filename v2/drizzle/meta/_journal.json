@@ -71,6 +71,13 @@
       "when": 1788341393839,
       "tag": "0009_le_fingerprint_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788404352155,
+      "tag": "0010_dt_fingerprint_unique",
+      "breakpoints": true
     }
   ]
 }

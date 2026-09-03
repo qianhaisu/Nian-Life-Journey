@@ -209,13 +209,19 @@ export const organizerRuns = pgTable("organizer_runs", {
 // into one TraceDay — so several rows per (profileId, day) are a normal, supported state and 17
 // such days already exist in production.
 //
-// `organization_fingerprint` is indexed but NOT unique, unlike lifeEvents and organizerRuns. That
-// is a known gap, not a design choice: persistDailyTrace() does SELECT-then-INSERT under READ
-// COMMITTED with no constraint to catch a lost race, and production holds 17 fingerprint collision
-// pairs — same fingerprint, same day, inserted seconds apart by concurrent backfill workers, 6 of
-// them byte-identical. Making the index unique requires resolving those 17 pairs first (a
-// destructive write on existing rows) or a partial unique index scoped to new rows; both need
-// Teddy's authorisation. See docs/organizer-dailytrace-identity-2026-09-03.md.
+// `organization_fingerprint` is now UNIQUE, matching lifeEvents and organizerRuns. It was only an
+// ordinary index until 2026-09-03, and the gap was real: persistDailyTrace() does
+// SELECT-then-INSERT under READ COMMITTED, so two workers organizing the same evidence both miss
+// and both insert. Production had acquired 17 collision pairs that way — same fingerprint, same
+// day, seconds apart, all rule-derived and all unpublished. Ten were byte-identical; in the other
+// seven the pair had since diverged because the (now removed) same-day merge appended later batches
+// to whichever row it found first.
+//
+// The pairs were consolidated before the constraint went on, using persistDailyTrace's OWN merge —
+// union of entries, union of sourceIds — which is exactly the state a non-racing run would have
+// produced. The read path already concatenated every trace on a day (memory-chapters.ts), so the
+// consolidated row shows the family what the pair already showed them, minus the duplicated lines.
+// See docs/organizer-dailytrace-uniqueness-2026-09-03.md.
 export const dailyTraces = pgTable("daily_traces", {
   id: text("id").primaryKey(),
   profileId: text("profile_id").notNull().references(() => profiles.id),
@@ -230,7 +236,7 @@ export const dailyTraces = pgTable("daily_traces", {
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => ({
   byProfile: index("daily_traces_profile_idx").on(table.profileId),
-  byFingerprint: index("daily_traces_fingerprint_idx").on(table.organizationFingerprint),
+  byFingerprint: uniqueIndex("daily_traces_fingerprint_unique_idx").on(table.organizationFingerprint),
 }));
 
 // New. Read-only today: no repository function creates or updates a GrowthRecord — it only ever

@@ -24,6 +24,20 @@ async function transactionOrNull<T>(run: () => Promise<T>): Promise<T | null> {
   }
 }
 
+// Postgres unique_violation. Narrow on the SQLSTATE only: the driver's message text is not a
+// contract, and matching on it would silently stop working after a driver upgrade.
+//
+// Drizzle wraps a driver error in DrizzleQueryError and puts the pg error on `cause`, so the code
+// is NOT on the object thrown to us. Walking the cause chain is what makes this actually fire —
+// checking only the top-level `code` looks right and silently never matches.
+function isUniqueViolation(error: unknown): boolean {
+  for (let current: unknown = error, depth = 0; current && depth < 5; depth += 1) {
+    if (typeof current === "object" && (current as { code?: unknown }).code === "23505") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 function taskFromRow(row: Record<string, unknown>): ChatImportTask {
   const timestamp = (value: unknown) => {
     if (value === null || value === undefined) return undefined;
@@ -372,6 +386,50 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
   // Page-facing event listings belong to the canonical profile only.
   const canonicalEvents = () => db.select().from(t.lifeEvents).where(eq(t.lifeEvents.profileId, CANONICAL_PROFILE_ID));
 
+  // The single-attempt body of persistDailyTrace. Extracted so the 23505 retry can re-enter it
+  // with a FRESH transaction; see persistDailyTrace for why retrying inside the aborted one cannot
+  // work.
+  const persistDailyTraceOnce = (trace: DailyTrace): Promise<DailyTrace> =>
+    db.transaction(async (tx) => {
+        // Fingerprint is the whole identity. There used to be a `(profileId, day)` fallback here,
+        // and it was a cutover blocker: every day the evidence organizer will ever write already
+        // holds a rule-derived trace, so the fallback made a new artifact adopt the legacy row —
+        // inheriting its id, its ledger binding and therefore its publication state, while
+        // `organizerRun` was overwritten with the incoming run. Because requiresQualityReview()
+        // reads `organizerRun.organizerType`, that overwrite also flipped the legacy row from
+        // rule-derived (fail closed) to AI-derived (fail open): of 171 production traces, 101 are
+        // hidden only by that check and would have published themselves on merge, and 33 approved
+        // rows would have absorbed unreviewed entries. Same evidence → same fingerprint → same
+        // artifact; different evidence → a separate artifact, grouped with it only for display.
+        // FOR UPDATE, because the merge below is a read-modify-write on `entries` and `sourceIds`.
+        // The unique index alone does not make that safe: it stops a duplicate ROW, but two callers
+        // that both find the existing row would both read the same arrays, both compute a union
+        // missing the other's contribution, and the last UPDATE would silently drop an entry. A
+        // five-writer race reproduced exactly that. The lock serialises the mergers, so each one
+        // reads what the previous committed.
+        const existing = trace.organizationFingerprint
+          ? ((await tx.select().from(t.dailyTraces).where(eq(t.dailyTraces.organizationFingerprint, trace.organizationFingerprint)).for("update"))[0] as unknown as DailyTrace | undefined)
+          : undefined;
+        let result: DailyTrace;
+        if (existing) {
+          const merged = {
+            entries: [...new Set([...existing.entries, ...trace.entries])],
+            sourceIds: [...new Set([...existing.sourceIds, ...trace.sourceIds])],
+            organizerRun: trace.organizerRun ?? existing.organizerRun,
+            organizationFingerprint: existing.organizationFingerprint ?? trace.organizationFingerprint,
+            updatedAt: new Date().toISOString(),
+          };
+          const rows = await tx.update(t.dailyTraces).set(merged).where(eq(t.dailyTraces.id, existing.id)).returning();
+          result = rows[0] as unknown as DailyTrace;
+        } else {
+          const rows = await tx.insert(t.dailyTraces).values(trace).returning();
+          result = rows[0] as unknown as DailyTrace;
+        }
+        if (trace.sourceIds.length) await tx.update(t.rawSources).set({ status: "organized", relatedLifeEventId: null }).where(inArray(t.rawSources.id, trace.sourceIds));
+        return result;
+    });
+
+
   return {
     async getHomeEvents() {
       const [rows, reviews] = await Promise.all([canonicalEvents(), reviewIndex()]);
@@ -644,38 +702,23 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       });
     },
     async persistDailyTrace(trace: DailyTrace) {
-      return db.transaction(async (tx) => {
-        // Fingerprint is the whole identity. There used to be a `(profileId, day)` fallback here,
-        // and it was a cutover blocker: every day the evidence organizer will ever write already
-        // holds a rule-derived trace, so the fallback made a new artifact adopt the legacy row —
-        // inheriting its id, its ledger binding and therefore its publication state, while
-        // `organizerRun` was overwritten with the incoming run. Because requiresQualityReview()
-        // reads `organizerRun.organizerType`, that overwrite also flipped the legacy row from
-        // rule-derived (fail closed) to AI-derived (fail open): of 171 production traces, 101 are
-        // hidden only by that check and would have published themselves on merge, and 33 approved
-        // rows would have absorbed unreviewed entries. Same evidence → same fingerprint → same
-        // artifact; different evidence → a separate artifact, grouped with it only for display.
-        const existing = trace.organizationFingerprint
-          ? ((await tx.select().from(t.dailyTraces).where(eq(t.dailyTraces.organizationFingerprint, trace.organizationFingerprint)))[0] as unknown as DailyTrace | undefined)
-          : undefined;
-        let result: DailyTrace;
-        if (existing) {
-          const merged = {
-            entries: [...new Set([...existing.entries, ...trace.entries])],
-            sourceIds: [...new Set([...existing.sourceIds, ...trace.sourceIds])],
-            organizerRun: trace.organizerRun ?? existing.organizerRun,
-            organizationFingerprint: existing.organizationFingerprint ?? trace.organizationFingerprint,
-            updatedAt: new Date().toISOString(),
-          };
-          const rows = await tx.update(t.dailyTraces).set(merged).where(eq(t.dailyTraces.id, existing.id)).returning();
-          result = rows[0] as unknown as DailyTrace;
-        } else {
-          const rows = await tx.insert(t.dailyTraces).values(trace).returning();
-          result = rows[0] as unknown as DailyTrace;
-        }
-        if (trace.sourceIds.length) await tx.update(t.rawSources).set({ status: "organized", relatedLifeEventId: null }).where(inArray(t.rawSources.id, trace.sourceIds));
-        return result;
-      });
+      // SELECT-then-INSERT under READ COMMITTED cannot see a concurrent inserter's uncommitted row,
+      // so two workers organizing the same evidence both miss and both insert. That is how
+      // production acquired 17 duplicate-fingerprint pairs. `daily_traces_fingerprint_unique_idx`
+      // now makes the loser fail instead of duplicating — but a raised 23505 must not become a 500,
+      // because losing that race is a NORMAL outcome and both callers are entitled to the same
+      // artifact. One retry is enough and cannot loop: the winner has committed by the time the
+      // loser's constraint fires, so the retry's SELECT finds it and takes the merge branch.
+      //
+      // The retry is deliberately OUTSIDE the failed transaction. A statement error aborts the whole
+      // transaction in Postgres, so retrying inside it would only produce
+      // "current transaction is aborted".
+      try {
+        return await persistDailyTraceOnce(trace);
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+        return await persistDailyTraceOnce(trace);
+      }
     },
     async persistCareEpisode(episode: CareEpisode) {
       return db.transaction(async (tx) => {
