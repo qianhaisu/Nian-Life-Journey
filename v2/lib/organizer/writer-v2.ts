@@ -100,6 +100,8 @@ export type VerifiedClaim = {
   observationMode: ObservationMode;
   subjectResolved: boolean;
   subjectBasis: string;
+  /** Who the claim is about, when resolved. Assertable only when it is this profile. */
+  subjectId?: string;
   speakers: NarrativePerson[];
   sourceIds: string[];
   evidenceRefs: string[];
@@ -196,11 +198,47 @@ export function ageAt(birthDate: string | undefined, lifeDate: string): string |
 
 /**
  * A claim may be stated as something that happened only when grounding verified all of it: the
- * evidence asserts it, and it is about this child. Polarity is deliberately NOT part of this —
- * 「还不会叫妈」 is a perfectly assertable fact, it simply is not an achievement.
+ * evidence asserts it, and it is about this child — not merely about *someone* resolved. Polarity
+ * is deliberately NOT part of this — 「还不会叫妈」 is a perfectly assertable fact, it simply is not
+ * an achievement.
  */
-export function isAssertable(claim: Pick<GroundedClaim, "assertionStatus" | "subject">): boolean {
-  return claim.assertionStatus === "supported_assertion" && claim.subject.resolved;
+export function isAssertable(claim: Pick<GroundedClaim, "assertionStatus" | "subject">, profileId?: string): boolean {
+  if (claim.assertionStatus !== "supported_assertion" || !claim.subject.resolved) return false;
+  if (profileId && claim.subject.subjectId && claim.subject.subjectId !== profileId) return false;
+  return true;
+}
+
+/**
+ * Inner state — what the child wanted, felt, liked, feared. An observable action (he stood, he
+ * pushed the cup away) may be stated as fact; an inner state is always somebody's reading of him,
+ * and the page must say whose: 「妈妈觉得他可能饿了」, never 「他饿了」. This classifier is shared by
+ * the prompt (so the Writer is told which claims need attribution) and the validator (so a flat
+ * statement is rejected). Deliberately narrow: it must not fire on 可爱 or on ordinary actions.
+ */
+export const INNER_STATE = /想(妈妈|爸爸|雪姨|回|要|吃|喝|睡|玩|出去|抱|念)|不想|舍不得|(太|很|最|真)爱|爱上|喜欢|讨厌|害怕|怕(黑|生|人|水)|饿了|困了|开心|高兴|难过|伤心|生气|委屈|着急|想念|期待|享受|不耐烦|烦了|无聊|不高兴|不乐意|不愿意|愿意|觉得|新鲜|好奇|敏感/;
+
+export function isInnerStateText(text: string): boolean {
+  return INNER_STATE.test(text);
+}
+
+// 宝宝 is what the family calls any baby, so it never counts as naming this one on its own.
+export const GENERIC_ALIASES = new Set(["宝宝"]);
+// A `[链接]` title or a quoted reply is not the family speaking.
+export const NOT_AN_UTTERANCE = /\\?\[链接\\?\]|^\s*>\s/;
+
+/**
+ * A quote may reach the page only when the line it comes from is itself assertable material:
+ * an assertable claim rests on that line, or the line names the child itself (「我张小年是爱国的」
+ * carries its own subject — there is nothing to launder). Shared by the prompt, which hides every
+ * other quote from the Writer, and the validator, which rejects one if it is used anyway.
+ */
+export function quoteIsAssertable(pkg: Pick<VerifiedMemoryEvidencePackage, "claims" | "identity">, quote: Pick<VerifiedQuote, "evidenceRef" | "text">): boolean {
+  const assertable = pkg.claims.filter((c) => c.assertable);
+  const assertableItems = new Set(assertable.flatMap((c) => c.evidenceRefs).map((ref) => ref.split("#")[0]));
+  if (assertableItems.has(quote.evidenceRef.split("#")[0]!)) return true;
+  if (assertable.some((c) => c.spans.some((s) => s.text.includes(quote.text)))) return true;
+  const names = [pkg.identity.subject.primaryName, ...pkg.identity.subject.aliases.filter((a) => !GENERIC_ALIASES.has(a))];
+  return !NOT_AN_UTTERANCE.test(quote.text) && names.some((n) => quote.text.includes(n));
 }
 
 export function mediaTierFor(confidence: number, boundItemId: string | undefined): MediaBindingTier {
@@ -233,11 +271,12 @@ export function buildEvidencePackage(input: BuildPackageInput): VerifiedMemoryEv
     observationMode: claim.observationMode,
     subjectResolved: claim.subject.resolved,
     subjectBasis: claim.subject.basis,
+    subjectId: claim.subject.subjectId,
     speakers: claim.speakerDigests.map(input.identityOf),
     sourceIds: claim.sourceIds,
     evidenceRefs: claim.evidenceRefs,
     spans: claim.supportingSpans.map((span) => ({ ref: span.ref, text: span.text })),
-    assertable: isAssertable(claim),
+    assertable: isAssertable(claim, window.profileId),
   }));
 
   // A quote is usable only if it is really in the window, character for character.
