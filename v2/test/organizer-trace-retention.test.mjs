@@ -211,6 +211,74 @@ test("v4/v5 without traceEvidenceCount keep the old terminal behaviour exactly",
   assert.equal(routed.retainedByTraceEvidence, undefined);
 });
 
+// ---------------------------------------------------------------- the window-level subject gate
+//
+// RC-08 asked whether "not safe enough to assert this as 张年's Memory" has to mean "discard the
+// day". In principle no — Memory attribution and day retention are different questions, and
+// routeV4 already separates them. But validator.ts's subject gate returns store_only BEFORE routing,
+// so `traceEvidenceCount` is never consulted for an ambiguous window.
+//
+// Measured on 69 saved editor verdicts (two corpora, zero new model calls): 15 windows hit that
+// gate. In EVERY window the editor called `ambiguous`, deterministic claim grounding independently
+// agreed — 0 resolved claims, traceEvidenceCount 0. The two subject determinations never disagree in
+// the direction that would cost a real day.
+//
+// The four windows where grounding DID resolve a claim were all `unrelated`, and all four are
+// advertising or logistics that merely mention him in passing. Relaxing the gate would rescue only
+// those. So the gate costs nothing at the trace layer today, and loosening it buys routine
+// inflation. Existing semantics are safe; these pin that conclusion rather than change it.
+
+test("an ambiguous subject is refused as BOTH a Memory and a trace, and asserts nothing", () => {
+  const bare = item("他又要长牙了。都冒出来了。");
+  const window = windowOf([bare, item("[表情包]")]);
+  const verdict = {
+    ...verdictOf([{ statement: "张小年第五第六颗牙长出来了", assertionKind: "raw_fact", evidenceRefs: [ref(bare)] }]),
+    subjectRelevance: "ambiguous",
+  };
+  const grounding = groundClaims(window, verdict, SUBJECT, OPTS);
+  assert.equal(grounding.traceEvidenceCount, 0, "nothing in scope names him, so nothing is attributable");
+
+  const policy = createV6RoutingPolicy(() => ({
+    worthiness: AXIS_ORDINARY, evidence: { evidenceConfidence: "medium", evidenceRefs: [] },
+    subjectResolution: "unresolved", grounding,
+  }));
+  const result = validate(window, verdict, {
+    now: "2026-03-02T00:00:00.000Z", existingLifeEvents: [], recentSameTypeCount: 0,
+    routingPolicy: policy, claimGrounding: grounding,
+  });
+
+  assert.equal(result.outcome.action, "store_only");
+  assert.ok(result.reasonCodes.includes("subject_ambiguous"));
+  // The forbidden transformation: a hedged, unattributable family remark must never be written out
+  // as an asserted fact about the child, at ANY layer.
+  assert.equal(result.outcome.traceLines, undefined, "no trace lines at all");
+  assert.equal(result.outcome.coreFacts, undefined, "and no asserted child facts");
+});
+
+test("an UNRELATED window is not rescued by a passing mention of the child", () => {
+  // The shape of every window that would be 'rescued' by relaxing the gate: an errand or an advert
+  // that names him once. Grounding resolves that one claim, so traceEvidenceCount is 1 — and the
+  // window still must not become a day in his archive.
+  const errand = item("小年的游泳圈买了，链接发你。");
+  const window = windowOf([errand, item("好的，那你直接买。")]);
+  const verdict = {
+    ...verdictOf([{ statement: "家人买了游泳圈", assertionKind: "raw_fact", evidenceRefs: [ref(errand)] }]),
+    subjectRelevance: "unrelated",
+  };
+  const grounding = groundClaims(window, verdict, SUBJECT, OPTS);
+  assert.ok(grounding.traceEvidenceCount >= 1, "the passing mention does resolve a claim");
+
+  const policy = createV6RoutingPolicy(() => ({
+    worthiness: AXIS_ORDINARY, evidence: { evidenceConfidence: "medium", evidenceRefs: [] },
+    subjectResolution: "explicit", grounding,
+  }));
+  const result = validate(window, verdict, {
+    now: "2026-03-02T00:00:00.000Z", existingLifeEvents: [], recentSameTypeCount: 0,
+    routingPolicy: policy, claimGrounding: grounding,
+  });
+  assert.equal(result.outcome.action, "store_only", "shopping for him is not a day of his life");
+});
+
 // ---------------------------------------------------------------- end to end through grounding
 
 function questionWindow() {
