@@ -41,10 +41,15 @@ test("REGRESSION: overwriting a legacy trace's organizerRun with an AI run publi
   assert.equal(isTracePublishable(legacy, reviews), false);
 
   const afterMerge = { ...legacy, organizerRun: { organizerType: "ai", organizerVersion: "evidence-v6" } };
+  // Until 2026-09-03 this published itself: rule provenance was the whole gate, so overwriting it
+  // with an AI run removed the gate. AI provenance is now fail-closed too, which neutralises THIS
+  // particular consequence of a day-merge. The merge is still forbidden — the next test shows the
+  // half that no provenance rule can fix, where the legacy row's `approved` decision is inherited
+  // by entries nobody reviewed.
   assert.equal(
     isTracePublishable(afterMerge, reviews),
-    true,
-    "a merged legacy row publishes itself: rule provenance was the whole gate",
+    false,
+    "an AI run no longer publishes itself by overwriting rule provenance",
   );
 });
 
@@ -73,13 +78,16 @@ test("a separate evidence artifact inherits no review state from the day's legac
   );
 });
 
-test("an explicit gating row holds an evidence trace back even though AI provenance fails open", () => {
-  // AI-derived content is not fail-closed: with no ledger row at all, an evidence trace publishes.
-  // That is why canary-created artifacts must be written together with a gating row.
+test("an evidence trace is fail-closed: no ledger row means it does not publish", () => {
+  // Was the fail-open. An evidence trace with no row used to publish, which is why the note here
+  // said canary artifacts "must be written together with a gating row" — a rule that holds only as
+  // long as nothing goes wrong between the two writes. It is now a property of the artifact rather
+  // than a discipline the writer has to remember.
   const evidence = evidenceTrace("trace-evidence");
-  assert.equal(requiresQualityReview(evidence), false);
-  assert.equal(isTracePublishable(evidence, indexReviews([])), true, "no row means published — the fail-open");
+  assert.equal(requiresQualityReview(evidence), true);
+  assert.equal(isTracePublishable(evidence, indexReviews([])), false, "no row means NOT published");
   assert.equal(isTracePublishable(evidence, indexReviews([review("trace-evidence", "needs_human_review")])), false);
+  assert.equal(isTracePublishable(evidence, indexReviews([review("trace-evidence", "approved")])), true, "an explicit approval still publishes it");
 });
 
 test("several trace artifacts on one day render as one day", () => {

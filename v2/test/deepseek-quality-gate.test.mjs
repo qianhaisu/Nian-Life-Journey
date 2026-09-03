@@ -105,10 +105,15 @@ test("rule-derived artifacts are fail closed and human ones are untouched", () =
   assert.equal(isEventPublishable(ruleEvent, rejected), false);
 });
 
-test("an explicit ledger decision binds AI-derived content too, so a canary Memory can stay gated", () => {
+test("an explicit ledger decision binds AI-derived content too, and no row means NOT published", () => {
   const aiEvent = { id: "e3", createdBy: "ai", organizerVersion: "deepseek-v6", visibility: "family" };
   const aiTrace = { id: "t3", createdBy: "ai", organizerRun: { organizerType: "ai" } };
-  assert.equal(isEventPublishable(aiEvent, indexReviews([])), true, "no row: AI content publishes as before");
+  // Changed 2026-09-03, with the V2 production adapter. This used to assert that AI content with no
+  // ledger row publishes. That was safe only while no AI artifact could exist — every production
+  // artifact was rule-derived. Once the adapter can write a generated Memory, "no row" must mean
+  // "not yet read by a human", or a failed review-row write silently publishes to the family.
+  assert.equal(isEventPublishable(aiEvent, indexReviews([])), false, "no row: AI content is NOT published");
+  assert.equal(isTracePublishable(aiTrace, indexReviews([])), false);
   const held = indexReviews([
     { targetKind: "life_event", targetId: "e3", decision: "needs_human_review" },
     { targetKind: "daily_trace", targetId: "t3", decision: "needs_human_review" },

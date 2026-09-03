@@ -43,7 +43,20 @@ export function decisionPublishes(decision: QualityDecision | undefined): boolea
 export function requiresQualityReview(artifact: { createdBy?: string; organizerVersion?: string; organizerRun?: { organizerType?: string } | null }): boolean {
   if (artifact.createdBy === "rule") return true;
   if (artifact.organizerVersion?.startsWith("rule")) return true;
-  return artifact.organizerRun?.organizerType === "rule";
+  if (artifact.organizerRun?.organizerType === "rule") return true;
+  // AI-authored artifacts fail CLOSED.
+  //
+  // This used to return false for them, on the reasoning that a canary would always write its own
+  // ledger row. That held only while no AI artifact could exist — every one of production's 82
+  // LifeEvents and 154 DailyTraces is rule-derived. The V2 production adapter changes that, and the
+  // old rule would have meant a generated Memory whose review row failed to write is published to
+  // the family immediately, with nothing showing it was never read by a human.
+  //
+  // So a missing row no longer means "publish". For AI content the explicit ledger decision is the
+  // only thing that can publish it, which is what "explicit ledger decision is authoritative for AI
+  // publication" has to mean if it means anything. Affects zero existing rows.
+  if (artifact.createdBy === "ai") return true;
+  return artifact.organizerRun?.organizerType === "ai";
 }
 
 export type ReviewIndex = Map<string, QualityDecision>;
