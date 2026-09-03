@@ -14,9 +14,41 @@
 // rejected rather than softened. Fail closed: a story that cannot be checked is not published.
 import { containsTechnicalPlaceholder } from "./quality-review";
 import { extractQuotes } from "./family-writer";
-import { mayIllustrateStory, type VerifiedMemoryEvidencePackage, type WriterV2Output } from "./writer-v2";
+import { isInnerStateText, mayIllustrateStory, quoteIsAssertable, type VerifiedMemoryEvidencePackage, type WriterV2Output } from "./writer-v2";
 
-export const NARRATIVE_VALIDATOR_VERSION = "narrative-validator-v2";
+export const NARRATIVE_VALIDATOR_VERSION = "narrative-validator-v2.3";
+
+// Family labels that may carry an attribution. Anyone else in a story is `unsupported_person`.
+const FAMILY_LABELS = ["爸爸", "妈妈", "雪姨", "奶奶", "爷爷", "外婆", "外公", "姥姥", "姥爷"];
+
+// 「妈妈觉得他可能饿了」: label + a verb of saying / seeing / judging. This is the only shape in
+// which an inner state may reach the page (Decision 3, 2026-09-03).
+const ATTRIBUTION_VERB = "(说|觉得|看|猜|感觉|发现|以为|认为|讲|估计|判断|问|提到|回|拍|听|想着|看来)";
+const ATTRIBUTED = new RegExp(`(${FAMILY_LABELS.join("|")})[^。！？；]{0,6}${ATTRIBUTION_VERB}`);
+// 「妈妈跟雪姨聊起……说」 names 雪姨 as the person spoken to, not the speaker, so a label right after
+// an addressee marker is not an attribution.
+const LABEL_WITH_VERB = new RegExp(`(?<![跟和对给向让同])(${FAMILY_LABELS.join("|")})[^。！？；「」]{0,6}${ATTRIBUTION_VERB}`, "g");
+
+// The family's 「你」 has no referent the evidence can verify: 「他太爱你了」 said by 妈妈 is not
+// 「他太爱妈妈了」 — she was talking to somebody. A feeling aimed at a named person may only be
+// written when that person's name is in the line itself.
+const FEELING_TOWARD_LABEL = new RegExp(`(爱|想|喜欢|黏|粘|找|要|抱|亲|认|离不开|依赖)(${FAMILY_LABELS.join("|")})`, "g");
+const LABEL_SURFACE: Record<string, string[]> = { 妈妈: ["妈"], 爸爸: ["爸"], 雪姨: ["雪姨", "阿姨"] };
+
+// 「妈妈看着张小年，说他腿粗」 when 妈妈 was looking at a photo. A stage direction is an observable
+// action the Writer added for rhythm; it is stated as fact and nothing in the evidence shows it.
+// Each verb is supported only by evidence containing the same act (哈哈 counts as laughing).
+const STAGE_DIRECTION = /(看着|望着|盯着|抱着|搂着|牵着|摸着|拉着|跟着|笑着|笑称)/g;
+const STAGE_SUPPORT: Record<string, RegExp> = {
+  看着: /看/, 望着: /看|望/, 盯着: /看|盯/, 抱着: /抱/, 搂着: /搂|抱/, 牵着: /牵/, 摸着: /摸/, 拉着: /拉/, 跟着: /跟|一起/,
+  笑着: /笑|哈哈|😂|🤣/, 笑称: /笑|哈哈|😂|🤣/,
+};
+
+// Before/after framing. Deliberately does not match a bare 从 (从早上 / 从沙发上), only 从…到….
+const CONTRAST_LANGUAGE = /从[^。，]{1,12}到[^。，]{1,12}|(以前|之前|上个月|前几天|前些天|那时候|原来|过去|上次|早先)[^。]{0,20}(现在|如今|这天|这次|已经|变)|比(以前|之前|上次|上个月)/;
+
+const splitSentences = (text: string) => text.split(/[。！？；\n]/).map((s) => s.trim()).filter(Boolean);
+const stripQuotes = (text: string) => text.replace(/「[^」]*」/g, "「」");
 
 export type NarrativeIssue = { code: string; detail?: string };
 export type NarrativeValidationResult = { ok: boolean; issues: NarrativeIssue[] };
@@ -93,8 +125,22 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
   // ---------------------------------------------------------------- per-claim support
 
   const claimById = new Map(pkg.claims.map((c) => [c.claimId, c]));
+  const knownLabels = new Set(pkg.identity.people.map((p) => p.narrativeLabel).filter(Boolean));
 
   if (output.narrativeClaims.length === 0) add("no_narrative_claims");
+
+  const quoteById = new Map(pkg.quotes.map((q) => [q.quoteId, q]));
+
+  // A quote is usable only when the line it comes from is itself assertable material. Otherwise a
+  // Writer could launder an unresolved-subject or hypothetical line into the page verbatim — the
+  // validator would find the characters in the evidence and wave it through. So the haystack is
+  // the assertable spans, plus package quotes whose source line an assertable claim rests on.
+  const assertableSpanText = pkg.claims.filter((c) => c.assertable).flatMap((c) => c.spans.map((s) => s.text));
+  const quotableText = [...assertableSpanText, ...pkg.quotes.filter((q) => quoteIsAssertable(pkg, q)).map((q) => q.text)].join("\n");
+  for (const id of output.usedQuoteIds) {
+    const q = quoteById.get(id);
+    if (q && !quoteIsAssertable(pkg, q)) add("quote_from_unassertable_material", id);
+  }
 
   for (const nc of output.narrativeClaims) {
     if (!nc.text?.trim()) { add("empty_narrative_claim"); continue; }
@@ -102,6 +148,7 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
       add("unsupported_narrative_claim", nc.text.slice(0, 40));
       continue;
     }
+    const citedSpeakerLabels = new Set<string>();
     for (const id of nc.supportedByClaimIds) {
       const claim = claimById.get(id);
       if (!claim) { add("narrative_claim_cites_unknown_claim", id); continue; }
@@ -109,9 +156,46 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
       // Writer's understanding; it may never be the support for a stated fact.
       if (!claim.assertable) add(`narrative_claim_cites_${claim.assertionStatus}`, `${id}: ${nc.text.slice(0, 30)}`);
       if (!claim.subjectResolved) add("narrative_claim_cites_unresolved_subject", id);
+      // Resolved is not the same as resolved-to-张年. A claim grounded on another child, or on an
+      // adult, can never support a sentence in his archive.
+      if (claim.subjectId && claim.subjectId !== pkg.identity.profileId) add("narrative_claim_cites_other_subject", `${id}: ${claim.subjectId}`);
+      for (const s of claim.speakers) if (s.narrativeLabel) citedSpeakerLabels.add(s.narrativeLabel);
     }
     for (const id of nc.supportedBySourceIds) if (!sourceIds.has(id)) add("narrative_claim_cites_unknown_source", id);
-    for (const id of nc.supportedByQuoteIds ?? []) if (!quoteIds.has(id)) add("narrative_claim_cites_unknown_quote", id);
+    for (const id of nc.supportedByQuoteIds ?? []) {
+      const q = quoteById.get(id);
+      if (!q) { add("narrative_claim_cites_unknown_quote", id); continue; }
+      if (q.speaker.narrativeLabel) citedSpeakerLabels.add(q.speaker.narrativeLabel);
+    }
+
+    // 「妈妈说……」 must be supported by material 妈妈 actually said. A sentence that attributes an
+    // observation to a family member none of its cited evidence came from is invention with a
+    // name on it — the more convincing for being specific.
+    for (const m of stripQuotes(nc.text).matchAll(LABEL_WITH_VERB)) {
+      const label = m[1]!;
+      if (knownLabels.has(label) && !citedSpeakerLabels.has(label)) add("misattributed_speaker", `${label}: ${nc.text.slice(0, 30)}`);
+    }
+
+    // 「他太爱你了」 → 「他太爱妈妈了」. The cited line addresses somebody as 你; the page may name
+    // that somebody only if the line itself does.
+    const citedLines = [
+      ...nc.supportedByClaimIds.flatMap((id) => claimById.get(id)?.spans.map((s) => s.text) ?? []),
+      ...(nc.supportedByQuoteIds ?? []).map((id) => quoteById.get(id)?.text ?? ""),
+    ];
+    if (citedLines.some((line) => /你/.test(line))) {
+      for (const m of stripQuotes(nc.text).matchAll(FEELING_TOWARD_LABEL)) {
+        const label = m[2]!;
+        const surfaces = [label, ...(LABEL_SURFACE[label] ?? [])];
+        if (!citedLines.some((line) => surfaces.some((s) => line.includes(s)))) add("second_person_resolved_to_person", `${label}: ${nc.text.slice(0, 30)}`);
+      }
+    }
+
+    // 「妈妈看着张小年，说……」: the saying is evidenced, the looking is not.
+    const citedText = citedLines.join("\n");
+    for (const m of stripQuotes(nc.text).matchAll(STAGE_DIRECTION)) {
+      const verb = m[1]!;
+      if (!STAGE_SUPPORT[verb]!.test(citedText)) add("unsupported_stage_direction", `${verb}: ${nc.text.slice(0, 30)}`);
+    }
 
     // Media may support a sentence only if it is really bound to this event. Same-day is never
     // enough, so a day_level photo cannot make a sentence true.
@@ -124,23 +208,34 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
 
   // ---------------------------------------------------------------- quotes
 
+  // Milestone detection below still looks at everything the package holds, so a milestone word the
+  // family used anywhere counts as evidence. Quotes are held to the stricter, assertable haystack.
   const evidenceHaystack = [
     ...pkg.claims.flatMap((c) => c.spans.map((s) => s.text)),
     ...pkg.quotes.map((q) => q.text),
   ].join("\n");
   for (const quote of extractQuotes(story)) {
-    if (!evidenceHaystack.includes(quote)) add("unsupported_quote", quote.slice(0, 20));
+    if (!quotableText.includes(quote)) add("unsupported_quote", quote.slice(0, 20));
   }
 
   // ---------------------------------------------------------------- people
 
   // Every narrative label used must belong to a person actually in this package. 雪姨 must not
   // appear in a story she is not part of, and an unknown speaker must not acquire a family role.
-  const knownLabels = new Set(pkg.identity.people.map((p) => p.narrativeLabel).filter(Boolean));
-  for (const label of ["爸爸", "妈妈", "雪姨", "奶奶", "爷爷", "外婆", "外公", "姥姥", "姥爷"]) {
+  for (const label of FAMILY_LABELS) {
     if ((title.includes(label) || story.includes(label)) && !knownLabels.has(label)) {
       add("unsupported_person", label);
     }
+  }
+
+  // ---------------------------------------------------------------- inner state
+
+  // An action may be stated; a feeling, wish or preference is always somebody's reading of the
+  // child and must say whose. Quoted text is excluded (the verbatim rule already governs it), and a
+  // sentence counts as attributed only when a family label carries a verb of saying or judging.
+  for (const sentence of splitSentences(`${title}。${story}`)) {
+    const bare = stripQuotes(sentence);
+    if (isInnerStateText(bare) && !ATTRIBUTED.test(bare)) add("inner_state_stated_as_fact", sentence.slice(0, 30));
   }
 
   // ---------------------------------------------------------------- novelty / polarity / mode
@@ -164,6 +259,17 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
     }));
   if (hypotheticalPresent && hypotheticalMentioned && !HYPOTHETICAL_FRAMING.test(story)) {
     add("unframed_hypothetical");
+  }
+
+  // ---------------------------------------------------------------- longitudinal contrast
+
+  // 「从抬头不稳到快要跑起来」 is only honest when both halves are evidenced: either the package
+  // carries verified earlier baseline, or the sentence rests on at least two distinct assertable
+  // claims of this day. A contrast built on one fact plus memory of "how he used to be" is invention.
+  for (const nc of output.narrativeClaims) {
+    if (!CONTRAST_LANGUAGE.test(stripQuotes(nc.text))) continue;
+    const distinctAssertable = new Set(nc.supportedByClaimIds.filter((id) => claimById.get(id)?.assertable));
+    if (pkg.longitudinal.length === 0 && distinctAssertable.size < 2) add("unsupported_longitudinal_contrast", nc.text.slice(0, 30));
   }
 
   // ---------------------------------------------------------------- time
@@ -193,7 +299,8 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
   if (titleLen > 0 && (titleLen < 6 || titleLen > 18)) add("title_length", String(titleLen));
   const storyLen = countHan(story);
   if (storyLen > storyMax) add("story_too_long", String(storyLen));
-  if (story && title && story.includes(title)) add("title_repeated_in_story");
+  // A title that is the family's own words may reappear as the quote it came from.
+  if (story && title && stripQuotes(story).includes(title)) add("title_repeated_in_story");
 
   return { ok: issues.length === 0, issues };
 }
