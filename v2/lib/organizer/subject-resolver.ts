@@ -19,6 +19,7 @@
 import type { EvidenceWindow, EvidenceItem } from "./evidence/types";
 import type { IdentityRegistry } from "./identity";
 import { resolveSpeaker } from "./identity";
+import { firstPronounItem, resolveByConversationContinuity, type SubjectResolutionEvidence } from "./subject-continuity";
 
 export type SubjectResolutionLevel = "explicit" | "contextually_resolved" | "unresolved";
 
@@ -30,6 +31,8 @@ export type SubjectResolution = {
   blockers: string[];
   /** Source ids the resolution rests on. An auditable trail, not a claim. */
   supportingSourceIds: string[];
+  /** Present only when bounded conversation continuity was consulted (subject-continuity.ts). */
+  continuity?: SubjectResolutionEvidence;
 };
 
 // Anyone whose presence makes "他" genuinely ambiguous. A cousin, a classmate, another baby in the
@@ -97,6 +100,16 @@ export function resolveSubjectBounded(
   // resolves to nobody, however child-shaped the conversation looks.
   const antecedents = neighbours.filter((item) => namesSubject(item.text, names));
   if (antecedents.length === 0) {
+    // Only when the caller attached bounded same-conversation context (subject-continuity.ts).
+    // Without it — every frozen V6 caller — the result is unchanged.
+    const anchor = "continuity" in window ? firstPronounItem(window) : undefined;
+    if (anchor) {
+      const continuity = resolveByConversationContinuity(window, anchor, subject, { registry: options.registry });
+      if (continuity.basis === "conversation_continuity") {
+        return { level: "contextually_resolved", signals: ["conversation_continuity", ...(options.singleChildHousehold ? ["single_child_household_prior"] : [])], blockers: [], supportingSourceIds: continuity.antecedentSourceIds, continuity };
+      }
+      return { level: "unresolved", signals: [], blockers: ["no_explicit_antecedent", ...continuity.blockers], supportingSourceIds: [], continuity };
+    }
     return { level: "unresolved", signals: [], blockers: ["no_explicit_antecedent"], supportingSourceIds: [] };
   }
   signals.push("explicit_antecedent_nearby");

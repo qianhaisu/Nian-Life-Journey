@@ -20,6 +20,7 @@ import type { CoreFact, MemoryEditorVerdict } from "./contract";
 import type { IdentityRegistry } from "./identity";
 import { resolveSpeaker } from "./identity";
 import { analyzeSpan, normalizeSpanText, type Polarity, type SpeechAct, type SpanAnalysis } from "./speech-act";
+import { resolveByConversationContinuity, type SubjectResolutionEvidence } from "./subject-continuity";
 import type { WorthinessAxisV4 } from "./worthiness-v4";
 
 export const CLAIM_GROUNDING_VERSION = "claim-grounding-v1";
@@ -28,6 +29,7 @@ export type ClaimSubjectBasis =
   | "explicit_in_span"
   | "antecedent_in_window"
   | "antecedent_in_neighbour"
+  | "conversation_continuity"
   | "unresolved_no_reference"
   | "unresolved_competing_person"
   | "unresolved_no_antecedent";
@@ -55,6 +57,8 @@ export type ClaimSubject = {
   basis: ClaimSubjectBasis;
   supportingSourceIds: string[];
   blockers: string[];
+  /** Present only when the subject was resolved by bounded conversation continuity (subject-continuity.ts). */
+  continuity?: SubjectResolutionEvidence;
 };
 
 export type GroundedClaim = {
@@ -173,6 +177,25 @@ export function resolveClaimSubject(
   const inNeighbour = neighbours.filter((item) => namesSubject(item.text, names));
   if (inNeighbour.length > 0) {
     return { resolved: true, subjectId, basis: "antecedent_in_neighbour", supportingSourceIds: inNeighbour.map((item) => item.sourceId), blockers: [] };
+  }
+
+  // Last resort, and only when the caller attached bounded same-conversation context to the window
+  // (attachContinuityContext). The frozen V6 path never does, so it is byte-for-byte unchanged here.
+  // The anchor is the claim's own earliest pronoun-bearing message; the walk is backwards only.
+  const anchorItem = spans
+    .filter((span) => PRONOUN.test(normalizeSpanText(span.text)))
+    .map((span) => window.items.find((item) => item.itemId === span.itemId))
+    .filter((item): item is EvidenceItem => Boolean(item))
+    .sort((a, b) => a.sentAt.localeCompare(b.sentAt))[0];
+  if (anchorItem && "continuity" in window) {
+    const continuity = resolveByConversationContinuity(window, anchorItem, subject, { registry: options.registry });
+    if (continuity.basis === "conversation_continuity") {
+      return { resolved: true, subjectId, basis: "conversation_continuity", supportingSourceIds: continuity.antecedentSourceIds, blockers: [], continuity };
+    }
+    if (continuity.competingSubjectIds.length > 0) {
+      return { resolved: false, basis: "unresolved_competing_person", supportingSourceIds: [], blockers: ["competing_person_in_scope", ...continuity.blockers], continuity };
+    }
+    return { resolved: false, basis: "unresolved_no_antecedent", supportingSourceIds: [], blockers: ["no_explicit_antecedent", ...continuity.blockers], continuity };
   }
   return { resolved: false, basis: "unresolved_no_antecedent", supportingSourceIds: [], blockers: ["no_explicit_antecedent"] };
 }
