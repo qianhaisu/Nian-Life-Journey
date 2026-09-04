@@ -14,7 +14,7 @@ Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（Neon�
 
 - `v2/app`：页面、Server Action、Route Handler
 - `v2/lib/db`：Repository（默认走 PostgreSQL，JSON file store 保留仅供本地无凭据开发）
-- `v2/lib/organizer`：Rule/AI Organizer（`MEMORY_ORGANIZER`/`AI_ORGANIZER_ENABLED` 默认关闭，走 RuleBased；AI 路径启用后，Gemini provider 缺省用 V2 Prompt/Schema 契约，OpenAI-compatible provider 仍用 V1）
+- `v2/lib/organizer`：Organizer V2 **生产已开启**（`ORGANIZER_V2_ENABLED` 已在 Vercel 设置，2026-09-04 确认）。生产 provider 统一 DeepSeek（`AI_PROVIDER=deepseek`、`AI_MODEL=deepseek-v4-pro`）；Gemini / OpenAI-compatible 分支保留但不再维护，不要改、不要删、不要拿它们做对比实验
 - `v2/lib/ingest`、`v2/tools/quark-connector`：Quark/WorkBuddy artifact 边界
 - `v2/lib/media`、`v2/lib/storage`、`v2/lib/archive`：媒体派生与存储
 
@@ -36,9 +36,13 @@ Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（Neon�
 
 任何 P2 及之后的产品、UI、UX、信息架构工作，动手前必须先读 [`docs/nianlife-product-principles.md`](docs/nianlife-product-principles.md) 并以它为准。原则只在那份文档里维护，本文件不复述。
 
-## AI Organizer 架构方向
+## AI Organizer 现状（2026-09-04）
 
-Gemini V2 的语义方向已用真实评测验证（Schema/Policy 叙事泄漏问题已解决），但真实响应延迟不稳定，同一请求在不同时刻可能是几秒也可能超过 30 秒。当前 Capture 链路仍是同步调用、同步 fallback。生产化时应把 AI Organizer 改成基于 PostgreSQL/job/outbox 的异步任务，让用户上传不必等待模型返回；不要通过继续调大同步 `AI_TIMEOUT_MS` 来掩盖这个问题。
+Organizer V2 已在生产运行，不是「还没上线」。问题相反：**它已经在跑，却只放行了 3 段 Memory**（生产 content_quality_reviews：life_event approved 3 / store_only 15 / downgrade 10 / rejected 6）。精度机制把真实人生挡在外面了。
+
+已定方向：Judgment 改 **recall-first**，精度机制降级为「对每句话的约束」，不再作为「要不要出候选」的门；人工审阅台（`/inbox`）作为 Organizer 最后一级。Organizer 搬到 Teddy 电脑上的本地 worker，Vercel 只做渲染和审阅台。
+
+Capture 链路的同步调用问题仍在（响应延迟不稳定），本地 worker 上线后自然解决；不要靠调大 `AI_TIMEOUT_MS` 掩盖。
 
 ## Teddy 的长期开发规则
 
@@ -57,13 +61,13 @@ Nianlife 当前按单用户个人项目开发，功能优先。
 - 审计、导出、账号删除
 - 为未来多用户提前进行复杂设计
 
-当前主线顺序：
+当前主线顺序（2026-09-04 重排，从最近月份做到最旧）：
 
-1. PostgreSQL 正式 Repository
-2. AI Organizer 异步任务
-3. Quark/WorkBuddy 初始化与持续导入
-4. 其他核心产品功能
-5. 核心功能完成后再考虑登录和安全
+0. **把硬盘上的东西全部导进来** ← 当前阶段。9 个微信会话（本地 5 万余条，已入库仅 16%）+ 夸克 2,279 个素材（已入库 0）。验收：raw_sources 覆盖 2025-01 → 2026-09 每月，任何一个月都能看到张年
+1. 审阅台 + recall-first，先做 2026-09 → 2026-06
+2. 本地 worker 上线；推进到 2026-01
+3. 回到 2025 年逐月出版；2025 年度书 V1
+4. 核心功能完成后再考虑登录和安全
 
 现有安全防护不要主动删除，但不要让新增安全建设阻塞当前开发。
 
@@ -95,12 +99,12 @@ Teddy 的默认 Git 习惯：
 - 如果实现方式明确，直接修改、验证、commit、push main。
 - 不要先完成一轮只读审计后，又为显而易见的修改重复询问。
 - 只有存在真正影响产品行为、数据模型或迁移路线的歧义时才找 Teddy。
-- 可以使用 Sonnet subagent，但 Teddy 是普通 Pro 用户：
-  - 默认主 Agent 完成
-  - 最多 2 个 subagent
-  - 不重复遍历相同代码
-  - 不为简单任务启用 subagent
-  - 不默认使用 Opus
+- Teddy 是 **Claude Max** 用户（2026-09-04 核实，此前本文件写的「普通 Pro」已过时）。subagent 和模型档位按任务选，不必刻意压低：
+  - 简单、明确的改动：主 Agent 直接做，不启 subagent
+  - 需要横扫多处代码的调研：可并行开 subagent，不再限制在 2 个
+  - 涉及数据模型、迁移路线、Organizer 判断逻辑的设计决策：用高档位模型
+  - 批量导入、脚本执行这类重复劳动：低档位或直接跑脚本，别烧在模型上
+  - 仍然不重复遍历相同代码
 
 ### 分支与 Worktree
 
@@ -129,77 +133,56 @@ Nianlife 只有一个 Neon 数据库（integration `neon-citrine-park`），Verc
 - 不删除现有路径、Schema、Policy 和幂等保护。
 - 修改后运行与改动范围匹配的 typecheck、test、lint、build 和 diff check（见「常用验证命令」），而不是每次都跑全套或完全不验证。
 
-## 工程执行质量与状态报告原则
+## 完成的定义、停下清单与 Codex 边界（2026-09-04）
 
-先看真实数据，再看真实调用链，再看真实写入链，最后才设计。不要因为代码存在就认为产品拥有该能力，不要因为测试通过就认为生产走过该路径，不要因为本阶段成功就推断下一阶段已经准备好。
+### 完成的定义
 
-这一节要求的是「Session 自己先核实事实」，不是「多问 Teddy」。核实由 Session 自己完成，不改变上面「开发执行方式」和「Neon/PostgreSQL」里已经给出的授权。
+**不是测试通过，是 nianlife.cn 上多出了家人能读的东西。** 每轮结束线上必须有变化。唯一的最终验收人是苏静：她愿不愿意翻。
 
-### Ground Truth First
+### 停下清单（这些一律不做，也不要提议）
 
-- 设计前先查真实数据、真实文件字节、真实 production call graph、真实 persistence path。
-- 代码、接口、类型、测试存在，不等于生产真的走这条路径；先确认调用方，再确认写入方。
+- 新的 worthiness / judgment / holdout / shadow 版本（唯一例外：私聊场景的主体判断校准）
+- 每个任务一份带日期的长审计文档。docs/ 已有 31 份，不再增加
+- 40 条测试残留不删除（读取层过滤）；Gemini / OpenAI provider 分支不删除也不维护
+- 商业化、登录、多用户（与上文「当前产品优先级」一致）
 
-### Verify Before Building
+### Codex 插件（`openai/codex-plugin-cc`）使用边界
 
-- DB 没资产 ≠ 文件不存在。
-- 测试通过 ≠ production 已接通。
-- dry-run 通过 ≠ Canary 通过。
-- fixture 能写 ≠ worker 能写。
-- 先用证据证明缺口存在，再为缺口设计方案；不要为想象中的缺口写代码。
+装它是为了两件具体的事，不是多一道审查。**用错地方它会变成第 32 份审计。**
 
-### Trace Existing Architecture First
+- ✅ `/codex:rescue`：Claude Code 额度用尽或卡住时甩给 Codex 接手。随时可用
+- ✅ `/codex:adversarial-review`：**只审两类代码**
+  1. **importer 与本地 worker** —— 幂等、断点续跑、并发、`--since` 边界，以及**吞吐**（批量写 vs 逐条 round-trip：5 万条消息 + 2,279 个素材，这一项决定导入跑 1 小时还是 3 天）
+  2. **R2 归档**（1,024 个 awaiting_archive）—— 文件搬运，错了就是照片没了
+- ❌ **不审 Organizer / judgment / worthiness / 展示层。** 那里的毛病是放行太少，不是漏洞太多。让一个专门挑刺的 AI 去审「要不要把这句话给苏静看」，只会让门更紧
 
-新增 adapter / binder / repository API / worker path 之前，先完整 trace 现有的 entrypoint、写入、transaction、identity、retry、review、provenance，优先复用现有实现，不要在旁边另起一条平行链路。
+Codex 报告只在 importer / worker / R2 上有一票，别处一票都没有。它说「报告干净」不等于任务完成——完成的定义见上。
 
-### Stop on Architectural Blockers
+### 性能的两个去处
 
-一旦发现任务前提不成立——pipeline 没有 production entrypoint、persistence 不存在、source data 实际缺失、evaluation independence 不成立——立即停止下游工作并报告 blocker。
+- **吞吐** → 归 Codex 审查（已并入上面第 1 类）。导入慢一个数量级，阶段 0 就从 2 天变成 2 周
+- **阅读体验** → 归验收，不归 Codex。指标只有一个：**苏静手机上打开一个月页，几秒内出现照片**，目标 ≤3 秒。已知最大嫌疑是 `getStore()` 每次拉 17 MB
+- **不做**：并发压测、缓存架构、CDN 调优、bundle 分析。这个站 3 个读者
 
-不得为了「把任务做完」继续跑没有意义的 Shadow / Writer / Canary，也不得降低标准让它通过。
+## 工程执行质量（精简版）
 
-### Proven / Inferred / Unknown
+先看真实数据，再看真实调用链，再看真实写入链，最后才设计。代码存在 ≠ 产品有该能力；测试通过 ≠ 生产走过这条路径。核实由 Session 自己完成，不是多问 Teddy。
 
-重要结论必须区分「已证明 / 推断 / 未知」，并说明证据来源。禁止把 likely、expected、inferred 写成 confirmed。
+- **DB 没资产 ≠ 文件不存在。** 遇到「某个月没内容」，先查导入任务跑完没有，再怀疑逻辑——2026-09-04 的教训：所有「无文字月份」都是导入任务被取消，与 Organizer 无关
+- **写生产前 predeclare**：输入、预期 DB delta、回滚标识；写完核对实际 delta，不符立即停，不扩大范围
+- **结论区分已证明 / 推断 / 未知**，一句话带过，不写分级论证
+- **前提不成立就停**（没有 production entrypoint、源数据实际缺失），报告 blocker，不降低标准硬跑
+- 状态用词保守：TESTS PASS ≠ PRODUCTION READY
 
-### 状态用词必须保守
+### 报告格式（取代原「最终报告纪律」）
 
-- TESTS PASS ≠ PRODUCTION READY
-- DRY RUN PASS ≠ CANARY READY
-- CANARY PASS ≠ CUTOVER READY
-- CUTOVER READY ≠ CUTOVER COMPLETE
+每个任务结束只写三行，追加到 `docs/STATUS.md`：
 
-状态标题必须反映所有已知 blocker；禁止用阶段性胜利掩盖未完成项。
+1. 本轮线上多了什么家人能读的东西
+2. 没做到什么 / 最大的已知 blocker
+3. 下一件事
 
-### End-to-End Completion
-
-一项生产能力只有在 entrypoint → business logic → persistence → provenance → review/publication → retry/replay/idempotency → rollback 这条链按任务要求验证之后，才能称为完成。
-
-仅由 script / mock / fixture / evaluation 验证过的能力，必须明确标注为**非 production-complete**。
-
-### Bounded Production Writes
-
-- 写入前 predeclare：exact inputs、expected DB delta、rollback identities。
-- 写入后：核对 actual delta、replay、确认 zero unexpected drift。
-- actual delta 与预期不符时立即停止，不扩大范围。
-
-### 不要为「完成任务」优化
-
-优先级固定：**correctness > truthfulness > reversibility > architectural coherence > completion speed**。
-
-不得为了让测试变绿、让 Canary 有结果、凑够样本数、输出 READY 或完成原始任务，而降低事实、subject、worthiness、media、review、identity 或 safety 标准。
-
-### 最终报告纪律
-
-最终报告必须写清：
-
-- 本轮证明了什么
-- 没证明什么
-- 最大的已知 blocker
-- 是否存在 production-only / fixture-only / script-only 差异
-- 下一个 Gate
-
-如果结论依赖 workaround、raw SQL、临时脚本、mock、placeholder 或 Canary-only path，必须写在状态标题附近，不能藏在正文末尾。
+不新建带日期的审计文档。结论若依赖 workaround、临时脚本、mock 或 script-only 路径，写在第 2 行里。
 
 ## 本地环境文件永久保护
 
