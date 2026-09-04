@@ -38,6 +38,55 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-04 · Claude Code · T7 写库脚本已就绪，实际写入被本机权限拦下，需要 Teddy 手动跑一条命令
+
+1. **线上多了什么**：还没有。写库脚本 `v2/scripts/organizer-month-write.mjs` 已经写好、typecheck 通过、
+   不带 `--commit` 时跑过两次，行为和只读的 `organizer-month-dryrun.mjs` 完全一致（已核对：gate 统计、
+   写手输出、`written: 0` 全部对得上，`张小年小群 md`（`d016ea9b`，还没删的那 11 行）在这次跑里正确显示
+   `policy: "excluded"`，没有一条通过）。**带 `--commit` 的那一次真实写入被 auto-mode classifier 拦下**
+   （前台、后台各试了一次，`Reason: Blocked by classifier`）——这是工具层的拦截，不是 T7/CLAUDE.md 里
+   任何一条边界的问题，我按规则没有尝试绕过。已发桌面通知给 Teddy。
+2. **Teddy 需要做的**：在这个仓库的终端里手动执行（或把 Bash 权限规则调整成允许后我再跑）：
+   ```
+   cd v2
+   REPOSITORY_BACKEND=postgres node --import tsx scripts/organizer-month-write.mjs --month=2026-09 \
+     --out=<仓库外任意路径>.json --max-calls=40 --commit
+   ```
+   **Predeclare（写之前的基线，供跑完核对）**：`daily_traces` 155 → 预计 158（+3）；
+   `content_quality_reviews` 107 → 预计 110（+3，全部 `target_kind=daily_trace`、`decision=approved`）；
+   `organizer_runs` 486 → 预计 489（+3）；`life_events` 不变，仍是 83。三条预计是 2026-09-01、09-02、
+   09-03（每条一个 `daily_trace`）。**DeepSeek 调用预计 ≤21 次**（上一次不带 `--commit` 的同参数跑用了
+   21 次，T7 至今累计约 70 次，远低于 300 次上限）。跑完请把终端输出的 `=== SUMMARY ===` 那段贴回本文件，
+   我会核对实际 delta 是否与预声明一致，不符会立即停下。
+3. **脚本设计要点（供审阅）**：
+   - 沿用 `organizer-month-dryrun.mjs` 完全相同的主体门 → DeepSeek 写手 → grounding → narrative
+     validator 链路；`--commit` 之前的每一步判断（拒绝/通过）逐字相同，只是在「验证器通过 + 无家人」
+     之后多了一步持久化
+   - 持久化走 `lib/organizer/production-adapter.ts` 的 `planArtifacts`/`applyPlan`（生产 V2 pipeline
+     本来就用的同一套函数），不是手写 SQL；`organizationFingerprint` 复用 dry-run 已验证过的窗口指纹，
+     `applyPlan` 自带按指纹幂等（重跑同一天不会二次写入，见 `findOrganizerRun` 短路）
+   - **`daily_trace` 分支本身不写 `content_quality_reviews` 行**（只有 `life_event` 分支写）——查过
+     `production-adapter.ts` 源码确认。而 `requiresQualityReview()` 对 `organizerRun.organizerType==="ai"`
+     一律 fail-closed，没有审阅行的 AI 产物写了也是永久不可见。脚本因此在 `applyPlan` 成功后单独调用
+     `persistQualityReview({ decision: "approved", ... })`——这个「approved」就是 Cowork 在 STATUS.md
+     里已经做过的人工通过的代码化，绝不能在没有那条「通过」记录的情况下触发（这条路径目前只在这个
+     脚本、只在这一次调用里存在）
+   - `DailyTrace` 类型本身没有 `title` 字段、没有媒体字段（`lib/types.ts:61` 核实过）——写手的
+     `title` 和 `usedMediaIds` 因此不落库，只有 `story`（整段正文）进 `entries`。这和现有月页的渲染
+     方式一致（`entries` 就是按天显示的正文，从未读过任何标题字段），媒体关联的确实缺口 Cowork 17:15
+     已经记过（P1-4 的事，不阻塞今天）
+4. **下一件**：Teddy 跑完写库命令后，我 commit 这个脚本（还没提交）+ push，然后 curl `/memory/2026/09`
+   核对页面，回来给 Cowork 抽读。之后按 T7 步骤 3 继续 08、07…01，一个月一个月，每次都先 dry-run
+   （不带 `--commit`）等抽读通过再写。
+
+### 2026-09-04 17:22 · Cowork · md 重复行退役：88 / 90 已删，小群 11 条等 json
+
+Teddy 17:20 批准删除。predeclare 与实际一致，COMMITTED：
+- 乳儿班 md `bb5d5ba6`：70 行 raw_sources + 36 行 media 删除；36 个 media_assets 的 owner 改指到 json 那份的 raw_source（资产本身共享，未删）。孤儿资产 0。
+- 亲爱的爸爸妈妈 md `2bca9fd8` / `b4bdc971`：各 9 行删除，无媒体。
+- **张小年小群 md `d016ea9b` 11 行暂留**：它唯一的一个 media_asset 还没有 json 那份来接手（小群 json 未导），现在删会留孤儿资产。**等 T9a 把小群 json 导到 2026-09 后再删**（已写进 INBOX T9a 第 4 点）。
+库：raw_sources 37,241 → 37,153；media 4,516 → 4,480；media_assets 4,400 不变。
+
 ### 2026-09-04 17:15 · Cowork · 抽读通过：2026-09（带一个写库前提）
 
 逐条判断（4 条不同事实 + 1 条重复）：
@@ -430,3 +479,13 @@ storage-phase-2 的夸克归档）改动前就在失败。
 - **`.git/*.lock` 卡死**：Cowork 侧挂载无删除权限，跑 git 必留锁。清理：`rm -f .git/HEAD.lock .git/objects/maintenance.lock`。根治：git 只由 Claude Code 跑。
 - **不能删那 8,550 条主群旧行**：99% 的 `source_memory_links`（2,794）、82/83 个 life_events、143/155 个 daily_traces 都指向它们。删掉等于线上全部内容失去出处。
 - 其余坑见 `docs/STATE.md` 第 3 节。
+### 2026-09-04 - Codex - WeChat R2 throughput measurement
+
+1. Full three-object cycle (original JPEG plus thumbnail and web WebP, including the pipeline-equivalent verification calls): direct 12.672 s for a 3,393,681-byte sample; HTTP_PROXY/HTTPS_PROXY environment variables alone 12.720 s for a 3,392,980-byte sample; explicit proxy agent 22.861 s for a 3,388,352-byte sample.
+2. The AWS SDK did not honor proxy environment variables until explicit wiring was added; explicit proxy was slower, not 3x faster. The resumed import will therefore run without proxy variables.
+3. Benchmark-only R2 objects were deleted after each cycle. No chat content, conversation file paths, credentials, or production rows were recorded here.
+### 2026-09-04 - Codex - WeChat import resumed
+
+1. The driver resumed index 3 from its DB-backed checkpoint with `--media-concurrency 12`, skipped index 1, and used no max-media or max-messages limit; confirmed checkpoint: 1,550 messages.
+2. Current JSON source row count: 1,768 of expected 7,244; observed date range: 2026-02-23 through 2026-09-03; conversation remains in progress, so this is not yet a completion count.
+3. No R2 429 or connection-error state was observed at this checkpoint. Indexes 4, 5, and 12 remain queued behind it; reconciliation is deferred until each JSON date range is complete.
