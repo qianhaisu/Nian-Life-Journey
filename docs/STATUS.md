@@ -37,6 +37,12 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-05 00:4x · Cowork · 视觉系统 V1 设计已出，T22 已派单（Teddy 拍板：立刻开干，性能最后做，否决手写体）
+
+1. **线上多了什么**：还没有——本条是派单。仓库新增 `docs/design/visual-system-v1.md`（tokens / 字阶 / 四个品牌小件 / 三种照片布局 / 逐页规则 / 动效 / 验收 8 条）和 `docs/design/mockups/`（首页、首页稀疏态、张年页、月页含稀疏月，全部用线上真实文字与真实照片画的手机宽度参考稿）。INBOX 末尾 T22，顶部看板已指向它。
+2. **顺手发现两个线上问题，已并入 T22**：(a) `/about` 的「肖像」现在是乳儿班 9/3 的香蕉和牛奶——T11 Part B 把乳儿班升 trusted 后 `latestPortrait` 选中了它，肖像规则改为只认夸克 family_photo 背书；(b) 手机 375px 上 8 月页正文被右侧裁切；另外所有 `<img>` 都在请求 `w=3840`（`sizes` 写错），作为「顺手一行」列入，Teddy 可否。
+3. **下一件**：Teddy 开一个新 Claude Code session 执行 T22；Cowork 按设计文档 §8 的 8 条验收（打开看，不 grep），并对照产品原则再跑一遍记分卡。
+
 ### 2026-09-04 · Claude Code · T11 + T12 代码完成；T11 数据迁移等 Teddy 确认
 
 1. **线上多了什么**：T12 已部署（`b6830f4`）——31 条垃圾 life_events（`[media]` 标题、表情包、`@` 提及、
@@ -1028,3 +1034,34 @@ P0 四个月数据本身没有受影响（life_events/media_ids 都是之前已�
    - P0 以外的任何东西（17 个月历史回填、审阅台等）——按 Teddy 指令不接
 5. **下一件**：按 Teddy 指令，这轮到此为止，等 Cowork 用产品原则检验句重新验收四个月，
    等 Teddy 看过网站后再定首页 memory-vs-recency 的取舍。
+
+### 2026-09-05 02:0x · Claude Code (session ba15c6) · P1-0 跑了 2026-05/04/03 三个月，卡在 DeepSeek 余额不足
+
+1. **2026-05、2026-04 两个月完整跑完四步链并已直接查库+curl 生产验证**：
+   - 05 月：53 条 life_event（22 天有文字），T18 回填媒体，T20-C 分级后 3 memory + 16 trace 发布（19 条，
+     34 条判定"非张年为主语"转 store_only），month-review 已写库，`curl nianlife.cn/memory/2026/05`
+     确认页面有文字、`grep 家人`=0、`grep [media]`=0。
+   - 04 月：37 条 life_event（21 天有文字），T18 回填，T20-C 分级后 4 memory + 10 trace 发布（14 条，
+     23 条转 store_only），month-review 已写库并同样直接 curl 核实。
+   - 两个月都满足 P1-0 验收表：有文字天数 ≥8、章节级（memory）≥1 条。
+2. **顺手修了 `month-review.mjs` 自己的一个 bug**（还没造成任何已发布内容出错，是我自己在跑
+   05 月时发现的）：它查 `life_events` 生成回顾草稿时**没有 join `content_quality_reviews` 过滤
+   `decision='approved'`**——如果先跑 T20-C 分级再跑 month-review（P1-0 这个新顺序就是这样），
+   会把刚被 T20-C 判定"不发布"的内容也喂给 DeepSeek 当"已发布素材"。06/07/08 三个月因为当时
+   月度回顾是在 T20-C 分级**之前**跑的（那晚顺序），没受影响，不用补跑。已加 join 修复，05/04 两个月
+   是用修复后的版本重新生成并核实的。
+3. **2026-03 卡住，是外部账户余额问题，不是代码问题**：`organizer-month-write.mjs` 和
+   `t18-backfill-media-binding.mjs` 两步已完整跑完并写库（51 条 life_event，24 天有文字，媒体已回填），
+   但 `t20c-regrade-memories.mjs` 在批次调用中途收到 DeepSeek `402 Insufficient Balance`——直接用
+   同一把 key 单独探测确认（`api.deepseek.com/anthropic/v1/messages` 返回
+   `{"error":{"code":"invalid_request_error","message":"Insufficient Balance"}}`），是账户真没钱了，
+   不是限流或临时故障。**该脚本先攒齐所有批次分级结果、只在全部成功后才一次性写库**（见脚本
+   `main()` 结构），所以这次中途失败**没有写入任何一行**——2026-03 的 51 条 life_event 目前全部
+   还停在 T7 写入时的默认 `approved`（未分级、未降级），不是脏状态，重跑一次 `t20c-regrade-memories.mjs
+   --month=2026-03 --commit` 就能补齐，脚本本身幂等。**03 月的 month-review 还没跑**（要等分级完成，
+   否则会把该降级的内容当发布内容喂进去）。
+4. **需要 Teddy**：DeepSeek 账户充值（花钱决策，按规则要 Teddy 处理，我不能绕过）。充值后按顺序：
+   `t20c-regrade-memories.mjs --month=2026-03 --commit` → `month-review.mjs --month=2026-03 --commit`
+   → 直接查库核实 → 继续 2026-02、2026-01。
+5. **下一件**：等 Teddy 充值后继续 P1-0 剩余的 03（收尾）/02/01 三个月；期间可以做 P1-0 之外
+   不依赖 DeepSeek 调用的其他事，但 INBOX 看板目前只列了 P1-0 一项，先不越权接其他任务。

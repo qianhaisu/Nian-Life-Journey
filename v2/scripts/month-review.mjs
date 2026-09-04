@@ -89,10 +89,22 @@ async function callReviewer(events, month) {
 // a libuv assertion (harmless — happened after all real work was done — but noisy and could
 // confuse automated exit-code checks).
 async function main() {
+  // Bug found 2026-09-05 (self-caught while running P1-0): this query had no join to
+  // content_quality_reviews, so it fed T20-C-downgraded (store_only / off-subject) events into the
+  // reviewer as "already published" material. decisionPublishes() in quality-review.ts is the real
+  // gate — mirror it here: latest review row per target_id, decision must be 'approved'.
   const events = await pool.query(
-    `select id, title, story, to_char(occurred_at, 'YYYY-MM-DD') as day from life_events
-     where profile_id = $1 and occurred_at >= $2::date and occurred_at < ($2::date + interval '1 month')
-     order by occurred_at`,
+    `select e.id, e.title, e.story, to_char(e.occurred_at, 'YYYY-MM-DD') as day
+     from life_events e
+     join lateral (
+       select decision from content_quality_reviews r
+       where r.target_kind = 'life_event' and r.target_id = e.id
+       order by r.reviewed_at desc limit 1
+     ) latest_review on true
+     where e.profile_id = $1
+       and e.occurred_at >= $2::date and e.occurred_at < ($2::date + interval '1 month')
+       and latest_review.decision = 'approved'
+     order by e.occurred_at`,
     [PROFILE_ID, `${MONTH}-01`],
   );
   console.log(`${MONTH}: ${events.rows.length} published life_event(s).`);
