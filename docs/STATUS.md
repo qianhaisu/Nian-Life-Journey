@@ -38,6 +38,40 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-04 · Claude Code · T10 完成：写库脚本支持按天切片，重跑零成本
+
+1. **线上多了什么**：还没有——T10 本身不写库，是给 Cowork 的写库工具加了两处改动（`b3d2cfa`）。
+   `organizer-month-write.mjs` 现在支持 `--day=YYYY-MM-DD`（或 `--from`/`--to`），且已组织过的窗口
+   在调用 DeepSeek **之前**就被 `findOrganizerRun` 指纹短路跳过，不再是等写手跑完才发现白跑。
+2. **验证**：`--day=2026-09-01`（09-01 已被 Cowork 写入）跑出 `daysConsidered: 1`，那条已提交窗口
+   打印「already organized...skipped before any DeepSeek call」且 traceId 对得上；同一天里另一条
+   还没提交过的窗口正常照跑不受影响。`written: 0`（未带 `--commit`）。全量 typecheck 通过。
+3. **下一件**：Cowork 用 `--day=2026-09-03 --commit` 补上 2026-09 最后一天，然后逐月往前推
+   （08、07…01，每月先出 dry-run 样本给 Cowork 抽读，通过后再按天 `--commit`）。
+
+### 2026-09-04 18:05 · Cowork · 2026-09 前两天已写库并核对（Code 被拦下的那条命令，Cowork 跑通了）
+
+1. **线上多了什么**：2026-09-01、09-02 两天的痕迹已入库（部署后可读）。这是今天第一次真正意义上的产出。
+   - 09-01：英语课跟读单词，英语老师夸奖；老师说上课可以，提醒一下就开始动起来
+   - 09-02：粥粥来时小年说了好多次「粥粥」，发音很清楚；吃点心比别的孩子快
+   称谓全部是「老师」，**无一处「家人」**。
+2. **没做到**：09-03 还没写——Cowork 侧单条命令 175 秒硬上限，每次重跑都要先把 09-01/09-02 的 DeepSeek
+   调用重付一遍才轮到它。已开 **T10**：给脚本加 `--day`，并把指纹短路提到 editor 调用之前。
+3. **下一件**：T10 做完，Cowork 按天跑完 09-03，再逐月往前。
+
+**实际 delta（与 Code 的预声明对照）**：`daily_traces` 155 → 157（预声明 158，差的就是没跑的 09-03）；
+`content_quality_reviews` 107 → 109，全部 `daily_trace` / `approved`；`organizer_runs` 486 → 488；
+`life_events` 83 未动。**方向和比例完全符合预声明，没有意外写入。**
+
+**两个机制第一次被实测**：
+- 指纹幂等：第二次跑同一天打印 `already organized under this fingerprint, no new write`，零重复
+- 主体门：2026-09 共 30 个窗口，**只有 14 个通过**；消息保留 120、拒绝 338。validator 另外拒了 3 个
+  （`inner_state_stated_as_fact`——写手替孩子说了心理活动），writer 自己判 2 个证据不足。层层都在挡。
+
+**Cowork 侧的一条环境事实（写进坑里）**：device_bash 每次调用是独立沙箱 `--die-with-parent`，
+**后台进程活不过一次调用**；`pgrep` 还会匹配到自己的命令行给出假的 RUNNING。长任务必须前台跑，
+或者切片跑。今天为此白等了 20 分钟。
+
 ### 2026-09-04 · Claude Code · T7 写库脚本已就绪，实际写入被本机权限拦下，需要 Teddy 手动跑一条命令
 
 1. **线上多了什么**：还没有。写库脚本 `v2/scripts/organizer-month-write.mjs` 已经写好、typecheck 通过、
