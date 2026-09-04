@@ -83,13 +83,23 @@ const { loadWechatBundle } = await import("../lib/ingest/wechat-snapshot.ts");
 const { runWechatImportWorker } = await import("../lib/ingest/wechat-worker.ts");
 
 const state = resetState ? { completed: [], excluded: [], startedAt: new Date().toISOString() } : readState();
-// Completion is keyed by conversationDigest, for the same reason exclusion always was: `index` is
-// only "position among candidates in digest order", and that order shifted the moment the importer
-// learned to read WeFlow's JSON transcripts as well as its Markdown. A state file written before
-// that holds indices which now point at different conversations, so three groups that had never
-// been imported were reported as already done. Legacy numeric entries are therefore dropped rather
-// than trusted; a conversation genuinely already imported is re-read once and comes back as reused.
-const completed = new Set((state.completed ?? []).filter((value) => typeof value === "string"));
+// Completion is keyed by `${conversationDigest}|${since}`, not conversationDigest alone. The digest
+// is a hash of the export FILE's path (see wechat-snapshot.ts's exportSnapshot.conversationDigest) —
+// the same file produces the same digest regardless of `since`, so a digest-only key cannot tell "the
+// whole conversation from birth day is done" apart from "just the September slice is done". A narrow
+// --since run completing used to mark the digest complete outright, which then made a later
+// birth-day-scoped run skip the conversation entirely — silently leaving thousands of older messages
+// unimported. (Same family of bug as the earlier index-keyed one: `index` shifted when JSON transcripts
+// were added, so completion moved to conversationDigest; now `since` varies per run, so it joins the key.)
+// A legacy bare-digest entry (no `|`) predates this fix and always meant "done from birth day", the
+// only `since` any run used before --since existed for this driver — normalized on read so those
+// conversations are not silently re-run.
+const completionKey = (digest) => `${digest}|${since}`;
+const completed = new Set(
+  (state.completed ?? [])
+    .filter((value) => typeof value === "string")
+    .map((value) => (value.includes("|") ? value : `${value}|${BIRTH_DAY}`)),
+);
 const excluded = new Set(state.excluded ?? []);
 log(`source-root scan starting · since=${since}${dryRun ? " · DRY RUN (nothing is written)" : ""}`);
 
@@ -129,10 +139,10 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
     log(`conversation ${index}: excluded (digest ${conversationDigest}) — not imported, not updated`);
     continue;
   }
-  if (completed.has(conversationDigest)) { log(`conversation ${index}: already completed in an earlier run — skipped`); continue; }
+  if (completed.has(completionKey(conversationDigest))) { log(`conversation ${index}: already completed in an earlier run — skipped`); continue; }
   const messages = probe.availableMessageCount;
   const mediaRefs = probe.availableMediaRefCount;
-  if (messages === 0) { log(`conversation ${index}: 0 messages at or after ${since} — nothing to import`); completed.add(conversationDigest); writeState({ ...state, completed: [...completed], excluded: [...excluded] }); continue; }
+  if (messages === 0) { log(`conversation ${index}: 0 messages at or after ${since} — nothing to import`); completed.add(completionKey(conversationDigest)); writeState({ ...state, completed: [...completed], excluded: [...excluded] }); continue; }
 
   if (dryRun) {
     log(`conversation ${index}: would import ${messages} message(s), ${mediaRefs} media ref(s)`);
@@ -168,7 +178,7 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
   totals.created += report.createdMessages; totals.reused += report.reusedMessages;
   totals.mediaCreated += report.createdMediaAssets; totals.mediaReused += report.reusedMediaAssets;
   totals.uploaded += report.uploadedObjects;
-  if (ok) { completed.add(conversationDigest); writeState({ ...state, completed: [...completed], excluded: [...excluded], updatedAt: new Date().toISOString() }); }
+  if (ok) { completed.add(completionKey(conversationDigest)); writeState({ ...state, completed: [...completed], excluded: [...excluded], updatedAt: new Date().toISOString() }); }
   else {
     totals.failed += 1;
     failures.push({ index, code: report.safeErrorCode ?? report.status });
