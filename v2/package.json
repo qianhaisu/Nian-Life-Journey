@@ -20,7 +20,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
     "db:migrate-json": "node --import tsx scripts/migrate-json-to-postgres.mjs",
-    "wechat:import": "node --import tsx scripts/wechat-import-worker.mjs"
+    "wechat:import": "node --import tsx scripts/wechat-import-worker.mjs",
+    "wechat:import-all": "node --import tsx scripts/wechat-import-all.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1120.0",
