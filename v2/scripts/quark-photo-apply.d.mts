@@ -10,12 +10,13 @@ export type ApplyRecord = {
 
 export type FailedRecord = { filename: string; sha256: string; reason: string };
 
-export type DateRecord = { date: string; sourceCount: number; jobId?: string; jobStatus?: string; wouldEnqueue?: boolean };
+export type DateRecord = { date: string; sourceCount: number; jobId?: string; jobStatus?: string; wouldEnqueue?: boolean; enqueued?: boolean };
 
 export type WorkerOutcome = { jobId: string; ok: boolean; action?: string; error?: string };
 
 export type ApplySummary = {
   mode: "dry-run" | "apply";
+  organize: boolean;
   total: number;
   eligible: number;
   newCount: number;
@@ -45,6 +46,7 @@ export function applyQuarkPhotoArtifact(config: {
   visibility?: string;
   sourceLabel?: string;
   maxGeminiJobs?: number;
+  organize?: boolean;
   requireGemini?: boolean;
   deps?: Record<string, unknown>;
 }): Promise<ApplyResult>;

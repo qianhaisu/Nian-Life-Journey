@@ -37,7 +37,7 @@ async function buildArtifact(items) {
 }
 
 function fakeDeps(overrides = {}) {
-  const calls = { appendUpload: [], put: [], enqueue: [] };
+  const calls = { appendUpload: [], put: [], enqueue: [], workerRuns: 0 };
   const repo = {
     async findMediaAssetByChecksum(checksum) {
       return (overrides.checksums ?? {})[checksum] ?? null;
@@ -65,7 +65,7 @@ function fakeDeps(overrides = {}) {
     mediaDeliveryUrl: (mediaId, variant) => `/api/media/${mediaId}?variant=${variant}`,
   };
   const worker = {
-    async runOrganizerWorker() { return []; },
+    async runOrganizerWorker() { calls.workerRuns += 1; return []; },
   };
   return { deps: { repo, hotStorage, processing, paths, worker }, calls, repo, hotStorage, processing, worker };
 }
@@ -132,7 +132,7 @@ test("apply mode writes storage and DB for a new JPEG and is idempotent on rerun
 
   const { deps, calls } = fakeDeps({ checksums: {} });
 
-  const result = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), requireGemini: false, deps });
+  const result = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), organize: true, requireGemini: false, deps });
 
   assert.equal(result.summary.newCount, 1);
   assert.equal(result.created[0].status, "created");
@@ -143,11 +143,50 @@ test("apply mode writes storage and DB for a new JPEG and is idempotent on rerun
   // Idempotent rerun: the checksum now resolves to an existing asset.
   const asset = calls.appendUpload[0].assets[0];
   const { deps: deps2, calls: calls2 } = fakeDeps({ checksums: { [newSha]: { id: asset.id, rawSourceId: asset.rawSourceId } } });
-  const rerun = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), requireGemini: false, deps: deps2 });
+  const rerun = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), organize: true, requireGemini: false, deps: deps2 });
   assert.equal(rerun.summary.newCount, 0);
   assert.equal(rerun.summary.reusedCount, 1);
   assert.equal(calls2.appendUpload.length, 0);
   assert.equal(calls2.enqueue.length, 0);
+
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("by default an apply ingests the photos and enqueues nothing, with no key present", async () => {
+  // The whole point of the ingest-only default: a photograph reaches the archive with its
+  // `family_photo` source identity — which is all `trusted` means in mediaPrivilegeOf, and the only
+  // condition for it to enter a month's body — without one model call being made or one key being
+  // required. 2,279 Quark files would otherwise enqueue hundreds of jobs against a judge whose
+  // recall is near zero. Teddy, 2026-09-04.
+  const newSha = sha256Of(Buffer.from("ingest-only-photo"));
+  const bytes = Buffer.from("ingest-only-photo");
+  const dir = await mkdtemp(path.join(os.tmpdir(), "quark-ingest-only-"));
+  const artifactsDir = path.join(dir, "artifacts");
+  const originalsDir = path.join(dir, "originals");
+  await mkdir(artifactsDir, { recursive: true });
+  await mkdir(originalsDir, { recursive: true });
+  const localPath = path.join(originalsDir, "new.jpg");
+  await writeFile(localPath, bytes);
+  await writeFile(path.join(artifactsDir, "task-items.jsonl"), JSON.stringify(taskItem({ filename: "new.jpg", sha256: newSha, size: bytes.byteLength, local_path: localPath })) + "\n");
+
+  const { deps, calls } = fakeDeps({ checksums: {} });
+  const savedGemini = process.env.GEMINI_API_KEY;
+  const savedModel = process.env.AI_MODEL;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.AI_MODEL;
+  try {
+    const result = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), deps });
+    assert.equal(result.summary.organize, false, "ingest-only is the default");
+    assert.equal(result.summary.newCount, 1, "the photograph is ingested");
+    assert.equal(calls.appendUpload.length, 1, "…and its bytes are persisted");
+    assert.equal(calls.enqueue.length, 0, "…but no Organizer job is enqueued");
+    assert.equal(calls.workerRuns, 0, "…and the worker never runs");
+    assert.deepEqual(result.dates.map((d) => d.enqueued), [false], "the day is still reported, not silently dropped");
+    assert.deepEqual(result.workerOutcomes, []);
+  } finally {
+    if (savedGemini === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = savedGemini;
+    if (savedModel === undefined) delete process.env.AI_MODEL; else process.env.AI_MODEL = savedModel;
+  }
 
   await rm(dir, { recursive: true, force: true });
 });
@@ -193,7 +232,7 @@ test("apply fails closed when a new photo needs organizing but Gemini is missing
   process.env.AI_MODEL = "test-model";
   try {
     await assert.rejects(
-      () => applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), deps }),
+      () => applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), organize: true, deps }),
       /GEMINI_API_KEY is required/,
     );
   } finally {

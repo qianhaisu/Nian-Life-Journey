@@ -95,9 +95,19 @@ function eligibleItems(items) {
  * @param {string} [config.visibility]
  * @param {string} [config.sourceLabel]
  * @param {number} [config.maxGeminiJobs]
- * @param {boolean} [config.requireGemini]       When true (default), an apply that would ingest NEW photos
- *                                               fails closed before any write unless GEMINI_API_KEY and AI_MODEL
- *                                               are present. A pure no-op (0 new) never requires Gemini.
+ * @param {boolean} [config.organize]            Whether an apply enqueues Organizer jobs and drains the worker.
+ *                                               Defaults to FALSE: ingestion alone is what gives a photo its
+ *                                               `family_photo` source identity, which is the whole of `trusted`
+ *                                               in mediaPrivilegeOf and the only condition for a picture to enter
+ *                                               a month's body. Judging what those pictures mean is a separate,
+ *                                               later decision (Teddy, 2026-09-04). With this off the run makes
+ *                                               zero AI calls: no job is enqueued, the worker is never imported,
+ *                                               and no key is required. The enqueue/drain path itself is intact —
+ *                                               pass `organize: true` to get it back.
+ * @param {boolean} [config.requireGemini]       When true (default), an apply that would ingest NEW photos AND
+ *                                               organize them fails closed before any write unless GEMINI_API_KEY
+ *                                               and AI_MODEL are present. A pure no-op (0 new), or a run that does
+ *                                               not organize, never requires them.
  * @param {object} [config.deps]                Injectable dependencies for testing (repo/hotStorage/processing/worker/paths).
  * @returns {Promise<object>} structured summary.
  */
@@ -113,6 +123,7 @@ export async function applyQuarkPhotoArtifact(config) {
     visibility = DEFAULT_VISIBILITY,
     sourceLabel = DEFAULT_SOURCE_LABEL,
     maxGeminiJobs = DEFAULT_MAX_GEMINI_JOBS,
+    organize = false,
     requireGemini = true,
     deps = {},
   } = config;
@@ -124,7 +135,9 @@ export async function applyQuarkPhotoArtifact(config) {
   const { sourceImageMetadata, createDerivatives } = deps.processing ?? (await import("../lib/media/processing.ts"));
   const hotStorage = deps.hotStorage ?? (await import("../lib/storage/hot-storage.ts")).hotStorage;
   const { mediaDeliveryUrl } = deps.paths ?? (await import("../lib/media/paths.ts"));
-  const runOrganizerWorker = deps.worker?.runOrganizerWorker ?? (mode === "apply" ? (await import("../lib/organizer/worker.ts")).runOrganizerWorker : async () => []);
+  // Imported only when this run will actually organize. A run that only ingests must not so much
+  // as load the worker module, so there is no reachable path from here to an AI provider.
+  const runOrganizerWorker = deps.worker?.runOrganizerWorker ?? (mode === "apply" && organize ? (await import("../lib/organizer/worker.ts")).runOrganizerWorker : async () => []);
 
   const resolvedTaskItems = taskItemsPath ?? path.join(artifactDir, "artifacts", "task-items.jsonl");
   const resolvedOriginals = originalsDir ?? path.join(artifactDir, "originals");
@@ -138,7 +151,7 @@ export async function applyQuarkPhotoArtifact(config) {
   // Fail-closed preflight (apply only): if this run would ingest any NEW photo, the Organizer will
   // be drained and needs Gemini. Refuse BEFORE writing anything when Gemini is missing, so a partial
   // write can never be left behind. A pure no-op (all reused/skipped) skips this entirely.
-  if (mode === "apply" && requireGemini) {
+  if (mode === "apply" && organize && requireGemini) {
     let wouldCreate = 0;
     for (const item of items) {
       const skip = permanentSkip.get(item.sha256);
@@ -189,7 +202,11 @@ export async function applyQuarkPhotoArtifact(config) {
 
   let dates = [];
   let workerOutcomes = [];
-  if (mode === "apply") {
+  if (mode === "apply" && !organize) {
+    // Ingest-only. The dates are still reported, so the photographed days this run added are
+    // visible and can be organized later on purpose — they are not silently dropped.
+    dates = dateKeys.map((date) => ({ date, sourceCount: byDate.get(date).size, enqueued: false }));
+  } else if (mode === "apply") {
     // Organizer work is driven solely by NEW sources. Reused sources were already organized when
     // they were first ingested, so re-enqueueing them would both duplicate organizer jobs and
     // re-invoke Gemini on a supposedly-idempotent re-run.
@@ -212,6 +229,7 @@ export async function applyQuarkPhotoArtifact(config) {
 
   const summary = {
     mode,
+    organize,
     total: allItems.length,
     eligible: items.length,
     newCount: created.length,

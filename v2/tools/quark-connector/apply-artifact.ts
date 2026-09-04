@@ -91,6 +91,10 @@ async function main() {
   const resume = process.argv.includes("--resume");
   const profileId = option("--profile-id")?.trim() || undefined;
   const sourceLabel = option("--source-label")?.trim() || undefined;
+  // Off by default, matching the shared core. Ingestion alone gives a photo the `family_photo`
+  // source identity that lets it into a month's body; judging the pictures is a separate decision.
+  // Without this flag the run enqueues nothing, drains nothing and calls no model.
+  const organize = process.argv.includes("--organize");
   const maxGeminiJobsRaw = option("--max-gemini-jobs");
   const maxGeminiJobs = maxGeminiJobsRaw ? Number(maxGeminiJobsRaw) : undefined;
   if (maxGeminiJobs !== undefined && (!Number.isInteger(maxGeminiJobs) || maxGeminiJobs < 1)) throw new CliUsageError("--max-gemini-jobs must be a positive integer");
@@ -101,13 +105,16 @@ async function main() {
   requireEnv("DATABASE_URL");
   if (apply) {
     if (process.env.MEDIA_STORAGE_PROVIDER !== "r2") throw new CliUsageError("MEDIA_STORAGE_PROVIDER must be r2 so originals/derivatives land in permanent storage, not local disk");
-    // Configure the AI Organizer for this run. GEMINI_API_KEY/AI_MODEL are intentionally NOT
-    // hard-required here: the shared core (scripts/quark-photo-apply.mjs) fails closed BEFORE any
-    // write only if the run would ingest NEW photos that need organizing. A pure no-op apply
-    // (all reused/skipped) legitimately needs no Gemini and must be allowed to complete.
-    process.env.MEMORY_ORGANIZER = "ai";
-    process.env.AI_ORGANIZER_ENABLED = "true";
-    process.env.AI_PROVIDER = "gemini";
+    // Configure the AI Organizer only when this run will organize. GEMINI_API_KEY/AI_MODEL are
+    // intentionally NOT hard-required here: the shared core (scripts/quark-photo-apply.mjs) fails
+    // closed BEFORE any write only if the run would ingest NEW photos that need organizing. A pure
+    // no-op apply (all reused/skipped) legitimately needs no key and must be allowed to complete.
+    // The provider is no longer pinned to gemini — production runs one provider, configured by the
+    // environment (see CLAUDE.md).
+    if (organize) {
+      process.env.MEMORY_ORGANIZER = "ai";
+      process.env.AI_ORGANIZER_ENABLED = "true";
+    }
   }
 
   const permanentSkip = await loadPermanentSkip(statePath, skipPath);
@@ -120,11 +127,13 @@ async function main() {
     ...(profileId ? { profileId } : {}),
     ...(sourceLabel ? { sourceLabel } : {}),
     ...(maxGeminiJobs !== undefined ? { maxGeminiJobs } : {}),
+    organize,
   });
 
   const payload = {
     ok: result.failed.length === 0 && result.workerOutcomes.every((o) => o.ok),
     mode: result.mode,
+    organize: result.organize,
     resume,
     total: result.total,
     eligible: result.eligible,
