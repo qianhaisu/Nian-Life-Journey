@@ -31,7 +31,7 @@ Claude Code 遇到下面任何一种情况，**停下来问 Teddy**，不要自�
 
 ## 队列
 
-### T1 · 提交待提交的改动 — status: ready
+### T1 · 提交待提交的改动 — status: done
 
 **目标**：把工作区里已完成、已验证的改动提交并推上去。Vercel 自动部署。
 
@@ -51,7 +51,7 @@ Claude Code 遇到下面任何一种情况，**停下来问 Teddy**，不要自�
 
 ---
 
-### T2 · 主群补 3,958 条 — status: ready
+### T2 · 主群补 3,958 条 — status: done（实际 3,912 条）
 
 **目标**：把主群 2025-11-14 之后的约 3,958 条导进来，零重复行。
 
@@ -95,7 +95,7 @@ Claude Code 遇到下面任何一种情况，**停下来问 Teddy**，不要自�
 
 ---
 
-### T4 · 夸克 2,279 张入库 — status: blocked（等 Teddy 定 enqueue 策略）
+### T4 · 夸克 2,279 张入库 — status: ready（可与 T2/T3 并行，见下方并行规则）
 
 **素材**：`C:\Users\teddy\NianlifeOps\quark-history\2026-09-03\`，2,019 照片 + 260 视频，9.8 GB，
 manifest 2,279 行，全部 `status: downloaded_new`。
@@ -109,10 +109,23 @@ manifest 2,279 行，全部 `status: downloaded_new`。
    超预算时它照样全部入队（第 199 行 warning 自己写了），剩下的由 Vercel cron 在后台捞走。
    判官是冻结的 V6（召回接近 0）→ 最坏情况是几百个 job 在后台烧钱、产出接近零
 
-**Cowork 的建议**（供 Teddy 参考，未定案）：这一步只需要照片拿到 `family_photo` 来源身份——
-那是 `mediaPrivilegeOf` 里 `trusted` 的全部定义，也是照片进正文的唯一条件。Organizer 不必参与。
+**enqueue 策略已定（Teddy，2026-09-04）：只入库，不调 Organizer。**
+
+- 把 `quark-photo-apply.mjs` 的 enqueue + drain 改成可关闭（新增开关，默认关；不要删除现有代码路径）
+- 这一步只需要照片拿到 `family_photo` 来源身份——那是 `mediaPrivilegeOf` 里 `trusted` 的全部定义，
+  也是照片进正文的唯一条件（见 `lib/family-archive.ts` 的 `mediaPrivilegeOf`）
+- 零 AI 调用、零费用。等阶段 1 的 recall-first 和审阅台就绪后，再回头决定让 Organizer 看这批
+- **如果你发现有任何路径仍会触发 AI 调用，停下来报告，不要"先跑跑看"**
 
 **已知限制**：夸克 2025-03 → 2025-10 这 8 个月总共只有 20 张；307 个没有 `takenAt`，入库了也不会
 出现在任何月页。
 
-**这条不要自己动手。等 Teddy 在第 3 点上表态。**
+**并行规则**（Teddy 要求 T4 尽早并行）：
+
+- T4 的**代码改造**（前置 1、2、3）随时可以做，和 T2/T3 不冲突
+- T4 的**实际入库**不要和 T2 的导入同时跑——唯一的共享资源是 Neon 连接池，STATE §3 记过一次
+  空闲连接掉线导致进程级崩溃，两个长任务同压会放大它。T2 跑完再开 T4 的入库
+- T4 入库期间不要做 T3 的性能测量（测量需要写入静默窗口）
+
+**已知限制**：夸克 2025-03 → 2025-10 这 8 个月总共只有 20 张，填不满那 8 个月；307 个没有
+`takenAt`，入库了也不会出现在任何月页——先不入或单独处理，不要让它们无声地消失在库里。
