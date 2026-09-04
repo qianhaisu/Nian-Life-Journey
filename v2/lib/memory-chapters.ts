@@ -92,6 +92,12 @@ export function excerptOf(event: Pick<LifeEvent, "story" | "storySections">, lim
   return `${cut}……`;
 }
 
+// T20-C, 2026-09-04 (原则五 检验句: "一眼就能分辨"): a "memory"/"chapter"/"highlight" weight event
+// is the month's real chapter — an excerpt truncated at 80 characters would cut a milestone off
+// mid-sentence. Those tiers read in full; "trace" (an ordinary day, still worth keeping) keeps the
+// shorter excerpt so a ordinary day does not visually compete with an actual chapter.
+const FULL_TEXT_WEIGHTS = new Set(["memory", "chapter", "highlight"]);
+
 export function memoryTitle(event: Pick<LifeEvent, "title" | "occurredAt">): string {
   const title = event.title?.trim();
   if (title) return title;
@@ -111,7 +117,7 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
   return {
     id: event.id,
     title,
-    excerpt: excerptOf(event),
+    excerpt: FULL_TEXT_WEIGHTS.has(event.memoryWeight) ? excerptOf(event, Infinity) : excerptOf(event),
     weight: event.memoryWeight,
     signature,
     lead: lead ? toMediaRef(lead, title) : undefined,

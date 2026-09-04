@@ -322,7 +322,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .memory-lead .photo-portrait { max-width: min(100%, 520px); }
 .memory-lead .memory-copy h3 { margin-top: 10px; font-size: clamp(1.9rem, 5vw, 2.9rem); line-height: 1.15; }
 .memory-lead .memory-copy p { max-width: 38ch; font-size: 1.05rem; }
-.memory-weight-chapter .memory-copy h3, .memory-weight-highlight .memory-copy h3 { font-size: clamp(1.7rem, 4.5vw, 2.5rem); }
+.memory-weight-chapter .memory-copy h3, .memory-weight-highlight .memory-copy h3, .memory-weight-memory .memory-copy h3 { font-size: clamp(1.7rem, 4.5vw, 2.5rem); }
+/* T20-C: a "memory"-weight entry's portrait/square photo reads at the lead's own size, not the
+   smaller cap every ordinary entry gets — matches its "web" (not "thumbnail") image variant. */
+.memory-weight-memory.memory-entry .photo-portrait, .memory-weight-memory.memory-entry .photo-square { max-width: min(100%, 520px); }
 .memory-lines { margin: 0; padding: 0; list-style: none; }
 .memory-line a { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 14px; min-height: 48px; padding: 8px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
 .memory-line a:hover { color: var(--color-accent); }

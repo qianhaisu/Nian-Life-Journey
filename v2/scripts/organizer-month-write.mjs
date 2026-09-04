@@ -33,6 +33,17 @@
 // "life_event_candidate" and memoryWeight is forced down to "trace" (see below) so T7's output reads
 // the same as everything else while still sorting behind real highlights/chapters.
 //
+// REQUIRED FOLLOW-UP for every month written here (T18 + T20-C, 2026-09-04 — do both, same as T7
+// itself, not optional cleanup):
+//   1. node --import tsx scripts/t18-backfill-media-binding.mjs --commit
+//      Binds media_ids/heroMediaId onto the rows this script just wrote — this script itself never
+//      does (media_ids stays []), so the event detail page and home page show no photo without it.
+//   2. node --import tsx scripts/t20c-regrade-memories.mjs --month=<the month> --commit
+//      Every row lands here at memoryWeight "trace" regardless of content (see T11 note above) —
+//      that regrade script is what tiers a real milestone up to "memory" and demotes an adult's
+//      logistics/administration (mentions the child, isn't about him) to unpublished. Skipping it
+//      means every day in the month reads as equally important, which principle 五 calls out by name.
+//
 // Why a review row still needs an explicit "approved" override here (see quality-review.ts):
 // requiresQualityReview() fails CLOSED for any artifact whose organizerRun.organizerType is "ai".
 // planArtifacts's life_event_candidate branch already writes a review row, but ADAPTER_REVIEW_DECISION

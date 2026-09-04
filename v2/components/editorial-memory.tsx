@@ -17,8 +17,12 @@ export function EditorialMemory({ memory, size = "entry", priority = false, show
   if (size === "line") {
     return <li className="memory-line"><Link href={href}><time dateTime={memory.signature.day}>{memory.signature.dateLabel}</time><span className="serif">{memory.title}</span></Link></li>;
   }
+  // T20-C: a "memory"-weight entry (a real chapter, not just an ordinary day) reads its lead photo
+  // at the same resolution as the page's single lead, not the smaller thumbnail every other entry
+  // gets — the visual weight has to match the editorial weight, not just the headline size.
+  const isChapterWeight = size === "lead" || memory.weight === "memory" || memory.weight === "chapter" || memory.weight === "highlight";
   return <article className={`memory memory-${size} memory-weight-${memory.weight}`}>
-    {memory.lead ? <Link href={href} className="memory-photo" tabIndex={-1} aria-hidden="true"><Photo media={memory.lead} priority={priority} variant={size === "lead" ? "web" : "thumbnail"} sizes={size === "lead" ? "(max-width: 700px) 100vw, 760px" : "(max-width: 700px) 100vw, 520px"} /></Link> : null}
+    {memory.lead ? <Link href={href} className="memory-photo" tabIndex={-1} aria-hidden="true"><Photo media={memory.lead} priority={priority} variant={isChapterWeight ? "web" : "thumbnail"} sizes={isChapterWeight ? "(max-width: 700px) 100vw, 760px" : "(max-width: 700px) 100vw, 520px"} /></Link> : null}
     <div className="memory-copy">
       {showSignature ? <TimeSignature signature={memory.signature} /> : null}
       <h3 className="serif"><Link href={href}>{memory.title}</Link></h3>

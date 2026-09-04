@@ -73,11 +73,14 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
     {archivePhotoCount > 0 ? <details className="month-archive">
       <summary><span className="serif">整月照片档案</span><small>{archivePhotoCount} 张</small></summary>
       <ol>
-        {composition.archiveDays.map((day) => <li className="month-day" key={day.day}>
+        {composition.archiveDaysVisible.map((day) => <li className="month-day" key={day.day}>
           <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} monthAgeLabel={chapter.ageLabel} year={year} />
           <PhotoStrip photos={day.photos} />
         </li>)}
       </ol>
+      {/* T20-A3: a screenful shows by default (原则五, "大部分内容默认不出现") — the rest is real,
+          counted here, not deleted; there is no expand-in-place yet (see docs/STATUS.md T20-A3). */}
+      {composition.archiveFoldedPhotoCount > 0 ? <p className="chapter-meta">还有 {composition.archiveFoldedDayCount} 天、{composition.archiveFoldedPhotoCount} 张照片收在档案里，未在此页展示。</p> : null}
       {composition.smallImageCount > 0 ? <p className="chapter-meta">还有 {composition.smallImageCount} 张过小的图片（表情、缩略图）留在档案记录里，未在此显示。</p> : null}
     </details> : null}
 

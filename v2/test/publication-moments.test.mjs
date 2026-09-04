@@ -113,6 +113,21 @@ test("a photo-only month becomes a weighted chronicle, not a wall: bounded momen
   const archiveTotal = composition.archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
   assert.equal(archiveTotal, media.length, "every deliverable drawable photo remains accessible in the archive layer");
   assert.deepEqual(composition.archiveDays.map((day) => day.day), [...composition.archiveDays.map((day) => day.day)].sort(), "archive reads ascending too");
+
+  // T20-A3: 44 photos here — more than the first-screen budget — so archiveDaysVisible must be a
+  // real subset, not everything, while archiveDays (checked above) stays the untouched full record.
+  const visibleTotal = composition.archiveDaysVisible.reduce((sum, day) => sum + day.photos.length, 0);
+  assert.ok(visibleTotal <= 24, `default first screen must not exceed the budget (got ${visibleTotal})`);
+  assert.equal(visibleTotal + composition.archiveFoldedPhotoCount, archiveTotal, "visible + folded accounts for every photo — none silently dropped");
+  assert.deepEqual(composition.archiveDaysVisible.map((day) => day.day), [...composition.archiveDaysVisible.map((day) => day.day)].sort(), "the visible slice still reads ascending");
+});
+
+test("a month within the archive first-screen budget shows everything, folds nothing", () => {
+  const media = [photo("a", "2026-08-01T08:00:00.000Z"), photo("b", "2026-08-02T08:00:00.000Z")];
+  const composition = buildMonthComposition(monthOf({ media }, "2026-08"), trust(media));
+  assert.equal(composition.archiveFoldedPhotoCount, 0);
+  assert.equal(composition.archiveFoldedDayCount, 0);
+  assert.deepEqual(composition.archiveDaysVisible, composition.archiveDays);
 });
 
 test("burst grouping is temporal redundancy only: one representative reads, every frame stays", () => {

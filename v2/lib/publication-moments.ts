@@ -75,7 +75,14 @@ export type MonthComposition = {
   // Photographed days folded to one line each: they exist, the archive layer has them whole.
   quietDays: QuietDay[];
   // Every deliverable, drawable photograph of the month, day by day, ascending — the full record.
+  // Nothing is ever deleted from this; it is the count `archiveFoldedPhotoCount` is measured against.
   archiveDays: PhotoDay[];
+  // T20-A3: the subset of archiveDays actually rendered by default — a screenful (photo-days that
+  // already carry a published moment first, then newest), ascending for reading order. The rest is
+  // real and reachable (archiveFoldedPhotoCount says how much), just not shipped unasked.
+  archiveDaysVisible: PhotoDay[];
+  archiveFoldedPhotoCount: number;
+  archiveFoldedDayCount: number;
   // Deliverable rows too small to draw at all (20x20 icons, 67x120 sticker thumbs): counted, never
   // rendered, never deleted.
   smallImageCount: number;
@@ -105,6 +112,8 @@ export const MOMENT_SUPPORTING_MAX = 2;
 export const UNVOUCHED_STRIP_MAX = 3;
 export const MOMENT_TEXT_MAX = 6;
 export const PREVIEW_PHOTOS_MAX = 3;
+// T20-A3: the month-end archive's default first-screen budget, in photos.
+export const ARCHIVE_FIRST_SCREEN_MAX = 24;
 export const BURST_GAP_SECONDS = 90;
 
 // Temporal burst grouping over one day's photos (takenAt ascending, as PhotoDay guarantees).
@@ -271,6 +280,29 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
     if (drawable.length > 0) archiveDays.push({ ...day, photos: drawable });
   }
 
+  // T20-A3 (原则五, "大部分内容默认不出现"): 507 photos flat in one page was the whole point being
+  // violated — everything shipped in the initial HTML whether the reader asked for it or not. The
+  // full archive is still real (archiveDays, unchanged) and still countable; archiveDaysVisible is
+  // what actually ships in the first render, capped to a screenful. Priority: a day that already
+  // carries a published moment (chapter/chronicle) first — its photos are the ones a reader who
+  // just read that day's words would want to see next — then newest first for the rest.
+  const referencedDays = new Set([...chapterMoments, ...chronicle].map((moment) => moment.day));
+  const archiveDaysRanked = [...archiveDays].sort((a, b) =>
+    Number(referencedDays.has(b.day)) - Number(referencedDays.has(a.day)) || b.day.localeCompare(a.day));
+  const archiveDaysVisible: PhotoDay[] = [];
+  let visiblePhotoCount = 0;
+  for (const day of archiveDaysRanked) {
+    if (visiblePhotoCount >= ARCHIVE_FIRST_SCREEN_MAX) break;
+    const room = ARCHIVE_FIRST_SCREEN_MAX - visiblePhotoCount;
+    const photos = day.photos.slice(0, room);
+    archiveDaysVisible.push({ ...day, photos });
+    visiblePhotoCount += photos.length;
+  }
+  archiveDaysVisible.sort((a, b) => a.day.localeCompare(b.day));
+  const visibleCountByDay = new Map(archiveDaysVisible.map((day) => [day.day, day.photos.length]));
+  const archiveFoldedPhotoCount = archiveDays.reduce((sum, day) => sum + day.photos.length, 0) - visiblePhotoCount;
+  const archiveFoldedDayCount = archiveDays.filter((day) => (visibleCountByDay.get(day.day) ?? 0) < day.photos.length).length;
+
   // COVER / PREVIEW — vouched pictures only, newest first so the index face matches the month's
   // latest life; a memory's own lead outranks loose photography.
   const memoryLead = chapter.memories.find((memory) => memory.lead)?.lead;
@@ -299,7 +331,7 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
     ? `这个月还没有整理出来的文字。${photoDaysAsc.length} 天留下了 ${archivePhotoCount} 张照片，都收在月末的档案里，还没有人确认过它们拍的是什么。`
     : undefined;
   const daysWithWords = new Set(chapterMoments.map((moment) => moment.day)).size;
-  return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, archiveDays, smallImageCount, cover, preview, narration, daysWithWords, totalPhotoCount: archivePhotoCount };
+  return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, archiveDays, archiveDaysVisible, archiveFoldedPhotoCount, archiveFoldedDayCount, smallImageCount, cover, preview, narration, daysWithWords, totalPhotoCount: archivePhotoCount };
 }
 
 // V4 (T16, 2026-09-04), corrected by T21 (Cowork, 2026-09-04): the original draft also stated the
