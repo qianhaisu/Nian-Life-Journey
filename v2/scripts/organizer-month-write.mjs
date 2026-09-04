@@ -7,7 +7,23 @@
 // review, then again with --commit after a human (Cowork/Teddy) has read the output.
 //
 //   node --import tsx scripts/organizer-month-write.mjs --month=2026-09 --out=<abs path outside repo>.json
-//     [--max-calls=60] [--max-days=31] [--commit]
+//     [--max-calls=60] [--max-days=31] [--concurrency=8] [--commit]
+//
+// T17, 2026-09-04 (Cowork): the per-window work was fully serial — ~82s/window, almost all of it
+// waiting on one DeepSeek HTTP round trip, so a month's ~100 passing windows took the better part of
+// an hour. --concurrency=N (default 8, 1-16) runs N bounded worker loops pulling from the same work
+// queue. Four things a naive "just wrap it in Promise.all" would have broken, kept intact on purpose:
+//   1. The T10 fingerprint short-circuit (findOrganizerRun) still runs per item, still before any
+//      model call — each worker checks its own item, so no worker ever spends a DeepSeek call on a
+//      window another run (or another worker) already committed.
+//   2. --max-calls stays a hard ceiling: reserveCall() below is a synchronous check-and-increment
+//      (no `await` inside it), which is atomic under JS's single-threaded event loop even with many
+//      in-flight workers — two workers can never both observe room for the last call and overshoot.
+//   3. `work` is deduped by fingerprint before the pool starts, so two workers can never race to
+//      persist the same organizationFingerprint (applyPlan's own idempotency is the backstop, not the
+//      first line of defense).
+//   4. Error isolation is per-item exactly as before (try/catch around each phase) — one window's
+//      editor/writer failure ends that window's iteration, not its worker's loop.
 //
 // T11, 2026-09-04 (Teddy): this used to persist a daily_trace. DailyTrace has no title field
 // (types.ts:61: entries: string[]), so it rendered folded behind TraceDisclosure while every other
@@ -57,6 +73,7 @@ const OUT = argOf("out", null);
 const MAX_CALLS = Number(argOf("max-calls", "60"));
 const MAX_DAYS = Number(argOf("max-days", "31"));
 const COMMIT = hasFlag("commit");
+const CONCURRENCY = Math.max(1, Math.min(16, Number(argOf("concurrency", "8")) || 8));
 // --day and --from/--to slice which days of the month are actually processed. T10, 2026-09-04:
 // Cowork's environment has a 175s hard ceiling per command and no surviving background process, so a
 // month has to be committed one day (or a few days) at a time across many invocations — and without
@@ -183,6 +200,7 @@ async function callWriter(pkg) {
     messages: [{ role: "user", content: buildWriterV2Prompt(pkg) }],
   });
   const res = await fetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
+  if (res.status === 429) { const err = new Error("writer http 429"); err.rateLimited = true; throw err; }
   if (!res.ok) throw new Error(`writer http ${res.status}`);
   const payload = await res.json();
   const tool = payload.content?.find((b) => b.type === "tool_use" && b.name === WRITER_V2_TOOL_NAME);
@@ -202,13 +220,56 @@ const repository = { findOrganizerRun, persistOrganization, persistDailyTrace, p
 // either name means the target id on that run points at a life_event, not a daily_trace.
 const MEMORY_RUN_ACTIONS = new Set(["create_memory", "life_event_candidate"]);
 
-const results = [];
+// Two workers must never both spend a call on the same window, and identity here is the
+// organizationFingerprint, not array position — dedupe before any worker sees the list.
+{
+  const seen = new Set();
+  const deduped = [];
+  for (const item of work) { if (seen.has(item.fp)) continue; seen.add(item.fp); deduped.push(item); }
+  if (deduped.length !== work.length) console.log(`Deduped ${work.length - deduped.length} window(s) sharing a fingerprint before dispatch.`);
+  work.length = 0;
+  work.push(...deduped);
+}
+
+const results = new Array(work.length);
 let calls = 0;
 let written = 0;
-for (const item of work) {
-  if (calls >= MAX_CALLS) { console.log(`Reached --max-calls=${MAX_CALLS}; stopping.`); break; }
+let maxCallsLogged = false;
+let cursor = 0;
+let allowedWorkers = CONCURRENCY;
+let consecutive429 = 0;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Synchronous check-and-increment: no `await` between the read and the write, so this is atomic
+// under JS's single-threaded event loop no matter how many workers call it "at once".
+function reserveCall() {
+  if (calls >= MAX_CALLS) { if (!maxCallsLogged) { maxCallsLogged = true; console.log(`Reached --max-calls=${MAX_CALLS}; workers will finish in-flight items and stop.`); } return false; }
+  calls += 1;
+  return true;
+}
+
+function nextIndex() { return cursor < work.length ? cursor++ : -1; }
+
+async function callWriterWithBackoff(pkg, lifeDate) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const result = await callWriter(pkg);
+      consecutive429 = 0;
+      return result;
+    } catch (error) {
+      if (!error?.rateLimited || attempt >= 4) throw error;
+      consecutive429 += 1;
+      const delayMs = Math.min(30000, 1000 * 2 ** consecutive429);
+      if (allowedWorkers > 1) { allowedWorkers -= 1; console.log(`  [rate-limit] 429 on ${lifeDate}, backing off ${delayMs}ms, concurrency reduced to ${allowedWorkers}`); }
+      else console.log(`  [rate-limit] 429 on ${lifeDate}, backing off ${delayMs}ms (concurrency already at floor 1)`);
+      await sleep(delayMs);
+    }
+  }
+}
+
+async function processItem(item) {
   const entry = { lifeDate: item.lifeDate, conversation: item.w.conversationId, gate: item.gate, fingerprint: item.fp, messages: item.w.stats.messageCount, images: item.w.stats.imageCount, keptSourceIds: item.keptSourceIds };
-  results.push(entry);
 
   // T10: the same window identity (organizationFingerprint = item.fp) that applyPlan already uses
   // for replay safety, checked BEFORE the editor is called rather than after the writer has already
@@ -218,12 +279,12 @@ for (const item of work) {
     entry.skipped = "already organized under this fingerprint (checked before any model call)";
     entry.write = { applied: false, reason: "already organized under this fingerprint", eventId: MEMORY_RUN_ACTIONS.has(prior.action) ? prior.targetId : undefined };
     console.log(`  ${item.lifeDate} — already organized (eventId ${entry.write.eventId ?? "n/a"}), skipped before any DeepSeek call`);
-    continue;
+    return entry;
   }
 
+  if (!reserveCall()) { entry.skipped = "max-calls reached before this window's editor call"; return entry; }
   let verdict, grounding;
   try {
-    calls += 1;
     const raw = (await editor.organize(item.w)).verdict;
     verdict = validateMemoryEditorVerdict(raw, item.w);
     const axes = editor.axesByWindowId.get(item.w.windowId);
@@ -231,7 +292,7 @@ for (const item of work) {
   } catch (error) {
     entry.skipped = `editor: ${String(error?.message ?? error)}`;
     console.log(`  ${item.lifeDate} EDITOR ERROR ${entry.skipped}`);
-    continue;
+    return entry;
   }
   entry.subjectRelevance = verdict.subjectRelevance;
   entry.groundedClaims = grounding.claims.length;
@@ -239,7 +300,7 @@ for (const item of work) {
   const kept = new Set(item.keptSourceIds);
   const groundedInKept = grounding.claims.filter((claim) => (claim.sourceIds ?? []).some((id) => kept.has(id)));
   entry.claimsFromGatedSources = groundedInKept.length;
-  if (groundedInKept.length === 0) { entry.skipped = "no grounded claim traces back to a message that passed the gate"; console.log(`  ${item.lifeDate} — no claim from gated sources`); continue; }
+  if (groundedInKept.length === 0) { entry.skipped = "no grounded claim traces back to a message that passed the gate"; console.log(`  ${item.lifeDate} — no claim from gated sources`); return entry; }
   grounding = { ...grounding, claims: groundedInKept };
 
   const pkg = buildEvidencePackage({
@@ -249,26 +310,27 @@ for (const item of work) {
     quotableLines: (verdict.quotableLines ?? []).map((q) => ({ text: q.text, evidenceRef: q.evidenceRef, speakerRole: q.speakerRole })),
     longitudinal: [], lifeDate: item.lifeDate,
   });
-  if (!packageHasAssertableMaterial(pkg)) { entry.skipped = "nothing assertable after grounding"; console.log(`  ${item.lifeDate} — nothing assertable`); continue; }
+  if (!packageHasAssertableMaterial(pkg)) { entry.skipped = "nothing assertable after grounding"; console.log(`  ${item.lifeDate} — nothing assertable`); return entry; }
 
+  if (!reserveCall()) { entry.skipped = "max-calls reached before this window's writer call"; return entry; }
   let writer;
-  try { calls += 1; writer = await callWriter(pkg); }
-  catch (error) { entry.skipped = `writer: ${String(error?.message ?? error)}`; console.log(`  ${item.lifeDate} WRITER ERROR`); continue; }
+  try { writer = await callWriterWithBackoff(pkg, item.lifeDate); }
+  catch (error) { entry.skipped = `writer: ${String(error?.message ?? error)}`; console.log(`  ${item.lifeDate} WRITER ERROR`); return entry; }
   const validation = validateNarrative({ pkg, output: writer.output });
   entry.validation = { ok: validation.ok, issues: validation.issues?.map((i) => i.code) ?? [] };
   entry.usage = writer.usage;
-  if (writer.output.insufficient) { entry.skipped = "writer declared the evidence insufficient"; console.log(`  ${item.lifeDate} — writer: insufficient`); continue; }
-  if (!validation.ok) { entry.skipped = `narrative validator refused: ${entry.validation.issues.join(",")}`; console.log(`  ${item.lifeDate} — validator refused (${entry.validation.issues.join(",")})`); continue; }
+  if (writer.output.insufficient) { entry.skipped = "writer declared the evidence insufficient"; console.log(`  ${item.lifeDate} — writer: insufficient`); return entry; }
+  if (!validation.ok) { entry.skipped = `narrative validator refused: ${entry.validation.issues.join(",")}`; console.log(`  ${item.lifeDate} — validator refused (${entry.validation.issues.join(",")})`); return entry; }
   const story = String(writer.output.story ?? "").trim();
   if (FORBIDDEN.test(story) || FORBIDDEN.test(String(writer.output.title ?? ""))) {
     entry.skipped = "text named an unresolved speaker as 家人";
     console.log(`  ${item.lifeDate} — REFUSED: contains 家人`);
-    continue;
+    return entry;
   }
   entry.proposed = { title: writer.output.title, story, usedMediaIds: writer.output.usedMediaIds ?? [], claims: writer.output.narrativeClaims ?? [] };
   console.log(`  ${item.lifeDate} OK  ${story.slice(0, 60)}…`);
 
-  if (!COMMIT) continue;
+  if (!COMMIT) return entry;
 
   // ---------------------------------------------------------------- persist (T7 step 3, real write)
   const contentTypes = [...new Set(item.w.items.map((i) => i.contentTypes ?? []).flat())];
@@ -312,13 +374,26 @@ for (const item of work) {
   } catch (error) {
     entry.writeError = String(error?.message ?? error);
     console.log(`  ${item.lifeDate} WRITE ERROR ${entry.writeError}`);
-    continue;
+    return entry;
   }
   entry.write = { applied: applied.applied, reason: applied.reason, eventId: applied.eventId };
-  if (!applied.applied) { console.log(`  ${item.lifeDate} — already organized under this fingerprint (eventId ${applied.eventId}), no new write`); continue; }
+  if (!applied.applied) { console.log(`  ${item.lifeDate} — already organized under this fingerprint (eventId ${applied.eventId}), no new write`); return entry; }
   written += 1;
   console.log(`  ${item.lifeDate} WRITTEN eventId=${applied.eventId}`);
+  return entry;
 }
+
+async function worker(workerIndex) {
+  for (;;) {
+    if (workerIndex >= allowedWorkers) return; // retired by a rate-limit downgrade
+    const index = nextIndex();
+    if (index === -1) return;
+    results[index] = await processItem(work[index]);
+  }
+}
+
+console.log(`Concurrency: ${CONCURRENCY} worker(s).`);
+await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => worker(i)));
 
 const publishable = results.filter((r) => r.proposed);
 const summary = {
