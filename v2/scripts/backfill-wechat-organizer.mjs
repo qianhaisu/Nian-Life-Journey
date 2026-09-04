@@ -6,6 +6,7 @@
 // Usage:
 //   node --import tsx scripts/backfill-wechat-organizer.mjs
 //   node --import tsx scripts/backfill-wechat-organizer.mjs --month=2025-09
+//   node --import tsx scripts/backfill-wechat-organizer.mjs --month=2026        (a whole year)
 //   node --import tsx scripts/backfill-wechat-organizer.mjs --limit=200
 //   node --import tsx scripts/backfill-wechat-organizer.mjs --dry-run
 import path from "node:path";
@@ -85,7 +86,11 @@ if (targetMonth) {
     // captured_at is timestamptz: it MUST be converted into Shanghai before the month is read,
     // otherwise a message sent between Shanghai 00:00 and 07:59 on the 1st is filed in the previous
     // month (Postgres renders a timestamptz through the session TimeZone, which is GMT here).
-    `SELECT id FROM raw_sources WHERE source_type='wechat' AND status='uploaded' AND to_char(captured_at AT TIME ZONE 'Asia/Shanghai','YYYY-MM')=$1`,
+    // Prefix match, so --month=2026 selects the whole year in one pass. The month label is a
+    // fixed YYYY-MM, so '2026' can only match 2026-01..2026-12 and '2026-05' only itself. This
+    // matters because each invocation pays ~10 minutes to load the organizer store; nine separate
+    // month runs spend an hour and a half doing nothing but re-reading the same rows.
+    `SELECT id FROM raw_sources WHERE source_type='wechat' AND status='uploaded' AND to_char(captured_at AT TIME ZONE 'Asia/Shanghai','YYYY-MM') LIKE $1 || '%'`,
     [targetMonth]
   );
 } else {

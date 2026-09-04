@@ -37,6 +37,71 @@
 ---
 
 ## 时间线（只追加，最新在上）
+### 2026-09-04 · Claude Code · T7 第一步：2025 那条链的真相（与入箱记载不符）
+
+1. **线上多了什么**：本条无线上变化，是 T7 动手前的链路核实。同时 T5（`3bff3ee` 肖像背书）、
+   T6（`04d402a` 月份倒序）、T4 代码改造（`3aefad9` `organize` 开关默认关）已推送。
+2. **没做到 / blocker**：**T8 两项 Codex 审查都没派出去**——本机没装 Codex CLI
+   （`npm install -g @openai/codex` 后 `/codex:setup`）。按入箱要求没有为它阻塞 T7。
+3. **下一件**：2026 全年 backfill（rule-based，零 AI）→ quality-audit → family-writer，从 2026-09 往回。
+
+**入箱事实 1、2 需要更正（已逐条核实）**：
+
+- 入箱写「现在网站上所有能读的文字，全部来自 rule-v2 运行」。**不成立。** 2025-07 那条痕迹
+  `trace-c8f1f9b8` 的三段 prose（「家人自制了一个床中床…」）在它指向的 **65 条源消息里一条都找不到**；
+  源是原始群聊（「同事老婆手织了一条豆豆毯给张小年」「哇，肯定很舒服」）。`rule-based.ts` 的
+  `traceEntry` 只产生 **一条** entry（`[traceEntry(sources)]`，取第一条有文字的 source 截 180 字），
+  而这些痕迹有 2–3 条。入箱事实 2 猜测的「大概率是 deepseek-family-writer 的改写」**是对的**。
+- **完整链条（这是要对 2026 复制的那条，不要新发明）**：
+  1. `backfill-wechat-organizer.mjs`（rule-based，零 AI）建 life_events + daily_traces，文字是原始聊天行
+  2. `deepseek-quality-audit.mjs` 逐条跑 `runPipeline`，产出 `subjectRelevance` + `coreFacts`
+     （证据绑定、≤60 字、过 H1–H9 sanitiser），并写 `content_quality_reviews`。**主体门就在这里**
+  3. `deepseek-family-writer.mjs` 把 approved 痕迹的 `entries` 用 `coreFacts` 重写（≤3 条）。
+     **这一步不调模型**；没有可用 fact 的痕迹会被撤回 approval 而不是发占位文字
+- **因此入箱「建议路径」第二步（自己加一个点名张年的过滤）不用做**：主体门已经存在于第 2 环，
+  再加一个平行的门等于新发明一条链，违反入箱自己的「不要发明新链路」。
+- 证据：痕迹 `created_at` 2026-09-01 09:05（rule 建的），`entries` 的 `updated_at` 是同日 16:44–16:45
+  （writer 改的），而 `organizer_run` 仍是 rule-based——provenance 记的是建者，不是写者。
+- 时间线上另一处更正：`life_events` 2025-07 的 title/story 至今仍是原始聊天行（`@hxx\. 下大雨了`、
+  `[media]`），说明 writer 的 life_event 改写只覆盖了很小一部分。
+
+**已确认的安全性**：rule 产出 fail-closed（`requiresQualityReview` 对 `organizerType==='rule'` 返回 true，
+只有 `approved` 才发布）。所以 backfill 本身**不可能**把错的文字推上网页；花钱和风险都在第 2 环。
+`deepseek-quality-audit.mjs` 的 editor variant 默认 v1 → `promptVersion=memory-editor-v1`，与现有 105 条
+审阅记录一致，所以已审过的会被跳过，**不会重复计费，也不会改动 2025 已发布的状态**。
+
+
+### 2026-09-04 15:30 · Teddy · 确认 /about 肖像是张年
+
+1. T5 上线后 /about 的肖像换成夸克照片 `media-quark-sha-379105…`，**Teddy 亲眼确认是张年**。
+2. 这是夸克 `family_photo` 背书第一次被人工验证。样本量 1，但方向对：夸克人脸搜索的结果可以作为 `trusted` 来源。
+3. 后续凡是靠夸克背书进正文的照片，仍按「未逐个核实」处理，等审阅台。
+
+### 2026-09-04 · Cowork · Teddy 两条决定：T4 → P1，T7 走 C 今天完成
+
+1. 线上无变化——本轮是定位和派单。
+2. 定位到的事实：**网站上所有可读文字全部来自 2026-09-01 那一次 rule-v2 运行**（217 traces + 82 memories）。
+   AI V2 Organizer 历史总产出 8 次。2026 年零次运行。`rule-based.ts` 没有主体过滤——直接跑私聊会把
+   车价写进档案。召回门在 claim-grounding 的主体解析，V7 那对（zero-anaphora + grounded promotion）
+   从未在生产启用。
+3. 下一件：Claude Code 执行 T7（详见 INBOX），Cowork 每 15 分钟 curl 各月页核对。
+
+**T4 夸克 → P1**（Teddy：可以接受图少）。已做的 apply `organize` 开关改造保留不回滚。
+
+### 2026-09-04 · Cowork · Teddy 抽查四处，两个 P0 漏的 bug，一条新原则
+
+1. 修了 `/about` 肖像（待 T5 提交上线）：`latestPortrait` 只按尺寸选图，选出的不是张年。加背书检查，
+   没有有背书的图就空着。
+2. 没做到：T2 标了 done，但按 CLAUDE.md「完成的定义」它没完成——文字进了库，页面上一个字没多。
+   **以后队列里每条任务的验收必须写「家人在页面上能看到什么」，不能只写数据层的数字。**
+3. 下一件：T5 提交 → T6 记忆页排序 → T7 等 Teddy 定。
+
+**Teddy 的新原则**：「可以接受有文字没图，不接受有图没文字。文字要么来自聊天，要么生成故事描述。」
+推翻了接手评估 §04 保留的「文字可无图、图可无文」。首页「最近的强照片日」规则、2026 年各月的
+纯相册状态，都因此变成违规。
+
+**同一个病的第三次出现**：2025-01 广告（月页）、/about 肖像、以及 Cowork 下午被否掉的尺寸筛选方案——
+全是「拿尺寸当照片」。以后凡是选图，一律先问有没有背书。
 ### 2026-09-04 · Claude Code · T2 主群补齐
 
 1. **线上多了什么**：主群 2025-11-15 → 2026-08-25 的 3,912 条消息和 592 张照片已入库。此前 2025-12 到
