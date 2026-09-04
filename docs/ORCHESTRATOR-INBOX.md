@@ -10,6 +10,14 @@ Teddy 不必在中间转述。
 > 盯着 docs/ORCHESTRATOR-INBOX.md，文件一变就读，按里面 `status: ready` 的任务从上到下执行，
 > 每完成一个把它的 status 改成 done 并在 docs/STATUS.md 追加三行。
 
+## 上下文纪律（Teddy 2026-09-04 17:26）
+
+**当前 session 上下文达到 200k token 就主动 `/compact`，除非正处在不能中断的当口**（写库事务进行中、
+一个多步操作做到一半、正在等一个马上要回来的命令）。那种情况做完立刻 compact。
+
+compact 之后先重读 `docs/ORCHESTRATOR-INBOX.md` 和 `docs/STATUS.md` 最新两条，再接着当前步骤——
+这两份文件就是为了让「上下文没了也能接着干」而存在的。**compact 不需要问 Teddy。**
+
 ## 这条通道的边界（重要）
 
 **它传递工作，不传递判断。**
@@ -293,8 +301,9 @@ Teddy 16:58：Codex 装好了，让它分担。这两件都和 T7 的文件不�
 2. 续跑之前被 kill 的那个全量导入（`--only 1,3,4,5,12 --skip 1`，checkpoint 在库里），加 `--media-concurrency 12`，
    `--retry-failed --task-id` 用原 task，**不用 `--max-media` / `--max-messages`**
 3. 盯到跑完；每个群完成后在 STATUS.md 追加三行（条数、月份范围、和 json 数对不对）
-4. md/json 重合的 90 行（bb5d5ba6 70 / d016ea9b 11 / 2bca9fd8 9 / b4bdc971 9）：json 导到对应月份后按
-   `(captured_at, sender, text)` 找重合，**predeclare 数量写进 STATUS.md，然后停下等 Teddy 确认再删**
+4. md 重复行：Cowork 17:22 已删 88 行（乳儿班 70、爸爸妈妈 18），**只剩张小年小群 md `d016ea9b` 11 行**。
+   等小群 json 导到 2026-09 后：把它那 1 个 media_asset 的 owner 改指 json 那份的 raw_source，删 11 行 raw_sources
+   + 1 行 media，孤儿资产必须为 0。Teddy 已批准，不用再问；predeclare 数字写 STATUS.md 后执行
 5. 硬边界：不碰 `lib/organizer/`，不碰 daily_traces / life_events，不 commit（改动留给 Code 提交）
 
 **T9b · T8b 诊断完之后，修那 3 个固定失败的测试**
@@ -305,3 +314,32 @@ Teddy 16:58：Codex 装好了，让它分担。这两件都和 T7 的文件不�
 
 **并行规则**：T9a 写库（导入）、T9b 只改 test/——和 T7 步骤 3 的写库不共用表；连接池压力在 T7 写库那一刻
 看一眼 T9a 是否在 media_link 高峰，是就等它过去。
+
+
+---
+
+### T10 · 给写库脚本加 `--day`（或 `--from`/`--to`）— status: done（`b3d2cfa`）
+
+**背景**：Cowork 已经能跑 `--commit`（Code 那边被 auto-mode classifier 拦的那条，Cowork 侧没有这个拦截），
+2026-09 的 09-01、09-02 已写入并核对：`daily_traces` 155 → **157**，`content_quality_reviews` 107 → **109**
+（都是 `daily_trace` / `approved`），`organizer_runs` 486 → **488**，`life_events` 仍 83。指纹幂等已实测
+（第二次跑打印 `already organized under this fingerprint, no new write`）。
+
+**但 Cowork 侧单条命令有 175 秒硬上限，且后台进程活不过一次调用**（沙箱 `--die-with-parent`）。
+2026-09 只有 3 天就已经跑不完（每次重跑都要把 09-01、09-02 的 DeepSeek 调用重付一遍才轮到 09-03）。
+2026-08 有约 30 天，更不可能。
+
+**要做的**：给 `scripts/organizer-month-write.mjs` 加按天切片的参数，二选一即可：
+- `--day=YYYY-MM-DD`（只处理这一天），或
+- `--from=YYYY-MM-DD --to=YYYY-MM-DD`
+
+要点：
+- 切片必须在**进入 DeepSeek 调用之前**过滤，不是跑完再丢——现在的浪费就出在这里
+- 更好的做法：把 `findOrganizerRun` 的指纹短路**提到 editor 调用之前**，已组织过的窗口直接跳过，
+  一分钱不花。这条独立于 `--day`，两个都做最好
+- 其余逻辑一个字不改
+
+**验收**：`--day=2026-09-03 --commit` 跑完，`daily_traces` 157 → 158，且 09-01/09-02 不产生任何 DeepSeek 调用。
+
+**做完通知**：改完 commit + push 并在 STATUS.md 写一行，Cowork 会自己按天跑完 2026-09 剩下的一天，
+然后逐月往前推（每月先不带 `--commit` 出样本给 Cowork 抽读，通过后 Cowork 自己按天 `--commit`）。
