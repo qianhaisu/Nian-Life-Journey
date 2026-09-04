@@ -26,6 +26,7 @@
 | 占用者 | 对象 | 开始 | 预计 | 备注 |
 |---|---|---|---|---|
 | Claude Code | `daily_traces` 2 行删除（T11 数据迁移，09-01/09-02） | 等 Teddy 确认 | — | predeclare 见时间线；确认后立即执行并重跑写库脚本 |
+| Claude Code (session ba15c6) | T7 Phase 1，2026-07 dry-run | 18:52 | ~15 分钟 | 只读 dry-run，零写入；发现仓库同时有多个活跃 session（`git log` 显示另一个 session 刚做完 T11/T12/T13），认领这个月避免撞车 |
 
 **互斥规则**
 
