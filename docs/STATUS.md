@@ -914,3 +914,23 @@ storage-phase-2 的夸克归档）改动前就在失败。
    都还没做。8 月新写的 13～46 条里同样有群务/后勤内容混入，问题在持续产生，不是历史存量。
 3. **下一件**：T20-B 月度回顾（四次 DeepSeek 调用，P0 范围）→ T20-C+T19（记忆分量分级，需重新定级
    06/07/08/09 已发布的约 128 条）→ T20-A3。
+
+### 2026-09-04 23:4x · Claude Code (session ba15c6) · T20-B 完成：三个月各有一段「这个月的张年」
+
+1. **线上多了什么（部署后）**：06/07/08 三个月页的开头会多一段真实的月度回顾，例如 07 月：
+   「这个月张年从乳儿班升入了大班，老师说「小年的能力在乳儿班已经关不住了」……这个月他感冒流浓鼻涕
+   拖了两周，去医院检查过。」——都是从当月已发布 life_event 里综合出来的变化，没有编造，没有数字。
+   09 月只有 4 条 life_event，按规则（<5 条不生成）正确留白，不是漏做。
+2. **实现方式**：发现 `monthly_snapshot` 表本来就是按 `(profile, month)` 唯一键设计的，但读取代码
+   （`getStore()`）一直只拉「全档案最新的一条」——一个架构性的疏漏，不是本轮引入的。已改成按月各自
+   读取（`Store.monthlySnapshot` → `Store.monthlySnapshots[]`），`app/page.tsx`/月页各自匹配自己的月份。
+   涉及 postgres/json/in-memory 三个 repository 实现 + 5 个测试 fixture，改完全量测试 643/643 通过。
+   新脚本 `scripts/month-review.mjs`：只读该月已发布 life_event 的标题+正文，DeepSeek 生成 3-5 句，
+   ≤200 字，无数字，禁「家人」，不足 5 条或模型判定材料不足则不生成。生成后同时写
+   `content_quality_reviews`（`targetKind: monthly_snapshot`，与 T7 一样的自我审阅记录方式）。
+3. **顺手修的 bug**：脚本用 `process.exit()` 提前退出时跳过了 `finally` 里的 `pool.end()`，
+   在这台机器的 Node 24 + Windows 上导致一次无害但很吵的 libuv 崩溃（发生在真正的工作已经完成之后）。
+   改成 `process.exitCode` + 提前 `return`，让 `finally` 正常跑完，问题消失。
+4. **没做到**：T20-A3（月末档案封顶）、T20-C+T19（记忆分量分级/群务降级）还没做。
+5. **下一件**：T20-C+T19——写手改按 `worthinessAxis` 落 `memoryWeight`（高→`memory`、中→`trace`、
+   低→不发布），并重新定级 06/07/08/09 已发布的约 128 条；然后 T20-A3。
