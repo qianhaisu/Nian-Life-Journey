@@ -19,7 +19,9 @@ export type SubjectGatePolicy =
   /** A group that exists because of him: a naming message, and what the same person says next. */
   | "group"
   /** A private chat between adults: only a message that names him, and nothing inferred. */
-  | "private";
+  | "private"
+  /** Superseded by a more complete re-export of the same real conversation — see below. */
+  | "excluded";
 
 export type SubjectGate = { policy: SubjectGatePolicy; conversation: string };
 
@@ -31,24 +33,40 @@ export type SubjectGate = { policy: SubjectGatePolicy; conversation: string };
 // lib/ingest/wechat-weflow-json.ts).
 const POLICIES: Record<string, SubjectGatePolicy> = {
   // 乳儿班张小年家庭群 — the nursery's family group. Teddy, 2026-09-04: everything in it is about him.
-  "conversation:2109e1e89306b57b8334d349": "all", // WeFlow JSON, 7,244 messages
-  "conversation:bb5d5ba6da5986d35b923465": "all", // WeFlow Markdown, the 70 that were imported first
+  "conversation:2109e1e89306b57b8334d349": "all", // WeFlow JSON, 7,244 messages — see "excluded" below for its md pair
 
   // Groups that exist because of him. He is usually the subject, but the adults also talk to each
   // other in them, so a message earns its place by naming him or by continuing the thought of one.
   "conversation:a673c0e0563be6ecf1867094": "group", // 主群 (作战部队), current export
   "conversation:856b8ec2b8f3ec2871782ca6": "group", // 主群, earlier export
-  "conversation:87c42fdc94895ff6b94222da": "group", // 张小年小群, JSON
-  "conversation:d016ea9b700f45190ee50221": "group", // 张小年小群, Markdown
+  "conversation:87c42fdc94895ff6b94222da": "group", // 张小年小群, JSON — see "excluded" below for its md pair
   "conversation:e6adbcafc3c6e32be0494251": "group", // 小雪微信群, JSON
-  "conversation:77348fd4007b65a8c3dc680f": "group", // 亲爱的爸爸妈妈, JSON
-  "conversation:2bca9fd86569eeed46b59927": "group", // 亲爱的爸爸妈妈, Markdown
+  "conversation:77348fd4007b65a8c3dc680f": "group", // 亲爱的爸爸妈妈, JSON — see "excluded" below for its md pair
   "conversation:b237eb2ab60e65c404be9cd0": "group", // 老苏家
-  "conversation:b4bdc9710e1faebcc88fd25e": "group", // 温州爸妈
 
   // Private chats between two adults. Most of what is said has nothing to do with him.
   "conversation:0567a44e538fc41f22b57097": "private", // 阿静 (妈妈)
   "conversation:5e89f3dacc787d226503906a": "private", // 陈亚萍 (奶奶)
+
+  // Superseded by a WeFlow JSON re-export of the SAME real conversation (see
+  // lib/ingest/wechat-weflow-json.ts): same messages, different conversationId, so both used to
+  // reach the gate and could each produce a page for the same day. Cowork, 2026-09-04, reviewing the
+  // first 2026-09 dry-run: two near-identical stories came out for 09-02, one from each side of the
+  // 乳儿班 md/json pair. Retiring (deleting) the smaller md rows needs Teddy's separate confirmation
+  // (they're production rows), so for now the md side is excluded from the gate instead — the json
+  // side is strictly the more complete re-export, so nothing is lost, and the duplicate is gone
+  // without deleting anything. Exact-text (sentAt, sender, text) matching to prove the overlap
+  // row-by-row does NOT work here — see subject-gate.test.mjs and STATUS.md 2026-09-04 for why.
+  "conversation:bb5d5ba6da5986d35b923465": "excluded", // 乳儿班 md (70 rows), superseded by 2109e1e8… json
+  "conversation:d016ea9b700f45190ee50221": "excluded", // 张小年小群 md (11 rows), superseded by 87c42fdc… json
+  "conversation:2bca9fd86569eeed46b59927": "excluded", // 亲爱的爸爸妈妈 md (9 rows), superseded by 77348fd4… json
+  // 温州爸妈 md (9 rows). Cowork's T9a/17:15 notes list this alongside the three json-superseded
+  // conversations above, but no json re-export of 温州爸妈 is among the four groups being imported —
+  // unconfirmed whether it's actually superseded, or a mislabel of a different conversation. Excluding
+  // it anyway per Cowork's explicit instruction: it already contributes 0 kept messages in every
+  // 2026-09 dry-run so far, so this changes nothing this month; re-verify before relying on this for
+  // a month where it might actually matter.
+  "conversation:b4bdc9710e1faebcc88fd25e": "excluded",
 };
 
 export function subjectGateFor(conversation: string): SubjectGate {
@@ -88,6 +106,7 @@ export type GateVerdict = {
  * failure mode the whole gate exists to prevent.
  */
 export function passesSubjectGate(window: EvidenceWindow, gate: SubjectGate): GateVerdict {
+  if (gate.policy === "excluded") return { passes: false, kept: [], rejected: [...window.items] };
   const kept: EvidenceWindow["items"] = [];
   const rejected: EvidenceWindow["items"] = [];
   let carrySender: string | undefined;

@@ -7,6 +7,7 @@ import { subjectGateFor, passesSubjectGate, isEmptyMessage, namesSubject } from 
 const NURSERY = "conversation:2109e1e89306b57b8334d349";
 const MAIN = "conversation:a673c0e0563be6ecf1867094";
 const MOTHER = "conversation:0567a44e538fc41f22b57097";
+const NURSERY_MD = "conversation:bb5d5ba6da5986d35b923465";
 
 const item = (text, senderDigest = "d-mother", over = {}) => ({
   itemId: `i-${Math.random().toString(36).slice(2)}`, sourceId: `s-${text.slice(0, 6)}-${senderDigest}`,
@@ -101,4 +102,18 @@ test("naming is by what the family actually calls him, not only his full name", 
 test("a window with nothing eligible is dropped before any model is called", () => {
   const verdict = passesSubjectGate(windowOf([item("你几点下班"), item("我在开会")]), subjectGateFor(MOTHER));
   assert.equal(verdict.passes, false, "no model call, no page, no cost");
+});
+
+test("a conversation superseded by a fuller re-export is excluded outright, even when every message names him", () => {
+  // Production 2026-09: the nursery group was exported twice (md, then a much larger json). Both
+  // reached the gate and each produced a page for the same day — a near-duplicate on 2026-09-02.
+  // Cowork's fix: exclude the smaller md side rather than delete production rows without Teddy's
+  // sign-off. Excluded means excluded — naming him is not enough to rescue a message here.
+  const gate = subjectGateFor(NURSERY_MD);
+  assert.equal(gate.policy, "excluded");
+  const w = windowOf([item("张小年今天午觉睡了两个小时"), item("张小年吃点心比别的孩子快")]);
+  const verdict = passesSubjectGate(w, gate);
+  assert.equal(verdict.passes, false);
+  assert.equal(verdict.kept.length, 0);
+  assert.equal(verdict.rejected.length, 2);
 });
