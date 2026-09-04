@@ -567,3 +567,16 @@ storage-phase-2 的夸克归档）改动前就在失败。
    全部来自 `created_by: 'rule'`、`organizer_version: 'rule-v2'` 的旧管线，从未经过 Writer v2。
 3. 写入 T12 到 INBOX：渲染层过滤，不删数据，立即可做。家人和原始聊天标题留给 T7 逐月重写时修复。
 4. **下一件**：T11（格式修复）+ T12（垃圾过滤）是当前最高优先级，都在 T3/T7 剩余月份之前。
+
+### 2026-09-04 · Cowork · T13 写入——发现 T7 回刷重大碰撞风险
+
+1. **线上无变化**——本轮是风险分析 + 任务规划。
+2. **发现**：T2 导入在 rule-v2 跑完之后，给 2025-05 到 2025-11 增加了 8,981 条 raw_sources。
+   T7 指纹 = `sha256(conversationId|activityDate|sortedSourceIds)`，source 变了 → 指纹变了 →
+   `applyPlan` 不会 skip → 会在旧 life_event 旁边再写一条新的 = **114 条重复 life_events**。
+   实测 2025-06-09：rule-v2 用 2 条 source，现在同天同群有 5 条。
+3. **写入 T13 到 INBOX**：在 T7 处理 dirty months 之前，需 Teddy 确认删除 rule-v2 产的旧数据
+   （~82 life_events、~144 daily_traces、~475 organizer_runs）。66% 是垃圾质量，无保留价值。
+4. **T7 可以安全先做 clean months**：2025-01→04, 2025-12, 2026-01, 2026-03→07 共 11 个月，
+   无旧数据碰撞。这不需要 Teddy 确认。
+5. **T7 执行顺序调整**：Phase 1 clean → Teddy 确认 T13 → Phase 2 cleaned。

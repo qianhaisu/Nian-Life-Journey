@@ -569,3 +569,114 @@ the words」。text_led 和 memory_led 的 hero/supporting 都是 `undefined / [
 | 被过滤的月份 | 如果某月所有 life_events 都被过滤，该月退化为只有 traces 的折叠显示——这是正确的，比显示垃圾标题好 |
 | `tsc --noEmit` | 通过 |
 | 测试 | `memory-chapters.test.mjs` 通过（可能需更新断言） |
+
+---
+
+### T13 · T7 回刷前必须先清理旧月份的 rule-v2 数据 — status: **blocked（需 Teddy 确认删除）**
+
+> **⚠️ 这是 Cowork 主动发现的重大风险**。如果不处理，T7 回刷 2025-05 到 2025-11 会产生
+> **114 条重复 life_events + 254 条重复 daily_traces**。
+
+#### 问题根因
+
+T2 在 rule-v2 跑完之后又导入了 8,981 条新 raw_sources（2025-05 到 2025-11）。
+
+T7 的去重指纹 = `sha256(conversationId | activityDate | sorted sourceIds)`。新 sources 加入后，
+同一天同一群的 window 会包含更多 sourceIds → 指纹不同 → `applyPlan` 认为是新窗口 → 写入新的
+life_event/daily_trace，旧的还在 → **重复**。
+
+实测：2025-06-09 的一个窗口，rule-v2 用了 2 条 source，现在同天同群有 5 条。
+
+量化：139 个 rule-v2 create_memory run 中 **114 个（82%）** 的 source 数量已变。
+
+#### 清理方案（需 Teddy 确认）
+
+分两批处理，每批执行前报数据、执行后验证。
+
+**第一批：dirty months（2025-05 到 2025-11 + 2026-02）—— 删除旧数据**
+
+要删除的内容（全部来自 `organizer_version: 'rule-v2'`，66% 是垃圾质量）：
+
+| 表 | 条件 | 预估行数 |
+|---|---|---|
+| `life_events` | profile=zhangnian, 2025-05→2025-11 + 2026-02, created_by='rule' | ~82 |
+| `daily_traces` | profile=zhangnian, 同上月份范围 | ~144 |
+| `organizer_runs` | profile=zhangnian, organizer_version='rule-v2', 同上月份窗口的 fingerprints | ~475 |
+| `content_quality_reviews` | target_id 指向被删 life_events | ~109 |
+| `source_memory_links` | life_event_id 指向被删 life_events | 待查 |
+
+**不删**的：raw_sources（原始数据神圣不可动）、media、2026-08/09 的数据（那些不是 rule-v2 产的，
+且 T11 单独处理 2026-09）。
+
+**第二批：2026-08（11 条 rule-v2 daily_traces）—— 也删除**
+
+2026-08 的 11 条 daily_traces 也是 rule-v2 产的，fingerprint 同样会撞。
+
+#### 清理后的 T7 执行顺序
+
+```
+Phase 1: clean months（无碰撞风险，立即可做）
+  2025-12, 2026-01, 2026-03, 2026-04, 2026-05, 2026-06, 2026-07
+  （2025-01 到 2025-04 可能源数据以媒体为主、文字少，视情况跳过）
+
+Phase 2: cleaned months（Teddy 确认删除后）
+  2025-05, 2025-06, 2025-07, 2025-08, 2025-09, 2025-10, 2025-11
+  2026-02, 2026-08
+
+Phase 3: 2026-09（T11 处理完后自动覆盖）
+```
+
+#### 为什么不能"只加不删"
+
+- 同一天出现两个 life_event（一个垃圾标题如 `[media]`，一个 Writer v2 写的正经标题）→ 月页上两条
+- 同一天出现两个 daily_trace → `foldTraces` 里 entries 重复
+- T12 的渲染层过滤只挡垃圾标题，不挡"看起来正常但和新条目说的是同一件事"的旧条目
+- 没有通用的"内容级去重"，指纹是唯一防线，指纹已变
+
+#### 验收
+
+| 检查项 | 期望 |
+|---|---|
+| 清理前 | life_events 83, daily_traces 157 |
+| 清理后 | life_events 1（2025-08 的 ai 那条保留）, daily_traces 13（2026-08=11 or 0, 2026-09=2） |
+| organizer_runs rule-v2 | 0（全部清理，否则 T7 跑到旧 fingerprint 会 skip） |
+| T7 Phase 1 后 | clean months 出现 life_events，无 duplicate |
+| T7 Phase 2 后 | dirty months 出现 writer-v2 质量的 life_events，替代旧垃圾 |
+
+#### 硬边界
+
+- **需 Teddy 明确说"可以删"** —— 这是删除生产数据（虽然 66% 是垃圾）
+- 删除前导出完整备份到 `docs/backups/rule-v2-cleanup-YYYYMMDD.json`
+- 只删 `created_by = 'rule'` 的 life_events —— 2025-08 那条 `created_by = 'ai'` 的保留
+- raw_sources 不动
+
+
+---
+
+### ⚠️ T7/T11/T13 依赖链（Cowork 2026-09-04 追加）
+
+**执行顺序**（Claude Code 必须遵守）：
+
+```
+T11 (pipeline fix) ← 最高优先级，先做
+  ↓
+T12 (garbage filter) ← 独立于 T11，可并行
+  ↓
+T7 Phase 1: clean months（无旧数据的月份，T11 完成后即可）
+  2025-01, 02, 03, 04, 12
+  2026-01, 03, 04, 05, 06, 07
+  ↓
+T13 cleanup（需 Teddy 确认删除旧 rule-v2 数据）
+  ↓
+T7 Phase 2: cleaned months（T13 完成后）
+  2025-05, 06, 07, 08, 09, 10, 11
+  2026-02, 08
+```
+
+**关键：T11 改变了 T7 的输出格式**。T7 原 spec 步骤 2 说「只产 daily_trace」，
+T11 把管线改为产 `life_event_candidate`（有标题、有故事、走 EditorialMemory 渲染）。
+T11 完成后 T7 自然产出正确格式，无需改 T7 spec 其他部分。
+
+**T7 Phase 1 的月份不需要 Teddy 确认**——它们没有旧数据，不涉及删除。
+**T7 Phase 2 的月份必须等 T13**——否则每个月都会产出重复条目。
+
