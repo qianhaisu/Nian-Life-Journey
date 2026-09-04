@@ -30,13 +30,23 @@
 **互斥规则**
 
 - **仓库写**：同一时间只有一个 session 可以改文件 / commit / push（CLAUDE.md 规定）。
-- **数据库写**：导入、入库、迁移彼此必须串行。
+- **数据库写**：微信导入和夸克入库写不同的行，也不共用 `chat_import_tasks` 队列，**并不需要串行**（2026-09-04 核实；此前本文写「必须串行」是没有依据的断言）。真实的共享资源只有两个：Neon 连接池（STATE 记过一次空闲连接掉线导致进程级崩溃，两个长任务同压会放大它），以及 **Claude Code 只有一个**——长任务的排队是操作者的排队，不是数据库的排队。
 - **性能测量**：测量期间数据库写入必须停止，否则数字是噪音。
 - **git 命令**：只由 Claude Code 执行。Cowork 侧的挂载删不掉文件，跑 git 会留下 `.git/*.lock` 把仓库卡住。
 
 ---
 
 ## 时间线（只追加，最新在上）
+
+### 2026-09-04 · Cowork · 夸克入库前置调查
+
+1. 线上无变化——本轮是只读调查。
+2. `quark-photo-init.mjs` **不是**「只入库不调 AI」的脚本，它是 `quark-photo-apply.mjs` 的 50 行壳（`import { applyQuarkPhotoArtifact }`），走同一条 enqueue 路径。且硬编码三处：强制 `AI_PROVIDER=gemini` / `MEMORY_ORGANIZER=ai` / `AI_ORGANIZER_ENABLED=true`（**违反「生产统一 DeepSeek」的决定**），`maxGeminiJobs: 20`，以及 `ARTIFACT_DIR = .../quark-photo-prep-20260831`（**8-31 那批旧 artifact，即已入库那 107 张的来源**）。要导的 2,279 张在 `C:\Users\teddy\NianlifeOps\quark-history\2026-09-03\`。**直接跑它不会发生任何事。**
+3. 下一件：夸克入库需要三项前置——artifact 目录可配置、Gemini 硬编码去掉、enqueue 策略定案。
+
+**enqueue 的真实规模**：`quark-photo-apply.mjs:202` 按天分组，一天一个 job，不是一张一个。2,279 张约 20 个月 → 上限几百个 job。但超预算时它**照样全部入队**（第 199 行的 warning 自己写了），只是本次不 drain；剩下的会被 Vercel cron 在后台慢慢捞走。判官是冻结的 V6（召回接近 0），所以最坏情况是几百个 job 在后台烧钱、产出接近零。
+
+**建议**：这一步只需要照片拿到 `family_photo` 来源身份——那是 `mediaPrivilegeOf` 里 `trusted` 的全部定义，也是月页正文出现照片的唯一条件（见上一条）。Organizer 不必参与。等阶段 1 recall-first 和审阅台就位再决定。
 
 ### 2026-09-04 · Claude Code · 主群补数尝试，零写入停止
 
