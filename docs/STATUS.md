@@ -37,6 +37,31 @@
 ---
 
 ## 时间线（只追加，最新在上）
+### 2026-09-04 · Claude Code · T7 交接（session 在此处 compact）
+
+**正在后台运行，不要重复启动**：`wechat-import-all --only 1,3,4,5,12 --skip 1`（PID 11352）。
+已入约 1,100 / 13,379 条。**可以安全 kill 并重跑**——消息身份由内容派生，重跑记为 reused。
+进度用 `select count(*) from raw_sources where status='uploaded'` 看（基线 22,465）。
+
+**下一步（按顺序）**
+
+1. 等导入跑完，或先停掉它、改用 `--since 2026-09-01 --only 3` 单独把乳儿班的 9 月先导进来
+   ——乳儿班按时间顺序导，2026-09 在最后才到，而 T7 要求从 2026-09 开始。`--since` 会自建新 task
+   （`4035062` 已验证不产生重复行）。
+2. 跑 `node --import tsx scripts/organizer-month-dryrun.mjs --month=2026-09 --out=<仓库外>.json --max-calls=12`。
+   零写入。把 5 条样本贴进本文件给 Cowork 抽读。**Cowork 写「通过」之前不写库。**
+3. 通过后再做写库路径——**目前还没有写库脚本**，dry-run 驱动只报告不落库。这是刻意的。
+
+**已知 blocker**
+
+- **导入吞吐**：媒体派生 + R2 上传约 3.6 个/分钟，4,893 个媒体要十几小时。`--max-media` 不能用。
+- **dry-run 首次未验证完**：第一次跑卡在读全库 36,000 行（10 分钟），已改成只读当月 ±7 天后停掉重来，
+  **所以链路端到端还没跑通过一次**，写手输出长什么样、会不会被 narrative validator 拒，都还不知道。
+- T8 两项 Codex 审查仍 blocked（本机没装 Codex CLI）。
+
+**这轮没有动生产数据的任何一行**（除了导入新增的 raw_sources/media）。155 条 daily_traces、
+83 条 life_events 原封未动。
+
 ### 2026-09-04 · Claude Code · T7 步骤 0：四个家庭群的 JSON 已能导入（进行中）
 
 1. **线上多了什么**：暂时没有。本条是步骤 0 的代码与进度。importer 现在能读 WeFlow 的 JSON 转录
