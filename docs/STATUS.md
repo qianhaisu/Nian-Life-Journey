@@ -38,6 +38,22 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-04 · Claude Code · T11 + T12 代码完成；T11 数据迁移等 Teddy 确认
+
+1. **线上多了什么**：T12 已部署（`b6830f4`）——31 条垃圾 life_events（`[media]` 标题、表情包、`@` 提及、
+   原始聊天当标题的）在渲染层被过滤，不再出现在月页，数据库行不变。T11 三部分代码已提交（`abf0dc6`）：
+   - Part A：`organizer-month-write.mjs` 改为输出 `life_event`（有标题+正文），不再是无标题的 `daily_trace`
+   - Part B：`subject-gate.ts` 导出 `DAYCARE_CONVERSATION` 常量；`family-archive.ts` 中乳儿班媒体获得 `trusted` 身份
+   - Part C：`publication-moments.ts` 为文字时刻和记忆时刻绑定同天 trusted 照片
+   但 **2026-09 月页的格式仍未改变**——现有 2 条 `daily_trace` 还在，要删掉它们并重跑才能出 `life_event`。
+2. **最大 blocker**：删除 2 条 2026-09 daily_traces 需要 Teddy 确认（T11 hard boundary）。
+   **Predeclare**（供 Teddy 确认后执行）：
+   - `daily_traces` 157 → 155（删 `trace-v2-91eb177c84ed0f77533364de36db3e00`、`trace-v2-3205610a1354c62c37a3e62fd403530d`）
+   - `content_quality_reviews` 109 → 107（删对应的 2 行 `daily_trace` reviews）
+   - `organizer_runs` 488 → 486（删对应的 2 行 organizer runs）
+   删完后 Cowork 用 `--day=2026-09-01 --commit` 和 `--day=2026-09-02 --commit` 重跑，产出 `life_event`（157→159，life_events 83→85）。
+3. **下一件**：Teddy 确认删除 → 执行删除 → Cowork 重跑 09-01/09-02 → 线上验证格式与 2025-08 一致。
+
 ### 2026-09-04 · Claude Code · T10 完成：写库脚本支持按天切片，重跑零成本
 
 1. **线上多了什么**：还没有——T10 本身不写库，是给 Cowork 的写库工具加了两处改动（`b3d2cfa`）。
@@ -523,3 +539,31 @@ storage-phase-2 的夸克归档）改动前就在失败。
 1. The driver resumed index 3 from its DB-backed checkpoint with `--media-concurrency 12`, skipped index 1, and used no max-media or max-messages limit; confirmed checkpoint: 1,550 messages.
 2. Current JSON source row count: 1,768 of expected 7,244; observed date range: 2026-02-23 through 2026-09-03; conversation remains in progress, so this is not yet a completion count.
 3. No R2 429 or connection-error state was observed at this checkpoint. Indexes 4, 5, and 12 remain queued behind it; reconciliation is deferred until each JSON date range is complete.
+
+### 2026-09-04 · Cowork · T11 INBOX 写入——格式一致性修复 + 乳儿班照片
+
+1. **线上无变化**——本轮是任务规划。
+2. 写入 T11 到 ORCHESTRATOR-INBOX.md，三个部分：
+   - **Part A**：T7 管线从 `daily_trace` 改为 `life_event_candidate`。根因是 Writer v2 已经生成
+     title + story，但管线丢弃 title 存为 daily_trace → 渲染走 TraceDisclosure（折叠）而非
+     EditorialMemory（有标题、显眼）。production-adapter.ts 已有完整的 `life_event_candidate`
+     分支，改动集中在 `organizer-month-write.mjs`。现有 2 条 2026-09 daily_traces 需删除重写
+     （需 Teddy 确认）。
+   - **Part B**：`mediaPrivilegeOf` 扩展，信任乳儿班（conversation:2109e1e89306b57b8334d349）媒体。
+     库内 2,434 张全是 sourceType=wechat 无背书；1,076 张达到 hero 尺寸。按 sourceLabel 判断，
+     零数据修改。
+   - **Part C**：`publication-moments.ts` 的 text_led / memory_led 时刻绑定同天 vouched 照片。
+     渲染侧（month-moment.tsx）已支持所有 kind 的 hero/supporting，不需要改。
+3. **下一件**：等 Claude Code 执行 T11。同时 Cowork 审查线上其他质量问题。
+
+### 2026-09-04 · Cowork · 主动质量审查——发现 83 条 life_events 中 55 条有质量问题
+
+1. **线上有问题但未触发部署**——本轮是只读审计。
+2. 审查发现现有 83 条 life_events（全站最显眼的内容）中：
+   - **31 条（37%）是垃圾**：标题和正文都是 `[media]`、`\[表情包\]`、`\[呲牙\]`、GPS 坐标、视频文件路径等 WeChat 占位符。**家人看到的是一列 `[media]` 标题**。
+   - **10 条（12%）含「家人」**：正文用「家人说」「家人转述」替代了具体称谓，违反核心规则。
+   - **14 条（17%）原始聊天消息**：标题就是未编辑的聊天消息（含 @提及），title === story。
+   - **仅 28 条（34%）**有可接受的编辑质量。
+   全部来自 `created_by: 'rule'`、`organizer_version: 'rule-v2'` 的旧管线，从未经过 Writer v2。
+3. 写入 T12 到 INBOX：渲染层过滤，不删数据，立即可做。家人和原始聊天标题留给 T7 逐月重写时修复。
+4. **下一件**：T11（格式修复）+ T12（垃圾过滤）是当前最高优先级，都在 T3/T7 剩余月份之前。

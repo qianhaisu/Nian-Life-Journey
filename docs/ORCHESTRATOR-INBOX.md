@@ -343,3 +343,229 @@ Teddy 16:58：Codex 装好了，让它分担。这两件都和 T7 的文件不�
 
 **做完通知**：改完 commit + push 并在 STATUS.md 写一行，Cowork 会自己按天跑完 2026-09 剩下的一天，
 然后逐月往前推（每月先不带 `--commit` 出样本给 Cowork 抽读，通过后 Cowork 自己按天 `--commit`）。
+
+---
+
+### T11 · 格式一致性修复 + 乳儿班照片入正文 — status: code-done（`abf0dc6`）；数据迁移等 Teddy 确认
+
+**Teddy 2026-09-04 反馈**：2025 年 8 月的文字记忆有标题、有完整叙事段落（EditorialMemory 组件渲染），
+2026 年 9 月（T7 产出）却变成折叠的「这个月有 2 天留下了生活痕迹」加短横线文字（TraceDisclosure 组件）。
+**两种格式不一致，家人看到的体验断裂。**
+
+同时：乳儿班照片应该出现在同一天的文字旁边（Teddy 确认：「基本都是张年的」）。
+
+---
+
+#### 根因
+
+T7 管线在 `organizer-month-write.mjs` 里硬编码 `outcome.action = "daily_trace"`。
+daily_trace 没有 title 字段（`types.ts:61`：`entries: string[]`），渲染走 `TraceDisclosure`（折叠 `<details>`）。
+而 2025-08 的内容是 `life_event`（有 `title`、`story`），渲染走 `EditorialMemory`（显眼、有标题）。
+
+**讽刺的是，Writer v2 已经在生成 title 和 story**（`writer-v2-prompt.ts` 的 `emit_memory` tool 有 `title` 字段），
+但管线在持久化时丢弃了 title，只把 story 塞进 `entries: [story]`。
+
+---
+
+#### Part A：T7 输出从 daily_trace 改为 life_event（格式修复）
+
+**要改的文件**：`v2/scripts/organizer-month-write.mjs`
+
+**做法**：
+
+1. 把 `outcome.action` 从 `"daily_trace"` 改成 `"life_event_candidate"`
+
+2. 给 `planArtifacts` 的 input 加上 `story` 字段（`production-adapter.ts:202` 的 `life_event_candidate`
+   分支要求它）：
+   ```
+   story: {
+     title: writer.output.title,
+     story: writer.output.story,
+     usedMediaIds: writer.output.usedMediaIds ?? []
+   }
+   ```
+
+3. `planArtifacts` 返回的 plan 里 `review.decision` 是 `"needs_human_review"`（见
+   `production-adapter.ts:33` 的 `ADAPTER_REVIEW_DECISION`）。T7 的审阅是 Cowork 在 STATUS.md
+   写「通过」——和之前 daily_trace 的自审批一样。所以**在调用 `applyPlan` 之前**，把
+   `plan.review.decision` 改为 `"approved"`，`plan.review.reasonCodes` 加上
+   `["t7-subject-gate", "cowork-reviewed"]`
+
+4. 删掉脚本尾部那段手动 `persistQualityReview` 调用（`applyPlan` 的 `life_event_candidate` 分支
+   已经包含 review 持久化，不再需要手动写）
+
+5. 更新 `applyPlan` 返回值的使用：把 `applied.traceId` 改成 `applied.eventId`
+
+6. 更新脚本顶部的注释：去掉 "T7's hard boundary: this produces daily_trace rows ONLY"
+
+7. `life_event_candidate` 分支设 `memoryWeight: "memory"`（`production-adapter.ts:226`）。
+   T7 产出应该用 `"trace"` 权重（最低），以免在 `curateMemories` 排序时抢了真正的 highlight/chapter。
+   **做法**：在拿到 plan 之后、调用 `applyPlan` 之前，把
+   `plan.lifeEvent.event.memoryWeight` 改成 `"trace"`
+
+8. `outcome` 对象里去掉 `traceLines`（life_event 不用它），保留 `occurredAt`、`contentTypes`、`scopes`
+
+**要删掉的旧数据**（**此条需 Teddy 确认**）：
+
+现有 2 条 2026-09 的 daily_traces（09-01、09-02）和它们的 2 条 content_quality_reviews、2 条
+organizer_runs。predeclare：
+- daily_traces: 删 2 行（id 见下面的验收查询）
+- content_quality_reviews: 删 2 行（targetKind = daily_trace, targetId 对应上面两个 trace id）
+- organizer_runs: 删 2 行（fingerprint 对应上面两条 trace 的 organizationFingerprint）
+
+删完后用 `--day=2026-09-01 --commit` 和 `--day=2026-09-02 --commit` 重跑，产出 life_event。
+
+**不删 2025 的任何东西。**
+
+---
+
+#### Part B：乳儿班媒体获得 trusted 身份
+
+**要改的文件**：`v2/lib/family-archive.ts`
+
+**现状**：`mediaPrivilegeOf`（第 48 行）只信任 `sourceType === "family_photo"` 的来源。
+乳儿班 2,434 张媒体全是 `sourceType = "wechat"`，1,076 张达到 hero 尺寸，全部 unvouched。
+
+**做法**：
+
+1. 把函数签名的 `Pick<RawSource, "id" | "sourceType">` 扩展为
+   `Pick<RawSource, "id" | "sourceType" | "sourceLabel">`
+
+2. 在 `familySources` 集合之外，再建一个集合——**乳儿班来源**：
+   ```
+   sourceLabel === "conversation:2109e1e89306b57b8334d349"
+   ```
+   这些来源的媒体也加入 `trusted` 集合
+
+3. 调用点 `composeFamilyArchive`（第 71 行）传入 `store.rawSources` 时，确保它的类型签名现在
+   包含 `sourceLabel`。检查 `getStore()` 返回的 `rawSources` 是否已有 `sourceLabel` 字段——
+   如果没有，需要在查询里加上
+
+**常量定义**：乳儿班 conversationId 写成命名常量，不要裸字符串散落。可以放在 `family-archive.ts` 顶部
+或 `subject-gate.ts`（那里已有 `DAYCARE_CONVERSATION`）——复用那个常量最好
+
+**为什么不改 sourceType**：修改现有 2,434 行的 sourceType 是数据迁移，风险大且不可逆。
+按 sourceLabel 判断是纯逻辑变更，零数据修改
+
+---
+
+#### Part C：同天 vouched 照片绑定到文字时刻（渲染层）
+
+**要改的文件**：`v2/lib/publication-moments.ts`
+
+**现状**：第 187–190 行注释说「Text moments are TEXT ONLY. The day's photographs are not laid beside
+the words」。text_led 和 memory_led 的 hero/supporting 都是 `undefined / []`（除非 memory 自带 mediaIds）。
+
+**Teddy 的要求**：乳儿班照片出现在同一天文字旁边。这些照片通过 Part B 已获得 trusted 身份。
+
+**做法**：
+
+1. 在 `memory_led` moments 构建处（约第 172 行）：如果 memory 没有自己的 lead photo（`!memory.lead`），
+   查找同一天（`memory.signature.day`）的 `photoDaysAsc` 里的照片，筛选 `isPrivileged` + `heroSized`
+   的作为 hero，再取几张 `isPrivileged` + `thumbnailSized` 的作为 supporting
+
+2. 在 `text_led` moments 构建处（约第 191 行）：同样的逻辑——查找同天 photoDaysAsc 的照片，
+   筛选 privileged + sized 的作为 hero/supporting
+
+3. **限制**：每个 moment 最多 1 hero + 4 supporting（和 photo_led 一致）。已经被某个 memory_led
+   moment 用过的 hero 照片不要重复绑定给同天的 text_led moment
+
+4. 删掉或更新第 187–190 行那段「TEXT ONLY」注释
+
+**渲染侧不需要改**：`month-moment.tsx` 已经支持在所有 kind 上渲染 hero + supporting
+（第 40–42 行有 hero、supporting 的渲染逻辑）
+
+---
+
+#### 验收
+
+| 检查 | 标准 |
+|---|---|
+| 2026-09 月页 | 09-01、09-02 以标题 + 段落形式显示（和 2025-08 一致），不再折叠 |
+| 2026-09 年页 | 09-01、09-02 出现在 EditorialMemory 区域，不在 TraceDisclosure 里 |
+| 乳儿班照片 | 09-01 或 09-02 旁边出现乳儿班当天照片（如果那天有的话） |
+| 2025-08 不变 | 既有 life_events 标题、叙事、数量完全不变（83 条 life_events） |
+| daily_traces 总数 | 从 157 降到 155（删掉 2 条） |
+| life_events 总数 | 从 83 升到 85（新增 2 条） |
+| `tsc --noEmit` | 通过 |
+| 相关测试 | `publication-moments.test.mjs` 通过（可能需要更新断言）|
+| 线上验证 | push 后在 nianlife.cn 确认渲染正确 |
+
+---
+
+#### 硬边界
+
+- **不改 production-adapter.ts**——它已经支持 `life_event_candidate`，不需要动
+- **不改 writer-v2-prompt.ts**——写手已经产出 title + story
+- **不删 2025 的任何数据**
+- **Part A 的旧数据删除需要 Teddy 确认**（predeclare 数字写 STATUS.md 后执行）
+- **乳儿班 conversationId 用常量**，不要裸字符串
+
+---
+
+### T12 · 抑制 31 条垃圾 life_events 的显示 — status: done（`b6830f4`）
+
+**Cowork 2026-09-04 主动审查发现**（不是 Teddy 发现的，这次是 Cowork 先抓到的）：
+
+现有 83 条 life_events 的质量分布：
+
+| 类别 | 数量 | 比例 | 举例 |
+|---|---:|---:|---|
+| **垃圾**（media/emoji/视频标记当标题和正文） | **31** | 37% | title=story=`[media]`；`\[呲牙\]\[呲牙\]\[呲牙\]`；`\[表情包\]`；`[视频文件](media/videos/...)`；`\[位置\] 上海建业里嘉佩乐酒店 (31.203,121.451)` |
+| **含「家人」** | **10** | 12% | 「家人新建了一个群聊」「家人转述老师的话」「家人说」 |
+| **原始聊天当标题** | **14** | 17% | `@hxx. 我带崽去吃劳了`；`@All 大家帮我一起记一下带牛肉干给苏希凌` |
+| 质量尚可 | 28 | 34% | `好想站起来的这一天`；`张小年吃西红柿鸡蛋面` |
+
+**全部 82 条 rule-v2 事件，无一经过 Writer v2 或任何编辑润色。** 标题即原始聊天消息第一行，正文即原始聊天消息全文。
+
+这意味着**家人现在打开网站，三分之二以上的 life_event 标题是 `[media]`、表情符号、@提及或 GPS 坐标**。
+
+---
+
+#### 立即修复：渲染层内容过滤
+
+**要改的文件**：`v2/lib/memory-chapters.ts`（构建 EditorialMemory 的地方）
+
+**做法**：在 `buildChapters` 把 life_event 加入 `chapter.memories` 之前（约第 206 行），
+加一个内容质量过滤。符合以下任一条件的 life_event **不进入 `memories` 数组**
+（它们仍然存在于数据库，只是不渲染）：
+
+1. `story` 为空或纯粹是 `[media]`、`[视频]`、`[视频文件](...)`、`\[表情包\]`、
+   `\[呲牙...]`、`\[发呆\]`、`\[位置\]...`、`\[其他消息\]`、`\[小程序\]...`、
+   `\[链接\]...` 等 WeChat 占位符
+2. `title` 以 `@` 开头（原始 @提及）
+3. `title === story`（标题就是正文全文——即原始聊天消息未经任何编辑）
+
+**判断函数**建议命名 `isGarbageLifeEvent(event: LifeEvent): boolean`，放在
+`memory-chapters.ts` 或新建 `lib/content-quality-filter.ts`。
+
+**正则参考**（覆盖上表所有垃圾模式）：
+```
+/^\[media\]$|^\[视频文件\]|^\\?\[表情包\\?\]|^\\?\[呲牙|^\\?\[视频\\?\]$|^\\?\[发呆\\?\]|^\\?\[其他消息\\?\]|^\\?\[小程序\\?\]|^\\?\[位置\\?\]|^\\?\[链接\\?\]/
+```
+
+**不要做的**：
+- 不删除任何数据——只是不渲染
+- 不改数据库——零写入
+- 不碰 `publication-moments.ts`——只在上游 `buildChapters` 过滤
+- 不影响 T7 产出的新 life_events（它们通过 Writer v2，标题和正文都是编辑过的）
+
+#### 「家人」修复（P2，不在本任务范围）
+
+10 条含「家人」的 life_events + 20 条含「家人」的 daily_traces 是 rule-v2 遗留。
+**等 T7 逐月推进到 2025-05 → 2025-11 时，Writer v2 会用正确称谓重写**（它有 `FORBIDDEN = /家人/` 检查）。
+那时候 rule-v2 的旧事件会被 T7 产出的 life_events 替代。不需要现在手动修。
+
+#### 验收
+
+| 检查 | 标准 |
+|---|---|
+| `[media]` 标题 | 网站上不再出现任何以 `[media]` 为标题的条目 |
+| 表情/视频标记 | 不再出现 `\[呲牙\]`、`\[表情包\]`、`\[视频\]` 等标题 |
+| @提及标题 | 不再出现 `@hxx.` 等原始提及作为标题 |
+| GPS 坐标 | `\[位置\]...` 不再出现 |
+| 有质量的标题 | 「好想站起来的这一天」「张小年吃西红柿鸡蛋面」等仍然正常显示 |
+| life_events 总数 | 数据库仍 83 条（不删数据） |
+| 被过滤的月份 | 如果某月所有 life_events 都被过滤，该月退化为只有 traces 的折叠显示——这是正确的，比显示垃圾标题好 |
+| `tsc --noEmit` | 通过 |
+| 测试 | `memory-chapters.test.mjs` 通过（可能需更新断言） |
