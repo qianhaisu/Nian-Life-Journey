@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { EditorialMemory } from "@/components/editorial-memory";
 import { PhotoStrip } from "@/components/media-sequence";
+import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
-import { Photo } from "@/components/photo";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { findMonth } from "@/lib/memory-chapters";
-import { buildMonthComposition, type PublicationMoment } from "@/lib/publication-moments";
+import { buildMonthComposition } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
 import { formatMonth } from "@/lib/time-signature";
 
@@ -16,21 +15,6 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ year: string; month: string }> }): Promise<Metadata> {
   const { year, month } = await params;
   return { title: formatMonth(`${year}-${month}`) };
-}
-
-// One moment of the month, read start to finish: its date, its words if the archive wrote any,
-// then its photographs. Text and pictures share the day; the text never captions a picture.
-function Moment({ moment, priority = false }: { moment: PublicationMoment; priority?: boolean }) {
-  if (moment.kind === "memory_led" && moment.memory) {
-    return <EditorialMemory memory={moment.memory} priority={priority} />;
-  }
-  return <article className={`month-moment moment-${moment.kind}${moment.hero ? " moment-with-hero" : ""}`}>
-    <p className="month-day-date"><time dateTime={moment.day}>{moment.dateLabel}</time>{moment.ageLabel ? <span>{moment.ageLabel}</span> : null}</p>
-    {moment.text.length > 0 ? <div className="moment-text serif">{moment.text.map((entry, index) => <p key={index}>{entry}</p>)}</div> : null}
-    {moment.hero ? <Photo media={moment.hero} priority={priority} sizes="(max-width: 700px) 100vw, 760px" className="moment-hero" /> : null}
-    {moment.supporting.length > 0 ? <PhotoStrip photos={moment.supporting} /> : null}
-    {moment.morePhotoCount > 0 ? <p className="chapter-meta">这一天还有 {moment.morePhotoCount} 张照片在月末的档案里</p> : null}
-  </article>;
 }
 
 // The month chapter — the primary reading unit inside 记忆. It reads like a month, start to end,
@@ -66,14 +50,14 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
 
     {composition.chapter.length > 0 ? <section className="month-reading" aria-labelledby="reading-title">
       <h2 id="reading-title" className="section-mark">这个月记下来的</h2>
-      {composition.chapter.map((moment, index) => <Moment moment={moment} priority={index === 0} key={`${moment.day}-${moment.kind}-${moment.memory?.id ?? ""}`} />)}
+      {composition.chapter.map((moment, index) => <MonthMoment moment={moment} year={year} priority={index === 0} continued={composition.chapter[index - 1]?.day === moment.day} key={`${moment.day}-${moment.kind}-${moment.memory?.id ?? ""}`} />)}
     </section> : null}
 
     {composition.chronicle.length > 0 ? <section className="month-days" aria-labelledby="days-title">
       <h2 id="days-title" className="section-mark">{composition.chapter.length > 0 ? "这个月的日子" : "这个月"}</h2>
       <ol>
         {composition.chronicle.map((moment, index) => <li className="month-day" key={moment.day}>
-          <Moment moment={moment} priority={index === 0 && composition.chapter.length === 0} />
+          <MonthMoment moment={moment} year={year} priority={index === 0 && composition.chapter.length === 0} />
         </li>)}
       </ol>
     </section> : null}
@@ -81,14 +65,14 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
     {composition.quietDays.length > 0 && (composition.chapter.length > 0 || composition.chronicle.length > 0) ? <p className="month-quiet-days serif">
       {composition.quietDays.length > 8
         ? `这个月还有 ${composition.quietDays.length} 天留下了零散的照片，收在下面的档案里。`
-        : `${composition.quietDays.map((day) => day.dateLabel.replace(`${year} 年 `, "")).join("、")}也留下了零散的照片，收在下面的档案里。`}
+        : `${composition.quietDays.map((day) => dayLabel(day.dateLabel, year)).join("、")}也留下了零散的照片，收在下面的档案里。`}
     </p> : null}
 
     {archivePhotoCount > 0 ? <details className="month-archive">
       <summary><span className="serif">整月照片档案</span><small>{archivePhotoCount} 张</small></summary>
       <ol>
         {composition.archiveDays.map((day) => <li className="month-day" key={day.day}>
-          <p className="month-day-date"><time dateTime={day.day}>{day.dateLabel}</time>{day.ageLabel ? <span>{day.ageLabel}</span> : null}</p>
+          <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} year={year} />
           <PhotoStrip photos={day.photos} />
         </li>)}
       </ol>

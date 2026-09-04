@@ -2,6 +2,9 @@
 // Renders the running local server (real production data via the JSON snapshot) at desktop and
 // real narrow-mobile viewports and saves full-page screenshots for inspection. Local only.
 //   node scripts/p1a2-visual-audit.mjs [--base=http://localhost:3000] [--out=DIR] [--pages=home,...]
+//                                      [--viewports=desktop,m390,m430] [--timeout=120000]
+// --timeout raises the per-page navigation budget: served straight from remote Postgres over a
+// home connection, one month page can take a couple of minutes, which the default outlasts.
 import { chromium } from "playwright";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -12,14 +15,19 @@ const argOf = (n, d) => { const h = args.find((a) => a.startsWith(`--${n}=`)); r
 const BASE = argOf("base", "http://localhost:3000");
 const OUT = argOf("out", path.join(process.cwd(), ".data", "scratch", "p1a2-visual"));
 const only = argOf("pages", "");
+const onlyViewports = argOf("viewports", "");
+const NAV_TIMEOUT = Number(argOf("timeout", "120000"));
 
 const PAGES = [
   ["home", "/"],
   ["memory", "/memory"],
   ["month-2026-08", "/memory/2026/08"],
+  ["month-2025-11", "/memory/2025/11"],
   ["month-2025-10", "/memory/2025/10"],
+  ["month-2025-09", "/memory/2025/09"],
   ["month-2025-08", "/memory/2025/08"],
   ["month-2025-07", "/memory/2025/07"],
+  ["month-2025-06", "/memory/2025/06"],
   ["event-stand", "/events/event-dc7193ad-8217-46c4-8ace-b2cc7602add8"],
   ["event-noodles", "/events/event-7f060955-2ac9-42e4-982a-a9cee5cab62b"],
   ["about", "/about"],
@@ -29,7 +37,7 @@ const VIEWPORTS = [
   ["desktop", { width: 1280, height: 900 }],
   ["m390", { width: 390, height: 844 }],
   ["m430", { width: 430, height: 932 }],
-];
+].filter(([name]) => !onlyViewports || onlyViewports.split(",").includes(name));
 
 mkdirSync(OUT, { recursive: true });
 // Local .env.local carries no hot-storage credentials, so image bytes are fetched read-only from
@@ -81,8 +89,8 @@ for (const [vpName, viewport] of VIEWPORTS) {
   const page = await context.newPage();
   for (const [name, route] of PAGES) {
     try {
-      await page.goto(BASE + route, { waitUntil: "load", timeout: 120000 });
-      await page.waitForLoadState("networkidle", { timeout: 90000 }).catch(() => {});
+      await page.goto(BASE + route, { waitUntil: "load", timeout: NAV_TIMEOUT });
+      await page.waitForLoadState("networkidle", { timeout: Math.round(NAV_TIMEOUT * 0.75) }).catch(() => {});
       await page.waitForTimeout(500);
       const height = await page.evaluate(() => document.documentElement.scrollHeight);
       const file = path.join(OUT, `${name}-${vpName}.png`);

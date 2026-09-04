@@ -243,12 +243,43 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-day-notes li { margin: 4px 0; }
 
 /* ---------- Publication moments ---------- */
-/* CHAPTER — what the month wrote down. Words lead at reading size; a day's photos follow them. */
-.month-reading { margin-top: clamp(24px, 4vw, 40px); }
-.month-reading > .section-mark { display: block; margin-bottom: 8px; }
+/* CHAPTER — the month read as prose, not as an index of its own days.
+   A day is a passage: its date and age hang in the left margin as a running head, and the words
+   the archive kept for that day run on beneath one another at reading size. Each entry stays its
+   own paragraph — it is a separate record and the page never merges two of them into a sentence —
+   but they are set as consecutive indented paragraphs of a Chinese book, so a day reads through
+   in one go and a month reads as twelve passages rather than thirty-six headlines.
+   Reading size is the point: at title size these short, plain observations wrapped every ten
+   characters and every one of them shouted. Weight is reserved for what actually carries it — a
+   published memory keeps its title type, so it still stands above an ordinary day (原则五). */
 .month-moment { padding: clamp(24px, 4vw, 36px) 0 clamp(16px, 3vw, 24px); border-bottom: 1px solid var(--color-border); }
+.moment-body { min-width: 0; }
 .moment-text { max-width: 34ch; }
 .moment-text p { margin: 0 0 10px; font-size: clamp(1.25rem, 3.2vw, 1.7rem); line-height: 1.5; }
+.month-reading { margin-top: clamp(24px, 4vw, 40px); }
+.month-reading > .section-mark { display: block; margin-bottom: 8px; }
+.month-reading .month-moment { padding: clamp(24px, 3.6vw, 34px) 0 0; border-bottom: 0; }
+.month-reading .month-day-date { margin: 0 0 10px; }
+/* The same day continuing under a head already stated: closer, so it reads on. */
+.month-reading .moment-continued { padding-top: clamp(12px, 1.8vw, 16px); }
+.month-reading .moment-text { max-width: 34em; font-weight: 400; font-size: clamp(1.05rem, 2.8vw, 1.15rem); line-height: 1.95; }
+.month-reading .moment-text p { margin: 0; font-size: inherit; line-height: inherit; text-indent: 2em; }
+/* A published memory is the month's heavier unit: a rule and extra air open it, its own date line
+   gives way to the running head above it, and its title keeps the size a story has earned. */
+.month-reading .moment-memory_led { margin-top: clamp(14px, 2.5vw, 22px); padding-top: clamp(26px, 4vw, 38px); border-top: 1px solid var(--color-border); }
+.month-reading .moment-memory_led .memory { padding: 0; border-bottom: 0; }
+.month-reading .moment-memory_led .memory .time-signature { display: none; }
+.month-reading .moment-memory_led .memory-copy h3 { margin-top: 0; }
+.month-reading .moment-memory_led .memory-copy p { max-width: 34em; }
+@media (min-width: 760px) {
+  .month-reading .month-moment { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0 32px; }
+  /* Column 2 is named, not inferred, so a continued day — whose head is deliberately absent —
+     keeps the same measure instead of sliding into the empty margin. */
+  .month-reading .moment-body { grid-column: 2; }
+  .month-reading .month-day-date { display: block; margin: .9em 0 0; text-align: right; }
+  .month-reading .month-day-date span { display: block; margin-top: 2px; }
+  .month-reading .moment-memory_led .month-day-date { margin-top: 1.4em; }
+}
 .moment-hero { margin-top: 18px; max-height: 76vh; }
 .moment-hero.photo-portrait { max-width: min(100%, 480px); }
 .month-moment .photo-strip { margin-top: 12px; }
