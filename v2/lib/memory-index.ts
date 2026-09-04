@@ -65,6 +65,21 @@ export function monthHref(month: string): string {
   return `/memory/${month.slice(0, 4)}/${month.slice(5, 7)}`;
 }
 
+// A year's months in the order they are read — newest first, exactly as they arrive — cut into
+// consecutive runs of the same mode. `mode` says how a month is shown; it must never decide where
+// the month sits. Rendering every open month before every index month put 2026-08 above 2026-09
+// and 2025-05 above 2025-12, which is not how anyone looks back through a year. Grouping the
+// consecutive index months keeps a folded stretch reading as one list instead of several.
+export function monthRuns(months: MonthIndexEntry[]): { mode: MonthIndexEntry["mode"]; months: MonthIndexEntry[] }[] {
+  const runs: { mode: MonthIndexEntry["mode"]; months: MonthIndexEntry[] }[] = [];
+  for (const month of months) {
+    const last = runs[runs.length - 1];
+    if (last && last.mode === month.mode) last.months.push(month);
+    else runs.push({ mode: month.mode, months: [month] });
+  }
+  return runs;
+}
+
 // /memory: the newest months open until roughly `openMemoriesTarget` curated memories are on the
 // page or `openMonthsMax` months are open, whichever comes first — in a photograph-heavy archive
 // the memory target alone would never close the window. Months after that are index rows. Months

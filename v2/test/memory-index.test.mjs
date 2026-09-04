@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildChapters } from "../lib/memory-chapters.ts";
-import { buildMemoryIndex, buildYearView, curateMemories, foldTraces } from "../lib/memory-index.ts";
+import { buildMemoryIndex, buildYearView, curateMemories, foldTraces, monthRuns } from "../lib/memory-index.ts";
 import { buildMonthComposition } from "../lib/publication-moments.ts";
 import { DEFAULT_MEMORY_IA_POLICY } from "../lib/memory-ia-policy.ts";
 import { BIRTH, buildFixture, event, photo, trace } from "./fixtures/editorial-archive.mjs";
@@ -124,4 +124,27 @@ test("the sparse fixture (today's shape) still opens the way it did: trace-only 
   assert.equal(dec.mode, "open");
   assert.equal(dec.hiddenMemoryCount, 0, "a month with fewer memories than the cap shows them all");
   assert.ok(index.years.some((year) => year.months.some((month) => month.mode === "index")));
+});
+
+test("a year reads backwards through its months, whatever mode each month is in", () => {
+  // Production 2026-09-04: /memory put 2026-08 above 2026-09, and 2025-08/07/06/05 above
+  // 2025-12/11/10/09, because every "open" month was rendered before every "index" month. The
+  // intent — the months with the most in them first — is legible, but a family looking back
+  // through a year reads it by date. Mode decides how a month is shown, never where it sits.
+  const months = [
+    { chapter: { month: "2026-09" }, mode: "index" },
+    { chapter: { month: "2026-08" }, mode: "open" },
+    { chapter: { month: "2026-07" }, mode: "open" },
+    { chapter: { month: "2026-06" }, mode: "index" },
+    { chapter: { month: "2026-05" }, mode: "index" },
+  ];
+  const runs = monthRuns(months);
+  assert.deepEqual(
+    runs.flatMap((run) => run.months.map((month) => month.chapter.month)),
+    ["2026-09", "2026-08", "2026-07", "2026-06", "2026-05"],
+    "the reading order is the month order, untouched",
+  );
+  assert.deepEqual(runs.map((run) => run.mode), ["index", "open", "index"], "…cut into runs of one mode");
+  assert.deepEqual(runs[2].months.map((month) => month.chapter.month), ["2026-06", "2026-05"], "consecutive folded months stay one list");
+  assert.deepEqual(monthRuns([]), [], "a year with no months has no runs");
 });

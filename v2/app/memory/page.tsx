@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArchiveNav } from "@/components/archive-nav";
 import { MonthChapter } from "@/components/month-chapter";
 import { loadFamilyArchive } from "@/lib/family-archive";
-import { buildMemoryIndex } from "@/lib/memory-index";
+import { buildMemoryIndex, monthRuns } from "@/lib/memory-index";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "记忆" };
@@ -21,15 +21,20 @@ export default async function MemoryPage() {
     <ArchiveNav nav={index.nav} />
     {index.years.length === 0 ? <section className="reading-wrap archive-empty"><p className="serif">档案还是空的。等时间再走一会儿。</p></section> : null}
     {index.years.map((year) => {
-      const openHere = year.months.filter((month) => month.mode === "open");
-      const indexHere = year.months.filter((month) => month.mode === "index");
+      // A year reads backwards through its months — 9, 8, 7 — and nothing reorders that. `mode`
+      // decides how a month is shown, never where it sits: rendering every open month first put
+      // 2026-08 above 2026-09, and 2025-05 above 2025-12, which is simply not how anyone looks
+      // back through a year. Consecutive index months still share one list, so the folded run
+      // still reads as a list rather than as a stack of separate ones.
+      const runs = monthRuns(year.months);
       return <section className="year-chapter reading-wrap" key={year.year} aria-labelledby={`year-${year.year}`}>
         <header className="year-anchor">
           <h2 id={`year-${year.year}`} className="serif"><Link href={year.href}>{year.year}</Link></h2>
           {year.ageSpan ? <p>{year.ageSpan}</p> : null}
         </header>
-        {openHere.map((month) => <MonthChapter entry={month} key={month.chapter.month} />)}
-        {indexHere.length > 0 ? <ol className="month-index">{indexHere.map((month) => <MonthChapter entry={month} key={month.chapter.month} />)}</ol> : null}
+        {runs.map((run) => run.mode === "index"
+          ? <ol className="month-index" key={run.months[0].chapter.month}>{run.months.map((month) => <MonthChapter entry={month} key={month.chapter.month} />)}</ol>
+          : run.months.map((month) => <MonthChapter entry={month} key={month.chapter.month} />))}
       </section>;
     })}
   </div>;
