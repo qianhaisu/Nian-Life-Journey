@@ -300,7 +300,7 @@ export async function runWechatImportWorker(options: WechatWorkerOptions): Promi
   const loaded = await loadWechatBundle(options.sourceRoot, options);
   const warningCounts = warningCountsFor(loaded.bundle);
   const now = options.now ?? new Date().toISOString();
-  const importBatchId = chatImportBatchId(loaded.bundle.exportSnapshot);
+  const importBatchId = chatImportBatchId(loaded.bundle.exportSnapshot, options.since);
   let task = options.taskId ? await repository.getChatImportTask(options.taskId) : await repository.createChatImportTask({ profileId: options.profileId, importBatchId, maxAttempts: 3, now });
   if (!task) return reportFrom(null, { safeErrorCode: "CHAT_IMPORT_TASK_NOT_FOUND", createdMessages: 0, reusedMessages: 0, createdMediaAssets: 0, reusedMediaAssets: 0, createdMediaLocations: 0, reusedMediaLocations: 0, uploadedObjects: 0, reusedObjects: 0, uploadedBytes: 0, warningCounts });
   if (options.taskId && task.importBatchId !== importBatchId) return reportFrom(task, { safeErrorCode: "WECHAT_SNAPSHOT_MISMATCH", createdMessages: 0, reusedMessages: 0, createdMediaAssets: 0, reusedMediaAssets: 0, createdMediaLocations: 0, reusedMediaLocations: 0, uploadedObjects: 0, reusedObjects: 0, uploadedBytes: 0, warningCounts });

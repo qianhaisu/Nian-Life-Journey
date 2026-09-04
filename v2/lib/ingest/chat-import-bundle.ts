@@ -11,8 +11,20 @@ export interface ChatImportBundle { schemaVersion: typeof CHAT_IMPORT_SCHEMA_VER
 // A batch id must be unique per (export snapshot, selected conversation) pair — two different
 // conversations from the same source-root snapshot are two different imports, not the same one,
 // and must not collide on (and short-circuit against) the same ChatImportTask row.
-export function chatImportBatchId(exportSnapshot: { rootFingerprint: string; conversationDigest: string }): string {
-  return `wechat-import:${exportSnapshot.rootFingerprint}:${exportSnapshot.conversationDigest}`;
+// A task is identified by the snapshot, the conversation, and — when the caller scopes the import
+// to a date range — that range. Without `since` in the key, one conversation under one export
+// snapshot has exactly one task forever, so a narrower re-import inherits the wider run's monotonic
+// counters (processedMessages/warnings) and dies on PROGRESS_NOT_MONOTONIC: a partial-range import
+// is simply not representable. Scoping the key gives a re-scoped run its own task with its own
+// counters and attempt budget. This does NOT touch canonicalMessageId — message identity is
+// unchanged, so a re-scoped run still reuses rows it already imported rather than duplicating them.
+// Omitting `since` keeps the original, unscoped id, so callers that import whole conversations
+// (wechat-import.ts) keep matching the tasks they already created.
+export function chatImportBatchId(exportSnapshot: { rootFingerprint: string; conversationDigest: string }, since?: string): string {
+  const base = `wechat-import:${exportSnapshot.rootFingerprint}:${exportSnapshot.conversationDigest}`;
+  if (since === undefined) return base;
+  const parsed = Date.parse(since);
+  return `${base}:since=${Number.isNaN(parsed) ? since : new Date(parsed).toISOString()}`;
 }
 
 export function canonicalMessageId(input: Omit<ChatMessage, "messageId">, occurrenceRank: number): string {
