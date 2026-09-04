@@ -572,7 +572,7 @@ the words」。text_led 和 memory_led 的 hero/supporting 都是 `undefined / [
 
 ---
 
-### T13 · T7 回刷前必须先清理旧月份的 rule-v2 数据 — status: **ready（Teddy 2026-09-04 已确认「我确认」）**
+### T13 · T7 回刷前必须先清理旧月份的 rule-v2 数据 — status: **done（`v2/scripts/_tmp-t13-cleanup.mjs`，2026-09-04 执行并核对，脚本已删）**
 
 > **⚠️ 这是 Cowork 主动发现的重大风险**。如果不处理，T7 回刷 2025-05 到 2025-11 会产生
 > **114 条重复 life_events + 254 条重复 daily_traces**。
