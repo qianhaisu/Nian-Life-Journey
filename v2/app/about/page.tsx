@@ -5,6 +5,7 @@ import { Photo } from "@/components/photo";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
 import { latestPortrait, recentTraceNotes } from "@/lib/memory-chapters";
+import { isPrivileged } from "@/lib/publication-moments";
 import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
 import { isRecent } from "@/lib/time-truth";
 
@@ -18,9 +19,9 @@ export const metadata: Metadata = { title: "张年" };
 // heading with its real dates — a year-old note may be read, but never mistaken for now. When a
 // section has no real record behind it, it is not rendered — never filled in.
 export default async function AboutPage() {
-  const { chapters, store, birthDay, time } = await loadFamilyArchive();
+  const { chapters, store, birthDay, time, privilege } = await loadFamilyArchive();
   const age = birthDay ? ageOn(birthDay, time.today) : undefined;
-  const portrait = latestPortrait(chapters);
+  const portrait = latestPortrait(chapters, (photo) => isPrivileged(photo, privilege));
   const portraitRecent = portrait ? isRecent(portrait.day, time) : false;
   const traceNotes = recentTraceNotes(chapters, 4);
   const currentNotes = traceNotes.filter((note) => isRecent(note.day, time));

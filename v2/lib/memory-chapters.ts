@@ -307,12 +307,19 @@ export function latestLeadPhoto(chapters: YearChapter[]): MediaRef | undefined {
 
 // The same photo with the day it was taken, so a page can say when "now" was photographed instead
 // of letting an undated portrait imply the present.
-export function latestPortrait(chapters: YearChapter[]): { photo: MediaRef; day: string; dateLabel: string } | undefined {
+// The portrait on 张年's own page is the one picture the site claims is him. It used to be chosen
+// by size alone — the newest photograph large enough to fill the slot — and the newest large image
+// in a WeChat stream is as likely to be a forward or a screenshot as a photo of the child; on
+// 2026-09-04 it was neither him nor anyone's. Vouching is the gate here as everywhere: a memory's
+// own lead, or a picture the family's photo archive or a published memory stands behind. Nothing
+// vouched → no portrait. An empty slot is honest; a stranger's picture is not.
+export function latestPortrait(chapters: YearChapter[], isVouched: (photo: MediaRef) => boolean = () => false): { photo: MediaRef; day: string; dateLabel: string } | undefined {
   for (const year of chapters) for (const month of year.months) {
     const memoryLead = month.memories.find((memory) => memory.lead);
-    const photoDay = month.photoDays.find((day) => day.photos.some(heroSized));
+    const eligible = (photo: MediaRef) => heroSized(photo) && isVouched(photo);
+    const photoDay = month.photoDays.find((day) => day.photos.some(eligible));
     if (photoDay && (!memoryLead || photoDay.day >= memoryLead.signature.day)) {
-      const photo = photoDay.photos.find(heroSized);
+      const photo = photoDay.photos.find(eligible);
       if (photo) return { photo, day: photoDay.day, dateLabel: photoDay.dateLabel };
     }
     if (memoryLead?.lead) return { photo: memoryLead.lead, day: memoryLead.signature.day, dateLabel: memoryLead.signature.dateLabel };
