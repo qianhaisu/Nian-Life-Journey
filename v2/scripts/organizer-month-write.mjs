@@ -48,6 +48,23 @@ const OUT = argOf("out", null);
 const MAX_CALLS = Number(argOf("max-calls", "60"));
 const MAX_DAYS = Number(argOf("max-days", "31"));
 const COMMIT = hasFlag("commit");
+// --day and --from/--to slice which days of the month are actually processed. T10, 2026-09-04:
+// Cowork's environment has a 175s hard ceiling per command and no surviving background process, so a
+// month has to be committed one day (or a few days) at a time across many invocations — and without
+// this filter, every rerun re-pays the DeepSeek calls for every earlier day in the month before it
+// even reaches the day that still needs doing. This filters BEFORE any editor call, not after.
+const DAY = argOf("day", null);
+const FROM = argOf("from", null);
+const TO = argOf("to", null);
+if (DAY && !/^\d{4}-\d{2}-\d{2}$/.test(DAY)) { console.error("--day=YYYY-MM-DD"); process.exit(1); }
+if ((FROM && !/^\d{4}-\d{2}-\d{2}$/.test(FROM)) || (TO && !/^\d{4}-\d{2}-\d{2}$/.test(TO))) { console.error("--from/--to take YYYY-MM-DD"); process.exit(1); }
+if (DAY && (FROM || TO)) { console.error("--day and --from/--to are mutually exclusive"); process.exit(1); }
+const inDayRange = (lifeDate) => {
+  if (DAY) return lifeDate === DAY;
+  if (FROM && lifeDate < FROM) return false;
+  if (TO && lifeDate > TO) return false;
+  return true;
+};
 const PROFILE_ID = "profile-zhangnian";
 const SUBJECT = { primaryName: "张年", aliases: SUBJECT_NAMES.filter((n) => n !== "张年") };
 const OPTS = { registry: FAMILY_REGISTRY, singleChildHousehold: true };
@@ -139,9 +156,10 @@ for (const [conversation, sources] of byConversation) {
   }
 }
 selected.sort((a, b) => a.lifeDate.localeCompare(b.lifeDate));
-const days = [...new Set(selected.map((s) => s.lifeDate))].slice(0, MAX_DAYS);
-const work = selected.filter((s) => days.includes(s.lifeDate));
-console.log(`Gate: ${gateStats.windowsInMonth} window(s) in ${MONTH}, ${gateStats.windowsPassed} passed, over ${days.length} day(s). Messages kept ${gateStats.messagesKept}, rejected ${gateStats.messagesRejected}.`);
+const inRange = selected.filter((s) => inDayRange(s.lifeDate));
+const days = [...new Set(inRange.map((s) => s.lifeDate))].slice(0, MAX_DAYS);
+const work = inRange.filter((s) => days.includes(s.lifeDate));
+console.log(`Gate: ${gateStats.windowsInMonth} window(s) in ${MONTH}, ${gateStats.windowsPassed} passed, over ${days.length} day(s)${DAY || FROM || TO ? ` (day filter: ${DAY ?? `${FROM ?? "start"}..${TO ?? "end"}`})` : ""}. Messages kept ${gateStats.messagesKept}, rejected ${gateStats.messagesRejected}.`);
 
 // ---------------------------------------------------------------- the writer (T7 step 2)
 const editor = createDeepSeekMemoryEditor(process.env, SUBJECT, { variant: "v4", ...OPTS });
@@ -179,6 +197,18 @@ for (const item of work) {
   if (calls >= MAX_CALLS) { console.log(`Reached --max-calls=${MAX_CALLS}; stopping.`); break; }
   const entry = { lifeDate: item.lifeDate, conversation: item.w.conversationId, gate: item.gate, fingerprint: item.fp, messages: item.w.stats.messageCount, images: item.w.stats.imageCount, keptSourceIds: item.keptSourceIds };
   results.push(entry);
+
+  // T10: the same window identity (organizationFingerprint = item.fp) that applyPlan already uses
+  // for replay safety, checked BEFORE the editor is called rather than after the writer has already
+  // run — a rerun of a day that's already committed costs zero DeepSeek calls instead of one or two.
+  const prior = await findOrganizerRun(item.fp);
+  if (prior) {
+    entry.skipped = "already organized under this fingerprint (checked before any model call)";
+    entry.write = { applied: false, reason: "already organized under this fingerprint", traceId: prior.action === "daily_trace" ? prior.targetId : undefined };
+    console.log(`  ${item.lifeDate} — already organized (traceId ${entry.write.traceId ?? "n/a"}), skipped before any DeepSeek call`);
+    continue;
+  }
+
   let verdict, grounding;
   try {
     calls += 1;
