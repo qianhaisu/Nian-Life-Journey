@@ -129,17 +129,30 @@ test("burst grouping is temporal redundancy only: one representative reads, ever
   assert.equal(burstGroups(spaced.map((item) => ({ ...item, alt: "" }))).length, 2);
 });
 
-test("same day alone never binds text to image: a text moment is text only, the day's photos read elsewhere", () => {
+test("a trusted photo binds beside its trace text when they share a day (T11 Part C)", () => {
+  // T11 Part C, 2026-09-04: privileged (trusted/confirmed) photos now appear beside same-day text
+  // moments. Provenance is the binding — daycare photos are trusted because every image there is
+  // of 张年, so showing them beside the day's text is not a caption-guessing exercise.
   const media = [photo("m", "2026-08-05T08:00:00.000Z")];
   const traces = [trace("t", "2026-08-05 00:00:00", ["第一次自己扶着栏杆站了一会儿"])];
   const composition = buildMonthComposition(monthOf({ media, traces }, "2026-08"), trust(media));
   const textMoment = composition.chapter[0];
   assert.equal(textMoment.kind, "text_led");
-  assert.equal(textMoment.hero, undefined, "sharing a calendar day is not a binding");
+  assert.equal(textMoment.hero?.id, "m", "privileged same-day photo binds to text moment");
   assert.equal(textMoment.supporting.length, 0);
-  // The photograph is not lost: it earns its own photo moment (vouched) and its archive place.
+  // The photograph also keeps its chronicle place — chronicle excludes only memory days.
   assert.deepEqual(composition.chronicle.map((moment) => [moment.day, moment.hero.id]), [["2026-08-05", "m"]]);
-  assert.ok(!composition.chronicle[0].hero.alt.includes("栏杆"), "and the words never describe the photo");
+});
+
+test("an unprivileged photo does not bind to a text moment", () => {
+  // Without privilege, the old behavior holds: a text moment is text-only.
+  const media = [photo("m", "2026-08-05T08:00:00.000Z")];
+  const traces = [trace("t", "2026-08-05 00:00:00", ["第一次自己扶着栏杆站了一会儿"])];
+  const noPriv = { confirmed: new Set(), trusted: new Set() };
+  const composition = buildMonthComposition(monthOf({ media, traces }, "2026-08"), noPriv);
+  const textMoment = composition.chapter[0];
+  assert.equal(textMoment.kind, "text_led");
+  assert.equal(textMoment.hero, undefined, "unvouched photo does not anchor a text moment");
 });
 
 test("a published memory's own lead is the month's face, above loose photography", () => {

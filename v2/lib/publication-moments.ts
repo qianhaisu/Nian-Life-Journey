@@ -162,13 +162,34 @@ function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMo
   };
 }
 
+// Pick hero + supporting photos from a PhotoDay for text/memory moments. Only privileged photos
+// are candidates — unvouched chat images cannot anchor a reading moment's photography slot.
+// excludeIds: hero IDs already claimed by another moment on the same day (T11 Part C: avoid
+// showing the same photo in both memory_led and text_led slots on the same day).
+function pickDayPhotos(photoDay: PhotoDay | undefined, privilege: MediaPrivilege, excludeIds?: ReadonlySet<string>): { hero?: MediaRef; supporting: MediaRef[]; morePhotoCount: number } {
+  if (!photoDay) return { hero: undefined, supporting: [], morePhotoCount: 0 };
+  const reps = burstRepresentatives(photoDay.photos);
+  const eligible = reps.filter((r) => !excludeIds?.has(r.id));
+  const hero = eligible.find((r) => heroEligibleRef(r, privilege));
+  const supporting = eligible.filter((r) => r !== hero && isPrivileged(r, privilege) && thumbnailSized(r)).slice(0, MOMENT_SUPPORTING_MAX);
+  const shownCount = (hero ? 1 : 0) + supporting.length;
+  return { hero, supporting, morePhotoCount: Math.max(0, photoDay.photos.length - shownCount) };
+}
+
 export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPrivilege = NO_PRIVILEGE): MonthComposition {
   const photoDaysAsc = [...chapter.photoDays].sort((a, b) => a.day.localeCompare(b.day));
   const traceByDay = new Map(chapter.traceDays.map((day) => [day.day, day]));
 
   // CHAPTER — what is worth reading, in the order the month happened. Memories first within a day.
   const chapterMoments: PublicationMoment[] = [];
+  // Track which photo IDs have been claimed by memory_led moments, so text_led moments on the
+  // same day don't repeat the same hero. Keyed by day string.
+  const heroClaimedOnDay = new Map<string, string>();
   for (const memory of [...chapter.memories].sort((a, b) => a.signature.day.localeCompare(b.signature.day))) {
+    // If the memory has no own lead photo, bind the day's first privileged hero photo (T11 Part C).
+    const photoDay = photoDaysAsc.find((day) => day.day === memory.signature.day);
+    const dayPhotos = !memory.lead ? pickDayPhotos(photoDay, privilege) : { hero: undefined, supporting: [], morePhotoCount: 0 };
+    if (dayPhotos.hero) heroClaimedOnDay.set(memory.signature.day, dayPhotos.hero.id);
     chapterMoments.push({
       kind: "memory_led",
       day: memory.signature.day,
@@ -176,28 +197,32 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
       ageLabel: memory.signature.ageLabel,
       memory,
       text: [],
-      hero: undefined,
-      supporting: [],
-      morePhotoCount: 0,
+      hero: dayPhotos.hero,
+      supporting: dayPhotos.supporting,
+      morePhotoCount: dayPhotos.morePhotoCount,
     });
   }
-  // Text moments are TEXT ONLY. The day's photographs are not laid beside the words: sharing a
-  // calendar day is not a binding, and rendering them as one block would visually claim the photo
-  // illustrates the sentence. The day's pictures keep their own place (a photo moment when one is
-  // earned, and always the archive layer).
+  // Bind privileged same-day photos beside text moments (T11 Part C). Sharing provenance is the
+  // binding here: a daycare-group photo appearing beside daycare-group text on the same day is not
+  // a guess at what the sentence depicts — both come from the same people at the same time.
+  // Unvouched WeChat images (chat stream screenshots, forwards) remain excluded: privilege is the gate.
   for (const traceDay of [...chapter.traceDays].sort((a, b) => a.day.localeCompare(b.day))) {
     const text = readableEntries(traceDay.entries).slice(0, MOMENT_TEXT_MAX);
     if (text.length === 0) continue;
     const photoDay = photoDaysAsc.find((day) => day.day === traceDay.day);
+    // Exclude any hero already shown by a memory_led moment on the same day.
+    const alreadyClaimed = heroClaimedOnDay.get(traceDay.day);
+    const excludeIds = alreadyClaimed ? new Set([alreadyClaimed]) : undefined;
+    const dayPhotos = pickDayPhotos(photoDay, privilege, excludeIds);
     chapterMoments.push({
       kind: "text_led",
       day: traceDay.day,
       dateLabel: traceDay.dateLabel,
       ageLabel: photoDay?.ageLabel,
       text,
-      hero: undefined,
-      supporting: [],
-      morePhotoCount: 0,
+      hero: dayPhotos.hero,
+      supporting: dayPhotos.supporting,
+      morePhotoCount: dayPhotos.morePhotoCount,
     });
   }
   const kindRank = (moment: PublicationMoment) => (moment.kind === "memory_led" ? 0 : 1);

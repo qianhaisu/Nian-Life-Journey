@@ -13,6 +13,15 @@ import type { EvidenceWindow } from "./evidence/types";
 /** What the family calls him. 张年 is his name; the rest are what actually appears in the chats. */
 export const SUBJECT_NAMES = ["张年", "张小年", "小年年", "小年", "年年", "崽崽", "崽", "宝宝", "宝贝"] as const;
 
+/**
+ * 乳儿班张小年家庭群 — the nursery's family group. The one WeChat group with a single-child gate
+ * policy of "all" (see POLICIES below), and the only WeChat source whose media (lib/family-archive.ts
+ * mediaPrivilegeOf, T11) is trusted without a published event vouching for it, on the same reasoning:
+ * every message and every photo in this specific group is about him. Named so the id isn't a bare
+ * string duplicated across modules that need to agree on which conversation this is.
+ */
+export const DAYCARE_CONVERSATION = "conversation:2109e1e89306b57b8334d349";
+
 export type SubjectGatePolicy =
   /** The whole conversation is about him, so every message is eligible. */
   | "all"
@@ -32,8 +41,8 @@ export type SubjectGate = { policy: SubjectGatePolicy; conversation: string };
 // export's Markdown and JSON carry different conversation identities on purpose (see
 // lib/ingest/wechat-weflow-json.ts).
 const POLICIES: Record<string, SubjectGatePolicy> = {
-  // 乳儿班张小年家庭群 — the nursery's family group. Teddy, 2026-09-04: everything in it is about him.
-  "conversation:2109e1e89306b57b8334d349": "all", // WeFlow JSON, 7,244 messages — see "excluded" below for its md pair
+  // Teddy, 2026-09-04: everything in it is about him.
+  [DAYCARE_CONVERSATION]: "all", // WeFlow JSON, 7,244 messages — see "excluded" below for its md pair
 
   // Groups that exist because of him. He is usually the subject, but the adults also talk to each
   // other in them, so a message earns its place by naming him or by continuing the thought of one.

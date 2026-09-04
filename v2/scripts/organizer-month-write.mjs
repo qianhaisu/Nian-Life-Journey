@@ -1,20 +1,29 @@
 #!/usr/bin/env node
 // One month, real writes: subject gate → Memory Editor → claim grounding → Writer v2 → narrative
-// validator → (if --commit) persist as a daily_trace, self-approved in content_quality_reviews.
+// validator → (if --commit) persist as a life_event, self-approved in content_quality_reviews.
 //
 // This is organizer-month-dryrun.mjs's exact pipeline plus persistence. Without --commit it behaves
 // identically to the dry-run driver — nothing is written — so the same command can be run once to
-// review, then again with --commit after a human (Cowork/Teddy) has read the output. T7's hard
-// boundary: this produces daily_trace rows ONLY, never a life_event or a Memory candidate.
+// review, then again with --commit after a human (Cowork/Teddy) has read the output.
 //
 //   node --import tsx scripts/organizer-month-write.mjs --month=2026-09 --out=<abs path outside repo>.json
 //     [--max-calls=60] [--max-days=31] [--commit]
 //
-// Why a daily_trace needs a manual review row here (see quality-review.ts): requiresQualityReview()
-// fails CLOSED for any artifact whose organizerRun.organizerType is "ai" — a trace written through
-// production-adapter.ts's daily_trace branch is otherwise persisted but permanently invisible, since
-// there is no review desk to approve it. Cowork's "通过" in docs/STATUS.md is the human review this
-// script's self-approval stands in for; it must never fire without that having happened first.
+// T11, 2026-09-04 (Teddy): this used to persist a daily_trace. DailyTrace has no title field
+// (types.ts:61: entries: string[]), so it rendered folded behind TraceDisclosure while every other
+// month's writer-v2 prose renders as an EditorialMemory (title + story) via life_event — a visible
+// format break between 2025 and 2026 pages for no reason the writer's own output couldn't already
+// fix, since it was producing a title all along and the pipeline was discarding it. Now action is
+// "life_event_candidate" and memoryWeight is forced down to "trace" (see below) so T7's output reads
+// the same as everything else while still sorting behind real highlights/chapters.
+//
+// Why a review row still needs an explicit "approved" override here (see quality-review.ts):
+// requiresQualityReview() fails CLOSED for any artifact whose organizerRun.organizerType is "ai".
+// planArtifacts's life_event_candidate branch already writes a review row, but ADAPTER_REVIEW_DECISION
+// is "needs_human_review" — correct for the real production pipeline, which has no review desk yet
+// either, but wrong here: Cowork's "通过" in docs/STATUS.md IS the human review for T7's output, so
+// this script overrides plan.review.decision to "approved" before applyPlan persists it. That override
+// must never fire without a Cowork "通过" having happened first.
 import { createHash, randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -85,7 +94,7 @@ const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anth
 if (!dbUrl) { console.error("Need DATABASE_URL."); process.exit(1); }
 if (!apiKey) { console.error("Need DEEPSEEK_API_KEY."); process.exit(1); }
 
-console.log(COMMIT ? "*** --commit set: passing days WILL be written as daily_trace rows ***" : "dry run (pass --commit to actually write)");
+console.log(COMMIT ? "*** --commit set: passing days WILL be written as life_event rows ***" : "dry run (pass --commit to actually write)");
 
 const client = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false }, keepAlive: true });
 await client.connect();
@@ -189,6 +198,9 @@ const identityOf = (digest) => {
 const FORBIDDEN = /家人/;
 const newIdOf = (prefix) => `${prefix}-${randomUUID()}`;
 const repository = { findOrganizerRun, persistOrganization, persistDailyTrace, persistOrganizerRun, markSourcesOrganized, persistQualityReview };
+// Mirrors production-adapter.ts's own (unexported) MEMORY_RUN_ACTIONS — an OrganizerRun.action of
+// either name means the target id on that run points at a life_event, not a daily_trace.
+const MEMORY_RUN_ACTIONS = new Set(["create_memory", "life_event_candidate"]);
 
 const results = [];
 let calls = 0;
@@ -204,8 +216,8 @@ for (const item of work) {
   const prior = await findOrganizerRun(item.fp);
   if (prior) {
     entry.skipped = "already organized under this fingerprint (checked before any model call)";
-    entry.write = { applied: false, reason: "already organized under this fingerprint", traceId: prior.action === "daily_trace" ? prior.targetId : undefined };
-    console.log(`  ${item.lifeDate} — already organized (traceId ${entry.write.traceId ?? "n/a"}), skipped before any DeepSeek call`);
+    entry.write = { applied: false, reason: "already organized under this fingerprint", eventId: MEMORY_RUN_ACTIONS.has(prior.action) ? prior.targetId : undefined };
+    console.log(`  ${item.lifeDate} — already organized (eventId ${entry.write.eventId ?? "n/a"}), skipped before any DeepSeek call`);
     continue;
   }
 
@@ -232,7 +244,7 @@ for (const item of work) {
 
   const pkg = buildEvidencePackage({
     window: item.w, windowFingerprint: item.fp, grounding,
-    selectedBy: { policyId: T7_POLICY_ID, action: "daily_trace", worthinessScore: 0 },
+    selectedBy: { policyId: T7_POLICY_ID, action: "life_event_candidate", worthinessScore: 0 },
     subject: { ...SUBJECT, narrativeLabel: "张年" }, identityOf,
     quotableLines: (verdict.quotableLines ?? []).map((q) => ({ text: q.text, evidenceRef: q.evidenceRef, speakerRole: q.speakerRole })),
     longitudinal: [], lifeDate: item.lifeDate,
@@ -262,7 +274,7 @@ for (const item of work) {
   const contentTypes = [...new Set(item.w.items.map((i) => i.contentTypes ?? []).flat())];
   const now = new Date().toISOString();
   const outcome = {
-    action: "daily_trace",
+    action: "life_event_candidate",
     sourceIds: item.keptSourceIds,
     windowId: item.w.windowId,
     policyVersion: T7_POLICY_ID,
@@ -272,8 +284,6 @@ for (const item of work) {
     occurredAt: `${item.lifeDate}T00:00:00.000Z`,
     scopes: ["family"],
     contentTypes: contentTypes.length ? contentTypes : ["daily"],
-    traceLines: [{ text: story, evidenceRefs: item.keptSourceIds }],
-    evidenceStrength: entry.claimsFromGatedSources,
   };
   const policy = {
     organizerVersion: "organizer-v2-t7-subject-gate",
@@ -285,33 +295,29 @@ for (const item of work) {
     model: editor.model,
     allowedMediaTiers: ["confirmed"],
   };
+  const writerStory = { title: writer.output.title, story, usedMediaIds: writer.output.usedMediaIds ?? [] };
   let applied;
   try {
-    const plan = planArtifacts({ window: item.w, outcome, windowFingerprint: item.fp, policy, now, newId: newIdOf });
+    const plan = planArtifacts({ window: item.w, outcome, windowFingerprint: item.fp, policy, story: writerStory, now, newId: newIdOf });
+    // T7's review IS Cowork's "通过" in docs/STATUS.md, already given before this script is ever run
+    // with --commit — planArtifacts's default ADAPTER_REVIEW_DECISION ("needs_human_review") is right
+    // for the real production pipeline, which has no review desk, but wrong here; this override must
+    // never fire without that "通过" having actually happened.
+    plan.review.decision = "approved";
+    plan.review.reasonCodes = [...plan.review.reasonCodes, "t7-subject-gate", "cowork-reviewed"];
+    // T7's output is everyday observation, not a curated highlight — memoryWeight stays at the
+    // pipeline's lowest tier so it never outranks a real chapter/highlight in curateMemories' sort.
+    plan.lifeEvent.event.memoryWeight = "trace";
     applied = await applyPlan(plan, repository, { newId: newIdOf, now });
   } catch (error) {
     entry.writeError = String(error?.message ?? error);
     console.log(`  ${item.lifeDate} WRITE ERROR ${entry.writeError}`);
     continue;
   }
-  entry.write = { applied: applied.applied, reason: applied.reason, traceId: applied.traceId };
-  if (!applied.applied) { console.log(`  ${item.lifeDate} — already organized under this fingerprint (traceId ${applied.traceId}), no new write`); continue; }
-
-  // A daily_trace's organizerRun.organizerType is "ai", so requiresQualityReview() fails it closed
-  // (quality-review.ts). planArtifacts's daily_trace branch writes no review row at all — only the
-  // life_event branch does — so this script writes it explicitly. This "approved" decision stands in
-  // for the human review Cowork already did in docs/STATUS.md; it must never be reached without that.
-  await persistQualityReview({
-    id: newIdOf("quality-review"), profileId: PROFILE_ID,
-    targetKind: "daily_trace", targetId: applied.traceId, decision: "approved",
-    subjectRelevance: verdict.subjectRelevance, worthinessScore: 0,
-    reasonCodes: ["t7-subject-gate", "cowork-reviewed-2026-09-04"],
-    provider: editor.name, model: editor.model,
-    promptVersion: WRITER_V2_PROMPT_VERSION, policyVersion: T7_POLICY_ID,
-    reviewFingerprint: `${item.fp}:daily_trace`, reviewedAt: now,
-  });
+  entry.write = { applied: applied.applied, reason: applied.reason, eventId: applied.eventId };
+  if (!applied.applied) { console.log(`  ${item.lifeDate} — already organized under this fingerprint (eventId ${applied.eventId}), no new write`); continue; }
   written += 1;
-  console.log(`  ${item.lifeDate} WRITTEN traceId=${applied.traceId}`);
+  console.log(`  ${item.lifeDate} WRITTEN eventId=${applied.eventId}`);
 }
 
 const publishable = results.filter((r) => r.proposed);
@@ -325,4 +331,4 @@ const summary = {
 };
 console.log(`\n=== SUMMARY ===\n${JSON.stringify(summary, null, 2)}`);
 writeFileSync(outPath, JSON.stringify({ summary, results }, null, 2), "utf8");
-console.log(`\n${COMMIT ? `Wrote ${written} daily_trace row(s).` : "DRY RUN — nothing was written to the database."} Report: ${outPath} (contains family chat text; keep it outside the repository)`);
+console.log(`\n${COMMIT ? `Wrote ${written} life_event row(s).` : "DRY RUN — nothing was written to the database."} Report: ${outPath} (contains family chat text; keep it outside the repository)`);
