@@ -637,3 +637,54 @@ storage-phase-2 的夸克归档）改动前就在失败。
 2. 核对时发现总数与 predeclare 有出入，查明是 T11 已由别的 session 跑完 09-01（跟 T13 无关，
    T13 的删除条件本就不含 2026-09）；但 09-02 目前没有写出来，需要单独补跑。
 3. 下一件：T7 Phase 2（2025-05→2025-11、2026-02、2026-08）解锁；09-02 补跑；继续 2026-07 Phase 1。
+
+### 2026-09-04 · Cowork · Teddy 截图发现：后台任务面板里多个任务疑似挂起超过 2 小时
+
+1. **线上无变化**——本轮是诊断线索，不是修复。
+2. Teddy 发来 Code 侧「Background tasks」面板截图，Running 里有：
+   - **T9a: WeChat import throughput + reconciliation** — Agent，**2h39m**
+   - **T9b: diagnose and fix broken tests** — Agent，**2h39m**
+   - Research daily_trace persistence path — Agent，2h37m
+   - Re-run September dry-run with duplicate-source exclusion applied — Shell，2h34m
+   - Run new write script WITHOUT --commit to verify it still behaves as pure dry-run — Shell，2h27m
+   - Dry-run 2026-07 with the T11-updated write script — Shell，53m29s（这个是已知在跑的，7月抽样）
+3. **怀疑**：T9a（跑了 2h39m）很可能就是乳儿班卡在 6,118/7,244、34+ 分钟零增长的原因——如果它真的还在
+   跑而不是挂起，说明它在做点什么但没有产出（没有新 raw_sources 写入）；如果它已经挂起，那是僵尸任务
+   占着资源。T9b（同样 2h39m）大概率就是 T14-A 一直没有测试结果的原因。
+4. **请 Code**：自己核实这几个后台任务的真实状态（进程是否存活、有没有产出、是否卡在锁或限流上）。
+   如果确认挂起，按 CLAUDE.md 的规则处理（不要盲目杀掉正在写库的进程；先看是不是「进程活着、只是租约
+   过期」——nianlife-verify 技能文档里记过这个陷阱）。如果 2h39m 真的只是任务本身就该这么久（比如
+   reconciliation 要扫全部 41,553 条），也请说明预计还要多久，不要让它无限期挂在 Running。
+5. **下一件**：等 Code 回应这几个任务的真实状态，同时继续 T7 Phase 1 / 09-02 补跑。
+
+### 2026-09-04 12:14 UTC · Claude Code (session ba15c6) · 乳儿班导入卡住的根因找到，部分修复
+
+1. **线上多了什么**：还没有——诊断 + 恢复动作，乳儿班本身仍未导完。
+2. **真根因**（用真实进程列表 + DB 查证，不是猜）：`chat_import_tasks` 里两行 `status='running'`
+   但租约早已过期（`lease_expires_at` 是 9～10 小时前），Windows 上唯一在跑的 3 个 node 进程全是
+   Codex 插件的 broker/app-server，跟导入无关——**没有活进程在写**，是真僵尸，不是"进程活着租约没续"。
+   重跑 `wechat-import-all.mjs`（用了内置的过期租约回收机制，不是手改数据）后，conversation 0/1/2
+   都正常完工或复用；**conversation 3（乳儿班）本身的 attempt 已经在我之前就到了 3/3 上限**，
+   `--retry-failed` 按设计拒绝重试已耗尽次数的 task（`chat-import-state.ts:222`），我没有手改
+   `attempt`/`max_attempts` 去绕过这道硬保护。已导 5,900/7,244 条，进度在 checkpoint 里，没有丢。
+   Teddy 截图里那几个 2h27m～2h39m 的 Agent/Shell 任务，我这个 session 查不到（`ListAgents` 无可达
+   agent，任务 ID 也不在本 session 的任务表里）——大概率是另一个窗口/session 的，无法代为核实。
+3. **没做到**：乳儿班还差 ~1,344 条没导完，需要一个正式修复（比如给这种耗尽重试次数的 task 一条
+   受控的重开路径），不是我现在能安全单方面决定的事。
+4. **下一件**：其余会话（亲爱的爸爸妈妈 7,925 条、主群）继续在后台导；乳儿班需要 Teddy/Cowork 定
+   下一步——是放宽这个 task 的 max_attempts 重跑，还是先查清 3 次分别死在哪一步。
+
+### 2026-09-04 20:1x · Cowork · 沟通规矩订正 + T15 待办清单整合
+
+1. **线上无变化**——本轮是流程订正。
+2. **Cowork 自己的失误**：上一轮发现「Code 的 watcher 只盯 INBOX，不盯 STATUS.md」，然后转头把最关键的
+   发现（后台任务挂起 2h39m）只写进了 STATUS.md——写进了 Code 看不见的地方，然后去找 Teddy 当传声筒。
+   Teddy 指出：和 Code 沟通的应该是 Cowork，不是他。
+3. **规矩改为**：要 Code 做的事一律写进 `docs/ORCHESTRATOR-INBOX.md`；`docs/STATUS.md` 只做事后记录，
+   不放待办。
+4. 已整合 T15 待办清单进 INBOX，六条：A 09-02/09-03 补跑、B 乳儿班导入诊断（6,118 是不是真实终点）、
+   C T7 Phase 1 继续（2026-07 已抽读通过，可补后半月并 commit）、D Windows 完整 npm test、
+   E 一条孤儿 organizer_run（`trace-v2-0f8fab8e…`，target 已删，会导致将来重跑短路跳过）、
+   F watcher 监控范围。
+5. **观察到的事实**（供 B 用）：乳儿班 11:02→12:1x 一小时零增长，仍 6,118；同期 raw_sources
+   41,553→41,623（+70），全部来自 `conversation:bb5d5ba6da5986d35b923465`，乳儿班一条没进。
