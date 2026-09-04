@@ -184,13 +184,26 @@ test("the lead is deterministic across row order: same-day memories break ties b
   }
 });
 
-test("trace-weight events do not carry the cover; with nothing worthy the cover is quiet, not invented", () => {
+test("trace-weight events cannot carry the LEAD, but a recent one carries the fallback MOMENT cover (T18)", () => {
   const chapters = buildChapters({ events: [event("folded", "2026-08-25", { memoryWeight: "trace" }), event("real", "2026-08-10")], traces: [], media: [], birthDay: BIRTH });
+  // Weight still decides the LEAD: a real (memory-weight) story always wins it over a folded one.
   assert.equal(selectHomeLead(chapters, { today: "2026-09-02" }).memory.id, "real");
+  // T18, 2026-09-04: with nothing lead-worthy competing, a recent trace-weight event — T7's
+  // everyday output — must still carry the page as its "最近的一天" fallback moment. The bug this
+  // pins: the front page was instead falling through to an untethered photo-only day, or to
+  // nothing at all, even though the child's own newest written words existed and were recent.
   const view = home(store({ events: [event("folded", "2026-08-25", { memoryWeight: "trace" })] }));
+  assert.equal(view.cover.kind, "moment");
+  assert.equal(view.cover.cover.moment.kind, "memory_led");
+  assert.equal(view.cover.cover.moment.memory.id, "folded");
+  assert.equal(leadOf(view), undefined);
+  assert.ok(view.mark.includes("最近"));
+});
+
+test("a trace-weight event too old to be recent falls through to the quiet empty cover, not an invented one", () => {
+  const view = home(store({ events: [event("old-folded", "2025-01-10", { memoryWeight: "trace" })] }));
   assert.equal(view.cover.kind, "empty");
   assert.equal(leadOf(view), undefined);
-  assert.equal(view.mark, "最近");
 });
 
 test("growth notes: 最近 wording only while the note is recent; the front page drops a stale change entirely", () => {

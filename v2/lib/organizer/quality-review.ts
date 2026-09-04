@@ -127,7 +127,16 @@ export function eventRendersCleanly(event: LifeEvent): boolean {
  * grades bindings (confirmed / strong_contextual), is trusted. Approving an event's TEXT through
  * the quality ledger says nothing about its pictures — the two decisions stay separate.
  */
+// T18, 2026-09-04: T7's subject-gate pipeline is exactly the "future pipeline that grades
+// bindings" this function's own comment anticipated. Its media_ids/heroMediaId are never a
+// same-day blanket harvest — they come from lib/publication-moments.ts's pickDayPhotos, gated on
+// MediaPrivilege (a Quark family-photo import, or the daycare group Teddy confirmed is entirely
+// about him), the identical function the month page itself uses. Trusting this exact
+// organizerVersion is trusting that specific, narrow binding — not AI authorship in general.
+const TRUSTED_BINDING_ORGANIZER_VERSIONS: ReadonlySet<string> = new Set(["organizer-v2-t7-subject-gate"]);
+
 export function mediaBindingTrusted(event: Pick<LifeEvent, "createdBy" | "organizerVersion" | "organizerRun">): boolean {
+  if (event.organizerVersion && TRUSTED_BINDING_ORGANIZER_VERSIONS.has(event.organizerVersion)) return true;
   return !requiresQualityReview(event);
 }
 

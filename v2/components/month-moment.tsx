@@ -23,8 +23,15 @@ export function dayLabel(dateLabel: string, year: string): string {
 
 // The running head of a day: the two clocks, calendar and life, and nothing else (原则二). In the
 // reading column it hangs in the left margin; on a narrow screen it sits above the words.
-export function DayHead({ day, dateLabel, ageLabel, year }: { day: string; dateLabel: string; ageLabel?: string; year: string }) {
-  return <p className="month-day-date"><time dateTime={day}>{dayLabel(dateLabel, year)}</time>{ageLabel ? <span>{ageLabel}</span> : null}</p>;
+//
+// V1 (T16, 2026-09-04): the chapter masthead already states the month's age once ("当时 1 岁 6 个
+// 月"). Printing the same label on every day turned a month into twenty repeats of one fact — a
+// magazine does not restate its issue date under every article. `monthAgeLabel` is that one
+// statement; a day only prints its own age when it actually differs (the days that cross a
+// "岁/个月" boundary within the month).
+export function DayHead({ day, dateLabel, ageLabel, monthAgeLabel, year }: { day: string; dateLabel: string; ageLabel?: string; monthAgeLabel?: string; year: string }) {
+  const showAge = ageLabel && ageLabel !== monthAgeLabel;
+  return <p className="month-day-date"><time dateTime={day}>{dayLabel(dateLabel, year)}</time>{showAge ? <span>{ageLabel}</span> : null}</p>;
 }
 
 // One moment of the month, read start to finish: its date, its words if the archive wrote any,
@@ -34,18 +41,21 @@ export function DayHead({ day, dateLabel, ageLabel, year }: { day: string; dateL
 // inside the body; its date is already stated by the head, so it does not repeat it.
 // `continued` is the second moment of a day the reader is already inside (a memory and that same
 // day's words): the head is stated once and the block reads on under it.
-export function MonthMoment({ moment, year, priority = false, continued = false }: { moment: PublicationMoment; year: string; priority?: boolean; continued?: boolean }) {
+export function MonthMoment({ moment, year, monthAgeLabel, priority = false, continued = false }: { moment: PublicationMoment; year: string; monthAgeLabel?: string; priority?: boolean; continued?: boolean }) {
   return <article className={`month-moment moment-${moment.kind}${moment.hero ? " moment-with-hero" : ""}${continued ? " moment-continued" : ""}`}>
-    {continued ? null : <DayHead day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} year={year} />}
+    {continued ? null : <DayHead day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} monthAgeLabel={monthAgeLabel} year={year} />}
     <div className="moment-body">
-      {moment.kind === "memory_led" && moment.memory ? <EditorialMemory memory={moment.memory} priority={priority} /> : null}
+      {/* T20-A1: DayHead just stated this day's date and age — a memory here does not restate them. */}
+      {moment.kind === "memory_led" && moment.memory ? <EditorialMemory memory={moment.memory} priority={priority} showSignature={false} /> : null}
       {/* One entry, one paragraph: each is a separate record of the archive and keeps its own line.
           The day still reads through in one go because they are set as consecutive paragraphs of
           prose, not because any two of them were joined. */}
       {moment.text.length > 0 ? <div className="moment-text serif">{moment.text.map((entry, index) => <p key={index}>{entry}</p>)}</div> : null}
       {moment.hero ? <Photo media={moment.hero} priority={priority} sizes="(max-width: 700px) 100vw, 760px" className="moment-hero" /> : null}
       {moment.supporting.length > 0 ? <PhotoStrip photos={moment.supporting} /> : null}
-      {moment.morePhotoCount > 0 ? <p className="chapter-meta">这一天还有 {moment.morePhotoCount} 张照片在月末的档案里</p> : null}
+      {/* T20-A2: T16 V2's "还有 N 张照片在月末的档案里" printed on nearly every day once T11 Part C
+          started binding a hero to most days — a count-of-photos sentence on every day is exactly
+          the "计数式描述" 原则三 rules out. The month-end archive section already says this once. */}
     </div>
   </article>;
 }

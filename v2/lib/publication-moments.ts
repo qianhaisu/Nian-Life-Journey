@@ -89,6 +89,12 @@ export type MonthComposition = {
   // guess at what the photos show, never emotion, never a milestone. A month with readable
   // moments needs no narration — its own words open it.
   narration?: string;
+  // V4 (T16, 2026-09-04): a standfirst for a month that DOES have a chapter — the two counts a
+  // magazine's opening line states before the story starts. Days = how many distinct days actually
+  // carry words in `chapter` (memory_led + text_led; a photo-only day was never "记下"). Photos =
+  // every deliverable picture the month holds, chapter and archive layer alike.
+  daysWithWords: number;
+  totalPhotoCount: number;
 };
 
 // Bounds. Editorial policy, not facts about current data.
@@ -166,7 +172,12 @@ function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMo
 // are candidates — unvouched chat images cannot anchor a reading moment's photography slot.
 // excludeIds: hero IDs already claimed by another moment on the same day (T11 Part C: avoid
 // showing the same photo in both memory_led and text_led slots on the same day).
-function pickDayPhotos(photoDay: PhotoDay | undefined, privilege: MediaPrivilege, excludeIds?: ReadonlySet<string>): { hero?: MediaRef; supporting: MediaRef[]; morePhotoCount: number } {
+//
+// Exported (T18, 2026-09-04): this is now also the backfill/write-time binding used to persist
+// media_ids/heroMediaId onto a life_event row (scripts/t18-backfill-media-binding.mjs) — the same
+// function, not a re-implementation, is what keeps the month page, the event detail page and the
+// home page showing the same picture for the same day.
+export function pickDayPhotos(photoDay: PhotoDay | undefined, privilege: MediaPrivilege, excludeIds?: ReadonlySet<string>): { hero?: MediaRef; supporting: MediaRef[]; morePhotoCount: number } {
   if (!photoDay) return { hero: undefined, supporting: [], morePhotoCount: 0 };
   const reps = burstRepresentatives(photoDay.photos);
   const eligible = reps.filter((r) => !excludeIds?.has(r.id));
@@ -287,5 +298,15 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const narration = chapterMoments.length === 0 && chronicle.length === 0 && archivePhotoCount > 0
     ? `这个月还没有整理出来的文字。${photoDaysAsc.length} 天留下了 ${archivePhotoCount} 张照片，都收在月末的档案里，还没有人确认过它们拍的是什么。`
     : undefined;
-  return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, archiveDays, smallImageCount, cover, preview, narration };
+  const daysWithWords = new Set(chapterMoments.map((moment) => moment.day)).size;
+  return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, archiveDays, smallImageCount, cover, preview, narration, daysWithWords, totalPhotoCount: archivePhotoCount };
+}
+
+// V4 (T16, 2026-09-04): the standfirst under a populated month's masthead — a fact stated, not a
+// sentence written. Purely arithmetic: no AI, no judgment about what the days or photos show.
+export function monthStandfirst(daysWithWords: number, totalPhotoCount: number): string | undefined {
+  if (daysWithWords > 0 && totalPhotoCount > 0) return `这个月记下 ${daysWithWords} 天，收进 ${totalPhotoCount} 张照片。`;
+  if (daysWithWords > 0) return `这个月记下 ${daysWithWords} 天。`;
+  if (totalPhotoCount > 0) return `这个月收进 ${totalPhotoCount} 张照片。`;
+  return undefined;
 }

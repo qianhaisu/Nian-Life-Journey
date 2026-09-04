@@ -231,6 +231,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .chapter-masthead .chapter-meta { margin: 0; }
 .chapter-summary { max-width: 30ch; margin: 18px 0 0; font-size: clamp(1.35rem, 3.4vw, 1.9rem); font-weight: 500; line-height: 1.4; }
 .chapter-narration { max-width: 30ch; margin: 18px 0 0; color: var(--color-muted); font-size: clamp(1.1rem, 2.8vw, 1.4rem); line-height: 1.5; }
+.chapter-standfirst { max-width: 30ch; margin: 18px 0 0; color: var(--color-muted); font-size: clamp(1.1rem, 2.8vw, 1.4rem); line-height: 1.5; }
 .month-page .photo-strip { margin-top: 28px; }
 /* The month's days: one bordered block per day, date and age as a quiet running head. */
 .month-days { margin-top: clamp(32px, 5vw, 56px); }

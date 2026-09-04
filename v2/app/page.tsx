@@ -26,12 +26,18 @@ export default async function HomePage() {
     </header>
 
     {cover.kind === "moment" ? <section className="home-lead home-moment reading-wrap" aria-labelledby="moment-title">
-      <h2 id="moment-title" className="section-mark">{cover.cover.moment.text.length > 0 ? "最近记下来的一天" : "最近的一天"}</h2>
-      <p className="home-day-date"><time dateTime={cover.cover.moment.day}>{cover.cover.moment.dateLabel}</time>{cover.cover.moment.ageLabel ? <span>{cover.cover.moment.ageLabel}</span> : null}</p>
+      <h2 id="moment-title" className="section-mark">{cover.cover.moment.kind === "photo_led" ? "最近的一天" : "最近记下来的一天"}</h2>
+      {/* memory_led carries its own TimeSignature/title inside EditorialMemory — text_led/photo_led
+          state the day here instead, matching MonthMoment's split (components/month-moment.tsx). */}
+      {cover.cover.moment.kind === "memory_led" && cover.cover.moment.memory
+        ? <EditorialMemory memory={cover.cover.moment.memory} size="lead" priority />
+        : <p className="home-day-date"><time dateTime={cover.cover.moment.day}>{cover.cover.moment.dateLabel}</time>{cover.cover.moment.ageLabel ? <span>{cover.cover.moment.ageLabel}</span> : null}</p>}
       {cover.cover.moment.text.length > 0 ? <div className="moment-text serif">{cover.cover.moment.text.map((entry, index) => <p key={index}>{entry}</p>)}</div> : null}
       {cover.cover.moment.hero ? <Photo media={cover.cover.moment.hero} priority sizes="(max-width: 700px) 100vw, 760px" className="moment-hero" /> : null}
       {cover.cover.moment.supporting.length > 0 ? <PhotoStrip photos={cover.cover.moment.supporting} /> : null}
-      <p className="chapter-meta"><Link className="text-link" href={cover.cover.monthHref}>{cover.cover.moreDayCount > 0 ? `这个月还有 ${cover.cover.moreDayCount} 天 · 翻看整个月` : "翻看整个月"}</Link></p>
+      {/* T20-A4: "还有 28 天" counted photographed days, not days with anything to read — a
+          count-of-days sentence is exactly the 计数式描述 原则三 rules out. */}
+      <p className="chapter-meta"><Link className="text-link" href={cover.cover.monthHref}>翻看整个月</Link></p>
     </section> : null}
 
     {pastLead ? <section className="home-past reading-wrap" aria-labelledby="past-title">

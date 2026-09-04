@@ -6,7 +6,7 @@ import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { findMonth } from "@/lib/memory-chapters";
-import { buildMonthComposition } from "@/lib/publication-moments";
+import { buildMonthComposition, monthStandfirst } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
 import { formatMonth } from "@/lib/time-signature";
 
@@ -31,6 +31,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   if (!chapter) notFound();
 
   const composition = buildMonthComposition(chapter, privilege);
+  const standfirst = monthStandfirst(composition.daysWithWords, composition.totalPhotoCount);
   const summary = snapshot?.month === month ? snapshot : undefined;
   const focusGoals = summary ? focusGoalsForSnapshot(store.monthlyFocusGoals, month) : [];
   const yearChapter = chapters.find((item) => item.year === year);
@@ -46,18 +47,19 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       {chapter.ageLabel ? <p className="chapter-age">当时 {chapter.ageLabel}</p> : null}
       {summary ? <p className="chapter-summary serif">{summary.summary}</p> : null}
       {!summary && composition.narration ? <p className="chapter-narration serif">{composition.narration}</p> : null}
+      {!summary && !composition.narration && standfirst ? <p className="chapter-standfirst serif">{standfirst}</p> : null}
     </header>
 
     {composition.chapter.length > 0 ? <section className="month-reading" aria-labelledby="reading-title">
       <h2 id="reading-title" className="section-mark">这个月记下来的</h2>
-      {composition.chapter.map((moment, index) => <MonthMoment moment={moment} year={year} priority={index === 0} continued={composition.chapter[index - 1]?.day === moment.day} key={`${moment.day}-${moment.kind}-${moment.memory?.id ?? ""}`} />)}
+      {composition.chapter.map((moment, index) => <MonthMoment moment={moment} year={year} monthAgeLabel={chapter.ageLabel} priority={index === 0} continued={composition.chapter[index - 1]?.day === moment.day} key={`${moment.day}-${moment.kind}-${moment.memory?.id ?? ""}`} />)}
     </section> : null}
 
     {composition.chronicle.length > 0 ? <section className="month-days" aria-labelledby="days-title">
       <h2 id="days-title" className="section-mark">{composition.chapter.length > 0 ? "这个月的日子" : "这个月"}</h2>
       <ol>
         {composition.chronicle.map((moment, index) => <li className="month-day" key={moment.day}>
-          <MonthMoment moment={moment} year={year} priority={index === 0 && composition.chapter.length === 0} />
+          <MonthMoment moment={moment} year={year} monthAgeLabel={chapter.ageLabel} priority={index === 0 && composition.chapter.length === 0} />
         </li>)}
       </ol>
     </section> : null}
@@ -72,7 +74,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       <summary><span className="serif">整月照片档案</span><small>{archivePhotoCount} 张</small></summary>
       <ol>
         {composition.archiveDays.map((day) => <li className="month-day" key={day.day}>
-          <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} year={year} />
+          <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} monthAgeLabel={chapter.ageLabel} year={year} />
           <PhotoStrip photos={day.photos} />
         </li>)}
       </ol>

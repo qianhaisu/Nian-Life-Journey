@@ -101,12 +101,18 @@ test("a memory keeps its title and its link; layout does not demote it to an ord
   assert.match(html, /class="month-moment moment-memory_led"/);
 });
 
-test("a photographed day carries no words of its own, and its head still reads", () => {
-  const moment = { kind: "photo_led", day: "2025-10-03", dateLabel: "2025 年 10 月 3 日", ageLabel: "9 个月", text: [], hero: undefined, supporting: [], morePhotoCount: 4 };
-  const html = render(MonthMoment, { moment: moment, year: "2025" });
-  assert.ok(!html.includes("moment-text"), "no text block is fabricated for a day that only has pictures");
-  assert.match(html, /<time datetime="2025-10-03">10 月 3 日<\/time>/i);
-  assert.match(html, /这一天还有 4 张照片在月末的档案里/);
+test("a day's moment never prints a per-day photo count footnote (T20-A2)", () => {
+  // T16 V2 added a "还有 N 张照片在月末的档案里" footnote gated on whether a photo had already
+  // been shown — but once T11 Part C started binding a hero to nearly every day, that condition
+  // was true almost everywhere, so the count-of-photos sentence printed on nearly every day
+  // anyway: exactly the "计数式描述" 原则三 rules out of ordinary reading pages. T20-A2 removes
+  // the line entirely; the month-end archive section states this once, not per day.
+  const withHero = { kind: "photo_led", day: "2025-10-03", dateLabel: "2025 年 10 月 3 日", ageLabel: "9 个月", text: [], hero: { id: "media-1", type: "photo", src: "/a.jpg", width: 1200, height: 900, alt: "" }, supporting: [], morePhotoCount: 4 };
+  const withoutHero = { ...withHero, hero: undefined };
+  for (const moment of [withHero, withoutHero]) {
+    const html = render(MonthMoment, { moment, year: "2025" });
+    assert.ok(!html.includes("chapter-meta"), "no per-day archive footnote, with or without a shown photo");
+  }
 });
 
 test("DayHead is honest about a day with no known age", () => {

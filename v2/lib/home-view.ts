@@ -32,24 +32,29 @@ export type HomeCover =
   | { kind: "empty" };
 
 // The strongest recent moment the newest month can offer, under the same recency contract as every
-// other "最近". Text with a picture beats text beats a strong photo day; among equals the newest
-// day wins. A moment with neither hero nor supporting pictures nor text cannot carry a cover.
+// other "最近". A published memory beats a text day beats a strong photo day; among equals the
+// newest day wins. A moment with neither hero nor supporting pictures nor text/memory cannot carry
+// a cover.
+//
+// T18, 2026-09-04: memory_led moments used to be excluded here on the assumption that any real
+// memory would already be caught by selectHomeLead — true only for chapter/highlight/memory
+// weight. T7's everyday output is deliberately weight "trace" (so it never outranks a curated
+// highlight there), but that meant a real, recently-published life_event fell into a gap neither
+// function claimed: not a "lead" (wrong weight), not a "moment" (kind excluded here) — so the
+// front page picked an untethered photo-only day instead of the child's newest actual words.
 export function selectRecentMoment(chapters: YearChapter[], privilege: MediaPrivilege, reference: RecencyReference): MomentCover | undefined {
   for (const year of chapters) for (const month of year.months) {
-    if (month.photoDays.length === 0 && month.traceDays.length === 0) continue;
+    if (month.photoDays.length === 0 && month.traceDays.length === 0 && month.memories.length === 0) continue;
     // Months are newest-first; once a month's newest day is no longer recent, none below it is.
-    const newestDay = [month.photoDays[0]?.day, month.traceDays[0]?.day].filter(Boolean).sort().at(-1);
+    const newestDay = [month.photoDays[0]?.day, month.traceDays[0]?.day, month.memories[0]?.signature.day].filter(Boolean).sort().at(-1);
     if (!isRecent(newestDay, reference)) return undefined;
     const composition = buildMonthComposition(month, privilege);
-    // A text moment can carry the cover on its words alone; a photo moment must have a real
-    // visual center — a vouched hero — or the cover falls back to the dated memory instead of a
-    // strip of small uncertain pictures.
-    const candidates = [...composition.chapter.filter((moment) => moment.kind === "text_led"), ...composition.chronicle]
+    const candidates = [...composition.chapter.filter((moment) => moment.kind === "text_led" || moment.kind === "memory_led"), ...composition.chronicle]
       .filter((moment) => isRecent(moment.day, reference))
-      .filter((moment) => (moment.kind === "text_led" ? moment.text.length > 0 : Boolean(moment.hero)));
+      .filter((moment) => moment.kind === "memory_led" ? Boolean(moment.memory) : moment.kind === "text_led" ? moment.text.length > 0 : Boolean(moment.hero));
     if (candidates.length === 0) continue;
     const rank = (moment: PublicationMoment) =>
-      (moment.kind === "text_led" ? 2 : 0) + (moment.hero ? 1 : 0);
+      (moment.kind === "memory_led" ? 3 : moment.kind === "text_led" ? 2 : 0) + (moment.hero ? 1 : 0);
     const best = [...candidates].sort((a, b) => rank(b) - rank(a) || b.day.localeCompare(a.day))[0];
     return {
       moment: best,
