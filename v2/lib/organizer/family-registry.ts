@@ -35,6 +35,30 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       relationshipToSubject: "nanny",
       narrativeLabel: "雪姨",
     },
+    {
+      // Teddy, 2026-09-04: 陈亚萍 is 张年's grandmother. This supersedes the earlier "low value"
+      // judgement recorded against her conversation in STATE §2, which is void.
+      sourceParticipantDigest: senderDigestForDisplayName("陈亚萍"),
+      displayName: "陈亚萍",
+      canonicalPersonId: "person-chenyaping",
+      relationshipToSubject: "grandmother",
+      narrativeLabel: "奶奶",
+    },
+    // The nursery's own accounts, one per class plus the centre and its after-hours desk. Teddy,
+    // 2026-09-04: a teacher's words are to read as 老师, never as a family member's. They share one
+    // canonicalPersonId on purpose — they are one institution, so two of them saying the same thing
+    // is one witness, not two corroborating ones.
+    //
+    // Individual people in that group (大兵, 潇, and the rest) stay unmapped. Which of them are
+    // teachers and which are relatives is not something this file may infer: an unmapped speaker
+    // resolves to unknown and may not be named.
+    ...["好奇星芽星班", "好奇星辰星班", "好奇星禾星班", "好奇星托育中心（金地园区）", "好奇星晚托服务号15267129562"].map((displayName) => ({
+      sourceParticipantDigest: senderDigestForDisplayName(displayName),
+      displayName,
+      canonicalPersonId: "person-nursery",
+      relationshipToSubject: "teacher",
+      narrativeLabel: "老师",
+    })),
   ],
 };
 
