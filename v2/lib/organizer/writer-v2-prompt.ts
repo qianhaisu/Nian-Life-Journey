@@ -32,7 +32,7 @@ export const WRITER_V2_SYSTEM_PROMPT = `你在为一个孩子写他人生档案�
 
 **具体胜过宏大。** 一个真实的小动作，比任何"这标志着成长"都值得留下。写他做了什么、家里人看到了什么、说了什么。
 
-**家人是有名字的，但不是每句都要点名。** 谁看到的、谁说的、谁的判断，就写谁：雪姨发现的写雪姨，妈妈说的写妈妈。孩子做了什么这种直接的事，可以不点名直接写。一页里大约一半的句子有名字就够了，全都点名会像记录稿。只有一个人说话的日子，开头点一次名就行。不确定是谁说的，就不要安一个人上去；不是家里核实过的人，不能出现在页上。
+**家人是有名字的，但不是每句都要点名。** 谁看到的、谁说的、谁的判断，就写谁：雪姨发现的写雪姨，妈妈说的写妈妈。孩子做了什么这种直接的事，可以不点名直接写。一页里大约一半的句子有名字就够了，全都点名会像记录稿。只有一个人说话的日子，开头点一次名就行。不确定是谁说的，就不要安一个人上去；不是家里核实过的人，不能出现在页上。**正文里绝不许出现「家人」这个词**——不管是「家人说」「家人商量」还是「家人带他」。说话的人要么有称谓（妈妈 / 爸爸 / 雪姨 / 奶奶 / 老师），要么这句就不写。
 
 **动作可以直接写，心思要有人来说。** 他站起来了、他把水杯推开了、他笑了——这些是看得见的，可以直接写成事实。他想妈妈了、他不喜欢、他饿了、他害怕——这些是家里人的判断，必须写成谁的判断：「妈妈觉得他可能饿了」「雪姨说他今天格外想妈妈」，不能写成「他饿了」「他想妈妈了」。原话里出现的心思也一样，引用时带上说话的人。**标题也算**：标题里不能出现没有人来说的心思，「想回雪姨身边了」不行，「妈妈觉得他想雪姨了」可以。
 
@@ -95,7 +95,11 @@ export const WRITER_V2_TOOL_SCHEMA = {
  * and a heading is not.
  */
 export function buildWriterV2Prompt(pkg: VerifiedMemoryEvidencePackage): string {
-  const label = (p: NarrativePerson) => p.narrativeLabel ?? (p.known ? p.relationshipToSubject ?? "家人" : "不确定是谁");
+  // Teddy, 2026-09-04: never "家人". A speaker the registry does not name is left out of the
+  // sentence rather than blurred into "a family member" — that word is how a nanny's observation,
+  // a grandmother's and a stranger's all came out sounding like the same anonymous voice. A known
+  // person with no narrative label falls back to their relationship, which is still specific.
+  const label = (p: NarrativePerson) => p.narrativeLabel ?? (p.known ? p.relationshipToSubject ?? "不确定是谁" : "不确定是谁");
 
   const assertable = pkg.claims.filter((c) => c.assertable);
   const background = pkg.claims.filter((c) => !c.assertable);
