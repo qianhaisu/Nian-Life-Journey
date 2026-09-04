@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { careEpisodes, careRecords, contributors, dailyTraces, events as seedEvents, growthRecords, media as seedMedia, monthlyFocusGoals, monthlySnapshot, profile, rawSources as seedSources } from "@/lib/mock-data";
-import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
+import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, MonthlySnapshot, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
 import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
 import { newId, organizerJobKey } from "./repository-interface";
@@ -14,7 +14,7 @@ import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTas
 const dataDir = path.join(process.cwd(), ".data");
 const storeFile = path.join(dataDir, "nian-life.json");
 
-const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], organizerJobs: [], chatImportTasks: [], qualityReviews: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshot });
+const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], organizerJobs: [], chatImportTasks: [], qualityReviews: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshots: [monthlySnapshot] });
 
 function normalizeStore(store: Partial<Store>): Store {
   return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [], organizerJobs: store.organizerJobs ?? [], chatImportTasks: (store.chatImportTasks ?? []).map(normalizeChatImportTask), qualityReviews: (store.qualityReviews ?? []).map((review) => ({ ...review, decision: normalizeQualityDecision(review.decision) })) };
@@ -170,6 +170,13 @@ export function createJsonRepository(): Repository {
     async findQualityReview(targetKind: QualityReview["targetKind"], targetId: string, promptVersion: string) {
       const store = await readStore();
       return store.qualityReviews.find((item) => item.targetKind === targetKind && item.targetId === targetId && item.promptVersion === promptVersion) ?? null;
+    },
+    async persistMonthlySnapshot(snapshot: MonthlySnapshot) {
+      return withStoreMutation((store) => {
+        const index = store.monthlySnapshots.findIndex((item) => item.profileId === snapshot.profileId && item.month === snapshot.month);
+        if (index >= 0) store.monthlySnapshots[index] = snapshot; else store.monthlySnapshots.push(snapshot);
+        return snapshot;
+      });
     },
     async markSourcesOrganized(sourceIds: string[]) { const store = await readStore(); for (const source of store.rawSources) if (sourceIds.includes(source.id)) source.status = "organized"; await writeStore(store); },
     async markSourcesProcessing(sourceIds: string[]) { const store = await readStore(); for (const source of store.rawSources) if (sourceIds.includes(source.id) && source.status === "uploaded") source.status = "processing"; await writeStore(store); },

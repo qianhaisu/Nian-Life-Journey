@@ -55,6 +55,7 @@ export const persistDailyTrace = repository.persistDailyTrace.bind(repository);
 export const persistCareEpisode = repository.persistCareEpisode.bind(repository);
 export const persistQualityReview = repository.persistQualityReview.bind(repository);
 export const findQualityReview = repository.findQualityReview.bind(repository);
+export const persistMonthlySnapshot = repository.persistMonthlySnapshot.bind(repository);
 export const markSourcesOrganized = repository.markSourcesOrganized.bind(repository);
 export const markSourcesProcessing = repository.markSourcesProcessing.bind(repository);
 export const findOrganizerRun = repository.findOrganizerRun.bind(repository);

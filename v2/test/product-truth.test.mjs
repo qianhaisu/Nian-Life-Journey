@@ -43,7 +43,7 @@ test("scopeStoreToProfile keeps only the named profile's rows, following assets 
     rawSources: [own.source, other.source],
     events: [own.event, other.event],
     links: [link(own.source, own.event), link(other.source, other.event)],
-    monthlySnapshot: null,
+    monthlySnapshots: [],
   };
   const scoped = scopeStoreToProfile(store, CANONICAL_PROFILE_ID);
   assert.deepEqual(scoped.events.map((e) => e.title), ["真的记忆"]);

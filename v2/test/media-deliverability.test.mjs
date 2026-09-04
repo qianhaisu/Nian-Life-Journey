@@ -32,7 +32,7 @@ function buildStore({ mediaRows = [], assets = [], locations = [], traces = [] }
     profile: { id: PROFILE, displayName: "张年", birthDate: "2025-01-03", timezone: "Asia/Shanghai", bio: "", visibility: "family" },
     contributors: [], media: mediaRows, mediaAssets: assets, mediaLocations: locations, connectorStates: [],
     rawSources: [], events: [], dailyTraces: traces, growthRecords: [], careRecords: [], careEpisodes: [],
-    monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], qualityReviews: [], links: [],
+    monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], qualityReviews: [], links: [], monthlySnapshots: [],
   };
 }
 

@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { TransactionRollbackError } from "drizzle-orm/errors";
 import { sql } from "drizzle-orm";
-import type { CareEpisode, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportWarning, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
+import type { CareEpisode, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportWarning, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, MonthlySnapshot, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
 import { getDb } from "./client";
 import * as t from "./schema";
 import { newId, organizerJobKey } from "./repository-interface";
@@ -305,7 +305,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       mediaAssets: mediaAssets as unknown as Store["mediaAssets"],
       events: events as unknown as Store["events"],
       mediaLocations: [], connectorStates: [], dailyTraces: [], growthRecords: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [], qualityReviews: [],
-      monthlySnapshot: { id: "organizer-store-unused", profileId, month: "1970-01", summary: "", highlights: [], visibility: "private" },
+      monthlySnapshots: [],
     };
   }
 
@@ -351,9 +351,8 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       db.select().from(t.chatImportTasks),
       db.select().from(t.sourceMemoryLinks),
       db.select().from(t.contentQualityReviews),
-      // Store carries one snapshot: the latest month's. Ordered so the choice does not depend on
-      // physical row order once more than one month has a summary.
-      db.select().from(t.monthlySnapshot).where(eq(t.monthlySnapshot.profileId, CANONICAL_PROFILE_ID)).orderBy(desc(t.monthlySnapshot.month)).limit(1),
+      // T20-B: every month's own snapshot, not just the newest — a month page needs its own.
+      db.select().from(t.monthlySnapshot).where(eq(t.monthlySnapshot.profileId, CANONICAL_PROFILE_ID)),
     ]);
     if (!profileRows[0]) throw new Error(`PostgreSQL repository: no profile row "${CANONICAL_PROFILE_ID}" found. Run the JSON→Postgres migration first.`);
     // Same publication gate as getHomeEvents/getAllEvents: the store feeds the memory timeline and
@@ -380,7 +379,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       chatImportTasks: chatImportTasks.map((task) => taskFromRow(task as unknown as Record<string, unknown>)),
       links: links as Store["links"],
       qualityReviews: qualityReviewRows.map((row) => reviewFromRow(row as unknown as Record<string, unknown>)),
-      monthlySnapshot: (snapshotRows[0] ?? null) as Store["monthlySnapshot"],
+      monthlySnapshots: snapshotRows as unknown as Store["monthlySnapshots"],
     };
   }
 
@@ -777,6 +776,15 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       ));
       if (!existing) throw new Error("PostgreSQL repository: quality review insert reported a conflict but no row was found.");
       return reviewFromRow(existing as unknown as Record<string, unknown>);
+    },
+    // T20-B, 2026-09-04: a month's own written review ("这个月的张年"). Upsert on the schema's
+    // real unique key (profileId, month) — re-running the generator for a month (a fixed prompt
+    // version, a corrected draft) replaces that month's row rather than duplicating it.
+    async persistMonthlySnapshot(snapshot: MonthlySnapshot) {
+      const rows = await db.insert(t.monthlySnapshot).values(snapshot as any)
+        .onConflictDoUpdate({ target: [t.monthlySnapshot.profileId, t.monthlySnapshot.month], set: { summary: snapshot.summary, highlights: snapshot.highlights, visibility: snapshot.visibility } })
+        .returning();
+      return rows[0] as unknown as MonthlySnapshot;
     },
     async findQualityReview(targetKind: QualityReview["targetKind"], targetId: string, promptVersion: string) {
       const [row] = await db.select().from(t.contentQualityReviews).where(and(

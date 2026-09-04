@@ -32,8 +32,10 @@ export type FamilyArchive = {
   events: LifeEvent[];
   chapters: YearChapter[];
   birthDay?: string;
-  // Only when real published memories stand behind it (see quality-review.ts).
-  snapshot?: MonthlySnapshot;
+  // Only the months with real published memories standing behind them (see quality-review.ts).
+  // T20-B, 2026-09-04: every P0 month gets its own snapshot now, not just one archive-wide —
+  // pages find their own month's entry (`snapshots.find(s => s.month === month)`).
+  snapshots: MonthlySnapshot[];
   // Which pictures something real vouches for (lib/publication-moments.ts): media of a published
   // memory, and media that arrived from the family's own photo archive. Derived from existing
   // rows only — no content is judged here.
@@ -74,7 +76,7 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   const media = familyMedia.filter((item) => deliverable.has(item.id));
   const chapters = buildChapters({ events, traces, media: familyMedia, deliverable, birthDay });
   const publishedMonths = new Set(events.map((event) => calendarMonthOf(event.occurredAt)).filter((value): value is string => Boolean(value)));
-  const snapshot = store.monthlySnapshot && isSnapshotPublishable(store.monthlySnapshot.month, publishedMonths) ? store.monthlySnapshot : undefined;
+  const snapshots = store.monthlySnapshots.filter((item) => isSnapshotPublishable(item.month, publishedMonths));
   const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources);
   const time: ArchiveTime = {
     today: productToday(now),
@@ -82,7 +84,7 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
     traceDay: latestTraceDay(traces),
     memoryDay: latestMemoryDay(events),
   };
-  return { store, media, events, chapters, birthDay, snapshot, privilege, time };
+  return { store, media, events, chapters, birthDay, snapshots, privilege, time };
 }
 
 export async function loadFamilyArchive(): Promise<FamilyArchive> {

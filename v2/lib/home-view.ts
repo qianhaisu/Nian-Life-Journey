@@ -88,7 +88,7 @@ export const RECENT_MARK = "最近";
 export const RECENT_LEAD_HEADING = "最近的一段生活";
 export const DATED_LEAD_HEADING = "上一段记下来的生活";
 
-export function buildHomeView({ chapters, store, birthDay, snapshot, privilege, time }: FamilyArchive): HomeView {
+export function buildHomeView({ chapters, store, birthDay, snapshots, privilege, time }: FamilyArchive): HomeView {
   const lead = selectHomeLead(chapters, time);
   const recentMoment = lead?.recent ? undefined : selectRecentMoment(chapters, privilege, time);
   const cover: HomeCover = lead?.recent
@@ -112,7 +112,7 @@ export function buildHomeView({ chapters, store, birthDay, snapshot, privilege, 
   const thisMonthPreview = thisMonth ? buildMonthComposition(thisMonth, privilege).preview : [];
   // A month summary is quoted only for the month it was written about and only when memories stand
   // behind it (lib/family-archive.ts) — a snapshot is a chapter summary, never the newest story.
-  const summary = thisMonth && snapshot?.month === thisMonth.month ? snapshot.summary : undefined;
+  const summary = thisMonth ? snapshots.find((item) => item.month === thisMonth.month)?.summary : undefined;
   const monthHref = thisMonth ? `/memory/${thisMonth.month.slice(0, 4)}/${thisMonth.month.slice(5, 7)}` : "/memory";
   return { cover, pastLead, mark, laterLifeNote, change, thisMonth, thisMonthPreview, summary, monthHref };
 }

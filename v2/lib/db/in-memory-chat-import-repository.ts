@@ -4,7 +4,7 @@ import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTas
 import type { ChatImportRepository, ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 
 function emptyStore(): Store {
-  return { profile: { id: "in-memory-profile", displayName: "In-memory", birthDate: "2020-01-01", timezone: "UTC", bio: "", visibility: "private" }, contributors: [], media: [], mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: [], events: [], dailyTraces: [], growthRecords: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [], qualityReviews: [], monthlySnapshot: { id: "in-memory-snapshot", profileId: "in-memory-profile", month: "1970-01", summary: "", highlights: [], visibility: "private" } };
+  return { profile: { id: "in-memory-profile", displayName: "In-memory", birthDate: "2020-01-01", timezone: "UTC", bio: "", visibility: "private" }, contributors: [], media: [], mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: [], events: [], dailyTraces: [], growthRecords: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [], qualityReviews: [], monthlySnapshots: [] };
 }
 
 function withDefaults(initial: Partial<Store> = {}) {

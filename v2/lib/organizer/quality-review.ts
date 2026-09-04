@@ -37,7 +37,11 @@ export function normalizeQualityDecision(value: unknown): QualityDecision {
 export type QualityReview = {
   id: string;
   profileId: string;
-  targetKind: "life_event" | "daily_trace";
+  // T20-B, 2026-09-04: "monthly_snapshot" records the review decision for a generated month
+  // review ("这个月的张年") — the same ledger, not a second one. Publication itself still gates
+  // on isSnapshotPublishable (an approved life_event must exist for the month); this row is the
+  // audit trail Cowork's spec asked for, not yet a second hard gate.
+  targetKind: "life_event" | "daily_trace" | "monthly_snapshot";
   targetId: string;
   decision: QualityDecision;
   gateA?: string;

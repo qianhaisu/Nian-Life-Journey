@@ -28,7 +28,11 @@ export type Store = {
   // readable only through the PostgreSQL backend's own private helper — so the JSON backend had
   // nowhere to put a review and the Organizer had to reach past the repository to write one.
   qualityReviews: QualityReview[];
-  monthlySnapshot: MonthlySnapshot;
+  // T20-B, 2026-09-04: every month with published memories may carry its own written review
+  // ("这个月的张年") — the table has always been per-(profile, month) (schema.ts's byProfileMonth
+  // unique index), but the store used to surface only the single newest one. A month page needs
+  // its OWN month's snapshot, not whichever is most recent archive-wide.
+  monthlySnapshots: MonthlySnapshot[];
 };
 
 export type EventDetail = {
@@ -153,6 +157,8 @@ export interface Repository extends ChatImportRepository {
   // promptVersion, never a silent overwrite of the old one.
   persistQualityReview(review: QualityReview): Promise<QualityReview>;
   findQualityReview(targetKind: QualityReview["targetKind"], targetId: string, promptVersion: string): Promise<QualityReview | null>;
+  // T20-B: upserts on the table's real unique key (profileId, month).
+  persistMonthlySnapshot(snapshot: MonthlySnapshot): Promise<MonthlySnapshot>;
   markSourcesOrganized(sourceIds: string[]): Promise<void>;
   markSourcesProcessing(sourceIds: string[]): Promise<void>;
   findOrganizerRun(organizationFingerprint: string): Promise<OrganizerRun | null>;

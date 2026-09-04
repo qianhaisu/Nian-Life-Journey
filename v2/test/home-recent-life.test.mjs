@@ -32,7 +32,7 @@ function store(shots, { events = [], rawSources = [], dailyTraces = [] } = {}) {
   return {
     profile: { id: CANONICAL_PROFILE_ID, displayName: "张年", birthDate: BIRTH, timezone: "Asia/Shanghai", visibility: "family" },
     contributors: [], connectorStates: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [], qualityReviews: [],
-    dailyTraces, growthRecords: [], monthlySnapshot: null,
+    dailyTraces, growthRecords: [], monthlySnapshots: [],
     media: shots.map((item) => item.media), mediaAssets: shots.map((item) => item.asset), mediaLocations: shots.map((item) => item.location),
     events, rawSources: [...rawSources, ...shots.map((item) => item.rawSource).filter(Boolean)],
   };

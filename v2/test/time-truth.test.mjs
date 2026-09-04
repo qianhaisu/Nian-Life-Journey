@@ -31,7 +31,7 @@ function store({ events = [], dailyTraces = [], rawSources = [], media = [], gro
   return {
     profile: { id: CANONICAL_PROFILE_ID, displayName: "张年", birthDate: BIRTH, timezone: "Asia/Shanghai", visibility: "family" },
     contributors: [], mediaAssets: [], mediaLocations: [], connectorStates: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [],
-    events, dailyTraces, rawSources, media, growthRecords, monthlySnapshot,
+    events, dailyTraces, rawSources, media, growthRecords, monthlySnapshots: monthlySnapshot ? [monthlySnapshot] : [],
   };
 }
 // The page read: getAllEvents() is the publishable event list; the store is the backend view.
