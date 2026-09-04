@@ -346,7 +346,7 @@ Teddy 16:58：Codex 装好了，让它分担。这两件都和 T7 的文件不�
 
 ---
 
-### T11 · 格式一致性修复 + 乳儿班照片入正文 — status: code-done（`abf0dc6`）；数据迁移等 Teddy 确认
+### T11 · 格式一致性修复 + 乳儿班照片入正文 — status: **ready（代码 `abf0dc6` 已合；数据迁移 Teddy 2026-09-04 已确认「一起放行」）**
 
 **Teddy 2026-09-04 反馈**：2025 年 8 月的文字记忆有标题、有完整叙事段落（EditorialMemory 组件渲染），
 2026 年 9 月（T7 产出）却变成折叠的「这个月有 2 天留下了生活痕迹」加短横线文字（TraceDisclosure 组件）。
@@ -572,7 +572,7 @@ the words」。text_led 和 memory_led 的 hero/supporting 都是 `undefined / [
 
 ---
 
-### T13 · T7 回刷前必须先清理旧月份的 rule-v2 数据 — status: **blocked（需 Teddy 确认删除）**
+### T13 · T7 回刷前必须先清理旧月份的 rule-v2 数据 — status: **ready（Teddy 2026-09-04 已确认「我确认」）**
 
 > **⚠️ 这是 Cowork 主动发现的重大风险**。如果不处理，T7 回刷 2025-05 到 2025-11 会产生
 > **114 条重复 life_events + 254 条重复 daily_traces**。
@@ -679,4 +679,215 @@ T11 完成后 T7 自然产出正确格式，无需改 T7 spec 其他部分。
 
 **T7 Phase 1 的月份不需要 Teddy 确认**——它们没有旧数据，不涉及删除。
 **T7 Phase 2 的月份必须等 T13**——否则每个月都会产出重复条目。
+
+
+---
+
+### T13 · predeclare 数字（Cowork 2026-09-04 10:30 UTC 实测，Teddy 已确认执行）
+
+**执行前必须先核对当前值和下表 "删除前" 一致**；对不上就停下报告，不要"想办法绕过去"。
+
+| 表 | 删除条件 | 删除前 | 删除行数 | 删除后 |
+|---|---|---:|---:|---:|
+| `life_events` | `profile_id='profile-zhangnian' AND created_by='rule' AND (occurred_at ∈ [2025-05-01, 2025-12-01) ∪ [2026-02-01, 2026-03-01))` | 83 | **82** | **1** |
+| `daily_traces` | `profile_id='profile-zhangnian' AND occurred_at ∈ [2025-05-01,2025-12-01) ∪ [2026-02-01,2026-03-01) ∪ [2026-08-01,2026-09-01)` | 157 | **155** | **2** |
+| `organizer_runs` | `profile_id='profile-zhangnian' AND organizer_version='rule-v2'` | 478+ | **478** | 剩非 rule-v2 的 10 条 |
+| `content_quality_reviews` | `target_id IN (被删的 life_events)` | 109 | **36** | 73 |
+| `source_memory_links` | `life_event_id IN (被删的 life_events)` | — | **2,876** | — |
+| `raw_sources` | **不删** | 41,553 | **0** | 41,553 |
+| `media` / `media_assets` | **不删**，只解绑 | 6,528 | **0**（251 张解绑） | 6,528 |
+
+**唯一保留的 life_event**（必须还在）：
+
+```
+id:      (created_by = 'ai')
+月份:    2025-08
+标题:    假哭时睁眼偷看有没有人哄
+```
+
+这条是 Writer v2 写的，是全库唯一一条有质量的 life_event。**删完后 `SELECT count(*) FROM life_events WHERE profile_id='profile-zhangnian'` 必须返回 1，且那一条的 title 必须是上面这个。**
+
+**保留的 2 条 daily_traces**：2026-09-01 和 2026-09-02（T11 的数据迁移单独处理这两条，T13 不碰）。
+
+#### 执行步骤
+
+1. **先备份**：把要删的五张表的行导出到 `docs/backups/rule-v2-cleanup-20260904.json`（不要提交进 git，
+   或者加进 .gitignore——里面有孩子的内容）
+2. **单事务**：五个 DELETE 放一个事务里，顺序 = links → reviews → life_events → daily_traces → organizer_runs
+   （先删引用方，再删被引用方）
+3. **事务里先 SELECT count 核对**，数字对不上就 ROLLBACK
+4. **COMMIT 后立刻验证**：life_events = 1、daily_traces = 2、raw_sources = 41,553 不变
+5. 在 STATUS.md 追加：删除前后各表数字 + 保留的那条 life_event 的 title
+
+#### 硬边界
+
+- **raw_sources 一行都不能少** —— 原始数据是整个项目的地基，删了不可恢复
+- **只删 `created_by='rule'`** —— 那条 ai 的必须活下来
+- 2026-09 的 2 条 daily_traces 归 T11，T13 不碰
+- 备份文件不要进 git（里面是孩子的内容）
+- 数字对不上就 ROLLBACK 并报告，不要调整条件去凑数
+
+
+---
+
+### T14 · 两件 Code 自己验的事（Cowork 只观察，不动手）— status: ready
+
+#### A. 全量测试跑一次，报数字
+
+Cowork 在自己的 Linux mount 上跑不了测试（`node_modules` 是 Windows 上装的，esbuild 只有
+`@esbuild/win32-x64`，缺 `linux-x64`）。**测试必须 Code 在 Teddy 的 Windows 机器上跑。**
+
+- `cd v2 && npm test`，报 pass / fail 数字
+- 基线：T11/T12 之前是 **619 通过 / 3 失败**（organizer-evidence-pipeline 和 storage-phase-2，改动前就在失败）
+- 如果 fail > 3，说明 `abf0dc6`(T11) 或 `b6830f4`(T12) 引入了回归，定位并修
+- `tsc --noEmit` 也跑一次
+
+#### B. 导入停了，查为什么
+
+**观察**（Cowork 只读，11:02 UTC）：
+
+- 10:28 UTC 和 11:02 UTC 两次读数**完全一样**：rs 41,553 / ma 6,528 / 乳儿班 6,118
+- 34 分钟零增长 → 导入进程已停
+- 乳儿班 6,118 / 预期 7,244 = **84%，没导完**
+
+**chat_import_tasks 现状**（可疑）：
+
+| task id | status | attempt | checkpoint messageOrdinal | updated (UTC) |
+|---|---|---:|---:|---|
+| `db017c7` | **running** | 3 | 5900 | 10:49 |
+| `e6cd4d1` | **running** | 1 | 100 | 09:05 |
+| `e5fbd25` | completed_with_warnings | 1 | **7244** | 08:51 |
+
+三条都是同一个 snapshotDigest `69ddbb1a…`（乳儿班）。
+
+**两个要查的问题**：
+
+1. **两条 `running` 同时挂着** —— 09:05 那条（e6cd4d1）两小时没动，lease 应该早过期了。
+   是 lease 没回收，还是进程死了没标记？
+2. **e5fbd25 已经 `completed_with_warnings` 且 checkpoint 到 7244**（全量），
+   但库里只有 6,118 行。差 1,126 行去哪了？
+   - 如果是被出生日过滤 / 空消息跳过 → 正常，说明**乳儿班其实已经导完**，
+     db017c7 是多余的重复任务，应该停掉
+   - 如果是写库失败被吞掉 → 是 bug，1,126 条消息丢了
+
+**先回答问题 2**，它决定要不要继续跑。`warnings` / `warning_counts` 字段里应该有线索。
+
+**硬边界**：
+- 不要为了"让它继续"就手改 task 的 status / attempt / checkpoint
+- 结论写进 STATUS.md，附上差值 1,126 的去向
+
+
+---
+
+### T11 + T13 合并执行（Teddy 2026-09-04 11:1x UTC「一起放行」）
+
+Teddy 已确认 **T13 的 82+155 行** 和 **T11 的 2 行 2026-09 daily_traces** 一起删。
+
+**所以实际是一次清空**：删完 `daily_traces` 表里 profile-zhangnian 一行不剩，`life_events` 只剩 1 条。
+
+#### 合并后的 predeclare
+
+| 表 | 删除前 | 删除行数 | 删除后 |
+|---|---:|---:|---:|
+| `life_events` | 83 | **82**（`created_by='rule'` 全部） | **1** |
+| `daily_traces` | 157 | **157**（全部，含 2026-09 那 2 条） | **0** |
+| `organizer_runs` | 488 | **478**（`organizer_version='rule-v2'`）+ **2**（T7 那两条 `organizer-v2-t7-subject-gate` 的 daily_trace run，不删的话 T7 重跑 2026-09 会指纹短路跳过） | 8 |
+| `content_quality_reviews` | 109 | **36** | 73 |
+| `source_memory_links` | — | **2,876** | — |
+| `raw_sources` | 41,553 | **0** | 41,553 |
+| `media` / `media_assets` | 6,528 | **0**（251 张解绑） | 6,528 |
+
+**唯一保留的 life_event**（删完必须还在，`SELECT count(*)` 必须 = 1）：
+
+```
+2025-08-29 · created_by='ai' · 假哭时睁眼偷看有没有人哄
+```
+
+#### ⚠️ 容易漏的一步
+
+删 `daily_traces` 的同时**必须删掉对应的 `organizer_runs`**，包括 T7 自己写的那 2 条
+（`organizer_version='organizer-v2-t7-subject-gate'`，fingerprint `42c50656…` 和 `ee3a07cf…`）。
+
+否则 T7 重跑 2026-09 时 `applyPlan` 查到旧 run → 判定「already organized under this fingerprint」
+→ **直接跳过，什么都不写**，而 daily_trace 已经删了 → 2026-09 变成空白月。
+
+同理，rule-v2 的 478 条 run 也必须删干净，否则 T7 Phase 2 的月份会大面积短路跳过。
+
+#### 删完之后的验收（Cowork 会自己 curl 核对）
+
+| 检查 | 期望 |
+|---|---|
+| `life_events` count | 1 |
+| `daily_traces` count | 0 |
+| `raw_sources` count | 41,553（一行不少） |
+| `organizer_runs` where version='rule-v2' | 0 |
+| `organizer_runs` where version like 'organizer-v2-t7%' | 0 |
+| 首页 | 显示「假哭时睁眼偷看有没有人哄」 |
+| /memory/2025/08 | 无「家人」 |
+| /memory/2025/05,06,07 | 无「家人」，页面退化为只有照片——**这是对的**，比留着违规文字好 |
+| /memory/2026/09 | 暂时空白，等 T7 重跑 |
+
+**页面会短暂变空，这是预期的**。T7 Phase 1（11 个 clean months）+ Phase 2（9 个 cleaned months）
+会把内容重新写回来，且这次是 Writer v2 的质量、正确称谓、有标题。
+
+
+---
+
+### 🔴 T13 predeclare 更正（Cowork 11:15 UTC 重测——**以这一份为准，上面两份作废**）
+
+**为什么更正**：上面的数字是 10:30 测的。之后 Code 完成了 T11 数据迁移（删掉 2 条 2026-09
+daily_traces，重跑出 1 条 life_event），库已经变了。**按旧数字对账会全部对不上。**
+
+#### 当前实况（11:15 UTC 实测）
+
+| 表 | 当前值 |
+|---|---:|
+| `life_events` | **84**（`rule` 82 + `ai` 2） |
+| `daily_traces` | **155** |
+| `raw_sources` | **41,553** |
+| `organizer_runs` | **487**（`rule-v2` 478 + 其他 9） |
+
+#### 更正后的 T13 predeclare
+
+| 表 | 删除条件 | 删除前 | 删除行数 | 删除后 |
+|---|---|---:|---:|---:|
+| `life_events` | `profile_id='profile-zhangnian' AND created_by='rule'` | 84 | **82** | **2** |
+| `daily_traces` | `profile_id='profile-zhangnian'`（全部） | 155 | **155** | **0** |
+| `organizer_runs` | `profile_id='profile-zhangnian' AND organizer_version='rule-v2'` | 487 | **478** | **9** |
+| `content_quality_reviews` | `target_id IN (被删的 life_events)` | 109 | **36** | 73 |
+| `source_memory_links` | `life_event_id IN (被删的 life_events)` | — | **2,876** | — |
+| `raw_sources` | **不删** | 41,553 | **0** | 41,553 |
+
+#### ⚠️ 上一份里有一条错的指令，**不要执行**
+
+上面写着「同时删掉 T7 那 2 条 `organizer-v2-t7-subject-gate` 的 run」——**现在这是错的**。
+
+实况：`organizer-v2-t7%` 只剩 **1 条**，fingerprint `42c50656…`，action 已是
+`life_event_candidate`，target 指向 **2026-09-01 的好内容**：
+
+```
+2026-09-01 · 英语课上跟读单词被老师夸
+「英语课上，小年跟读了英语单词，英语老师夸奖了他。老师还说「小年上课可以的」，
+  提醒一下就开始动起来。」
+```
+
+**删了它就把刚做好的 T11 成果弄没了。** T13 只删 `organizer_version='rule-v2'`，
+其余 9 条 run（`evidence-v6+writer-v2` 5、`organizer-v2-adapter-v1` 3、`organizer-v2-t7-subject-gate` 1）
+**全部保留**。
+
+#### 删完后必须剩下的 2 条 life_events
+
+```
+2025-08-29 · ai · 假哭时睁眼偷看有没有人哄
+2026-09-01 · ai · 英语课上跟读单词被老师夸
+```
+
+`SELECT count(*) FROM life_events WHERE profile_id='profile-zhangnian'` 必须 = **2**，
+且这两条 title 必须一字不差。对不上就 ROLLBACK。
+
+#### 顺带一个观察（不阻塞 T13）
+
+2026-09 只写出了 09-01 一条，**09-02「粥粥」那条没出来**（原 daily_trace 里有：
+「老师说，粥粥来的时候，小年说了好多次『粥粥，粥粥』，发音很清楚」）。
+是主体门挡掉了、还是 Writer v2 判定不够成篇？T7 重跑 2026-09 时留意，不用现在查。
 
