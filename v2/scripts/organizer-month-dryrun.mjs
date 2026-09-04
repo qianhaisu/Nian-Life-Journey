@@ -20,7 +20,11 @@ import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import pg from "pg";
+import { config as loadDotenv } from "dotenv";
 
+// Before any module that reads the environment at import time.
+loadDotenv({ path: path.resolve(process.cwd(), ".env.local"), quiet: true });
+loadDotenv({ path: path.resolve(process.cwd(), "../.env.local"), quiet: true });
 process.env.REPOSITORY_BACKEND = "postgres";
 
 const { buildEvidenceWindows } = await import("../lib/organizer/evidence/window.ts");
@@ -59,14 +63,20 @@ if (!apiKey) { console.error("Need DEEPSEEK_API_KEY."); process.exit(1); }
 const client = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false }, keepAlive: true });
 await client.connect();
 
-// Every wechat source, not just the month's: a window's neighbours are what let a pronoun resolve,
-// and they can sit either side of a month boundary.
+// The month, plus a week either side. A window's neighbours are what let a pronoun resolve and they
+// can sit across a month boundary, so the margin is real; reading the whole archive is not. Every
+// row carries its message text, and the full table is about 50 MB — ten minutes over this link, once
+// per month, for rows nine-tenths of which the month can never use.
 const COLS = "id, profile_id, source_type, content_types, contributor_id, captured_at, text, media_ids, source_label, visibility, metadata";
+const monthStart = `${MONTH}-01`;
 const rows = [];
 for (let offset = 0; ; offset += 1000) {
   const page = await client.query(
     `select ${COLS}, ${SHANGHAI_LIFE_DATE_SQL} as life_date from raw_sources
-     where source_type='wechat' and deleted_at is null and profile_id=$1 order by captured_at, id limit 1000 offset ${offset}`, [PROFILE_ID]);
+     where source_type='wechat' and deleted_at is null and profile_id=$1
+       and captured_at >= ($2::date - interval '7 days')
+       and captured_at <  (($2::date + interval '1 month') + interval '7 days')
+     order by captured_at, id limit 1000 offset ${offset}`, [PROFILE_ID, monthStart]);
   rows.push(...page.rows);
   if (page.rows.length < 1000) break;
 }
