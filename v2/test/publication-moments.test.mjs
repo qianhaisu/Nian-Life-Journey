@@ -43,15 +43,29 @@ test("tiny production sizes never gain publication privilege anywhere, and stay 
   assert.equal(composition.smallImageCount, 4, "…but they are counted, never deleted");
 });
 
-test("a big but unvouched chat image never reaches the reading layer: no hero, no cover, no moment — a quiet line and the archive", () => {
+test("an unvouched chat image is never enlarged and never becomes a month's face — but a wordless month still shows its days", () => {
+  // Production 2025-10: 135 photographs, no organized words. Hiding them behind a fold published an
+  // empty month for a month the family actually lived, so the pictures now read as a small strip.
   const media = [photo("wx-big", "2025-10-14T08:00:00.000Z"), photo("wx-2", "2025-10-14T10:00:00.000Z")];
   const composition = buildMonthComposition(monthOf({ media }, "2025-10"));
-  assert.equal(composition.cover, undefined, "no vouched picture → the month shows type, not a guess");
+  assert.equal(composition.cover, undefined, "no vouched picture → an index still shows type, not a guess");
   assert.deepEqual(composition.preview, []);
   assert.equal(composition.mode, "typography");
-  assert.deepEqual(composition.chronicle, [], "uncertain pictures cannot carry the month's main matter");
+  assert.equal(composition.chronicle.length, 1, "the day reaches the reading layer");
+  assert.equal(composition.chronicle[0].hero, undefined, "…but never enlarged: an unvouched picture is not a hero");
+  assert.deepEqual(composition.chronicle[0].supporting.map((item) => item.id), ["wx-big", "wx-2"], "…it reads as a strip of small pictures");
+  assert.deepEqual(composition.quietDays, [], "the only photographed day is read, not folded away");
+  assert.equal(composition.archiveDays.flatMap((day) => day.photos).length, 2, "…and every picture stays reachable");
+});
+
+test("a month that has words keeps the strict rule: unvouched pictures stay out of the reading layer", () => {
+  const media = [photo("wx-big", "2025-10-14T08:00:00.000Z"), photo("wx-2", "2025-10-14T10:00:00.000Z")];
+  const traces = [trace("t", "2025-10-20 00:00:00", ["晚上自己扶着沙发站了一会儿"])];
+  const composition = buildMonthComposition(monthOf({ media, traces }, "2025-10"));
+  assert.deepEqual(composition.chapter.map((m) => m.kind), ["text_led"]);
+  assert.deepEqual(composition.chronicle, [], "the month can speak for itself, so uncertain pictures stay in the archive");
   assert.deepEqual(composition.quietDays.map((day) => day.day), ["2025-10-14"]);
-  assert.equal(composition.archiveDays.flatMap((day) => day.photos).length, 2, "…but every picture stays reachable");
+  assert.equal(composition.archiveDays.flatMap((day) => day.photos).length, 2);
 });
 
 test("text-only is a first-class moment, and a month can publish with zero representative photos", () => {

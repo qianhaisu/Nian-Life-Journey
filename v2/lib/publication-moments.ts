@@ -94,6 +94,8 @@ export type MonthComposition = {
 // Bounds. Editorial policy, not facts about current data.
 export const CHRONICLE_MOMENTS_MAX = 10;
 export const MOMENT_SUPPORTING_MAX = 2;
+// A wordless month shows its days as strips of small pictures; this bounds one day's strip.
+export const UNVOUCHED_STRIP_MAX = 3;
 export const MOMENT_TEXT_MAX = 6;
 export const PREVIEW_PHOTOS_MAX = 3;
 export const BURST_GAP_SECONDS = 90;
@@ -135,11 +137,19 @@ export function readableEntries(entries: string[]): string[] {
 // pictures nothing vouches for — chat-stream images that could as easily be a screenshot as a
 // scene — folds to a quiet line and stays whole in the archive layer, rather than becoming the
 // month's main matter by default.
-function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMoment | undefined {
+function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege, wordlessMonth = false): PublicationMoment | undefined {
   const representatives = burstRepresentatives(day.photos);
   const hero = representatives.find((item) => heroEligibleRef(item, privilege));
-  if (!hero) return undefined;
-  const supporting = representatives.filter((item) => item !== hero && isPrivileged(item, privilege) && thumbnailSized(item)).slice(0, MOMENT_SUPPORTING_MAX);
+  // A month with no organized words at all has nothing else to publish: its photographs are the
+  // only record it kept. Folding them into a collapsed archive shows the family an empty month for
+  // a month they actually lived, so such a month may read its days as strips of small pictures.
+  // The vouching rule still holds where it matters — no unvouched image is ever enlarged to a
+  // page-width hero, and none becomes the month's face on an index (see cover/preview below).
+  if (!hero && !wordlessMonth) return undefined;
+  const supporting = hero
+    ? representatives.filter((item) => item !== hero && isPrivileged(item, privilege) && thumbnailSized(item)).slice(0, MOMENT_SUPPORTING_MAX)
+    : representatives.filter(thumbnailSized).slice(0, UNVOUCHED_STRIP_MAX);
+  if (!hero && supporting.length === 0) return undefined;
   return {
     kind: "photo_led",
     day: day.day,
@@ -148,7 +158,7 @@ function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMo
     text: [],
     hero,
     supporting,
-    morePhotoCount: Math.max(0, day.photos.length - 1 - supporting.length),
+    morePhotoCount: Math.max(0, day.photos.length - (hero ? 1 : 0) - supporting.length),
   };
 }
 
@@ -202,8 +212,10 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // the memory itself.
   const memoryDays = new Set(chapter.memories.map((memory) => memory.signature.day));
   const candidates = photoDaysAsc.filter((day) => !memoryDays.has(day.day));
+  // A month whose chapter came out empty has no words to lead with; its photographed days carry it.
+  const wordlessMonth = chapterMoments.length === 0;
   const scored = candidates
-    .map((day) => ({ day, moment: photoLedMoment(day, privilege) }))
+    .map((day) => ({ day, moment: photoLedMoment(day, privilege, wordlessMonth) }))
     .filter((item): item is { day: PhotoDay; moment: PublicationMoment } => Boolean(item.moment));
   const ranked = [...scored].sort((a, b) =>
     Number(Boolean(b.moment.hero)) - Number(Boolean(a.moment.hero))
