@@ -302,11 +302,15 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, archiveDays, smallImageCount, cover, preview, narration, daysWithWords, totalPhotoCount: archivePhotoCount };
 }
 
-// V4 (T16, 2026-09-04): the standfirst under a populated month's masthead — a fact stated, not a
-// sentence written. Purely arithmetic: no AI, no judgment about what the days or photos show.
-export function monthStandfirst(daysWithWords: number, totalPhotoCount: number): string | undefined {
-  if (daysWithWords > 0 && totalPhotoCount > 0) return `这个月记下 ${daysWithWords} 天，收进 ${totalPhotoCount} 张照片。`;
+// V4 (T16, 2026-09-04), corrected by T21 (Cowork, 2026-09-04): the original draft also stated the
+// month's photo count — "收进 M 张照片" — reasoning that a bare number carried no judgment, so it
+// was zero-risk. That reasoning was wrong: 原则三 names "用 X 张照片 / Y 条消息代替内容本身" as the
+// violation, verbatim, and 原则七 says a month's opening line is answering "what changed", never a
+// photo/message/event count. The photo count is the archive describing itself, not a fact about
+// the child — dropped. `totalPhotoCount` stays a MonthComposition field (T20-B's "这个月的张年"
+// paragraph replaces this whole line; until then, silence is safer than a number in "违反 by
+// design" territory).
+export function monthStandfirst(daysWithWords: number): string | undefined {
   if (daysWithWords > 0) return `这个月记下 ${daysWithWords} 天。`;
-  if (totalPhotoCount > 0) return `这个月收进 ${totalPhotoCount} 张照片。`;
   return undefined;
 }
