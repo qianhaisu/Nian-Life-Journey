@@ -94,7 +94,8 @@ export type MonthComposition = {
 // Bounds. Editorial policy, not facts about current data.
 export const CHRONICLE_MOMENTS_MAX = 10;
 export const MOMENT_SUPPORTING_MAX = 2;
-// A wordless month shows its days as strips of small pictures; this bounds one day's strip.
+// Retired 2026-09-04 with the wordless-month exception (see photoLedMoment). Kept so nothing that
+// imports it breaks; no code path builds an unvouched strip any more.
 export const UNVOUCHED_STRIP_MAX = 3;
 export const MOMENT_TEXT_MAX = 6;
 export const PREVIEW_PHOTOS_MAX = 3;
@@ -137,19 +138,18 @@ export function readableEntries(entries: string[]): string[] {
 // pictures nothing vouches for — chat-stream images that could as easily be a screenshot as a
 // scene — folds to a quiet line and stays whole in the archive layer, rather than becoming the
 // month's main matter by default.
-function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege, wordlessMonth = false): PublicationMoment | undefined {
+function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMoment | undefined {
   const representatives = burstRepresentatives(day.photos);
   const hero = representatives.find((item) => heroEligibleRef(item, privilege));
-  // A month with no organized words at all has nothing else to publish: its photographs are the
-  // only record it kept. Folding them into a collapsed archive shows the family an empty month for
-  // a month they actually lived, so such a month may read its days as strips of small pictures.
-  // The vouching rule still holds where it matters — no unvouched image is ever enlarged to a
-  // page-width hero, and none becomes the month's face on an index (see cover/preview below).
-  if (!hero && !wordlessMonth) return undefined;
-  const supporting = hero
-    ? representatives.filter((item) => item !== hero && isPrivileged(item, privilege) && thumbnailSized(item)).slice(0, MOMENT_SUPPORTING_MAX)
-    : representatives.filter(thumbnailSized).slice(0, UNVOUCHED_STRIP_MAX);
-  if (!hero && supporting.length === 0) return undefined;
+  // Vouching is the whole gate. A wordless month used to be allowed to read its days as strips of
+  // unvouched pictures, on the reasoning that photographs were the only record it kept — but
+  // 2025-01 published three Facebook Marketplace listings and a feeding-volume infographic under
+  // that exception, and not one picture of the child. A chat stream's images are as likely to be a
+  // screenshot, a forward, or a product listing as a photograph, and size cannot tell them apart:
+  // a phone screenshot is large and near-portrait, exactly like a photo. An empty month is honest;
+  // a month of advertisements is not. Teddy, 2026-09-04: 宁可没有照片，不要错的东西.
+  if (!hero) return undefined;
+  const supporting = representatives.filter((item) => item !== hero && isPrivileged(item, privilege) && thumbnailSized(item)).slice(0, MOMENT_SUPPORTING_MAX);
   return {
     kind: "photo_led",
     day: day.day,
@@ -212,10 +212,8 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // the memory itself.
   const memoryDays = new Set(chapter.memories.map((memory) => memory.signature.day));
   const candidates = photoDaysAsc.filter((day) => !memoryDays.has(day.day));
-  // A month whose chapter came out empty has no words to lead with; its photographed days carry it.
-  const wordlessMonth = chapterMoments.length === 0;
   const scored = candidates
-    .map((day) => ({ day, moment: photoLedMoment(day, privilege, wordlessMonth) }))
+    .map((day) => ({ day, moment: photoLedMoment(day, privilege) }))
     .filter((item): item is { day: PhotoDay; moment: PublicationMoment } => Boolean(item.moment));
   const ranked = [...scored].sort((a, b) =>
     Number(Boolean(b.moment.hero)) - Number(Boolean(a.moment.hero))
@@ -257,8 +255,12 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   }
 
   const mode: MonthComposition["mode"] = chapter.memories.length > 0 ? "memory" : cover ? "photography" : "typography";
-  const narration = chapterMoments.length === 0 && photoDaysAsc.length > 0
-    ? `这个月还没有整理出来的文字，${photoDaysAsc.length} 天的日子留在了照片里。`
+  // Says only what is true and where it is. The old sentence — the days 留在了照片里 — read as a
+  // promise that the page was about to show them; nothing vouched, nothing shows, and the reader
+  // was left looking for pictures that were folded away.
+  const archivePhotoCount = archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
+  const narration = chapterMoments.length === 0 && chronicle.length === 0 && archivePhotoCount > 0
+    ? `这个月还没有整理出来的文字。${photoDaysAsc.length} 天留下了 ${archivePhotoCount} 张照片，都收在月末的档案里，还没有人确认过它们拍的是什么。`
     : undefined;
   return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, archiveDays, smallImageCount, cover, preview, narration };
 }

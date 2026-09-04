@@ -43,19 +43,20 @@ test("tiny production sizes never gain publication privilege anywhere, and stay 
   assert.equal(composition.smallImageCount, 4, "…but they are counted, never deleted");
 });
 
-test("an unvouched chat image is never enlarged and never becomes a month's face — but a wordless month still shows its days", () => {
-  // Production 2025-10: 135 photographs, no organized words. Hiding them behind a fold published an
-  // empty month for a month the family actually lived, so the pictures now read as a small strip.
+test("a wordless month publishes nothing rather than publishing the wrong thing", () => {
+  // Production 2025-01, the month he was born: the page led with three unvouched chat images — two
+  // Facebook Marketplace listings for a changing table and a baby tub, and a feeding-volume
+  // infographic. Not one picture of the child. The wordless-month exception that put them there is
+  // gone. Size cannot rescue it either: those screenshots are 1180x2556 and 1242x1660 — large, and
+  // no more elongated than a portrait photo. Vouching is the only gate that separates them.
   const media = [photo("wx-big", "2025-10-14T08:00:00.000Z"), photo("wx-2", "2025-10-14T10:00:00.000Z")];
   const composition = buildMonthComposition(monthOf({ media }, "2025-10"));
   assert.equal(composition.cover, undefined, "no vouched picture → an index still shows type, not a guess");
   assert.deepEqual(composition.preview, []);
   assert.equal(composition.mode, "typography");
-  assert.equal(composition.chronicle.length, 1, "the day reaches the reading layer");
-  assert.equal(composition.chronicle[0].hero, undefined, "…but never enlarged: an unvouched picture is not a hero");
-  assert.deepEqual(composition.chronicle[0].supporting.map((item) => item.id), ["wx-big", "wx-2"], "…it reads as a strip of small pictures");
-  assert.deepEqual(composition.quietDays, [], "the only photographed day is read, not folded away");
-  assert.equal(composition.archiveDays.flatMap((day) => day.photos).length, 2, "…and every picture stays reachable");
+  assert.deepEqual(composition.chronicle, [], "nothing vouches for these, so nothing reaches the reading layer");
+  assert.equal(composition.archiveDays.flatMap((day) => day.photos).length, 2, "…but every picture stays reachable in the archive");
+  assert.match(composition.narration ?? "", /还没有人确认过/, "…and the page says where they are and that no one has confirmed them");
 });
 
 test("a month that has words keeps the strict rule: unvouched pictures stay out of the reading layer", () => {
