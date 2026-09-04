@@ -179,6 +179,17 @@ for (const item of work) {
   entry.subjectRelevance = verdict.subjectRelevance;
   entry.groundedClaims = grounding.claims.length;
 
+  // The window the model reads is the whole conversation, because that is what lets a pronoun
+  // resolve. What it may ASSERT is narrower: a claim survives only if some message the gate let
+  // through supports it. Without this, a car-price line sitting in the same window as a naming
+  // message could still become a fact about him — the acceptance rule is that every published
+  // sentence traces back to a message that passed the gate, so it is enforced here rather than hoped for.
+  const kept = new Set(item.keptSourceIds);
+  const groundedInKept = grounding.claims.filter((claim) => (claim.sourceIds ?? []).some((id) => kept.has(id)));
+  entry.claimsFromGatedSources = groundedInKept.length;
+  if (groundedInKept.length === 0) { entry.skipped = "no grounded claim traces back to a message that passed the gate"; console.log(`  ${item.lifeDate} — no claim from gated sources`); continue; }
+  grounding = { ...grounding, claims: groundedInKept };
+
   const pkg = buildEvidencePackage({
     window: item.w, windowFingerprint: item.fp, grounding,
     selectedBy: { policyId: "t7-subject-gate", action: "daily_trace", worthinessScore: 0 },
