@@ -161,72 +161,91 @@ manifest 2,279 行，全部 `status: downloaded_new`。
 
 ---
 
-### T7 · 2026 年每个月页面上要有整理过的文字 — status: **ready · 最高优先级 · 今天完成**
+### T7 · 2026 年每个月页面上要有整理过的文字 — status: **ready（重来，按本节最终方案；Teddy 16:00 review 通过）**
 
-**Teddy 2026-09-04 决定：方案 C。**「T2 done 但网页没文字，这个重要，按 C 方案做，今天必须完成。」
-
-**验收（按页面说，不按数据说）**：打开 https://nianlife.cn/memory/2026/0X（X = 1…9），每个月的
-「这个月记下来的」里有整理过的文字——像 2025-07 那样按天成段的「家人说…」——而不是纯相册或空旁白。
-**不接受**：把阿静和 Teddy 聊车价、聊工作的内容写成张年的记录。宁可某天没文字，不要错的文字。
-
----
-
-**Cowork 已核实的事实（不用重查）**
-
-1. **现在网站上所有能读的文字，全部来自 2026-09-01 那次 `rule-v2` 运行**：`organizer_runs` 里 rule-based
-   daily_trace 217 次、create_memory 82 次。AI V2 Organizer 全部历史产出只有 daily_trace 1、
-   life_event_candidate 1、store_only 6。**2026 年零次运行。** `daily_traces` 全天 155 没动过。
-2. `lib/organizer/rule-based.ts`（99 行）的 `traceEntry` 就是「取第一条 source 的 text 截 180 字」，
-   **没有主体过滤、没有改写**。2025-07 页面上「家人讨论喂张小年辅食时糊糊弄脏口水巾…」那种成段
-   prose 不是它直接产的——大概率是之后 `scripts/deepseek-family-writer.mjs`（`evidence-v6+writer-v2`）
-   的改写。**请先弄清 2025 那批可读文字的完整生成链，再对 2026 复制同一条链**——不要发明新链路。
-3. 2026 年文字的构成：阿静私聊每月 800–1,400 条（**关于张年的估计只占 5–10%**），主群 2026 年每月
-   19–49 条，老苏家 2026-05 起活跃。**私聊是主要来源，也是最容易写错的来源。** 样本：
-   `19款17万公里也报价11万 / 我们还是要多训训价` —— 这种绝不能变成张年的痕迹。
-4. 主体判断的门在哪：`worthiness-v4.ts:137` 的 `routeV4` 决定 store_only / daily_trace，靠的是
-   `traceEvidenceCount`（grounded 的主体事实数）。召回杀手在上游 claim-grounding 的主体解析——
-   `judgment-policy.ts` 头部注释写得很清楚：frozen V6 clean-positive 召回 1/4，V7 那对
-   （zero-anaphora + grounded promotion）2/4，**且 V7 从未在生产启用**（validator.ts 回落 V1）。
-5. `scripts/backfill-wechat-organizer.mjs` 支持 `--month=2026-05 --dry-run`，rule-based、共享 store、
-   零 AI 费用、秒级。
-6. 生产 provider 统一 DeepSeek（`.env.local`：`AI_PROVIDER=deepseek`、`AI_MODEL=deepseek-v4-pro`）。
+**16:00 之前那一轮已清理**：rule-v2 原样入库的 119 条 daily_traces + 57 条 life_events 已按 predeclare 删除
+（media 解绑 136、source_memory_links 删 1,267，全部与预期一致，COMMITTED）。库回到 daily_traces 155 /
+life_events 83。**那一轮的错误**：跳过主体门、跳过写手、直接写库、还生成了 Memory——三个硬边界全破。
+副作用未回滚：3 次 `attach_existing` 给 2025 的既有 event 挂了少量 2026 来源，低优先级，P2 重跑时一并处理。
 
 ---
 
-**建议路径（Cowork 的判断，你可以在事实面前推翻它，但要写明理由）**
+#### 步骤 0（新增，必须先做）：导入四个家庭群的 JSON 原始数据
 
-- **第一步：复现 2025 的链**。搞清 rule-v2 → (writer?) → 页面 这条链每一环是哪个脚本、什么参数。
-  在 2026-05 上 `--dry-run` 看会产出什么。**这一步不写库。**
-- **第二步：加主体门，再跑**。rule-based 没有主体过滤，直接跑私聊会把车价写进档案。最小可行的门：
-  只组织**文本里点名提到张年的消息**（张小年 / 小年 / 年年 / 儿子 / 宝宝——以仓库里 family-registry
-  的称谓表为准，不要自己列）。漏掉「他今天会坐了」这类零指代是可以接受的代价——
-  **今天的目标是 2026 每月有正确的文字，不是召回最大化。** 家庭群可以放宽（群本身就是关于他的）。
-- **第三步：writer 改写**（如果 2025 是这么来的）。DeepSeek，按天。2026 有文字的天数估计 200–270 天，
-  按每天一次调用、每次 ≤20K token 算，费用在几十元量级。**超过 300 次调用停下来报告。**
-- **第四步：逐月验收**。每做完一个月，curl 那个月页确认「这个月记下来的」非空，且抽读 5 条不是
-  阿静的工作/购物对话。写进 STATUS.md。从 2026-09 往回做到 2026-01（Teddy 定的顺序：最近到最旧）。
+Cowork 16:05 核对 `E:\WechatHis\texts`：**importer 只读 .md，而四个家庭群的历史只在 .json 里**（WeFlow 导出，
+顶层 `{weflow, session, messages, avatars}`，消息字段 `createTime / senderDisplayName / content / type`）：
 
-**硬边界**
-- 不改 frozen V6、不新建 worthiness/judgment/holdout 版本（CLAUDE.md 停下清单）。V7 那对如果要用，
-  是「选择已有策略」，不是「写新策略」；用了要在 STATUS.md 注明
-- 私聊来源的每条痕迹必须能回溯到一条**点名张年**的原文；做不到就不写
-- 不删任何现有 daily_traces / life_events
-- 每完成一个月就 commit + push（Vercel 部署），让 Teddy 能随时打开看——不要攒到最后
-- 若某一环的前提不成立（比如 2025 的 prose 根本不是 writer 产的），停下报告，不要绕
+| 会话 | json 消息数 | json 范围 | md 已导 | 缺 |
+|---|---:|---|---:|---:|
+| 乳儿班张小年家庭群 | **7,244** | 2026-02 → 09 | 70 | **~7,170** |
+| 亲爱的爸爸妈妈 | **7,925** | 2019-05 → 2026-09 | 9 | 出生日起约数千 |
+| 张小年小群 | **643** | 2026-04 → 09 | 11 | **632** |
+| 小雪微信群 | **303** | 2025-06 → 12 | 0 | **303** |
+| 主群 | 12,508 | 2025-05 → 2026-08 | 12,508 | 0 |
 
-**不可接受**：2026 任何一个月页上出现一条明显不是关于张年的痕迹。这比留空严重得多。
+**这改变了 T7 的性质**：2026 年最好、最安全的文字来源（乳儿班——Teddy：「所有信息都是关于张年的」）根本没进库。
+先导这四个，2026 就有一万多条不需要主体门的文字。
 
-**Codex 在 T7 里的用法（Teddy 2026-09-04 授权）**
-- 主体门写好之后、跑生产之前，**必须** `/codex:adversarial-review`，只问一个问题：
-  「这个过滤器会让哪些**不是关于张年**的消息漏进来？」把它列出的每一类拿 2026-05 阿静私聊的真实
-  数据验一遍。这是 CLAUDE.md 里 Codex 边界的一个明确例外——T7 的风险是漏进错的东西，不是放行太少。
-- 你若卡住或额度紧张，`/codex:rescue` 随时可用。
+- 给 importer 加 WeFlow JSON 读取（复用现有 canonicalMessageId / checkpoint / 幂等）
+- **身份冲突要预先处理**：同一会话的 md 和 json 是两次导出，conversationId 会不同。对已有 md 行的三个群
+  （70 + 9 + 11 = 90 行），导 json 后按 `(sentAt, sender, text)` 找出重合，predeclare 后删掉 md 那份——
+  不要留两份
+- 出生日 2025-01-03 起过滤
+- 陈亚萍私聊 **不是**排除对象（Teddy 16:00：陈亚萍是奶奶。此前 STATE §2 第 6 条「低价值」判定作废）
+- 验收：`nianlife-status` 里四个群的库内条数 ≈ json 数；主群零变化
 
-**Cowork 会每 15 分钟自己 curl 各月页核对，不看进程状态。**
+**步骤 0 的速率提醒（Cowork 16:37）**：乳儿班 30 分钟进了 1,100 / 7,244 条（约 35 条/分钟，媒体哈希占大头）。
+按这个速率四个群全导完要 5 小时以上，T7 今天完不成。**不要等四个群全导完**：乳儿班导完就开始步骤 1–3
+（它是「全放行」的，最安全也最丰富），其他三个群在后台继续导。步骤 3 每次写库只有几十条 daily_traces，
+和导入不共用队列，连接池压力可接受；但**步骤 3 写库前先看一眼导入进程是否正在 media_link 高峰**，是的话等它过去。
 
----
+**步骤 0 提速（Cowork 16:45 量过，Teddy 已问）**：瓶颈不是哈希，是往 R2 传派生文件——26 分钟 1,599 个上传
+≈ 1 个/秒，而 `lib/ingest/wechat-worker.ts:299` 把 `mediaConcurrency` 钳在 `clamp(x, 4, 2, 4)`，最大只有 4。
+做法：上限放到 12（`clamp(x, 4, 2, 12)`），然后 `cancel_requested_at` 停掉当前任务，用
+`--retry-failed --task-id <同一个> --media-concurrency 12` 续跑——checkpoint 在 `messageOrdinal`，已完成的消息和
+媒体不重建、不重传（worker 自己的保证）。预计 2–3×。**不要用 `--max-media` / `--max-messages`**（丢照片的坑）。
+「文字先进、媒体后补」是正确的长期设计，归 P1-6 worker，今天不做。
 
-### T8 · 两项 Codex 后台审查 — status: blocked（本机未安装 Codex CLI）
+#### 步骤 1：主体门
+
+| 来源 | 规则 |
+|---|---|
+| **乳儿班张小年家庭群** | **全部放行**（Teddy：所有信息都关于张年） |
+| 主群 / 张小年小群 / 小雪微信群 / 老苏家 / 温州爸妈 / 亲爱的爸爸妈妈 | 群本身关于他：点名（张小年 / 小年 / 年年 / 宝宝 / 儿子——以 family-registry 为准）或紧跟点名消息的同一发言人连续消息 |
+| 阿静私聊、**陈亚萍（奶奶）私聊** | 只留**句子里明确点名**的；零指代不要；「非常确定」才留 |
+| 任何来源 | 空消息、`[media]`、`[语音通话]`、纯文件链接、纯表情：**永远不进** |
+
+#### 步骤 2：V2 写手
+
+- DeepSeek 按天改写成一段，每句话受事实约束；只写〔观察〕，〔设想〕明确框住；不添加原文没有的信息
+- **称谓**：妈妈说 / 雪姨说 / 爸爸说 / 奶奶说（`family-registry.ts` 已有 person-ted → 爸爸、阿静 → 妈妈、
+  hxx. → 雪姨；**陈亚萍 → 奶奶 要加进去**）。解析不到的发言人不写那句，**不回落「家人」**
+- **只产 daily_trace，不产 life_event / Memory**
+- 乳儿班的老师发言：称谓用「老师」或其显示名，不要写成家人
+
+#### 步骤 3：逐月 dry-run → Cowork 抽读 → 通过才写库 → push → curl
+
+从 **2026-09** 开始，通过后 08、07 … 01。**一个月一个月，不批量，不并行。**
+
+#### 验收（每个月）
+
+| 检查 | 谁 | 标准 |
+|---|---|---|
+| 抽读 5 条 | Cowork | 5/5 关于张年 |
+| grep 月页 | Cowork | 无「家人」 |
+| 来源回溯 | Code | 每条痕迹指回一条过门的原文 |
+| life_events | Cowork | 数量不变 83 |
+| 私聊来源 | Cowork | 每条都点名张年 |
+
+#### 硬边界
+
+- **不生成 Memory**
+- **DeepSeek ≤ 300 次**，超了停
+- **不删 2025 的任何东西**
+- **前提不成立就停**：写手脚本不是按天工作、JSON 格式和预期不符、identity 冲突处理不干净——停下报告
+- 写库之前必须有 dry-run 结果在 STATUS.md 里，且 Cowork 已在 STATUS.md 写「通过」
+
+### T8 · 两项 Codex 后台审查 — status: ready（Codex CLI 已装，v0.153.2，已登录；Teddy 16:58）· **后台派发，不要阻塞 T7**
 
 **2026-09-04 Claude Code**：T8a、T8b 都已按要求后台派发，两个都立刻失败，报的是同一件事——
 `Codex CLI is not installed or is missing required runtime support`。装法：`npm install -g @openai/codex`，
@@ -258,3 +277,31 @@ importer 代码，正属于 Codex 审查范围；按 CLAUDE.md 它本该在跑�
 每个说清：测试坏了还是代码坏了；环境依赖（网络 / R2 / 时序）还是逻辑。只要报告，不修。
 
 **不可接受**：为了派 T8 而中断 T7 的执行；等 Codex 结果再继续 T7。
+
+---
+
+### T9 · 派给 Codex 的两件活 — status: ready · **用 `/codex:rescue` 后台派，Code 不要自己做**
+
+Teddy 16:58：Codex 装好了，让它分担。这两件都和 T7 的文件不重叠，用 Codex 自己的额度。
+
+**T9a · 步骤 0 续跑（三个群 + 乳儿班 9 月之前）**
+0. **先测代理**（Teddy 17:05 授权）：瓶颈是跨境到 R2。用同一张 3 MB 左右的图，分别在
+   不带代理 / 带 `HTTPS_PROXY=http://127.0.0.1:7994` 两种环境下各传 R2 一次（原图 + web + 缩略图三件），
+   记录耗时写进 STATUS.md。快 3× 以上就给导入进程挂上代理再续跑。代理地址 Teddy 17:07 已给：`http://127.0.0.1:7994`（HTTP_PROXY / HTTPS_PROXY 都设上；Node 的 fetch/undici 和 AWS SDK 对代理环境变量的支持不一样，S3 客户端可能要显式配 `NodeHttpHandler` + `https-proxy-agent`——先试环境变量，不生效再配）。
+1. `lib/ingest/wechat-worker.ts:299` 的 `clamp(options.mediaConcurrency, 4, 2, 4)` 改成上限 24（不是 12）；
+   先用 12 跑，看 R2 有没有 429 / 连接错误再决定加不加
+2. 续跑之前被 kill 的那个全量导入（`--only 1,3,4,5,12 --skip 1`，checkpoint 在库里），加 `--media-concurrency 12`，
+   `--retry-failed --task-id` 用原 task，**不用 `--max-media` / `--max-messages`**
+3. 盯到跑完；每个群完成后在 STATUS.md 追加三行（条数、月份范围、和 json 数对不对）
+4. md/json 重合的 90 行（bb5d5ba6 70 / d016ea9b 11 / 2bca9fd8 9 / b4bdc971 9）：json 导到对应月份后按
+   `(captured_at, sender, text)` 找重合，**predeclare 数量写进 STATUS.md，然后停下等 Teddy 确认再删**
+5. 硬边界：不碰 `lib/organizer/`，不碰 daily_traces / life_events，不 commit（改动留给 Code 提交）
+
+**T9b · T8b 诊断完之后，修那 3 个固定失败的测试**
+- `test/organizer-evidence-pipeline.test.mjs`、`test/storage-phase-2.test.mjs`（两处）
+- 先按 T8b 的诊断分清「测试坏了」还是「代码坏了」：测试坏了就修测试；代码坏了**停下报告**，不擅自改业务代码
+- flaky 那条（wechat-worker HASH_CHANGED）只报原因，不改
+- 不 commit
+
+**并行规则**：T9a 写库（导入）、T9b 只改 test/——和 T7 步骤 3 的写库不共用表；连接池压力在 T7 写库那一刻
+看一眼 T9a 是否在 media_link 高峰，是就等它过去。
