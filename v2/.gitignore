@@ -15,3 +15,6 @@ media-manifest.json
 !.env.example
 
 .vercel
+
+# Sandboxed tool runs (Codex, etc.) sometimes point npm at a local cache dir here.
+.npm-cache/

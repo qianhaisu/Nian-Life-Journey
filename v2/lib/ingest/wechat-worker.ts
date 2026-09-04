@@ -296,7 +296,7 @@ export async function runWechatImportWorker(options: WechatWorkerOptions): Promi
   const storage = options.storage ?? hotStorage;
   const leaseOwner = options.leaseOwner ?? `wechat-worker:${randomUUID()}`;
   const messageBatchSize = clamp(options.messageBatchSize, 50, 20, 100);
-  const mediaConcurrency = clamp(options.mediaConcurrency, 4, 2, 4);
+  const mediaConcurrency = clamp(options.mediaConcurrency, 4, 2, 24);
   const loaded = await loadWechatBundle(options.sourceRoot, options);
   const warningCounts = warningCountsFor(loaded.bundle);
   const now = options.now ?? new Date().toISOString();

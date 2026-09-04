@@ -61,6 +61,8 @@ if (skip && [...skip].some((value) => !Number.isInteger(value) || value < 0)) { 
 // no maxAttempts budget). It is not a status edit: a task the queue refuses to transition stays
 // refused. Off by default — a cancelled task was cancelled on purpose.
 const retryFailed = hasFlag("--retry-failed");
+const mediaConcurrency = option("--media-concurrency") !== undefined ? Number(option("--media-concurrency")) : undefined;
+if (mediaConcurrency !== undefined && (!Number.isInteger(mediaConcurrency) || mediaConcurrency < 2 || mediaConcurrency > 24)) { process.stderr.write("--media-concurrency takes an integer from 2 to 24\n"); process.exit(1); }
 
 if (!dryRun) {
   if ((process.env.REPOSITORY_BACKEND ?? "").trim().toLowerCase() !== "postgres") { process.stderr.write("REPOSITORY_BACKEND=postgres is required for a real import\n"); process.exit(1); }
@@ -165,6 +167,7 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
       conversationIndex: index,
       since,
       retryFailed,
+      mediaConcurrency,
     });
   } catch (error) {
     const info = safeErrorInfo(error);

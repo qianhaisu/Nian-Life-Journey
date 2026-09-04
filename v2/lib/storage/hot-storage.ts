@@ -77,7 +77,14 @@ export class R2HotStorage implements HotStorage {
 
   constructor(config = getR2Config()) {
     this.config = config;
-    this.client = import("@aws-sdk/client-s3").then(({ S3Client }) => new S3Client({ endpoint: config.endpoint, region: "auto", forcePathStyle: true, credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } }));
+    const proxyUrl = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
+    this.client = Promise.all([import("@aws-sdk/client-s3"), import("@smithy/node-http-handler"), import("https-proxy-agent")]).then(([{ S3Client }, { NodeHttpHandler }, { HttpsProxyAgent }]) => new S3Client({
+      endpoint: config.endpoint,
+      region: "auto",
+      forcePathStyle: true,
+      credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+      requestHandler: proxyUrl ? new NodeHttpHandler({ httpsAgent: new HttpsProxyAgent(proxyUrl) }) : undefined,
+    }));
   }
 
   async put(input: HotStorageInput) {
