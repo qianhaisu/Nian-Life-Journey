@@ -16,6 +16,12 @@ import { config as loadDotenv } from "dotenv";
 
 loadDotenv({ path: path.resolve(process.cwd(), ".env.local"), quiet: true });
 loadDotenv({ path: path.resolve(process.cwd(), "../.env.local"), quiet: true });
+// Bug found 2026-09-04 (Cowork caught it): without this, an unset REPOSITORY_BACKEND makes
+// lib/db/config.ts fall back to the local JSON store — this script's first --commit run silently
+// wrote three "successful" snapshots nobody could ever see, because they went into a local mock
+// file, not the production database. Same class of mistake organizer-month-write.mjs already
+// guards against by setting this explicitly instead of trusting the caller's shell.
+process.env.REPOSITORY_BACKEND = "postgres";
 
 const { persistMonthlySnapshot, persistQualityReview } = await import("../lib/db/repository.ts");
 

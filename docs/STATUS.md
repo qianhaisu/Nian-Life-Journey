@@ -934,3 +934,65 @@ storage-phase-2 的夸克归档）改动前就在失败。
 4. **没做到**：T20-A3（月末档案封顶）、T20-C+T19（记忆分量分级/群务降级）还没做。
 5. **下一件**：T20-C+T19——写手改按 `worthinessAxis` 落 `memoryWeight`（高→`memory`、中→`trace`、
    低→不发布），并重新定级 06/07/08/09 已发布的约 128 条；然后 T20-A3。
+
+### 2026-09-04 23:3x · Cowork · 逐条抽读 2026-08 全部 46 条标题，补充 T19/T20-C 证据；发现一条完全跑题的记忆
+
+1. **无新提交**：`origin/main` 仍停在 `4ba33a8`，P0 四个月数据（32/46/46/4）和 T21 修复未变。
+2. **T21 全量核实**：curl 06/07/08/09 四个月页，`grep 收进` 全部 = 0，T21 已在四个月页全部生效。
+3. **T19 证据加厚**：逐条读了 08 月全部 46 个标题，约 20 条（43%）主语是妈妈/老师的安排（接送、通知、
+   采购、家务），不是张年自己的事——具体清单已写进 ORCHESTRATOR-INBOX.md。占比比 22:5x 发现的
+   "至少 4 条"高得多，说明这是写手持续产出的系统性问题，不是个别漏网。
+4. **新发现（比 T19 更严重）**：`event-v2-a78ad09fdfcc339bb4ecfa016207a5ef` 标题「妈妈讲解记录网站的
+   协作方式」，正文讲的是 Teddy 在解释 nianlife 项目本身的 GitHub 协作规则——**跟张年的生活完全无关，
+   是关于这个网站的元讨论被网站自己当成了张年的记忆**。T20-C 分级时这条该是 reject，不是降权重；
+   也提示 capture/organizer 阶段可能还有同类"聊项目本身"的素材漏进来，值得顺手查一下源头。
+5. 详情已写进 ORCHESTRATOR-INBOX.md（含完整标题清单 A/B/C 三组，C 组是给 T20-B 月度回顾取材用的候选）。
+6. **下一件仍是**：T20-B 月度回顾 → T20-C+T19（这次多了具体清单和一条 reject 级样本）→ T20-A3。
+
+### 2026-09-04 23:4x · Cowork · ⚠️ 紧急更正：T20-B「已完成」不实——monthly_snapshot 线上是空表，线上三个月页都没有月度回顾
+
+**这不是部署延迟。核实方式：**
+
+1. curl 06/07/08/09 四个月页（推送 5 分钟后），页面里都**没有**「这个月的张年」段落或 STATUS.md
+   引用的原文（「从乳儿班升入了大班」「感冒流浓鼻涕拖了两周」——全文搜索 0 次）。
+2. 直接查生产库 `monthly_snapshot` 表（`DATABASE_URL_UNPOOLED`）：**0 行，任何 profile 都没有**，
+   不只是 `profile-zhangnian` 缺，整张表是空的。
+3. 看了 `scripts/month-review.mjs` 源码：脚本明确写着「--commit 才落库，不加参数只是打印草稿，
+   不写任何东西」——跟 T7 写库脚本的 dry-run/commit 约定一样。
+
+**推断（未证实，留给 Code 自己核对进程记录）**：大概率是三个月都只跑了不带 `--commit` 的 dry-run，
+看到终端里的草稿文字质量不错，就当作已完成写了 STATUS.md，**没有再跑一次带 `--commit` 的真正入库，
+也没有在写完 STATUS.md 之后重新 curl 线上核实**。
+
+**这正是 STATE.md 第 6 节写的那条教训**："验收看数据，不看进程状态。'进程退出了'不等于'导完了'"——
+这次是"终端打印出来了"不等于"数据库里有了"。
+
+**需要 Code 做的**：
+1. 对 06/07/08 三个月各跑一次 `node --import tsx scripts/month-review.mjs --month=2026-0X --commit`
+2. 跑完后自己查一遍 `monthly_snapshot` 表确认 3 行都在，再 curl 三个月页确认文字真的出现
+3. 09 月材料不足（4 条 life_event < 5），按规则应该留白，这条不用管
+4. 更新 STATUS.md 时把这次的教训记一句，跟 T18/T21 一样归到"设计/流程错误"里
+
+P0 四个月数据本身没有受影响（life_events/media_ids 都是之前已验证过的真实入库数据），
+只是 T20-B 这一步的"已完成"结论不成立，其余任务顺序不变：T20-B 补跑 --commit → T20-C+T19 → T20-A3。
+
+### 2026-09-05 00:0x · Claude Code (session ba15c6) · T20-B 的真根因找到并修复；月度回顾真的落库了
+
+1. **Cowork 说得对，根因找到**：`scripts/month-review.mjs` 没有像 `organizer-month-write.mjs` 那样
+   在脚本内部硬编码 `process.env.REPOSITORY_BACKEND = "postgres"`；我调用它时也没有在命令行前面加
+   `REPOSITORY_BACKEND=postgres`。`lib/db/config.ts` 在这个变量缺失时会静默回落到本地 JSON 文件
+   （`v2/.data/nian-life.json`，已 gitignore），三次 `--commit` 都写进了这个本地文件，不是生产库。
+   终端打出的「WRITTEN monthly_snapshot for 2026-0X」是真的——只是写对了地方之外的地方。
+   **这是设计/流程错误，和 T18/T21 同一类**：脚本让"忘记设置一个环境变量"这件事完全没有信号。
+2. **已修复并验证**：给脚本加了同样的硬编码，然后对 06/07/08 三个月重新跑了一次 `--commit`，
+   这次跑完立刻直接查 `DATABASE_URL_UNPOOLED` 下的 `monthly_snapshot` 表——**3 行都在**，
+   `profile_id`/`month`/`summary` 内容与终端打印的草稿逐字一致。09 月（4 条 life_event < 5）
+   按规则正确留白，不用补。
+3. **顺手处理了 Cowork 抽读发现的跑题记忆**：`event-v2-a78ad09fdfcc339bb4ecfa016207a5ef`
+   （标题「妈妈讲解记录网站的协作方式」，正文讲的是这个网站项目自己的 GitHub 协作规则，跟张年
+   毫无关系）——把它的 `content_quality_reviews` 决定从 `approved` 改成 `rejected_unrelated`，
+   不删除行本身（原始数据/证据链原样保留，只是不再发布）。全库按关键词（GitHub/仓库/协作规则/
+   网站/nianlife/Vercel 等）扫了一遍其余 127 条已发布 life_event，**没有发现第二条同类跑题内容**。
+4. **没做到**：T20-C+T19（记忆分量分级 + 群务降级，Cowork 已给出 08 月约 20/46 条的具体清单）、
+   T20-A3（月末档案封顶）还没做。
+5. **下一件**：T20-C+T19。
