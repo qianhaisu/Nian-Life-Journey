@@ -4,8 +4,8 @@ import { canonicalMessageId, type ChatMessage, type ChatMessageType, type MediaA
 
 export interface ParsedMarkdown { document: string; conversationId: string; conversationName: string; messages: ChatMessage[]; warnings: string[]; }
 const header = /^## (\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) (.+)$/;
-function id(value: string) { return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 24); }
-function safeTarget(root: string, document: string, target: string) {
+export function id(value: string) { return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 24); }
+export function safeTarget(root: string, document: string, target: string) {
   if (!target || /^(?:[A-Za-z]:[\\/]|\\\\|[a-z][a-z0-9+.-]*:)/i.test(target)) return undefined;
   const base = resolve(root, document, ".."); const path = resolve(base, target); const prefix = base.endsWith(sep) ? base : `${base}${sep}`;
   return path === base || path.startsWith(prefix) ? relative(root, path).replaceAll("\\", "/") : undefined;

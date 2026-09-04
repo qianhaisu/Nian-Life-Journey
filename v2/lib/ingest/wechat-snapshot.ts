@@ -5,8 +5,9 @@ import path from "node:path";
 import sharp from "sharp";
 import type { ChatImportBundle, ChatMediaRef, MediaAvailability } from "./chat-import-bundle";
 import { parseWechatMarkdown } from "./wechat-markdown";
+import { isWeflowJson, parseWeflowJson } from "./wechat-weflow-json";
 
-export type WechatSnapshotEntry = { relativePath: string; absolutePath: string; kind: "markdown" | "jpeg" | "other"; size: number; mtimeMs: number; contentDigest?: string };
+export type WechatSnapshotEntry = { relativePath: string; absolutePath: string; kind: "markdown" | "weflow-json" | "jpeg" | "other"; size: number; mtimeMs: number; contentDigest?: string };
 export type WechatSnapshot = { rootFingerprint: string; fileCount: number; files: WechatSnapshotEntry[] };
 export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number; since?: string };
 export type WechatBundleLoad = { snapshot: WechatSnapshot; bundle: ChatImportBundle; selectedDocument: string; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number };
@@ -48,8 +49,11 @@ async function walk(root: string, rootReal: string, directory: string, entries: 
     }
     if (!child.isFile()) continue;
     const relativePath = normalizeRelative(path.relative(root, absolutePath));
-    const kind = /\.md$/i.test(relativePath) ? "markdown" : isJpeg(relativePath) ? "jpeg" : "other";
-    const content = kind === "markdown" ? await streamDigest(absolutePath) : undefined;
+    // WeFlow writes a .json transcript beside the .md one, and for four of the family's groups the
+    // JSON is the only place their history exists. It is a transcript like the Markdown is, so it is
+    // digested and drift-checked the same way.
+    const kind = /\.md$/i.test(relativePath) ? "markdown" : /\.json$/i.test(relativePath) ? "weflow-json" : isJpeg(relativePath) ? "jpeg" : "other";
+    const content = kind === "markdown" || kind === "weflow-json" ? await streamDigest(absolutePath) : undefined;
     entries.push({ relativePath, absolutePath, kind, size: info.size, mtimeMs: info.mtimeMs, contentDigest: content?.digest });
   }
 }
@@ -93,6 +97,23 @@ function refsFromMessages(messages: Array<{ mediaRefs: ChatMediaRef[] }>) {
   return refs;
 }
 
+// One conversation is one transcript file, in whichever of WeFlow's two formats it was written.
+// Both parsers return the same shape, so the whole pipeline below this point is format-blind.
+function parseTranscript(
+  entry: WechatSnapshotEntry,
+  root: string,
+  text: string,
+  media: Map<string, { checksum?: string; availability: MediaAvailability; mimeType?: string; fileSize?: number; width?: number; height?: number }>,
+) {
+  // A .json in the export root is only a transcript if it says so. Anything else is left alone
+  // rather than guessed at: a stray JSON file with a `messages` array must not become a conversation.
+  if (entry.kind === "weflow-json") {
+    if (!isWeflowJson(text)) return { document: entry.relativePath, conversationId: "", conversationName: "", messages: [], warnings: ["not_a_weflow_transcript"] };
+    return parseWeflowJson({ root, document: entry.relativePath, media, text });
+  }
+  return parseWechatMarkdown({ root, document: entry.relativePath, media, text });
+}
+
 export async function loadWechatBundle(sourceRoot: string, options: WechatBundleOptions = {}): Promise<WechatBundleLoad> {
   const maxMessages = options.maxMessages ?? 100;
   const maxMedia = options.maxMedia ?? 20;
@@ -105,12 +126,12 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   const sinceMs = options.since !== undefined ? Date.parse(options.since) : undefined;
   if (sinceMs !== undefined && Number.isNaN(sinceMs)) throw new Error("WECHAT_SINCE_INVALID");
   const snapshot = await scanWechatSnapshot(sourceRoot);
-  const markdown = snapshot.files.filter((file) => file.kind === "markdown").toSorted((a, b) => digest(a.relativePath).localeCompare(digest(b.relativePath)));
+  const transcripts = snapshot.files.filter((file) => file.kind === "markdown" || file.kind === "weflow-json").toSorted((a, b) => digest(a.relativePath).localeCompare(digest(b.relativePath)));
   const candidates: Array<{ entry: WechatSnapshotEntry; text: string; conversationId: string; messages: ReturnType<typeof parseWechatMarkdown>["messages"] }> = [];
-  for (const entry of markdown) {
+  for (const entry of transcripts) {
     const text = await readFile(entry.absolutePath, "utf8");
     if (entry.contentDigest && digest(text) !== entry.contentDigest) throw new Error("WECHAT_SNAPSHOT_CHANGED_DURING_SCAN");
-    const parsed = parseWechatMarkdown({ root: path.resolve(sourceRoot), document: entry.relativePath, media: new Map(), text });
+    const parsed = parseTranscript(entry, path.resolve(sourceRoot), text, new Map());
     if (parsed.messages.length) candidates.push({ entry, text, conversationId: parsed.conversationId, messages: parsed.messages });
   }
   // candidates is already in the deterministic (relativePath-digest) order established above;
@@ -138,7 +159,7 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
     media.set(relativePath, state);
     if (state.availability === "present") hashedMedia += 1;
   }
-  const reparsed = parseWechatMarkdown({ root: path.resolve(sourceRoot), document: selected.entry.relativePath, media, text: selected.text });
+  const reparsed = parseTranscript(selected.entry, path.resolve(sourceRoot), selected.text, media);
   const reparsedEligible = sinceMs !== undefined ? reparsed.messages.filter((message) => Date.parse(message.sentAt) >= sinceMs) : reparsed.messages;
   const messages = reparsedEligible.slice(0, maxMessages);
   const mediaRefs = [...new Map(messages.flatMap((message) => message.mediaRefs).map((ref) => [ref.id, ref])).values()];
