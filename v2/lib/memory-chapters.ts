@@ -12,6 +12,20 @@ import { mediaBindingTrusted } from "@/lib/organizer/quality-review";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
 
+// WeChat placeholder patterns that the rule organizer wrote verbatim into story/title fields.
+// These are not about Zhang Nian — they are format artifacts. Filter them at render time; rows
+// remain in the database untouched and will be overwritten by Writer v2 in later T7 rounds.
+const WECHAT_PLACEHOLDER = /^\[media\]$|^\[视频文件\]|\\\[表情包\\\]|\\\[呲牙|\\\[视频\\\]$|\\\[发呆\\\]|\\\[其他消息\\\]|\\\[小程序\\\]|\\\[位置\\\]|\\\[链接\\\]|\[表情包\]|\[呲牙|\[视频\]$|\[发呆\]|\[其他消息\]|\[小程序\]|\[位置\]|\[链接\]/;
+
+export function isGarbageLifeEvent(event: Pick<LifeEvent, "title" | "story">): boolean {
+  const title = (event.title ?? "").trim();
+  const story = (event.story ?? "").trim();
+  if (WECHAT_PLACEHOLDER.test(story) || WECHAT_PLACEHOLDER.test(title)) return true;
+  if (title.startsWith("@")) return true;
+  if (title && story && title === story) return true;
+  return false;
+}
+
 export type MediaRef = Pick<Media, "id" | "src" | "thumbnailSrc" | "width" | "height" | "type" | "posterSrc" | "takenAt"> & { alt: string };
 
 export type EditorialMemory = {
@@ -202,6 +216,7 @@ export function buildChapters({ events, traces, media, deliverable, birthDay }: 
   for (const event of sortedEvents) {
     const month = calendarMonthOf(event.occurredAt);
     if (!month) continue;
+    if (isGarbageLifeEvent(event)) continue;
     const memory = editorialMemory(event, mediaById, birthDay);
     if (memory) monthOf(month).memories.push(memory);
   }
