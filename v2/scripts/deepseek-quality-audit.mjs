@@ -6,7 +6,8 @@
 // decision here is reversible by deleting or updating a review row. Rule-derived artifacts are fail
 // closed, so an artifact this script never reaches simply stays hidden.
 //
-//   node --import tsx scripts/deepseek-quality-audit.mjs --out=<abs-path.json> [--limit=N] [--dry-run]
+//   node --import tsx scripts/deepseek-quality-audit.mjs --out=<abs-path.json> [--limit=N] [--fetch=N]
+//                                                        [--kind=both|daily_trace|life_event] [--dry-run]
 import { existsSync } from "node:fs";
 import { appendFile, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
@@ -24,6 +25,18 @@ const { QUALITY_REVIEW_POLICY_VERSION, containsTechnicalPlaceholder } = await im
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const limit = Number(args.find((a) => a.startsWith("--limit="))?.slice("--limit=".length) ?? "999");
+// How many artifacts to FETCH, as distinct from how many to audit. The fetch was a fixed newest-200
+// and the `done` set is applied after it, so once those 200 carried review rows every later run
+// re-fetched the same 200, skipped all of them, and could never reach #201. With 2026 backfilled
+// there are more than 200 traces, and the oldest months would have been permanently unreachable.
+const fetchLimit = Number(args.find((a) => a.startsWith("--fetch="))?.slice("--fetch=".length) ?? "200");
+if (!Number.isInteger(fetchLimit) || fetchLimit < 1 || fetchLimit > 5000) { console.error("--fetch must be an integer between 1 and 5000"); process.exit(1); }
+// Which artifact kind to spend calls on. Life events are audited before traces, so a --limit small
+// enough to control spend was consumed entirely by events, and the traces — the day-by-day text a
+// month page actually reads, and the only rewrite that costs no further model call — were never
+// reached. Defaults to both, which is the behaviour this script always had.
+const kind = args.find((a) => a.startsWith("--kind="))?.slice("--kind=".length) ?? "both";
+if (!["both", "daily_trace", "life_event"].includes(kind)) { console.error("--kind must be both, daily_trace or life_event"); process.exit(1); }
 const outArg = args.find((a) => a.startsWith("--out="))?.slice("--out=".length);
 if (!outArg) { console.error("--out=<absolute path outside the repo> is required"); process.exit(1); }
 const outPath = path.resolve(outArg);
@@ -168,14 +181,14 @@ async function audit(targetKind, rows, textOf) {
 
 const events = (await client.query(
   `select id, occurred_at, title, story, source_ids from life_events
-   where profile_id = $1 and created_by = 'rule' order by occurred_at desc limit 200`, [PROFILE_ID])).rows;
+   where profile_id = $1 and created_by = 'rule' order by occurred_at desc limit $2`, [PROFILE_ID, fetchLimit])).rows;
 const traces = (await client.query(
   `select id, occurred_at, entries, source_ids from daily_traces
-   where profile_id = $1 and organizer_run->>'organizerType' = 'rule' order by occurred_at desc limit 200`, [PROFILE_ID])).rows;
+   where profile_id = $1 and organizer_run->>'organizerType' = 'rule' order by occurred_at desc limit $2`, [PROFILE_ID, fetchLimit])).rows;
 
-console.log(`Auditing ${events.length} life events and ${traces.length} daily traces.`);
-await audit("life_event", events, (row) => [row.title, row.story].filter(Boolean).join(" — "));
-await audit("daily_trace", traces, (row) => (row.entries ?? []).join(" — "));
+console.log(`Auditing ${kind === "daily_trace" ? 0 : events.length} life events and ${kind === "life_event" ? 0 : traces.length} daily traces (kind=${kind}, fetch=${fetchLimit}, limit=${limit}).`);
+if (kind !== "daily_trace") await audit("life_event", events, (row) => [row.title, row.story].filter(Boolean).join(" — "));
+if (kind !== "life_event") await audit("daily_trace", traces, (row) => (row.entries ?? []).join(" — "));
 
 // Review rows are already persisted per artifact by persistReview(); nothing is batched at the end.
 console.log(dryRun ? "\nDry run: no review rows written." : `\nWrote ${results.length} review row(s) incrementally.`);
