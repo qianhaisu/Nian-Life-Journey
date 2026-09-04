@@ -8,7 +8,7 @@ import { parseWechatMarkdown } from "./wechat-markdown";
 
 export type WechatSnapshotEntry = { relativePath: string; absolutePath: string; kind: "markdown" | "jpeg" | "other"; size: number; mtimeMs: number; contentDigest?: string };
 export type WechatSnapshot = { rootFingerprint: string; fileCount: number; files: WechatSnapshotEntry[] };
-export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number };
+export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number; since?: string };
 export type WechatBundleLoad = { snapshot: WechatSnapshot; bundle: ChatImportBundle; selectedDocument: string; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number };
 export type WechatCapacityAudit = { fileCount: number; markdownFileCount: number; jpegFileCount: number; otherFileCount: number; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number; presentMediaCount: number; missingMediaCount: number; needsReviewMediaCount: number; invalidMediaCount: number; hashChangedMediaCount: number; deferredByLimitMediaCount: number; messageLimitReached: boolean; mediaLimitReached: boolean; maxMessages: number; maxMedia: number };
 
@@ -102,6 +102,8 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   // is never truncated by an arbitrary canary-era cap.
   if (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 200_000) throw new Error("WECHAT_MESSAGE_LIMIT_INVALID");
   if (!Number.isInteger(maxMedia) || maxMedia < 1 || maxMedia > 200_000) throw new Error("WECHAT_MEDIA_LIMIT_INVALID");
+  const sinceMs = options.since !== undefined ? Date.parse(options.since) : undefined;
+  if (sinceMs !== undefined && Number.isNaN(sinceMs)) throw new Error("WECHAT_SINCE_INVALID");
   const snapshot = await scanWechatSnapshot(sourceRoot);
   const markdown = snapshot.files.filter((file) => file.kind === "markdown").toSorted((a, b) => digest(a.relativePath).localeCompare(digest(b.relativePath)));
   const candidates: Array<{ entry: WechatSnapshotEntry; text: string; conversationId: string; messages: ReturnType<typeof parseWechatMarkdown>["messages"] }> = [];
@@ -118,9 +120,10 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   if (!Number.isInteger(conversationIndex) || conversationIndex < 0) throw new Error("WECHAT_CONVERSATION_INDEX_INVALID");
   const selected = candidates[conversationIndex];
   if (!selected) throw new Error("WECHAT_NO_VALID_SESSION");
-  const availableMessageCount = selected.messages.length;
-  const selectedMessages = selected.messages.slice(0, maxMessages);
-  const availableMediaRefCount = refsFromMessages(selected.messages).size;
+  const eligibleMessages = sinceMs !== undefined ? selected.messages.filter((message) => Date.parse(message.sentAt) >= sinceMs) : selected.messages;
+  const availableMessageCount = eligibleMessages.length;
+  const selectedMessages = eligibleMessages.slice(0, maxMessages);
+  const availableMediaRefCount = refsFromMessages(eligibleMessages).size;
   const byPath = new Map(snapshot.files.map((file) => [file.relativePath, file]));
   const refs = refsFromMessages(selectedMessages);
   const media = new Map<string, { checksum?: string; availability: MediaAvailability }>();
@@ -136,7 +139,8 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
     if (state.availability === "present") hashedMedia += 1;
   }
   const reparsed = parseWechatMarkdown({ root: path.resolve(sourceRoot), document: selected.entry.relativePath, media, text: selected.text });
-  const messages = reparsed.messages.slice(0, maxMessages);
+  const reparsedEligible = sinceMs !== undefined ? reparsed.messages.filter((message) => Date.parse(message.sentAt) >= sinceMs) : reparsed.messages;
+  const messages = reparsedEligible.slice(0, maxMessages);
   const mediaRefs = [...new Map(messages.flatMap((message) => message.mediaRefs).map((ref) => [ref.id, ref])).values()];
   const bundle: ChatImportBundle = {
     schemaVersion: "chat-import-bundle/v1",

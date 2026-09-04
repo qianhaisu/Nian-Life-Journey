@@ -52,7 +52,7 @@ function rejectedReport(safeErrorCode) {
 }
 
 if (hasFlag("--help")) {
-  process.stdout.write("Usage: npm run wechat:import -- --source-root <directory> [--profile-id <id>] [--contributor-id <id>] [--task-id <id>] [--conversation-index <n>] [--max-messages <1..200000>] [--max-media <1..200000>] [--full-conversation] [--retry-failed] [--canary]\n       npm run wechat:import -- --source-root <directory> --capacity-audit [--conversation-index <n>] [--max-messages <1..200000>] [--max-media <1..200000>]\nReal imports (not --capacity-audit) require REPOSITORY_BACKEND=postgres to be set explicitly; there is no silent default.\n--conversation-index selects among the deterministically ordered candidate conversations (0-indexed); omit it to keep the existing default (index 0).\n--retry-failed also resumes a task that was gracefully cancelled (pass the same --task-id); already-completed messages and media are never re-created or re-uploaded.\n");
+  process.stdout.write("Usage: npm run wechat:import -- --source-root <directory> [--profile-id <id>] [--contributor-id <id>] [--task-id <id>] [--conversation-index <n>] [--since <ISO date>] [--max-messages <1..200000>] [--max-media <1..200000>] [--full-conversation] [--retry-failed] [--canary]\n       npm run wechat:import -- --source-root <directory> --capacity-audit [--conversation-index <n>] [--since <ISO date>] [--max-messages <1..200000>] [--max-media <1..200000>]\nReal imports (not --capacity-audit) require REPOSITORY_BACKEND=postgres to be set explicitly; there is no silent default.\n--conversation-index selects among the deterministically ordered candidate conversations (0-indexed); omit it to keep the existing default (index 0).\n--since filters to messages at or after this instant (any Date.parse-able string, e.g. 2025-01-03 or 2025-01-03T00:00:00+08:00) before --max-messages is applied; omit it to import from the start of the conversation.\n--retry-failed also resumes a task that was gracefully cancelled (pass the same --task-id); already-completed messages and media are never re-created or re-uploaded.\n");
   process.exit(0);
 }
 
@@ -80,7 +80,7 @@ try {
     const maxMessages = positiveLimit(option("--max-messages"), "max_messages", 200_000) ?? 100;
     const maxMedia = positiveLimit(option("--max-media"), "max_media", 200_000) ?? 20;
     const { auditWechatCapacity } = await import("../lib/ingest/wechat-snapshot.ts");
-    const audit = await auditWechatCapacity(sourceRoot, { maxMessages, maxMedia, conversationIndex: conversationIndexValue });
+    const audit = await auditWechatCapacity(sourceRoot, { maxMessages, maxMedia, conversationIndex: conversationIndexValue, since: option("--since") });
     process.stdout.write(`${JSON.stringify(redactedCapacityAudit(audit))}\n`);
   } else {
     assertPostgresBackendForRealImport();
@@ -92,7 +92,7 @@ try {
       // Discover the selected conversation's true size with a cheap pass (no media hashing beyond
       // the floor caps), then re-request exactly that many messages/media refs so nothing is
       // truncated — no arbitrary "big enough" sentinel that could still clip an even larger export.
-      const probe = await loadWechatBundle(sourceRoot, { maxMessages: 1, maxMedia: 1, conversationIndex: conversationIndexValue });
+      const probe = await loadWechatBundle(sourceRoot, { maxMessages: 1, maxMedia: 1, conversationIndex: conversationIndexValue, since: option("--since") });
       maxMessages = Math.max(probe.availableMessageCount, 1);
       maxMedia = Math.max(probe.availableMediaRefCount, 1);
     } else {
@@ -109,6 +109,7 @@ try {
       maxMessages,
       maxMedia,
       conversationIndex: conversationIndexValue,
+      since: option("--since"),
       retryFailed: hasFlag("--retry-failed"),
       messageBatchSize,
       mediaConcurrency,
