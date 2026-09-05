@@ -49,6 +49,7 @@ const batchRoot = path.resolve(option("--batch-root") ?? DEFAULT_BATCH_ROOT);
 const manifestPath = option("--manifest") ?? path.join(batchRoot, "manifests/quark-history-manifest.jsonl");
 const originalsDir = option("--originals-dir") ?? path.join(batchRoot, "downloads");
 const undatedOut = option("--undated-out") ?? path.join(batchRoot, "manifests/undated-photos.jsonl");
+const heicSkippedOut = option("--heic-skipped-out") ?? path.join(batchRoot, "manifests/heic-decode-unsupported.jsonl");
 const taskItemsOut = path.join(batchRoot, "manifests/quark-history-task-items.jsonl");
 const sourceLabel = option("--source-label") ?? "Quark 历史素材 2026-09-03";
 const mode = hasFlag("--apply") ? "apply" : "dry-run";
@@ -78,7 +79,26 @@ for (const row of photos) {
   else undated.push(row);
 }
 
-const taskItems = dated.map(({ row, takenAtText }) => ({
+// HEIC in this batch is not a per-file corruption problem: two independent sessions each sampled
+// files spread across the full date range and found the SAME failure on every one --
+// `heif: Decoder plugin generated an error` from this machine's libvips/libheif (vips 8.18.6,
+// libheif 1.23.2) on createDerivatives(), even though sourceImageMetadata() reads them fine and
+// Windows' own WIC decoder opens all of them without issue. Verified NOT corrupted downloads.
+// Feeding these through applyQuarkPhotoArtifact anyway means uploading each original to R2 (a real
+// network call) before the derivative step throws -- for ~1,468 of the 1,690 dated photos, that is
+// ~1,468 wasted uploads for a guaranteed failure. Filtered out here instead, to a side file, so a
+// future decoder fix (upgrade libheif, or a different decode path) can pick this file straight back
+// up without re-running the whole batch. Not a permanent-skip in quark-photo-apply.mjs's sense --
+// these are not corrupted, just currently undecodable on this machine.
+const HEIC_EXT = /\.heic$/i;
+const decodable = [];
+const heicSkipped = [];
+for (const entry of dated) {
+  if (HEIC_EXT.test(entry.row.download_path)) heicSkipped.push(entry.row);
+  else decodable.push(entry);
+}
+
+const taskItems = decodable.map(({ row, takenAtText }) => ({
   kind: "photo",
   download_status: "success",
   checksum_duplicate: false,
@@ -94,10 +114,12 @@ const taskItems = dated.map(({ row, takenAtText }) => ({
 
 await mkdir(path.dirname(undatedOut), { recursive: true });
 await writeFile(undatedOut, undated.map((row) => JSON.stringify(row)).join("\n") + (undated.length ? "\n" : ""), "utf8");
+await writeFile(heicSkippedOut, heicSkipped.map((row) => JSON.stringify(row)).join("\n") + (heicSkipped.length ? "\n" : ""), "utf8");
 await writeFile(taskItemsOut, taskItems.map((item) => JSON.stringify(item)).join("\n") + (taskItems.length ? "\n" : ""), "utf8");
 
 console.log(`manifest: ${manifestPath}`);
-console.log(`photos: ${photos.length} total -> ${dated.length} dated (will attempt ingestion), ${undated.length} undated (written to ${undatedOut}, not ingested)`);
+console.log(`photos: ${photos.length} total -> ${dated.length} dated, ${undated.length} undated (written to ${undatedOut}, not ingested)`);
+console.log(`  of the ${dated.length} dated: ${decodable.length} will attempt ingestion, ${heicSkipped.length} HEIC skipped as currently undecodable (written to ${heicSkippedOut}, not corrupted -- see script comment)`);
 console.log(`videos: ${videos.length} (out of scope for this script; no ingestion path yet)`);
 console.log(`mode: ${mode}`);
 
