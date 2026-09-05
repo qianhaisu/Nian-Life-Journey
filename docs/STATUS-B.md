@@ -67,3 +67,11 @@
 - 完成：① latestPortrait 加 media-quark-sha-* ID 过滤器（排除 WeChat/乳儿班食物照）；② SnapshotSummary 组件创建；③ 首页/about/月页三处 summary 渲染统一用组件，不再出现「- 」原始文字；④ chapter-summary CSS 适配 ul
 - typecheck 通过，推 main
 - 下一步：B-9d（IO 兜底 + 直边圆角收口 + 月页通栏线）
+
+### 2026-09-05 11:0x · B-9d 完成，推 main cc1cd5a
+
+- 完成：① IO fallback（scroll-reveal.tsx，iOS Safari）；② home-month 卡片壳；③ SnapshotSummary icons 属性 + 首页要点小图标；④ Badge white-space:nowrap；⑤ home-lead 1100px 放宽；⑥ text-link 1px→2px sage；⑦ 月页 month-day 去除 border-top；⑧ chapter-masthead 去除 border-bottom
+- typecheck 通过，推 main
+- 下一步：等入箱新任务 / Cowork 验收 B-9bc-fix 和 B-9d
+
+=== B 轨已到收尾节点，可以 /clear ===

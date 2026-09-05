@@ -499,7 +499,19 @@ B-1 至 B-5 的"没做到什么"栏都说"未在线上验证"，这里补验：
 
 **没做到什么**　未在线上实看——需 Vercel 部署后打开 `/about` 确认肖像 id 以 `media-quark-sha-` 开头；打开 `/memory/2026/08` 确认 summary 分行显示、页面 grep「- 」= 0。B-9bc-fix 第 3 条（IntersectionObserver 兜底）和第 4 条（月页通栏线）与 9d 一起做。
 
-**下一件**　B-9d（全站收口：iOS IO 兜底 + 剩余 straight-edge 圆角 + 月页通栏线）。
+**下一件**　B-9d（已做，见下）。
+
+---
+
+### B-9d · 全站收口 · 完成 2026-09-05
+
+**线上多了什么**　commit cc1cd5a：① `scroll-reveal.tsx` Client Component：在不支持 `animation-timeline:view()` 的 iOS Safari 上，给 html 加 `.io-reveal-pending`，用 IntersectionObserver 当元素进入视口时加 `.is-visible`——苏静在微信/Safari 里也能看到照片依次醒来；② 首页「本月入口」改为整块可点的圆角卡片（`--card-soft` 米色底 + 32px 圆角 + hover 上浮），badge 显示月份+年龄；③ `SnapshotSummary` 增加 `icons` 属性，首页「最近的新变化」每条要点前加关键词匹配的内联 SVG 图标（语言/动作/兴趣/作息/社交，16px，--sage/--clay/--apricot 颜色）；④ `date-badge` 和 `home-lead .memory-lead .time-signature` 加 `white-space:nowrap`（Badge 不再折两行）；⑤ home-lead 在 ≥1000px 时放宽到 1100px；⑥ `.text-link/.back-link` 下划线从 `1px currentColor` 改为 `2px var(--sage)`；⑦ 月页每天分隔从 `border-top` 改为加大 `padding-top:32px`；⑧ chapter-masthead 移除 `border-bottom`。
+
+**怎么验证的**　typecheck 通过（0 错误）；推 main (cc1cd5a)，Vercel 自动部署。
+
+**没做到什么**　① 未在真机上确认 IO fallback 效果（iOS Safari 实机测试）；② 图标为确定性关键词匹配，未验收每条实际要点的匹配准确率；③ B-9d 入箱第 5 条「`.text-link` 下划线等全站统一」只改了主体规则，个别 `.text-link` override（如 `.archive-expand`）保留原样——非阻塞。
+
+**下一件**　读入箱顶部看有无新任务；若无，等 Cowork 验收 B-9bc-fix 和 B-9d。
 
 ---
 
