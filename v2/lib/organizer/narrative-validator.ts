@@ -70,6 +70,15 @@ const CLICHES = [
   "见证了", "留下了美好", "满满的爱", "治愈了", "小小的身体里", "成长的印记",
 ];
 
+// The prompt bans "家人" as a speaker (identity.ts's whole point: an unmapped speaker is
+// UNKNOWN_SPEAKER_LABEL, never flattened into a generic family collective). Found 2026-09-05
+// auditing P1-0 output: the writer routes around the literal ban with "家里人" — same anonymous
+// collective, different two characters, and it had already reached six live months (03 through 08)
+// because human review only ever grepped the exact string "家人". This is prompt-only enforcement
+// with no code-level backstop, so catch the loophole here instead of trusting the next synonym
+// won't slip through too.
+const GENERIC_FAMILY_COLLECTIVE = /家人|家里人|一家人/;
+
 // The pipeline's own reasoning must never reach the family. Found in the first Writer v2 shadow:
 // asked to be careful about an unresolved subject, the model wrote the CAUTION into the story —
 // 「家里聊起他已经学会欢迎欢迎，但这句话说的是谁，没法确认。」 A reader of 张年's archive should
@@ -286,6 +295,8 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
 
   if (containsTechnicalPlaceholder(title) || containsTechnicalPlaceholder(story)) add("technical_placeholder");
   for (const cliche of CLICHES) if (title.includes(cliche) || story.includes(cliche)) add("cliche", cliche);
+  const collective = `${title}${story}`.match(GENERIC_FAMILY_COLLECTIVE)?.[0];
+  if (collective) add("generic_family_collective", collective);
   const emotion = story.match(EMOTION_INFERENCE)?.[0];
   if (emotion) add("unsupported_emotional_inference", emotion);
   const causal = story.match(CAUSAL_INFERENCE)?.[0];
