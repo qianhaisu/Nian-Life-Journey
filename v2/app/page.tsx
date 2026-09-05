@@ -66,15 +66,19 @@ export default async function HomePage() {
     {/* 最近的新变化：直接复用 monthly_snapshot.summary，有就显示，没有就整块消失 */}
     {summary && changeLabel && changeHref ? <section className="home-change reading-wrap" aria-labelledby="change-title">
       <h2 id="change-title" className="section-mark">最近的新变化</h2>
-      <SnapshotSummary text={summary} className="home-change-note serif" />
+      <SnapshotSummary text={summary} className="home-change-note serif" icons />
       <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
     </section> : null}
 
-    {/* 本月入口：简洁的月份入口，不重复 cover 的月份 */}
-    {showThisMonth ? <section className="home-month reading-wrap" aria-labelledby="month-title">
-      <h2 id="month-title" className="serif"><Link href={monthHref}>{thisMonth.label}</Link></h2>
-      {thisMonth.ageLabel ? <p className="chapter-age">当时 {thisMonth.ageLabel}</p> : null}
-      <Link className="text-link" href={monthHref}>翻看这个月</Link>
+    {/* 本月入口：整块可点的圆角卡片 */}
+    {showThisMonth ? <section className="home-month reading-wrap">
+      <Link className="home-month-card" href={monthHref} aria-label={`翻看${thisMonth.label}`}>
+        <span className="month-card-badge">
+          <span>{thisMonth.label}</span>
+          {thisMonth.ageLabel ? <span>{` · 当时 ${thisMonth.ageLabel}`}</span> : null}
+        </span>
+        <p className="month-card-cta">翻看这个月 →</p>
+      </Link>
     </section> : null}
   </div>;
 }

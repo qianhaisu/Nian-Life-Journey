@@ -59,7 +59,7 @@ time, .growth-chart strong, .portrait-facts strong { font-variant-numeric: tabul
 .brand-copy small { flex: 0 0 auto; color: var(--color-muted); font-size: clamp(.64rem, 1.5vw, .76rem); letter-spacing: .08em; }
 .desktop-nav { display: none; }
 .section-mark, .eyebrow, .layer-label { display: block; color: var(--color-accent); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
-.text-link, .back-link { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 1px solid currentColor; font-size: .82rem; font-weight: 700; transition: color 180ms var(--ease-out), transform 180ms var(--ease-out); }
+.text-link, .back-link { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 2px solid var(--sage); font-size: .82rem; font-weight: 700; transition: color 180ms var(--ease-out), transform 180ms var(--ease-out); }
 .text-link:hover, .back-link:hover { color: var(--color-accent); transform: translateX(4px); }
 .primary-button { border: 1px solid var(--color-primary) !important; background: var(--color-primary) !important; color: var(--color-bg) !important; border-radius: 12px !important; }
 .primary-button:hover { border-color: var(--color-accent) !important; background: var(--color-accent) !important; transform: translateY(-2px); box-shadow: 0 8px 16px oklch(49% .13 38 / .16); }
@@ -204,7 +204,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-moment .chapter-meta { margin-top: 20px; }
 
 /* B-9a: date badge + moment left-right layout */
-.date-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 20px; }
+.date-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 20px; white-space: nowrap; }
 .moment-layout { padding-bottom: clamp(56px, 8vw, 96px); }
 .moment-photo-col { min-width: 0; }
 .moment-text-col { min-width: 0; }
@@ -224,12 +224,16 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .home-lead .memory-lead .memory-photo:hover .photo { transform: translateY(-8px) scale(1.02); box-shadow: var(--shadow-hover); }
 }
 .home-lead .memory-lead .memory-photo:active .photo { transform: scale(.98); }
-.home-lead .memory-lead .time-signature { display: inline-flex; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 12px; }
+.home-lead .memory-lead .time-signature { display: inline-flex; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 12px; white-space: nowrap; }
 .home-lead .memory-lead .time-signature time, .home-lead .memory-lead .time-signature span { color: inherit; font-size: inherit; font-weight: inherit; }
 @media (min-width: 900px) {
   .home-lead .memory-lead { display: flex; flex-direction: row; align-items: flex-start; gap: 60px; }
   .home-lead .memory-lead .memory-photo { flex: 1.2; min-width: 0; }
   .home-lead .memory-lead .memory-copy { flex: 0.8; min-width: 0; padding-top: 20px; }
+}
+/* B-9d: widen the "最近生活" cover container on large screens so photo:text = 1.2:0.8 at full size */
+@media (min-width: 1000px) {
+  .home-lead.reading-wrap { width: min(1100px, calc(100% - 64px)); }
 }
 .home-past { padding: clamp(64px, 8vw, 96px) 0 clamp(40px, 6vw, 64px); }
 .home-past .memory { margin-top: 20px; }
@@ -244,6 +248,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-month .memory-lines { margin-top: 20px; }
 .home-month .chapter-meta { margin: 14px 0 6px; }
 .home-month .text-link { display: inline-block; margin-top: 16px; }
+/* B-9d: 本月入口 card — clickable card with badge + soft rounded shell */
+.home-month-card { display: block; padding: clamp(24px, 4vw, 40px); background: var(--card-soft); border-radius: var(--r-card); text-decoration: none; transition: transform .3s var(--ease-hover), box-shadow .3s var(--ease-hover); }
+@media (hover: hover) { .home-month-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); } }
+.home-month-card:active { transform: scale(.98); }
+.month-card-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); white-space: nowrap; }
+.month-card-cta { margin: 16px 0 0; color: var(--muted); font-size: .88rem; font-weight: 600; }
 
 /* Year / month anchors */
 .year-chapter { padding-bottom: clamp(48px, 7vw, 88px); }
@@ -263,7 +273,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .year-month .photo-strip { margin-top: 20px; }
 .year-month .memory-lines { margin-top: 12px; }
 .year-month .chapter-meta { margin: 8px 0 0; }
-.chapter-masthead { display: grid; gap: 8px; padding: clamp(32px, 6vw, 64px) 0 clamp(24px, 4vw, 40px); border-bottom: 1px solid var(--color-primary); }
+.chapter-masthead { display: grid; gap: 8px; padding: clamp(32px, 6vw, 64px) 0 clamp(32px, 5vw, 56px); }
 .chapter-masthead .back-link { justify-self: start; margin-bottom: 24px; }
 .chapter-masthead h1 { margin: 6px 0 0; font-size: clamp(2.8rem, 9vw, 5.5rem); font-weight: 500; letter-spacing: -.04em; line-height: 1; }
 .chapter-age { margin: 4px 0 0; color: var(--color-muted); font-size: .95rem; }
@@ -276,7 +286,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* The month's days: one bordered block per day, date and age as a quiet running head. */
 .month-days { margin-top: clamp(32px, 5vw, 56px); }
 .month-days > ol { margin: 0; padding: 0; list-style: none; }
-.month-day { padding: 20px 0 10px; border-top: 1px solid var(--color-border); }
+.month-day { padding: 32px 0 10px; }
 .month-day .photo-strip { margin-top: 0; }
 .month-day-date { display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px; font-size: .8rem; color: var(--color-muted); }
 .month-day-date time { color: var(--color-secondary); font-weight: 700; }
@@ -467,6 +477,18 @@ button:disabled { cursor: not-allowed; opacity: .45; }
     .memory-entry .memory-copy { animation: fadeInUp .5s var(--ease) both; animation-timeline: view(); animation-range: entry 8% entry 36%; }
     .month-moment { animation: fadeInUp .5s var(--ease) both; animation-timeline: view(); animation-range: entry 0% entry 30%; }
   }
+}
+
+/* B-9d: IntersectionObserver fallback for animation-timeline:view() (iOS Safari).
+   When the root has .io-reveal-pending (set by scroll-reveal.tsx when view() is unsupported),
+   elements start hidden and are revealed by JS adding .is-visible. */
+@media (prefers-reduced-motion: no-preference) {
+  .io-reveal-pending .memory-entry .memory-photo,
+  .io-reveal-pending .memory-entry .memory-copy,
+  .io-reveal-pending .month-moment { opacity: 0; transform: translateY(24px); transition: opacity .45s var(--ease), transform .45s var(--ease); }
+  .io-reveal-pending .memory-entry .memory-photo.is-visible,
+  .io-reveal-pending .month-moment.is-visible { opacity: 1; transform: none; }
+  .io-reveal-pending .memory-entry .memory-copy.is-visible { opacity: 1; transform: none; transition-delay: 0.1s; }
 }
 
 /* Photo viewer overlay — frosted dark glass */
