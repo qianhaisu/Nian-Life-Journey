@@ -85,6 +85,13 @@
       "when": 1788567784803,
       "tag": "0011_dusty_iron_fist",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788575217536,
+      "tag": "0012_early_secret_warriors",
+      "breakpoints": true
     }
   ]
 }

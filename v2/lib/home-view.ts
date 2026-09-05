@@ -15,7 +15,7 @@ import { latestGrowthNote, type GrowthNote } from "@/lib/growth-notes";
 import type { MediaRef, MonthChapter, YearChapter } from "@/lib/memory-chapters";
 import { buildMonthComposition, type MediaPrivilege, type PublicationMoment } from "@/lib/publication-moments";
 import { formatMonth } from "@/lib/time-signature";
-import { isRecent, monthsBetween, selectHomeLead, type HomeLead, type RecencyReference } from "@/lib/time-truth";
+import { isRecent, monthsBetween, RECENT_ACTIVITY_MONTH_GAP, selectHomeLead, type HomeLead, type RecencyReference } from "@/lib/time-truth";
 
 export type MomentCover = {
   moment: PublicationMoment;
@@ -127,8 +127,14 @@ export function buildHomeView({ chapters, store, birthDay, snapshots, privilege,
       changeLabel = thisMonth.label;
       changeHref = `/memory/${thisMonth.month.slice(0, 4)}/${thisMonth.month.slice(5, 7)}`;
     } else {
-      // Current month has no snapshot (too few approved events) — show the latest month that does.
-      const latest = [...snapshots].sort((a, b) => b.month.localeCompare(a.month))[0];
+      // Current month has no snapshot (too few approved events) — show the latest month that does,
+      // but only if it is still recent by the same policy as everywhere else on the page
+      // (RECENT_ACTIVITY_MONTH_GAP). Without this bound, a single old seed snapshot sitting alone
+      // in an otherwise-empty store would resurface as "最近的新变化" no matter how long ago it was
+      // written — a full year, in the case this guards (time-truth.test.mjs Case 6).
+      const latest = [...snapshots]
+        .filter((item) => monthsBetween(item.month, thisMonth.month) <= RECENT_ACTIVITY_MONTH_GAP)
+        .sort((a, b) => b.month.localeCompare(a.month))[0];
       if (latest) {
         summary = latest.summary;
         const fallbackChapter = chapters.flatMap((y) => y.months).find((m) => m.month === latest.month);
