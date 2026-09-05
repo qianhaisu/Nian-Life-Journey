@@ -76,6 +76,26 @@ const POLICIES: Record<string, SubjectGatePolicy> = {
   // 2026-09 dry-run so far, so this changes nothing this month; re-verify before relying on this for
   // a month where it might actually matter.
   "conversation:b4bdc9710e1faebcc88fd25e": "excluded",
+
+  // Pre-registered post-fix ids (P1-1, 2026-09-05). wechat-markdown.ts used to hash the export
+  // header's 消息数量/导出时间 into conversationId, so EVERY re-export of EVERY markdown-sourced
+  // conversation minted a brand-new id for the same real conversation (docs/STATUS.md 2026-09-04
+  // "根因" — this is where the -earlier export/current export- pairs above came from). The fix keys
+  // conversationId on 会话ID instead, but that only stops FUTURE fragmentation; it does not change
+  // ids already written to raw_sources. The very next re-export of each of these conversations will
+  // therefore mint one more, final id — different from every id above — which would otherwise reach
+  // subjectGateFor() unlisted and silently fall back to the strictest "private" policy. Registered
+  // ahead of time, with the same policy as that conversation's existing (pre-fix) entry, so that
+  // fallback never happens. Computed directly from each export's real 会话ID/标题/会话类型 (not from
+  // any row already in the database), so this is safe to land before the next re-export runs.
+  "conversation:064d5dfbd798a5f27223c758": "group", // 主群 (作战部队), post-fix id
+  "conversation:d3a0e5f619ac6fe3e40d81cf": "excluded", // 乳儿班 md, post-fix id — still superseded by DAYCARE_CONVERSATION json
+  "conversation:8778e74dea416b9fc8ab6651": "excluded", // 张小年小群 md, post-fix id — still superseded by 87c42fdc… json
+  "conversation:3769bfd8fba668c7fb3ad240": "excluded", // 亲爱的爸爸妈妈 md, post-fix id — still superseded by 77348fd4… json
+  "conversation:c9882c6d1fb49581840dd47c": "excluded", // 温州爸妈 md, post-fix id — same unresolved status as b4bdc971… above
+  "conversation:8245344e70d2a1a24311ea3e": "group", // 老苏家, post-fix id
+  "conversation:bfdcc142ba4c02f5aebec4c7": "private", // 阿静 (妈妈), post-fix id
+  "conversation:6789abd45ba255751fd4d428": "private", // 陈亚萍 (奶奶), post-fix id
 };
 
 export function subjectGateFor(conversation: string): SubjectGate {
