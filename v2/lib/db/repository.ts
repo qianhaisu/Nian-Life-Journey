@@ -24,6 +24,7 @@ export const getOrganizerStore = repository.getOrganizerStore.bind(repository);
 export const getOrganizerWindowInput = repository.getOrganizerWindowInput.bind(repository);
 export const getEventDetail = repository.getEventDetail.bind(repository);
 export const getMonthArchive = repository.getMonthArchive.bind(repository);
+export const listArchiveMonths = repository.listArchiveMonths.bind(repository);
 export const appendUpload = repository.appendUpload.bind(repository);
 export const persistUpload = repository.persistUpload.bind(repository);
 export const persistChatImportMessage = repository.persistChatImportMessage.bind(repository);

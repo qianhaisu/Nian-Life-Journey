@@ -10,6 +10,7 @@ import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImpo
 import { normalizeSha256 } from "./chat-import-persistence";
 import { indexReviews, isEventPublishable, isTracePublishable, normalizeQualityDecision, type QualityReview } from "@/lib/organizer/quality-review";
 import { birthDayOf } from "@/lib/time-signature";
+import { calendarMonthOf } from "@/lib/timeline-dates";
 import { ChatImportStateError, acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 
 // tx.rollback() doesn't make db.transaction() resolve to whatever the callback returns after it —
@@ -547,6 +548,18 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       };
     },
     async getMonthArchive(month: string) { return assembleMonthArchive(month); },
+    async listArchiveMonths() {
+      const [events, traces, media] = await Promise.all([
+        db.select({ occurredAt: t.lifeEvents.occurredAt }).from(t.lifeEvents).where(eq(t.lifeEvents.profileId, CANONICAL_PROFILE_ID)),
+        db.select({ occurredAt: t.dailyTraces.occurredAt }).from(t.dailyTraces).where(eq(t.dailyTraces.profileId, CANONICAL_PROFILE_ID)),
+        db.select({ takenAt: t.media.takenAt }).from(t.media).where(eq(t.media.profileId, CANONICAL_PROFILE_ID)),
+      ]);
+      const months = new Set<string>();
+      for (const row of events) { const m = calendarMonthOf(row.occurredAt); if (m) months.add(m); }
+      for (const row of traces) { const m = calendarMonthOf(row.occurredAt); if (m) months.add(m); }
+      for (const row of media) { const m = calendarMonthOf(row.takenAt); if (m) months.add(m); }
+      return [...months].sort();
+    },
     async appendUpload(input) { return (await persistUpload(input)).source; },
     async persistUpload(input) { return persistUpload(input); },
     async findMediaAssetByChecksum(checksum) {

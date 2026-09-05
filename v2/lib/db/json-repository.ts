@@ -142,6 +142,14 @@ export function createJsonRepository(): Repository {
         rawSources: store.rawSources.filter((item) => sourceIds.has(item.id)),
       };
     },
+    async listArchiveMonths() {
+      const store = await readStore();
+      const months = new Set<string>();
+      for (const item of store.events) { const m = calendarMonthOf(item.occurredAt); if (m) months.add(m); }
+      for (const item of store.dailyTraces) { const m = calendarMonthOf(item.occurredAt); if (m) months.add(m); }
+      for (const item of store.media) { const m = calendarMonthOf(item.takenAt); if (m) months.add(m); }
+      return [...months].sort();
+    },
     async appendUpload(input: UploadPersistInput) { return (await persistUploadInJson(input)).source; },
     async persistUpload(input: UploadPersistInput) { return persistUploadInJson(input); },
     async findMediaAssetByChecksum(checksum: string) { const store = await readStore(); return assetByChecksum(store, checksum); },

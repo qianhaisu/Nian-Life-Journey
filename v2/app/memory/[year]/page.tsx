@@ -5,9 +5,19 @@ import { ArchiveNav } from "@/components/archive-nav";
 import { EditorialMemory } from "@/components/editorial-memory";
 import { PhotoStrip } from "@/components/media-sequence";
 import { loadFamilyArchive } from "@/lib/family-archive";
+import { listArchiveMonths } from "@/lib/db/repository";
 import { buildMemoryIndex, buildYearView } from "@/lib/memory-index";
 
 export const revalidate = 300;
+
+// Without this, the [year] segment has no params known at build time and Next renders it fully
+// dynamic on every request (no CDN cache) regardless of `revalidate` above. A year absent from
+// this list still works — Next falls back to generating it on first request and caching that.
+export async function generateStaticParams() {
+  const months = await listArchiveMonths();
+  const years = new Set(months.map((month) => month.slice(0, 4)));
+  return [...years].map((year) => ({ year }));
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ year: string }> }): Promise<Metadata> {
   const { year } = await params;

@@ -144,6 +144,12 @@ export interface Repository extends ChatImportRepository {
   // doc comment for why getStore() cannot serve this: the archive-expander action needs one month
   // out of the whole profile's history on every click, not the whole history filtered client-side.
   getMonthArchive(month: string): Promise<MonthArchiveInput>;
+  // Every "YYYY-MM" a month page could exist for — same existence rule as buildChapters
+  // (lib/memory-chapters.ts): a life_event, a daily_trace, or a photographed media item landing in
+  // that month. Used only by generateStaticParams (build-time, not a request path) so [year] and
+  // [year]/[month] can be prebuilt and actually served from the CDN instead of rendering on every
+  // hit; a month missing from this list still works, it just falls back to on-demand ISR.
+  listArchiveMonths(): Promise<string[]>;
   appendUpload(input: UploadPersistInput): Promise<RawSource>;
   persistUpload(input: UploadPersistInput): Promise<UploadPersistResult>;
   findMediaAssetByChecksum(checksum: string): Promise<MediaAsset | null>;

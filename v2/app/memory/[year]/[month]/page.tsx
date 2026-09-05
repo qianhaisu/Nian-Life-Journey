@@ -7,12 +7,21 @@ import { SnapshotSummary } from "@/components/snapshot-summary";
 import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { loadFamilyArchive } from "@/lib/family-archive";
+import { listArchiveMonths } from "@/lib/db/repository";
 import { findMonth } from "@/lib/memory-chapters";
 import { buildMonthComposition, monthStandfirst } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
 import { formatMonth } from "@/lib/time-signature";
 
 export const revalidate = 300;
+
+// Same reasoning as [year]/page.tsx's generateStaticParams: without params known at build time
+// this segment renders fully dynamic on every request. A month absent here still works via
+// on-demand ISR — new months don't need to be pre-listed.
+export async function generateStaticParams() {
+  const months = await listArchiveMonths();
+  return months.map((month) => ({ year: month.slice(0, 4), month: month.slice(5, 7) }));
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ year: string; month: string }> }): Promise<Metadata> {
   const { year, month } = await params;
