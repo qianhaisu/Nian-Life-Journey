@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 // it is. Nothing rotates, nothing counts at the reader, nothing asks them to upload.
 export default async function HomePage() {
   const archive = await loadFamilyArchive();
-  const { cover, mark, laterLifeNote, thisMonth, summary, monthHref } = buildHomeView(archive);
+  const { cover, mark, laterLifeNote, thisMonth, summary, changeLabel, changeHref, monthHref } = buildHomeView(archive);
   const alternates = cover.kind === "memory" ? cover.lead.month.memories.filter((memory) => memory.id !== cover.lead.memory.id).slice(0, 2) : [];
   // Don't show "本月入口" when it repeats the cover's own month.
   const coverMonth = cover.kind === "moment" ? cover.cover.month.month : undefined;
@@ -57,10 +57,10 @@ export default async function HomePage() {
     {cover.kind === "empty" ? <section className="home-lead reading-wrap"><p className="serif archive-empty">{archive.chapters.length > 0 ? "还没有一段整理好的记忆可以放在这里。" : "档案还是空的。等时间再走一会儿。"}</p></section> : null}
 
     {/* 最近的新变化：直接复用 monthly_snapshot.summary，有就显示，没有就整块消失 */}
-    {summary && thisMonth ? <section className="home-change reading-wrap" aria-labelledby="change-title">
+    {summary && changeLabel && changeHref ? <section className="home-change reading-wrap" aria-labelledby="change-title">
       <h2 id="change-title" className="section-mark">最近的新变化</h2>
       <p className="home-change-note serif">{summary}</p>
-      <p className="chapter-meta"><Link className="text-link" href={monthHref}>{thisMonth.label}</Link></p>
+      <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
     </section> : null}
 
     {/* 本月入口：简洁的月份入口，不重复 cover 的月份 */}

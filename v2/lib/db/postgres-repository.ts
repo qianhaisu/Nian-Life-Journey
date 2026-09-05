@@ -332,23 +332,27 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
   // backend view (Organizer, archive and ingest pipelines read them by source/asset id); pages
   // narrow them to the profile with scopeStoreToProfile.
   async function assembleStore(): Promise<Store> {
-    const [profileRows, contributors, media, mediaAssets, mediaLocations, connectorStates, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns, organizerJobs, chatImportTasks, links, qualityReviewRows, snapshotRows] = await Promise.all([
+    // P1-5: scoped read — the rendering path never touches rawSources.text (the single heaviest
+    // column at 44k rows of chat messages) and never reads pipeline-only tables (organizerRuns,
+    // organizerJobs, chatImportTasks, connectorStates). Dropping them cuts the query payload from
+    // ~120 MB to ~5 MB and eliminates the >30 s archive-expander timeouts.
+    const [profileRows, contributors, media, mediaAssets, mediaLocations, rawSources, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, links, qualityReviewRows, snapshotRows] = await Promise.all([
       db.select().from(t.profiles).where(eq(t.profiles.id, CANONICAL_PROFILE_ID)).limit(1),
       db.select().from(t.contributors),
       db.select().from(t.media),
       db.select().from(t.mediaAssets),
       db.select().from(t.mediaLocations),
-      db.select().from(t.connectorStates),
-      db.select().from(t.rawSources),
+      // Only the columns composeFamilyArchive actually reads: mediaPrivilegeOf needs id +
+      // sourceType + sourceLabel; latestActivityDay needs capturedAt + deletedAt;
+      // scopeStoreToProfile needs profileId. The `text` column (chat message bodies) is the
+      // single largest contributor to payload and is never read by any page.
+      db.select({ id: t.rawSources.id, profileId: t.rawSources.profileId, contributorId: t.rawSources.contributorId, sourceType: t.rawSources.sourceType, contentTypes: t.rawSources.contentTypes, capturedAt: t.rawSources.capturedAt, mediaIds: t.rawSources.mediaIds, sourceLabel: t.rawSources.sourceLabel, visibility: t.rawSources.visibility, deletedAt: t.rawSources.deletedAt }).from(t.rawSources),
       db.select().from(t.lifeEvents),
       db.select().from(t.dailyTraces),
       db.select().from(t.growthRecords),
       db.select().from(t.careRecords),
       db.select().from(t.careEpisodes),
       db.select().from(t.monthlyFocusGoals),
-      db.select().from(t.organizerRuns),
-      db.select().from(t.organizerJobs),
-      db.select().from(t.chatImportTasks),
       db.select().from(t.sourceMemoryLinks),
       db.select().from(t.contentQualityReviews),
       // T20-B: every month's own snapshot, not just the newest — a month page needs its own.
@@ -366,7 +370,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       media: media as unknown as Store["media"],
       mediaAssets: mediaAssets as unknown as Store["mediaAssets"],
       mediaLocations: mediaLocations as unknown as Store["mediaLocations"],
-      connectorStates: connectorStates as unknown as Store["connectorStates"],
+      connectorStates: [],
       rawSources: rawSources as unknown as Store["rawSources"],
       events: publishableEvents as unknown as Store["events"],
       dailyTraces: publishableTraces as unknown as Store["dailyTraces"],
@@ -374,9 +378,9 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       careRecords: careRecords as unknown as Store["careRecords"],
       careEpisodes: careEpisodes as unknown as Store["careEpisodes"],
       monthlyFocusGoals: monthlyFocusGoals as unknown as Store["monthlyFocusGoals"],
-      organizerRuns: organizerRuns as unknown as Store["organizerRuns"],
-      organizerJobs: organizerJobs as unknown as Store["organizerJobs"],
-      chatImportTasks: chatImportTasks.map((task) => taskFromRow(task as unknown as Record<string, unknown>)),
+      organizerRuns: [],
+      organizerJobs: [],
+      chatImportTasks: [],
       links: links as Store["links"],
       qualityReviews: qualityReviewRows.map((row) => reviewFromRow(row as unknown as Record<string, unknown>)),
       monthlySnapshots: snapshotRows as unknown as Store["monthlySnapshots"],

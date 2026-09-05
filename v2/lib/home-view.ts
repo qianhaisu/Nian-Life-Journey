@@ -81,6 +81,10 @@ export type HomeView = {
   // The month block's pictures: the composition's vouched preview, never a raw slice.
   thisMonthPreview: MediaRef[];
   summary?: string;
+  // The month label and href for the "最近的新变化" section — may differ from thisMonth when
+  // the current month has no snapshot and we fall back to the latest available one.
+  changeLabel?: string;
+  changeHref?: string;
   monthHref: string;
 };
 
@@ -112,7 +116,27 @@ export function buildHomeView({ chapters, store, birthDay, snapshots, privilege,
   const thisMonthPreview = thisMonth ? buildMonthComposition(thisMonth, privilege).preview : [];
   // A month summary is quoted only for the month it was written about and only when memories stand
   // behind it (lib/family-archive.ts) — a snapshot is a chapter summary, never the newest story.
-  const summary = thisMonth ? snapshots.find((item) => item.month === thisMonth.month)?.summary : undefined;
+  // Snapshot for "最近的新变化": prefer thisMonth's snapshot, fall back to the latest available.
+  let summary: string | undefined;
+  let changeLabel: string | undefined;
+  let changeHref: string | undefined;
+  if (thisMonth) {
+    const thisMonthSnapshot = snapshots.find((item) => item.month === thisMonth.month);
+    if (thisMonthSnapshot) {
+      summary = thisMonthSnapshot.summary;
+      changeLabel = thisMonth.label;
+      changeHref = `/memory/${thisMonth.month.slice(0, 4)}/${thisMonth.month.slice(5, 7)}`;
+    } else {
+      // Current month has no snapshot (too few approved events) — show the latest month that does.
+      const latest = [...snapshots].sort((a, b) => b.month.localeCompare(a.month))[0];
+      if (latest) {
+        summary = latest.summary;
+        const fallbackChapter = chapters.flatMap((y) => y.months).find((m) => m.month === latest.month);
+        changeLabel = fallbackChapter?.label ?? formatMonth(latest.month);
+        changeHref = `/memory/${latest.month.slice(0, 4)}/${latest.month.slice(5, 7)}`;
+      }
+    }
+  }
   const monthHref = thisMonth ? `/memory/${thisMonth.month.slice(0, 4)}/${thisMonth.month.slice(5, 7)}` : "/memory";
-  return { cover, pastLead, mark, laterLifeNote, change, thisMonth, thisMonthPreview, summary, monthHref };
+  return { cover, pastLead, mark, laterLifeNote, change, thisMonth, thisMonthPreview, summary, changeLabel, changeHref, monthHref };
 }
