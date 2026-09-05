@@ -98,12 +98,12 @@ export default async function HomePage() {
     {recentCluster.length >= 2 ? <section className="home-cluster reading-wrap" aria-label="最近的照片">
       <div className="home-cluster-grid">
         <Link href={`/events/${recentCluster[0].memory.id}`} className="cluster-item cluster-large">
-          <Photo media={recentCluster[0].photo} sizes="(max-width: 720px) 65vw, 480px" />
+          <Photo media={recentCluster[0].photo} variant="thumbnail" sizes="(max-width: 720px) 65vw, 480px" />
         </Link>
         <div className="cluster-stack">
           {recentCluster.slice(1).map(({ memory, photo }) => (
             <Link key={memory.id} href={`/events/${memory.id}`} className="cluster-item">
-              <Photo media={photo} sizes="(max-width: 720px) 30vw, 220px" />
+              <Photo media={photo} variant="thumbnail" sizes="(max-width: 720px) 30vw, 220px" />
             </Link>
           ))}
         </div>

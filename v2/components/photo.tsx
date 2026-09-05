@@ -25,7 +25,14 @@ export function Photo({ media, sizes, priority = false, variant = "web", classNa
   const [failed, setFailed] = useState(false);
   const [fullSize, setFullSize] = useState(false);
   const [actual, setActual] = useState<{ width: number; height: number } | null>(null);
-  if (failed) return null;
+  // Final fallback: Next optimizer timed out or the derivative is missing — serve the thumbnail
+  // directly (bypasses optimizer) so the slot never goes blank. Use stored metadata for shape since
+  // no successful load occurred.
+  if (failed) {
+    const shape = media;
+    // eslint-disable-next-line @next/next/no-img-element
+    return <figure className={`photo photo-${orientationOf(shape)} ${className}`.trim()} style={{ aspectRatio: aspectRatioOf(shape) }}><img src={mediaDeliveryUrl(media.id, "thumbnail")} alt={media.alt} /></figure>;
+  }
   const wantsThumbnail = variant === "thumbnail" && !fullSize;
   const src = wantsThumbnail ? media.thumbnailSrc ?? mediaDeliveryUrl(media.id, "thumbnail") : media.src;
   const width = media.width || 4;
