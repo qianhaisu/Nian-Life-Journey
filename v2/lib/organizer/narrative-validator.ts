@@ -73,11 +73,15 @@ const CLICHES = [
 // The prompt bans "家人" as a speaker (identity.ts's whole point: an unmapped speaker is
 // UNKNOWN_SPEAKER_LABEL, never flattened into a generic family collective). Found 2026-09-05
 // auditing P1-0 output: the writer routes around the literal ban with "家里人" — same anonymous
-// collective, different two characters, and it had already reached six live months (03 through 08)
-// because human review only ever grepped the exact string "家人". This is prompt-only enforcement
-// with no code-level backstop, so catch the loophole here instead of trusting the next synonym
-// won't slip through too.
-const GENERIC_FAMILY_COLLECTIVE = /家人|家里人|一家人/;
+// collective, different two characters. A same-day fix that only blacklisted those two extra
+// characters missed the actual shape of the problem (Cowork's catch): "有人问起..." and "家里有人
+// 说..." are the identical failure — an attribution that cannot resolve to a specific person in
+// family-registry — wearing yet another synonym. The real rule per identity.ts is "a speaker either
+// resolves to a concrete identity or the sentence isn't written"; this pattern class is the pragmatic
+// stand-in for that (a full parse-every-attribution-clause-and-resolve-against-the-registry checker
+// would be the complete version, not built here) — verb-gated on 有人/大家 so it doesn't fire on an
+// unrelated "有人" that isn't introducing a quote or judgment.
+const GENERIC_FAMILY_COLLECTIVE = /家人|家里人|一家人|长辈|亲戚|家属|家庭成员|有人(说|问|讲|提到|回|答|猜|觉得)|大家(说|问|讲|提到|都说|都觉得)/;
 
 // The pipeline's own reasoning must never reach the family. Found in the first Writer v2 shadow:
 // asked to be careful about an unresolved subject, the model wrote the CAUTION into the story —
