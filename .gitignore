@@ -8,3 +8,7 @@ node_modules/
 .github/skills/quarkclouddrive/workbuddy/search/
 .github/skills/quarkclouddrive/workbuddy/download/
 .github/skills/quarkclouddrive/scripts/search-results/
+
+*.log
+Claude outputs/
+.github/skills.zip
