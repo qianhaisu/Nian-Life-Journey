@@ -1264,3 +1264,46 @@ node --import tsx scripts/month-review.mjs --month=YYYY-MM --commit
 （夸克背书规则改成了信任名单，不是字面"provider=夸克"）。
 
 === A 轨已到收尾节点，可以 /clear ===
+
+### 2026-09-05 05:0x · Claude Code (新 Session，读交接稿接手) · P1-1 身份修复：代码修完 + 预注册未来 id，未做历史行重写
+
+1. **线上无新增家人能读的内容**——本轮是管线正确性修复，不是内容。
+2. **确认了 P1-5 剩余部分（`getStore()` 按月 scoped read、`no-store`→revalidate）全部卡在
+   `app/**/page.tsx`**（`export const dynamic = "force-dynamic"` 就在各 page.tsx 里），INBOX 顶部
+   看板到目前为止没有 Cowork 给出的分工结论，按 HANDOFF-A 的既定判断跳过，改做 P1-1。
+3. **根因（`docs/STATUS.md` 2026-09-04 已查明，这次实际修复）**：`wechat-markdown.ts:17` 把整个
+   导出头部（含「消息数量」「导出时间」）一起哈希进 `conversationId`，而 `canonicalMessageId` 又把
+   `conversationId` 编进每条消息的身份——**每重新导出一次，该会话全部消息身份作废**。改成只用
+   「会话ID」+ 标题 + 「会话类型」（跟 `wechat-weflow-json.ts` 已经在用的稳定写法一致，加
+   `markdown\n` 前缀避免和 JSON 那边的 id 撞车），**排除了消息数量/导出时间这两个易变字段**。
+   新增测试：同一会话两次「导出」（消息数量、导出时间都不同）现在产出完全相同的
+   `conversationId`/`messageId`（`v2/test/wechat-markdown-bundle.test.mjs`）。`typecheck` 干净，
+   645/645 测试通过。**commit `2e38e5a`**。
+4. **验证过这不是纸上谈兵**：直接读了 `E:\WechatHis\texts` 下真实的 9 个会话的导出头部（只读了
+   会话ID/类型/标题这几行元数据，没有读聊天正文），用修好的公式重新算出了每个会话「下次重新导出」
+   会拿到的新 `conversationId`。同时查了生产库 `raw_sources`（`provider='wechat'`，44,345 行）：
+   目前 15 个 `sourceLabel` 分组对应 9 个真实会话——**「主群」「乳儿班（md）」两个会话确实已经因为
+   这个 bug 分裂成两个 `conversationId`**（例：主群 856b8ec2…=8550 条 + a673c0e0…=3958 条，两段
+   日期完全首尾相接、无重叠，加起来正好等于导出头部写的 12508 条——是身份分裂，不是内容重复）。
+   另外 40 条属于同一个 `documentDigest` 但发送者不同、时间戳整分钟等间隔——核对后就是
+   CLAUDE.md 停下清单里那条已知的「40 条测试残留」，不是本轮范围，没有碰。
+5. **「存量迁移」做了预注册，没做历史行重写**：`lib/organizer/subject-gate.ts` 的 `POLICIES`
+   表已经在用「逐个列出已知 conversationId」的方式人工规避了历史分裂（比如「主群」的两个旧 id
+   都已经在表里，都标成 `group`），所以历史遗留的分裂本身**当前没有已知的线上后果**。但代码修复
+   本身有一个新副作用：**下次 Teddy 重新导出任何一个会话，都会算出一个全新的、表里没有的
+   `conversationId`**（旧 id 是用错误公式算的，跟新公式对不上）——如果不预先登记，这个新 id 会
+   命中 `subjectGateFor()` 的兜底分支，被当成从没见过的会话，直接退化成最严格的 `private` 策略。
+   对「主群」「老苏家」这类本应是 `group` 策略的会话，这会在下一次增量导入时悄悄收紧主体门，
+   是一个真实的产品回归风险。**已经把 9 个真实会话「修复后会拿到的 id」全部预先算好、按对应旧
+   id 一样的策略写进 `POLICIES` 表**（`commit 86f174e`），这样下次重新导出直接落在正确的策略上，
+   不会有一次「悄悄变严」的窗口期。**没有做的**：把 856b8ec2/a673c0e0 这类已经产生的历史行改写成
+   统一的新 id（要动 `raw_sources.id`/`providerExternalId`、`media.id`、以及
+   `media_assets.rawSourceId`/`media.rawSourceId`/`source_memory_links.rawSourceId`/
+   `life_events.sourceIds`/`life_events.mediaIds`/`daily_traces.sourceIds`/
+   `organizer_runs.sourceIds` 里所有引用它们的地方）——**这是因为现有分类表已经吸收了这个分裂，
+   没有已知的正确性问题在等这次迁移去修，而历史行重写要动的表和字段很多、对生产数据的写风险和
+   收益不成比例**。如果之后发现哪里真的因为一个会话有两个 id 而出问题（比如某处按单个
+   conversationId 去聚合一个会话的全部消息），再针对那个具体问题做定向迁移，而不是现在为了
+   「彻底」去重写四十多条历史分裂行。
+6. **下一件**：按执行顺序（P1-0 → P1-5 → P1-9 → P1-8/P1-12 → P1-1 → **P1-2** → ...），P1-1 到此
+   做完，接下来做 P1-2（夸克 2,279 张入库）。
