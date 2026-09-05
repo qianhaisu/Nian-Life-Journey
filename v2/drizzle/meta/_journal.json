@@ -78,6 +78,13 @@
       "when": 1788404352155,
       "tag": "0010_dt_fingerprint_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788567784803,
+      "tag": "0011_dusty_iron_fist",
+      "breakpoints": true
     }
   ]
 }

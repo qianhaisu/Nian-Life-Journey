@@ -50,7 +50,7 @@ export const rawSources = pgTable("raw_sources", {
   extractedMedicalFacts: jsonb("extracted_medical_facts").$type<{ hospital?: string; examinationType?: string; recordedAt?: string; facts: string[] }>(),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
-}, (table) => ({ byProfile: index("raw_sources_profile_idx").on(table.profileId), byStatus: index("raw_sources_status_idx").on(table.status), canonicalIdentity: uniqueIndex("raw_sources_provider_external_id_unique").on(table.provider, table.providerExternalId) }));
+}, (table) => ({ byProfile: index("raw_sources_profile_idx").on(table.profileId), byStatus: index("raw_sources_status_idx").on(table.status), byCapturedAt: index("raw_sources_captured_at_idx").on(table.capturedAt), canonicalIdentity: uniqueIndex("raw_sources_provider_external_id_unique").on(table.provider, table.providerExternalId) }));
 
 export const mediaAssets = pgTable("media_assets", {
   id: text("id").primaryKey(),

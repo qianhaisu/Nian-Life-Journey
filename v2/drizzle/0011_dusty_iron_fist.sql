@@ -1,0 +1,1 @@
+CREATE INDEX "raw_sources_captured_at_idx" ON "raw_sources" USING btree ("captured_at");
