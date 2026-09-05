@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArchiveExpander } from "@/components/archive-expander";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
@@ -78,9 +79,15 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
           <PhotoGallery photos={day.photos} dateLabel={day.dateLabel} ageLabel={day.ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
         </li>)}
       </ol>
-      {/* T20-A3: a screenful shows by default (原则五, "大部分内容默认不出现") — the rest is real,
-          counted here, not deleted; there is no expand-in-place yet (see docs/STATUS.md T20-A3). */}
-      {composition.archiveFoldedPhotoCount > 0 ? <p className="chapter-meta">还有 {composition.archiveFoldedDayCount} 天、{composition.archiveFoldedPhotoCount} 张照片收在档案里，未在此页展示。</p> : null}
+      {/* B-3: ArchiveExpander replaces the static "还有 N 天" text; fetches hidden days on demand. */}
+      <ArchiveExpander
+        year={year}
+        month={monthSegment}
+        foldedDayCount={composition.archiveFoldedDayCount}
+        foldedPhotoCount={composition.archiveFoldedPhotoCount}
+        visibleDayKeys={composition.archiveDaysVisible.map((d) => d.day)}
+        monthAgeLabel={chapter.ageLabel}
+      />
       {composition.smallImageCount > 0 ? <p className="chapter-meta">还有 {composition.smallImageCount} 张过小的图片（表情、缩略图）留在档案记录里，未在此显示。</p> : null}
     </details> : null}
 
