@@ -52,6 +52,7 @@ export default async function AboutPage() {
       <p className="about-portrait-date"><time dateTime={portrait.day}>摄于 {portrait.dateLabel}</time>{portraitRecent ? null : <span> · 档案里最新的一张</span>}</p>
     </div> : null}
 
+    <div className="about-timeline">
     {notes.length > 0 ? <section className="about-notes" aria-labelledby="notes-title">
       <h2 id="notes-title" className="section-mark">{notesHeading}</h2>
       <dl>{notes.map((note) => {
@@ -98,6 +99,7 @@ export default async function AboutPage() {
         </div>;
       })}</dl>
     </section> : null}
+    </div>
 
     {hasDeeper ? <details className="about-deeper">
       <summary><span className="serif">更深的资料</span><small>{[heights.length > 0 ? "身高" : "", weights.length > 0 ? "体重" : "", care.length > 0 ? "照护" : ""].filter(Boolean).join(" · ")}</small></summary>

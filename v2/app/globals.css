@@ -30,6 +30,8 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-hover: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-out: cubic-bezier(.25, 1, .5, 1);
+  --muted: #7A7267;
+  --card-soft: #F3EEE6;
 }
 
 * { box-sizing: border-box; }
@@ -469,7 +471,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* 张年 */
 .about-age { margin: 10px 0 0; color: var(--color-muted); font-size: 1.05rem; }
 .about-portrait { margin-top: 28px; }
-.about-portrait .photo { max-width: min(100%, 560px); }
+.about-portrait .photo { max-width: min(100%, 480px); border-radius: 50% 50% 32px 32px / 40% 40% 32px 32px; overflow: hidden; box-shadow: var(--shadow); }
 .about-notes { padding: clamp(40px, 6vw, 64px) 0; }
 .about-notes dl { margin: 20px 0 0; border-top: 1px solid var(--color-primary); }
 .about-notes dl > div { display: grid; gap: 8px; padding: 22px 0; border-bottom: 1px solid var(--color-border); }
@@ -490,6 +492,23 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .about-deeper > summary::after { margin-left: auto; color: var(--color-accent); content: "＋"; }
 .about-deeper[open] > summary::after { content: "－"; }
 .about-deeper .chart-pair { margin: 8px 0 24px; }
+
+/* B-9b: About page timeline — scrolling line + arch portrait node cards */
+.about-timeline { position: relative; padding-left: 32px; }
+/* Vertical trunk line — visible by default; scroll-drives growth when supported */
+.about-timeline::before { content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px; background: var(--sage); opacity: .35; transform-origin: top; transform: scaleY(1); }
+@supports (animation-timeline: scroll()) {
+  .about-timeline::before { transform: scaleY(0); animation: b9b-line-grow linear both; animation-timeline: scroll(root); }
+  @keyframes b9b-line-grow { to { transform: scaleY(1); } }
+}
+@media (prefers-reduced-motion: reduce) { .about-timeline::before { animation: none !important; transform: scaleY(1); } }
+/* Node cards */
+.about-timeline .about-notes { position: relative; padding: clamp(18px, 3.5vw, 28px); background: var(--card-soft); border-radius: 20px; margin-bottom: 16px; }
+/* Suppress old padding/borders inherited from .about-notes inside timeline */
+.about-timeline .about-notes dl { border-top: none; margin-top: 12px; }
+.about-timeline .about-notes dl > div { border-bottom: none; padding: 12px 0 0; }
+/* Sage dot on the trunk */
+.about-timeline .about-notes::before { content: ''; position: absolute; left: -24px; top: 26px; width: 10px; height: 10px; background: var(--sage); border-radius: 50%; border: 2px solid var(--color-bg); }
 .single-measure { display: grid; gap: 4px; margin: 0; padding: 24px 0; border-top: 1px solid var(--color-primary); }
 .single-measure span { color: var(--color-secondary); font-size: .75rem; font-weight: 700; }
 .single-measure strong { font-family: var(--font-heading); font-size: 2rem; font-weight: 400; }
