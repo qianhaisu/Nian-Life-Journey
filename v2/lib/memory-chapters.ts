@@ -8,6 +8,7 @@
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
+import { isPortraitOfZhangnian } from "@/lib/media/representative";
 import { mediaBindingTrusted } from "@/lib/organizer/quality-review";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
@@ -335,17 +336,13 @@ export function latestLeadPhoto(chapters: YearChapter[]): MediaRef | undefined {
 // own lead, or a picture the family's photo archive or a published memory stands behind. Nothing
 // vouched → no portrait. An empty slot is honest; a stranger's picture is not.
 export function latestPortrait(chapters: YearChapter[], isVouched: (photo: MediaRef) => boolean = () => false): { photo: MediaRef; day: string; dateLabel: string } | undefined {
-  // Only Quark family-photo backed media (id starts with "media-quark-sha-") are eligible as
-  // 张年's portrait. WeChat forwards and daycare shots reach the archive too, but the about page
-  // must show 张年 — not food, not a classroom activity. A vouching-only gate is not enough because
-  // trusted delivery paths also carry non-person images; source identity is the only reliable gate.
-  const isQuarkOrigin = (photo: MediaRef) => photo.id.startsWith('media-quark-sha-');
+  // Only Quark family-photo backed media are eligible as 张年's portrait — see lib/media/representative.ts.
   const isPortraitOriented = (photo: MediaRef) => Boolean(photo.width && photo.height && photo.width < photo.height);
   let fallback: { photo: MediaRef; day: string; dateLabel: string } | undefined;
 
   for (const year of chapters) for (const month of year.months) {
-    const memoryLead = month.memories.find((memory) => memory.lead && isQuarkOrigin(memory.lead));
-    const eligible = (photo: MediaRef) => heroSized(photo) && isVouched(photo) && isQuarkOrigin(photo);
+    const memoryLead = month.memories.find((memory) => memory.lead && isPortraitOfZhangnian(memory.lead));
+    const eligible = (photo: MediaRef) => heroSized(photo) && isVouched(photo) && isPortraitOfZhangnian(photo);
     const photoDay = month.photoDays.find((day) => day.photos.some(eligible));
     if (photoDay && (!memoryLead || photoDay.day >= memoryLead.signature.day)) {
       const portraitPhoto = photoDay.photos.find((p) => eligible(p) && isPortraitOriented(p));

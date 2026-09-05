@@ -5,6 +5,7 @@ import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { buildHomeView } from "@/lib/home-view";
+import { isPortraitOfZhangnian } from "@/lib/media/representative";
 import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
 export const dynamic = "force-dynamic";
@@ -28,13 +29,19 @@ export default async function HomePage() {
     for (const month of year.months) {
       for (const memory of month.memories) {
         if (!memory.lead) continue;
-        if (!archive.privilege.trusted.has(memory.lead.id)) continue;
+        if (!isPortraitOfZhangnian(memory.lead)) continue;
         if (memory.lead.id === coverPhotoId) continue;
         recentCluster.push({ memory, photo: memory.lead });
         if (recentCluster.length >= 3) break outer;
       }
     }
   }
+
+  // B-15: Only quark family-album photos go in any cover slot — wechat-media is evidence, not portrait.
+  const momentHeroPhotos = cover.kind === "moment" ? [
+    ...(cover.cover.moment.hero && isPortraitOfZhangnian(cover.cover.moment.hero) ? [cover.cover.moment.hero] : []),
+    ...cover.cover.moment.supporting.filter(isPortraitOfZhangnian),
+  ] : [];
 
   return <div className="home-page">
     <header className="home-masthead reading-wrap reveal">
@@ -45,11 +52,11 @@ export default async function HomePage() {
     {cover.kind === "moment" ? <section className="home-lead home-moment" aria-labelledby="moment-title">
       <h2 id="moment-title" className="section-mark reading-wrap">{cover.cover.moment.kind === "photo_led" ? "最近的一天" : "最近记下来的一天"}</h2>
       <div className="moment-layout photo-wrap">
-        {(cover.cover.moment.hero || cover.cover.moment.supporting.length > 0) ? (
+        {momentHeroPhotos.length > 0 ? (
           <div className="moment-photo-col">
             <PhotoGallery
-              photos={[...(cover.cover.moment.hero ? [cover.cover.moment.hero] : []), ...cover.cover.moment.supporting]}
-              heroIndex={cover.cover.moment.hero ? 0 : undefined}
+              photos={momentHeroPhotos}
+              heroIndex={0}
               heroClassName="moment-hero"
               dateLabel={cover.cover.moment.dateLabel}
               ageLabel={cover.cover.moment.ageLabel}

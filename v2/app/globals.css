@@ -576,10 +576,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @media (hover: hover) { .month-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-hover); } }
 .month-card:active { transform: scale(.98); }
 /* Force horizontal crop: override Photo's intrinsic aspect-ratio via absolute positioning */
-.month-card-photo { position: relative; height: clamp(160px, 40vw, 230px); overflow: hidden; background: var(--card-soft); }
+.month-card-photo { position: relative; height: clamp(160px, 40vw, 240px); overflow: hidden; background: var(--card-soft); }
 .month-card-photo .photo { position: absolute; inset: 0; }
-.month-card-photo .photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 32%; }
-.month-card-photo--empty { position: relative; height: clamp(160px, 40vw, 230px); background: var(--card-soft); }
+.month-card-photo .photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
 .month-card-body { padding: 18px 22px 22px; }
 .month-card-label { display: block; font-size: 1.3rem; font-weight: 600; color: var(--color-text); }
 .month-card-age { display: block; margin-top: 4px; color: var(--muted); font-size: .8rem; }
