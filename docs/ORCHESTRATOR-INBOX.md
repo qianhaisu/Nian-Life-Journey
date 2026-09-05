@@ -1,3 +1,18 @@
+# ⚠️ GIT 修复（下个 session 第一件事做）
+
+Cowork commit `9a1d2a7` 用了空的临时 index，导致 6 个文件被错误标记为删除。
+**文件全在磁盘上，没丢。** 修法：
+
+```bash
+rm -f .git/HEAD.lock
+git add docs/HANDOFF-A.md v2/scripts/quark-history-init.mjs v2/scripts/t20c-grade-events.mjs v2/drizzle/0012_early_secret_warriors.sql v2/drizzle/meta/0012_snapshot.json "v2/app/memory/[year]/[month]/actions.ts"
+git commit -m "fix: restore files accidentally removed by Cowork temp-index commit"
+```
+
+做完这个再往下读任务。
+
+---
+
 # INBOX — 给 Claude Code 的任务队列
 
 Cowork 写这里，Claude Code 读这里并执行，结果写回 `docs/STATUS.md`。
@@ -25,7 +40,43 @@ Teddy 不必在中间转述。
 > **不要从文件开头往下读全部历史**——上面大半是已经 done 的旧任务。
 > **只看这块。** 这里列的就是当前该做的，按顺序。做完一条在这里标 done。
 
-**更新于 2026-09-05 05:30 UTC（Cowork）· P1-3 done，派发 P1-4**
+**更新于 2026-09-05 06:10 UTC（Cowork）· P1-4 done，P1-2b 转码完成，派发 P1-2b 入库**
+
+P1-4 已完成（commit e47a4c0 + 3d407a4）：trusted-photo-sources.ts 上线，主群三个 export ID 加入信任名单。
+HEIC 转码已完成：1,468 张全部转为 JPEG，0 失败，manifest 就绪。
+
+---
+
+## A 轨当前任务：P1-2b（第二阶段）· HEIC 转码照片入库
+
+### 目标
+
+把 1,468 张已转码的 HEIC→JPEG 照片入库到 raw_sources + media_assets + media。
+转码已完成，manifest 已生成，只差入库这一步。
+
+### 执行步骤
+
+1. **Manifest 位置**：'E:\WechatHis\quark-history\2026-09-03\manifests\quark-heic-converted-task-items.jsonl'（1,468 行）
+2. **入库脚本**：'v2/scripts/quark-photo-apply.mjs'——已验证过能吃转码后的 JPEG（之前 10 张测试全部成功）
+3. **运行方式**：
+   
+   如果脚本不接受 --manifest 参数，读代码确认入口，用正确的参数调用。
+4. **预计耗时**：5-6 小时（每条约 12-30 秒，含 R2 上传 + DB 写入）
+5. **每 10 分钟汇报一次进度**（追加到 STATUS.md）：当前入库数 / 1,468，失败数，速率
+
+### 硬边界
+
+- source_label 必须保持 'Quark 历史素材 2026-09-03'（和之前 224 条一致）
+- 不改 schema、不改 processing.ts、不改 B 轨文件
+- 如果 Neon CU-hours 接近限额（100 CU/月），暂停并报告
+- 遇到批量失败（连续 10 条失败）立即停下报告，不要盲目重试
+
+### 验收
+
+- raw_sources 里 source_label = 'Quark 历史素材 2026-09-03' 的数量 >= 1,500（224 已有 + 1,468 新增，允许少量重复/失败）
+- media_assets 对应增长
+- 按月分布覆盖 2025-01 到 2026-08（对照转码目录的月份分布）
+- 完成后跑 nianlife-status.mjs 汇报最终数字
 
 P1-3 已完成（commit f8b009e + 21edcec）：T20-C 分级收编进 organizer-month-write.mjs --commit，
 全站只保留一个判断点。验收通过：approved 133 / store_only 220，每月 >=8 天有文字 + >=1 章节级（01 月除外）。
