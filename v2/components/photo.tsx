@@ -21,24 +21,32 @@ import { mediaDeliveryUrl } from "@/lib/media/paths";
 // Falling back is two steps, not one: a missing thumbnail derivative drops to the web variant, and
 // only a photo that fails at full size removes itself. Disappearing on the first 404 would have
 // hidden the ~185 pictures that have no thumbnail row.
-export function Photo({ media, sizes, priority = false, variant = "web", className = "" }: { media: MediaRef; sizes: string; priority?: boolean; variant?: "web" | "thumbnail"; className?: string }) {
+//
+// `fit` picks which of two shapes a photo takes, decided by the API rather than by CSS specificity
+// (B-16: an inline `aspectRatio` on the figure once outranked a card's fixed-height rule and blew a
+// 610px hole in the /memory index). "natural" (default) sizes the box to the photo's own ratio — a
+// portrait WeChat photo stands tall, nothing is cropped. "crop" is for a caller-owned fixed-height
+// slot (a month card cover, a home cluster tile): no aspect-ratio is written, the image fills the
+// slot's own height via CSS `object-fit: cover`.
+export function Photo({ media, sizes, priority = false, variant = "web", fit = "natural", className = "" }: { media: MediaRef; sizes: string; priority?: boolean; variant?: "web" | "thumbnail"; fit?: "natural" | "crop"; className?: string }) {
   const [failed, setFailed] = useState(false);
   const [fullSize, setFullSize] = useState(false);
   const [actual, setActual] = useState<{ width: number; height: number } | null>(null);
+  const shape = actual ? { ...media, ...actual } : media;
+  const figureClassName = `photo photo-${orientationOf(shape)}${fit === "crop" ? " photo-crop" : ""} ${className}`.trim();
+  const figureStyle = fit === "crop" ? undefined : { aspectRatio: aspectRatioOf(shape) };
   // Final fallback: Next optimizer timed out or the derivative is missing — serve the thumbnail
   // directly (bypasses optimizer) so the slot never goes blank. Use stored metadata for shape since
   // no successful load occurred.
   if (failed) {
-    const shape = media;
     // eslint-disable-next-line @next/next/no-img-element
-    return <figure className={`photo photo-${orientationOf(shape)} ${className}`.trim()} style={{ aspectRatio: aspectRatioOf(shape) }}><img src={mediaDeliveryUrl(media.id, "thumbnail")} alt={media.alt} /></figure>;
+    return <figure className={figureClassName} style={figureStyle}><img src={mediaDeliveryUrl(media.id, "thumbnail")} alt={media.alt} /></figure>;
   }
   const wantsThumbnail = variant === "thumbnail" && !fullSize;
   const src = wantsThumbnail ? media.thumbnailSrc ?? mediaDeliveryUrl(media.id, "thumbnail") : media.src;
   const width = media.width || 4;
   const height = media.height || 3;
-  const shape = actual ? { ...media, ...actual } : media;
-  return <figure className={`photo photo-${orientationOf(shape)} ${className}`.trim()} style={{ aspectRatio: aspectRatioOf(shape) }}>
+  return <figure className={figureClassName} style={figureStyle}>
     <Image
       key={src}
       src={src} alt={media.alt} width={width} height={height} sizes={sizes} priority={priority}

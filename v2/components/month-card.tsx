@@ -20,6 +20,7 @@ export function MonthCard({ entry, blurb }: { entry: MonthIndexEntry; blurb?: st
           <Photo
             media={coverPhoto}
             variant="thumbnail"
+            fit="crop"
             sizes="(max-width: 720px) calc(100vw - 32px), 340px"
           />
         </div>

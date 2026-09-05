@@ -575,10 +575,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-card { display: block; background: #fff; border-radius: var(--r-card); overflow: hidden; box-shadow: var(--shadow); transition: transform .4s var(--ease-hover), box-shadow .4s var(--ease-hover); }
 @media (hover: hover) { .month-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-hover); } }
 .month-card:active { transform: scale(.98); }
-/* Force horizontal crop: override Photo's intrinsic aspect-ratio via absolute positioning */
+/* Crop mode (Photo fit="crop"): the card owns the height, the photo fills it. */
 .month-card-photo { position: relative; height: clamp(160px, 40vw, 240px); overflow: hidden; background: var(--card-soft); }
-.month-card-photo .photo { position: absolute; inset: 0; }
-.month-card-photo .photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+.month-card-photo .photo-crop { position: absolute; inset: 0; }
+.month-card-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
 .month-card-body { padding: 18px 22px 22px; }
 .month-card-label { display: block; font-size: 1.3rem; font-weight: 600; color: var(--color-text); }
 .month-card-age { display: block; margin-top: 4px; color: var(--muted); font-size: .8rem; }
@@ -612,8 +612,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .cluster-item { display: block; overflow: hidden; border-radius: var(--r-card); box-shadow: var(--shadow); transition: transform .4s var(--ease-hover), box-shadow .4s var(--ease-hover); height: 100%; }
 @media (hover: hover) { .cluster-item:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); } }
 .cluster-item:active { transform: scale(.98); }
-.cluster-item .photo { position: absolute; inset: 0; }
-.cluster-item .photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 32%; }
+.cluster-item .photo-crop { position: absolute; inset: 0; }
+.cluster-item .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 32%; }
 /* Wrap each cluster-item in a relative container for the absolute photo */
 .cluster-item { position: relative; }
 .cluster-stack .cluster-item { flex: 1; }
