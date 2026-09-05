@@ -41,6 +41,7 @@ export const retryChatImportTask = repository.retryChatImportTask.bind(repositor
 export const completeChatImportTask = repository.completeChatImportTask.bind(repository);
 export const completeChatImportWithWarnings = repository.completeChatImportWithWarnings.bind(repository);
 export const findMediaAssetByChecksum = repository.findMediaAssetByChecksum.bind(repository);
+export const getMediaForDelivery = repository.getMediaForDelivery.bind(repository);
 export const updateMediaAsset = repository.updateMediaAsset.bind(repository);
 export const updateMediaLocation = repository.updateMediaLocation.bind(repository);
 export const removeMediaLocation = repository.removeMediaLocation.bind(repository);

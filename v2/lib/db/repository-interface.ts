@@ -147,6 +147,10 @@ export interface Repository extends ChatImportRepository {
   appendUpload(input: UploadPersistInput): Promise<RawSource>;
   persistUpload(input: UploadPersistInput): Promise<UploadPersistResult>;
   findMediaAssetByChecksum(checksum: string): Promise<MediaAsset | null>;
+  // /api/media/[id]'s only read: one media row, its asset, and that asset's locations — never
+  // getStore()'s whole-archive projection. See lib/db/media.ts's locationForMedia for the
+  // equivalent in-memory-Store shape this narrows down to.
+  getMediaForDelivery(id: string): Promise<{ media: Media; asset: MediaAsset | null; locations: MediaLocation[] } | null>;
   updateMediaAsset(id: string, patch: Partial<MediaAsset>): Promise<MediaAsset | null>;
   updateMediaLocation(id: string, patch: Partial<MediaLocation>): Promise<MediaLocation | null>;
   removeMediaLocation(id: string): Promise<void>;

@@ -12,7 +12,7 @@ import { buildMonthComposition, monthStandfirst } from "@/lib/publication-moment
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
 import { formatMonth } from "@/lib/time-signature";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export async function generateMetadata({ params }: { params: Promise<{ year: string; month: string }> }): Promise<Metadata> {
   const { year, month } = await params;

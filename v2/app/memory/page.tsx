@@ -3,7 +3,7 @@ import { MonthCard } from "@/components/month-card";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { buildMemoryIndex } from "@/lib/memory-index";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 export const metadata: Metadata = { title: "记忆" };
 
 // The archive read as a publication directory: year pill nav → month cards in a two-column grid.

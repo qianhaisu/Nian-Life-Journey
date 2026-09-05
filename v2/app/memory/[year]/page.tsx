@@ -7,7 +7,7 @@ import { PhotoStrip } from "@/components/media-sequence";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { buildMemoryIndex, buildYearView } from "@/lib/memory-index";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export async function generateMetadata({ params }: { params: Promise<{ year: string }> }): Promise<Metadata> {
   const { year } = await params;

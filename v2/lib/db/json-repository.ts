@@ -145,6 +145,14 @@ export function createJsonRepository(): Repository {
     async appendUpload(input: UploadPersistInput) { return (await persistUploadInJson(input)).source; },
     async persistUpload(input: UploadPersistInput) { return persistUploadInJson(input); },
     async findMediaAssetByChecksum(checksum: string) { const store = await readStore(); return assetByChecksum(store, checksum); },
+    async getMediaForDelivery(id: string) {
+      const store = await readStore();
+      const media = store.media.find((item) => item.id === id);
+      if (!media) return null;
+      const asset = media.mediaAssetId ? store.mediaAssets.find((item) => item.id === media.mediaAssetId) ?? null : null;
+      const locations = asset ? store.mediaLocations.filter((item) => item.mediaAssetId === asset.id) : [];
+      return { media, asset, locations };
+    },
     async persistChatImportMessage(input: UploadPersistInput) { return persistUploadInJson(input); },
     async persistChatImportBatch(inputs: UploadPersistInput[]) { return persistChatImportBatchInJson(inputs); },
     async createChatImportTask(input) { return withStoreMutation((store) => createChatImportTask(store.chatImportTasks, input)); },

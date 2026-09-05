@@ -555,6 +555,16 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       const [row] = await db.select().from(t.mediaAssets).where(eq(t.mediaAssets.checksum, normalized));
       return (row as unknown as MediaAsset) ?? null;
     },
+    async getMediaForDelivery(id) {
+      const [mediaRow] = await db.select().from(t.media).where(eq(t.media.id, id));
+      if (!mediaRow) return null;
+      const media = mediaRow as unknown as Media;
+      if (!media.mediaAssetId) return { media, asset: null, locations: [] };
+      const [assetRow] = await db.select().from(t.mediaAssets).where(eq(t.mediaAssets.id, media.mediaAssetId));
+      const asset = (assetRow as unknown as MediaAsset) ?? null;
+      const locations = asset ? (await db.select().from(t.mediaLocations).where(eq(t.mediaLocations.mediaAssetId, asset.id))) as unknown as MediaLocation[] : [];
+      return { media, asset, locations };
+    },
     async persistChatImportMessage(input) { return persistUpload(input); },
     async persistChatImportBatch(inputs) { return persistChatImportBatch(inputs); },
     async createChatImportTask(input: ChatImportTaskCreateInput) {

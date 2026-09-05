@@ -12,7 +12,7 @@ import { ageOn, formatDay, formatMonth, timeSignatureFor } from "@/lib/time-sign
 import type { LifeEvent } from "@/lib/types";
 import { isRecent } from "@/lib/time-truth";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 export const metadata: Metadata = { title: "张年" };
 
 // Who 张年 is right now — and only then, who he was earlier. The page is split in two eras with

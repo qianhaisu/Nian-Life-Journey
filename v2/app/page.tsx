@@ -8,7 +8,7 @@ import { buildHomeView } from "@/lib/home-view";
 import { isPortraitOfZhangnian } from "@/lib/media/representative";
 import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 // The front page answers one question — 最近怎么样，张年 — with ONE expression, the strongest the
 // archive can honestly make (lib/home-view.ts): a recent memory, a recent moment with real words,
