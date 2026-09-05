@@ -3,7 +3,7 @@
 > **这份文档只能覆盖写，不能追加。** 它永远只描述"现在"，长度保持在 100 行以内。
 > 历史在 `git log` 和 `docs/STATUS.md` 里，不在这。一个刚清空上下文的 Session 只读这一份就能接着干。
 >
-> 最后更新：2026-09-05 13:4x · by Claude Code（接手 session）
+> 最后更新：2026-09-05 14:1x · by Claude Code（接手 session）
 
 ---
 
@@ -15,6 +15,7 @@ A 轨 = 写库轨。管数据管线：导入、写手、主体门、分级、月
 ```
 v2/scripts/**        v2/lib/organizer/**      v2/lib/db/**
 v2/.env.local        docs/ORCHESTRATOR-INBOX.md    docs/STATUS.md    docs/HANDOFF-A.md
+v2/lib/family-archive.ts   v2/lib/trusted-photo-sources.ts   v2/lib/home-view.ts
 ```
 
 **B 轨拥有的，我不碰**
@@ -24,7 +25,7 @@ v2/lib/publication-moments.ts     docs/ORCHESTRATOR-INBOX-B.md    docs/STATUS-B.
 ```
 
 **Git**：直接在 main 上做；`git add` 只加自己的文件，**绝不 `git add -A`**；commit 前 `git pull --rebase`；
-撞上 `.git/index.lock` 是 B 轨在提交，等 10 秒重试，别删。
+撞上 `.git/HEAD.lock` 先等 30 秒（b9 在提交）；0 字节锁超过 30 秒可以删。
 
 ---
 
@@ -40,63 +41,53 @@ v2/lib/publication-moments.ts     docs/ORCHESTRATOR-INBOX-B.md    docs/STATUS-B.
 | P1-snap | 月度回顾 bullet 化 | ✅ 数据+渲染全部到位（v2 格式 + B 轨 <ul><li>） | e304b07 + 7fda35b |
 | P1-2 | 夸克 1,690 张历史照片入库 | **到达当前工具链上限（214/1,690）** 见下 | fdd8df3 + 51dcf0b |
 | P1-3 | 主体门 + T20-C 收编 | ✅ 完成（gradeMonthEvents 共享模块，writer 自动调用） | f8b009e |
-| P1-4 | 图文同日绑定（信任名单制） | ⬜ 未开始（P1-3 之后） | — |
+| P1-4 | 图文同日绑定（信任名单制） | ✅ 完成（trusted-photo-sources.ts，主群加入信任名单） | e47a4c0 |
 | P1-6 | 本地 worker | ⬜ 未开始（排最后） | — |
 
 **P1-2 说明**（不是卡住，是遇到了真实的工具链上限）：
-1,690 张中 87%（1,468 张）是 HEIC 格式；这台机器的 libvips/libheif（vips 8.18.6 / libheif 1.23.2）
-在 `createDerivatives()` 时报 `heif: Decoder plugin generated an error`，即使 `sourceImageMetadata()`
-能读取元数据，Windows WIC 也能打开。**不是文件损坏，是这台机器的解码器不支持。**
-已过滤到 `C:\Users\teddy\NianlifeOps\quark-history\2026-09-03\manifests\heic-decode-unsupported.jsonl`
-（1,468 行），未来换解码器后可直接拿这个文件续跑，不必重新扫描整个 manifest。
-222 张非 HEIC 候选中有 8 张 checksum 已存在（另一批次入库过），实际新增 214 条。
-**P1-2b（HEIC 解码）**是单独任务，Cowork 安排，不在当前 A 轨范围。
+1,690 张中 87%（1,468 张）是 HEIC 格式；这台机器的 libvips/libheif 在 `createDerivatives()` 时报错，
+sourceImageMetadata() 能读元数据，Windows WIC 也能打开，不是文件损坏，是 Node 解码器限制。
+已过滤到 `heic-decode-unsupported.jsonl`（1,468 行）。**P1-2b（HEIC 解码）**是单独任务，给新 A 轨 session。
 
-**P1-2 误报说明**（2026-09-05 12:4x Cowork 巡检那条）：巡检用了 `LIKE '%Quark%'` 查出 321 条，
-是把目标批次（214）和另一个不相关的旧批次 `Quark 照片初始化`（107）加在一起了，不是新的崩溃。
-已由 nianlife-b9 在 STATUS.md 和 commit 1eb61b6 里纠正。
-
-**P1-0：01 月不达标（5 天/0 章节级）** 是真实内容薄，不是模型问题（pro 重跑过，仍不达标）。
-由 Cowork/Teddy 判断是否放宽，A 轨不自行动阈值。
+**P1-4 架构说明**：
+- `lib/trusted-photo-sources.ts` → `isTrustedPhotoSource()` = 信任名单的唯一入口
+- 信任名单：Quark album（`sourceType="family_photo"`）+ 乳儿班群（DAYCARE_CONVERSATION）+ 主群三个 ID
+- `family-archive.ts` 的 `mediaPrivilegeOf` 改用 `isTrustedPhotoSource`，两个读路径（getStore + getMonthArchive）自动覆盖
+- 无 schema 改动，无 AI 判断
 
 ---
 
 ## 3 · 下一件事
 
-**P1-4：图文同日绑定（信任名单制）**。具体规格在 ORCHESTRATOR-INBOX.md 的 `### 🚀 P1` 段，
-关键：「背书」= 来源在信任名单里（夸克 + 乳儿班群 + 以后任何 Teddy 点头的会话），不是字面 provider=夸克。
+**先读 INBOX 顶部看板**，确认是否有比 P1-4 之后更急的任务。
 
-**先确认 INBOX 顶部看板是否有比 P1-4 更急的任务**。
+已知待做（如果 INBOX 无更急优先级）：
+- **P1-4 视觉验收**：打开 2026-07 月页（Quark 照片最多，204 张），确认 Quark 照片和文字并排
+- **P1-6（本地 worker）**：INBOX 里最后的 P1 任务
 
 ---
 
 ## 4 · 不要再踩的坑
 
-1. **`REPOSITORY_BACKEND` 不设会静默写进本地 JSON**（`v2/.data/nian-life.json`），终端照样打印
-   "WRITTEN"。写库脚本必须在文件里硬编码 `process.env.REPOSITORY_BACKEND = "postgres"`。
+1. **`REPOSITORY_BACKEND` 不设会静默写进本地 JSON**（`v2/.data/nian-life.json`），终端照样打印 "WRITTEN"。写库脚本必须硬编码。
 2. `organizer-month-write.mjs` 的 `--out` 必须是**仓库外**的绝对路径。
-3. **匿名发言人要按"一类规则"查，不是词表**：「家人」「家里人」「有人说」「有人问」「大家说」
-   「长辈」「亲戚」「家属」都是同一个违规，`narrative-validator.ts` 的 `GENERIC_FAMILY_COLLECTIVE`
-   已经改成这类规则模式。
-4. **月度回顾是二次生成的**：改了 `life_events` 不会自动改 `monthly_snapshot`，都要扫、
-   改完源头后重跑 `month-review.mjs --commit`。
-5. **切换 `AI_MODEL` 重跑一个月，必须加 `--force`**：去重键与模型无关，不加会全部跳过，等于白跑。
-6. **flash 有时会漏掉必填数组字段**（`TypeError` 崩进程）——已在 `narrative-validator.ts` 全部加
-   `?? []`（commit 9eae6eb），再遇到新崩溃去查有没有新的未保护字段访问。
+3. **匿名发言人要按"一类规则"查**，不是词表。
+4. **月度回顾是二次生成的**：改了 `life_events` 不会自动改 `monthly_snapshot`。
+5. **切换 `AI_MODEL` 重跑一个月，必须加 `--force`**：去重键与模型无关。
+6. **flash 有时会漏掉必填数组字段**——已在 `narrative-validator.ts` 全部加 `?? []`。
 7. 验收看数据，不看进程状态。"终端打印出来了" ≠ "数据库里有了"。
-8. **巡检 / 查进度时不要用 `LIKE '%Quark%'`**：会把多个批次加在一起，用精确 `source_label = '...'`。
-9. **T20-C 分级现在是自动的**（P1-3，f8b009e）：`organizer-month-write.mjs --commit` 结束时会自动运行
-   `gradeMonthEvents`。不要再把 `t20c-regrade-memories.mjs` 当成必须手动跑的第二步。
-   它保留用于：改了分级 prompt 之后手动重跑某个月。
+8. **巡检/查进度时不要用 `LIKE '%Quark%'`**：会把多个批次加在一起。
+9. **T20-C 分级现在是自动的**（P1-3）：`organizer-month-write.mjs --commit` 结束时自动运行 `gradeMonthEvents`。
+10. **HEAD.lock = 0 字节且超过 30 秒未变化 = 可以删**（先等 30 秒确认是否 b9 在用）。
 
 ---
 
 ## 5 · 我不能单方面做的
 
-- 删数据、删行（`store_only` 是"不发布"，不是删）
-- 改 B 轨的文件（`v2/components/**`、`v2/app/**/page.tsx`、`v2/app/globals.css`、`v2/lib/publication-moments.ts`）
+- 删数据、删行
+- 改 B 轨文件（`v2/components/**`、`v2/app/**/page.tsx`、`v2/app/globals.css`、`v2/lib/publication-moments.ts`）
 - 为了让数字达标而手动把 `store_only` 改回 approved
-- 放宽主体门 / 分级阈值（低于内容量下限时如实报告，由 Cowork/Teddy 判断）
+- 放宽主体门/分级阈值
 - 接 P1 以外的任务
 
 ---
