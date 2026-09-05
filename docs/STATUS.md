@@ -1409,3 +1409,37 @@ node --import tsx scripts/month-review.mjs --month=YYYY-MM --commit
 9. **下一件**：按 09:40 板子的顺序，第 1-3 项现在都做完了（2、3 是另一个 Session 做的，我验证
    没被碰坏），回到第 4 项 P1-2（夸克入库）——已经在后台跑（见上面 05:3x 那条 predeclare），
    继续等它跑完再查库核实。
+
+### 2026-09-05 06:4x · Claude Code · P1-2 后台任务两次静默中断，已转给 Codex 排查；同时做完 P1-snap（月度回顾分点）
+
+1. **P1-2 后台进程两次静默中断**：`quark-history-init.mjs --apply` 跑到 204/1,690 条时，进程以
+   exit code 0 结束，但**从没打印过脚本自己的最终 JSON 汇总、也没写 `apply-failed.jsonl`**——
+   说明是在 `applyQuarkPhotoArtifact` 的逐条循环内部被整体杀掉，不是某一条素材出错（那条路径
+   已经有 try/catch）。两次都是这个现象，重启后也没查出明显原因（`Get-Process` 看不到崩溃、
+   日志里没有堆栈）。**这属于 CLAUDE.md 里明确划给 Codex 的复审范围**（"importer 与本地
+   worker——幂等、断点续跑、并发、吞吐"），加上这台机器到 Neon 单次查询延迟本身就有 3-7 秒、
+   `ingestOne()` 逐条查 checksum 没有批量预检查，两个问题（静默中断 + 吞吐）性质相近，
+   一起交给了 `/codex:rescue`（后台任务 `task-mtntehv1-r3ils8`）。**没有自己继续瞎猜着改**——
+   Codex 现在在改 `v2/lib/db/client.ts`、`v2/scripts/quark-photo-apply.mjs`，这两个文件这一刻
+   不要碰，等它的报告。
+2. **等 Codex 排查期间做了 P1-snap（Cowork 11:0x 派的、明确说"利用等待时间做，不阻塞 P1-2"）**：
+   `month-review.mjs` 的 prompt 从"3-5 句散文、不分点"改成"3-5 条 `- ` 开头的独立要点行"，加了
+   一个格式校验（少于 2 行或有行不是 `-` 开头就拒绝写库），`PROMPT_VERSION` 升到 `month-review-v2`
+   （旧版本的 review 行不受影响，新生成的能在台账里区分是哪版 prompt 写的）。
+3. **重新生成了 2026-01~08 全部 8 个月的 `monthly_snapshot`**（`--commit`，用的是环境变量里配置的
+   模型），全部一次成功、全部通过"家人"检查和新的分点格式检查。查库核对了全部 8 条 summary 原文
+   （见下方），额外跑了一次正则扫描 `家人|家里人|有人说|有人问|大家说`，**0 命中**。
+4. **发现一个真实的渲染缺口，没有去碰它**：curl 线上首页确认 5 条要点确实都完整写进了 HTML
+   的 `<p class="home-change-note serif">` 里（换行符也在），**但 `globals.css` 里
+   `.home-change-note` 没有 `white-space: pre-line`/`pre-wrap`，纯 `<p>` 标签会把换行当空白
+   吞掉**——浏览器里现在大概率还是看起来像一整段挤在一起，肉眼看不出分点，即使数据已经是分好点
+   的了。这正是 Cowork 11:0x 那条任务说明里预判的情况（"如果它只是 `<p>{summary}</p>`，需要通知
+   Cowork 让 B 轨加 markdown 渲染"）。**没有去动 `app/page.tsx` 或 `globals.css`**——那是 B 轨的
+   文件，需要 B 轨加一行 CSS（`white-space: pre-line`）或者把 `\n` 分行渲染成 `<li>`。
+5. **8 个月最终文案**（已入库，供 Cowork/B 轨核对，不重复贴在这——查
+   `SELECT month, summary FROM monthly_snapshot WHERE month LIKE '2026-0%'` 能看到全部）：
+   逐条都是"这个月开始会什么/多了什么习惯"式的变化句，去掉数字后仍然读得出这个月的张年，
+   引号原话都能对应到给定素材，称谓都是妈妈/爸爸/奶奶/雪姨/老师，没有"家人"。
+6. **下一件**：等 Codex 关于 P1-2 静默中断的报告——报告回来后我会核实它的诊断/修复（不直接信结论，
+   会自己验一遍：跑测试、必要时跑一次小规模真实 apply），确认安全后再继续跑完剩下的 1,486 张。
+   把这条 P1-snap 的渲染缺口写进给 Cowork 的下一条消息，让它决定要不要现在派给 B 轨。
