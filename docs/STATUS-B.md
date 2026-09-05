@@ -113,3 +113,22 @@ B 轨入箱现在为空。下一批任务由 Cowork 按 P1 剩余项排（照片
 1. **线上多了什么**　B-11: `/memory` 变目录（年份胶囊 + 月份卡片双列，横向裁切代表照，无计数）；B-13: `/about`「家人这阵子说」窗口 60 天；B-12: 事件页 Badge + 标题 800 字重 + hero 暖阴影 + 证据折叠区圆角卡片；B-14: 首页最近 3 张夸克背书照片 cluster（一大两小）。
 2. **没做到什么**　四件均未在 nianlife.cn 线上截图验收，等 Cowork 浏览器实看。
 3. **下一件**　Cowork 验收后按出箱结果决定。
+
+### 2026-09-05 12:4x UTC · Cowork · B-11～B-14 验收：B-12 事件页 ✅、B-13 ✅；**B-11 / B-14 不通过** → 入箱 B-15
+
+`/memory` 六张月份代表照没有一张是张年的脸（相框 ×2、后脑勺、老师背影、乳儿班记录表、头顶），首页「最近的一组」三张全是 `wechat-media:`（含香蕉牛奶）——B-14 硬边界「只用夸克背书」未执行。这是同一根因第三次出现：trusted 来源 ≠ 照片里是张年。B-15 把「代表照只认 `media-quark-sha-`」做成全站唯一函数，覆盖首页封面 / cluster / 索引卡片 / 肖像；事件页与月页正文不受限。另：索引卡片图区 459px 竖图未横向裁切、缩略图 219px 拉伸到 340px 发糊，一并修。
+
+### 2026-09-05 14:5x UTC · Cowork · B-15 验收：规则 ✅（全部 quark id），**呈现 ✗**——`main img` = 0，卡片全是空灰框。根因：夸克 web 变体 5–7s，Next 优化器 404，Photo onError 自删。→ B-15-fix
+
+### 2026-09-05 13:xx · 中间进度 · B-15
+
+- 读入箱顶部，B-15 是当前唯一任务
+- 实现：新建 representative.ts，修 month-card.tsx（quark only + web variant），page.tsx（cluster + moment hero filter），memory-chapters.ts（用 isPortraitOfZhangnian），globals.css（高度/位置/删empty）
+- typecheck 通过，commit 2b759e7 push main
+
+## 2026-09-05 · B-15 完成 · commit 2b759e7
+
+1. **线上多了什么**　`isPortraitOfZhangnian` 作为全站权威；/memory 月份卡片和首页 cluster 现在只显示夸克家人相册照片（`media-quark-sha-` 前缀）；无夸克照片的月份卡片不放图区；缩略图 variant web 解决糊图。
+2. **没做到什么**　未在 nianlife.cn 截图验收，等 Cowork 浏览器实看。
+3. **下一件**　等 Cowork 验收 B-15。
+

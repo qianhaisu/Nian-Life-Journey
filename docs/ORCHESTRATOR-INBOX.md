@@ -1,3 +1,7 @@
+# ✅ GIT 修复已完成（commit 5eebfc0），无需再做
+
+---
+
 # INBOX — 给 Claude Code 的任务队列
 
 Cowork 写这里，Claude Code 读这里并执行，结果写回 `docs/STATUS.md`。
@@ -25,188 +29,128 @@ Teddy 不必在中间转述。
 > **不要从文件开头往下读全部历史**——上面大半是已经 done 的旧任务。
 > **只看这块。** 这里列的就是当前该做的，按顺序。做完一条在这里标 done。
 
-**更新于 2026-09-05 06:4x（Claude Code）· P1-2 后台任务两次静默中断，转给 Codex 排查；P1-snap 做完**
+**更新于 2026-09-05 09:55 UTC（Cowork）· P1-2b 入库收尾中（1235/1468），完成后做 P1-6**
 
-`quark-history-init.mjs --apply` 两次都在 204/1,690 条时以 exit 0 静默结束，没有报错、没有最终
-汇总——这是「整个进程被杀掉」的样子，不是某条素材出错（那条路径已有 try/catch）。这正是 CLAUDE.md
-划给 Codex 的复审范围（importer 幂等/吞吐），已经转给 `/codex:rescue` 排查（后台任务
-`task-mtntehv1-r3ils8`，正在改 `v2/lib/db/client.ts`/`v2/scripts/quark-photo-apply.mjs`，**这两个
-文件现在先不要碰**，等它报告）。**P1-2 剩下 1,486 张暂停在这里，等 Codex 的诊断确认安全后再继续**，
-不是不管了。
+**P1-2b 入库接近完成**（1235/1468，~12/min，预计 ~10:05 UTC 完成）。
+**不要重启入库进程。** 让它跑完。
 
-等待期间做完了 Cowork 11:0x 派的 **P1-snap**（月度回顾分点）：`month-review.mjs` 的 prompt 改成
-输出 3-5 条 `- ` 开头的独立要点、加了格式校验、`PROMPT_VERSION` 升到 v2，2026-01~08 全部 8 个月
-重新生成并入库，查库核对全部通过（无「家人/家里人/有人说」类违规）。**发现一个真实的渲染缺口**：
-`app/globals.css` 的 `.home-change-note` 没有 `white-space: pre-line`，`<p>{summary}</p>` 会把
-换行吞掉，浏览器里现在这 5 条要点大概率还是挤成一段——**数据已经分好点了，缺的是这一行 CSS（或
-把 `\n` 拆成 `<li>`）**，需要 Cowork 派给 B 轨，我没有碰 `app/page.tsx`/`globals.css`。
-细节见 `docs/STATUS.md` 06:4x。
+**入库跑完后，A 轨本 session 收工。** P1-6 会在新 session 里做，不要拾取。写完收工汇报到 STATUS.md 就结束。
 
-**🏁 更新于 2026-09-05 07:2x（Claude Code）· P1-2 到达当前工具链上限：214/1,690，不是卡住**
+---
 
-Codex 报告：代码里排不出会静默退出的路径（per-item 报错都在 try/catch 里），判断是"进程被外部
-结束"，不是逻辑 bug；但它确实把 `ingestOne()` 逐条查 checksum 改成了一次性批量查（`v2/lib/db/
-client.ts` 新增 `getMediaAssetChecksumIndex()`），我验过 typecheck/645 测试/批量查询本身耗时都对
-得上。核实后发现了一个更关键的问题：**87%（1,468/1,690）剩下的素材是 HEIC，这台机器的
-libvips/libheif 解不了码**（`heif: Decoder plugin generated an error`）——两个 Session 分别抽样
-验证过，确认不是文件损坏（Windows 自带 WIC 解码器能正常打开），是这台机器解码器本身的兼容性
-问题。原来的流程会对着这些注定失败的文件先把原图传上 R2 再报错，这才是"进度看起来卡住"的真正
-原因（不是挂了，是在传大文件）。已经把 HEIC 提前过滤掉（写到仓库外的
-`heic-decode-unsupported.jsonl`，不是永久跳过，换解码器后能直接捡回来），过滤后剩下 222 张
-非 HEIC 候选 30 秒内跑完：10 条新建、212 条已存在、0 失败，正常退出并打出完整汇总。
+## 🔵 P1-2b 继续跑（不要碰，参考信息）
 
-**P1-2 现在的真实上限是 214 条（+ 之前已有的 8 条），不是 1,682 条。** 剩下 1,468 张 HEIC 要不要
-投入去修解码器（升级 libvips/libheif，或者换个解码路径，会影响 `lib/media/processing.ts` 这条
-全站共用的图片处理链，不是这个脚本内部能孤立解决的），这个判断留给 Cowork/Teddy，我没有自己选
-方向做。细节/协调过程（这轮期间撞上了两个额外的重复 Session，都已经自行停手清理干净，没有产生
-脏数据）见 `docs/STATUS.md` 07:2x。**P1-2 到此为止，下一件按板子顺序是 P1-3。**
+## A 轨当前任务：P1-2b（第二阶段）· HEIC 转码照片入库
 
-**更新于 2026-09-05 11:0x（Cowork）· P1 进度刷新，当前任务：P1-2 续跑 Quark 入库**
+### 目标
 
-## P1 完成状态
+把 1,468 张已转码的 HEIC→JPEG 照片入库到 raw_sources + media_assets + media。
+转码已完成，manifest 已生成，只差入库这一步。
 
-| # | 事项 | 状态 |
-|---|---|---|
-| P1-0 | 2026-01~05 五个月过 T7 管线 | ✅ done（01 月 5 天/0 章节级，素材薄，阈值不动） |
-| P1-5 | 性能：索引 + scoped read + getMonthArchive | ✅ done（8459502 + d1b6e3e + ca9c38d） |
-| P1-1 | 身份修复 conversationId | ✅ done（2e38e5a + 86f174e） |
-| P1-7 | 月末档案展开交互 | ✅ done（B 轨 B-3） |
-| **P1-2** | **Quark 1,690 张历史照片入库** | **🔴 只进了 204 张，需要续跑** |
-| P1-3 | 主体门 + 收编 T20-C 分类器 | ⬜ 未开始（P1-2 之后） |
-| P1-4 | 图文同日绑定（信任名单制） | ⬜ 未开始（P1-2 + P1-3 之后） |
-| P1-6 | 本地 worker | ⬜ 未开始（排最后） |
+### 执行步骤
 
-## 当前任务：P1-2 Quark 历史照片入库（续跑）
+1. **Manifest 位置**：'E:\WechatHis\quark-history\2026-09-03\manifests\quark-heic-converted-task-items.jsonl'（1,468 行）
+2. **入库脚本**：'v2/scripts/quark-photo-apply.mjs'——已验证过能吃转码后的 JPEG（之前 10 张测试全部成功）
+3. **运行方式**：
+   
+   如果脚本不接受 --manifest 参数，读代码确认入口，用正确的参数调用。
+4. **预计耗时**：5-6 小时（每条约 12-30 秒，含 R2 上传 + DB 写入）
+5. **每 10 分钟汇报一次进度**（追加到 STATUS.md）：当前入库数 / 1,468，失败数，速率
 
-**背景**：上一个 A 轨 session 生成了 `manifests/quark-history-manifest.jsonl`（1,690 张有可信日期的照片），
-跑了 `quark-photo-apply.mjs` 但只入了 204 张（跑到一半 session 结束了，后台进程随之死亡）。
-脚本按 checksum 去重，**重跑安全**。
+### 硬边界
+
+- source_label 必须保持 'Quark 历史素材 2026-09-03'（和之前 224 条一致）
+- 不改 schema、不改 processing.ts、不改 B 轨文件
+- 如果 Neon CU-hours 接近限额（100 CU/月），暂停并报告
+- 遇到批量失败（连续 10 条失败）立即停下报告，不要盲目重试
+
+### 验收
+
+- raw_sources 里 source_label = 'Quark 历史素材 2026-09-03' 的数量 >= 1,500（224 已有 + 1,468 新增，允许少量重复/失败）
+- media_assets 对应增长
+- 按月分布覆盖 2025-01 到 2026-08（对照转码目录的月份分布）
+- 完成后跑 nianlife-status.mjs 汇报最终数字
+
+P1-3 已完成（commit f8b009e + 21edcec）：T20-C 分级收编进 organizer-month-write.mjs --commit，
+全站只保留一个判断点。验收通过：approved 133 / store_only 220，每月 >=8 天有文字 + >=1 章节级（01 月除外）。
+
+---
+
+## A 轨当前任务：P1-4 · 图文同日绑定（信任名单制）
+
+### 目标
+
+照片和文字在月页上按「同一天」并排展示，判据是**信任名单制**（不再只限夸克）。
+
+**现状**：月页上照片和文字是分开展示的。照片来源有两类：
+- 夸克相册（218 条已入库，source_label = 'Quark 历史素材 2026-09-03'）
+- 微信群（乳儿班群等，由 wechat-import 导入）
+
+P1 plan review（A 条）已明确：**"背书"的定义从「来源 = 夸克」改成「来源在信任名单里」**——
+夸克 + 乳儿班群 + 以后任何 Teddy 点头的会话。规则是"这个来源的照片默认就是张年"。
+
+### 信任名单
+
+已知可信来源（照片默认是张年）：
+1. **夸克 family_photo**：source_label LIKE 'Quark%' 的 media_assets
+2. **乳儿班群**：conversation:bb5d5ba6da5986d35b923465（张小年家庭群）
+3. **主力作战部队群**：conversation:856b8ec2b8f3ec2871782ca6 和相关 label
+
+信任名单应该是**可配置的**（放在代码常量或配置文件里），未来 Teddy 可以加新来源。
+
+### 做什么
+
+1. **定义信任名单**：在 lib/ 下建一个 trusted-photo-sources.ts（或类似），列出可信来源的匹配规则
+2. **修改绑定逻辑**：月页渲染时，照片如果来自信任名单 **且** 同一天有过主体门的文字（life_events 里有 approved 的记录），则并排展示
+3. **非信任来源的照片**：留在月末档案，不进正文
+4. **首页封面**：去掉「强照片日」规则（如果还在的话），只用信任名单 + 同日文字
+
+### 硬边界
+
+1. **不引入新的 AI 判断**——信任是名单制，不是模型打分
+2. **不改 media_assets schema**——不加列
+3. **不影响已有的月页文字展示**——只改照片的位置和绑定逻辑
+4. **微信照片（非信任来源）不能出现在正文里**——只有信任名单里的来源才行
+
+### 验收
+
+1. 2026-07 月页（Quark 照片最多的月份，204 张 media_assets）：有 Quark 照片和文字并排的日子
+2. 乳儿班群的照片（如果有 approved life_event 同日的）也能并排
+3. 非信任来源的照片仍在月末档案，不在正文
+4. 首页照片来自信任名单
+5. npm run typecheck 和 npm test 通过
+6. 结果写 STATUS.md，**每 5 分钟中间进度汇报**
+
+### 不可接受
+
+- 把 261 张微信照片全部从月页撤下（plan review A 条警告过的场景）
+- 用 AI 模型判断"这张照片是不是张年"
+- 硬编码某些照片 ID
+
+### 代码指引
+
+- 月页渲染入口：app/memory/[year]/[month]/page.tsx
+- 照片展示逻辑：lib/publication-moments.ts（这是 B 轨文件，改之前确认 B 轨没在动——B 轨已收尾，可以改）
+- 事件页照片：app/memory/[year]/[month]/[eventId]/page.tsx
+- 首页：lib/home-view.ts 的 buildHomeView
+- 参考 P1 plan review A 条的完整分析（claude/nianlife-P1-plan-review-2026-09-05.md）
+
+---
+
+## 新 A 轨任务（并行）：P1-2b · HEIC 批量转码 + 二次入库
+
+**背景**：Quark 1,690 张照片里 ~1,470 张是 .HEIC，sharp/libvips 在 Windows 上无法解码。
+非 HEIC 部分已入库 218 条。Windows 本身能正常打开这些 HEIC 文件（系统解码器没问题），
+问题只在 Node.js 的 sharp 库。
 
 **做什么**：
-1. 先查库确认现在 Quark 历史素材有多少条：
-   ```sql
-   SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-09-03';
-   ```
-2. 重新跑 apply（不是 dry-run）：
-   ```bash
-   cd v2 && node scripts/quark-photo-apply.mjs --manifest manifests/quark-history-manifest.jsonl 2>&1 | tee ../quark-apply.log &
-   ```
-   （具体命令以脚本实际参数为准，上面是方向。检查 `scripts/` 下 quark 相关脚本的 `--help` 或源码确认用法。）
-3. 跑完后查库核实：
-   - `raw_sources` 增量 ≈ 1,682（1,690 - 8 已有）
-   - 等量 `media` / `media_assets`
-   - 读 `manifests/apply-failed.jsonl` 看失败分布（HEIC 解码失败是已知的，不是数据损坏）
-4. 结果写 `docs/STATUS.md`
 
-**预期吞吐**：上次实测 ~5 条/分钟（逐条 await，checksum 查询 + R2 put + DB insert），
-1,486 条约 5 小时。这是一次性历史回填，幂等，不需要为速度改逻辑。
+1. 读 manifests/heic-decode-unsupported.jsonl（1,468 行，已由之前的 session 生成）
+2. 用 heic-convert npm 包（纯 JS，不依赖系统解码器）批量转 JPEG
+3. JPEG 输出到 NianlifeOps/quark-history/2026-09-03/jpeg-converted/
+4. 把转码后的 JPEG 文件走 quark-photo-apply.mjs 的正常流程入库
 
-**做完 P1-2 之后**：在 `docs/STATUS.md` 报告完成，写交接稿到 `docs/HANDOFF-A.md`，
-末尾写 `=== A 轨已到收尾节点，可以 /clear ===`，等 Cowork 派下一个任务（P1-3）。
-
-## 重要提醒
-
-- **信任名单改法**（P1-4 用）：P1-4 的「背书」从 `来源=夸克` 改成「来源在信任名单里」——
-  夸克 + 乳儿班群 + 以后任何 Teddy 点头的会话。这条在 P1-4 时执行，现在不动。
-- **P1-3 验收必须同时看内容量下限**：≥8 天有文字 + ≥1 章节级。低于下限说明门太严。
-- **01 月阈值不要自己动**：pro 重跑后仍 5 天/0 章节级，已如实记录，等 Teddy 定。
-
-## P1-snap · 月度回顾 summary 可读性修复（Quark 跑后台时做）
-
-**优先级**：P1-2 Quark apply 放后台之后，利用等待时间做这件。不阻塞 P1-2。
-
-**问题**：首页「最近的新变化」把 `monthly_snapshot.summary` 整段堆在一起，没有分段、没有 bullet，
-一坨文字没有可读性。这是最基本的审美问题，家人不会去读一整段话。
-
-**根因**：`month-review.mjs` 的 prompt 让 AI 输出一整段叙述。需要改成按主题分点输出。
-
-**做什么**：
-1. 找到 `month-review.mjs`（或它调用的 prompt 模板），把 summary 的输出要求改成：
-   - 按主题分点，每点 1-2 句话
-   - 用 markdown bullet（`- `）或换行分隔
-   - 例如原来的一整段应该变成：
-     ```
-     - 入选了幼儿园毕业庆典的节目，妈妈说「张小年上节目了，哈哈」
-     - 开始跟着音乐伴奏舞动，「突然变得好看看绘本」，还会说 ball 了
-     - 吃饭总吃得最急，妈妈和老师都想引导他慢慢吃
-     - 妈妈惦记着预防驼背，说在一群宝宝里面他特别明显
-     ```
-2. 确认首页渲染组件（B 轨的 `app/page.tsx`）能正确渲染 markdown bullet——
-   如果它只是 `<p>{summary}</p>`，需要通知 Cowork 让 B 轨加 markdown 渲染。
-   **你不要动 `app/page.tsx`，那是 B 轨的文件**，只把发现写进 STATUS.md。
-3. 重跑 8 个月的 monthly snapshot（2026-01~08）：
-   ```bash
-   for m in 01 02 03 04 05 06 07 08; do
-     node scripts/month-review.mjs --month "2026-$m" --force --commit
-   done
-   ```
-   （具体参数以脚本实际用法为准。`--force` 是因为已经有 snapshot 了需要覆盖。）
-4. 跑完后 curl 首页确认 summary 已经分点显示（或确认需要 B 轨改渲染）。
-5. 结果写 `docs/STATUS.md`。
-
-**验收**：首页「最近的新变化」文字分成 3-5 个要点，每个要点独立一行，一眼能扫完。
-
-#### 🐛 Cowork 抽读发现的一个真问题（不阻塞，做完 01/02 再修）
-
-**2026-03 有两条章节级写的是同一件里程碑**：
-
-> ★ 会独立行走，玩泡泡笑得眉眼弯弯
-> ★ 年年会独立行走了
-
-「学会独立行走」在同一个月被写成两条 memory 级记忆。产品原则里 AI 的职责之一就是**合并重复**
-（原则五 / 第 5 节"同一件事没有重复"）。一个月只该有 1–4 条章节级，其中还重复一条，很浪费。
-
-**建议**（不要现在停下来做，先把 02/01 跑完）：在 `t20c-regrade-memories.mjs` 里加一步——
-同月的高档候选之间做一次去重判断，同一件里程碑只留写得最好的那条，其余降到 trace。
-
-**⛔ T22（视觉系统 V1）已被 Teddy 01:4x 取消——「先取消」，是暂缓不是废弃。**
-不要开工，不要读它的 spec 去改渲染层。`docs/design/visual-system-v1.md` 和 mockups 原样留着，
-等 Teddy 什么时候说恢复再做。**现在 P1 是唯一在做的事。**
-
-| # | 任务 | 轨 | 在第几节 | 状态 |
-|---|---|---|---|---|
-| 0 | **P1-0：2026-01~05 五个月过 T7 管线** | B·写库 | `### 🚀 P1`（文件末尾） | 🔴 **ready，唯一在做的任务，立刻开跑** |
-| 1 | P1-5 性能 → P1-1 身份 → P1-2 夸克 → P1-3 主体门 → P1-4 图文绑定 | 见 `### 🚀 P1` | ⏳ 按顺序，P1-0 之后 |
-| 2 | P1-7 月末档案展开交互（很小） | A·仓库 | `### 🚀 P1` | ⏳ 任何空档都能插 |
-| — | ~~🎨 T22 视觉系统 V1~~ | — | `### 🎨 T22` | ⛔ **Teddy 01:4x 取消，暂缓** |
-
-⚠️ **动 P1-4 之前必须先读 `### 🚀 P1` 里的「计划已被修订」那一段**——原计划里"照片必须是夸克背书"
-那条规则如果照抄，会把 06~09 页面上 91% 的照片（261/286 张，主力是乳儿班群）撤下来。
-
-（以下是 P0 收尾时的看板，保留作存档。）
-
-**更新于 2026-09-05 00:2x（Claude Code）· P0（2026-06~09）四项全部做完，按 Teddy 指令停在这里，等下一步**
-
-**🛑 Teddy 硬指令（已于 01:3x 解除）**：「p0还差啥，按照26年6-9月标准，这几个月做完先不要继续了」。
-**这条停止令已被 Teddy 01:3x 的新指令取代：「通知 code 开始干 p1」。P1 已经开始，见文件最顶上的看板。**
-（原文保留作存档，不要再据此拒绝新任务。）
-
-| # | 任务 | 状态 |
-|---|---|---|
-| 1 | 2026-06/07/08/09 整月 T7 | ✅ 32/46/46/4 条，0 家人，全部有标题 |
-| 2 | T18 照片落库 + 首页「最近的一天」 | ✅ Cowork 已验收通过 |
-| 3 | T21 撤掉月首照片计数 | ✅ 完成，Cowork 已 curl 核实 |
-| 4 | T20-A1/A2/A4（月页去登记簿感） | ✅ 已验收通过 |
-| 5 | **T20-A3（月末档案封顶）** | ✅ **本轮完成**——默认只渲染一屏（预算 24 张），其余计数说明，数据不删。**未做**：点击展开的交互（首屏体积问题已解决，"展开看全部"这半句还没做） |
-| 6 | T20-B 月度回顾 | ✅ 真的落库了（Cowork 23:4x 抓到脚本忘设 `REPOSITORY_BACKEND`，已修复+重新提交+直接查库核实） |
-| 7 | 一条跑题记忆（讲网站项目本身的） | ✅ 已改成不发布，行未删；全库扫描无第二条 |
-| 8 | **T20-C 记忆分量 + T19 群务降级** | ✅ **本轮完成**——四个月全部跑完（Cowork 00:1x 看到的"06/09 没跑"是只查了 `memory_weight`，那两个月的分级结果本来就是全 trace，`content_quality_reviews` 才是真实证据）。发布中记忆从 128 条降到 52 条（06:10/07:20/08:19/09:3），渲染层也跟上了权重区分 |
-| 9 | T15-D `npm test`（644/644 通过） | ✅ |
-
-✅ **P0（2026-06~09）四项验收标准都做完了**：四个月都有文字、0 家人、照片绑定、月度回顾、记忆分级、
-档案首屏封顶。**未做/已知留白**：T20-A3 的展开交互、首页 memory-vs-recency 优先级的产品判断
-（Cowork 已明确留给 Teddy，不是 bug）。**这轮到此为止，等 Cowork 重新验收 + 等 Teddy 看过网站定夺。**
-
-**T20-B 说明**：`monthlySnapshot` 从「全档案只存一条」改成按月各一条（表本来就有 `(profile,month)` 唯一键，
-只是读取代码一直只取最新一条——现在每个月页读自己那个月）。新脚本 `scripts/month-review.mjs`：只用该月
-已发布的 life_event 综合，不看原始聊天，不足 5 条自动跳过，含「家人」自动拒绝。06/07/08 已生成并写库，
-09（4 条）正确跳过留白。样例（07 月）：「这个月张年从乳儿班升入了大班，老师说「小年的能力在乳儿班已经
-关不住了」……这个月他感冒流浓鼻涕拖了两周，去医院检查过。」——按 06/07/08 三个月分别抽取了真实变化。
-
-**T18 说明**：82 条 T7 life_event 里 66 条回填了 `media_ids`/`hero_media_id`（16 条那天确实没有可信照片，
-不是漏了）；同时修了 `mediaBindingTrusted`（认可 T7 这条精确绑定路径）和首页 `selectRecentMoment`
-（trace 权重的记忆现在能作为兜底的「最近一天」，不再退到无文字的照片日）。**新建脚本
-`scripts/t18-backfill-media-binding.mjs`，2026-08 T7 跑完后要重跑一次**（脚本本身幂等、可安全重跑）。
+**验收**：Quark raw_sources >= 1,500；转码后照片月页可显示；STATUS.md 每 5 分钟汇报
 
 ---
 
@@ -2006,229 +1950,68 @@ Teddy 原话：「p0还差啥，按照26年6-9月标准，这几个月做完先�
 
 ---
 
-### 🎨 T22 · 视觉系统 V1 落地：从「成人极简档案」到「高级家庭成长杂志」— status: ⛔ **暂缓（Teddy 2026-09-05 01:4x：「p22 先取消」）**
+### ~~T22~~ · 已撤回（2026-09-05 08:4x Cowork）
 
-> **不要执行本节。** Teddy 01:4x 取消了 T22，用词是「先取消」——暂缓，不是废弃。
-> spec（`docs/design/visual-system-v1.md`）和 mockups（`docs/design/mockups/*.html`）原样保留，
-> 等 Teddy 明确说恢复再动。当前唯一在做的是 P1，见文件顶部看板。
->
-> （以下是取消前的原文，存档。）
-
-**先读**：`docs/design/visual-system-v1.md`（规则）+ `docs/design/mockups/*.html`（手感；用浏览器打开看，手机宽度）。
-本任务是纯渲染层（`v2/app/**`、`v2/components/**`、`globals.css`、`lib/home-view.ts` / `lib/memory-chapters.ts` / `lib/publication-moments.ts` 的**选择规则**），零数据库写入，不碰 Organizer / 写手 / 主体门。
-
-#### 目标（家人看得见的）
-
-苏静打开 nianlife.cn 首页，第一屏是张年的照片和一枚「1 岁 8 个月」的印章，下面是一句他的事和一句家人原话；翻到 8 月，像翻一期杂志而不是登记簿；点「张年」，看到的是他本人的肖像和家人最近怎么说他。全程没有一个数字、没有一条横线在数她看了多少。
-
-#### 做什么（按设计文档 §5 逐页；顺序 = 提交顺序，每步独立可回滚）
-
-1. **Tokens + 字阶 + 动效**（§1、§2、§6）：替换 `globals.css` 顶部 token；巨字下调；删 `.text-link:hover` 位移；加 `reveal` / `drift` / `prefers-reduced-motion`。**不引入任何 webfont。**
-2. **四个品牌小件**（§3）：`AgeStamp`、`DayMark`、`Speaker`、`GrowthRuler` 四个组件，内联 SVG/CSS，无外部图标。
-3. **照片布局**（§4）：`bleed` / `duo` / `cluster` 三种 + 月页的 bleed↔inset 交错规则，落在 `MonthMoment` / `PhotoStrip` 层。
-4. **首页**（§5.1）：删巨型刊头；封面照 bleed；印章；那一句；「家人说」（确定性正则抽第一句带称谓原话，抽不到不渲染）；最近长大的一点；最近的一组（cluster）；本月（燕麦色块，唯一色块）。无 hero 时按 `home-sparse.html` 走纯排版封面。
-5. **月页**（§5.2）：刊头 = 月份 display + 印章 + 回顾 standfirst；**取消「这个月记下 N 天」整行**（T21 第二步）；正文日子之间无横线，chronicle 合并进正文；档案 summary 去掉「N 张」。
-6. **张年页**（§5.3）：**肖像选择规则改为「最近一条已发布记忆绑定的 hero，且 media 来源身份为夸克 family_photo 背书」**，乳儿班/微信来源即使 trusted 也不得作肖像（线上现在的肖像是乳儿班 9/3 的香蕉和牛奶——`latestPortrait` 在 T11 Part B 把乳儿班升 trusted 后选中了它）；无符合者退到首页封面照；再无则不放图。印章放大；「家人最近说」（最多 3 条，同一正则，可点回记忆）；「最近记下来的」改 DayMark 列表；不渲染任何空格子。
-7. **记忆索引**（§5.4）：月份行用「第一条记忆标题」替换 `indexCount` 的计数；年份区块用 GrowthRuler（V1 等距简化版可以）。
-8. **两个顺手的 bug**：(a) 手机 375px 上 8 月页正文被右侧裁切（Cowork 2026-09-05 实测）——查 `.reading-wrap` / `.moment-text` 的宽度与 `overflow-wrap`；(b) `Photo` 组件的 `sizes` 让 Next 对每张缩略图都请求 `w=3840`（线上所有 `<img src>` 都带 `&w=3840`）——这是一个属性的事，改对 `sizes` 即可。**(b) 不是性能任务，是正在改的组件里的一处错字；Teddy 可否。**
-
-#### 硬边界
-
-- 只改渲染层与选择规则；`life_events` / `daily_traces` / `raw_sources` / `media_*` 零写入。
-- **页面上每一句话都必须能回溯到已发布的 life_event / snapshot 文本**；「家人说」只能是正则从 `story` 里原样切出的引号内容 + registry 称谓，**不允许生成、不允许拼接、不允许无称谓回落**。抽不到就不渲染那块。
-- 封面照 / 肖像 / 最近的一组只用有背书绑定（`hero_media_id` / `media_ids`）的照片；不为了填满放无背书图。
-- 主阅读层（首页、月页正文、张年页、记忆索引）**零计数**；`<details>` 内允许 `<small>` 计数。
-- 不引入 webfont、图标库、组件库；不加圆角卡片阵列；不做轮播 / 蹦跳。
-- 不动 Organizer、写手、主体门、`month-review.mjs`；不动 `/inbox` `/capture` 的功能（样式可以跟随 token）。
-- `tsc --noEmit`、`npm test` 通过；测试断言按新行为更新，但不为过测试改行为。
-- 每步独立 commit；提交信息带 `t22-N`。改完 push，部署后在 STATUS.md 追加三行 + 贴首页 / 8 月 / 张年三页手机截图。
-
-#### 验收（Cowork 会做的，设计文档 §8 全部 8 条，这里只列判定句）
-
-1. 首页不点任何东西：第一屏 ≥60% 是照片；无数字、无通栏横线、无同尺寸卡片；能说出「1 岁 8 个月，最近……」。
-2. `/memory/2026/08` 与 `/memory/2025/03`：无横线分隔、无计数、无「暂无」；稀疏月读起来像安静。
-3. `/about`：肖像是张年本人且来源夸克；「家人最近说」每条有称谓、可点回；无空格子。
-4. 随机截三屏：无工程名词、无计数；重与轻一眼可分。
-5. 抽读 5 句：全部在库里有出处。
-6. 375px 不裁切、不横向滚动。
-7. `prefers-reduced-motion` 下无动画。
-8. 新增字体请求 = 0。
-
-#### 不可接受
-
-- 页面上出现任何不是家人/老师原话或写手已发布文本的句子。
-- 为了「有照片」选了无背书的图；肖像仍然不是人。
-- 「稀疏态」用占位、灰框、「暂无」来表达。
-- 把现有暖纸/墨色/衬线换成通用组件库的样子（原则 §4 明说这是资产，V1 是在它之上升温，不是替换）。
-
+T22 的设计方向被 Teddy 否决，且渲染层任务归 B 轨。全站视觉重构现为 **`docs/ORCHESTRATOR-INBOX-B.md` 的 B-9**，规范在 `docs/design/visual-system-v2.md`。A 轨不要做任何 UI 工作。
 
 ---
 
-### 🚀 P1 · 2026 全年正确 + 档案活起来 — status: ready · **Teddy 01:3x 指令「开始干 p1」**
+## P1-6: 本地 worker（P1-2b 完成后立刻开始）
 
-来源：`nianlife-P1-P2-plan.md`（09-04 15:45 写成）+ **Cowork 01:2x 的逐条校读**
-（`nianlife-P1-plan-review-2026-09-05.md`）。**下面这份是修订后的版本，与原计划冲突时以本节为准。**
+status: ready
+轨道: A
+优先级: P1-2b 完成后立刻做
 
----
+### 目标
 
-#### ⚠️ 计划已被修订——动手前必须知道的四条
+一个 Node.js 脚本 `scripts/nianlife-worker.mjs`，Teddy 加进 Windows 任务计划后每天自动跑一次。它做四件事：
 
-原 P1 计划写在 P0 那一晚开工**之前**，有几条前提已经被今晚的实况推翻。以下是实测数字（01:2x 直接查生产库）：
+1. **增量导入**：扫 `E:\WechatHis` 目录，对比上次导入的指纹（`.data/worker-state.json`），只导入有变化的会话
+2. **Organizer**：对新导入的 raw_sources 跑 V2 Organizer（recall-first + 主体门 + 写手），生成 life_events
+3. **月度回顾**：对有新事件的月份重新生成 monthly_snapshot
+4. **日志**：每次运行写 `.data/worker-runs/<timestamp>.log`，记录导入了多少条、生成了多少事件、跳过了什么
 
-1. **P1-4 的选图规则会造成回退。** 原文要求「照片是夸克（trusted）**且**同天有过门文字才并排」。
-   实测 06~09 页面上已绑定的 286 张照片：**微信 261 张（91%）、夸克 25 张（9%）**。
-   那 261 张主力是乳儿班群，它的信任是 Teddy 在 P0 里亲口给的（「所有信息都是关于张年的」），
-   T11 据此实现并已上线验证。**照原文执行会把九成照片撤回月末档案。**
-   → **改法：「背书」= 来源在信任名单里（夸克 + 乳儿班群 + 以后任何 Teddy 点头的会话），
-   不是「provider 叫夸克」。**
-2. **`daily_traces` 现在是 0 行**（T11 改管线 + T13 清库之后这张表在生产上空了）。
-   原 P1-5 里「给 `daily_traces.occurred_at` 加索引」**删掉**，那是给空表加索引。
-   另外 `life_events_occurred_idx` **已经存在**；仍然缺的只有 **`raw_sources.captured_at`**。
-3. **数据量翻了五倍**：raw_sources 8,796 → **44,452**，media_assets 1,131 → **7,395**。
-   性能不再是收尾的优化，是后面所有写库任务的地基（今晚 Code 已经撞上 `getStore()` 在这台机器上
-   直接挂死、只能绕开走纯 SQL）。**P1-5 提到 P1-2 之前。**
-4. **今晚多出来一个判官。** `t20c-regrade-memories.mjs` 是事后重新分级，P1-3 要做的是写入时的门。
-   同一件事两个判断点必然漂移。→ **P1-3 的范围 = 把 T20-C 的分类器收编进写入时的门，
-   全站只保留一个判断点**，不要再写第三套规则。
+**最终效果**：Teddy 只要定期把微信聊天记录导出到 `E:\WechatHis`，网站会自动更新。Vercel 只负责渲染。
 
----
+### 硬边界
 
-#### 🔴 P1-0 · 2026-01~05 五个月过 T7 管线（**立刻开跑，B 轨**）
+1. **必须在 Windows 上跑**——Teddy 的机器是 Windows，Node.js 已装好，`v2/node_modules` 已存在。
+2. **单文件入口**——`node scripts/nianlife-worker.mjs` 一条命令完成所有事，不需要人按顺序跑多个脚本。
+3. **幂等**——重复运行不会产生重复数据。已导入的消息跳过，已组织的月份跳过。
+4. **不改 schema**——不加表、不加列、不改索引。
+5. **用现有管线**——调用 `lib/` 下已有的函数（wechat-import、organizer），不重写管线逻辑。如果 tsx/drizzle 在 Windows 有兼容性问题，参考 P1-2b 的做法（纯 JS + pg 直连）绕过，但业务逻辑必须复用已有的。
+6. **排除名单生效**——陈亚萍和 `.data/wechat-import-all-state.json` 里的 `excluded` 会话必须跳过。
+7. **不碰 Vercel 部署**——worker 只写数据库，不触发部署、不改 Vercel 配置。Vercel 的 ISR/revalidate 自己会拿到新数据。
+8. **错误隔离**——一个会话导入失败不影响其他会话；一个月 Organizer 失败不影响其他月。失败的写日志，下次重试。
 
-**为什么它排第一**：P1 的退出标准写着「2026 每月『这个月记下来的』非空」，但这五个月是
-**11,521 条 raw_sources、0 条 life_event**——原计划的六个任务里没有一条负责写它们，是计划漏了。
-它也是 P1 里唯一直接让网站上多出家人能读的东西的任务，且不依赖任何其他任务。
+### 验收
 
-**目标**　2026-01、02、03、04、05 五个月，每个月都像 06~09 那样有带标题的正文、有绑定的照片、
-有月度回顾（够 5 条的月份）。
+1. Teddy 导出新的微信聊天到 `E:\WechatHis`，跑 `node scripts/nianlife-worker.mjs`，15 分钟内 nianlife.cn 上出现新事件（Cowork 浏览器验证）。
+2. 不导出新内容时跑 worker，日志显示"无新数据"，数据库零变化。
+3. 断网/DB 连不上时 worker 优雅退出，日志写明原因，不留僵尸状态。
+4. `.data/worker-state.json` 记录了上次成功运行的指纹，下次启动时读取。
+5. Windows 任务计划配置示例写在脚本头部注释里（`schtasks /create ...`）。
 
-**硬边界**
-- 用今晚已经跑通的那条链，**不要重新发明**：`organizer-month-write.mjs --month=YYYY-MM --commit`
-  → `t18-backfill-media-binding.mjs` → `t20c-regrade-memories.mjs --commit` → `month-review.mjs --commit`。
-  这四步的顺序和"每个新月份都要补跑后三步"已经写在 `organizer-month-write.mjs` 的头注释里。
-- **每一步跑完立刻直接查生产库确认，再报完成。** 今晚 T20-B 的教训：脚本忘设
-  `REPOSITORY_BACKEND=postgres` 时会静默写进本地 JSON，终端照样打印 "WRITTEN"。
-- 称谓规则不变：妈妈/爸爸/奶奶/雪姨/老师，**「家人」一处都不许有**；解析不到发言人就不写那句。
-- 私聊来源仍按 T7 的主体门处理：只留明确点名张年的，不靠代词猜。
+### 不可接受
 
-**验收（按页面说，不按进程说）**
-- curl `/memory/2026/01`…`/05`：每页都有带标题的正文，`grep 家人` = 0、`grep '\[media\]'` = 0
-- 每个月抽读 5 条，主语是张年 ≥ 4/5
-- 每个月的 `life_events.media_ids` 非空比例 ≥ 上一批四个月的水平
-- **每月 ≥ 8 天有文字**（见下面「⚖️ 内容量下限」）
+- 要求 Teddy 手动按顺序运行多个脚本。
+- 吞掉错误不报告（静默失败）。
+- 重复导入已有数据（消息重复、照片重复）。
+- 依赖 tsx（Windows 上不稳定）——如果用 TypeScript 函数，用 `--import tsx` 或绕过。
+- 在 `v2/node_modules` 之外安装全局依赖。
+- 把 API key / DB URL 硬编码（必须读 `.env.local`）。
+- 运行时间超过 1 小时（增量导入应该很快，只有首次全量跑才慢）。
 
-**不可接受**　为了让页面看起来满而放宽称谓或主体门；只跑第一步就报"这个月完成了"；
-终端打印当作入库证据。
+### 代码指引
 
-**每个月的四步（照抄，不要重新发明；`cd v2` 之后跑）**
+- **导入入口**：`scripts/wechat-import-all.mjs`——现有的全量导入脚本，worker 需要复用它的核心逻辑但改成增量模式（基于指纹跳过已导入的会话）。
+- **指纹**：`.data/wechat-import-all-state.json` 已经保存了每个会话的 digest 和导入状态。Worker 的 state 可以扩展这个文件或创建独立的 `.data/worker-state.json`。
+- **Organizer 入口**：`lib/organizer/organizer-runner.ts` 的 `runOrganizerForMonth()`。它接受 year+month，对该月所有 raw_sources 跑 V2 管线。Worker 需要知道哪些月份有新数据，然后对这些月份调 Organizer。
+- **月度回顾**：`scripts/month-review.mjs`——现有脚本，接受 `--month YYYY-MM`，对有足够 approved events 的月份生成 snapshot。
+- **trusted photo sources**：`lib/organizer/trusted-photo-sources.ts`——图文绑定的信任名单，worker 不需要改这个。
+- **P1-2b 的教训**：Windows 上 tsx + drizzle 容易崩。如果 `runOrganizerForMonth` 跑不起来，用 `scripts/` 下的 standalone 脚本模式（纯 JS + `@neondatabase/serverless` 或 `pg`），但必须复用已有的 prompt 和判断逻辑，不能另写一套。
+- **source root**：`E:\WechatHis`，不是 `E:\WechatHis\texts`。见 STATE.md 第 3 节坑。
 
-```
-# 1) 写这个月的 life_events（--out 必须是仓库外的绝对路径）
-node --import tsx scripts/organizer-month-write.mjs --month=2026-01 \
-     --out=C:/Users/teddy/nianlife-backups/p1-2026-01.json --concurrency=8 --commit
+### 工作量估计
 
-# 2) 把照片绑到这些新记忆上（幂等，可重跑）
-node --import tsx scripts/t18-backfill-media-binding.mjs --month=2026-01
-
-# 3) 记忆分量分级 + 群务降级
-node --import tsx scripts/t20c-regrade-memories.mjs --month=2026-01 --commit
-
-# 4) 月度回顾（该月已发布 <5 条时自己跳过，属正常）
-node --import tsx scripts/month-review.mjs --month=2026-01 --commit
-```
-
-**每跑完一步立刻查库确认，再进下一步**（今晚 T20-B 的教训：`REPOSITORY_BACKEND` 没设时脚本
-会静默写进本地 JSON，终端照样打印 WRITTEN。`month-review.mjs` 已在 `fb0e6ee` 里硬编码修好，
-**如果新写/改了别的脚本，先确认它自己设了 `process.env.REPOSITORY_BACKEND = "postgres"`**）。
-
-一句话自查（跑完一个月就跑一次，四个数字都要动）：
-
-```
-SELECT to_char(occurred_at,'YYYY-MM') mo,
-       count(*) AS 写出,
-       count(*) FILTER (WHERE memory_weight='memory') AS 章节级,
-       count(*) FILTER (WHERE media_ids IS NOT NULL AND media_ids::text <> '[]') AS 有照片
-FROM life_events WHERE profile_id='profile-zhangnian'
-  AND occurred_at >= '2026-01-01' AND occurred_at < '2026-06-01'
-GROUP BY 1 ORDER BY 1;
-```
-
-**顺序建议**：**从 2026-05 往回做到 2026-01**（离现在近的先出来，Teddy 醒来先看到最近的）。
-五个月各自独立，一个月跑完就报一次，不要五个月全跑完才报。
-
----
-
-#### ⚖️ 内容量下限（Cowork 暂定，Teddy 可推翻）
-
-今晚的门收得很严：写出 128 条**只发布 52 条**（59% 不发布），2026-06 只剩 **7 天有内容、0 条章节级**。
-P1-3 还要继续加严，这个数字会继续往下走。这里两条原则已经开始互相拉扯——
-原则五「大部分内容默认不出现」支持收严，原则一「家人不点任何东西就能说出张年最近怎么样」
-在一个月只剩 7 天时就悬了。
-
-**所以从 P1 开始，主体门相关的验收必须同时看两个方向：**
-
-| 指标 | 下限 |
-|---|---|
-| 每月有文字的天数 | **≥ 8 天** |
-| 每月章节级（`memory_weight=memory`）记忆 | **≥ 1 条** |
-| 抽读 5 条主语是张年 | **≥ 4/5** |
-
-**低于下限 = 门太严，要回调**，不是"精度提高了"。这正是接手评估里批评过的老毛病：
-精度高到把真实人生挡在外面。Teddy 若要改这个下限，以他的话为准。
-
----
-
-#### 其余任务（P1-0 之后按此顺序）
-
-| # | 事项 | 相对原计划的变化 |
-|---|---|---|
-| **P1-5** | `raw_sources.captured_at` 加索引；`getStore()` 改按月 scoped read；手机首屏 ≤3 秒 | **提前到 P1-1 之前**；删掉 daily_traces 索引那条 |
-| **P1-1** | 身份修复：`conversationId` 去掉导出时间/消息数 + 存量迁移。验收＝重新导出一次微信，raw_sources 零重复 | 不变，仍是 P1-6 的硬前置 |
-| **P1-2** | 夸克 2,279 入库，只入库不触发 Organizer；307 张无日期单独放 | 不变 |
-| **P1-3** | 主体门加严 **+ 收编 T20-C 分类器为唯一判断点** | 范围改写（见上 4）；**验收加内容量下限** |
-| **P1-4** | 图文同日绑定 + 首页 | **「夸克」改成「信任名单」**（见上 1） |
-| **P1-7** | 月末档案展开交互（"还有 N 张"可点开看全部） | **新增**。原则五检验句写的是"折叠展开后仍能看到全部"，现在这半句不成立，是 P0 遗留的欠账，很小 |
-| **P1-6** | 本地 worker（Windows 任务计划：增量导入 → 主体门 → 写手 → 发布） | 不变，**严格排在 P1-1 之后** |
-
-**并行规则**：A 轨（T22、P1-7、P1-4、P1-5 的代码部分）改仓库，B 轨（P1-0、P1-2 的入库、P1-1 的迁移）
-写库，可以同时跑；但**仓库写操作同一时间只能有一个 Session**，且 **P1-5 的性能测量需要写库静默窗口**。
-
-**P1 退出标准（含 Cowork 补的一条人的验收）**
-1. 2026 每个月页非空、抽读零错、`grep 家人` = 0
-2. 重新导出一次微信，raw_sources 零重复
-3. 关机一周再开，worker 自动补齐
-4. 首页不违反原则一/二/三
-5. **苏静在 2026 任意一个月页停留超过一分钟，并说出一件她不知道的事**（P1 原计划的退出标准全是
-   机器检查，可以在没有任何人读过页面的情况下达成——这与"每一轮结束网站上要多出一样家人能读的
-   东西"冲突，所以补这一条）
-
----
-
-#### 还挂在 Teddy 那里的一个产品判断（不要擅自改）
-
-首页「最近记下来的一天」现在优先选 `memory` 级，导致 9 月（4 条全是 trace）被 8 月的一条
-memory 级记忆抢了首页。**这是 Cowork 写的规则（INBOX C.4）产生的真实后果，不是 bug。**
-两种解都成立——"首页展示最重要的最近时刻"，还是"永远不早于最新有内容的月份，同月内再挑 memory"。
-**等 Teddy 看过网站后定，Code 不擅自改。**
-
----
-
-## 🌅 晨间交接规则（长期有效，每天都适用）
-
-Teddy 每天早上会把这条轨的上下文清掉（`/clear`），所以**连续性必须活在文件里，不在你的记忆里**。
-
-**触发时机**：Cowork 或 Teddy 让你"收尾"时，或者你自己判断当前任务已经跑完一个完整节点时
-（一个月跑完、一个功能上线并验证过——**不要停在一个月跑到一半**）。
-
-**收尾三步，顺序不能换：**
-
-1. **先覆盖写 `docs/HANDOFF-A.md`** ——覆盖，不是追加；100 行以内；模板就是它现在的样子。
-   写的是"一个失忆的自己明天早上要知道什么"，不是"我今天干了什么"。干了什么在 `git log` 里。
-   五段固定：我管什么 / 现在做到哪 / 下一件事（明确到命令）/ 不要再踩的坑 / 我不能单方面做的。
-2. **提交并推送**（只加自己的文件）。
-3. 在 `docs/STATUS.md` 末尾写一行：`=== A 轨已到收尾节点，可以 /clear ===`，然后**停下，不要再开新任务**。
-
-Cowork 会盯着那行标记，看到就通知 Teddy 来清。清完之后新 Session 只读交接稿就能接着干。
-
-**为什么交接稿要覆盖写**：`STATUS.md` 已经 900+ 行，是流水账，新 Session 读不完也不该读。
-交接稿是定长的"现在"，两者分工不同，不要把交接稿写成第二本流水账。
+中等（4-8 小时）。大部分时间在调通 Windows 上 Organizer 的运行环境 + 测试幂等性。

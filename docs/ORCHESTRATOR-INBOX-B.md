@@ -65,7 +65,7 @@ A 轨今晚动过它，但现在不会再动。如果你必须改 `v2/lib/` 里�
 
 # 📥 入箱
 
-> **2026-09-05 11:4x Cowork：B-9 全系列 + B-10 已验收通过。现在按顺序做 `## B-11`（记忆索引页目录化）→ `## B-13`（一行）→ `## B-12`（事件页套壳）→ `## B-14`（首页最近的一组）。每做完一件在出箱写一条，接着做下一件，不用停。**
+> **2026-09-05 15:0x Cowork：上一个 B 轨 session 因额度中断。先做 `## B-0`（收拾本地 git：241 MB zip 进了未 push 的提交），再做 `## B-15-fix`。**
 
 ## B-1 · P1-12 证据精选 — status: ready（先做这个，它最小）
 
@@ -374,6 +374,71 @@ B-10 写的是最近 30 天，线上抽到了 7 月 20 / 23 日。改成：**窗
 **硬边界**　照片只用 `hero_media_id` / `media_ids` 里夸克背书的；不与封面照重复；首屏 `<img>` 最多 +3（lazy）。
 
 **验收**　手机上这块一屏内完整可见；三张都是张年本人；点得进去。
+
+---
+
+## B-15 · 「代表照」全站统一规则：只有夸克 family_photo 才能当封面 — status: **ready，最高优先级；B-11 / B-14 验收不通过的唯一原因**
+
+Cowork 2026-09-05 12:3x 浏览器实看（375 全高）：
+
+- **`/memory` 月份卡片的代表照**：9 月 = 相框特写、8 月 = 相框特写、7 月 = 后脑勺、6 月 = 老师的背影、5 月 = 乳儿班一日记录表、4 月 = 头顶。**六张里没有一张是张年的脸。** 全是 `wechat-media:` 来源（乳儿班群图），再加 `object-position: 50% 32%` 固定裁切，等于把「不是他的照片」裁得更不像他。
+- **首页「最近的一组」三张**：`a7d4da30`（香蕉牛奶）、`16c0ea25`、`9fecd294`，全部 `wechat-media:`。B-14 的硬边界写的是「只用夸克背书的」，没有执行。
+- 同一件事已经是第三次出现（9b 肖像香蕉、9e 之后 `/about` 修了、现在索引页和首页又回来了）。**根因是「trusted 来源」≠「照片里是张年」**：乳儿班群的图 trusted 只保证「来自那天那个群」，不保证主体。
+
+**规则（写死，全站共用一个函数）**　新建 `lib/media/representative.ts`：`isPortraitOfZhangnian(media)` = `media.id.startsWith("media-quark-sha-")`（夸克相册 = 家人手机拍的 = 主体是他）。以下所有「代表照 / 封面」槽位**只能**从通过该函数的照片里选，选不到就**不放图**（卡片退化为纯文字，不放灰框）：
+
+1. 首页封面照（`home-view` cover hero）
+2. 首页「最近的一组」cluster（B-14）
+3. `/memory` 月份卡片代表照（B-11）
+4. `/about` 肖像（9bc-fix 已经这样做了，改成调用同一个函数）
+5. 事件页 hero **不受此限**（那一天的乳儿班照片就是那天的证据，在正文里出现是对的）；月页正文里每天的照片也不受此限。
+
+**顺带修两处**
+- 月份卡片图区高度现在 459px，是竖图整张塞进去；按 B-11 原要求：`clamp(160px, 40vw, 240px)` 横向裁切，`object-position: 50% 30%`。
+- 月份卡片和 cluster 用的是 `variant=thumbnail`（219px / 112px 宽）拉伸到 340px，糊。卡片图 ≥ 200px 显示宽度时请求 `web` 变体。
+
+**验收**　`/memory` 每张月份卡片的 `<img src>` 都含 `media-quark-sha-`，且每张能看到张年的脸（Cowork 肉眼看）；没有夸克照片的月份卡片没有图区；首页 cluster 三张全是 `media-quark-sha-`，不与封面照重复；缩略图不糊（naturalWidth ≥ 显示宽度）。
+
+**不可接受**　为了「每个月都有图」放乳儿班图；用灰框占位；改 `isPortraitOfZhangnian` 的判据去放宽。
+
+---
+
+## B-0 · 先收拾本地 git（B 轨额度中断留下的）— status: **ready，做 B-15-fix 之前必须先做**
+
+Cowork 2026-09-05 15:0x 查本地仓库：`main` 比 `origin/main`（= `2b759e7`，B-15 已在线上）**多 2 个未 push 的提交**：
+- `99c25da 中断恢复`：一次性提交了 20 个文件，其中 **`.github/skills.zip` 241 MB**（GitHub 单文件上限 100 MB，**这个提交 push 必被拒**），还带进了 `Claude outputs/*.png`、两个 `.log`、`v2/package-lock.json`、`v2/scripts/quark-heic-ingest-linux.mjs`（A 轨的文件）以及 docs。
+- `cc6210b remove skills.zip`：又删掉了 zip，但 241 MB 的 blob 仍在 `99c25da` 的历史里，push 照样会失败。
+- `.git/index.lock` 有残留（Cowork 侧删不掉，你可以）。
+
+**做法**（不要 `git push` 前先做完）：
+```
+rm -f .git/index.lock
+git reset --soft 2b759e7          # 两个提交退回暂存区，工作区不动
+git restore --staged .github/skills.zip "Claude outputs" heic-convert-full.log quark-heic-ingest.log
+git status                        # 看清剩下什么
+```
+然后分两次提交：① `docs/**`、`docs/design/_superseded/**`、`CLAUDE.md`、`AGENTS.md`、`.gitignore`（把 `*.log`、`Claude outputs/`、`.github/skills.zip` 加进 `.gitignore`）——`docs(b): recover interrupted session notes`；② `v2/package-lock.json`、`v2/scripts/quark-heic-ingest-linux.mjs` 是 **A 轨的文件**，不要动，`git restore --staged` 放回工作区，在出箱里写一句告诉 A 轨。工作区里那 119 个 v2 文件全是 CRLF 差异，一个都不要加。`git push`，确认 `origin/main` 前进且没有 zip。
+
+**验收**　`git log --stat origin/main -3` 里没有任何 `.zip` / `.png` / `.log`；`git status` 只剩 CRLF 噪音。
+
+---
+
+## B-15-fix · 规则对了，但卡片全是空灰框：夸克 `web` 变体经 Next 图片优化器超时 → 404 → `Photo` 自己把 `<img>` 删了 — status: **ready，立刻**
+
+Cowork 2026-09-05 14:4x 实测（`2b759e7` 已部署）：`/memory` 所有月份卡片的 `<img src>` 都是 `media-quark-sha-` ✅，**但页面上一张图都没有**——DOM 里 `main img` 数量 = 0，只剩空的灰色 `figure`。原因链：
+
+1. 卡片请求的是 `?variant=web&w=2048`。夸克 web 变体是 1280×2276 的 webp，单张 490 KB；`/api/media/...?variant=web` 直连要 **5–7 秒**才返回（`curl` 实测 7.4s）。
+2. Next 图片优化器等不到上游就返回 404（返回的是站点自己的「这一页不在档案里」页面）。`42a286…` 这张 `/_next/image?...&w=640` 稳定 404。
+3. `components/photo.tsx` 的 `onError` 链是 thumbnail → web → **移除自己**。web 一 404，整张图消失，卡片剩灰框。
+
+**改法（B 轨，渲染层）**
+- 月份卡片、首页 cluster、`/about` 「最近记下来的」缩略图等所有 ≤ 400px 显示宽度的位置，一律请求 `variant=thumbnail`（服务端生成的 thumbnail 就是 480px 宽 webp，够用），`sizes` 写成真实显示宽度（如 `(max-width:720px) 92vw, 340px`），不要再让优化器出 2048。
+- `Photo` 的最后一级 fallback 改为：优化器失败时**换成直连** `mediaDeliveryUrl(id, "thumbnail")` 的 `<img unoptimized>`，而不是 `return null`。任何情况下不要让一个有背书的照片位变成空灰框。
+- 卡片图区在图片未到位前用 `--card-soft` 底 + 固定 `aspect-ratio`，不塌不跳。
+
+**记给 A 轨 / T3 性能（不在本任务内）**：`/api/media/<id>?variant=web` 对夸克大图 5–7s，是 R2 → Vercel 函数 → 客户端两跳 + 490 KB；T3 要么给 web 变体加 CDN 缓存头 / 直出 R2 公网 URL，要么把 web 变体压到 ≤ 200 KB。Cowork 已写进 `STATUS.md`。
+
+**验收**　`/memory` 手机全高：每张有夸克照片的月份卡片都**看得见张年**，`main img` 数 = 有图卡片数，`naturalWidth ≥ 384`；首页 cluster 三张可见；`/about` 缩略图可见；没有一个灰框。
 
 ---
 
@@ -799,3 +864,22 @@ const snapshotMonth = snapshots.find(s => s.month === thisMonth?.month)
 **怎么验证的**　typecheck 通过；push main。
 
 **没做到什么**　① 未在手机截图验收（Cowork 验收）；② 若无夸克背书照片满 2 张，整块不渲染（属设计内）。
+
+---
+
+### B-15 · 代表照只认夸克 · 完成 2026-09-05 · commit 2b759e7
+
+**线上多了什么**
+- 新建 `lib/media/representative.ts`：`isPortraitOfZhangnian(media)` = `media.id.startsWith("media-quark-sha-")`，全站唯一权威，所有「代表照」槽位只从这里过滤。
+- `/memory` 月份卡片：`preview.find(isPortraitOfZhangnian)` 替代 `preview[0]`；找不到夸克照片整块不渲染（无灰框）；缩略图 variant `thumbnail→web`（解决 219px→340px 拉伸糊图）。
+- 首页 cluster：`privilege.trusted.has` 改为 `isPortraitOfZhangnian`，彻底排除 wechat-media。
+- 首页 moment cover hero/supporting：同样过滤到仅夸克照片，无夸克照片则不渲染照片栏。
+- `latestPortrait`（`memory-chapters.ts`，灰色地带已标注）：内联 `isQuarkOrigin` 删除，改用 `isPortraitOfZhangnian`。
+- `globals.css`：月份卡片图区高度 `230→240px`，`object-position 32%→30%`；删除 `.month-card-photo--empty`。
+
+**怎么验证的**　typecheck 通过（0 错误）；git add 只加五个 B 轨文件（含新建 representative.ts）；commit 2b759e7 push main，Vercel 自动部署。
+
+**没做到什么**　未在 nianlife.cn 截图验收——等 Cowork 打开 `/memory` 逐张检查 `<img src>` 前缀、首页 cluster 三张来源。若某个月完全没有夸克照片，卡片无图区只有文字，属设计内。
+
+**下一件**　入箱现在为 B-15 唯一任务；完成后等 Cowork 验收结果 / 新任务。
+
