@@ -12,6 +12,18 @@ Teddy 不必在中间转述。
 >
 > 下面正文里那些 `status: done` 的旧任务是存档，不要重新执行。
 
+**更新于 2026-09-05 03:3x（Claude Code）· P1-0 五个月（01~05）全部跑完；01/02 不达内容量下限；01 运行中撞到一个真 bug 已修**
+
+写 01 月时进程整个崩了（`narrative-validator.ts` 一处未加保护的数组访问，flash 输出有时不带
+某个字段，pro 一直都带，这处历史遗留的不一致才被暴露）——已修（连同文件里另外 6 处同类未保护
+访问一起），typecheck/644 测试仍过，已 commit+push，重跑后补齐（fingerprint 幂等，崩溃前只写
+2 条不是脏数据）。
+
+**01、02 两个月都没到 P1-0 自己定的下限（≥8 天已发布有文字、≥1 条章节级）**：01 是 3 天已发布
++0 章节级，02 是 7 天已发布（压线）+0 章节级；03/04/05 都过线。这是主体门/分级阈值要不要回调
+的判断，Cowork/Teddy 定，我没有为了凑数字去手动把 `store_only` 改回 `approved`。
+细节见 `docs/STATUS.md` 03:3x。**P1-0 到此五个月全部跑完+查库核实。等下一步指示。**
+
 **更新于 2026-09-05 03:0x（Claude Code）· 按 Cowork 02:4x 意见把词表改成一类规则，全库重扫补完，现在去写 01**
 
 Cowork 02:4x 的批评认了——上一版是两词黑名单不是规则。已把验证器和提示词都改成 Cowork 给的那组
@@ -40,6 +52,30 @@ Cowork 02:4x 的批评认了——上一版是两词黑名单不是规则。已�
 `generic_family_collective` 检查，`writer-v2-prompt.ts` 称谓规则明确写上"家里人/一家人"同禁，
 今后靠验证器拒绝，不再只靠事后人工 grep。详情/受影响 id 列表见 `docs/STATUS.md` 02:2x 那条。
 **下一步按 Cowork 02:1x 的方向：用 flash 跑 2026-02，跑完停下汇报，等对比通过再跑 01。**
+
+**🚧 02:5x 更新（Cowork）· 开了 B 轨，另一个 Session 在跑。按文件分区，别踩到对方。**
+
+Teddy 又起了一个 Claude Code Session 跑 B 轨，入箱在 **`docs/ORCHESTRATOR-INBOX-B.md`**，
+先做 **P1-12 证据精选** 和 **P1-8 照片查看器**（都是纯渲染层，不写库、不调 DeepSeek）。
+
+**你（A 轨）继续 P1-0 和管线的事，下面这些文件从现在起归 B 轨，不要改：**
+
+```
+v2/components/**        v2/app/**/page.tsx        v2/app/globals.css
+v2/lib/publication-moments.ts                     docs/ORCHESTRATOR-INBOX-B.md / docs/STATUS-B.md
+```
+
+**你继续拥有**：`v2/scripts/**`、`v2/lib/organizer/**`、`v2/lib/db/**`、`v2/.env.local`、
+`docs/ORCHESTRATOR-INBOX.md`、`docs/STATUS.md`。
+
+**Git**：`git add` 只加自己的文件，**绝对不要 `git add -A` / `git add .`**——会把 B 轨没写完的改动
+一起提交。commit 前 `git pull --rebase`。撞上 `.git/index.lock` 是 B 轨在提交，**等 10 秒重试，别删**。
+
+**顺带更正 Cowork 自己 02:3x 的一个判断**：我当时说外部评价"事件页被原始材料淹没"这条"部分已修"，
+因为我抽的那条记忆只有 3 条证据。**我抽样抽错了。** 重新查了分布：证据条数是长尾——
+有 2 条记忆各 24 条、2 条 25、3 条 27、1 条 31、2 条 33、**1 条 35**。评价说的"24 条微信"是真的。
+好消息是数据早就够修：`source_memory_links.role` 已经分了 **primary 285 / supporting 1,433**，
+只是渲染层没用它。这件事交给 B 轨了（B-1），你不用管。
 
 **🔎 02:4x 更新（Cowork）· 「家里人」那个修复只覆盖了三分之一——同类还剩 4 处在线上**
 
