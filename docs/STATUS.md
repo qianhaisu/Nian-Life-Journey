@@ -37,11 +37,11 @@
 
 ## 时间线（只追加，最新在上）
 
-### 2026-09-05 10:10 · 中间进度 · P1-6
+### 2026-09-05 10:30 · Claude Code · P1-6 done — commit d0ea2e4
 
-- 读完 P1-6 spec，读完 wechat-import-all.mjs / organizer-month-write.mjs / month-review.mjs 的核心逻辑，确认 tsx 在 devDependencies 里，`wechat-import-all-state.json` 里有 excluded 列表。
-- 设计确认：worker 用 `--import tsx`，import 阶段内联调用 `loadWechatBundle`/`runWechatImportWorker`，Organizer 和 month-review 各 spawn 子进程（按月隔离错误）；affected months 用 DB 查 `created_at >= runStartedAt` 定位；state 存 `.data/worker-state.json`。
-- 当前：正在写 `v2/scripts/nianlife-worker.mjs`。
+1. **线上多了什么**：`v2/scripts/nianlife-worker.mjs`（单文件入口）已在 main 上。Teddy 把微信导出放到 `E:\WechatHis` 后，运行 `node --import tsx scripts/nianlife-worker.mjs`（或 `npm run worker`）一条命令完成四个阶段：增量导入→找受影响月份→Organizer→月度回顾；日志写 `.data/worker-runs/<timestamp>.log`，状态写 `.data/worker-state.json`。Windows 任务计划的 `schtasks /create` 示例在脚本头部注释里。
+2. **没做到什么**：尚未在真实 WeChat 数据上跑过（需要 `E:\WechatHis` + 有效数据库连接）；Organizer 子进程仍依赖 `--import tsx`（P1-2b 的已知风险，但现有 wechat-import-all.mjs 用同一方式运行正常）。
+3. **下一件**：Cowork 浏览器验收（导出新 WeChat 聊天 → 跑 worker → 确认 nianlife.cn 15 分钟内出现新事件）；P1 其余任务由 Cowork 调度。
 
 ### 2026-09-05 00:4x · Cowork · 视觉系统 V1 设计已出，T22 已派单（Teddy 拍板：立刻开干，性能最后做，否决手写体）
 
