@@ -131,16 +131,20 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
     ...pkg.longitudinal.flatMap((l) => l.sourceIds),
   ]);
 
-  for (const id of output.usedClaimIds) if (!claimIds.has(id)) add("used_claim_not_in_package", id);
-  for (const id of output.usedQuoteIds) if (!quoteIds.has(id)) add("used_quote_not_in_package", id);
-  for (const id of output.usedMediaIds) if (!mediaIds.has(id)) add("used_media_not_in_package", id);
+  for (const id of output.usedClaimIds ?? []) if (!claimIds.has(id)) add("used_claim_not_in_package", id);
+  for (const id of output.usedQuoteIds ?? []) if (!quoteIds.has(id)) add("used_quote_not_in_package", id);
+  for (const id of output.usedMediaIds ?? []) if (!mediaIds.has(id)) add("used_media_not_in_package", id);
 
   // ---------------------------------------------------------------- per-claim support
 
   const claimById = new Map(pkg.claims.map((c) => [c.claimId, c]));
   const knownLabels = new Set(pkg.identity.people.map((p) => p.narrativeLabel).filter(Boolean));
 
-  if (output.narrativeClaims.length === 0) add("no_narrative_claims");
+  // Flash (unlike pro) sometimes omits an array field entirely rather than sending `[]` — the type
+  // says required, the wire payload doesn't always agree. Normalize once here rather than scattering
+  // `?? []` at every call site (found the hard way: an unguarded access crashed a whole P1-0 run).
+  const narrativeClaims = output.narrativeClaims ?? [];
+  if (narrativeClaims.length === 0) add("no_narrative_claims");
 
   const quoteById = new Map(pkg.quotes.map((q) => [q.quoteId, q]));
 
@@ -155,14 +159,14 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
     if (q && !quoteIsAssertable(pkg, q)) add("quote_from_unassertable_material", id);
   }
 
-  for (const nc of output.narrativeClaims) {
+  for (const nc of narrativeClaims) {
     if (!nc.text?.trim()) { add("empty_narrative_claim"); continue; }
-    if (nc.supportedByClaimIds.length === 0 && (nc.supportedByQuoteIds?.length ?? 0) === 0) {
+    if ((nc.supportedByClaimIds?.length ?? 0) === 0 && (nc.supportedByQuoteIds?.length ?? 0) === 0) {
       add("unsupported_narrative_claim", nc.text.slice(0, 40));
       continue;
     }
     const citedSpeakerLabels = new Set<string>();
-    for (const id of nc.supportedByClaimIds) {
+    for (const id of nc.supportedByClaimIds ?? []) {
       const claim = claimById.get(id);
       if (!claim) { add("narrative_claim_cites_unknown_claim", id); continue; }
       // The core rule. A question, a plan, a hypothetical or an unresolved subject may inform the
@@ -174,7 +178,7 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
       if (claim.subjectId && claim.subjectId !== pkg.identity.profileId) add("narrative_claim_cites_other_subject", `${id}: ${claim.subjectId}`);
       for (const s of claim.speakers) if (s.narrativeLabel) citedSpeakerLabels.add(s.narrativeLabel);
     }
-    for (const id of nc.supportedBySourceIds) if (!sourceIds.has(id)) add("narrative_claim_cites_unknown_source", id);
+    for (const id of nc.supportedBySourceIds ?? []) if (!sourceIds.has(id)) add("narrative_claim_cites_unknown_source", id);
     for (const id of nc.supportedByQuoteIds ?? []) {
       const q = quoteById.get(id);
       if (!q) { add("narrative_claim_cites_unknown_quote", id); continue; }
@@ -192,7 +196,7 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
     // 「他太爱你了」 → 「他太爱妈妈了」. The cited line addresses somebody as 你; the page may name
     // that somebody only if the line itself does.
     const citedLines = [
-      ...nc.supportedByClaimIds.flatMap((id) => claimById.get(id)?.spans.map((s) => s.text) ?? []),
+      ...(nc.supportedByClaimIds ?? []).flatMap((id) => claimById.get(id)?.spans.map((s) => s.text) ?? []),
       ...(nc.supportedByQuoteIds ?? []).map((id) => quoteById.get(id)?.text ?? ""),
     ];
     if (citedLines.some((line) => /你/.test(line))) {
@@ -265,8 +269,8 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
 
   // A plan or hypothetical anywhere in the used material must be visibly framed.
   const hypotheticalPresent = pkg.claims.some((c) => c.assertionStatus === "plan_or_hypothetical" || c.assertionStatus === "question");
-  const hypotheticalMentioned = output.narrativeClaims.some((nc) =>
-    nc.supportedByClaimIds.some((id) => {
+  const hypotheticalMentioned = narrativeClaims.some((nc) =>
+    (nc.supportedByClaimIds ?? []).some((id) => {
       const c = claimById.get(id);
       return c && (c.assertionStatus === "plan_or_hypothetical" || c.assertionStatus === "question");
     }));
@@ -279,9 +283,9 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
   // 「从抬头不稳到快要跑起来」 is only honest when both halves are evidenced: either the package
   // carries verified earlier baseline, or the sentence rests on at least two distinct assertable
   // claims of this day. A contrast built on one fact plus memory of "how he used to be" is invention.
-  for (const nc of output.narrativeClaims) {
+  for (const nc of narrativeClaims) {
     if (!CONTRAST_LANGUAGE.test(stripQuotes(nc.text))) continue;
-    const distinctAssertable = new Set(nc.supportedByClaimIds.filter((id) => claimById.get(id)?.assertable));
+    const distinctAssertable = new Set((nc.supportedByClaimIds ?? []).filter((id) => claimById.get(id)?.assertable));
     if (pkg.longitudinal.length === 0 && distinctAssertable.size < 2) add("unsupported_longitudinal_contrast", nc.text.slice(0, 30));
   }
 
