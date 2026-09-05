@@ -83,3 +83,33 @@
 - 已读 INBOX-B 顶部 + STATUS-B，确认任务：B-9e（图标彩色 + 月页 border）→ B-10（张年页最近记下来的 + 家人最近说）
 - 当前：修 snapshot-summary.tsx（18px 2px 彩色图标 + 背景徽章）+ globals.css（moment-memory_led 去 border-top）+ about/page.tsx（新两个 block）
 - 下一步：三文件改完 typecheck → push
+
+## 2026-09-05 · B-9e + B-10 完成 · commit a35adbb
+
+1. **线上多了什么**　B-9e：首页要点图标改为彩色（18px/2px/徽章）；月页 `.moment-memory_led` 去掉 1px 线，改为 56px 留白。B-10：`/about` 新增「最近记下来的」（最近 30 天 life_event，最多 6 条，可点）和「家人最近说」（正则提取家人引用，最多 3 条，可点）。
+2. **没做到什么**　未在 nianlife.cn 截图验收，等 Cowork 浏览器实看。
+3. **下一件**　等入箱新任务 / Cowork 验收结果。
+
+### 2026-09-05 11:1x UTC · Cowork · B-9e + B-10 验收：**通过**。B-9 视觉重构整体收官
+
+浏览器实看（375 全高 + 桌面）：首页要点图标已是彩色徽章（鼠尾草 / 陶 / 暖黄…）✅；`/memory/2026/08` 的 `.month-moment` border = 0，仅 `back-link` / 折叠档案 / 页脚有线 ✅；375 无横向滚动 ✅。
+`/about` 现在三块：最近的生活节奏（分行要点）、最近记下来的（6 条，日期 + 标题可点）、家人最近说（3 句，称谓 + 日期 + 年龄 + 「查看那天」）✅；肖像为夸克本人拱门 ✅；无「暂无」、无计数 ✅。
+
+**小瑕疵（记着，不阻塞）**：「家人最近说」抽到了 7 月 20 / 23 日的话，超过了任务写的 30 天窗口——要么把窗口放宽到 60 天并把标题改成「家人这阵子说」，要么严格 30 天。二选一，下次顺手。
+
+**原则记分卡（本节点）**：一 Person First ✅（首页 + 张年页都能不点就答「他最近怎么样」）· 二 Two Clocks ✅（Badge 日期 + 年龄成对）· 三 Media First ✅（主阅读层零计数，折叠层 `<small>` 除外）· 四 Invisible Automation 🟡（本地 worker 属阶段二）· 五 Not Equal Weight 🟡（T20-C 分级已生效，月页重轻可分；首页「最近一组」未做）· 六 Bring the Past Back ⚪（未交付，无占位）· 七 Automatic Reflection ✅（月度回顾三处）· 八 Family Owns It ✅。
+过 5 · 部分 2 · 未交付 1（上次：过 3 · 部分 1 · 不过 3 · 未交付 1）。
+
+B 轨入箱现在为空。下一批任务由 Cowork 按 P1 剩余项排（照片档案 / 记忆索引页的视觉、事件页验收、六「过去回来」）。
+
+### 2026-09-05 12:00 · 中间进度 · B-11 → B-13 → B-12 → B-14
+
+- 刚读 INBOX-B 顶部，确认任务顺序：B-11（记忆索引目录化）→ B-13（一行）→ B-12（事件页套壳）→ B-14（首页最近一组）
+- 当前：读取了 memory/page.tsx、month-chapter.tsx、memory-index.ts、about/page.tsx、events/[id]/page.tsx、home/page.tsx、globals.css 等关键文件
+- 下一步：① 修改 memory-index.ts（为所有非空月生成 preview）② 新建 month-card.tsx ③ 重写 memory/page.tsx ④ 更新 scroll-reveal.tsx + globals.css
+
+## 2026-09-05 · B-11 + B-13 + B-12 + B-14 全部完成
+
+1. **线上多了什么**　B-11: `/memory` 变目录（年份胶囊 + 月份卡片双列，横向裁切代表照，无计数）；B-13: `/about`「家人这阵子说」窗口 60 天；B-12: 事件页 Badge + 标题 800 字重 + hero 暖阴影 + 证据折叠区圆角卡片；B-14: 首页最近 3 张夸克背书照片 cluster（一大两小）。
+2. **没做到什么**　四件均未在 nianlife.cn 线上截图验收，等 Cowork 浏览器实看。
+3. **下一件**　Cowork 验收后按出箱结果决定。

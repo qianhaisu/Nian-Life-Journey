@@ -14,7 +14,7 @@ export function ScrollReveal() {
     document.documentElement.classList.add('io-reveal-pending');
 
     const targets = document.querySelectorAll<Element>(
-      '.memory-entry .memory-photo, .memory-entry .memory-copy, .month-moment'
+      '.memory-entry .memory-photo, .memory-entry .memory-copy, .month-moment, .month-card'
     );
     if (targets.length === 0) return;
 

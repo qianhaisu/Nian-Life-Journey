@@ -62,12 +62,12 @@ export default async function AboutPage() {
   );
   // B-5: latest published snapshot summary for "生活节奏" block.
   const latestSnapshot = [...snapshots].sort((a, b) => b.month.localeCompare(a.month)).find((s) => s.summary?.trim());
-  // B-10: recent published life_events (last 30 days, max 6) for "最近记下来的".
-  const cutoffDay30 = new Date(time.today);
-  cutoffDay30.setDate(cutoffDay30.getDate() - 30);
-  const cutoff30 = cutoffDay30.toISOString().slice(0, 10);
+  // B-10: recent published life_events (last 60 days, max 6) for "最近记下来的".
+  const cutoffDay60 = new Date(time.today);
+  cutoffDay60.setDate(cutoffDay60.getDate() - 60);
+  const cutoff60 = cutoffDay60.toISOString().slice(0, 10);
   const recentEvents = events
-    .filter((e) => { const d = calendarDayOf(e.occurredAt); return d && d >= cutoff30; })
+    .filter((e) => { const d = calendarDayOf(e.occurredAt); return d && d >= cutoff60; })
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
     .slice(0, 6);
   // B-10: family quotes from all published events (sorted newest-first, take first 3 matches).
@@ -130,7 +130,7 @@ export default async function AboutPage() {
     </section> : null}
 
     {familyQuotes.length > 0 ? <section className="about-notes" aria-labelledby="family-quotes-title">
-      <h2 id="family-quotes-title" className="section-mark">家人最近说</h2>
+      <h2 id="family-quotes-title" className="section-mark">家人这阵子说</h2>
       <dl>{familyQuotes.map((q, i) => <div key={i}>
         <dt>{q.caller} · <time dateTime={q.day}>{q.dateLabel}</time>{q.ageLabel ? <> · {q.ageLabel}</> : null}</dt>
         <dd><p className="serif">「{q.quote}」</p><p className="note-meta"><Link className="text-link" href={`/events/${q.eventId}`}>查看那天</Link></p></dd>

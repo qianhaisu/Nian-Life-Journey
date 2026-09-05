@@ -95,14 +95,14 @@ export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy
       // does not print an empty section — and it does not consume the window.
       const bare = chapter.memories.length === 0 && chapter.photos.length === 0 && chapter.traceDays.length === 0;
       let open = !bare && shown < policy.openMemoriesTarget && opened < policy.openMonthsMax;
-      let composition = open ? buildMonthComposition(chapter, privilege) : undefined;
+      // Build composition for every non-bare month so all month cards get a cover photo.
+      const composition = !bare ? buildMonthComposition(chapter, privilege) : undefined;
       // An open section must have something to say: a memory, a readable moment, or a vouched
       // picture. A month of nothing but unvouched photography is a real month with a real page,
       // but on the directory it is one row — it neither prints an empty section nor consumes the
       // open window.
       if (open && composition && composition.chapter.length === 0 && composition.preview.length === 0) {
         open = false;
-        composition = undefined;
       }
       const featured = open ? curateMemories(chapter.memories, policy.curatedPerMonth) : [];
       if (open) { shown += featured.length; opened += 1; }

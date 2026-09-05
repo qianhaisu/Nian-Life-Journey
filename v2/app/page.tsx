@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { EditorialMemory } from "@/components/editorial-memory";
+import { Photo } from "@/components/photo";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { buildHomeView } from "@/lib/home-view";
+import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,21 @@ export default async function HomePage() {
   // Don't show "本月入口" when it repeats the cover's own month.
   const coverMonth = cover.kind === "moment" ? cover.cover.month.month : undefined;
   const showThisMonth = thisMonth && coverMonth !== thisMonth.month;
+  // B-14: 3 recent published memories with Quark-backed (trusted) lead photos, excluding cover.
+  const coverPhotoId = cover.kind === "memory" ? cover.lead.memory.lead?.id :
+    cover.kind === "moment" ? cover.cover.moment.hero?.id : undefined;
+  const recentCluster: { memory: EditorialMemoryType; photo: MediaRef }[] = [];
+  outer: for (const year of archive.chapters) {
+    for (const month of year.months) {
+      for (const memory of month.memories) {
+        if (!memory.lead) continue;
+        if (!archive.privilege.trusted.has(memory.lead.id)) continue;
+        if (memory.lead.id === coverPhotoId) continue;
+        recentCluster.push({ memory, photo: memory.lead });
+        if (recentCluster.length >= 3) break outer;
+      }
+    }
+  }
 
   return <div className="home-page">
     <header className="home-masthead reading-wrap reveal">
@@ -68,6 +85,22 @@ export default async function HomePage() {
       <h2 id="change-title" className="section-mark">最近的新变化</h2>
       <SnapshotSummary text={summary} className="home-change-note serif" icons />
       <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
+    </section> : null}
+
+    {/* B-14: 最近的一组 — 1 large + 2 small trusted photos, no text, no count */}
+    {recentCluster.length >= 2 ? <section className="home-cluster reading-wrap" aria-label="最近的照片">
+      <div className="home-cluster-grid">
+        <Link href={`/events/${recentCluster[0].memory.id}`} className="cluster-item cluster-large">
+          <Photo media={recentCluster[0].photo} sizes="(max-width: 720px) 65vw, 480px" />
+        </Link>
+        <div className="cluster-stack">
+          {recentCluster.slice(1).map(({ memory, photo }) => (
+            <Link key={memory.id} href={`/events/${memory.id}`} className="cluster-item">
+              <Photo media={photo} sizes="(max-width: 720px) 30vw, 220px" />
+            </Link>
+          ))}
+        </div>
+      </div>
     </section> : null}
 
     {/* 本月入口：整块可点的圆角卡片 */}
