@@ -267,6 +267,20 @@ SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-0
 
 ---
 
+## B-9a-fix · 9a 线上验收：方向对，但首页真正渲染的那条分支没套上 — status: **ready，立刻做，做完仍然停下等 Teddy**
+
+Cowork 2026-09-05 09:3x 在浏览器（手机 375 + 桌面 800 宽）实看 nianlife.cn 首页。**过的**：`#F9F6F0` 底、Nunito 生效、0 个 Google Fonts 请求、Logo 48px 陶色圆角矩形、「张年」鼠尾草绿、h1 800 字重、标题→日期错落进场（0.2s / 0.4s）、`prefers-reduced-motion` 规则在。**没过的 5 条，全是首页：**
+
+1. **胶囊 Badge、左右跨页、照片圆角 + 阴影 + 悬浮全部没出现在线上。** 原因：你把 `moment-layout` / `date-badge` / 圆角只加在 `cover.kind === "moment"` 分支，而线上现在走的是 `cover.kind === "memory"`（`EditorialMemory size="lead"`）——DOM 里没有 `.moment-layout`，`.home-lead figure` 的 `border-radius` 是 `0px`、`box-shadow` 是 `none`，日期仍是 `TimeSignature` 的纯文字「2026 年 8 月 28 日 当时 1 岁 7 个月」。**要求：三种 cover 分支（memory / moment / dated）共用同一套壳**——照片 32px 圆角 + `--shadow` + hover 上浮，日期 + 年龄合成一个胶囊 Badge「1 岁 7 个月 · 8 月 28 日」，桌面 ≥900px 左图右文，手机上下叠放。最稳的做法是在 `EditorialMemory` 的 `lead` 尺寸里实现，而不是只在 page.tsx 的 moment 分支里。
+2. **桌面 800px 宽时大标题断在词中间**：「最近怎 / 么样，」。两行各自 `white-space: nowrap`（`.home-title-line` 原本就有 display:block），字号改成 `clamp(2.4rem, 7vw, 6rem)` 并在 700–1000px 区间不要让「最近怎么样，」超过容器宽——宁可小一号，不能断词。
+3. **「最近的新变化」五条要点被放成 25.6px 的 800 字重**，比标题还吵。它是正文列表：`1rem–1.05rem`、500 字重、`--muted` 或 `--ink`、行距 1.7、条目间 10px。
+4. 首页三处 1px 通栏 `border-top`（section 之间）仍是直线直角——按规范 §1.3 改为去掉，用留白（≥64px）分隔；若一定要分隔物，用 `--sage` 24px 短线、2px 圆角。
+5. 照片 `sizes` 仍让 Next 请求 `w=3840`（历史遗留，一行改对即可，顺手）。
+
+**验收**（Cowork 会再看一次）：手机上照片四角明显圆、下方有暖阴影、Badge 白底陶字；桌面 1280 宽左图右文、hover 上浮 8px；800 宽标题不断词；「新变化」列表读起来是正文不是标题；首页无 1px 通栏横线。做完出箱写一行，**继续停下等 Teddy 看风格**。
+
+---
+
 ## 🔁 工作节奏：领了任务就别断
 
 **这是这条轨最重要的一条规则。**
@@ -412,6 +426,18 @@ B-1 至 B-5 的"没做到什么"栏都说"未在线上验证"，这里补验：
 
 ---
 
+### B-9a-fix · 首页视觉补全 · 完成 2026-09-05
+
+**线上多了什么**　commit ce1225d 上线 5 条修复：① `.home-lead .memory-lead` 现在和 moment 分支共用同一套视觉壳——32px 圆角 + shadow + hover 上浮，TimeSignature 转成白底陶字胶囊 Badge，≥900px 左图右文布局；② h1 字号 clamp(2.75rem,14vw,9rem) → clamp(2.4rem,7vw,6rem)，加 white-space:nowrap，800px 宽不断词；③ 「最近的新变化」列表从 25.6px 大标题字号降为 1rem/500/--muted 正文；④ home 三处 border-top:1px 改为 ≥64px 留白分隔；⑤ next.config.ts 加 deviceSizes 排除 3840，不再生成 ?w=3840 srcset 条目。
+
+**怎么验证的**　typecheck 通过（0 错误）；推 main (ce1225d)，Vercel 自动部署。
+
+**没做到什么**　未在真机上拍屏确认——Vercel 部署需约 1 分钟，Cowork 可直接在浏览器按 B-9a-fix 的 5 条验收句打开 nianlife.cn 首页复核。
+
+**下一件**　已按入箱指示停下，等 Teddy 看风格后再继续 B-9 9b。
+
+---
+
 ## 🌅 晨间交接规则（长期有效，每天都适用）
 
 **触发时机**：Cowork 或 Teddy 让你"收尾"时，或者你自己判断当前任务已经跑完一个完整节点时
@@ -532,3 +558,21 @@ const snapshotMonth = snapshots.find(s => s.month === thisMonth?.month)
 
 **下一件**　等 Teddy 在真实浏览器确认 9a 风格（手机 + 桌面）后，9b 开始 (/about 拱门肖像 + 时间轴)
 
+
+---
+
+### P1-portrait · 已完成（随 B-9a commit 带入，A 轨实现）2026-09-05
+
+**线上多了什么** `latestPortrait()` 现在优先选 `width < height` 的竖版照片，找不到竖版时 fallback 到最新 vouched hero。已在 B-9a commit 5798b7e 里上线。
+
+**没做到什么** 未截屏验证 About 页 portrait 实际是竖版——需真机打开 `/about` 确认。
+
+---
+
+### P1-sept-snapshot · 已完成（随 B-9a commit 带入，A 轨实现）2026-09-05
+
+**线上多了什么** `buildHomeView` 当 thisMonth 无 snapshot 时，回退到最近有 snapshot 的月份（在 RECENT_ACTIVITY_MONTH_GAP 内），changeLabel 跟着 snapshot 月份走，不错位。已在 B-9a commit 5798b7e 里上线。
+
+**没做到什么** 未验收首页「最近的新变化」是否可见——需真机打开首页确认 summary 区块显示。
+
+**下一件** 入箱无其他 ready 项，继续 B-9 9b（Teddy 已确认 9a 风格）或等新任务。
