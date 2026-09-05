@@ -31,9 +31,7 @@ const hasFlag = (name) => args.includes(`--${name}`);
 const MONTH = argOf("month", null);
 const COMMIT = hasFlag("commit");
 const MIN_EVENTS = 5;
-// v2, 2026-09-05: summary changed from one flowing paragraph to 3-5 "- " bullet lines (readability
-// fix — a wall of text nobody reads). Bumped so the ledger can tell which prompt wrote a given row.
-const PROMPT_VERSION = "month-review-v2";
+const PROMPT_VERSION = "month-review-v1";
 const PROFILE_ID = "profile-zhangnian";
 
 if (!MONTH || !/^\d{4}-\d{2}$/.test(MONTH)) { console.error("--month=YYYY-MM is required"); process.exit(1); }
@@ -52,7 +50,7 @@ const TOOL_SCHEMA = {
   type: "object",
   properties: {
     insufficient: { type: "boolean", description: "true if the month's events genuinely do not support a 3-5 sentence review without inventing anything" },
-    summary: { type: "string", description: "3-5 bullet lines, each starting with '- ', joined by \\n. <=200 characters total, no numbers/counts, quotes use 「」" },
+    summary: { type: "string", description: "3-5 Chinese sentences, <=200 characters total, no numbers/counts, quotes use 「」" },
   },
   required: ["insufficient"],
 };
@@ -61,12 +59,9 @@ const SYSTEM_PROMPT = `你是一份家庭档案的编辑。你的任务是把一
 
 硬性规则：
 - 只能使用给定的记忆里已经写出的事实，不能引入任何新事实，不能推测、不能想象
-- 输出 3-5 条要点，每条独立一行、以"- "开头，行与行之间用换行符分隔——不要写成一整段散文，
-  不加标题、不加"第一/第二"这类序号词，每条本身也不再分点
-- 每条只讲一件事、1 句话；全文（含"- "和换行符）不超过 200 字
-- 优先写"变化"：这个月开始会什么、比之前多了什么、一个新习惯；其次是反复出现的事；最后才是单次事件；
-  同一件事只写一条，不要在不同要点里重复
-- 可以引用原话，用「」标出，原话必须逐字来自给定的记忆
+- 3-5 句话，全文不超过 200 字，用中文衬线排版的散文，不分点、不加标题
+- 优先写"变化"：这个月开始会什么、比之前多了什么、一个新习惯；其次是反复出现的事；最后才是单次事件
+- 可以引用 1-2 句原话，用「」标出，原话必须逐字来自给定的记忆
 - 称谓只能用：妈妈、爸爸、奶奶、雪姨、老师——绝不能写"家人"这个词
 - 绝对不能出现任何数字（几张照片、几条记忆、几天、年龄）
 - 如果这些记忆内容太单薄、太重复、或者写不出真正的变化而不编造，把 insufficient 设为 true，summary 留空`;
@@ -127,12 +122,6 @@ async function main() {
   console.log(`\nDraft (${summary.length} chars):\n${summary}\n`);
 
   if (/家人/.test(summary)) { console.error("REFUSED: contains 家人"); process.exitCode = 1; return; }
-  const lines = summary.split("\n").filter((line) => line.trim());
-  if (lines.length < 2 || !lines.every((line) => line.trim().startsWith("-"))) {
-    console.error(`REFUSED: expected 3-5 "- " bullet lines, got:\n${summary}`);
-    process.exitCode = 1;
-    return;
-  }
   if (/\d/.test(summary.replace(/[年月日]/g, ""))) console.log("WARNING: contains a digit outside a bare date reference — review before committing.");
 
   if (!COMMIT) { console.log("Dry run — nothing written. Pass --commit to persist."); return; }

@@ -7,9 +7,7 @@ import { selectLocation } from "@/lib/storage/hot-storage";
 import { newId, organizerJobKey } from "./repository-interface";
 import { normalizeQualityDecision, type QualityReview } from "@/lib/organizer/quality-review";
 import { CANONICAL_PROFILE_ID } from "./config";
-import type { MonthArchiveInput, Repository, Store, UploadPersistInput } from "./repository-interface";
-import { calendarMonthOf } from "@/lib/timeline-dates";
-import { birthDayOf } from "@/lib/time-signature";
+import type { Repository, Store, UploadPersistInput } from "./repository-interface";
 import { assetByChecksum, normalizeChatImportTask, persistChatImportBatchInStore, persistUploadInStore } from "./chat-import-persistence";
 import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 
@@ -124,24 +122,6 @@ export function createJsonRepository(): Repository {
       };
     },
     async getEventDetail(id: string) { const store = await readStore(); const event = store.events.find((item) => item.id === id); if (!event) return null; return { event, media: store.media.filter((item) => event.mediaIds.includes(item.id)), sources: store.rawSources.filter((item) => event.sourceIds.includes(item.id) && !item.deletedAt), contributors: store.contributors, growth: store.growthRecords.filter((item) => event.growthRecordIds.includes(item.id)), care: store.careRecords.filter((item) => event.careRecordIds.includes(item.id) && item.visibility !== "private") }; },
-    // Local dev store is small — no need for the PostgreSQL backend's scoped query, just filter the
-    // whole (already in-memory) store down to the requested month.
-    async getMonthArchive(month: string): Promise<MonthArchiveInput> {
-      const store = await readStore();
-      const media = store.media.filter((item) => calendarMonthOf(item.takenAt) === month);
-      const sourceIds = new Set(media.map((item) => item.rawSourceId).filter((id): id is string => Boolean(id)));
-      const assetIds = new Set(media.map((item) => item.mediaAssetId).filter((id): id is string => Boolean(id)));
-      return {
-        birthDay: birthDayOf(store.profile),
-        events: store.events.filter((item) => calendarMonthOf(item.occurredAt) === month),
-        // Matches composeFamilyArchive's own extra visibility filter (lib/family-archive.ts).
-        dailyTraces: store.dailyTraces.filter((item) => calendarMonthOf(item.occurredAt) === month && item.visibility !== "private"),
-        media,
-        mediaAssets: store.mediaAssets.filter((item) => assetIds.has(item.id)),
-        mediaLocations: store.mediaLocations.filter((item) => assetIds.has(item.mediaAssetId)),
-        rawSources: store.rawSources.filter((item) => sourceIds.has(item.id)),
-      };
-    },
     async appendUpload(input: UploadPersistInput) { return (await persistUploadInJson(input)).source; },
     async persistUpload(input: UploadPersistInput) { return persistUploadInJson(input); },
     async findMediaAssetByChecksum(checksum: string) { const store = await readStore(); return assetByChecksum(store, checksum); },

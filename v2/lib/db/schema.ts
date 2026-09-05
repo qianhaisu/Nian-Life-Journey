@@ -118,8 +118,6 @@ export const media = pgTable("media", {
   byLifeEvent: index("media_life_event_idx").on(table.lifeEventId),
   byRawSource: index("media_raw_source_idx").on(table.rawSourceId),
   byAsset: index("media_asset_idx").on(table.mediaAssetId),
-  // P1-5: getMonthArchive filters this column by month range on every archive-expander click.
-  byTakenAt: index("media_taken_at_idx").on(table.takenAt),
 }));
 
 // Rebuilt field-for-field against LifeEvent. `featured`/`yearbook_selected` from the old table

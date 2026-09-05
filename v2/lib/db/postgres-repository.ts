@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { TransactionRollbackError } from "drizzle-orm/errors";
 import { sql } from "drizzle-orm";
 import type { CareEpisode, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportWarning, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, MonthlySnapshot, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
@@ -6,10 +6,9 @@ import { getDb } from "./client";
 import * as t from "./schema";
 import { newId, organizerJobKey } from "./repository-interface";
 import { CANONICAL_PROFILE_ID } from "./config";
-import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, MonthArchiveInput, OrganizerWindowInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
+import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, OrganizerWindowInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 import { normalizeSha256 } from "./chat-import-persistence";
 import { indexReviews, isEventPublishable, isTracePublishable, normalizeQualityDecision, type QualityReview } from "@/lib/organizer/quality-review";
-import { birthDayOf } from "@/lib/time-signature";
 import { ChatImportStateError, acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 
 // tx.rollback() doesn't make db.transaction() resolve to whatever the callback returns after it —
@@ -328,57 +327,6 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     return { profile: (profileRow as unknown as Store["profile"]) ?? null, sources: live, media, mediaAssets, mediaLocations };
   }
 
-  // "YYYY-MM" -> the [start, nextStart) instant boundaries buildChapters' own bucketing agrees with.
-  // life_events.occurred_at is timestamptz storing a calendar date AT UTC MIDNIGHT (see
-  // lib/timeline-dates.ts's header comment) — an explicit "...Z" boundary matches that encoding
-  // exactly. daily_traces.occurred_at and media.taken_at are naive `timestamp` (no offset, verified
-  // against real rows: drizzle returns "2026-08-31 01:25:00" — no "Z", no +08:00) — for those,
-  // Postgres discards the "Z" on a plain `timestamp` column and reads the same YYYY-MM-DD HH:MM:SS
-  // literal, which is exactly the day calendarDayOf() would report for an offset-less value (it
-  // takes the string's own date parts as written, never a timezone conversion). Same boundary
-  // string, correct for both column kinds.
-  function monthRange(month: string): { start: string; end: string } {
-    const [year, mm] = [Number(month.slice(0, 4)), Number(month.slice(5, 7))];
-    const next = mm === 12 ? `${year + 1}-01` : `${year}-${String(mm + 1).padStart(2, "0")}`;
-    return { start: `${month}-01T00:00:00.000Z`, end: `${next}-01T00:00:00.000Z` };
-  }
-
-  // One month's worth of the archive: exactly what lib/memory-chapters.ts buildChapters,
-  // lib/media/deliverability.ts deliverableMediaIds and lib/family-archive.ts mediaPrivilegeOf need
-  // to build that one MonthChapter, scoped by date/id at the query rather than sliced in JS out of
-  // getStore()'s whole-history load. See repository-interface.ts MonthArchiveInput.
-  async function assembleMonthArchive(month: string): Promise<MonthArchiveInput> {
-    const { start, end } = monthRange(month);
-    const [profileRows, events, dailyTraces, media] = await Promise.all([
-      db.select({ birthDate: t.profiles.birthDate }).from(t.profiles).where(eq(t.profiles.id, CANONICAL_PROFILE_ID)).limit(1),
-      db.select().from(t.lifeEvents).where(and(eq(t.lifeEvents.profileId, CANONICAL_PROFILE_ID), gte(t.lifeEvents.occurredAt, start), lt(t.lifeEvents.occurredAt, end))),
-      db.select().from(t.dailyTraces).where(and(eq(t.dailyTraces.profileId, CANONICAL_PROFILE_ID), gte(t.dailyTraces.occurredAt, start), lt(t.dailyTraces.occurredAt, end))),
-      db.select().from(t.media).where(and(eq(t.media.profileId, CANONICAL_PROFILE_ID), gte(t.media.takenAt, start), lt(t.media.takenAt, end))),
-    ]);
-    const reviews = await reviewIndex();
-    const publishableEvents = (events as unknown as LifeEvent[]).filter((event) => isEventPublishable(event, reviews));
-    // Matches composeFamilyArchive's own extra visibility filter on top of getStore()'s already-
-    // publishable dailyTraces (lib/family-archive.ts) — this function stands in for that same path.
-    const publishableTraces = (dailyTraces as unknown as DailyTrace[]).filter((trace) => isTracePublishable(trace, reviews) && trace.visibility !== "private");
-    const mediaRows = media as unknown as Media[];
-    const assetIds = [...new Set(mediaRows.map((item) => item.mediaAssetId).filter((id): id is string => Boolean(id)))];
-    const sourceIds = [...new Set(mediaRows.map((item) => item.rawSourceId).filter((id): id is string => Boolean(id)))];
-    const [mediaAssets, mediaLocations, rawSources] = await Promise.all([
-      assetIds.length ? db.select().from(t.mediaAssets).where(inArray(t.mediaAssets.id, assetIds)) : Promise.resolve([]),
-      assetIds.length ? db.select().from(t.mediaLocations).where(inArray(t.mediaLocations.mediaAssetId, assetIds)) : Promise.resolve([]),
-      sourceIds.length ? db.select({ id: t.rawSources.id, sourceType: t.rawSources.sourceType, sourceLabel: t.rawSources.sourceLabel }).from(t.rawSources).where(inArray(t.rawSources.id, sourceIds)) : Promise.resolve([]),
-    ]);
-    return {
-      birthDay: birthDayOf(profileRows[0] as unknown as { birthDate?: string } | undefined),
-      events: publishableEvents,
-      dailyTraces: publishableTraces,
-      media: mediaRows,
-      mediaAssets: mediaAssets as unknown as MediaAsset[],
-      mediaLocations: mediaLocations as unknown as MediaLocation[],
-      rawSources: rawSources as unknown as Pick<RawSource, "id" | "sourceType" | "sourceLabel">[],
-    };
-  }
-
   // The profile row is pinned by id — never `profiles limit 1`, which once handed a stranded
   // contract-test profile (born 2020) to the whole site as 张年. The collections stay the full
   // backend view (Organizer, archive and ingest pipelines read them by source/asset id); pages
@@ -546,7 +494,6 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         care: (careRows as unknown as Store["careRecords"]).filter((item) => e.careRecordIds.includes(item.id) && item.visibility !== "private"),
       };
     },
-    async getMonthArchive(month: string) { return assembleMonthArchive(month); },
     async appendUpload(input) { return (await persistUpload(input)).source; },
     async persistUpload(input) { return persistUpload(input); },
     async findMediaAssetByChecksum(checksum) {

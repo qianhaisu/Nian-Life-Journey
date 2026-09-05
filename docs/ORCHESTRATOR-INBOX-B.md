@@ -7,20 +7,6 @@ Cowork 写「入箱」，B 轨 Session 读入箱、执行、把结果写「出�
 P1-8 照片查看器 · P1-12 证据精选 从这里开始」。
 
 ---
-## ⏱ 常设规则：每 5 分钟强制汇报（所有任务都适用）
-
-不管任务多长，**每隔 5 分钟必须往 `docs/STATUS-B.md` 追加一段中间进度**。格式：
-
-```
-### YYYY-MM-DD HH:MMx · 中间进度 · <任务编号>
-
-- 从上次汇报到现在做了什么（哪怕只是"还在跑，N/M 条"）
-- 当前卡在哪 / 下一步是什么
-- 遇到的错误或异常（如果有）
-```
-
-**跑完时写正式汇报，跑到一半也必须写中间汇报。** 5 分钟没动静 = Cowork 无法判断你是死是活。
-宁可写"还在等 DB 响应，无新进展"，也不要沉默。
 
 ## 🚧 两条轨怎么不打架（先读这段，只有这段是硬约束）
 
@@ -179,60 +165,6 @@ A 轨今晚动过它，但现在不会再动。如果你必须改 `v2/lib/` 里�
 
 ---
 
-
-## B-6 · 立即 push 本地 commit — status: done
-
-**背景**　本地 main 上有一个未 push 的 commit `d1b6e3e`（P1-5 性能 + P1-portrait + P1-sept-snapshot，A 轨写的代码）。
-Teddy 不在电脑旁，你来 push。
-
-**做什么**
-```bash
-git log --oneline -3          # 确认 d1b6e3e 在 main 上
-git push origin main
-```
-
-push 后等 Vercel 部署完成（约 1-2 分钟），在出箱报告 push 结果和 Vercel 部署 URL/状态。
-**视觉验证 Cowork 会做，你不用管。**
-
----
-
-## B-8 · P1-snap 渲染修复（一行 CSS） — status: ready
-
-**优先级**：最高，1 分钟能做完。
-
-**问题**：A 轨已经把 `monthly_snapshot.summary` 改成了分点格式（每行 `- ` 开头），
-数据库里已经是正确的 bullet 格式了。但首页渲染时 `<p class="home-change-note serif">{summary}</p>`
-把 `\n` 当空白吞掉了，浏览器里还是挤成一段。
-
-**做什么（二选一，选你觉得更干净的）**：
-
-方案 A（最快）：在 `globals.css` 里给 `.home-change-note` 加一行 `white-space: pre-line;`
-
-方案 B（更语义化）：在渲染 summary 的组件里把 `\n` 拆成 `<li>` 或 `<br/>`，
-比如 `summary.split('\n').filter(Boolean).map(line => <li>{line}</li>)`
-
-**验收**：首页「最近的新变化」能看到 3-5 条分开的要点，不是一坨文字。
-用 curl 检查 HTML 里确实有换行/列表结构。
-
----
-
-## B-7 · P1-2 夸克历史素材入库（续跑） — status: done（已由 A 轨接管）
-
-**背景**　上一个 A 轨 session 跑了 `v2/scripts/quark-history-init.mjs`，只进了 194/1,690 张就断了。脚本按 checksum 去重，重跑安全。
-
-**做什么**
-```bash
-cd v2
-node scripts/quark-history-init.mjs
-```
-
-**范围**　只有照片，不含 260 个视频。329 张无日期照片不在这轮范围。
-**验收**　跑完后查库：
-```sql
-SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-09-03';
-```
-应该 ≈ 1,690（±去重容差）。结果写出箱。
-
 ## 🔁 工作节奏：领了任务就别断
 
 **这是这条轨最重要的一条规则。**
@@ -262,7 +194,7 @@ SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-0
 
 **怎么验证的**　typecheck 通过；推到 main，Vercel 部署。能在 https://nianlife.cn/events/<id> 上验证：primary 条数 < 总条数时页面明显变短，次级折叠存在且可以展开看育儿建议长文。没有 primary 的事件回退为原来的平铺行为。
 
-**没做到什么**　（已补验收）见下方「线上验收补记」。
+**没做到什么**　线上验收需要一个有大量证据的事件 id；Vercel 部署通常 1–2 分钟完成后可验证。
 
 **下一件**　B-2 照片查看器（已完成，见下）。
 
@@ -316,69 +248,9 @@ SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-0
 
 ---
 
-### B-6 · push 本地 commit · 完成 2026-09-05
-
-**线上多了什么**　`d1b6e3e`（perf: scoped getStore() + P1-portrait + P1-sept-snapshot，A 轨代码）已 push 到 main，Vercel 开始部署。
-
-**怎么验证的**　`git log --oneline -3` 确认 `d1b6e3e` 在顶部；`git push origin main` 成功，`ee443c0..d1b6e3e  main -> main`。
-
-**没做到什么**　Vercel 部署状态未等待确认（约 1-2 分钟自动完成）。
-
-**下一件**　B-7 夸克历史素材入库。
-
----
-
-### B-7 · P1-2 夸克历史素材入库（续跑）· ⏸ 等待 A 轨修复 2026-09-05
-
-**已知状态**　三次跑均失败 (b7z6hljna / btppqu1ki / bdenecoiu)，exit 1，无 JSON 摘要，无 stderr 错误输出。干跑 exit 0 正常，说明 crash 只发生在 apply 路径。crash 绕过外层 try/catch，最可能是 sharp/libvips 原生内存 OOM 导致 SIGKILL。DB 里已有 204 条 raw_sources（checksum 去重，重跑安全）。
-
-**已 revert**　`v2/scripts/quark-history-init.mjs` 的诊断改动已还原（A 轨边界）；Codex（task-mtntehv1-r3ils8）正在排查 `quark-photo-apply.mjs` / `client.ts`。
-
-**下一步**　等 A 轨/Codex 报告修复结果，再重跑一次。完成后查库并补写结果。
-
----
-
 ## 🌅 晨间交接规则（长期有效，每天都适用）
 
 Teddy 每天早上会把这条轨的上下文清掉（`/clear`），所以**连续性必须活在文件里，不在你的记忆里**。
-
----
-
-### 线上验收补记 · B-1~B-5 · 2026-09-05
-
-B-1 至 B-5 的"没做到什么"栏都说"未在线上验证"，这里补验：
-
-**B-1 证据精选** ✅ 已验
-- `curl https://nianlife.cn/events/event-v2-b76018fcae4fb0a3f90d4b4efe4d2cdc` 抓到「当时留下的资料 35 项」+ `<details class="evidence-secondary">当天其余资料（34 项）`。
-- 证据数最多的那条事件（35 总/1 primary）：第一层只显示 1 条；34 条 supporting 在次级折叠里，默认收起。**验收通过。**
-
-**B-2 照片查看器** ⚠️ 半验
-- August 月页 HTML 里有 `PhotoGallery` 组件占位、71 个 `<img>` tag（带 lazy loading）。查看器是纯客户端 JS，curl 无法触发点击/滑动——**需要真机上用手指点才能确认滑动/放大/关闭**。
-
-**B-3 月页渐进展开** ✅ 已验
-- August 月页（220 KB）有「还有 29 天、548 张照片——点此展开全部」按钮；`ArchiveExpander` 存在；初始 71 个 `<img>`，548 张档案图片**未预先渲染**（`archive-day` / `archive-item` 类数量 = 0）。**验收通过。**
-
-**B-4 首页三块** ✅ 已验
-- 首页可见三块：① 最近一段生活（最近三条记忆 + 日期/年龄）；② 最近的新变化（取自 8 月 snapshot.summary）；③「翻看这个月」（本月入口）。**验收通过。**
-
-**B-5 张年页** ✅ 已验（部分）
-- `/about` 显示：年龄「1 岁 8 个月」、「最近的生活节奏 2026 年 8 月」。growth records 有无带 lifeEventId 的条目（即「查看那天」链接能否出现）仍需真机打开确认。
-
----
-
-### B-8 · P1-snap 渲染修复 · 完成 2026-09-05
-
-**线上多了什么**　首页「最近的新变化」的 summary 现在分行显示为列表项，不再挤成一段。`- ` 前缀自动去掉，每行一个 `<li>`。
-
-**怎么验证的**　typecheck 通过；推 main (7fda35b)，Vercel 部署后可在首页「最近的新变化」验证分行效果。
-
-**没做到什么**　未 curl 线上确认（Vercel 部署需约 1 分钟可补验）。
-
-**下一件**　入箱无其他 ready 任务，继续监控。
-
----
-
-## 🌅 晨间交接规则（长期有效，每天都适用）
 
 **触发时机**：Cowork 或 Teddy 让你"收尾"时，或者你自己判断当前任务已经跑完一个完整节点时
 （一个月跑完、一个功能上线并验证过——**不要停在一个月跑到一半**）。

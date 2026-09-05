@@ -40,10 +40,7 @@ async function readVerified(item, originalsDir) {
 }
 
 async function ingestOne(item, ctx) {
-  const checksumKey = item.sha256.toLowerCase();
-  // The index is a snapshot.  A miss still performs the existing point lookup so a concurrent
-  // importer cannot create duplicate work after the snapshot was taken.
-  const existingAsset = ctx.existingAssetsByChecksum.get(checksumKey) ?? await ctx.repo.findMediaAssetByChecksum(item.sha256);
+  const existingAsset = await ctx.repo.findMediaAssetByChecksum(item.sha256);
   if (existingAsset) {
     if (!existingAsset.rawSourceId) throw new Error(`existing asset ${existingAsset.id} has no rawSourceId; needs manual reconciliation`);
     return { status: "reused", filename: item.filename, sha256: item.sha256, rawSourceId: existingAsset.rawSourceId, capturedAt: capturedAtIso(item) };
@@ -76,7 +73,6 @@ async function ingestOne(item, ctx) {
   const media = { id: mediaId, profileId: ctx.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: "photo", src: ctx.mediaDeliveryUrl(mediaId, "web"), originalFilename: item.filename, mimeType: item.format_type, fileSize: bytes.byteLength, alt: item.filename, takenAt: capturedAt, visibility: ctx.visibility, width: dims.width, height: dims.height };
 
   await ctx.repo.appendUpload({ source, media: [media], assets: [asset], locations });
-  ctx.existingAssetsByChecksum.set(checksumKey, { id: assetId, rawSourceId: sourceId });
   return { status: "created", filename: item.filename, sha256, rawSourceId: sourceId, capturedAt };
 }
 
@@ -150,16 +146,7 @@ export async function applyQuarkPhotoArtifact(config) {
   const allItems = raw.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
   const items = eligibleItems(allItems);
 
-  // PostgreSQL gets one projected media_assets read for the entire run.  Test/injected and JSON
-  // repositories retain their established point-lookup contract unless they explicitly supply an
-  // index, so existing callers remain compatible.
-  const existingAssetsByChecksum = deps.mediaAssetChecksumIndex
-    ? await deps.mediaAssetChecksumIndex()
-    : !deps.repo && process.env.REPOSITORY_BACKEND === "postgres"
-      ? await (await import("../lib/db/client.ts")).getMediaAssetChecksumIndex()
-      : new Map();
-
-  const ctx = { repo, sourceImageMetadata, createDerivatives, hotStorage, mediaDeliveryUrl, profileId, contributorId, visibility, sourceLabel, originalsDir: resolvedOriginals, mode, existingAssetsByChecksum };
+  const ctx = { repo, sourceImageMetadata, createDerivatives, hotStorage, mediaDeliveryUrl, profileId, contributorId, visibility, sourceLabel, originalsDir: resolvedOriginals, mode };
 
   // Fail-closed preflight (apply only): if this run would ingest any NEW photo, the Organizer will
   // be drained and needs Gemini. Refuse BEFORE writing anything when Gemini is missing, so a partial
@@ -172,7 +159,7 @@ export async function applyQuarkPhotoArtifact(config) {
         const sizeChanged = typeof skip.size === "number" && typeof item.size === "number" && skip.size !== item.size;
         if (!sizeChanged) continue;
       }
-      const existing = existingAssetsByChecksum.get(item.sha256.toLowerCase()) ?? await repo.findMediaAssetByChecksum(item.sha256);
+      const existing = await repo.findMediaAssetByChecksum(item.sha256);
       if (!existing) wouldCreate += 1;
     }
     if (wouldCreate > 0) {
