@@ -24,27 +24,33 @@ export default async function HomePage() {
       <h1 className="serif"><span className="home-title-line">最近怎么样，</span><span className="home-title-line"><em>张年。</em></span></h1>
     </header>
 
-    {cover.kind === "moment" ? <section className="home-lead home-moment reading-wrap" aria-labelledby="moment-title">
-      <h2 id="moment-title" className="section-mark">{cover.cover.moment.kind === "photo_led" ? "最近的一天" : "最近记下来的一天"}</h2>
-      {/* memory_led carries its own TimeSignature/title inside EditorialMemory — text_led/photo_led
-          state the day here instead, matching MonthMoment's split (components/month-moment.tsx). */}
-      {cover.cover.moment.kind === "memory_led" && cover.cover.moment.memory
-        ? <EditorialMemory memory={cover.cover.moment.memory} size="lead" priority />
-        : <p className="home-day-date"><time dateTime={cover.cover.moment.day}>{cover.cover.moment.dateLabel}</time>{cover.cover.moment.ageLabel ? <span>{cover.cover.moment.ageLabel}</span> : null}</p>}
-      {cover.cover.moment.text.length > 0 ? <div className="moment-text serif">{cover.cover.moment.text.map((entry, index) => <p key={index}>{entry}</p>)}</div> : null}
-      {(cover.cover.moment.hero || cover.cover.moment.supporting.length > 0) ? (
-        <PhotoGallery
-          photos={[...(cover.cover.moment.hero ? [cover.cover.moment.hero] : []), ...cover.cover.moment.supporting]}
-          heroIndex={cover.cover.moment.hero ? 0 : undefined}
-          heroClassName="moment-hero"
-          dateLabel={cover.cover.moment.dateLabel}
-          ageLabel={cover.cover.moment.ageLabel}
-          priority
-        />
-      ) : null}
-      {/* T20-A4: "还有 28 天" counted photographed days, not days with anything to read — a
-          count-of-days sentence is exactly the 计数式描述 原则三 rules out. */}
-      <p className="chapter-meta"><Link className="text-link" href={cover.cover.monthHref}>翻看整个月</Link></p>
+    {cover.kind === "moment" ? <section className="home-lead home-moment" aria-labelledby="moment-title">
+      <h2 id="moment-title" className="section-mark reading-wrap">{cover.cover.moment.kind === "photo_led" ? "最近的一天" : "最近记下来的一天"}</h2>
+      <div className="moment-layout photo-wrap">
+        {(cover.cover.moment.hero || cover.cover.moment.supporting.length > 0) ? (
+          <div className="moment-photo-col">
+            <PhotoGallery
+              photos={[...(cover.cover.moment.hero ? [cover.cover.moment.hero] : []), ...cover.cover.moment.supporting]}
+              heroIndex={cover.cover.moment.hero ? 0 : undefined}
+              heroClassName="moment-hero"
+              dateLabel={cover.cover.moment.dateLabel}
+              ageLabel={cover.cover.moment.ageLabel}
+              priority
+            />
+          </div>
+        ) : null}
+        <div className="moment-text-col">
+          {/* memory_led carries its own TimeSignature/title inside EditorialMemory — text_led/photo_led
+              show a date-badge here instead, matching MonthMoment's split (components/month-moment.tsx). */}
+          {cover.cover.moment.kind === "memory_led" && cover.cover.moment.memory
+            ? <EditorialMemory memory={cover.cover.moment.memory} size="lead" priority />
+            : <span className="date-badge"><time dateTime={cover.cover.moment.day}>{cover.cover.moment.dateLabel}</time>{cover.cover.moment.ageLabel ? <span>{` · ${cover.cover.moment.ageLabel}`}</span> : null}</span>}
+          {cover.cover.moment.text.length > 0 ? <div className="moment-text serif">{cover.cover.moment.text.map((entry, index) => <p key={index}>{entry}</p>)}</div> : null}
+          {/* T20-A4: "还有 28 天" counted photographed days, not days with anything to read — a
+              count-of-days sentence is exactly the 计数式描述 原则三 rules out. */}
+          <p className="chapter-meta"><Link className="text-link" href={cover.cover.monthHref}>翻看整个月</Link></p>
+        </div>
+      </div>
     </section> : null}
 
     {cover.kind === "memory" || cover.kind === "dated" ? <section className="home-lead reading-wrap" aria-labelledby="lead-title">
@@ -59,7 +65,7 @@ export default async function HomePage() {
     {/* 最近的新变化：直接复用 monthly_snapshot.summary，有就显示，没有就整块消失 */}
     {summary && changeLabel && changeHref ? <section className="home-change reading-wrap" aria-labelledby="change-title">
       <h2 id="change-title" className="section-mark">最近的新变化</h2>
-      <p className="home-change-note serif">{summary}</p>
+      <ul className="home-change-note serif">{summary.split('\n').filter(Boolean).map((line, i) => <li key={i}>{line.replace(/^-\s*/, '')}</li>)}</ul>
       <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
     </section> : null}
 

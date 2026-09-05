@@ -26,6 +26,18 @@ export function getDb(env: NodeJS.ProcessEnv = process.env) {
   return drizzle(getPool(env), { schema });
 }
 
+// Import jobs must not turn a resume into N high-latency point lookups.  Keep this deliberately
+// narrow: it selects only the two identity columns from media_assets, rather than getStore(),
+// which loads the whole archive graph.
+export async function getMediaAssetChecksumIndex(env: NodeJS.ProcessEnv = process.env) {
+  const rows = await getDb(env)
+    .select({ checksum: schema.mediaAssets.checksum, rawSourceId: schema.mediaAssets.rawSourceId, id: schema.mediaAssets.id })
+    .from(schema.mediaAssets);
+  return new Map(rows
+    .filter((row) => typeof row.checksum === "string")
+    .map((row) => [row.checksum!.replace(/^sha256:/i, "").toLowerCase(), { id: row.id, rawSourceId: row.rawSourceId }]));
+}
+
 export async function closePool() {
   if (pool) { await pool.end(); pool = undefined; }
 }

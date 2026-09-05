@@ -44,6 +44,20 @@ export type EventDetail = {
   care: CareRecord[];
 };
 
+// Just enough of the Store to build ONE month's chapter (lib/memory-chapters.ts buildChapters +
+// lib/media/deliverability.ts deliverableMediaIds + lib/family-archive.ts mediaPrivilegeOf), scoped
+// by date at the query itself rather than filtered in JS after getStore() pulled every month. See
+// Repository.getMonthArchive.
+export type MonthArchiveInput = {
+  birthDay?: string;
+  events: LifeEvent[];
+  dailyTraces: DailyTrace[];
+  media: Media[];
+  mediaAssets: MediaAsset[];
+  mediaLocations: MediaLocation[];
+  rawSources: Pick<RawSource, "id" | "sourceType" | "sourceLabel">[];
+};
+
 // The domain contract pages, Server Actions, Route Handlers, and the Organizer depend on — never
 // on PostgreSQL or the JSON file directly. Both json-repository.ts and postgres-repository.ts
 // implement this exactly; repository.ts picks one at module load based on REPOSITORY_BACKEND.
@@ -126,6 +140,10 @@ export interface Repository extends ChatImportRepository {
   /** Evidence-window input for one job's sources. See OrganizerWindowInput. */
   getOrganizerWindowInput(sourceIds: string[]): Promise<OrganizerWindowInput>;
   getEventDetail(id: string): Promise<EventDetail | null>;
+  // month is "YYYY-MM". Scoped by occurredAt/takenAt at the query itself — see getOrganizerStore's
+  // doc comment for why getStore() cannot serve this: the archive-expander action needs one month
+  // out of the whole profile's history on every click, not the whole history filtered client-side.
+  getMonthArchive(month: string): Promise<MonthArchiveInput>;
   appendUpload(input: UploadPersistInput): Promise<RawSource>;
   persistUpload(input: UploadPersistInput): Promise<UploadPersistResult>;
   findMediaAssetByChecksum(checksum: string): Promise<MediaAsset | null>;

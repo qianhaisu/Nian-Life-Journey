@@ -1,7 +1,3 @@
-# ✅ GIT 修复已完成（commit 5eebfc0），无需再做
-
----
-
 # INBOX — 给 Claude Code 的任务队列
 
 Cowork 写这里，Claude Code 读这里并执行，结果写回 `docs/STATUS.md`。
@@ -29,208 +25,188 @@ Teddy 不必在中间转述。
 > **不要从文件开头往下读全部历史**——上面大半是已经 done 的旧任务。
 > **只看这块。** 这里列的就是当前该做的，按顺序。做完一条在这里标 done。
 
-**更新于 2026-09-05 08:20 UTC（Cowork）· P1-2b 入库在跑，同时分发 P1-portrait + P1-sept-snapshot**
-
-**P1-2b 入库正在后台跑**（A 轨已写新脚本 00eaada + 738e5f5，纯 JS 无 tsx 依赖）。
-截至 16:18 本地时间：created 99, reused 2, failed 0，进度正常，预计还需数小时。
-**不要重启入库进程，不要碰入库脚本。** 让它跑完。
-
-**P1-2b 跑着的同时，做下面两个不依赖入库的任务（按顺序）。** 都是小改动，合计 < 1 小时。
-
----
-
-## ⚡ 任务 1：P1-portrait · About 页 portrait 优先选人像照片
-
-### 目标
-
-About 页展示的 portrait 是张年的人像照片，不是食物/物品照。
-
-**现状**：`latestPortrait()` (`lib/memory-chapters.ts`) 遍历 chapters（最新月优先），取第一张 `heroSized()` + `isVouched()` 的照片。它不区分照片内容——可能选到食物摆盘照。
-
-### 硬边界
-
-1. **不引入外部 AI 人脸检测服务**——不加新的 API 依赖
-2. **不改 media_assets schema**——不加列
-3. **选不到人像时 fallback 到当前逻辑**（最新 vouched hero），不能让 portrait 变空
-
-### 做什么
-
-在 `latestPortrait` 的候选排序中，**优先选 portrait orientation（竖版）的照片**。
-家长拍孩子人像几乎都是竖着拍的，这是不需要 AI 的最强信号。
-
-具体：
-- 遍历候选时，先找 `width < height`（竖版）的 heroSized + isVouched 照片
-- 找不到竖版时，fallback 到当前逻辑（横版也行）
-- 可以额外降权关联事件标题含"吃""饭""食"的照片（可选，不强求）
-
-### 验收
-
-1. About 页 portrait 是竖版照片（浏览器视觉验证）
-2. 不影响其他页面的照片展示
-3. npm run typecheck 通过
-
-### 代码指引
-
-- `latestPortrait()` 在 `lib/memory-chapters.ts` 约 line 331-343
-- 调用处：`app/about/page.tsx:24`
-- media_assets 表有 `width` 和 `height` 列
-
----
-
-## ⚡ 任务 2：P1-sept-snapshot · 首页"最近的新变化"可见
-
-### 目标
-
-首页"最近的新变化"区块有内容展示，不留空白。
-
-**现状**：`buildHomeView` 取 `chapters[0].months[0]`（最新月 = 2026-09），然后找 `snapshots.find(item => item.month === thisMonth.month)`。9 月无 monthly_snapshot → summary 为 undefined → 整个区块不渲染。
-
-### 硬边界
-
-1. **不降低 month-review.mjs 的 MIN_EVENTS 阈值**——薄月不写 snapshot 是正确的
-2. **不手写 / 硬编码 9 月的 summary 文本**
-3. **保持 `isSnapshotPublishable` 的逻辑不变**
-
-### 做什么
-
-当 `thisMonth` 没有 snapshot 时，**回退到 snapshots 列表中最近的一个有 snapshot 的月份**。
-月份标签要跟着 snapshot 走（显示"八月"而非"九月"），不能错位。
-
-```typescript
-// 当前月没有 snapshot 时，找最近有 snapshot 的月份
-const snapshotMonth = snapshots.find(s => s.month === thisMonth?.month)
-  ?? snapshots.sort((a, b) => b.month.localeCompare(a.month))[0];
-// monthHref 和标签要跟着 snapshot 的月份走
-```
-
-### 验收
-
-1. 首页"最近的新变化"区块可见，展示最近有 snapshot 的月份（当前应为 2026-08）
-2. 月份标签与 snapshot 内容一致（不错位）
-3. 不影响月页和 About 页的 snapshot 展示
-4. npm run typecheck 通过
-
-### 代码指引
-
-- 改动点：`lib/home-view.ts` 的 `buildHomeView` 函数
-- `app/page.tsx` 渲染逻辑可能也要改（月份标签）
-- 对照 commit `9dd5427`（之前的 null guard fix）确认不回归
-
----
-
-## 🔵 P1-2b 继续跑（不要碰，参考信息）
-
-## A 轨当前任务：P1-2b（第二阶段）· HEIC 转码照片入库
-
-### 目标
-
-把 1,468 张已转码的 HEIC→JPEG 照片入库到 raw_sources + media_assets + media。
-转码已完成，manifest 已生成，只差入库这一步。
-
-### 执行步骤
-
-1. **Manifest 位置**：'E:\WechatHis\quark-history\2026-09-03\manifests\quark-heic-converted-task-items.jsonl'（1,468 行）
-2. **入库脚本**：'v2/scripts/quark-photo-apply.mjs'——已验证过能吃转码后的 JPEG（之前 10 张测试全部成功）
-3. **运行方式**：
-   
-   如果脚本不接受 --manifest 参数，读代码确认入口，用正确的参数调用。
-4. **预计耗时**：5-6 小时（每条约 12-30 秒，含 R2 上传 + DB 写入）
-5. **每 10 分钟汇报一次进度**（追加到 STATUS.md）：当前入库数 / 1,468，失败数，速率
-
-### 硬边界
-
-- source_label 必须保持 'Quark 历史素材 2026-09-03'（和之前 224 条一致）
-- 不改 schema、不改 processing.ts、不改 B 轨文件
-- 如果 Neon CU-hours 接近限额（100 CU/月），暂停并报告
-- 遇到批量失败（连续 10 条失败）立即停下报告，不要盲目重试
-
-### 验收
-
-- raw_sources 里 source_label = 'Quark 历史素材 2026-09-03' 的数量 >= 1,500（224 已有 + 1,468 新增，允许少量重复/失败）
-- media_assets 对应增长
-- 按月分布覆盖 2025-01 到 2026-08（对照转码目录的月份分布）
-- 完成后跑 nianlife-status.mjs 汇报最终数字
-
-P1-3 已完成（commit f8b009e + 21edcec）：T20-C 分级收编进 organizer-month-write.mjs --commit，
-全站只保留一个判断点。验收通过：approved 133 / store_only 220，每月 >=8 天有文字 + >=1 章节级（01 月除外）。
-
----
-
-## A 轨当前任务：P1-4 · 图文同日绑定（信任名单制）
-
-### 目标
-
-照片和文字在月页上按「同一天」并排展示，判据是**信任名单制**（不再只限夸克）。
-
-**现状**：月页上照片和文字是分开展示的。照片来源有两类：
-- 夸克相册（218 条已入库，source_label = 'Quark 历史素材 2026-09-03'）
-- 微信群（乳儿班群等，由 wechat-import 导入）
-
-P1 plan review（A 条）已明确：**"背书"的定义从「来源 = 夸克」改成「来源在信任名单里」**——
-夸克 + 乳儿班群 + 以后任何 Teddy 点头的会话。规则是"这个来源的照片默认就是张年"。
-
-### 信任名单
-
-已知可信来源（照片默认是张年）：
-1. **夸克 family_photo**：source_label LIKE 'Quark%' 的 media_assets
-2. **乳儿班群**：conversation:bb5d5ba6da5986d35b923465（张小年家庭群）
-3. **主力作战部队群**：conversation:856b8ec2b8f3ec2871782ca6 和相关 label
-
-信任名单应该是**可配置的**（放在代码常量或配置文件里），未来 Teddy 可以加新来源。
-
-### 做什么
-
-1. **定义信任名单**：在 lib/ 下建一个 trusted-photo-sources.ts（或类似），列出可信来源的匹配规则
-2. **修改绑定逻辑**：月页渲染时，照片如果来自信任名单 **且** 同一天有过主体门的文字（life_events 里有 approved 的记录），则并排展示
-3. **非信任来源的照片**：留在月末档案，不进正文
-4. **首页封面**：去掉「强照片日」规则（如果还在的话），只用信任名单 + 同日文字
-
-### 硬边界
-
-1. **不引入新的 AI 判断**——信任是名单制，不是模型打分
-2. **不改 media_assets schema**——不加列
-3. **不影响已有的月页文字展示**——只改照片的位置和绑定逻辑
-4. **微信照片（非信任来源）不能出现在正文里**——只有信任名单里的来源才行
-
-### 验收
-
-1. 2026-07 月页（Quark 照片最多的月份，204 张 media_assets）：有 Quark 照片和文字并排的日子
-2. 乳儿班群的照片（如果有 approved life_event 同日的）也能并排
-3. 非信任来源的照片仍在月末档案，不在正文
-4. 首页照片来自信任名单
-5. npm run typecheck 和 npm test 通过
-6. 结果写 STATUS.md，**每 5 分钟中间进度汇报**
-
-### 不可接受
-
-- 把 261 张微信照片全部从月页撤下（plan review A 条警告过的场景）
-- 用 AI 模型判断"这张照片是不是张年"
-- 硬编码某些照片 ID
-
-### 代码指引
-
-- 月页渲染入口：app/memory/[year]/[month]/page.tsx
-- 照片展示逻辑：lib/publication-moments.ts（这是 B 轨文件，改之前确认 B 轨没在动——B 轨已收尾，可以改）
-- 事件页照片：app/memory/[year]/[month]/[eventId]/page.tsx
-- 首页：lib/home-view.ts 的 buildHomeView
-- 参考 P1 plan review A 条的完整分析（claude/nianlife-P1-plan-review-2026-09-05.md）
-
----
-
-## 新 A 轨任务（并行）：P1-2b · HEIC 批量转码 + 二次入库
-
-**背景**：Quark 1,690 张照片里 ~1,470 张是 .HEIC，sharp/libvips 在 Windows 上无法解码。
-非 HEIC 部分已入库 218 条。Windows 本身能正常打开这些 HEIC 文件（系统解码器没问题），
-问题只在 Node.js 的 sharp 库。
+**更新于 2026-09-05 06:4x（Claude Code）· P1-2 后台任务两次静默中断，转给 Codex 排查；P1-snap 做完**
+
+`quark-history-init.mjs --apply` 两次都在 204/1,690 条时以 exit 0 静默结束，没有报错、没有最终
+汇总——这是「整个进程被杀掉」的样子，不是某条素材出错（那条路径已有 try/catch）。这正是 CLAUDE.md
+划给 Codex 的复审范围（importer 幂等/吞吐），已经转给 `/codex:rescue` 排查（后台任务
+`task-mtntehv1-r3ils8`，正在改 `v2/lib/db/client.ts`/`v2/scripts/quark-photo-apply.mjs`，**这两个
+文件现在先不要碰**，等它报告）。**P1-2 剩下 1,486 张暂停在这里，等 Codex 的诊断确认安全后再继续**，
+不是不管了。
+
+等待期间做完了 Cowork 11:0x 派的 **P1-snap**（月度回顾分点）：`month-review.mjs` 的 prompt 改成
+输出 3-5 条 `- ` 开头的独立要点、加了格式校验、`PROMPT_VERSION` 升到 v2，2026-01~08 全部 8 个月
+重新生成并入库，查库核对全部通过（无「家人/家里人/有人说」类违规）。**发现一个真实的渲染缺口**：
+`app/globals.css` 的 `.home-change-note` 没有 `white-space: pre-line`，`<p>{summary}</p>` 会把
+换行吞掉，浏览器里现在这 5 条要点大概率还是挤成一段——**数据已经分好点了，缺的是这一行 CSS（或
+把 `\n` 拆成 `<li>`）**，需要 Cowork 派给 B 轨，我没有碰 `app/page.tsx`/`globals.css`。
+细节见 `docs/STATUS.md` 06:4x。
+
+**🏁 更新于 2026-09-05 07:2x（Claude Code）· P1-2 到达当前工具链上限：214/1,690，不是卡住**
+
+Codex 报告：代码里排不出会静默退出的路径（per-item 报错都在 try/catch 里），判断是"进程被外部
+结束"，不是逻辑 bug；但它确实把 `ingestOne()` 逐条查 checksum 改成了一次性批量查（`v2/lib/db/
+client.ts` 新增 `getMediaAssetChecksumIndex()`），我验过 typecheck/645 测试/批量查询本身耗时都对
+得上。核实后发现了一个更关键的问题：**87%（1,468/1,690）剩下的素材是 HEIC，这台机器的
+libvips/libheif 解不了码**（`heif: Decoder plugin generated an error`）——两个 Session 分别抽样
+验证过，确认不是文件损坏（Windows 自带 WIC 解码器能正常打开），是这台机器解码器本身的兼容性
+问题。原来的流程会对着这些注定失败的文件先把原图传上 R2 再报错，这才是"进度看起来卡住"的真正
+原因（不是挂了，是在传大文件）。已经把 HEIC 提前过滤掉（写到仓库外的
+`heic-decode-unsupported.jsonl`，不是永久跳过，换解码器后能直接捡回来），过滤后剩下 222 张
+非 HEIC 候选 30 秒内跑完：10 条新建、212 条已存在、0 失败，正常退出并打出完整汇总。
+
+**P1-2 现在的真实上限是 214 条（+ 之前已有的 8 条），不是 1,682 条。** 剩下 1,468 张 HEIC 要不要
+投入去修解码器（升级 libvips/libheif，或者换个解码路径，会影响 `lib/media/processing.ts` 这条
+全站共用的图片处理链，不是这个脚本内部能孤立解决的），这个判断留给 Cowork/Teddy，我没有自己选
+方向做。细节/协调过程（这轮期间撞上了两个额外的重复 Session，都已经自行停手清理干净，没有产生
+脏数据）见 `docs/STATUS.md` 07:2x。**P1-2 到此为止，下一件按板子顺序是 P1-3。**
+
+**更新于 2026-09-05 11:0x（Cowork）· P1 进度刷新，当前任务：P1-2 续跑 Quark 入库**
+
+## P1 完成状态
+
+| # | 事项 | 状态 |
+|---|---|---|
+| P1-0 | 2026-01~05 五个月过 T7 管线 | ✅ done（01 月 5 天/0 章节级，素材薄，阈值不动） |
+| P1-5 | 性能：索引 + scoped read + getMonthArchive | ✅ done（8459502 + d1b6e3e + ca9c38d） |
+| P1-1 | 身份修复 conversationId | ✅ done（2e38e5a + 86f174e） |
+| P1-7 | 月末档案展开交互 | ✅ done（B 轨 B-3） |
+| **P1-2** | **Quark 1,690 张历史照片入库** | **🔴 只进了 204 张，需要续跑** |
+| P1-3 | 主体门 + 收编 T20-C 分类器 | ⬜ 未开始（P1-2 之后） |
+| P1-4 | 图文同日绑定（信任名单制） | ⬜ 未开始（P1-2 + P1-3 之后） |
+| P1-6 | 本地 worker | ⬜ 未开始（排最后） |
+
+## 当前任务：P1-2 Quark 历史照片入库（续跑）
+
+**背景**：上一个 A 轨 session 生成了 `manifests/quark-history-manifest.jsonl`（1,690 张有可信日期的照片），
+跑了 `quark-photo-apply.mjs` 但只入了 204 张（跑到一半 session 结束了，后台进程随之死亡）。
+脚本按 checksum 去重，**重跑安全**。
 
 **做什么**：
+1. 先查库确认现在 Quark 历史素材有多少条：
+   ```sql
+   SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-09-03';
+   ```
+2. 重新跑 apply（不是 dry-run）：
+   ```bash
+   cd v2 && node scripts/quark-photo-apply.mjs --manifest manifests/quark-history-manifest.jsonl 2>&1 | tee ../quark-apply.log &
+   ```
+   （具体命令以脚本实际参数为准，上面是方向。检查 `scripts/` 下 quark 相关脚本的 `--help` 或源码确认用法。）
+3. 跑完后查库核实：
+   - `raw_sources` 增量 ≈ 1,682（1,690 - 8 已有）
+   - 等量 `media` / `media_assets`
+   - 读 `manifests/apply-failed.jsonl` 看失败分布（HEIC 解码失败是已知的，不是数据损坏）
+4. 结果写 `docs/STATUS.md`
 
-1. 读 manifests/heic-decode-unsupported.jsonl（1,468 行，已由之前的 session 生成）
-2. 用 heic-convert npm 包（纯 JS，不依赖系统解码器）批量转 JPEG
-3. JPEG 输出到 NianlifeOps/quark-history/2026-09-03/jpeg-converted/
-4. 把转码后的 JPEG 文件走 quark-photo-apply.mjs 的正常流程入库
+**预期吞吐**：上次实测 ~5 条/分钟（逐条 await，checksum 查询 + R2 put + DB insert），
+1,486 条约 5 小时。这是一次性历史回填，幂等，不需要为速度改逻辑。
 
-**验收**：Quark raw_sources >= 1,500；转码后照片月页可显示；STATUS.md 每 5 分钟汇报
+**做完 P1-2 之后**：在 `docs/STATUS.md` 报告完成，写交接稿到 `docs/HANDOFF-A.md`，
+末尾写 `=== A 轨已到收尾节点，可以 /clear ===`，等 Cowork 派下一个任务（P1-3）。
+
+## 重要提醒
+
+- **信任名单改法**（P1-4 用）：P1-4 的「背书」从 `来源=夸克` 改成「来源在信任名单里」——
+  夸克 + 乳儿班群 + 以后任何 Teddy 点头的会话。这条在 P1-4 时执行，现在不动。
+- **P1-3 验收必须同时看内容量下限**：≥8 天有文字 + ≥1 章节级。低于下限说明门太严。
+- **01 月阈值不要自己动**：pro 重跑后仍 5 天/0 章节级，已如实记录，等 Teddy 定。
+
+## P1-snap · 月度回顾 summary 可读性修复（Quark 跑后台时做）
+
+**优先级**：P1-2 Quark apply 放后台之后，利用等待时间做这件。不阻塞 P1-2。
+
+**问题**：首页「最近的新变化」把 `monthly_snapshot.summary` 整段堆在一起，没有分段、没有 bullet，
+一坨文字没有可读性。这是最基本的审美问题，家人不会去读一整段话。
+
+**根因**：`month-review.mjs` 的 prompt 让 AI 输出一整段叙述。需要改成按主题分点输出。
+
+**做什么**：
+1. 找到 `month-review.mjs`（或它调用的 prompt 模板），把 summary 的输出要求改成：
+   - 按主题分点，每点 1-2 句话
+   - 用 markdown bullet（`- `）或换行分隔
+   - 例如原来的一整段应该变成：
+     ```
+     - 入选了幼儿园毕业庆典的节目，妈妈说「张小年上节目了，哈哈」
+     - 开始跟着音乐伴奏舞动，「突然变得好看看绘本」，还会说 ball 了
+     - 吃饭总吃得最急，妈妈和老师都想引导他慢慢吃
+     - 妈妈惦记着预防驼背，说在一群宝宝里面他特别明显
+     ```
+2. 确认首页渲染组件（B 轨的 `app/page.tsx`）能正确渲染 markdown bullet——
+   如果它只是 `<p>{summary}</p>`，需要通知 Cowork 让 B 轨加 markdown 渲染。
+   **你不要动 `app/page.tsx`，那是 B 轨的文件**，只把发现写进 STATUS.md。
+3. 重跑 8 个月的 monthly snapshot（2026-01~08）：
+   ```bash
+   for m in 01 02 03 04 05 06 07 08; do
+     node scripts/month-review.mjs --month "2026-$m" --force --commit
+   done
+   ```
+   （具体参数以脚本实际用法为准。`--force` 是因为已经有 snapshot 了需要覆盖。）
+4. 跑完后 curl 首页确认 summary 已经分点显示（或确认需要 B 轨改渲染）。
+5. 结果写 `docs/STATUS.md`。
+
+**验收**：首页「最近的新变化」文字分成 3-5 个要点，每个要点独立一行，一眼能扫完。
+
+#### 🐛 Cowork 抽读发现的一个真问题（不阻塞，做完 01/02 再修）
+
+**2026-03 有两条章节级写的是同一件里程碑**：
+
+> ★ 会独立行走，玩泡泡笑得眉眼弯弯
+> ★ 年年会独立行走了
+
+「学会独立行走」在同一个月被写成两条 memory 级记忆。产品原则里 AI 的职责之一就是**合并重复**
+（原则五 / 第 5 节"同一件事没有重复"）。一个月只该有 1–4 条章节级，其中还重复一条，很浪费。
+
+**建议**（不要现在停下来做，先把 02/01 跑完）：在 `t20c-regrade-memories.mjs` 里加一步——
+同月的高档候选之间做一次去重判断，同一件里程碑只留写得最好的那条，其余降到 trace。
+
+**⛔ T22（视觉系统 V1）已被 Teddy 01:4x 取消——「先取消」，是暂缓不是废弃。**
+不要开工，不要读它的 spec 去改渲染层。`docs/design/visual-system-v1.md` 和 mockups 原样留着，
+等 Teddy 什么时候说恢复再做。**现在 P1 是唯一在做的事。**
+
+| # | 任务 | 轨 | 在第几节 | 状态 |
+|---|---|---|---|---|
+| 0 | **P1-0：2026-01~05 五个月过 T7 管线** | B·写库 | `### 🚀 P1`（文件末尾） | 🔴 **ready，唯一在做的任务，立刻开跑** |
+| 1 | P1-5 性能 → P1-1 身份 → P1-2 夸克 → P1-3 主体门 → P1-4 图文绑定 | 见 `### 🚀 P1` | ⏳ 按顺序，P1-0 之后 |
+| 2 | P1-7 月末档案展开交互（很小） | A·仓库 | `### 🚀 P1` | ⏳ 任何空档都能插 |
+| — | ~~🎨 T22 视觉系统 V1~~ | — | `### 🎨 T22` | ⛔ **Teddy 01:4x 取消，暂缓** |
+
+⚠️ **动 P1-4 之前必须先读 `### 🚀 P1` 里的「计划已被修订」那一段**——原计划里"照片必须是夸克背书"
+那条规则如果照抄，会把 06~09 页面上 91% 的照片（261/286 张，主力是乳儿班群）撤下来。
+
+（以下是 P0 收尾时的看板，保留作存档。）
+
+**更新于 2026-09-05 00:2x（Claude Code）· P0（2026-06~09）四项全部做完，按 Teddy 指令停在这里，等下一步**
+
+**🛑 Teddy 硬指令（已于 01:3x 解除）**：「p0还差啥，按照26年6-9月标准，这几个月做完先不要继续了」。
+**这条停止令已被 Teddy 01:3x 的新指令取代：「通知 code 开始干 p1」。P1 已经开始，见文件最顶上的看板。**
+（原文保留作存档，不要再据此拒绝新任务。）
+
+| # | 任务 | 状态 |
+|---|---|---|
+| 1 | 2026-06/07/08/09 整月 T7 | ✅ 32/46/46/4 条，0 家人，全部有标题 |
+| 2 | T18 照片落库 + 首页「最近的一天」 | ✅ Cowork 已验收通过 |
+| 3 | T21 撤掉月首照片计数 | ✅ 完成，Cowork 已 curl 核实 |
+| 4 | T20-A1/A2/A4（月页去登记簿感） | ✅ 已验收通过 |
+| 5 | **T20-A3（月末档案封顶）** | ✅ **本轮完成**——默认只渲染一屏（预算 24 张），其余计数说明，数据不删。**未做**：点击展开的交互（首屏体积问题已解决，"展开看全部"这半句还没做） |
+| 6 | T20-B 月度回顾 | ✅ 真的落库了（Cowork 23:4x 抓到脚本忘设 `REPOSITORY_BACKEND`，已修复+重新提交+直接查库核实） |
+| 7 | 一条跑题记忆（讲网站项目本身的） | ✅ 已改成不发布，行未删；全库扫描无第二条 |
+| 8 | **T20-C 记忆分量 + T19 群务降级** | ✅ **本轮完成**——四个月全部跑完（Cowork 00:1x 看到的"06/09 没跑"是只查了 `memory_weight`，那两个月的分级结果本来就是全 trace，`content_quality_reviews` 才是真实证据）。发布中记忆从 128 条降到 52 条（06:10/07:20/08:19/09:3），渲染层也跟上了权重区分 |
+| 9 | T15-D `npm test`（644/644 通过） | ✅ |
+
+✅ **P0（2026-06~09）四项验收标准都做完了**：四个月都有文字、0 家人、照片绑定、月度回顾、记忆分级、
+档案首屏封顶。**未做/已知留白**：T20-A3 的展开交互、首页 memory-vs-recency 优先级的产品判断
+（Cowork 已明确留给 Teddy，不是 bug）。**这轮到此为止，等 Cowork 重新验收 + 等 Teddy 看过网站定夺。**
+
+**T20-B 说明**：`monthlySnapshot` 从「全档案只存一条」改成按月各一条（表本来就有 `(profile,month)` 唯一键，
+只是读取代码一直只取最新一条——现在每个月页读自己那个月）。新脚本 `scripts/month-review.mjs`：只用该月
+已发布的 life_event 综合，不看原始聊天，不足 5 条自动跳过，含「家人」自动拒绝。06/07/08 已生成并写库，
+09（4 条）正确跳过留白。样例（07 月）：「这个月张年从乳儿班升入了大班，老师说「小年的能力在乳儿班已经
+关不住了」……这个月他感冒流浓鼻涕拖了两周，去医院检查过。」——按 06/07/08 三个月分别抽取了真实变化。
+
+**T18 说明**：82 条 T7 life_event 里 66 条回填了 `media_ids`/`hero_media_id`（16 条那天确实没有可信照片，
+不是漏了）；同时修了 `mediaBindingTrusted`（认可 T7 这条精确绑定路径）和首页 `selectRecentMoment`
+（trace 权重的记忆现在能作为兜底的「最近一天」，不再退到无文字的照片日）。**新建脚本
+`scripts/t18-backfill-media-binding.mjs`，2026-08 T7 跑完后要重跑一次**（脚本本身幂等、可安全重跑）。
 
 ---
 
