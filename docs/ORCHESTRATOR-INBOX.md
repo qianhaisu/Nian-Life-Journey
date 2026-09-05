@@ -40,7 +40,11 @@ Teddy 不必在中间转述。
 > **不要从文件开头往下读全部历史**——上面大半是已经 done 的旧任务。
 > **只看这块。** 这里列的就是当前该做的，按顺序。做完一条在这里标 done。
 
-**更新于 2026-09-05 06:10 UTC（Cowork）· P1-4 done，P1-2b 转码完成，派发 P1-2b 入库**
+**更新于 2026-09-05 06:50 UTC（Cowork）· Neon 已升级 Launch，站已恢复，P1-2b 继续跑**
+
+Neon 配额耗尽导致站 500 已解决：Teddy 已升级到 Launch plan（500 GB 传输配额）。
+站已恢复 HTTP 200。P1-2b 入库在 ~344 条时中断，manifest 有 checksum 去重，直接重跑即可。
+**不需要重做转码，不需要改代码。直接跑 applyQuarkPhotoArtifact 即可。**
 
 P1-4 已完成（commit e47a4c0 + 3d407a4）：trusted-photo-sources.ts 上线，主群三个 export ID 加入信任名单。
 HEIC 转码已完成：1,468 张全部转为 JPEG，0 失败，manifest 就绪。
