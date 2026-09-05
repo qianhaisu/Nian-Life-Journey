@@ -1307,3 +1307,105 @@ node --import tsx scripts/month-review.mjs --month=YYYY-MM --commit
    「彻底」去重写四十多条历史分裂行。
 6. **下一件**：按执行顺序（P1-0 → P1-5 → P1-9 → P1-8/P1-12 → P1-1 → **P1-2** → ...），P1-1 到此
    做完，接下来做 P1-2（夸克 2,279 张入库）。
+
+### 2026-09-05 05:3x · Claude Code · P1-2 夸克入库：预置条件已满足，正在跑（预计数小时，后台运行）
+
+1. **线上还没有新内容**——本条是导入开跑时的 predeclare，不是完成汇报。
+2. **确认三项前置已经在早前的 commit 里做完**（`3aefad9`），不是这次新做的：`quark-photo-init.mjs`
+   的 artifact 目录已经可以用 `--artifact-dir` 配置、`AI_PROVIDER=gemini` 硬编码已经去掉（改成尊重
+   环境变量）、enqueue 策略已定案为 `organize` 默认 `false`（纯入库，零 AI 调用）。
+3. **这批 2,279 个文件的 manifest 跟 `quark-photo-apply.mjs` 期望的 `task-items.jsonl` 格式对不上**
+   （字段名完全不同：`download_path` vs `local_path`、`takenAt` vs `capture_time.text` 等），写了
+   一个适配脚本 `v2/scripts/quark-history-init.mjs`，只做格式转换，**没有写第二套导入实现**（沿用
+   `applyQuarkPhotoArtifact` 这一个实现，符合该文件头注释「不能有第二个导入实现」的约束）。
+4. **这一轮的范围只有照片，不含视频**：`applyQuarkPhotoArtifact`/`sourceImageMetadata`/
+   `createDerivatives` 目前完全没有视频处理逻辑（没有时长/封面帧提取），260 个视频硬塞进去会被
+   当成图片错误处理，所以直接排除，等 P1 计划里单列的「夸克 260 个视频要能播」那一项来解决。
+5. **307 无日期是 manifest 自己报告的口径，我验出来的实际数字更大——已如实按我验出的数字处理**：
+   独立解析 manifest 后，`takenAt` 为空或解析失败（含 4 条 EXIF 时间戳被截断出现乱码字节）的
+   照片有 **329 张，不是 307**——多出的 31 张是 manifest 自己按文件名猜出了 `month`（比如
+   `微信图片_20260727142407...heic` 能从文件名看出日期），却没有同时把 `takenAt` 填上，这 31 张
+   本质上也是「没有一个可信时间戳」。**没有为了凑 307 这个数字去信任那 31 张的文件名猜测**，全部
+   329 张一起写进了 `manifests/undated-photos.jsonl`（仓库外），这一轮不入库，不编日期。
+6. **HEIC 全解码抽测**：sharp 能读出至少一个真实 HEIC 样本的尺寸元数据，但对同一个文件做完整的
+   缩放+编码（`createDerivatives` 实际要做的事）会报 `heif: Decoder plugin generated an error`——
+   说明一部分 HEIC 会在真正 apply 时进 `failed`，不是数据损坏，是这台机器的 libheif 解码器对
+   某些 HEIC 变体力不从心。已经在脚本里让失败项落进 `failed` 数组、写到
+   `manifests/apply-failed.jsonl`，不会导致整批中断，也不会留脏数据（衍生图失败发生在
+   `appendUpload` 写库之前，DB 侧不会出现半条记录；R2 侧原图可能已经传上去成了孤儿对象，
+   下次同一个 sha256 重跑会原地覆盖同一个 key，无害）。
+7. **dry-run 先跑过一遍确认**：1,690 张有可信日期的照片里，1,682 张会新建、8 张按 checksum 命中
+   已有记录（跟之前「107 张 8 月照片里已有 107 张」的说法方向一致），0 失败——dry-run 不会真的
+   解码/编码图片，所以这个 0 不代表 apply 也会 0 失败，见上一条。
+8. **predeclare**：输入 1,690 条（`quark-history-manifest.jsonl` 里 `media_type=photo` 且
+   `takenAt` 可解析的行）；预期 DB delta ≈ 1,682 条新 `raw_sources`（`sourceType=family_photo`,
+   `sourceLabel='Quark 历史素材 2026-09-03'`）+ 等量 `media`/`media_assets` + 每条最多 3 条
+   `media_locations`（原图+thumbnail+web，HEIC 解码失败的少 2 条衍生图，看第 6 条）；不触碰
+   `life_events`/`organizer_runs`/`content_quality_reviews`（`organize=false`）；回滚标识——所有
+   id 都是 `*-quark-sha-<sha256的hex>` 确定性生成，整批也可以按
+   `source_label = 'Quark 历史素材 2026-09-03'` 定位。
+9. **实测吞吐很慢**：apply 跑起来后查库计数，约 20 分钟写入 102 条，即 ~5 条/分钟，1,690 条推算
+   要 5-6 小时——`ingestOne()` 是逐条 await（1 次 checksum 查询 + 最多 3 次 R2 put + 1 次 DB
+   insert，中间没有批量化），这正是 CLAUDE.md 里点名要 Codex 审查的「批量写 vs 逐条 round-trip」
+   吞吐问题，但这是一次性历史回填、不是每晚都要跑的常规任务，而且是幂等的（按 checksum 去重、
+   中断可安全重跑），**没有为了赶速度中途改写这条已经在跑的导入逻辑**——先让它跑完，数字对不对
+   比这一轮跑多快更重要。已经放到后台运行，会在跑完之后核实真实入库数、失败数，再写下一条汇报。
+10. **下一件**：这批 apply 还在跑，跑完后查 `raw_sources`/`media`/`media_locations` 实际增量、
+    读 `apply-failed.jsonl` 看失败原因分布（是否集中在 HEIC）、curl 一个有夸克新照片的月页确认
+    照片真的能显示，再报完成。329 张无日期照片留给以后的 EXIF/文件名再修复任务，不在这轮范围。
+
+### 2026-09-05 06:1x · Claude Code · P1-5（Cowork 09:40 重排后的第 1 项）：getFullArchiveDays 按月 scope 做完，已上线
+
+1. **线上多了什么**：没有新增家人能读的内容——这轮是纯性能修复。archive expander（月页「还有 N 天/
+   M 张」展开按钮）不再经过 `loadFamilyArchive()`/`getStore()` 拉全档案历史，改成只查那一个月。
+2. **收到 Cowork 09:40 重排序时，发现另一个 Session（Opus 4.6，`session_015HNCvM4CD5VEadkHPN9skb`）
+   已经把 `assembleStore()` 的列裁剪、P1-portrait、P1-sept-snapshot 三件都写好并提交了**
+   （`commit d1b6e3e`）——这部分不是我做的，如实说明。我在这基础上只做 09:40 板子上第 1 项里
+   **还没做的那一半**：`getFullArchiveDays` 本身仍然整档案扫。
+3. **`getFullArchiveDays` 改法**：新增 `Repository.getMonthArchive(month)`（`repository-interface.ts`/
+   `postgres-repository.ts`/`json-repository.ts`），按 `occurredAt`/`takenAt` 日期范围 + 引用到的
+   `media_asset`/`media_location`/`raw_source` id 精确查，不再是 `getStore()` 那种无 WHERE 的
+   18 张表全表 select。加了 `media_taken_at_idx` 索引（`raw_sources.captured_at` 那条索引之前已经
+   加过，这次是给 `media.taken_at`，因为 `getMonthArchive` 现在会按这一列做范围查询）。
+   `getFullArchiveDays` 换成调用它，自己跑 `buildChapters`/`deliverableMediaIds`/`mediaPrivilegeOf`/
+   `buildMonthComposition`，跟原来 `loadFamilyArchive()` 路径产出完全同构（都验证过 29 天/572 张
+   照片，结果一致）。
+4. **顺手抓到一个真回归**：`npm test` 跑出一个新失败——`time-truth.test.mjs` Case 6 断言「2025-08
+   的 snapshot 不能盖过 2026-08 的新记忆、也不能单独出现」，但另一个 Session 写的 P1-sept-snapshot
+   回退逻辑是「回退到 snapshots 里最新的一条，不管差多远」，会让这条一年前的 snapshot 在这个
+   构造场景下重新冒出来。**这是设计上没有边界，不是抄错了值**——已经改成复用页面别处已经在用的
+   `RECENT_ACTIVITY_MONTH_GAP` 常量做边界（现在是 1 个月），线上真实场景（9 月没有 snapshot、
+   回退到 8 月）验证过没变（curl 首页确认「最近的新变化」仍然链到 2026/08），Case 6 这种一年前的
+   极端场景现在正确地不回退。测试改动前 1 fail，改完 645/645 全过，`typecheck` 干净。
+5. **本地测出的耗时数字不能当生产数字**：这台 Windows 开发机到 Neon 的单次查询延迟本身就有
+   3-7 秒（连 `SELECT * FROM content_quality_reviews`「432 行的整表查询」都要 7 秒），跟这次改动
+   有没有生效关系不大——`repository-interface.ts` 里 `getOrganizerStore` 自己的注释也写着
+   `getStore()` 真实数据量下"~10 分钟"，量级吻合，说明是这台机器/网络到 Neon 的固有延迟，不是
+   生产（Vercel 同区域连接）会看到的数字。本地测 `getFullArchiveDays`：改之前 289 秒，只做完
+   列裁剪那版本 35 秒，加上这次的按月 scope 28-35 秒——**架构上查询面从「18 表全量」收窄到
+   「7 次按月/按 id 的小查询」是确定的进步，但离线本地这个绝对数字不能拿来对「<3 秒」验收**。
+6. **线上验证**：push 后 curl 了首页/8 月月页/About 页都是 200；8 月月页 `grep 家人`=0、
+   `grep '\[media\]'`=0；首页「最近的新变化」正确链到 8 月（Sept 没 snapshot 的真实回退场景）；
+   About 页有图（P1-portrait 那部分，验证的是另一 Session 的改动没被我碰坏，不是我做的）。
+   **没有做、也没法在这台机器上做的**：archive expander 真正点击后的响应时间——它是 Server
+   Action，不是普通 GET，本地/curl 都测不出跟浏览器点击等价的数字，`<3 秒` 这条验收需要在浏览器
+   里实测（Cowork 之前给 B 轨的任务都是这么验的），我这边只能验证"查询面变小了、结果没变"。
+7. **没做的**：09:40 板子第 1 项里没有再提「`no-store` 改成 revalidate」这件事（那是更早
+   02:3x 笔记里的旧条目），这次没有主动扩大范围去动 6 个 `dynamic = "force-dynamic"` 页面——
+   一是最新指令没要求，二是刚经历过一次和另一个 Session 在 `page.tsx`/`postgres-repository.ts`
+   共享 git index 上的并发冲突（细节见下一条），这个时间点不去多碰共享文件。
+8. **一个值得记录的并发事故（没有造成任何丢失，但过程惊险）**：commit 前 `git status` 发现
+   `page.tsx`/`postgres-repository.ts`/`home-view.ts`/`memory-chapters.ts` 早就被另一个 Session
+   预先 `git add` 过；正准备 commit 时撞上 `.git/index.lock`——`Get-Process git` 确认没有真在跑的
+   进程后按既有协议删了锁，`git log` 一看，那个 Session 已经在几乎同一时刻把这几个文件提交成了
+   `d1b6e3e`。之后 `git status` 一度显示 `page.tsx`/`memory-chapters.ts` 处于「已暂存和未暂存都有
+   差异」的状态——**没有直接 commit**，而是先 `git diff --cached` 逐个文件核对，发现那两个文件的
+   暂存内容是我完全没碰过的旧快照，跟 HEAD 也对不上，判断是共享 index 在两个 Session 并发操作下
+   出现的过渡态，用 `git restore --staged` 把它们退回到与 HEAD 一致（不动工作区文件，没有丢
+   任何人的改动），`home-view.ts` 同理重新 `git add` 成我工作区里的真实内容后再核对 diff，确认
+   `git diff --cached` 只剩我自己的改动才 commit。**教训**：这个仓库现在是真的多 Session 并发在
+   动同一批文件，`git add` 之后、`git commit` 之前，一定要 `git diff --cached` 核对一遍再提交，
+   不能假设自己 `git add` 过的文件在 commit 那一刻还是自己 add 时的样子。
+9. **下一件**：按 09:40 板子的顺序，第 1-3 项现在都做完了（2、3 是另一个 Session 做的，我验证
+   没被碰坏），回到第 4 项 P1-2（夸克入库）——已经在后台跑（见上面 05:3x 那条 predeclare），
+   继续等它跑完再查库核实。
