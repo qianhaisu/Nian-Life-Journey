@@ -65,7 +65,7 @@ A 轨今晚动过它，但现在不会再动。如果你必须改 `v2/lib/` 里�
 
 # 📥 入箱
 
-> **2026-09-05 15:0x Cowork：上一个 B 轨 session 因额度中断。先做 `## B-0`（收拾本地 git：241 MB zip 进了未 push 的提交），再做 `## B-15-fix`。**
+> **2026-09-05 15:2x Cowork：B-0 已由 Teddy 手动完成（git 历史已干净，origin/main = 0fb467b）。现在唯一在做的是 `## B-15-fix`——B-15 的选片规则已生效，但索引卡片全是空灰框，要用 thumbnail 变体 + 直连兜底修好。**
 
 ## B-1 · P1-12 证据精选 — status: ready（先做这个，它最小）
 
@@ -403,7 +403,11 @@ Cowork 2026-09-05 12:3x 浏览器实看（375 全高）：
 
 ---
 
-## B-0 · 先收拾本地 git（B 轨额度中断留下的）— status: **ready，做 B-15-fix 之前必须先做**
+## B-0 · 收拾本地 git — status: **done（Teddy 2026-09-05 手动完成）**
+
+历史已干净：`99c25da` / `cc6210b`（含 241 MB zip）被 `5cfc1c0` + `0fb467b` 取代，origin/main = 本地 main，`git log --all -- .github/skills.zip` 为空。下面的原始说明留档，不要再执行。
+
+<details><summary>原始说明</summary>
 
 Cowork 2026-09-05 15:0x 查本地仓库：`main` 比 `origin/main`（= `2b759e7`，B-15 已在线上）**多 2 个未 push 的提交**：
 - `99c25da 中断恢复`：一次性提交了 20 个文件，其中 **`.github/skills.zip` 241 MB**（GitHub 单文件上限 100 MB，**这个提交 push 必被拒**），还带进了 `Claude outputs/*.png`、两个 `.log`、`v2/package-lock.json`、`v2/scripts/quark-heic-ingest-linux.mjs`（A 轨的文件）以及 docs。
@@ -420,6 +424,7 @@ git status                        # 看清剩下什么
 然后分两次提交：① `docs/**`、`docs/design/_superseded/**`、`CLAUDE.md`、`AGENTS.md`、`.gitignore`（把 `*.log`、`Claude outputs/`、`.github/skills.zip` 加进 `.gitignore`）——`docs(b): recover interrupted session notes`；② `v2/package-lock.json`、`v2/scripts/quark-heic-ingest-linux.mjs` 是 **A 轨的文件**，不要动，`git restore --staged` 放回工作区，在出箱里写一句告诉 A 轨。工作区里那 119 个 v2 文件全是 CRLF 差异，一个都不要加。`git push`，确认 `origin/main` 前进且没有 zip。
 
 **验收**　`git log --stat origin/main -3` 里没有任何 `.zip` / `.png` / `.log`；`git status` 只剩 CRLF 噪音。
+</details>
 
 ---
 

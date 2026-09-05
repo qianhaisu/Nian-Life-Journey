@@ -37,6 +37,10 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-05 14:5x UTC · Cowork · 记给 T3 性能：`/api/media/<id>?variant=web` 对夸克大图 5–7 秒
+
+实测 `media-quark-sha-42a286…` web 变体 490 KB、直连 7.4s；Next 图片优化器等不到就 404，B 轨的索引卡片因此全空（已派 B-15-fix 用 thumbnail 变体绕开）。T3 做性能时把这条算进去：web 变体加缓存头 / 直出 R2 公网地址，或把 web 变体压到 ≤ 200 KB。
+
 ### 2026-09-05 10:30 · Claude Code · P1-6 done — commit d0ea2e4
 
 1. **线上多了什么**：`v2/scripts/nianlife-worker.mjs`（单文件入口）已在 main 上。Teddy 把微信导出放到 `E:\WechatHis` 后，运行 `node --import tsx scripts/nianlife-worker.mjs`（或 `npm run worker`）一条命令完成四个阶段：增量导入→找受影响月份→Organizer→月度回顾；日志写 `.data/worker-runs/<timestamp>.log`，状态写 `.data/worker-state.json`。Windows 任务计划的 `schtasks /create` 示例在脚本头部注释里。
