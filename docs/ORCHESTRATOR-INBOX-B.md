@@ -888,3 +888,19 @@ const snapshotMonth = snapshots.find(s => s.month === thisMonth?.month)
 
 **下一件**　入箱现在为 B-15 唯一任务；完成后等 Cowork 验收结果 / 新任务。
 
+
+---
+
+### B-15-fix · 卡片灰框修复 · 完成 2026-09-05 · commit af1d89c
+
+**线上多了什么**
+- `photo.tsx`：`failed` 时不再 `return null`，改为直连 `mediaDeliveryUrl(id,"thumbnail")` 的原生 `<img>`，绕开 Next 优化器超时链路（590ms 而非 7s），有背书的照片位不再变空灰框。
+- `month-card.tsx`：`variant="web"` → `"thumbnail"`（480px webp，适合卡片 340px 显示宽度，加载快）。
+- `app/page.tsx` cluster：同改 `variant="thumbnail"`。
+
+**怎么验证的**　typecheck 通过（0 错误）；git add 三个 B 轨文件；commit af1d89c push main，Vercel 自动部署。
+
+**没做到什么**　未在 nianlife.cn 截图验收——等 Cowork 打开 `/memory` 确认月份卡片可见、`main img` 数量 = 有图卡片数、首页 cluster 三张可见、无灰框。
+
+**下一件**　等 Cowork 验收。
+

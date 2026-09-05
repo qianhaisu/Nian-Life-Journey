@@ -14,32 +14,33 @@ B 轨拥有：`v2/components/**`、`v2/app/**/page.tsx`、`v2/app/globals.css`�
 
 ## 现在做到哪
 
-**B-1 到 B-15 全部完成。commit `2b759e7`（B-15）已 push main，Vercel 部署中。**
+**B-1 到 B-15-fix 全部完成。commit `af1d89c`（B-15-fix）已 push main，Vercel 部署中。**
 
 | 任务 | 完成 | 线上验收 |
 |---|---|---|
-| B-1 P1-12 证据精选 | ✓ | ✓ curl 确认 1 primary + 34 supporting 折叠 |
-| B-2 P1-8 照片查看器 | ✓ | ⚠️ 组件存在；点击/滑动需真机验 |
-| B-3 P1-9 月页渐进展开 | ✓ | ✓ 按钮存在；548 张未预渲染 |
-| B-4 P1-10 首页三块 | ✓ | ✓ 三块可见 |
-| B-5 P1-11 张年页 | ✓ | ✓ 生活节奏出现 |
-| B-7 P1-2 夸克导入 | ⏸ 阻塞 | apply crash，A 轨 Codex 修复中 |
-| B-9 全站视觉重构 | ✓ 9a-9e 全完成 | ✓ Cowork 验收通过 |
+| B-1 P1-12 证据精选 | ✓ | ✓ |
+| B-2 P1-8 照片查看器 | ✓ | ⚠️ 真机手势待验 |
+| B-3 P1-9 月页渐进展开 | ✓ | ✓ |
+| B-4 P1-10 首页三块 | ✓ | ✓ |
+| B-5 P1-11 张年页 | ✓ | ✓ |
+| B-7 P1-2 夸克导入 | ⏸ 阻塞 | apply crash，A 轨处理 |
+| B-9 全站视觉重构 | ✓ 9a-9e | ✓ Cowork 验收通过 |
 | B-10 张年页内容补完 | ✓ | ✓ Cowork 验收通过 |
-| B-11 /memory 目录化 | ✓ | ✓ Cowork 验：B-12/B-13 过；B-11/B-14 不过 → B-15 修复 |
-| B-12 事件页套壳 | ✓ | ✓ Cowork 验收通过 |
-| B-13 家人这阵子说 60 天 | ✓ | ✓ Cowork 验收通过 |
-| B-14 首页最近一组 | ✓ | ⏳ B-15 修复后等 Cowork 重验 |
-| B-15 代表照只认夸克 | ✓ | ⏳ 等 Cowork 验收 |
+| B-11 /memory 目录化 | ✓ | ⏳ B-15-fix 后等 Cowork 重验 |
+| B-12 事件页套壳 | ✓ | ✓ |
+| B-13 家人这阵子说 60 天 | ✓ | ✓ |
+| B-14 首页最近一组 | ✓ | ⏳ B-15-fix 后等 Cowork 重验 |
+| B-15 代表照只认夸克 | ✓ | ✓ 选片规则通过；图片消失问题 → B-15-fix |
+| B-15-fix 卡片灰框修复 | ✓ | ⏳ 等 Cowork 验收 |
 
 ---
 
 ## 下一件事（明确到操作）
 
-等 Cowork 在浏览器验收 B-15：
-- **`/memory`**：每张月份卡片 `<img src>` 含 `media-quark-sha-`，肉眼能看到张年的脸；没有夸克照片的月份显示纯文字卡片（无灰框）
-- **首页 cluster**：三张全是 `media-quark-sha-`，不含香蕉牛奶等 wechat-media；不足 2 张则整块不渲染
-- **缩略图不糊**：naturalWidth ≥ 显示宽度
+等 Cowork 在浏览器验收 B-15-fix：
+- `/memory`：每张有夸克照片的月份卡片**看得见张年**，`main img` 数量 = 有图卡片数，`naturalWidth ≥ 384`，无灰框
+- 首页 cluster：三张照片可见，全是 `media-quark-sha-`
+- 没有一处空灰框
 
 ---
 
@@ -47,10 +48,10 @@ B 轨拥有：`v2/components/**`、`v2/app/**/page.tsx`、`v2/app/globals.css`�
 
 1. **`git add -A` 会把约 251 个 CRLF/LF 假改动混入提交**——只 `git add` 自己改过的文件。
 2. **`git pull --rebase` 在 CLAUDE.md 有 CRLF 差异时报冲突**——先用 `git log --oneline main..origin/main` 确认 origin 没有领先，没有就跳过 rebase。
-3. **DayHead 不能从服务器组件文件跨 `use client` 边界 import**——在 `archive-expander.tsx` 里内联了它的逻辑。
-4. **PowerShell 多行 commit message 含中文字符要用 Bash 写**，不要用 PowerShell here-string。
-5. **`v2/scripts/**` 是 A 轨领土**——卡住就写出箱，不要越界。
-6. **B-7 apply 的 crash 是 A 轨问题**：dry-run 正常，apply OOM/SIGKILL。不要再次跑 apply。
+3. **夸克 web 变体 (~490KB) 经 Next 优化器超时**：≤ 400px 显示宽度的槽位一律用 `variant="thumbnail"`（480px webp），不要用 `variant="web"`。
+4. **`Photo` 的 failed → `return null` 已改**：现在 fallback 直连 `mediaDeliveryUrl(id,"thumbnail")`，不会出空灰框。如果以后再改 `photo.tsx` 要保持这条 fallback。
+5. **PowerShell 多行 commit message 含中文字符要用 Bash 写**，不要用 PowerShell here-string。
+6. **`v2/scripts/**` 是 A 轨领土**——卡住就写出箱，不要越界。
 7. **`trusted` ≠ `isPortraitOfZhangnian`**：privilege.trusted 包含 wechat-media，封面/卡片/cluster 只用 `isPortraitOfZhangnian`（`lib/media/representative.ts`）。
 8. **memory-chapters.ts 是灰色地带**：B-15 改了 `latestPortrait` 用 `isPortraitOfZhangnian`，出箱已标注。
 

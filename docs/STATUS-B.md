@@ -134,3 +134,11 @@ B 轨入箱现在为空。下一批任务由 Cowork 按 P1 剩余项排（照片
 
 
 === B 轨已到收尾节点，可以 /clear ===
+
+## 2026-09-05 · B-15-fix 完成 · commit af1d89c
+
+1. **线上多了什么**　`Photo` 组件 failed 时改为直连 thumbnail 原生 `<img>`（绕过 Next 优化器），月份卡片和 cluster 改回 `variant="thumbnail"`（480px，加载稳定）。有背书的照片位不再变空灰框。
+2. **没做到什么**　未在 nianlife.cn 截图验收，等 Cowork 浏览器实看。
+3. **下一件**　等 Cowork 验收 B-15-fix。
+
+=== B 轨已到收尾节点，可以 /clear ===
