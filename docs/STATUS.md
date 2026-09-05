@@ -1855,3 +1855,40 @@ Cowork 12:4x 在 INBOX 下了新任务，说巡检发现 Quark apply 进程第�
 1. 线上多了什么：1,260 张 Quark 历史照片（HEIC 转码后的 JPEG）入库完成，含 raw_sources + media_assets + media_locations + media，原图和缩略图/web 变体已上传 R2，source_label="Quark 历史素材 2026-09-03"。eligible=1468，created=1260，reused=208（已存在），failed=0。2025-01 至 2026-08 各月均有覆盖。
 2. 没做到什么：WeChat 消息（5 万余条，仅入库 16%）仍待导入；P1-4 视觉验证（2026-07 月页实际打开确认 Quark 照片出现）未做；P1-6 本地 worker 未启动——均按 INBOX 指示留给后续 session。
 3. 下一件事：P1-6（本地 worker）在新 session 里做，本 session 收工。
+
+### 2026-09-05 15:4x UTC · Cowork · 撤回：上面那条媒体延迟的事 A 轨不用管，C 轨已修
+
+15:11 我在验收 B-15-fix 时实测 `/api/media/<id>?variant=thumbnail` 要 4-6 秒、缓存头是 `private, max-age=60`，
+当时写了一条 P0 给 A 轨。**这条现在撤回**：同一分钟 C 轨的 `bd63bb7` 已经修掉了同一个根因
+（`/api/media/[id]` 每张图都调 `getStore()` 全量读取层 → 改成 `getMediaForDelivery(id)` 精确查询；
+5 个公开页 `force-dynamic` → `revalidate=300`）。我看到的「代码和线上头不一致」是因为我读的是本地已改的代码、
+测的是还没部署的线上版本，不是缓存头失效。
+
+**部署后复测（Cowork 15:4x，浏览器实测）**：`/api/media` 冷 1.2-3.1s、热 **352ms**，
+`x-vercel-cache` MISS→HIT，`cache-control: public, max-age=31536000, immutable` 已生效。
+月份卡片不再退化到 `variant=web`，404 消失。
+
+A 轨不需要动 `v2/lib/storage/**` 或 `v2/app/api/media/**`；剩余的 C-4（月页/年页 ISR）在 C 轨手里。
+
+### 2026-09-05 15:4x · A-1/A-2/A-3 · 本地 worker 接入 revalidate + 真机验证
+
+1. **线上多了什么**：`v2/scripts/nianlife-worker.mjs` 新增 Phase 5 —— 导入完成后自动 POST
+   `https://nianlife.cn/api/internal/revalidate`（Bearer INGESTION_TOKEN，body 为受影响的
+   `/`、`/memory`、`/memory/<year>`、`/memory/<year>/<month>`），失败只记日志不让 worker 退出非零。
+   同时给 worker 加了 `--since` / `--max-messages` / `--limit` / `--no-state-update` 四个 CLI
+   覆盖参数（仅手动测试用，定时任务不带参数时行为不变）。
+   真机验证：`E:\WechatHis` 已有 Teddy 导出的真实数据（此前 HANDOFF 认为"没有新导出"，实际已存在）。
+   按 Teddy 指示**只跑最近 50 条**（`--since=2026-09-01 --max-messages=50 --limit=50
+   --no-state-update`），四个阶段全部正常跑完，无报错：conversation 0 的 50 条消息 / 29 条媒体全部
+   `reused`（此前已入库，不是新内容），因此没有新行、没有触发 organizer/review/revalidate ——
+   这本身验证了幂等性：重复跑不会重复写。原本误启动的一次全量首跑（无 since 限制，会拉全部历史，
+   conversation 3 单群就有 7244 条消息）在识别到用户要求"不要跑大量数据"后立即用 TaskStop 终止，
+   `worker-state.json` 从未被写入，不影响后续真正的全量导入。
+2. **没做到什么**：还没有验证到"真正写入新数据 → organizer → month-review → revalidate → nianlife.cn
+   上肉眼可见"这条完整链路——因为最近 50 条都已存在，没有新内容可写。全量导入（conversation 3
+   的 7244 条主群消息等）仍待跑，规模较大，需要 Teddy 决定是否现在跑（预计数小时）还是留给
+   Task Scheduler 定时任务分批消化。`.env.local` 里也还没有 `INGESTION_TOKEN`，本地跑 worker 时
+   revalidate 阶段会跳过（只记日志），要接上还需 Teddy 提供/设置这个 token。
+3. **下一件事**：等 Teddy 决定要不要现在跑全量导入，或者直接让 Windows Task Scheduler 按 03:00
+   定时任务开始分批消化（每天用 lastRunAt 增量，不会像手动首跑那样一次性拉全部历史）；
+   全量导入产生新数据后再验证 revalidate 链路真的能让 nianlife.cn 秒级更新。

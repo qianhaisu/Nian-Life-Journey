@@ -3,7 +3,7 @@
 > **这份文档只能覆盖写，不能追加。** 它永远只描述"现在"，长度保持在 100 行以内。
 > 历史在 `git log` 和 `docs/STATUS.md` 里，不在这。一个刚清空上下文的 Session 只读这一份就能接着干。
 >
-> 最后更新：2026-09-05 14:1x · by Claude Code（接手 session）
+> 最后更新：2026-09-05 15:4x · by Claude Code（接手 session）
 
 ---
 
@@ -42,7 +42,7 @@ v2/lib/publication-moments.ts     docs/ORCHESTRATOR-INBOX-B.md    docs/STATUS-B.
 | P1-2 | 夸克 1,690 张历史照片入库 | **到达当前工具链上限（214/1,690）** 见下 | fdd8df3 + 51dcf0b |
 | P1-3 | 主体门 + T20-C 收编 | ✅ 完成（gradeMonthEvents 共享模块，writer 自动调用） | f8b009e |
 | P1-4 | 图文同日绑定（信任名单制） | ✅ 完成（trusted-photo-sources.ts，主群加入信任名单） | e47a4c0 |
-| P1-6 | 本地 worker | ⬜ 未开始（排最后） | — |
+| P1-6 | 本地 worker | 🟡 revalidate 接上 + 空转/小规模真机验证完成，全量导入未跑 | 见下 |
 
 **P1-2 说明**（不是卡住，是遇到了真实的工具链上限）：
 1,690 张中 87%（1,468 张）是 HEIC 格式；这台机器的 libvips/libheif 在 `createDerivatives()` 时报错，
@@ -55,15 +55,31 @@ sourceImageMetadata() 能读元数据，Windows WIC 也能打开，不是文件�
 - `family-archive.ts` 的 `mediaPrivilegeOf` 改用 `isTrustedPhotoSource`，两个读路径（getStore + getMonthArchive）自动覆盖
 - 无 schema 改动，无 AI 判断
 
+**P1-6 说明（2026-09-05 15:4x）**：
+- `nianlife-worker.mjs` Phase 5 已接上 `/api/internal/revalidate`（C 轨提供，Bearer INGESTION_TOKEN），
+  导入产生新数据的月份会自动 POST 刷新 `/`、`/memory`、`/memory/<year>`、`/memory/<year>/<month>`；
+  失败只记日志，不让 worker 非零退出。
+- 新增 CLI 覆盖参数（仅手动测试用，定时任务不带参数=原行为不变）：
+  `--since=YYYY-MM-DD` `--max-messages=N`（单会话上限）`--limit=N`（全局停止阈值）`--no-state-update`。
+- **`E:\WechatHis` 已经有 Teddy 导出的真实数据**（不是"没导出"，之前的判断过时了）。跑过一次
+  bounded 测试（`--since=2026-09-01 --max-messages=50 --limit=50 --no-state-update`）：四阶段全部
+  正常跑完，50 条消息全部 `reused`（已入库，无新内容），验证了幂等性和管线本身没问题。
+- **全量首次导入还没跑**：会话 3（主群）单群就有 7,244 条消息 + 3,488 条媒体引用，是"5 万条仅入库
+  16%"里剩下的大头。跑法二选一，等 Teddy 决定：① 手动跑一次不带参数的 `node --import tsx
+  scripts/nianlife-worker.mjs`（预计数小时，会写 `worker-state.json`）② 直接挂 Windows Task
+  Scheduler 03:00 定时任务，靠增量自然消化（见脚本顶部注释的 schtasks 命令）。
+- `.env.local` 里还没有 `INGESTION_TOKEN`——本地跑 worker 时 revalidate 阶段会跳过并记日志，
+  不影响导入本身；要打通完整链路需要 Teddy 提供/设置这个 token（和线上 Vercel 的值必须一致）。
+
 ---
 
 ## 3 · 下一件事
 
-**先读 INBOX 顶部看板**，确认是否有比 P1-4 之后更急的任务。
+**先读 INBOX 顶部看板**，确认是否有比 P1-6 之后更急的任务。
 
 已知待做（如果 INBOX 无更急优先级）：
+- 等 Teddy 决定全量导入的跑法（见上），跑完后验证 revalidate 链路真的让 nianlife.cn 秒级更新
 - **P1-4 视觉验收**：打开 2026-07 月页（Quark 照片最多，204 张），确认 Quark 照片和文字并排
-- **P1-6（本地 worker）**：INBOX 里最后的 P1 任务
 
 ---
 

@@ -63,6 +63,7 @@ const CONVERSATION_LIMIT = 64;
 
 const WORKER_STATE_PATH = path.resolve(process.cwd(), ".data/worker-state.json");
 const IMPORT_STATE_PATH = path.resolve(process.cwd(), ".data/wechat-import-all-state.json");
+const SITE_URL = "https://nianlife.cn";
 
 // ── Env validation ────────────────────────────────────────────────────────────
 
@@ -163,19 +164,85 @@ function spawnChild(label, scriptArgs) {
   });
 }
 
+async function revalidateAffectedMonths(months) {
+  const token = process.env.INGESTION_TOKEN;
+  if (!token) {
+    log("[revalidate] INGESTION_TOKEN not set — skipping (pages will still update within 300s ISR)");
+    return;
+  }
+
+  const paths = new Set(["/", "/memory"]);
+  for (const month of months) {
+    const [year] = month.split("-");
+    paths.add(`/memory/${year}`);
+    paths.add(`/memory/${month.replace("-", "/")}`);
+  }
+  const pathList = [...paths].slice(0, 50);
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const response = await fetch(`${SITE_URL}/api/internal/revalidate`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ paths: pathList }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      log(`[revalidate] request failed: ${response.status} ${text.slice(0, 200)}`);
+      return;
+    }
+    log(`[revalidate] ok — revalidated ${pathList.length} path(s): ${pathList.join(", ")}`);
+  } catch (error) {
+    const info = safeErrorInfo(error);
+    log(`[revalidate] threw ${info.code}: ${info.message} — pages still fall back to 300s ISR`);
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
+
+// ── CLI overrides (for bounded manual test runs — never used by the scheduled task) ────
+//
+//   --since=YYYY-MM-DD    override the computed "import since" lower bound
+//   --max-messages=N      cap messages/media processed per conversation
+//   --limit=N             stop the conversation loop once total created+reused messages reach N
+//   --no-state-update     don't advance worker-state.json's lastRunAt (keeps the real
+//                          incremental cursor intact so a bounded test run never causes
+//                          the next scheduled full run to skip a backlog)
+function argValue(name) {
+  const prefix = `--${name}=`;
+  const hit = process.argv.slice(2).find((a) => a.startsWith(prefix));
+  return hit ? hit.slice(prefix.length) : null;
+}
+const CLI_SINCE = argValue("since");
+const CLI_MAX_MESSAGES = argValue("max-messages") ? Number(argValue("max-messages")) : null;
+const CLI_LIMIT = argValue("limit") ? Number(argValue("limit")) : null;
+const CLI_NO_STATE_UPDATE = process.argv.includes("--no-state-update");
 
 async function main() {
   const runStartedAt = new Date();
   log(`nianlife-worker v1 starting · log: ${logPath}`);
+  if (CLI_SINCE || CLI_MAX_MESSAGES || CLI_LIMIT || CLI_NO_STATE_UPDATE) {
+    log(
+      `[bounded test run] since=${CLI_SINCE ?? "(default)"} max-messages=${CLI_MAX_MESSAGES ?? "(none)"}` +
+        ` limit=${CLI_LIMIT ?? "(none)"} no-state-update=${CLI_NO_STATE_UPDATE}`,
+    );
+  }
 
   const workerState = readWorkerState();
   // On the first run, import everything since birth day. On subsequent runs, use the
   // last successful run's timestamp as the lower bound (messages before it are already
   // in the DB and will be counted as "reused", which is fine — the import is idempotent).
-  const importSince = workerState.lastRunAt
-    ? new Date(workerState.lastRunAt).toISOString().slice(0, 10)
-    : BIRTH_DAY;
+  const importSince =
+    CLI_SINCE ??
+    (workerState.lastRunAt
+      ? new Date(workerState.lastRunAt).toISOString().slice(0, 10)
+      : BIRTH_DAY);
   log(`import since: ${importSince}${workerState.lastRunAt ? " (last successful run)" : " (first run — full import)"}`);
 
   const excluded = readImportExcluded();
@@ -218,8 +285,12 @@ async function main() {
       continue;
     }
 
-    const messages = probe.availableMessageCount;
-    const mediaRefs = probe.availableMediaRefCount;
+    const messages = CLI_MAX_MESSAGES
+      ? Math.min(probe.availableMessageCount, CLI_MAX_MESSAGES)
+      : probe.availableMessageCount;
+    const mediaRefs = CLI_MAX_MESSAGES
+      ? Math.min(probe.availableMediaRefCount, CLI_MAX_MESSAGES)
+      : probe.availableMediaRefCount;
 
     if (messages === 0) {
       log(`conversation ${index}: 0 messages since ${importSince} — nothing to import`);
@@ -263,6 +334,11 @@ async function main() {
     if (!ok) {
       totals.failed += 1;
       log(`conversation ${index}: not fully completed — will retry next run`);
+    }
+
+    if (CLI_LIMIT && totals.created + totals.reused >= CLI_LIMIT) {
+      log(`[bounded test run] reached --limit=${CLI_LIMIT} (created+reused) — stopping import phase early`);
+      break;
     }
   }
 
@@ -339,6 +415,17 @@ async function main() {
     }
   }
 
+  // ── Phase 5: Revalidate ───────────────────────────────────────────────────
+  //
+  // Public pages are ISR (revalidate=300s). Without an explicit poke, a family member
+  // could wait up to 5 minutes after this run to see new content. Best-effort: a failure
+  // here must never fail the run — the import/organizer/review work already landed in the DB.
+
+  if (affectedMonths.length > 0) {
+    log("=== Phase 5: Revalidate ===");
+    await revalidateAffectedMonths(affectedMonths);
+  }
+
   // ── Done ──────────────────────────────────────────────────────────────────
 
   const durationSec = Math.round((Date.now() - runStartedAt.getTime()) / 1000);
@@ -353,8 +440,12 @@ async function main() {
   // Advance lastRunAt so the next run starts from here. We still update even if some
   // conversations failed — those will retry from this point, and messages already imported
   // will come back as "reused" (idempotent).
-  writeWorkerState({ lastRunAt: runStartedAt.toISOString() });
-  log(`worker-state.json → lastRunAt: ${runStartedAt.toISOString()}`);
+  if (CLI_NO_STATE_UPDATE) {
+    log("[bounded test run] --no-state-update set — worker-state.json left untouched");
+  } else {
+    writeWorkerState({ lastRunAt: runStartedAt.toISOString() });
+    log(`worker-state.json → lastRunAt: ${runStartedAt.toISOString()}`);
+  }
   log(`log file: ${logPath}`);
 }
 
