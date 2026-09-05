@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EvidenceList } from "@/components/evidence-list";
-import { PhotoStrip } from "@/components/media-sequence";
-import { Photo } from "@/components/photo";
+import { PhotoGallery } from "@/components/photo-viewer";
 import { TimeSignature } from "@/components/time-signature";
 import { getAllEvents, getEventDetail, getStore } from "@/lib/db/repository";
 import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
@@ -63,7 +62,19 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       <h1 className="serif">{title}</h1>
       {people.length > 0 || location ? <p className="detail-context">{[people.join("、"), location].filter(Boolean).join(" · ")}</p> : null}
     </header>
-    {hero ? <div className="reading-wrap"><Photo media={hero} priority sizes="(max-width: 700px) 100vw, 1120px" className="detail-hero" /></div> : null}
+    {(hero || supporting.length > 0) ? <div className="reading-wrap detail-supporting">
+      <PhotoGallery
+        photos={[...(hero ? [hero] : []), ...supporting]}
+        heroIndex={hero ? 0 : undefined}
+        heroClassName="detail-hero"
+        dateLabel={signature?.dateLabel ?? ""}
+        ageLabel={signature?.ageLabel}
+        priority
+        heroSizes="(max-width: 700px) 100vw, 1120px"
+        stripSizes="(max-width: 700px) 30vw, 200px"
+      />
+      {layout.remaining > 0 ? <p className="sequence-more">那天还有 {layout.remaining} 张照片，收在下面的资料里。</p> : null}
+    </div> : null}
     {paragraphs.length > 0 || growth.length > 0 || care.length > 0 ? <section className="story-layer reading-wrap">
       {paragraphs.length > 0 ? <div className="story-column">{paragraphs.map((text, index) => <p key={index} className={index === 0 ? "story-lead" : undefined}>{text}</p>)}</div> : null}
       {growth.length > 0 || care.length > 0 ? <aside className="story-aside">
@@ -71,10 +82,6 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         {care.map((record) => <div className="story-note" key={record.id}><span className="section-mark">{record.title}</span><p>{record.note}</p></div>)}
       </aside> : null}
     </section> : null}
-    {supporting.length > 0 ? <div className="reading-wrap detail-supporting">
-      <PhotoStrip photos={supporting} />
-      {layout.remaining > 0 ? <p className="sequence-more">那天还有 {layout.remaining} 张照片，收在下面的资料里。</p> : null}
-    </div> : null}
     {materialCount > 0 ? <details className="evidence-disclosure reading-wrap">
       <summary><span className="serif">当时留下的资料</span><small>{materialCount} 项</small></summary>
       <EvidenceList sources={eventSources} media={eventMedia} contributors={contributors} deliverableIds={deliverable} sourceRoles={sourceRoles} />

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PhotoStrip } from "@/components/media-sequence";
+import { PhotoGallery } from "@/components/photo-viewer";
 import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { loadFamilyArchive } from "@/lib/family-archive";
@@ -75,7 +75,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       <ol>
         {composition.archiveDaysVisible.map((day) => <li className="month-day" key={day.day}>
           <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} monthAgeLabel={chapter.ageLabel} year={year} />
-          <PhotoStrip photos={day.photos} />
+          <PhotoGallery photos={day.photos} dateLabel={day.dateLabel} ageLabel={day.ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
         </li>)}
       </ol>
       {/* T20-A3: a screenful shows by default (原则五, "大部分内容默认不出现") — the rest is real,

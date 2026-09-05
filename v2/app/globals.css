@@ -337,7 +337,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .photo img { width: 100%; height: 100%; object-fit: contain; }
 .photo-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; align-items: start; }
 .photo-strip .photo { max-height: 60vh; }
-.photo-strip .photo img { object-fit: cover; }
+.photo-strip .photo img { object-fit: cover; object-position: 50% 40%; }
+.photo-strip .photo-portrait img { object-position: 50% 32%; }
+.photo-strip .photo-landscape img { object-position: 50% 42%; }
 .photo-strip-1 { grid-template-columns: minmax(0, 480px); }
 .photo-strip-1 .photo { max-height: none; }
 .sequence-more { margin: 10px 0 0; color: var(--color-muted); font-size: .8rem; }
@@ -404,6 +406,21 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .evidence-text-long > summary.evidence-quote { max-width: 38ch; overflow-wrap: anywhere; font-family: var(--font-heading); font-size: clamp(1.3rem, 4vw, 2rem); line-height: 1.4; }
 .evidence-text-long > summary.evidence-note { color: var(--color-muted); overflow-wrap: anywhere; }
 .evidence-text-long > p { margin-top: 8px; }
+/* Photo gallery: clickable thumbnails and hero */
+.photo[role="button"] { cursor: zoom-in; }
+/* Photo viewer overlay */
+.photo-viewer { position: fixed; inset: 0; z-index: 300; display: flex; flex-direction: column; background: #000; }
+.viewer-header { display: flex; align-items: center; gap: 16px; padding: max(12px, env(safe-area-inset-top)) 16px 12px; flex-shrink: 0; }
+.viewer-close { background: none; border: none; color: #fff; font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 6px 10px; flex-shrink: 0; }
+.viewer-caption { display: flex; gap: 14px; align-items: baseline; margin: 0; color: rgba(255,255,255,.85); font-size: .85rem; }
+.viewer-caption time { font-weight: 600; }
+.viewer-reel { flex: 1; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.viewer-reel::-webkit-scrollbar { display: none; }
+.viewer-slide { flex: 0 0 100%; scroll-snap-align: start; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.viewer-image { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; transition: transform .2s; }
+.viewer-image-zoomed { transform: scale(2.5); touch-action: pinch-zoom; cursor: zoom-out; }
+@media (prefers-reduced-motion: reduce) { .viewer-image { transition: none; } }
+.viewer-nav { flex-shrink: 0; text-align: center; padding: 10px 16px; padding-bottom: max(10px, env(safe-area-inset-bottom)); color: rgba(255,255,255,.6); font-size: .8rem; }
 .detail-footer { padding: 40px 0 96px; }
 
 /* 张年 */

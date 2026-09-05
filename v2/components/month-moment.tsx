@@ -1,6 +1,5 @@
 import { EditorialMemory } from "@/components/editorial-memory";
-import { PhotoStrip } from "@/components/media-sequence";
-import { Photo } from "@/components/photo";
+import { PhotoGallery } from "@/components/photo-viewer";
 import type { PublicationMoment } from "@/lib/publication-moments";
 
 // How a month chapter is laid out. Composition — which days appear at all and in what order — is
@@ -51,8 +50,16 @@ export function MonthMoment({ moment, year, monthAgeLabel, priority = false, con
           The day still reads through in one go because they are set as consecutive paragraphs of
           prose, not because any two of them were joined. */}
       {moment.text.length > 0 ? <div className="moment-text serif">{moment.text.map((entry, index) => <p key={index}>{entry}</p>)}</div> : null}
-      {moment.hero ? <Photo media={moment.hero} priority={priority} sizes="(max-width: 700px) 100vw, 760px" className="moment-hero" /> : null}
-      {moment.supporting.length > 0 ? <PhotoStrip photos={moment.supporting} /> : null}
+      {(moment.hero || moment.supporting.length > 0) ? (
+        <PhotoGallery
+          photos={[...(moment.hero ? [moment.hero] : []), ...moment.supporting]}
+          heroIndex={moment.hero ? 0 : undefined}
+          heroClassName="moment-hero"
+          dateLabel={moment.dateLabel}
+          ageLabel={moment.ageLabel}
+          priority={priority}
+        />
+      ) : null}
       {/* T20-A2: T16 V2's "还有 N 张照片在月末的档案里" printed on nearly every day once T11 Part C
           started binding a hero to most days — a count-of-photos sentence on every day is exactly
           the "计数式描述" 原则三 rules out. The month-end archive section already says this once. */}
