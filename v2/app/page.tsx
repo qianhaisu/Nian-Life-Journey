@@ -59,7 +59,7 @@ export default async function HomePage() {
     {/* 最近的新变化：直接复用 monthly_snapshot.summary，有就显示，没有就整块消失 */}
     {summary && changeLabel && changeHref ? <section className="home-change reading-wrap" aria-labelledby="change-title">
       <h2 id="change-title" className="section-mark">最近的新变化</h2>
-      <p className="home-change-note serif">{summary}</p>
+      <ul className="home-change-note serif">{summary.split('\n').filter(Boolean).map((line, i) => <li key={i}>{line.replace(/^-\s*/, '')}</li>)}</ul>
       <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
     </section> : null}
 
