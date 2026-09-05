@@ -1170,3 +1170,21 @@ P0 四个月数据本身没有受影响（life_events/media_ids 都是之前已�
 5. **下一件**：等 Cowork/Teddy 看 01/02 内容量下限不达标要不要紧急处理（比如提前做 P1-2 夸克
    入库、或调整主体门阈值），P1 计划里 02:3x 那份新看板（P1-8~P1-12 五项 + 缓存/视频两项加强）
    等 P1-0 收尾确认后再开始，没有在 P1-0 跑的过程中提前动手。
+
+### 2026-09-05 03:5x · Claude Code (session ba15c6) · P1-5：加了索引；scoped-read 那部分需要跨轨协调，先停下汇报
+
+1. **`raw_sources.captured_at` 加了索引**（P1 计划里 P1-5 明确要求的那条，`daily_traces` 那条已经
+   在计划修订里删掉了，空表不用加索引）。`drizzle-kit generate` + `db:migrate` 跑完，直接查
+   `pg_indexes` 确认 `raw_sources_captured_at_idx` 已经在生产库里。`typecheck` 干净。已 commit+push。
+2. **`getStore()` 改成按月 scoped read 这部分，我没有动，先停下来汇报**：`loadFamilyArchive()`
+   （`lib/family-archive.ts`）目前是每个页面都调用、内部整表 `getStore()` 不分月——真要按月
+   scoped 需要给这个函数加月份参数，且**每个调用它的 page.tsx（首页/年页/月页/事件页）都要跟着改**。
+   看到 Teddy 刚开的 B 轨（`docs/ORCHESTRATOR-INBOX-B.md`）把 `v2/app/**/page.tsx` 划成了
+   B 轨独占，而且 **B 轨的 P1-9（月页渐进展开）本来就是要解决同一个"整月一次性加载太重"的问题**——
+   两边各自去改 page.tsx 的调用方式，大概率互相踩。**这是需要 Cowork 决定怎么分工的协调问题，
+   不是我能单方面猜的业务判断**，所以只做了不涉及 page.tsx 的这一半（加索引），按需要跨轨协调
+   的部分先停下汇报，没有去动 `app/**/page.tsx`。
+3. **手机首屏 ≤3 秒**这条验收，同样卡在上面这个协调问题上，没法在不碰 page.tsx 的情况下验证改善。
+4. **下一件**：等 Cowork 决定 getStore-scoping 这部分并入 B 轨的 P1-9，还是仍归 A 轨、B 轨等一等；
+   在此之前不重复开工。P1-1（身份修复）、P1-2（夸克入库）都在 `lib/`/`scripts/` 范围内，
+   不涉及 page.tsx，可以按顺序继续，等下一步指示。
