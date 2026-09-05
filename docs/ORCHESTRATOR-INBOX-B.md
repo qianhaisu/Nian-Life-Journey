@@ -65,7 +65,7 @@ A 轨今晚动过它，但现在不会再动。如果你必须改 `v2/lib/` 里�
 
 # 📥 入箱
 
-> **2026-09-05 10:0x Cowork：9a 已通过 Teddy 风格确认。现在做 `## B-9b 放行` → 9b → 9c → 9d 连着做，不再停。9d 清单见 `## B-9b · 放行` 一节。**
+> **2026-09-05 10:0x Cowork：9a 已通过 Teddy 风格确认。9b/9c 已上线但有两个硬伤：**先做 `## B-9bc-fix`（肖像仍是香蕉、月度回顾三处成一坨）**，再做 9d（清单在 `## B-9b · 放行` 一节 + B-9bc-fix 第 3、4 条）。**
 
 ## B-1 · P1-12 证据精选 — status: ready（先做这个，它最小）
 
@@ -294,6 +294,22 @@ Teddy 已看过线上首页，风格确认。按 `visual-system-v2.md` §2.3 / �
 
 ---
 
+## B-9bc-fix · 9b / 9c 线上验收：两个硬伤，**插队，先于 9d 剩余项** — status: **ready**
+
+Cowork 2026-09-05 10:1x 浏览器实看（375 手机全高）。
+
+**1. `/about` 的肖像还是那盘香蕉和牛奶（`wechat-media:a7d4da30…`，乳儿班 9/3 餐点照），现在还被裁成了拱门。** 出箱里说「P1-portrait: memory-chapters.ts 已有竖版优先逻辑，无需重复实现」——**竖版优先挡不住一张竖版的香蕉照**。这是全站最私人的页面，第一屏不是张年本人，其它都白做。规则改成：`latestPortrait` **只在来源身份为夸克 `family_photo` 背书的 media 里选**（`media-quark-sha-…`），乳儿班 / 微信来源即使 trusted 也不作肖像；无符合者退到首页封面照（现在是 `media-quark-sha-379105…`，就是那张笑着伸手的）；再无则不放图。验收：`/about` 第一张图的 id 以 `media-quark-sha-` 开头，且是人。
+
+**2. 月度回顾在 `/about`「最近的生活节奏」和月页刊头（`/memory/2026/08`）都被渲染成一整段带 `- ` 的原始文本**：「- 张年入选了… - 开始能和老师… - 突然变得…」挤成一坨。B-8 只修了首页。A 轨把 `monthly_snapshot.summary` 改成了逐行 `- ` 格式，所以**所有**读 summary 的地方都要走同一个渲染器：抽一个 `SnapshotSummary` 组件（按 `\n` 拆、去 `- ` 前缀、`<ul><li>`），首页 / 月页 / about 三处共用；grep 全仓库 `summary` 的渲染点，一个不漏。验收：三处都是分行要点，页面上 grep「- 」= 0。
+
+**3.（不阻塞，9d 一起）** 9c 的滚动唤醒用了 `animation-timeline: view()`，iOS Safari 目前不支持——苏静在微信 / Safari 里看，**整站的「回忆依次醒来」在她手机上等于没做**。加 `IntersectionObserver` 兜底（不支持 `view()` 时用 `.is-visible` 类触发同一个 fadeInUp，图片先、文字延迟 0.1s），`prefers-reduced-motion` 同样关闭。
+
+**4.（9d 一起）** 月页每天之间、「这个月记下来的」上方的 1px 通栏线仍在。
+
+做完 1、2 出箱写一行，Cowork 再看；然后继续 9d。**你的上下文快满了（auto-compact 7%）：先按晨间交接规则覆盖写 `HANDOFF-B.md` 再动手，免得压缩后忘了 1、2。**
+
+---
+
 ## 🔁 工作节奏：领了任务就别断
 
 **这是这条轨最重要的一条规则。**
@@ -460,6 +476,30 @@ B-1 至 B-5 的"没做到什么"栏都说"未在线上验证"，这里补验：
 **没做到什么**　未在真机上确认拱门效果和滚动线——需 Vercel 部署后打开 nianlife.cn/about 验收。
 
 **下一件**　B-9 9c（月页 / 记忆 / 事件页），接着做。
+
+---
+
+### B-9c · 记忆 / 月页 / 事件页视觉 · 完成 2026-09-05
+
+**线上多了什么**　commit 4800751：① 所有编辑级别照片加 32px 圆角（`.memory-lead .memory-photo .photo`、`.memory-entry .memory-photo .photo`、`.moment-hero`、`.detail-hero`）；archive 缩略图故意不加（B-3 性能约束）；② 照片查看器背景从 `#000` 改为 `rgba(0,0,0,.88)` + `backdrop-filter: blur(24px) saturate(180%)` 毛玻璃深底；③ 月页记忆条目和 moment 块加 CSS `animation-timeline: view()` 滚动唤醒（`@supports` 包裹，旧浏览器不播动画，`prefers-reduced-motion` 也不播），照片先进场（`entry 0%→28%`）、文字稍后（`entry 8%→36%`）。
+
+**怎么验证的**　typecheck 通过（0 错误）；推 main，Vercel 自动部署。
+
+**没做到什么**　未在真机上确认效果——需 Vercel 部署后打开月页和事件页验收。
+
+**下一件**　B-9bc-fix（已做，见下）。
+
+---
+
+### B-9bc-fix · /about 肖像 + 月度回顾渲染 · 完成 2026-09-05
+
+**线上多了什么**　commit f9a1e39：① `latestPortrait()` 现在只在 `media-quark-sha-*` ID 的照片里选——WeChat / 乳儿班图源即使已 trusted 也不进候选，不再把食物照作为张年肖像；② 新建 `SnapshotSummary` 组件，按 `\n` 拆行、去 `- ` 前缀、渲染 `<ul><li>`；③ 三处 summary 渲染点（首页「最近的新变化」、/about「最近的生活节奏」、月页刊头）全部改用同一组件，不再出现带 `- ` 的一坨原始文字；④ `.chapter-summary` CSS 适配 `<ul>`（`list-style:none; padding:0; li margin-top:.35em`）。
+
+**怎么验证的**　typecheck 通过（0 错误）；推 main (f9a1e39)，Vercel 自动部署。B-9bc-fix 入箱两项硬伤（肖像过滤、summary 渲染）均已处理。
+
+**没做到什么**　未在线上实看——需 Vercel 部署后打开 `/about` 确认肖像 id 以 `media-quark-sha-` 开头；打开 `/memory/2026/08` 确认 summary 分行显示、页面 grep「- 」= 0。B-9bc-fix 第 3 条（IntersectionObserver 兜底）和第 4 条（月页通栏线）与 9d 一起做。
+
+**下一件**　B-9d（全站收口：iOS IO 兜底 + 剩余 straight-edge 圆角 + 月页通栏线）。
 
 ---
 

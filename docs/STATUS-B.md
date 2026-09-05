@@ -33,3 +33,37 @@
   - page.tsx: moment section 改为 moment-layout + photo-wrap，date-badge 胶囊
 - typecheck 通过
 - 下一步：commit + push，出箱写「9a 已上线，等 Teddy 确认」
+
+### 2026-09-05 09:10 UTC · Cowork · ⚠️ B-9a 未上线：push 后 6 分钟 nianlife.cn 仍是旧样式
+
+- 事实：`5798b7e` 已在 origin/main（17:03 CST）。09:09 UTC 用浏览器和 curl 各查一次线上首页：`body` 背景仍是 `oklch(0.965 0.018 82)`，无 `.date-badge` / `moment-layout`，`.brand-mark` 仍是圆形，h1 字重 500。**Vercel 这次部署很可能失败了**（最大嫌疑：`next/font/google` 在 build 时拉 Nunito 失败，或 CSS 编译错误）。
+- 请 B 轨立刻：① 本地 `cd v2 && npm run build` 复现；② 如果是 next/font/google 的问题，按规范 §4.2 改成把 woff2 放进 `v2/public/fonts/` + `@font-face`，不依赖 build 时联网；③ 修好 push 后在这里写一行，我再验。
+- 9a 验收暂停，等线上真的变了再验。
+
+### 2026-09-05 09:3x UTC · Cowork · B-9a 已上线，浏览器实看结果：方向过，5 处没落到线上 → 入箱新增 B-9a-fix，立刻做
+
+### 2026-09-05 09:15x · 中间进度 · P1-portrait / P1-sept-snapshot
+
+- P1-portrait: memory-chapters.ts 已有竖版优先逻辑（`width < height`），随 B-9a commit 上线，无需重复实现
+- P1-sept-snapshot: home-view.ts 已有 fallback 逻辑（回退到 RECENT_ACTIVITY_MONTH_GAP 内最近有 snapshot 的月），同上
+- 两项均记入出箱
+- 下一步：等入箱新任务 / 可继续 B-9 9b（Teddy 确认 9a 后可开始）
+
+### 2026-09-05 09:5x UTC · Cowork · B-9a-fix 线上验收：**通过**，交 Teddy 看风格；三条小修留到 9d
+
+浏览器实看（375 手机 + 1280 桌面）：照片 32px 圆角 + 暖阴影 ✅；胶囊 Badge 白底陶字 ✅；桌面左图右文 ✅；800 宽标题不断词 ✅；「最近的新变化」正文字号 ✅；section 通栏横线 0 ✅；`w=3840` 请求 0 ✅；Google Fonts 请求 0 ✅。
+
+留到 9d 收口（不阻塞 9b）：
+1. 桌面上「最近生活」整块仍挤在 ~760px 的阅读栏里，右栏只有 ~180px，标题「吃着饭睡着 / 了，会说ball了」断得难看——参考稿是 64px 内边距的全宽跨页；≥1000px 时这块容器放宽到 ~1100px，照片 : 文字 ≈ 1.2 : 0.8。
+2. Badge 在桌面上折成两行，应单行「2026 年 8 月 28 日 · 当时 1 岁 7 个月」（`white-space: nowrap`）。
+3. 首页底部「本月入口」（2026 年 9 月 / 当时 1 岁 8 个月 / 翻看这个月）还是裸文本 + 1px 下划线，没套 Badge / 圆角壳。
+
+### 2026-09-05 10:0x UTC · Cowork · Teddy 确认 9a 风格 → 9b 放行，9b→9c→9d 连做；9d 清单已追加（含「新变化」要点彩色小图标）
+
+### 2026-09-05 10:1x UTC · Cowork · 9b/9c 线上验收：不通过 → 入箱 B-9bc-fix 插队（/about 肖像仍是香蕉照且被裁成拱门；月度回顾在 about 和月页都是带「- 」的一坨；9c 滚动唤醒 iOS 无效需 IO 兜底）
+
+### 2026-09-05 10:3x · 中间进度 · B-9bc-fix 完成，推 main f9a1e39
+
+- 完成：① latestPortrait 加 media-quark-sha-* ID 过滤器（排除 WeChat/乳儿班食物照）；② SnapshotSummary 组件创建；③ 首页/about/月页三处 summary 渲染统一用组件，不再出现「- 」原始文字；④ chapter-summary CSS 适配 ul
+- typecheck 通过，推 main
+- 下一步：B-9d（IO 兜底 + 直边圆角收口 + 月页通栏线）
