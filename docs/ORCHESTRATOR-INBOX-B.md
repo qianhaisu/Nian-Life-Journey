@@ -65,7 +65,7 @@ A 轨今晚动过它，但现在不会再动。如果你必须改 `v2/lib/` 里�
 
 # 📥 入箱
 
-> **2026-09-05 15:2x Cowork：B-0 已由 Teddy 手动完成（git 历史已干净，origin/main = 0fb467b）。现在唯一在做的是 `## B-15-fix`——B-15 的选片规则已生效，但索引卡片全是空灰框，要用 thumbnail 变体 + 直连兜底修好。**
+> **2026-09-05 23:36x B 轨：B-16 已完成，commit `3e98ada` 已 push main，等 Cowork 浏览器手机 375 复验（见下方出箱 B-16 段）。入箱暂无新 ready 任务，回到已完成任务按验收段真机走查。**
 
 ## B-1 · P1-12 证据精选 — status: ready（先做这个，它最小）
 
@@ -428,7 +428,38 @@ git status                        # 看清剩下什么
 
 ---
 
-## B-15-fix · 规则对了，但卡片全是空灰框：夸克 `web` 变体经 Next 图片优化器超时 → 404 → `Photo` 自己把 `<img>` 删了 — status: **ready，立刻**
+## B-16 · 月份卡片图区被 `aspect-ratio` 撑到 610px，索引页又变回「一张张大图往下堆」 — status: **ready，第一件**
+
+**背景**　Cowork 2026-09-05 15:4x 实测（`bd63bb7` 已部署，图片加载问题已由 C 轨解决，`/api/media` 热请求 352ms）。`/memory` 375 宽，8 张有图卡片的图区高度：193px / 257px / **610px ×5**。
+
+B-11 的硬边界是 `clamp(160px, 40vw, 240px)` 横向裁切 + `object-position: 50% 30%`；B-15 复述过（当时 459px）；现在是 610px = 343 × (2276/1280)，正好是夸克竖图的原始比例。
+
+**根因（已定位，不用重新排查）**　B-15-fix 给 `components/photo.tsx` 的 `<figure>` 加了内联 `style={{ aspectRatio: aspectRatioOf(shape) }}`（本意是「图片未到位前不塌不跳」）。内联样式优先级高于 `globals.css` 里月份卡片的高度规则，竖图于是把卡片撑满。B-11 想解决的「索引页 = 月页复读」原样回来了。
+
+**目标**　`Photo` 有两种明确模式，靠 API 区分，不靠 CSS 优先级打架：
+
+1. **按自身比例**（默认，现在的行为）：事件页正文、月页每天的照片、`PhotoGallery`——照片立着就立着，不裁。
+2. **裁进固定槽位**（新增，比如 `fit="crop"`）：月份卡片代表照、首页 cluster、`/about` 缩略图——调用方给定高度，`Photo` 不写 `aspect-ratio`，图片 `object-fit: cover` + `object-position: 50% 30%` 填满槽位。
+
+占位不塌的目标在 crop 模式下由**槽位自己的固定高度**保证（本来就有高度），不需要 `aspect-ratio`。
+
+**硬边界**
+- 只改 `components/photo.tsx`、`components/month-card.tsx`、`app/page.tsx`（cluster）、`app/about/page.tsx`（缩略图）、`app/globals.css`。不动 `v2/app/api/**`、`v2/lib/db/**`、`v2/lib/storage/**`（C 轨/A 轨的）。
+- **不要加 `app/memory/[year]/page.tsx`、`app/memory/[year]/[month]/page.tsx`**——C-4 正在这两个文件上加 `generateStaticParams`，会 git 冲突。
+- B-15 的选片规则（`isPortraitOfZhangnian`）不变；B-15-fix 的直连兜底保留。
+- 文本一字不改，不新增计数。
+
+**验收**（Cowork 会在浏览器手机 375 全高实看）
+- `/memory` 每张有图的月份卡片图区高度在 160–240px 之间，横向裁切，看得见张年的脸而不是半张脸/头顶。
+- 一屏内能看到 ≥3 个月的卡片（B-11 原始目标）。
+- 事件页、月页正文里的照片**仍然按自身比例**，竖图还是竖的（不要为了修卡片把所有照片都裁了）。
+- 首页 cluster 三张、`/about` 缩略图都不塌不跳。
+
+**不可接受**　用 `!important` 压内联样式；把 `aspect-ratio` 直接删掉导致按比例展示的地方塌陷；为了省事把月份卡片改成不放图。
+
+---
+
+## B-15-fix · 规则对了，但卡片全是空灰框：夸克 `web` 变体经 Next 图片优化器超时 → 404 → `Photo` 自己把 `<img>` 删了 — status: **done（2026-09-05 15:4x Cowork 复验通过；后端那半由 C 轨 `bd63bb7` 解决）**
 
 Cowork 2026-09-05 14:4x 实测（`2b759e7` 已部署）：`/memory` 所有月份卡片的 `<img src>` 都是 `media-quark-sha-` ✅，**但页面上一张图都没有**——DOM 里 `main img` 数量 = 0，只剩空的灰色 `figure`。原因链：
 
@@ -444,6 +475,8 @@ Cowork 2026-09-05 14:4x 实测（`2b759e7` 已部署）：`/memory` 所有月份
 **记给 A 轨 / T3 性能（不在本任务内）**：`/api/media/<id>?variant=web` 对夸克大图 5–7s，是 R2 → Vercel 函数 → 客户端两跳 + 490 KB；T3 要么给 web 变体加 CDN 缓存头 / 直出 R2 公网 URL，要么把 web 变体压到 ≤ 200 KB。Cowork 已写进 `STATUS.md`。
 
 **验收**　`/memory` 手机全高：每张有夸克照片的月份卡片都**看得见张年**，`main img` 数 = 有图卡片数，`naturalWidth ≥ 384`；首页 cluster 三张可见；`/about` 缩略图可见；没有一个灰框。
+
+**Cowork 2026-09-05 15:11 复查：不通过，根因比诊断的更深一层。** `month-card.tsx`/`page.tsx`/`photo.tsx` 三处改动都对，但线上仍然复现空灰框（`/memory` 5 月卡片 30+ 秒仍空、首页 cluster 两小图 20+ 秒空、console 13 条 404）。原因：直连 `/api/media/<id>?variant=thumbnail` 实测也要 **4-6 秒**（不只是 web 变体慢），且响应头是 `private, max-age=60` 而不是代码里写的 `public, max-age=31536000, immutable`——强缓存没生效，每次都重新打 R2。这是 `v2/lib/storage/hot-storage.ts` + `v2/app/api/media/[id]/route.ts` 的后端延迟问题，不是变体选择问题，**B 轨这次改的兜底已经是能做的最好情况了，不用再在这条上加班**。已转 A 轨 STATUS.md 记 P0。B 轨这条先挂起，回入箱找别的 ready 任务；等 A 轨或 Teddy 查完 region/缓存问题回来再复验。
 
 ---
 
@@ -903,4 +936,18 @@ const snapshotMonth = snapshots.find(s => s.month === thisMonth?.month)
 **没做到什么**　未在 nianlife.cn 截图验收——等 Cowork 打开 `/memory` 确认月份卡片可见、`main img` 数量 = 有图卡片数、首页 cluster 三张可见、无灰框。
 
 **下一件**　等 Cowork 验收。
+
+---
+
+### B-16 · 月份卡片图区被 aspect-ratio 撑到 610px · 完成 2026-09-05 · commit 3e98ada
+
+**线上多了什么**　`Photo` 新增 `fit` prop：`"natural"`（默认，行为不变，事件页/月页正文/PhotoGallery 都走这条，竖图仍然立着）与 `"crop"`（新增，不写内联 `aspect-ratio`，交给调用方的固定高度槽位 + CSS `object-fit: cover` 裁切）。`month-card.tsx` 封面照、`app/page.tsx` 首页 cluster 两处传 `fit="crop"`。`globals.css` 里 `.month-card-photo .photo` / `.cluster-item .photo` 两条规则改成只匹配新增的 `.photo-crop` class，不再靠父子选择器压全部 `.photo`，避免以后误伤自然比例的照片。
+
+**根因**（沿用入箱诊断，未重新排查）　B-15-fix 给 `<figure>` 加的内联 `style={{aspectRatio}}` 优先级压过 `.month-card-photo` 的固定高度 CSS 规则，1280×2276 的夸克竖图把 240px 的卡片槽位撑到 610px。
+
+**怎么验证的**　typecheck 通过（0 错误）；只 `git add` 4 个 B 轨文件（`photo.tsx`、`month-card.tsx`、`app/page.tsx`、`globals.css`）；commit 3e98ada push main，Vercel 自动部署。未碰 `app/memory/[year]/**`（C-4 领土）。
+
+**没做到什么**　未在 nianlife.cn 截图验收——等 Cowork 打开 `/memory` 手机 375 全高确认：每张有图卡片高度回到 160–240px 区间、横向裁切看得见脸、一屏 ≥3 个月；事件页/月页正文照片仍按自身比例不裁；首页 cluster 三张、`/about` 头像不塌不跳。`/about` 头像本身没有固定高度槽位（靠 border-radius 跟随原比例），未改动，不在本次改动范围内。
+
+**下一件**　等 Cowork 验收；同时回入箱找下一件 ready 任务。
 

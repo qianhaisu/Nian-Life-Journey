@@ -142,3 +142,47 @@ B 轨入箱现在为空。下一批任务由 Cowork 按 P1 剩余项排（照片
 3. **下一件**　等 Cowork 验收 B-15-fix。
 
 === B 轨已到收尾节点，可以 /clear ===
+
+### 2026-09-05 15:11 UTC · Cowork · B-15-fix 验收：**不通过** —— 根因诊断不完整，问题还在线上
+
+浏览器实看（手机 375，`/memory` 和首页，commit `af1d89c` 之后 15+ 分钟，`x-vercel-cache: MISS`/`age:0` 确认非缓存旧页）：
+
+**代码确实按预期改了**：`month-card.tsx`、`page.tsx` cluster 已经是 `variant="thumbnail"`；`photo.tsx` 失败兜底已经是直连 `<img src=".../variant=thumbnail">` 而不是 `return null`。这部分 B-track 做对了。
+
+**但线上仍然复现空灰框**，而且比修复前更慢：
+- `/memory` 手机全高滚动，`5 月` 卡片在页面加载后 **30+ 秒**仍是纯 `--card-soft` 空框，无 `<img>`、无 `<figure>`（DOM 里该槽位的 figure 元素直接消失了，不是「加载中」，是从 8 个 figure 掉到 4 个）。
+- 首页「最近的一组」cluster 三张：右侧两张小图在加载后约 20 秒内持续是空框，之后才渲染出来。
+- 浏览器 console 记录 **13 条 404**（图片请求失败）。
+
+**真正根因，比 B-15-fix 诊断的更深一层**：直接 `curl`/`fetch` 测试 `/api/media/<quark-id>?variant=thumbnail`（绕开 Next 图片优化器，直连后端路由）：
+- 耗时 **6041ms**、**3862ms**（连续两次，同一 id，均无缓存命中）——**thumbnail 变体本身也要 4-6 秒**，不是只有 `web` 变体慢。B-15-fix「thumbnail 是服务端预生成的 480px，不会有同样延迟」这个假设**不成立**。
+- 响应头 `cache-control: private, max-age=60`，但 `v2/app/api/media/[id]/route.ts` 代码里写的是 `public, max-age=31536000, s-maxage=31536000, immutable` + `ETag`——**代码设的强缓存头没有生效**，说明这条链路可能根本没有被 CDN/边缘缓存，每次都要重新走一遍 `hotStorage.get()`（R2 GET），这才是 4-6 秒延迟的来源。
+- 只要单次请求逼近或超过 Next 图片优化器的超时阈值，`thumbnail` 请求本身就会 404，触发 `photo.tsx` 的兜底链（thumbnail 失败 → 试 web → 也可能 404 → 最终直连 img），三跳加起来可以到 15-30 秒，这就是页面上「空灰框卡半天」的直接原因。
+
+**结论**：这不是「该请求哪个 variant」的前端问题，是 `/api/media/[id]` 这条后端链路（R2 取图，或强缓存头没生效导致边缘从不命中缓存）本身延迟过高的问题。B-track 在 UI 层面能做的兜底已经做了（不再是最初的「直接删掉 img」），但兜底链路本身的等待时间对真实访问者来说仍然是「刷新出破图」的体验，没有达到验收标准「没有一个灰框」。
+
+**这条我判断不是 B 轨（UI/渲染）能单独解决的**，转给 A 轨（存储 / `v2/lib/storage/hot-storage.ts` + `v2/app/api/media/[id]/route.ts`）核实：
+1. 为什么 `Cache-Control: public, max-age=31536000, immutable` 没有让 Vercel Edge 命中缓存（两次连续请求 `age` 都是 0）？
+2. `R2HotStorage.get()` 单次 GET 4-6 秒是否是每次请求都新建 S3 client / 连接（没有连接复用），还是 R2 bucket region 与 Vercel 函数 region 不匹配导致的网络廷迟？
+
+已把这条以 P0（不是之前记的「T3 性能」future work）写入 A 轨 STATUS.md，附带上面的具体测量数据。B-15-fix 本身的 UI 兜底逻辑保留（比不兜底强），但 B-15 状态改为「部分通过，等后端修复」，不算收尾。
+
+### 2026-09-05 15:4x UTC · Cowork · B-15-fix 复验更正 + 新发现一处回归
+
+**更正**：15:11 我判 B-15-fix「不通过、根因在后端」，其中「后端延迟」这半句已由 C 轨 `bd63bb7` 修掉（`/api/media/[id]` 去掉每张图都调 `getStore()`、5 个公开页改 ISR）。部署后复测：`/api/media` 热 352ms（原 5.9s）、冷 1.2-3.1s，`public, max-age=31536000, immutable` 生效，`x-vercel-cache` MISS→HIT。**月份卡片和 cluster 不再退化到 `variant=web`，console 的 404 消失，空灰框的成因解除。** B-15-fix 的三处改动判定有效，A 轨那条 P0 已撤回。
+
+**但复验时发现一处新的回归，是 B 轨自己的**：`/memory` 月份卡片图区高度失控。375 宽实测 8 张卡片的图区：193px / 257px / **610px ×5**。B-11 的硬边界写的是 `clamp(160px, 40vw, 240px)` 横向裁切 + `object-position: 50% 30%`，B-15 也复述过这条（当时是 459px）。现在 610px = 343 × (2276/1280)，正好是夸克竖图的原始比例——说明卡片的固定高度被 `photo.tsx` 里那句 `style={{ aspectRatio: aspectRatioOf(shape) }}` 覆盖了。
+
+**根因**：B-15-fix 给 `Photo` 的 figure 加了内联 `aspect-ratio`（为了「图片未到位前不塌不跳」），内联样式优先级高于 `globals.css` 里月份卡片的高度规则，于是竖图把卡片撑到 610px，索引页又变回「一张张大图往下堆」，B-11 想解决的问题原样回来了。
+
+**改法（B-16，见入箱）**：让「按自身比例展示」和「裁进固定槽位」成为两种明确的模式，而不是靠 CSS 优先级打架。
+
+**没验到的**：这轮浏览器面板是隐藏状态（`innerWidth` 返回 0），截图拿不到真实渲染，上面的高度/来源/加载都是 DOM 实测数据。等面板可见时我再补一次肉眼截图确认。
+
+### 2026-09-05 23:36x · 完成 · B-16
+
+- 根因如入箱所写：`photo.tsx` 给 figure 加的内联 `aspect-ratio` 优先级压过 `.month-card-photo` 的固定高度规则，竖图撑到 610px。
+- 改法：`Photo` 新增 `fit` prop（`"natural"` 默认 / `"crop"`）。crop 模式不写内联 `aspect-ratio`，靠调用方固定高度槽位 + CSS `object-fit: cover` 裁切。`month-card.tsx`、`app/page.tsx` 的 cluster 两处传 `fit="crop"`；globals.css 里 `.month-card-photo .photo` / `.cluster-item .photo` 改成只匹配 `.photo-crop`，避免自然比例的照片被误伤。
+- `/about` 的 hero 肖像没有固定高度槽位（靠 border-radius 跟随原比例），不属于本次范围，未改。
+- typecheck 通过。commit `3e98ada` 已 push main。未碰 `app/memory/[year]/**`（C-4 领土）。
+- 下一件：等 Cowork 浏览器手机 375 验收；同时回入箱找下一件 ready。
