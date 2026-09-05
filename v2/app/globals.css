@@ -63,10 +63,10 @@ time, .growth-chart strong, .portrait-facts strong { font-variant-numeric: tabul
 .primary-button:hover { border-color: var(--color-accent) !important; background: var(--color-accent) !important; transform: translateY(-2px); box-shadow: 0 8px 16px oklch(49% .13 38 / .16); }
 button:disabled { cursor: not-allowed; opacity: .45; }
 .home-masthead { padding: clamp(56px, 9vw, 128px) 0 clamp(40px, 6vw, 80px); }
-.home-masthead h1 { max-width: none; margin: 18px 0 0; font-size: clamp(2.75rem, 14vw, 9rem); font-weight: 800; letter-spacing: -.04em; line-height: 1.05; animation: fadeInUp 1.2s var(--ease) .2s both; }
+.home-masthead h1 { max-width: none; margin: 18px 0 0; font-size: clamp(2.4rem, 7vw, 6rem); font-weight: 800; letter-spacing: -.04em; line-height: 1.05; animation: fadeInUp 1.2s var(--ease) .2s both; }
 .home-masthead.reveal { animation: none; }
 .home-masthead .section-mark { animation: fadeInUp 1.2s var(--ease) .4s both; }
-.home-title-line { display: block; }
+.home-title-line { display: block; white-space: nowrap; }
 .home-masthead em, .page-masthead em { color: var(--color-accent); font-style: normal; }
 .section-heading { display: grid; gap: 12px; }
 .section-heading h2 { max-width: 18ch; margin: 0; font-size: clamp(2.1rem, 5vw, 4.2rem); line-height: 1.08; }
@@ -216,14 +216,27 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .moment-photo-col { flex: 1.2; }
   .moment-text-col { flex: 0.8; }
 }
-.home-past { padding: clamp(40px, 6vw, 64px) 0; border-top: 1px solid var(--color-primary); }
+/* B-9a-fix: memory/dated cover uses EditorialMemory size="lead" — same visual shell as moment */
+.home-lead .memory-lead .memory-photo .photo { border-radius: var(--r-card); box-shadow: var(--shadow); overflow: hidden; transition: transform .5s var(--ease-hover), box-shadow .5s var(--ease-hover); }
+@media (hover: hover) {
+  .home-lead .memory-lead .memory-photo:hover .photo { transform: translateY(-8px) scale(1.02); box-shadow: var(--shadow-hover); }
+}
+.home-lead .memory-lead .memory-photo:active .photo { transform: scale(.98); }
+.home-lead .memory-lead .time-signature { display: inline-flex; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 12px; }
+.home-lead .memory-lead .time-signature time, .home-lead .memory-lead .time-signature span { color: inherit; font-size: inherit; font-weight: inherit; }
+@media (min-width: 900px) {
+  .home-lead .memory-lead { display: flex; flex-direction: row; align-items: flex-start; gap: 60px; }
+  .home-lead .memory-lead .memory-photo { flex: 1.2; min-width: 0; }
+  .home-lead .memory-lead .memory-copy { flex: 0.8; min-width: 0; padding-top: 20px; }
+}
+.home-past { padding: clamp(64px, 8vw, 96px) 0 clamp(40px, 6vw, 64px); }
 .home-past .memory { margin-top: 20px; }
-.home-change { padding: clamp(40px, 6vw, 64px) 0; border-top: 1px solid var(--color-primary); }
-.home-change-note { max-width: 24ch; margin: 18px 0 14px; font-size: clamp(1.6rem, 4vw, 2.4rem); line-height: 1.3; list-style: none; padding: 0; }
-.home-change-note li { margin-top: .4em; }
+.home-change { padding: clamp(64px, 8vw, 96px) 0 clamp(40px, 6vw, 64px); }
+.home-change-note { margin: 18px 0 14px; list-style: none; padding: 0; }
+.home-change-note li { font-size: 1rem; font-weight: 500; color: var(--muted); line-height: 1.7; margin-top: 10px; }
 .home-change-meta { display: flex; gap: 14px; margin: 0; color: var(--color-muted); font-size: .8rem; }
 .home-change-meta span { color: var(--color-secondary); font-weight: 700; }
-.home-month { padding: clamp(40px, 6vw, 64px) 0 clamp(64px, 8vw, 112px); border-top: 1px solid var(--color-primary); }
+.home-month { padding: clamp(64px, 8vw, 96px) 0 clamp(64px, 8vw, 112px); }
 .home-month .photo-strip { margin: 24px 0 8px; }
 .home-month .chapter-summary { margin: 24px 0 8px; }
 .home-month .memory-lines { margin-top: 20px; }
