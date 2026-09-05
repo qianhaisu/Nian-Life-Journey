@@ -9,7 +9,7 @@ import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
 import { isSnapshotPublishable, mediaBindingTrusted } from "@/lib/organizer/quality-review";
-import { DAYCARE_CONVERSATION } from "@/lib/organizer/subject-gate";
+import { isTrustedPhotoSource } from "@/lib/trusted-photo-sources";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
 import type { MediaPrivilege } from "@/lib/publication-moments";
 import type { LifeEvent, Media, MonthlySnapshot, RawSource } from "@/lib/types";
@@ -46,16 +46,12 @@ export type FamilyArchive = {
 // `confirmed`: claimed by a published (quality-approved) event WHOSE MEDIA BINDING is trusted —
 // the legacy rule organizer bound every same-day chat image to its events, and that harvest must
 // not vouch a screenshot into a hero slot (quality-review.ts mediaBindingTrusted). `trusted`: the
-// picture's RawSource is a family_photo import (the Quark album initialization), i.e. the
-// family's own photo collection rather than an image scraped from chat, OR a picture from the
-// daycare group (DAYCARE_CONVERSATION) — Teddy confirmed 2026-09-04: every image there is of 张年.
-// The daycare source is identified by sourceLabel, not sourceType, so no data migration is needed.
+// picture's RawSource passes isTrustedPhotoSource (lib/trusted-photo-sources.ts) — either a
+// family_photo import (Quark album) or a WeChat group Teddy confirmed contains only Zhang Nian.
 export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources: Pick<RawSource, "id" | "sourceType" | "sourceLabel">[]): MediaPrivilege {
   const confirmed = new Set<string>(events.filter(mediaBindingTrusted).flatMap((event) => event.mediaIds));
   const trustedSources = new Set(
-    rawSources
-      .filter((source) => source.sourceType === "family_photo" || source.sourceLabel === DAYCARE_CONVERSATION)
-      .map((source) => source.id),
+    rawSources.filter(isTrustedPhotoSource).map((source) => source.id),
   );
   const trusted = new Set<string>(media.filter((item) => item.rawSourceId && trustedSources.has(item.rawSourceId)).map((item) => item.id));
   return { confirmed, trusted };
