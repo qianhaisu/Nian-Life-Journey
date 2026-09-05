@@ -165,6 +165,40 @@ A 轨今晚动过它，但现在不会再动。如果你必须改 `v2/lib/` 里�
 
 ---
 
+
+## B-6 · 立即 push 本地 commit — status: done
+
+**背景**　本地 main 上有一个未 push 的 commit `d1b6e3e`（P1-5 性能 + P1-portrait + P1-sept-snapshot，A 轨写的代码）。
+Teddy 不在电脑旁，你来 push。
+
+**做什么**
+```bash
+git log --oneline -3          # 确认 d1b6e3e 在 main 上
+git push origin main
+```
+
+push 后等 Vercel 部署完成（约 1-2 分钟），在出箱报告 push 结果和 Vercel 部署 URL/状态。
+**视觉验证 Cowork 会做，你不用管。**
+
+---
+
+## B-7 · P1-2 夸克历史素材入库（续跑） — status: ready
+
+**背景**　上一个 A 轨 session 跑了 `v2/scripts/quark-history-init.mjs`，只进了 194/1,690 张就断了。脚本按 checksum 去重，重跑安全。
+
+**做什么**
+```bash
+cd v2
+node scripts/quark-history-init.mjs
+```
+
+**范围**　只有照片，不含 260 个视频。329 张无日期照片不在这轮范围。
+**验收**　跑完后查库：
+```sql
+SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-09-03';
+```
+应该 ≈ 1,690（±去重容差）。结果写出箱。
+
 ## 🔁 工作节奏：领了任务就别断
 
 **这是这条轨最重要的一条规则。**
@@ -245,6 +279,26 @@ A 轨今晚动过它，但现在不会再动。如果你必须改 `v2/lib/` 里�
 **没做到什么**　① 未在线上验收——growth records 有多少条带 lifeEventId 需等 Vercel 部署后实际点开 `/about` 确认；② trace notes 只链到月页，没有锚点跳到当天（月页没有日级锚点）；③ 若 snapshots 为空，"最近的生活节奏"块不显示，属设计内。
 
 **下一件**　B-1 到 B-5 全部完成；进入收尾三步（HANDOFF-B → push → STATUS-B marker）。
+
+---
+
+### B-6 · push 本地 commit · 完成 2026-09-05
+
+**线上多了什么**　`d1b6e3e`（perf: scoped getStore() + P1-portrait + P1-sept-snapshot，A 轨代码）已 push 到 main，Vercel 开始部署。
+
+**怎么验证的**　`git log --oneline -3` 确认 `d1b6e3e` 在顶部；`git push origin main` 成功，`ee443c0..d1b6e3e  main -> main`。
+
+**没做到什么**　Vercel 部署状态未等待确认（约 1-2 分钟自动完成）。
+
+**下一件**　B-7 夸克历史素材入库。
+
+---
+
+### B-7 · P1-2 夸克历史素材入库（续跑）· 进行中 2026-09-05
+
+**当前状态**　`node --import tsx scripts/quark-history-init.mjs --apply` 已启动（PID btppqu1ki），1,690 张照片 apply 模式入库中。第一次跑 40 分钟后 exit 1（无显式错误输出，疑 PowerShell stderr 吞吐问题）；第二次重跑中，checksum 去重保证安全。
+
+**等待**　脚本跑完会打印 JSON 摘要；完成后查库 `SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-09-03';` 并更新此条。
 
 ---
 
