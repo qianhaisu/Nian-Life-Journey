@@ -1519,3 +1519,20 @@ Cowork 12:4x 在 INBOX 下了新任务，说巡检发现 Quark apply 进程第�
    Cowork 12:4x 的「第三次静默死亡」误报已被 nianlife-b9 在 1eb61b6 里纠正（`LIKE '%Quark%'` 把两个
    不相关批次加在一起了，实际目标批次 214 条，没有新崩溃）。
 3. **下一件**：P1-3（主体门 + T20-C 收编），等 Cowork 派单；交接稿已更新到 docs/HANDOFF-A.md。
+
+### 2026-09-05 13:2x · 中间进度 · P1-3
+
+- 读完 INBOX 顶部看板：老 A 轨跳过 P1-2b（HEIC 转码），直接做 P1-3（主体门 + T20-C 收编）
+- 读完 t20c-regrade-memories.mjs 和 organizer-month-write.mjs，诊断清楚两判断点的漂移机制
+- 计划：提取共享模块 t20c-grade-events.mjs → organizer-month-write.mjs --commit 结束时自动调用 → t20c-regrade-memories.mjs 变薄包装
+- 开始写代码
+
+### 2026-09-05 13:4x · Claude Code (A 轨接手 session) · P1-3 完成：T20-C 收编进写入时门
+
+1. **线上多了什么**：代码变更，不直接增加家人能读的内容——但从这次提交起，任何新月份用
+   `organizer-month-write.mjs --commit` 写完后，T20-C 分级（high/medium/low → memoryWeight + store_only）
+   会自动在同一个进程里跑完，不再是需要单独记得跑的第二步。这是 P1-3「全站只保留一个判断点」的核心改动。
+2. **没做到什么**：`t20c-regrade-memories.mjs` 保留作为手动重跑工具，但不再是必须的后置步骤。
+   已写的月份（P1-0 已跑 T20-C）不需要重跑。验收：approved 133 条、store_only 220 条，数字与 P1-3 前一致
+   （T20-C 已跑过，幂等，无变化是正确结果）；每月 ≥8 天有文字 + ≥1 章节级，01 月除外（材料薄，已知例外）。
+3. **下一件事**：P1-4（图文同日绑定，信任名单制），或等 Cowork 从 INBOX 顶部派下一件。

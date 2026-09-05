@@ -33,16 +33,15 @@
 // "life_event_candidate" and memoryWeight is forced down to "trace" (see below) so T7's output reads
 // the same as everything else while still sorting behind real highlights/chapters.
 //
-// REQUIRED FOLLOW-UP for every month written here (T18 + T20-C, 2026-09-04 — do both, same as T7
-// itself, not optional cleanup):
-//   1. node --import tsx scripts/t18-backfill-media-binding.mjs --commit
-//      Binds media_ids/heroMediaId onto the rows this script just wrote — this script itself never
-//      does (media_ids stays []), so the event detail page and home page show no photo without it.
-//   2. node --import tsx scripts/t20c-regrade-memories.mjs --month=<the month> --commit
-//      Every row lands here at memoryWeight "trace" regardless of content (see T11 note above) —
-//      that regrade script is what tiers a real milestone up to "memory" and demotes an adult's
-//      logistics/administration (mentions the child, isn't about him) to unpublished. Skipping it
-//      means every day in the month reads as equally important, which principle 五 calls out by name.
+// REQUIRED FOLLOW-UP for every month written here (T18, 2026-09-04):
+//   node --import tsx scripts/t18-backfill-media-binding.mjs --commit
+//   Binds media_ids/heroMediaId onto the rows this script just wrote — this script itself never
+//   does (media_ids stays []), so the event detail page and home page show no photo without it.
+//
+// T20-C grading (P1-3, 2026-09-05) is now AUTOMATIC: when --commit is given and events were
+// written, this script grades them all at the end (high/medium/low → memoryWeight + store_only).
+// t20c-regrade-memories.mjs is kept for manual re-runs after prompt changes, but is no longer a
+// required follow-up step.
 //
 // Why a review row still needs an explicit "approved" override here (see quality-review.ts):
 // requiresQualityReview() fails CLOSED for any artifact whose organizerRun.organizerType is "ai".
@@ -75,6 +74,7 @@ const { NARRATIVE_VALIDATOR_VERSION, validateNarrative } = await import("../lib/
 const { subjectGateFor, passesSubjectGate, SUBJECT_NAMES } = await import("../lib/organizer/subject-gate.ts");
 const { planArtifacts, applyPlan } = await import("../lib/organizer/production-adapter.ts");
 const { persistDailyTrace, persistOrganizerRun, findOrganizerRun, persistOrganization, markSourcesOrganized, persistQualityReview } = await import("../lib/db/repository.ts");
+const { gradeMonthEvents } = await import("./t20c-grade-events.mjs");
 
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => { const hit = args.find((a) => a.startsWith(`--${name}=`)); return hit ? hit.slice(name.length + 3) : fallback; };
@@ -426,3 +426,12 @@ const summary = {
 console.log(`\n=== SUMMARY ===\n${JSON.stringify(summary, null, 2)}`);
 writeFileSync(outPath, JSON.stringify({ summary, results }, null, 2), "utf8");
 console.log(`\n${COMMIT ? `Wrote ${written} life_event row(s).` : "DRY RUN — nothing was written to the database."} Report: ${outPath} (contains family chat text; keep it outside the repository)`);
+
+// P1-3: T20-C grading runs automatically after writing (single judgment point).
+// Grades ALL events in this month (not just the ones written this run) so the whole month is
+// consistently graded even when --day/--from/--to was used to process only a slice.
+if (COMMIT) {
+  console.log(`\n--- T20-C auto-grade (P1-3) ---`);
+  const gradeModel = process.env.AI_MODEL || "deepseek-v4-pro";
+  await gradeMonthEvents(MONTH, { dbUrl, apiKey, baseUrl, model: gradeModel, persistQualityReview, commit: true });
+};
