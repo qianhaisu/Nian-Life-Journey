@@ -3,7 +3,7 @@
 > **这份文档只能覆盖写，不能追加。** 它永远只描述"现在"，长度保持在 100 行以内。
 > 历史在 `git log` 和 `docs/STATUS.md` 里，不在这。一个刚清空上下文的 Session 只读这一份就能接着干。
 >
-> 最后更新：2026-09-05 13:1x · by Claude Code（接手 session，接上一个 ba15c6 和 nianlife-b9）
+> 最后更新：2026-09-05 13:4x · by Claude Code（接手 session）
 
 ---
 
@@ -39,7 +39,7 @@ v2/lib/publication-moments.ts     docs/ORCHESTRATOR-INBOX-B.md    docs/STATUS-B.
 | P1-1 | conversationId 稳定性修复 | ✅ 修完 + 预注册 9 个 post-fix ID | 2e38e5a + 86f174e |
 | P1-snap | 月度回顾 bullet 化 | ✅ 数据+渲染全部到位（v2 格式 + B 轨 <ul><li>） | e304b07 + 7fda35b |
 | P1-2 | 夸克 1,690 张历史照片入库 | **到达当前工具链上限（214/1,690）** 见下 | fdd8df3 + 51dcf0b |
-| P1-3 | 主体门 + T20-C 收编 | ⬜ 未开始，等 Cowork 派单 | — |
+| P1-3 | 主体门 + T20-C 收编 | ✅ 完成（gradeMonthEvents 共享模块，writer 自动调用） | f8b009e |
 | P1-4 | 图文同日绑定（信任名单制） | ⬜ 未开始（P1-3 之后） | — |
 | P1-6 | 本地 worker | ⬜ 未开始（排最后） | — |
 
@@ -63,11 +63,10 @@ v2/lib/publication-moments.ts     docs/ORCHESTRATOR-INBOX-B.md    docs/STATUS-B.
 
 ## 3 · 下一件事
 
-**等 Cowork 派 P1-3（主体门 + 收编 T20-C 分类器）**。
+**P1-4：图文同日绑定（信任名单制）**。具体规格在 ORCHESTRATOR-INBOX.md 的 `### 🚀 P1` 段，
+关键：「背书」= 来源在信任名单里（夸克 + 乳儿班群 + 以后任何 Teddy 点头的会话），不是字面 provider=夸克。
 
-P1-3 的验收必须检查内容量下限：收紧主体门后，生产中仍需 ≥8 天有文字 + ≥1 章节级。低于下限说明门太严。
-
-**如果 Cowork 的 INBOX 里已经有 P1-3 的具体指令，直接看 INBOX 顶部看板执行，不用等。**
+**先确认 INBOX 顶部看板是否有比 P1-4 更急的任务**。
 
 ---
 
@@ -86,6 +85,9 @@ P1-3 的验收必须检查内容量下限：收紧主体门后，生产中仍需
    `?? []`（commit 9eae6eb），再遇到新崩溃去查有没有新的未保护字段访问。
 7. 验收看数据，不看进程状态。"终端打印出来了" ≠ "数据库里有了"。
 8. **巡检 / 查进度时不要用 `LIKE '%Quark%'`**：会把多个批次加在一起，用精确 `source_label = '...'`。
+9. **T20-C 分级现在是自动的**（P1-3，f8b009e）：`organizer-month-write.mjs --commit` 结束时会自动运行
+   `gradeMonthEvents`。不要再把 `t20c-regrade-memories.mjs` 当成必须手动跑的第二步。
+   它保留用于：改了分级 prompt 之后手动重跑某个月。
 
 ---
 
