@@ -228,7 +228,7 @@ SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-0
 
 **怎么验证的**　typecheck 通过；推到 main，Vercel 部署。能在 https://nianlife.cn/events/<id> 上验证：primary 条数 < 总条数时页面明显变短，次级折叠存在且可以展开看育儿建议长文。没有 primary 的事件回退为原来的平铺行为。
 
-**没做到什么**　线上验收需要一个有大量证据的事件 id；Vercel 部署通常 1–2 分钟完成后可验证。
+**没做到什么**　（已补验收）见下方「线上验收补记」。
 
 **下一件**　B-2 照片查看器（已完成，见下）。
 
@@ -294,17 +294,45 @@ SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-0
 
 ---
 
-### B-7 · P1-2 夸克历史素材入库（续跑）· 进行中 2026-09-05
+### B-7 · P1-2 夸克历史素材入库（续跑）· ⏸ 等待 A 轨修复 2026-09-05
 
-**当前状态**　`node --import tsx scripts/quark-history-init.mjs --apply` 已启动（PID btppqu1ki），1,690 张照片 apply 模式入库中。第一次跑 40 分钟后 exit 1（无显式错误输出，疑 PowerShell stderr 吞吐问题）；第二次重跑中，checksum 去重保证安全。
+**已知状态**　三次跑均失败 (b7z6hljna / btppqu1ki / bdenecoiu)，exit 1，无 JSON 摘要，无 stderr 错误输出。干跑 exit 0 正常，说明 crash 只发生在 apply 路径。crash 绕过外层 try/catch，最可能是 sharp/libvips 原生内存 OOM 导致 SIGKILL。DB 里已有 204 条 raw_sources（checksum 去重，重跑安全）。
 
-**等待**　脚本跑完会打印 JSON 摘要；完成后查库 `SELECT count(*) FROM raw_sources WHERE source_label = 'Quark 历史素材 2026-09-03';` 并更新此条。
+**已 revert**　`v2/scripts/quark-history-init.mjs` 的诊断改动已还原（A 轨边界）；Codex（task-mtntehv1-r3ils8）正在排查 `quark-photo-apply.mjs` / `client.ts`。
+
+**下一步**　等 A 轨/Codex 报告修复结果，再重跑一次。完成后查库并补写结果。
 
 ---
 
 ## 🌅 晨间交接规则（长期有效，每天都适用）
 
 Teddy 每天早上会把这条轨的上下文清掉（`/clear`），所以**连续性必须活在文件里，不在你的记忆里**。
+
+---
+
+### 线上验收补记 · B-1~B-5 · 2026-09-05
+
+B-1 至 B-5 的"没做到什么"栏都说"未在线上验证"，这里补验：
+
+**B-1 证据精选** ✅ 已验
+- `curl https://nianlife.cn/events/event-v2-b76018fcae4fb0a3f90d4b4efe4d2cdc` 抓到「当时留下的资料 35 项」+ `<details class="evidence-secondary">当天其余资料（34 项）`。
+- 证据数最多的那条事件（35 总/1 primary）：第一层只显示 1 条；34 条 supporting 在次级折叠里，默认收起。**验收通过。**
+
+**B-2 照片查看器** ⚠️ 半验
+- August 月页 HTML 里有 `PhotoGallery` 组件占位、71 个 `<img>` tag（带 lazy loading）。查看器是纯客户端 JS，curl 无法触发点击/滑动——**需要真机上用手指点才能确认滑动/放大/关闭**。
+
+**B-3 月页渐进展开** ✅ 已验
+- August 月页（220 KB）有「还有 29 天、548 张照片——点此展开全部」按钮；`ArchiveExpander` 存在；初始 71 个 `<img>`，548 张档案图片**未预先渲染**（`archive-day` / `archive-item` 类数量 = 0）。**验收通过。**
+
+**B-4 首页三块** ✅ 已验
+- 首页可见三块：① 最近一段生活（最近三条记忆 + 日期/年龄）；② 最近的新变化（取自 8 月 snapshot.summary）；③「翻看这个月」（本月入口）。**验收通过。**
+
+**B-5 张年页** ✅ 已验（部分）
+- `/about` 显示：年龄「1 岁 8 个月」、「最近的生活节奏 2026 年 8 月」。growth records 有无带 lifeEventId 的条目（即「查看那天」链接能否出现）仍需真机打开确认。
+
+---
+
+## 🌅 晨间交接规则（长期有效，每天都适用）
 
 **触发时机**：Cowork 或 Teddy 让你"收尾"时，或者你自己判断当前任务已经跑完一个完整节点时
 （一个月跑完、一个功能上线并验证过——**不要停在一个月跑到一半**）。
