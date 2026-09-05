@@ -393,6 +393,17 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .evidence-disclosure > summary::after { margin-left: auto; color: var(--color-accent); content: "＋"; }
 .evidence-disclosure[open] > summary::after { content: "－"; }
 .evidence-list { display: grid; gap: 12px; padding-bottom: 24px; }
+.evidence-secondary { margin-top: 8px; border-top: 1px solid var(--color-border); }
+.evidence-secondary-label { display: flex; align-items: center; gap: 10px; padding: 14px 0; cursor: pointer; list-style: none; color: var(--color-muted); font-size: .78rem; }
+.evidence-secondary-label::-webkit-details-marker { display: none; }
+.evidence-secondary-label::after { margin-left: auto; color: var(--color-accent); content: "＋"; font-size: .9rem; }
+.evidence-secondary[open] .evidence-secondary-label::after { content: "－"; }
+.evidence-text-long { margin: 10px 0 0; }
+.evidence-text-long > summary { cursor: pointer; list-style: none; }
+.evidence-text-long > summary::-webkit-details-marker { display: none; }
+.evidence-text-long > summary.evidence-quote { max-width: 38ch; overflow-wrap: anywhere; font-family: var(--font-heading); font-size: clamp(1.3rem, 4vw, 2rem); line-height: 1.4; }
+.evidence-text-long > summary.evidence-note { color: var(--color-muted); overflow-wrap: anywhere; }
+.evidence-text-long > p { margin-top: 8px; }
 .detail-footer { padding: 40px 0 96px; }
 
 /* 张年 */
