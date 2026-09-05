@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: "张年" };
 // heading with its real dates — a year-old note may be read, but never mistaken for now. When a
 // section has no real record behind it, it is not rendered — never filled in.
 export default async function AboutPage() {
-  const { chapters, store, birthDay, time, privilege } = await loadFamilyArchive();
+  const { chapters, store, birthDay, time, privilege, snapshots } = await loadFamilyArchive();
   const age = birthDay ? ageOn(birthDay, time.today) : undefined;
   const portrait = latestPortrait(chapters, (photo) => isPrivileged(photo, privilege));
   const portraitRecent = portrait ? isRecent(portrait.day, time) : false;
@@ -29,6 +29,12 @@ export default async function AboutPage() {
   const earlierSpan = earlierNotes.length > 0 ? formatMonth(earlierNotes[0].day.slice(0, 7)) : undefined;
   const notes = recentGrowthNotes(store.growthRecords, birthDay, 4, time);
   const notesHeading = notes.some((note) => note.recent) ? "最近的变化" : "记下来的变化";
+  // B-5: link growth notes to their originating life_event where one exists.
+  const growthEventMap = new Map(
+    store.growthRecords.filter((r) => r.lifeEventId).map((r) => [r.id, r.lifeEventId!])
+  );
+  // B-5: latest published snapshot summary for "生活节奏" block.
+  const latestSnapshot = [...snapshots].sort((a, b) => b.month.localeCompare(a.month)).find((s) => s.summary?.trim());
   const heights = measurements(store.growthRecords, "height", birthDay);
   const weights = measurements(store.growthRecords, "weight", birthDay);
   const care = store.careRecords.filter((record) => record.visibility !== "private").sort((a, b) => b.observedAt.localeCompare(a.observedAt));
@@ -48,17 +54,49 @@ export default async function AboutPage() {
 
     {notes.length > 0 ? <section className="about-notes" aria-labelledby="notes-title">
       <h2 id="notes-title" className="section-mark">{notesHeading}</h2>
-      <dl>{notes.map((note) => <div key={note.id}><dt>{note.label}</dt><dd><p className="serif">{note.note}</p><time dateTime={note.signature.day}>{note.signature.dateLabel}</time></dd></div>)}</dl>
+      <dl>{notes.map((note) => {
+        const eventId = growthEventMap.get(note.id);
+        return <div key={note.id}>
+          <dt>{note.label}</dt>
+          <dd>
+            <p className="serif">{note.note}</p>
+            <p className="note-meta">
+              <time dateTime={note.signature.day}>{note.signature.dateLabel}</time>
+              {eventId ? <Link className="text-link" href={`/events/${eventId}`}>查看那天</Link> : null}
+            </p>
+          </dd>
+        </div>;
+      })}</dl>
+    </section> : null}
+
+    {latestSnapshot ? <section className="about-notes" aria-labelledby="snapshot-title">
+      <h2 id="snapshot-title" className="section-mark">最近的生活节奏</h2>
+      <dl><div>
+        <dt><Link className="text-link" href={`/memory/${latestSnapshot.month.slice(0, 4)}/${latestSnapshot.month.slice(5, 7)}`}>{formatMonth(latestSnapshot.month)}</Link></dt>
+        <dd><p className="serif">{latestSnapshot.summary}</p></dd>
+      </div></dl>
     </section> : null}
 
     {currentNotes.length > 0 ? <section className="about-notes about-traces" aria-labelledby="traces-title">
       <h2 id="traces-title" className="section-mark">档案最近记下的</h2>
-      <dl>{currentNotes.map((note, index) => <div key={`${note.day}-${index}`}><dt><time dateTime={note.day}>{note.dateLabel}</time></dt><dd><p className="serif">{note.entry}</p></dd></div>)}</dl>
+      <dl>{currentNotes.map((note, index) => {
+        const monthHref = `/memory/${note.day.slice(0, 4)}/${note.day.slice(5, 7)}`;
+        return <div key={`${note.day}-${index}`}>
+          <dt><time dateTime={note.day}><Link className="text-link" href={monthHref}>{note.dateLabel}</Link></time></dt>
+          <dd><p className="serif">{note.entry}</p></dd>
+        </div>;
+      })}</dl>
     </section> : null}
 
     {earlierNotes.length > 0 ? <section className="about-notes about-traces about-earlier" aria-labelledby="earlier-title">
       <h2 id="earlier-title" className="section-mark">更早的时候{earlierSpan ? ` · ${earlierSpan}` : ""}</h2>
-      <dl>{earlierNotes.map((note, index) => <div key={`${note.day}-${index}`}><dt><time dateTime={note.day}>{note.dateLabel}</time></dt><dd><p className="serif">{note.entry}</p></dd></div>)}</dl>
+      <dl>{earlierNotes.map((note, index) => {
+        const monthHref = `/memory/${note.day.slice(0, 4)}/${note.day.slice(5, 7)}`;
+        return <div key={`${note.day}-${index}`}>
+          <dt><time dateTime={note.day}><Link className="text-link" href={monthHref}>{note.dateLabel}</Link></time></dt>
+          <dd><p className="serif">{note.entry}</p></dd>
+        </div>;
+      })}</dl>
     </section> : null}
 
     {hasDeeper ? <details className="about-deeper">

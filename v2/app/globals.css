@@ -440,6 +440,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .about-notes dd { margin: 0; }
 .about-notes dd p { margin: 0 0 6px; font-size: clamp(1.25rem, 3.2vw, 1.7rem); line-height: 1.4; }
 .about-notes dd time { color: var(--color-muted); font-size: .78rem; }
+.note-meta { display: flex; align-items: baseline; gap: 12px; margin: 0; color: var(--color-muted); font-size: .78rem; }
+.note-meta time { color: inherit; font-size: inherit; }
 .about-portrait-date { margin: 10px 0 0; color: var(--color-muted); font-size: .78rem; }
 /* 更早的时候 — visibly a different era: quieter type, clearly dated. */
 .about-earlier dd p { font-size: 1.05rem; color: var(--color-muted); }
