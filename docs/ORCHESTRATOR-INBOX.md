@@ -1,15 +1,4 @@
-# ⚠️ GIT 修复（下个 session 第一件事做）
-
-Cowork commit `9a1d2a7` 用了空的临时 index，导致 6 个文件被错误标记为删除。
-**文件全在磁盘上，没丢。** 修法：
-
-```bash
-rm -f .git/HEAD.lock
-git add docs/HANDOFF-A.md v2/scripts/quark-history-init.mjs v2/scripts/t20c-grade-events.mjs v2/drizzle/0012_early_secret_warriors.sql v2/drizzle/meta/0012_snapshot.json "v2/app/memory/[year]/[month]/actions.ts"
-git commit -m "fix: restore files accidentally removed by Cowork temp-index commit"
-```
-
-做完这个再往下读任务。
+# ✅ GIT 修复已完成（commit 5eebfc0），无需再做
 
 ---
 
@@ -40,16 +29,96 @@ Teddy 不必在中间转述。
 > **不要从文件开头往下读全部历史**——上面大半是已经 done 的旧任务。
 > **只看这块。** 这里列的就是当前该做的，按顺序。做完一条在这里标 done。
 
-**更新于 2026-09-05 06:50 UTC（Cowork）· Neon 已升级 Launch，站已恢复，P1-2b 继续跑**
+**更新于 2026-09-05 08:20 UTC（Cowork）· P1-2b 入库在跑，同时分发 P1-portrait + P1-sept-snapshot**
 
-Neon 配额耗尽导致站 500 已解决：Teddy 已升级到 Launch plan（500 GB 传输配额）。
-站已恢复 HTTP 200。P1-2b 入库在 ~344 条时中断，manifest 有 checksum 去重，直接重跑即可。
-**不需要重做转码，不需要改代码。直接跑 applyQuarkPhotoArtifact 即可。**
+**P1-2b 入库正在后台跑**（A 轨已写新脚本 00eaada + 738e5f5，纯 JS 无 tsx 依赖）。
+截至 16:18 本地时间：created 99, reused 2, failed 0，进度正常，预计还需数小时。
+**不要重启入库进程，不要碰入库脚本。** 让它跑完。
 
-P1-4 已完成（commit e47a4c0 + 3d407a4）：trusted-photo-sources.ts 上线，主群三个 export ID 加入信任名单。
-HEIC 转码已完成：1,468 张全部转为 JPEG，0 失败，manifest 就绪。
+**P1-2b 跑着的同时，做下面两个不依赖入库的任务（按顺序）。** 都是小改动，合计 < 1 小时。
 
 ---
+
+## ⚡ 任务 1：P1-portrait · About 页 portrait 优先选人像照片
+
+### 目标
+
+About 页展示的 portrait 是张年的人像照片，不是食物/物品照。
+
+**现状**：`latestPortrait()` (`lib/memory-chapters.ts`) 遍历 chapters（最新月优先），取第一张 `heroSized()` + `isVouched()` 的照片。它不区分照片内容——可能选到食物摆盘照。
+
+### 硬边界
+
+1. **不引入外部 AI 人脸检测服务**——不加新的 API 依赖
+2. **不改 media_assets schema**——不加列
+3. **选不到人像时 fallback 到当前逻辑**（最新 vouched hero），不能让 portrait 变空
+
+### 做什么
+
+在 `latestPortrait` 的候选排序中，**优先选 portrait orientation（竖版）的照片**。
+家长拍孩子人像几乎都是竖着拍的，这是不需要 AI 的最强信号。
+
+具体：
+- 遍历候选时，先找 `width < height`（竖版）的 heroSized + isVouched 照片
+- 找不到竖版时，fallback 到当前逻辑（横版也行）
+- 可以额外降权关联事件标题含"吃""饭""食"的照片（可选，不强求）
+
+### 验收
+
+1. About 页 portrait 是竖版照片（浏览器视觉验证）
+2. 不影响其他页面的照片展示
+3. npm run typecheck 通过
+
+### 代码指引
+
+- `latestPortrait()` 在 `lib/memory-chapters.ts` 约 line 331-343
+- 调用处：`app/about/page.tsx:24`
+- media_assets 表有 `width` 和 `height` 列
+
+---
+
+## ⚡ 任务 2：P1-sept-snapshot · 首页"最近的新变化"可见
+
+### 目标
+
+首页"最近的新变化"区块有内容展示，不留空白。
+
+**现状**：`buildHomeView` 取 `chapters[0].months[0]`（最新月 = 2026-09），然后找 `snapshots.find(item => item.month === thisMonth.month)`。9 月无 monthly_snapshot → summary 为 undefined → 整个区块不渲染。
+
+### 硬边界
+
+1. **不降低 month-review.mjs 的 MIN_EVENTS 阈值**——薄月不写 snapshot 是正确的
+2. **不手写 / 硬编码 9 月的 summary 文本**
+3. **保持 `isSnapshotPublishable` 的逻辑不变**
+
+### 做什么
+
+当 `thisMonth` 没有 snapshot 时，**回退到 snapshots 列表中最近的一个有 snapshot 的月份**。
+月份标签要跟着 snapshot 走（显示"八月"而非"九月"），不能错位。
+
+```typescript
+// 当前月没有 snapshot 时，找最近有 snapshot 的月份
+const snapshotMonth = snapshots.find(s => s.month === thisMonth?.month)
+  ?? snapshots.sort((a, b) => b.month.localeCompare(a.month))[0];
+// monthHref 和标签要跟着 snapshot 的月份走
+```
+
+### 验收
+
+1. 首页"最近的新变化"区块可见，展示最近有 snapshot 的月份（当前应为 2026-08）
+2. 月份标签与 snapshot 内容一致（不错位）
+3. 不影响月页和 About 页的 snapshot 展示
+4. npm run typecheck 通过
+
+### 代码指引
+
+- 改动点：`lib/home-view.ts` 的 `buildHomeView` 函数
+- `app/page.tsx` 渲染逻辑可能也要改（月份标签）
+- 对照 commit `9dd5427`（之前的 null guard fix）确认不回归
+
+---
+
+## 🔵 P1-2b 继续跑（不要碰，参考信息）
 
 ## A 轨当前任务：P1-2b（第二阶段）· HEIC 转码照片入库
 
