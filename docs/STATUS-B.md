@@ -75,3 +75,11 @@
 - 下一步：等入箱新任务 / Cowork 验收 B-9bc-fix 和 B-9d
 
 === B 轨已到收尾节点，可以 /clear ===
+
+### 2026-09-05 10:4x UTC · Cowork · 验收：B-9bc-fix 通过；9d 过大半，余两条 → B-9e；张年页内容空 → B-10。B 轨可以 /clear，新 session 读 HANDOFF-B 后从 B-9e 开始
+
+### 2026-09-05 11:1x · 中间进度 · B-9e + B-10
+
+- 已读 INBOX-B 顶部 + STATUS-B，确认任务：B-9e（图标彩色 + 月页 border）→ B-10（张年页最近记下来的 + 家人最近说）
+- 当前：修 snapshot-summary.tsx（18px 2px 彩色图标 + 背景徽章）+ globals.css（moment-memory_led 去 border-top）+ about/page.tsx（新两个 block）
+- 下一步：三文件改完 typecheck → push

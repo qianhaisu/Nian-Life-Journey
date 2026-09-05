@@ -5,9 +5,11 @@ import { Photo } from "@/components/photo";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
 import { SnapshotSummary } from "@/components/snapshot-summary";
-import { latestPortrait, recentTraceNotes } from "@/lib/memory-chapters";
+import { latestPortrait, memoryTitle, recentTraceNotes } from "@/lib/memory-chapters";
 import { isPrivileged } from "@/lib/publication-moments";
-import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
+import { calendarDayOf } from "@/lib/timeline-dates";
+import { ageOn, formatDay, formatMonth, timeSignatureFor } from "@/lib/time-signature";
+import type { LifeEvent } from "@/lib/types";
 import { isRecent } from "@/lib/time-truth";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +21,32 @@ export const metadata: Metadata = { title: "张年" };
 // it was taken, and any recent notes), and everything older sits under an explicit 更早的时候
 // heading with its real dates — a year-old note may be read, but never mistaken for now. When a
 // section has no real record behind it, it is not rendered — never filled in.
+// Deterministic regex to lift family-member quotes from a life_event story.
+// Matches: 妈妈/爸爸/奶奶/雪姨/老师 (+ optional 说/转述) + 「…」 (2–40 chars)
+const FAMILY_QUOTE_RE = /(妈妈|爸爸|奶奶|雪姨|老师)(说|转述)?[：:]?「([^」]{2,40})」/g;
+
+type FamilyQuote = { caller: string; quote: string; day: string; dateLabel: string; ageLabel?: string; eventId: string };
+
+function extractFamilyQuotes(events: LifeEvent[], birthDay?: string, max = 3): FamilyQuote[] {
+  const results: FamilyQuote[] = [];
+  for (const event of events) {
+    if (!event.story || results.length >= max) break;
+    const day = calendarDayOf(event.occurredAt);
+    if (!day) continue;
+    const sig = timeSignatureFor(event.occurredAt, birthDay);
+    if (!sig) continue;
+    FAMILY_QUOTE_RE.lastIndex = 0;
+    let match;
+    while ((match = FAMILY_QUOTE_RE.exec(event.story)) !== null) {
+      results.push({ caller: match[1], quote: match[3], day, dateLabel: sig.dateLabel, ageLabel: sig.ageLabel, eventId: event.id });
+      if (results.length >= max) break;
+    }
+  }
+  return results;
+}
+
 export default async function AboutPage() {
-  const { chapters, store, birthDay, time, privilege, snapshots } = await loadFamilyArchive();
+  const { chapters, store, birthDay, time, privilege, snapshots, events } = await loadFamilyArchive();
   const age = birthDay ? ageOn(birthDay, time.today) : undefined;
   const portrait = latestPortrait(chapters, (photo) => isPrivileged(photo, privilege));
   const portraitRecent = portrait ? isRecent(portrait.day, time) : false;
@@ -36,6 +62,18 @@ export default async function AboutPage() {
   );
   // B-5: latest published snapshot summary for "生活节奏" block.
   const latestSnapshot = [...snapshots].sort((a, b) => b.month.localeCompare(a.month)).find((s) => s.summary?.trim());
+  // B-10: recent published life_events (last 30 days, max 6) for "最近记下来的".
+  const cutoffDay30 = new Date(time.today);
+  cutoffDay30.setDate(cutoffDay30.getDate() - 30);
+  const cutoff30 = cutoffDay30.toISOString().slice(0, 10);
+  const recentEvents = events
+    .filter((e) => { const d = calendarDayOf(e.occurredAt); return d && d >= cutoff30; })
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+    .slice(0, 6);
+  // B-10: family quotes from all published events (sorted newest-first, take first 3 matches).
+  const sortedEvents = [...events].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+  const familyQuotes = extractFamilyQuotes(sortedEvents, birthDay);
+
   const heights = measurements(store.growthRecords, "height", birthDay);
   const weights = measurements(store.growthRecords, "weight", birthDay);
   const care = store.careRecords.filter((record) => record.visibility !== "private").sort((a, b) => b.observedAt.localeCompare(a.observedAt));
@@ -77,6 +115,26 @@ export default async function AboutPage() {
         <dt><Link className="text-link" href={`/memory/${latestSnapshot.month.slice(0, 4)}/${latestSnapshot.month.slice(5, 7)}`}>{formatMonth(latestSnapshot.month)}</Link></dt>
         <dd><SnapshotSummary text={latestSnapshot.summary!} className="serif" /></dd>
       </div></dl>
+    </section> : null}
+
+    {recentEvents.length > 0 ? <section className="about-notes" aria-labelledby="recent-events-title">
+      <h2 id="recent-events-title" className="section-mark">最近记下来的</h2>
+      <dl>{recentEvents.map((event) => {
+        const sig = timeSignatureFor(event.occurredAt, birthDay);
+        if (!sig) return null;
+        return <div key={event.id}>
+          <dt><time dateTime={sig.day}>{sig.dateLabel}</time></dt>
+          <dd><p className="serif"><Link className="text-link" href={`/events/${event.id}`}>{memoryTitle(event)}</Link></p></dd>
+        </div>;
+      })}</dl>
+    </section> : null}
+
+    {familyQuotes.length > 0 ? <section className="about-notes" aria-labelledby="family-quotes-title">
+      <h2 id="family-quotes-title" className="section-mark">家人最近说</h2>
+      <dl>{familyQuotes.map((q, i) => <div key={i}>
+        <dt>{q.caller} · <time dateTime={q.day}>{q.dateLabel}</time>{q.ageLabel ? <> · {q.ageLabel}</> : null}</dt>
+        <dd><p className="serif">「{q.quote}」</p><p className="note-meta"><Link className="text-link" href={`/events/${q.eventId}`}>查看那天</Link></p></dd>
+      </div>)}</dl>
     </section> : null}
 
     {currentNotes.length > 0 ? <section className="about-notes about-traces" aria-labelledby="traces-title">
