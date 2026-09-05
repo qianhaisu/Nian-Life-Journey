@@ -1188,3 +1188,79 @@ P0 四个月数据本身没有受影响（life_events/media_ids 都是之前已�
 4. **下一件**：等 Cowork 决定 getStore-scoping 这部分并入 B 轨的 P1-9，还是仍归 A 轨、B 轨等一等；
    在此之前不重复开工。P1-1（身份修复）、P1-2（夸克入库）都在 `lib/`/`scripts/` 范围内，
    不涉及 page.tsx，可以按顺序继续，等下一步指示。
+
+### 2026-09-05 04:2x · Claude Code (session ba15c6) · 01/02 用 pro 重跑完成；结果证明 01 是真的内容薄，不是模型问题
+
+1. **重跑前发现一个关键技术事实，先说清楚**：`organizer-month-write.mjs` 的去重键
+   (`fingerprintOf`) 只由 `conversationId|activityDate|sourceIds` 组成，跟模型/prompt 版本无关。
+   这意味着**直接切 pro 重跑 01/02，对已经用 flash 写过的窗口会全部提前跳过、不会真的用 pro
+   重写**——`findOrganizerRun` 在调用模型前就短路了。加了一个 `--force` 参数（只跳过这一处提前
+   退出检查，`applyPlan` 下游的按指纹 upsert 完全不变，不会产生重复行），重跑前把 01/02 当时的
+   23 条 life_event 全量导出备份到会话 scratchpad（仓库外），然后才跑 `--force --commit`。
+2. **02 月（pro）：40 条写出（19 天有文字）→ T18 回填 → T20-C 分级：3 章节级 + 17 trace 发布
+   （35 条不发布）→ 已发布 9 天/18 条 → month-review 已重新生成并写库。两条下限都过了
+   （≥8 天已发布 ✓，≥1 章节级 ✓）**。查库+curl 核实，`grep 家人`=0，新的一类模式扫全表也是 0。
+3. **01 月（pro）：21 条写出（16 天有文字）→ T18 回填（11/29 条绑上了照片）→ T20-C 分级：0 章节级
+   + 8 trace 发布（21 条不发布）→ 已发布 5 天/8 条 → month-review 用这 8 条生成并写库
+   （之前 <5 条跳过，这次够了）**。**两条下限仍然没过（5 天 <8，0 章节级 <1）**。
+   **这是本轮最重要的一条判断依据**：01 月用 flash 和用 pro 结果都不达标（flash：3 天/0 章节级；
+   pro：5 天/0 章节级——pro 确实比 flash 多写出、多发布了不少，但离下限还是有差距）。
+   **按 Cowork 的原话"若 pro 重跑后仍不达标，那才轮到讨论门的阈值"——现在轮到了，但我没有
+   自己去动阈值**，如实报告：01 月看起来是这段时间本身聊天记录里"张年是主体"的内容天然就少
+   （`raw_sources` 有 1,478 条不算少，但主体门/写手能确认归属、且真的关于张年的窗口比例低），
+   要不要放宽门槛是产品判断，留给 Cowork/Teddy。
+4. **验证**：01/02 都直接查了 `monthly_snapshot`/`content_quality_reviews`，curl 了两个页面，
+   全库扫过新的一类匿名归属模式，0 命中。`typecheck` 干净，`npm test` 644/644 通过。
+5. **P1-0 到此彻底收尾**：01~05 五个月全部用当前最好的模型（03/04/05 pro 首跑；01/02 flash 首跑
+   后又用 pro 重跑）跑过完整四步链，03/04/05/02 四个月过验收下限，01 月未过（如上，已如实说明
+   原因不是模型选择）。
+
+---
+
+## A 轨交接稿 · 清上下文前（2026-09-05 04:2x，写给下一个清空记忆的 Session）
+
+**你是谁**：Nianlife 项目的 Claude Code A 轨 Session。A 轨管写库/管线（`v2/scripts/**`、
+`v2/lib/organizer/**`、`v2/lib/db/**`、`v2/.env.local`、`docs/ORCHESTRATOR-INBOX.md`、
+`docs/STATUS.md`）。**另有一个 B 轨 Session 同时在跑**，管前端渲染（`v2/components/**`、
+`v2/app/**/page.tsx`、`v2/app/globals.css`、`v2/lib/publication-moments.ts`），入箱在
+`docs/ORCHESTRATOR-INBOX-B.md`，出箱在 `docs/STATUS-B.md`——**这些文件不属于你，不要碰**。
+先读 `CLAUDE.md`（项目长期规则）和本文件（`docs/STATUS.md`）最新几条 + `docs/ORCHESTRATOR-INBOX.md`
+顶部「🔴 现在做什么」看板（不要从头读全文，一千多行大半是存档）。
+
+**P1-0（2026-01~05 过 T7 管线）已经做完**，四步链固定顺序（都在 `v2/` 目录下跑）：
+```
+node --import tsx scripts/organizer-month-write.mjs --month=YYYY-MM --out=<仓库外绝对路径>.json --max-calls=400 --commit
+node --import tsx scripts/t18-backfill-media-binding.mjs --commit
+node --import tsx scripts/t20c-regrade-memories.mjs --month=YYYY-MM --commit
+node --import tsx scripts/month-review.mjs --month=YYYY-MM --commit
+```
+每一步跑完都要直接查库（`DATABASE_URL_UNPOOLED`）+ `curl nianlife.cn/memory/YYYY/MM` 核实，
+不能只看终端打印。
+
+**今晚踩过的坑，别再踩一遍**：
+- `REPOSITORY_BACKEND` 不设会静默写本地 gitignored JSON 文件，终端照样打印"WRITTEN"——
+  `organizer-month-write.mjs`/`t20c-regrade-memories.mjs`/`month-review.mjs` 已经在脚本内硬编码
+  `process.env.REPOSITORY_BACKEND = "postgres"`，但任何新脚本都要照做。
+- `--out` 必须是仓库外的绝对路径（含真实聊天记录，不能进仓库）。
+- 「家里人/有人说/大家说」这类不点名的集体归属，和「家人」是**同一类问题**，要按模式类查
+  （`narrative-validator.ts` 的 `GENERIC_FAMILY_COLLECTIVE` 正则），不是列几个词就查完了——
+  这次全库重扫了两轮才真正清干净，第一轮词表遗漏了「有人说」这类。
+- `monthly_snapshot` 是从已发布记忆**二次生成**的——改了源头 life_event 的正文，不会自动更新
+  已经生成的月度回顾，要手动重跑 `month-review.mjs` 才会同步。
+- `organizer-month-write.mjs` 的去重是**纯窗口指纹**（会话+日期+来源消息 id），跟模型无关——
+  切换 `AI_MODEL` 后想让已写过的月份真正用新模型重写，必须加 `--force`，否则会对所有已提交窗口
+  提前跳过、什么也不会发生。
+- Windows/Node 24 下这个终端的 cwd 在多次 `cd v2 && ...` 之后可能悄悄回到仓库根——每次命令前
+  用 `pwd` 确认，别假设 cwd 还在 `v2/`。
+- `.git/index.lock` 偶尔残留：先 `Get-Process git` 确认没有真在跑的 git 进程，再删。
+
+**P1 下一件是 P1-5（性能与缓存）**，不是 P1-8~P1-12（那五件在 B 轨手上）。P1-5 目前状态：
+`raw_sources.captured_at` 索引已加（commit 8459502，已验证生产库有这个索引）。**`getStore()`
+按月 scoped read 还没做**——这部分需要改 `loadFamilyArchive()` 的调用方式，牵涉到每个
+`app/**/page.tsx` 的调用点，而这些文件现在是 B 轨独占，且 B 轨的 P1-9（月页渐进展开）本来就是
+在解决同一个"整月一次性加载太重"的问题。**这是需要 Cowork 判断怎么分工的协调问题，不要自己
+猜着动手改 page.tsx。** 完整 P1 计划、执行顺序、P1-1~P1-4/P1-6 的规格全部在
+`docs/ORCHESTRATOR-INBOX.md` 的 `### 🚀 P1` 那节里，动 P1-4 之前记得先读"计划已被修订"那段
+（夸克背书规则改成了信任名单，不是字面"provider=夸克"）。
+
+=== A 轨已到收尾节点，可以 /clear ===
