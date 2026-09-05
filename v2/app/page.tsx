@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EditorialMemory } from "@/components/editorial-memory";
 import { PhotoGallery } from "@/components/photo-viewer";
+import { SnapshotSummary } from "@/components/snapshot-summary";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { buildHomeView } from "@/lib/home-view";
 
@@ -65,7 +66,7 @@ export default async function HomePage() {
     {/* 最近的新变化：直接复用 monthly_snapshot.summary，有就显示，没有就整块消失 */}
     {summary && changeLabel && changeHref ? <section className="home-change reading-wrap" aria-labelledby="change-title">
       <h2 id="change-title" className="section-mark">最近的新变化</h2>
-      <ul className="home-change-note serif">{summary.split('\n').filter(Boolean).map((line, i) => <li key={i}>{line.replace(/^-\s*/, '')}</li>)}</ul>
+      <SnapshotSummary text={summary} className="home-change-note serif" />
       <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
     </section> : null}
 

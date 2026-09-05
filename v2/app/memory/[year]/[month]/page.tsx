@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArchiveExpander } from "@/components/archive-expander";
 import { PhotoGallery } from "@/components/photo-viewer";
+import { SnapshotSummary } from "@/components/snapshot-summary";
 import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { loadFamilyArchive } from "@/lib/family-archive";
@@ -46,7 +47,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       <span className="section-mark">月份章节</span>
       <h1 className="serif">{chapter.label}</h1>
       {chapter.ageLabel ? <p className="chapter-age">当时 {chapter.ageLabel}</p> : null}
-      {summary ? <p className="chapter-summary serif">{summary.summary}</p> : null}
+      {summary?.summary ? <SnapshotSummary text={summary.summary} className="chapter-summary serif" /> : null}
       {!summary && composition.narration ? <p className="chapter-narration serif">{composition.narration}</p> : null}
       {!summary && !composition.narration && standfirst ? <p className="chapter-standfirst serif">{standfirst}</p> : null}
     </header>

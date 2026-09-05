@@ -335,20 +335,21 @@ export function latestLeadPhoto(chapters: YearChapter[]): MediaRef | undefined {
 // own lead, or a picture the family's photo archive or a published memory stands behind. Nothing
 // vouched → no portrait. An empty slot is honest; a stranger's picture is not.
 export function latestPortrait(chapters: YearChapter[], isVouched: (photo: MediaRef) => boolean = () => false): { photo: MediaRef; day: string; dateLabel: string } | undefined {
-  // Prefer portrait-oriented (vertical) photos — parents almost always photograph their child
-  // in portrait mode; food, objects and screenshots tend to be landscape or square. This avoids
-  // the About page showing a food photo as 张年's portrait (2026-09-05 fix).
+  // Only Quark family-photo backed media (id starts with "media-quark-sha-") are eligible as
+  // 张年's portrait. WeChat forwards and daycare shots reach the archive too, but the about page
+  // must show 张年 — not food, not a classroom activity. A vouching-only gate is not enough because
+  // trusted delivery paths also carry non-person images; source identity is the only reliable gate.
+  const isQuarkOrigin = (photo: MediaRef) => photo.id.startsWith('media-quark-sha-');
   const isPortraitOriented = (photo: MediaRef) => Boolean(photo.width && photo.height && photo.width < photo.height);
   let fallback: { photo: MediaRef; day: string; dateLabel: string } | undefined;
 
   for (const year of chapters) for (const month of year.months) {
-    const memoryLead = month.memories.find((memory) => memory.lead);
-    const eligible = (photo: MediaRef) => heroSized(photo) && isVouched(photo);
+    const memoryLead = month.memories.find((memory) => memory.lead && isQuarkOrigin(memory.lead));
+    const eligible = (photo: MediaRef) => heroSized(photo) && isVouched(photo) && isQuarkOrigin(photo);
     const photoDay = month.photoDays.find((day) => day.photos.some(eligible));
     if (photoDay && (!memoryLead || photoDay.day >= memoryLead.signature.day)) {
       const portraitPhoto = photoDay.photos.find((p) => eligible(p) && isPortraitOriented(p));
       if (portraitPhoto) return { photo: portraitPhoto, day: photoDay.day, dateLabel: photoDay.dateLabel };
-      // Remember the first non-portrait eligible as fallback (most recent, same as old behavior).
       if (!fallback) {
         const anyPhoto = photoDay.photos.find(eligible);
         if (anyPhoto) fallback = { photo: anyPhoto, day: photoDay.day, dateLabel: photoDay.dateLabel };

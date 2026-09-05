@@ -4,6 +4,7 @@ import { GrowthChart } from "@/components/growth-chart";
 import { Photo } from "@/components/photo";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
+import { SnapshotSummary } from "@/components/snapshot-summary";
 import { latestPortrait, recentTraceNotes } from "@/lib/memory-chapters";
 import { isPrivileged } from "@/lib/publication-moments";
 import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
@@ -74,7 +75,7 @@ export default async function AboutPage() {
       <h2 id="snapshot-title" className="section-mark">最近的生活节奏</h2>
       <dl><div>
         <dt><Link className="text-link" href={`/memory/${latestSnapshot.month.slice(0, 4)}/${latestSnapshot.month.slice(5, 7)}`}>{formatMonth(latestSnapshot.month)}</Link></dt>
-        <dd><p className="serif">{latestSnapshot.summary}</p></dd>
+        <dd><SnapshotSummary text={latestSnapshot.summary!} className="serif" /></dd>
       </div></dl>
     </section> : null}
 
