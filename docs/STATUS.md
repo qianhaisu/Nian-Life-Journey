@@ -1538,3 +1538,21 @@ Cowork 12:4x 在 INBOX 下了新任务，说巡检发现 Quark apply 进程第�
 3. **下一件事**：P1-4（图文同日绑定，信任名单制），或等 Cowork 从 INBOX 顶部派下一件。
 
 === A 轨已到收尾节点，可以 /clear ===
+
+### 2026-09-05 13:3x · 中间进度 · P1-2b（新 A 轨 session，nianlife-b9）
+
+- 已装 `heic-convert`（纯 JS/WASM libheif 绑定，独立于这台机器的 sharp/libvips），10 张样本
+  转码+入库全链路验证通过：`quark-photo-apply.mjs` 原样吃转码后的 JPEG，0 失败，
+  查库确认 `raw_sources`（`Quark 历史素材 2026-09-03`）214 → **224**。
+- 写了 `v2/scripts/quark-heic-convert.mjs`（并发池转码，进度按 50 条打印，失败写
+  `manifests/heic-convert-failed.jsonl`，成功写新 manifest 供 `applyQuarkPhotoArtifact` 直接消费）。
+- **发现一个和 HEIC 无关但影响吞吐的真问题**：`getMediaAssetChecksumIndex()`（Codex fdd8df3 的
+  批量预取）读全表 `media_assets`（7,609 行）实测耗时 **74 秒**，`user`/`sys` CPU 时间均 <50ms——
+  纯网络/IO 等待，不是查询逻辑问题。这解释了今天多次"看起来卡住"的现象：批量预取本身在这台机器
+  当前网络状况下就要先等 1 分钟才开始处理第一条。10 条真实素材端到端（含这 74 秒预取）耗时
+  4m55s，折合单条约 22-30 秒，比 INBOX 里记录的历史基线 ~5 条/分钟（12 秒/条）慢了一倍左右，
+  但量级一致，判断是今天网络状况偏差，不是新 bug，不阻塞继续跑。
+- 正在后台跑全量转码（1,468 张 HEIC，并发 6，预计 10-15 分钟）。转码完成后接着跑全量入库
+  （预计数小时，量级对齐 INBOX 原始预期"5-6 小时"）。
+- **下一步**：转码跑完先核对样本再点火入库；入库设了自动 DB 计数监控，每 10 分钟报一次，
+  长时间跑会持续追加中间进度到本文件。
