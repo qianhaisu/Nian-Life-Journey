@@ -13,6 +13,16 @@ test("official markdown parses deterministic messages and media states", () => {
   assert.notEqual(parsed.messages[1].messageId, parsed.messages[2].messageId);
 });
 
+test("re-exporting the same conversation keeps the same conversationId and messageIds", () => {
+  const media = new Map();
+  const header = (messageCount, exportedAt) =>
+    `# 家庭群\n\n- 会话ID: \`12345@chatroom\`\n- 会话类型: 群聊\n- 消息数量: ${messageCount}\n- 导出时间: ${exportedAt}\n- 导出工具: WeFlow\n\n---\n## 2026\\-08\\-31 09:01:02 Sender\nhello`;
+  const first = parseWechatMarkdown({ root: "C:/export", document: "conversation.md", media, text: header(100, "2026\\-09\\-01 10:00:00") });
+  const second = parseWechatMarkdown({ root: "C:/export", document: "conversation.md", media, text: header(148, "2026\\-09\\-03 22:00:00") });
+  assert.equal(first.conversationId, second.conversationId);
+  assert.equal(first.messages[0].messageId, second.messages[0].messageId);
+});
+
 test("auxiliary markdown is excluded and unsafe references reject validation", () => {
   const auxiliary = parseWechatMarkdown({ root: "C:/export", document: "extra.md", media: new Map(), text: "# Auxiliary\nno records" });
   assert.equal(auxiliary.messages.length, 0);
