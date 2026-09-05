@@ -84,6 +84,14 @@ const OUT = argOf("out", null);
 const MAX_CALLS = Number(argOf("max-calls", "60"));
 const MAX_DAYS = Number(argOf("max-days", "31"));
 const COMMIT = hasFlag("commit");
+// --force: bypass the findOrganizerRun early-exit below (only that check — applyPlan's own
+// upsert-by-fingerprint idempotency downstream is untouched, so a forced rerun still can't
+// duplicate a row, it can only replace one). Needed to redo a month under a different model:
+// the fingerprint is window identity (conversationId|day|sourceIds), not model or prompt
+// version, so a plain rerun after switching AI_MODEL silently no-ops on every already-written
+// window instead of regenerating it — found 2026-09-05 when P1-0's flash months needed a pro
+// redo. Use deliberately: this re-spends a DeepSeek call on every window in scope.
+const FORCE = hasFlag("force");
 const CONCURRENCY = Math.max(1, Math.min(16, Number(argOf("concurrency", "8")) || 8));
 // --day and --from/--to slice which days of the month are actually processed. T10, 2026-09-04:
 // Cowork's environment has a 175s hard ceiling per command and no surviving background process, so a
@@ -285,7 +293,7 @@ async function processItem(item) {
   // T10: the same window identity (organizationFingerprint = item.fp) that applyPlan already uses
   // for replay safety, checked BEFORE the editor is called rather than after the writer has already
   // run — a rerun of a day that's already committed costs zero DeepSeek calls instead of one or two.
-  const prior = await findOrganizerRun(item.fp);
+  const prior = FORCE ? null : await findOrganizerRun(item.fp);
   if (prior) {
     entry.skipped = "already organized under this fingerprint (checked before any model call)";
     entry.write = { applied: false, reason: "already organized under this fingerprint", eventId: MEMORY_RUN_ACTIONS.has(prior.action) ? prior.targetId : undefined };
