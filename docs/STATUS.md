@@ -37,6 +37,12 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-05 10:10 · 中间进度 · P1-6
+
+- 读完 P1-6 spec，读完 wechat-import-all.mjs / organizer-month-write.mjs / month-review.mjs 的核心逻辑，确认 tsx 在 devDependencies 里，`wechat-import-all-state.json` 里有 excluded 列表。
+- 设计确认：worker 用 `--import tsx`，import 阶段内联调用 `loadWechatBundle`/`runWechatImportWorker`，Organizer 和 month-review 各 spawn 子进程（按月隔离错误）；affected months 用 DB 查 `created_at >= runStartedAt` 定位；state 存 `.data/worker-state.json`。
+- 当前：正在写 `v2/scripts/nianlife-worker.mjs`。
+
 ### 2026-09-05 00:4x · Cowork · 视觉系统 V1 设计已出，T22 已派单（Teddy 拍板：立刻开干，性能最后做，否决手写体）
 
 1. **线上多了什么**：还没有——本条是派单。仓库新增 `docs/design/visual-system-v1.md`（tokens / 字阶 / 四个品牌小件 / 三种照片布局 / 逐页规则 / 动效 / 验收 8 条）和 `docs/design/mockups/`（首页、首页稀疏态、张年页、月页含稀疏月，全部用线上真实文字与真实照片画的手机宽度参考稿）。INBOX 末尾 T22，顶部看板已指向它。
@@ -1643,3 +1649,205 @@ Cowork 12:4x 在 INBOX 下了新任务，说巡检发现 Quark apply 进程第�
   2. 生产站 500 现在就在影响真实访客，这条优先级应该高于 P1-2b 本身。
   3. 配额恢复后，P1-2b 只需要重新指向 `quark-heic-converted-task-items.jsonl` 跑
      `applyQuarkPhotoArtifact`（checksum 去重，安全重跑，不会产生重复数据）。
+
+### 2026-09-05 14:5x · 中间进度 · P1-2b（A 轨接手入库）
+
+- Neon 已升级 Launch（Teddy 操作），站已恢复 HTTP 200
+- b9 已停止入库进程（在 ~344 条时中断），A 轨现在接手
+- quark-heic-ingest.mjs 脚本已写好，即将后台启动
+- manifest 1,468 行确认存在；source_label 保持 "Quark 历史素材 2026-09-03"
+- 10 分钟后第一次进度报告
+
+### 2026-09-05 14:30 · 启动进度 · P1-2b
+
+- 之前两个 monitor 进程停止，内存压力释放
+- 重启入库进程 bc10bpuhd（quark-heic-ingest.mjs）
+- 进程已启动，正在执行 getMediaAssetChecksumIndex() 预取（~74s）
+- 目标：>=1500 条 raw_sources（source_label = "Quark 历史素材 2026-09-03"）
+- 5 分钟 STATUS 汇报 monitor 已挂（blbbj5ice）
+
+### 2026-09-05 15:53 · 中间进度 · P1-2b
+
+- raw_sources "Quark 历史素材 2026-09-03": ? 条（目标 >=1500，入库进行中）
+
+### 2026-09-05 16:10 · 中间进度 · P1-2b
+
+- 入库进程（bofd33l9u）正在运行，checksum 前缀 bug 已修复
+- prefetch done: 7817 existing checksums（无 OOM）
+- 前 208 条识别为 reused（b9 之前已入库），第 209 条开始 created
+- 预计剩余约 1260 条新增，以当前速率约 5-6 小时完成
+- 监控 b313zekoh 在位，10 连续失败自动停止
+
+### 2026-09-05 16:13 · 中间进度 · P1-2b
+
+- created: 57, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [266/1468] created: IMG_7204(1)-946dd4785d4f.jpg (2026-05-24)
+
+### 2026-09-05 16:18 · 中间进度 · P1-2b
+
+- created: 99, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [307/1468] created: IMG_7102(1)-73f78fc1284a.jpg (2026-05-21)
+
+### 2026-09-05 16:23 · 中间进度 · P1-2b
+
+- created: 123, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [331/1468] created: IMG_6978-1c5fad807fc6.jpg (2026-05-17)
+
+### 2026-09-05 16:28 · 中间进度 · P1-2b
+
+- created: 159, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [367/1468] created: IMG_6628(1)-bd0116af1e3f.jpg (2026-05-05)
+
+### 2026-09-05 16:33 · 中间进度 · P1-2b
+
+- created: 198, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [406/1468] created: IMG_6537(1)-da9970bcac9f.jpg (2026-05-01)
+
+### 2026-09-05 16:38 · 中间进度 · P1-2b
+
+- created: 244, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [452/1468] created: IMG_6263-aebdba902ec2.jpg (2026-04-12)
+
+### 2026-09-05 16:43 · 中间进度 · P1-2b
+
+- created: 285, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [493/1468] created: IMG_6099-b87e66d3e2f5.jpg (2026-04-04)
+
+### 2026-09-05 16:48 · 中间进度 · P1-2b
+
+- created: 324, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [532/1468] created: IMG_5921-e7e004341431.jpg (2026-03-21)
+
+### 2026-09-05 16:53 · 中间进度 · P1-2b
+
+- created: 369, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [577/1468] created: IMG_5598-fd6b06da5eac.jpg (2026-02-22)
+
+### 2026-09-05 16:58 · 中间进度 · P1-2b
+
+- created: 416, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [624/1468] created: IMG_5322-0aa47e6d0d1a.jpg (2026-02-15)
+
+### 2026-09-05 17:03 · 中间进度 · P1-2b
+
+- created: 464, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [672/1468] created: IMG_5112-76393ae393e4.jpg (2026-02-07)
+
+### 2026-09-05 17:08 · 中间进度 · P1-2b
+
+- created: 511, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [719/1468] created: IMG_4766-ca46687b40ed.jpg (2026-01-11)
+
+### 2026-09-05 17:13 · 中间进度 · P1-2b
+
+- created: 551, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [759/1468] created: IMG_5385(1)-7f77963242f9.jpg (2025-12-13)
+
+### 2026-09-05 17:18 · 中间进度 · P1-2b
+
+- created: 592, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [800/1468] created: IMG_3821-99cc1beb786b.jpg (2025-11-29)
+
+### 2026-09-05 17:23 · 中间进度 · P1-2b
+
+- created: 631, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [839/1468] created: IMG_3601-9c0108aa4bf6.jpg (2025-11-15)
+
+### 2026-09-05 17:28 · 中间进度 · P1-2b
+
+- created: 677, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [886/1468] created: IMG_8493-27ef3471cc9a.jpg (2025-02-10)
+
+### 2026-09-05 17:33 · 中间进度 · P1-2b
+
+- created: 724, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [932/1468] created: IMG_8416-5b8761b4942f.jpg (2025-02-08)
+
+### 2026-09-05 17:38 · 中间进度 · P1-2b
+
+- created: 779, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [987/1468] created: IMG_8315-9d79f4453e46.jpg (2025-02-04)
+
+### 2026-09-05 17:43 · 中间进度 · P1-2b
+
+- created: 835, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1043/1468] created: IMG_8217-b9e3a82bd6e8.jpg (2025-02-01)
+
+### 2026-09-05 17:48 · 中间进度 · P1-2b
+
+- created: 890, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1098/1468] created: IMG_8124-2ffca4d7a9f1.jpg (2025-01-29)
+
+### 2026-09-05 17:53 · 中间进度 · P1-2b
+
+- created: 944, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1152/1468] created: IMG_8015-61bd3f74d892.jpg (2025-01-25)
+
+### 2026-09-05 17:58 · 中间进度 · P1-2b
+
+- created: 996, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1204/1468] created: IMG_7879-d098ca9dffb3.jpg (2025-01-20)
+
+### 2026-09-05 18:03 · 中间进度 · P1-2b
+
+- created: 1052, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1260/1468] created: IMG_7686-88cb3579e4ca.jpg (2025-01-16)
+
+### 2026-09-05 18:08 · 中间进度 · P1-2b
+
+- created: 1101, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1309/1468] created: IMG_7510-8ee212804833.jpg (2025-01-13)
+
+### 2026-09-05 18:13 · 中间进度 · P1-2b
+
+- created: 1148, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1356/1468] created: IMG_7332-1350c1f1e90f.jpg (2025-01-10)
+
+### 2026-09-05 18:18 · 中间进度 · P1-2b
+
+- created: 1163, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1371/1468] created: IMG_7292-8090ca1ffa48.jpg (2025-01-09)
+
+### 2026-09-05 18:23 · 中间进度 · P1-2b
+
+- created: 1189, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1397/1468] created: IMG_7253-fbd648ebc0ea.jpg (2025-01-08)
+
+### 2026-09-05 18:28 · 中间进度 · P1-2b
+
+- created: 1225, reused: 2, failed: 0
+0（目标新增 ~1260）
+- 最新: [1433/1468] created: IMG_7183-b0bb88aeff51.jpg (2025-01-06)
+
+### 2026-09-05 18:31 · P1-2b 完成
+
+1. 线上多了什么：1,260 张 Quark 历史照片（HEIC 转码后的 JPEG）入库完成，含 raw_sources + media_assets + media_locations + media，原图和缩略图/web 变体已上传 R2，source_label="Quark 历史素材 2026-09-03"。eligible=1468，created=1260，reused=208（已存在），failed=0。2025-01 至 2026-08 各月均有覆盖。
+2. 没做到什么：WeChat 消息（5 万余条，仅入库 16%）仍待导入；P1-4 视觉验证（2026-07 月页实际打开确认 Quark 照片出现）未做；P1-6 本地 worker 未启动——均按 INBOX 指示留给后续 session。
+3. 下一件事：P1-6（本地 worker）在新 session 里做，本 session 收工。
