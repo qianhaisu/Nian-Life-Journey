@@ -130,7 +130,9 @@ const prefetchRes = await pool.query(
 );
 const existingByChecksum = new Map();
 for (const row of prefetchRes.rows) {
-  existingByChecksum.set(row.checksum.toLowerCase(), { id: row.id, rawSourceId: row.raw_source_id });
+  // DB stores checksums with "sha256:" prefix (normalizeSha256 convention). Strip it for lookup.
+  const key = row.checksum.replace(/^sha256:/i, "").toLowerCase();
+  existingByChecksum.set(key, { id: row.id, rawSourceId: row.raw_source_id });
 }
 console.log(`[quark-heic-direct] prefetch done: ${existingByChecksum.size} existing checksums`);
 
@@ -146,15 +148,16 @@ const created = [];
 const reused = [];
 const failed = [];
 let idx = 0;
+let consecutiveFails = 0;
 
 for (const item of items) {
   idx++;
   const checksumKey = item.sha256.toLowerCase();
 
   if (existingByChecksum.has(checksumKey)) {
-    const existing = existingByChecksum.get(checksumKey);
     reused.push({ filename: item.filename, sha256: item.sha256 });
-    if (idx % 50 === 0) console.log(`[${idx}/${items.length}] reused: ${item.filename}`);
+    consecutiveFails = 0;
+    if (idx % 100 === 0) console.log(`[${idx}/${items.length}] reused: ${item.filename}`);
     continue;
   }
 
@@ -225,7 +228,7 @@ for (const item of items) {
     try {
       await client.query("BEGIN");
 
-      // raw_sources
+      // raw_sources — ON CONFLICT (id) handles re-runs and concurrent inserts
       await client.query(
         `INSERT INTO raw_sources (id, profile_id, contributor_id, source_type, content_types, captured_at, imported_at,
           media_ids, source_label, status, visibility, original_filename, metadata, created_at, updated_at)
@@ -243,16 +246,16 @@ for (const item of items) {
         ]
       );
 
-      // media_assets
+      // media_assets — store checksum with sha256: prefix (normalizeSha256 convention)
       await client.query(
         `INSERT INTO media_assets (id, profile_id, raw_source_id, media_type, mime_type, width, height,
           taken_at, checksum, original_filename, archive_status, archive_verified_at, created_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-         ON CONFLICT (checksum) DO NOTHING`,
+         ON CONFLICT (id) DO NOTHING`,
         [
           assetId, PROFILE_ID, sourceId, "photo",
           item.format_type, dims.width, dims.height,
-          capturedAt, sha256, item.filename,
+          capturedAt, `sha256:${sha256}`, item.filename,
           "archived", now, now,
         ]
       );
@@ -283,6 +286,7 @@ for (const item of items) {
           taken_at, visibility, width, height)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          ON CONFLICT (id) DO NOTHING`,
+
         [
           mediaId, PROFILE_ID, sourceId, assetId, "photo",
           mediaSrc,
@@ -304,12 +308,18 @@ for (const item of items) {
 
     existingByChecksum.set(checksumKey, { id: assetId, rawSourceId: sourceId });
     created.push({ filename: item.filename, sha256, capturedAt });
+    consecutiveFails = 0;
     console.log(`[${idx}/${items.length}] created: ${item.filename} (${capturedAt.slice(0,10)})`);
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     failed.push({ filename: item.filename, sha256: item.sha256, reason: msg });
+    consecutiveFails++;
     console.error(`[${idx}/${items.length}] FAILED: ${item.filename} — ${msg}`);
+    if (consecutiveFails >= 10) {
+      console.error(`STOPPING: ${consecutiveFails} consecutive failures. Last: ${msg}`);
+      break;
+    }
   }
 }
 
