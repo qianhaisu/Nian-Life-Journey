@@ -35,6 +35,10 @@ const PROVIDER = "cowork-a6";
 // EXCLUDE reason codes kept in comments next to each month for the audit trail in STATUS.md;
 // this file only needs the INCLUDE set since that's the only thing persisted.
 const INCLUDE = {
+  // Numbers below are after the 2026-09-06 title-only revocation pass (Cowork audit): the trace
+  // layer renders ONLY the title (one line, no story), but the first pass judged eligibility from
+  // the full story text. 14 items whose title alone reads as alarming/misleading/family-friction
+  // even though the story clarifies it were revoked; see docs/STATUS.md for the per-item list.
   // 2025-01 (10/18 store_only)
   "event-v2-a7e2fe96502d78436131daa90946263b": "about_child_specific_incident",
   "event-v2-648f93de4ac88c7d54823a34431d958f": "about_child_specific_fact",
@@ -60,19 +64,17 @@ const INCLUDE = {
   "event-v2-ae40d73e611bc36918edc24096527c14": "about_child_daily_texture",
   "event-v2-c21f0871b6bb4fe4d7b07bd314ff27fe": "about_child_specific_moment",
   "event-v2-fa4d930aacf3771ca9625e812d9d7713": "about_child_family_moment",
-  // 2025-03 (10/11 store_only)
+  // 2025-03 (9/11 store_only, after title revocation)
   "event-v2-4b5416f09f3c613a13e9bdfb06bffda2": "about_child_medical",
   "event-v2-3ee8e4e59714106ba555d839353183ac": "about_child_specific_incident",
   "event-v2-44158735a93e95a120e50dc4aee5a143": "about_child_specific_moment",
   "event-v2-7ea89d3ffc4b17fe3a3eab06d2466974": "about_child_family_humor",
-  "event-v2-514a8a7c0936e74d174ffaf5defc26ee": "about_child_specific_detail",
   "event-v2-622965f7004e805787f437c5e644f9a3": "about_child_family_humor",
   "event-v2-46e1bd58fbfdd5ab2616bee2c955d26c": "about_child_specific_incident",
   "event-v2-4e37e3cf5d8a6ee00e70b1037e9e26e4": "about_child_family_moment",
   "event-v2-dae7da08b6680539ed79aa54f730a77a": "about_child_growth_observation",
   "event-v2-6ff7b91da245c42f2ea7b29f8fd47f95": "about_child_milestone_adjacent",
-  // 2025-04 (3/4 store_only)
-  "event-v2-c891d40614fc2536e19c49f27854c415": "about_child_medical",
+  // 2025-04 (2/4 store_only, after title revocation)
   "event-v2-0020a0a535d2df7edecc421e7e354176": "about_child_caregiving",
   "event-v2-05d33b31a5c0104c44242af6d7294576": "about_child_family_humor",
   // 2025-05 (7/9 store_only)
@@ -83,25 +85,22 @@ const INCLUDE = {
   "event-v2-e4bc91ca07c250e3ded122928fea0142": "about_child_daily_texture",
   "event-v2-fdcc3b88c51b2ea9216486b3153f6576": "about_child_family_moment",
   "event-v2-d52904825cb8c01595fea7d23c433379": "about_child_specific_moment",
-  // 2025-06 (9/12 store_only — verification benchmark month)
+  // 2025-06 (8/12 store_only, after title revocation — verification benchmark month)
   "event-v2-b574a4aad0315bcec991d9b1052ae45f": "about_child_caregiving",
   "event-v2-e9099a2c4a64380c5a35040d0dc42825": "about_child_daily_texture",
-  "event-v2-21fe2b70ff9fbe0f740cde8fee9c500d": "about_child_safety_concern",
   "event-v2-e4cc80ff646bfaa689e0d744fddab8d7": "about_child_specific_moment",
   "event-v2-8bf77ff3ed20f8713d1496c68665b0b3": "about_child_caregiving",
   "event-v2-3122505362580e0a1a822071d016f71d": "about_child_family_humor",
   "event-v2-bbaa7e18a90c816f92b0b8afcf3ce306": "about_child_daily_texture",
   "event-v2-ce8e958b092dac1c97d039482620ab13": "about_child_activity",
   "event-v2-08aeb20bd787d87c92c1924eb607e5db": "about_child_activity",
-  // 2025-07 (26/30 store_only)
+  // 2025-07 (23/30 store_only, after title revocation)
   "event-v2-1548e3bce63de19bccdec6e872c57777": "about_child_caregiving",
   "event-v2-1d4e0304b12f758ebc362e8d22a28422": "about_child_gift",
   "event-v2-8af5f505435e64773dadcbe07bc2ea25": "about_child_emotional_bond",
   "event-v2-ab1d3c5273049d116f27d24c5759b8cf": "about_child_gift",
   "event-v2-481f8a519820a6fdc61416167ada5710": "about_child_specific_detail",
   "event-v2-4e3063768a446be02ad84d22e3ffb10c": "about_child_emotional_bond",
-  "event-v2-7cfe201959d573357970d0281af0f600": "about_child_growth_observation",
-  "event-v2-4cf9eec8aed8f8b0a3d4cb7b3f6bb254": "about_child_protective_concern",
   "event-v2-3f5f8c04b3e839e83a4ab9ae795558c5": "about_child_feeding_milestone",
   "event-v2-20042ff0e45543a90381b52ba40854ed": "about_child_specific_detail",
   "event-v2-7fe69908a74f3a62ca72f349af035c5a": "about_child_medical",
@@ -119,8 +118,7 @@ const INCLUDE = {
   "event-v2-ea97c4761e86d5a7a2979bcc894967cc": "about_child_specific_moment",
   "event-v2-0aeb920bd9a0264b21e69794e7dec9ce": "about_child_caregiving",
   "event-v2-334de43635683116d1b8068ea8ec99c8": "about_child_daily_texture",
-  "event-v2-1dde15faf52cba6190c98a08275d0165": "about_child_specific_detail",
-  // 2025-08 (22/30 store_only)
+  // 2025-08 (20/30 store_only, after title revocation)
   "event-v2-56db16cee2557d6968b84ed298f3babf": "about_child_daily_texture",
   "event-v2-7313d7e7d07dd2478eb3a54826322b0e": "about_child_caregiving",
   "event-v2-db5e188ddd2110e3ee0d5071c42ea98c": "about_child_medical",
@@ -133,17 +131,15 @@ const INCLUDE = {
   "event-v2-09f631c7fb0ba9285ce15484ae8bcea1": "about_child_milestone_adjacent",
   "event-v2-d20195db1e60db79c9a87642ba0f3e17": "about_child_daily_texture",
   "event-v2-7b4a4af399ef9183a3ff2dd005198ef0": "about_child_emotional_bond",
-  "event-v2-ea6038d3607a3876da3a775e6792c313": "about_child_personality_trace",
   "event-v2-1a2c34bcc6983e55da09e9d8e42b11e5": "about_child_emotional_bond",
   "event-v2-5b4999fc99fa641ed5461f74ebc614ce": "about_child_parenting_intention",
   "event-v2-9232d050358d47b06ff30c9d4d22a4a9": "about_child_family_humor",
   "event-v2-d865de6673bdca12efbfaa09855f483f": "about_child_milestone_adjacent",
-  "event-v2-b50c2109b675db42959a4cdf55469be6": "about_child_family_humor",
   "event-v2-cb523d72a806dba9970acdb004c2aa96": "about_child_personality_trace",
   "event-v2-4cd747443677d76411b43edc83723150": "about_child_medical",
   "event-v2-fe6b9494082f2bb7535556892c56b20d": "about_child_environment",
   "event-v2-12b3f5ae099250d9d84f83e977a17419": "about_child_specific_detail",
-  // 2025-09 (19/25 store_only)
+  // 2025-09 (17/25 store_only, after title revocation)
   "event-v2-1db183b6cbc13a53a7ce50b3b81bddaa": "about_child_feeding",
   "event-v2-3692c9fef43dca8b7effb1657107f488": "about_child_medical",
   "event-v2-73d88c28be4dcb5884ec5ec92ab9007e": "about_child_environment",
@@ -155,21 +151,18 @@ const INCLUDE = {
   "event-v2-dc0f2e6ac6503a3d3cc5fd907b8b6abf": "about_child_daily_texture",
   "event-v2-345f4f51e779e016f6ac04ae8f666e93": "about_child_emotional_reflection",
   "event-v2-65a8ad9f3dcafe69331c3ca9517a0399": "about_child_developmental",
-  "event-v2-47e6374ced73542d4e8646aa2fc3e019": "about_child_medical",
   "event-v2-46c0de5adf00e70277d0054f25637bb5": "about_child_activity",
   "event-v2-8eb03cb30f5c133f94b4cd40e2091987": "about_child_family_humor",
   "event-v2-d13e7b1e10c86b53bd8d4060484336d0": "about_child_family_humor",
   "event-v2-ca9d0b532ddbbb1c3373946e25605097": "about_child_safety_note",
   "event-v2-003043314c6b7b2213d9148b18d08124": "about_child_emotional_attentiveness",
-  "event-v2-4023fb349137b074a2185319843fe00d": "about_child_daily_texture",
   "event-v2-722bb49cf704adb4331245cabb87d00e": "about_child_daily_texture",
-  // 2025-10 (19/22 store_only)
+  // 2025-10 (17/22 store_only, after title revocation)
   "event-v2-2c6811fb8c03473ebc37b30e5d45a0ef": "about_child_specific_moment",
   "event-v2-fda2287f81bc28d6bc26f9ca6fec3de6": "about_child_specific_detail",
   "event-v2-e8aa933558b8ce662945afb379437578": "about_child_family_humor",
   "event-v2-2e68d02550a6f69a124ac83411cb4681": "about_child_caregiving",
   "event-v2-9302f77c4b1b90da900eece507542778": "about_child_caregiving",
-  "event-v2-975305f61765d8ab110254acbc6efb0f": "about_child_family_humor",
   "event-v2-41b034dbcb40771b7c9f6b6ec90dd858": "about_child_developmental",
   "event-v2-3268ca3b7053492bd6f3451f68acec98": "about_child_specific_moment",
   "event-v2-ad97e1df5a96b7aa0678e4220f91318d": "about_child_specific_detail",
@@ -178,13 +171,11 @@ const INCLUDE = {
   "event-v2-ca00160d4302c7ca3d684e07755c6f04": "about_child_emotional_bond",
   "event-v2-44c2ecd22a9f5b53fc4670e532d40b76": "about_child_caregiving",
   "event-v2-5cecff0d5b46a55ec84aa12f32b21f6b": "about_child_specific_moment",
-  "event-v2-894d097e030784a545111b16b2b05574": "about_child_developmental",
   "event-v2-0ef4c22ce53c1012e7d7c5675d80ab56": "about_child_specific_detail",
   "event-v2-74f6e8987b62e147d4cecc00c0f35da3": "about_child_family_humor",
   "event-v2-f76df5a3722a675dc5651c68fe25226b": "about_child_emotional_bond",
   "event-v2-90c0878ec2c34ac2947a4a42b8354c5a": "about_child_specific_detail",
-  // 2025-11 (15/18 store_only)
-  "event-v2-684cf92c6e0ab38d4ab474870f307fb7": "about_child_family_humor",
+  // 2025-11 (13/18 store_only, after title revocation)
   "event-v2-d820e147a2139b68ab747d523492eef0": "about_child_caregiving",
   "event-v2-9a9c0b4448cf9cc9f5626c86d10406f3": "about_child_concern_check",
   "event-v2-aa24066543d034acb87a5306e4c6e273": "about_child_emotional_reflection",
@@ -194,7 +185,6 @@ const INCLUDE = {
   "event-v2-8519289cd3533ae864c5eb9e222b54c7": "about_child_emotional_bond",
   "event-v2-258ca6fbc9e26ec161cc9ed93ebe04d4": "about_child_caregiving",
   "event-v2-3c040188518be8659c1b235a9a7a40f5": "about_child_family_humor",
-  "event-v2-4afe59e9d10cd01b07582015adc4a2fa": "about_child_travel_prep",
   "event-v2-3058e68ffbf0c9be315a18144735a9c0": "about_child_caregiving",
   "event-v2-c7d9bcdea7a70e1d7bfcdf71bed916c3": "about_child_daily_texture",
   "event-v2-c4a997639da5dd83fcc452eade0e0deb": "about_child_family_humor",

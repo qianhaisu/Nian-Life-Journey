@@ -71,8 +71,11 @@ P1-5（scoped read）✅。
 
 ---
 
-**A-6（痕迹层数据，2025 全年）已完成（2026-09-06）**：
-- 217 条 2025 store_only life_events **逐条读完判定**，167 条标为「可展示痕迹」，写进
+**A-6（痕迹层数据，2025 全年）已完成（2026-09-06，含一轮修正）**：
+- 217 条 2025 store_only life_events **逐条读完判定**，第一轮 167 条标为「可展示痕迹」；
+  Cowork 抽读后指出痕迹层页面**只渲染标题**，第一轮判断却用了 story 全文语境，点名两条
+  标题单独读会误导/暴露家庭摩擦的漏网。按"只看标题"标准重过一遍，又撤销 14 条，
+  **最终 153 条**。撤销清单和理由见 `docs/STATUS.md` 2026-09-06 03:03 UTC 条目。写进
   `content_quality_reviews`（`target_kind='life_event_trace'`——**注意不是 `'life_event'`**，
   见下一条踩坑记录、`provider='cowork-a6'`、`decision='trace_eligible'`、
   `prompt_version='a6-trace-layer-v1'`）。B 轨读取：
