@@ -458,3 +458,5 @@ URL），跟 C-6 预热的原始 `/api/media/...` 是两个不同的 CDN 缓存�
 `/_next/image?url=...`"）达成。已在 `docs/ORCHESTRATOR-INBOX-C.md` 给 C 轨留言。B-18 结案。
 
 ### 2026-09-06 · 空闲回读，无新任务（B-18 已结案，C 轨在做 Ignored Build Step）
+
+### 2026-09-06 · 空闲回读，无新任务
