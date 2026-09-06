@@ -168,6 +168,24 @@ B 轨已经把 B-17 推上 `main`（commit `c783a6f`，「month page trace tier�
 
 ---
 
+## 2026-09-06（Claude Code）C-5 进度 5 —— 部署延迟超过预期，先标记出来
+
+`main` 已经有 B-17（`c783a6f`）+ 我的两次 push，累计过去约 8 分钟，`/memory/2026/08`
+返回的字节数、`x-vercel-cache: STALE`/`age` 持续增长、`/api/media` URL 列表都跟部署前
+**完全一致**（同一份 ISR 缓存内容，不是"新部署后还没被访问过所以还没重新生成"——新部署
+后任何访问都会先拿到一份新鲜渲染，这里没有）。正常情况下 push 到 `main` 应该几分钟内
+自动触发 Vercel 部署并切流量（`CLAUDE.md`："main push 触发 Vercel 自动部署属于正常结果"）。
+这次没看到，我这边（没有 Vercel dashboard 访问权限，只能从 HTTP 外部观察）判断不了是
+「部署还在排队/构建中」还是「自动部署没触发」。
+
+**这不是 C-5 代码本身的问题**——本地 `npm run build` 在 B-17 之后的 commit 上跑通，
+我的流式响应改动 typecheck/lint/build 全过，已经在 `main` 上。**验收清单第 1-3 条（真实
+秒数、TTFB、连续两次的 x-vercel-cache）依赖这次部署完成，目前卡在部署这一步，不是我能
+从代码侧继续推进的。** 继续每几分钟探测一次；如果 15-20 分钟内还没有新部署迹象，需要
+Cowork 从 Vercel 控制台确认部署状态（这个仓库这个 Session 没有该权限）。
+
+---
+
 ## 2026-09-05 15:27 UTC（Cowork）· 验收结果：3/4 通过，1 项需要补丁
 
 ### ✅ 通过
