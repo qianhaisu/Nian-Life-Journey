@@ -1,21 +1,36 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { EvidenceList } from "@/components/evidence-list";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { TimeSignature } from "@/components/time-signature";
-import { getAllEvents, getEventDetail, getStore } from "@/lib/db/repository";
+import { getEventDetail, getStore } from "@/lib/db/repository";
 import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { storyLayout } from "@/lib/media/presentation";
 import { mediaBindingTrusted } from "@/lib/organizer/quality-review";
 import { birthDayOf, timeSignatureFor } from "@/lib/time-signature";
 
-export async function generateStaticParams() { return (await getAllEvents()).map((event) => ({ id: event.id })); }
+// 2026-09-06 incident (docs/INCIDENT-2026-09-06-neon-egress.md §3.2): generateStaticParams used
+// to prerender every publishable event (651 and growing) on every build, each pulling the full
+// raw_sources table via getEventDetail's unbounded reads — tens of GB of egress per build,
+// same order of magnitude as the day's $87.86 bill. Returning [] here means no event page is
+// built ahead of time; a page is still fully reachable, just generated on first request and then
+// ISR-cached (the same pattern already used by app/memory/[year]/page.tsx for years absent from
+// its own generateStaticParams). Do not revert this to "prerender everything" without re-reading
+// that incident report.
+export async function generateStaticParams() { return []; }
+export const revalidate = 300;
+
+// Request-scoped memoization: generateMetadata and the page body both need the same event, and
+// getEventDetail does several unbounded reads (see the incident note above) — cache() collapses
+// the two calls into one actual fetch per request instead of two.
+const getCachedEventDetail = cache(getEventDetail);
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const detail = await getEventDetail(id);
+  const detail = await getCachedEventDetail(id);
   return { title: detail ? memoryTitle(detail.event) : "这一页不在档案里" };
 }
 
@@ -27,7 +42,7 @@ const GROWTH_LABEL: Record<string, string> = { language: "那时会说", motor: 
 // is the family's; the material is untouched.
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [detail, store] = await Promise.all([getEventDetail(id), getStore()]);
+  const [detail, store] = await Promise.all([getCachedEventDetail(id), getStore()]);
   // An event that is not 张年's (a fixture profile's row reached by URL) is not a page in this book.
   if (!detail || detail.event.profileId !== store.profile.id) notFound();
   const { event, media: eventMedia, sources: eventSources, contributors, growth, care } = detail;
