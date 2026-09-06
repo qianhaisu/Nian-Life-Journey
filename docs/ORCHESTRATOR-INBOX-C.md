@@ -1,3 +1,90 @@
+# 🔴🔴 C-8：抢救会过期的证据（最高优先级，2026-09-06 09:2x UTC）
+
+**为什么现在做**：Neon 的小时级用量数据只保留最近 **168 小时**。过了这个窗口，这次
+$87.86 事故就从"能部分还原"变成"永远只能推测"。审核方明确指出：现在最高优先级不是继续
+润色报告，是先把原始数据导出来存盘。**这条优先于 C-7 的任何收尾工作。**
+
+## 绝对边界（先读，违反任何一条都比不做更糟）
+
+- **只允许只读命令**：`vercel ls`、`vercel inspect`、`vercel project ls` 之类。
+- **严禁**：`vercel deploy`、`vercel redeploy`、`vercel --prod`、`vercel promote`、
+  `vercel env pull` 之外的任何写操作。**不许触发任何 Preview 或 Production 部署。**
+- **严禁连接或试图恢复 Neon。** 数据库是 Teddy 主动关的。
+- **不要 push。** 导出的文件本地 commit 即可。
+- 导出物里**不许包含任何连接串、token、密钥**。只要 id、状态、时间、commit sha。
+  如果某个输出里带了敏感值，先脱敏再存盘。
+
+## C-8-1：导出 Vercel 部署清单（你这边有 Vercel 登录态，Cowork 侧没有）
+
+目标：把 2026-09-05 到现在的**每一次部署**记录下来，字段至少包括：
+
+- deployment id / url
+- **state**：Ready / Error / Canceled / Queued / Building —— 必须分开，不能只统计总数
+- **target**：production / preview —— 必须分开
+- 对应的 commit sha
+- createdAt / readyAt（或 buildingAt → ready 的时间跨度）
+
+建议命令（自己按 CLI 版本调整，用 `--json` 或 `--yes` 之类拿机器可读输出）：
+
+```
+vercel ls --json > ../docs/evidence/vercel-deployments-raw.json
+```
+
+如果 `--json` 不支持，用普通输出也行，但要完整、带时间戳。必要时对关键部署补
+`vercel inspect <id>`。
+
+**输出落到**：`docs/evidence/vercel-deployments-2026-09-06.json`（或 .txt）
+外加一份 `docs/evidence/vercel-deployments-summary.md`，里面用表格列出：
+每次部署的 state / target / commit / 开始时间 / 结束时间，按时间排序。
+
+## C-8-2：确认 Neon API 可达性（失败也要如实记录）
+
+Cowork 已实测：`.env.local` 里**没有** `NEON_API_KEY`，只有 `DATABASE_NEON_PROJECT_ID`。
+所以 Neon 的 consumption history API 和 quota API 目前调不了。
+
+你要做的**只是确认并记录**，不要试图绕过：
+
+1. 检查 Windows 侧是否存在任何 Neon 凭据（`~/.neon`、环境变量、Vercel 环境变量里
+   拉下来的东西）。**只报告有没有、叫什么名字，不要打印值。**
+2. 如果确实没有，就在报告里写清楚："无 Neon API key，consumption history 无法导出，
+   需要 Teddy 从 Neon 控制台创建 API key，或走 Vercel/Neon Support。"
+3. **不要**尝试用 `DATABASE_URL` 去连库代替（库是封的，而且那也取不到用量数据）。
+
+## C-8-3：本地能拿到的构建证据
+
+如果 `.next/` 目录里还留着上一次成功构建的产物：
+
+```
+ls -la ../v2/.next/prerender-manifest.json 2>/dev/null
+```
+
+有的话，把它里面**事件页（/events/[id]）的实际条目数**统计出来 —— 这能把报告 §3.2
+那个"651 × 133MB"的推算换成实测数字。没有就如实写"本地无构建产物"。
+**不要为了拿这个数字去跑 `npm run build`**（会连生产库）。
+
+## C-8-4：Cron 时间的更正（写进你的报告里）
+
+`v2/vercel.json` 里的 `{"path": "/api/internal/organizer-worker", "schedule": "0 3 * * *"}`
+—— Vercel 的 cron **一律按 UTC 解释**，所以它实际是**北京时间每天 11:00**，不是凌晨 3 点。
+Cowork 之前在对话里说成"凌晨三点"，错了。
+
+这条很重要，因为对齐小时级流量时时间轴会整体错 8 小时。顺带注意：诱因 A 的 commit
+`2f65c78` 是北京时间 10:54 落地的，**这条 cron 在 6 分钟后就会触发一次** —— 做时间轴
+对齐时这是个值得单独标出来的点。
+
+---
+
+## 完成后
+
+在 `docs/STATUS-C.md` 汇报，明确写出：
+1. 导出到了哪些文件、各自包含什么
+2. **哪些没能导出、真实的错误信息是什么**（不要写"尝试过但失败了"，要写实际报错原文）
+3. 部署清单里 Ready / Error / Canceled 各多少条、production 和 preview 各多少条
+
+做完就停，不要 push。
+
+---
+
 # 🔴 现在做这个：事件页的构建期放大要拆掉（C 轨，2026-09-06 09:0x UTC）
 
 **背景**：Cowork 复盘 $87.86 事故时发现的新问题。完整报告见
