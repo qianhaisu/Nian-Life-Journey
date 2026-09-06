@@ -20,9 +20,12 @@
 //     family's own photo archive). An unvouched WeChat image can appear small and can live in the
 //     archive layer, but never becomes a hero or a month's face. No content detector is faked.
 import type { EditorialMemory, MediaRef, MonthChapter, PhotoDay } from "@/lib/memory-chapters";
-import { isArchiveCountNote } from "@/lib/memory-chapters";
+import { isArchiveCountNote, isGarbageLifeEvent, memoryTitle } from "@/lib/memory-chapters";
 import { containsTechnicalPlaceholder } from "@/lib/organizer/quality-review";
 import { heroSized, thumbnailSized } from "@/lib/media/hero";
+import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
+import { formatDay, timeSignatureFor } from "@/lib/time-signature";
+import type { LifeEvent } from "@/lib/types";
 
 // Who vouches for a picture. `confirmed`: media of a published (quality-approved) memory.
 // `trusted`: media that reached the archive from the family's own photo collection (Quark album
@@ -41,7 +44,16 @@ export function heroEligibleRef(ref: MediaRef, privilege: MediaPrivilege): boole
   return heroSized(ref) && isPrivileged(ref, privilege);
 }
 
-export type MomentKind = "memory_led" | "text_led" | "photo_led";
+// `trace` (P2, T22, 2026-09-06): a day whose only surviving material is a store_only LifeEvent —
+// the Organizer read it, wrote a real one-line description of it, and judged it not significant
+// enough to publish as a memory. Judged low ≠ not about the child (Cowork read 12 of 2025-06's 13
+// store_only rows and 11 were ordinary真实 daily life: "妈妈夸小年白得逆光都不怕", "张小年今晚跟
+// 小雪睡"). Before this tier such a day simply vanished into quietDays' "还有 N 天...零散的照片"
+// sentence — the month's actual words were thrown away along with the ones that were noise. A trace
+// moment is deliberately the thinnest possible claim: one line, the event's own short title, no
+// photo (an unvouched picture still may not anchor anything — see photoLedMoment), no promotion to
+// a bigger typeface. It is the low end of 原则五's weight ladder, not a second copy of 段落.
+export type MomentKind = "memory_led" | "text_led" | "photo_led" | "trace";
 
 export type PublicationMoment = {
   kind: MomentKind;
@@ -196,7 +208,27 @@ export function pickDayPhotos(photoDay: PhotoDay | undefined, privilege: MediaPr
   return { hero, supporting, morePhotoCount: Math.max(0, photoDay.photos.length - shownCount) };
 }
 
-export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPrivilege = NO_PRIVILEGE): MonthComposition {
+export type TraceNote = { day: string; dateLabel: string; ageLabel?: string; text: string };
+
+// The trace tier's data source, isolated in one function per the P2 dispatch note ("数据源抽成一个
+// 函数，方便一行切换"): today `events` is the store_only 全集 (family-archive.ts filters the ledger
+// to decision === "store_only" and hands the whole set here) because A-6's subject-confirmed subset
+// has not landed yet. When it does, family-archive.ts narrows `events` to that subset before calling
+// this — nothing here or in buildMonthComposition needs to change.
+export function buildTraceNotes(events: LifeEvent[], birthDay?: string): TraceNote[] {
+  const notes: TraceNote[] = [];
+  for (const event of events) {
+    const day = calendarDayOf(event.occurredAt);
+    if (!day) continue;
+    if (isGarbageLifeEvent(event)) continue;
+    const text = memoryTitle(event).trim();
+    if (!text || containsTechnicalPlaceholder(text)) continue;
+    notes.push({ day, dateLabel: formatDay(day), ageLabel: timeSignatureFor(event.occurredAt, birthDay)?.ageLabel, text });
+  }
+  return notes;
+}
+
+export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPrivilege = NO_PRIVILEGE, traceEvents: LifeEvent[] = [], birthDay?: string): MonthComposition {
   const photoDaysAsc = [...chapter.photoDays].sort((a, b) => a.day.localeCompare(b.day));
   const traceByDay = new Map(chapter.traceDays.map((day) => [day.day, day]));
 
@@ -248,6 +280,18 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const kindRank = (moment: PublicationMoment) => (moment.kind === "memory_led" ? 0 : 1);
   chapterMoments.sort((a, b) => a.day.localeCompare(b.day) || kindRank(a) - kindRank(b));
 
+  // TRACE — store_only days (see buildTraceNotes), keyed one note per day. A day whose real words
+  // already reached the chapter (a memory, or an approved DailyTrace) does not also get a trace
+  // line: that would be a second, weaker copy of something already told.
+  const memoryDays = new Set(chapter.memories.map((memory) => memory.signature.day));
+  const chapterDays = new Set(chapterMoments.map((moment) => moment.day));
+  const monthTraceEvents = traceEvents.filter((event) => calendarMonthOf(event.occurredAt) === chapter.month);
+  const traceNoteByDay = new Map<string, TraceNote>();
+  for (const note of buildTraceNotes(monthTraceEvents, birthDay)) {
+    if (memoryDays.has(note.day) || chapterDays.has(note.day) || traceNoteByDay.has(note.day)) continue;
+    traceNoteByDay.set(note.day, note);
+  }
+
   // CHRONICLE — the photographed days not already read in the chapter, weighted: the strongest
   // CHRONICLE_MOMENTS_MAX days become moments, the rest fold to quiet lines. Strength is real and
   // boring: a vouched hero first, then how much of the day was photographed; ties go to the
@@ -255,19 +299,38 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // A day with words in the chapter may still earn a photo moment here — the two sections make
   // no claim on each other. Only memory days are excluded: their photographs already read inside
   // the memory itself.
-  const memoryDays = new Set(chapter.memories.map((memory) => memory.signature.day));
   const candidates = photoDaysAsc.filter((day) => !memoryDays.has(day.day));
   const scored = candidates
     .map((day) => ({ day, moment: photoLedMoment(day, privilege) }))
     .filter((item): item is { day: PhotoDay; moment: PublicationMoment } => Boolean(item.moment));
+  // A photographed day that also has a trace note absorbs it as text and is never folded away —
+  // its photo may lose the ranking, but the sentence someone wrote about that day must not.
+  for (const item of scored) {
+    const note = traceNoteByDay.get(item.day.day);
+    if (!note) continue;
+    item.moment.text = [note.text];
+    traceNoteByDay.delete(item.day.day);
+  }
   const ranked = [...scored].sort((a, b) =>
     Number(Boolean(b.moment.hero)) - Number(Boolean(a.moment.hero))
     || b.day.photos.length - a.day.photos.length
     || a.day.day.localeCompare(b.day.day));
-  const kept = new Set(ranked.slice(0, CHRONICLE_MOMENTS_MAX).map((item) => item.day.day));
-  const chronicle = scored.filter((item) => kept.has(item.day.day)).map((item) => item.moment);
+  const mustKeep = ranked.filter((item) => item.moment.text.length > 0);
+  const capCandidates = ranked.filter((item) => item.moment.text.length === 0);
+  const capRoom = Math.max(0, CHRONICLE_MOMENTS_MAX - mustKeep.length);
+  const kept = new Set([...mustKeep, ...capCandidates.slice(0, capRoom)].map((item) => item.day.day));
+  const chronicleFromPhotos = scored.filter((item) => kept.has(item.day.day)).map((item) => item.moment);
+  // Trace-only days: no photographed day at all, or none with a vouched hero — the note is the
+  // day's whole content. Never capped: a one-line sentence costs nothing to show, and capping it
+  // would recreate the exact disappearance this tier exists to fix (原则七: "去掉所有数字后仍能读出
+  // 这个月的张年" fails if the month's actual sentences are the ones left out).
+  const traceOnly: PublicationMoment[] = [...traceNoteByDay.values()]
+    .filter((note) => !kept.has(note.day))
+    .map((note) => ({ kind: "trace", day: note.day, dateLabel: note.dateLabel, ageLabel: note.ageLabel, text: [note.text], supporting: [], morePhotoCount: 0 }));
+  const chronicle = [...chronicleFromPhotos, ...traceOnly].sort((a, b) => a.day.localeCompare(b.day));
+  const chronicleDays = new Set(chronicle.map((moment) => moment.day));
   const quietDays: QuietDay[] = candidates
-    .filter((day) => !kept.has(day.day))
+    .filter((day) => !chronicleDays.has(day.day))
     .map((day) => ({ day: day.day, dateLabel: day.dateLabel, photoCount: day.photos.length }));
 
   // ARCHIVE — the month whole, ascending; days read morning to evening already. Only rows too

@@ -8,7 +8,7 @@ import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
-import { isSnapshotPublishable, mediaBindingTrusted } from "@/lib/organizer/quality-review";
+import { indexReviews, isSnapshotPublishable, mediaBindingTrusted } from "@/lib/organizer/quality-review";
 import { isTrustedPhotoSource } from "@/lib/trusted-photo-sources";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
 import type { MediaPrivilege } from "@/lib/publication-moments";
@@ -30,6 +30,11 @@ export type FamilyArchive = {
   // is missing renders as nothing, so counting it would print a number the family cannot see.
   media: Media[];
   events: LifeEvent[];
+  // P2 trace tier (B-17, 2026-09-06): store_only life_events — the Organizer read them and wrote a
+  // real one-line description, but judged them not significant enough to publish. Today this is the
+  // whole store_only set (A-6's subject-confirmed subset has not landed); publication-moments.ts's
+  // buildTraceNotes still gates each row (garbage/placeholder text) before it can appear.
+  traceEvents: LifeEvent[];
   chapters: YearChapter[];
   birthDay?: string;
   // Only the months with real published memories standing behind them (see quality-review.ts).
@@ -74,13 +79,15 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   const publishedMonths = new Set(events.map((event) => calendarMonthOf(event.occurredAt)).filter((value): value is string => Boolean(value)));
   const snapshots = store.monthlySnapshots.filter((item) => isSnapshotPublishable(item.month, publishedMonths));
   const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources);
+  const reviews = indexReviews(store.qualityReviews ?? []);
+  const traceEvents = store.events.filter((event) => reviews.get(`life_event:${event.id}`) === "store_only");
   const time: ArchiveTime = {
     today: productToday(now),
     activityDay: latestActivityDay({ rawSources: store.rawSources, dailyTraces: traces, events }),
     traceDay: latestTraceDay(traces),
     memoryDay: latestMemoryDay(events),
   };
-  return { store, media, events, chapters, birthDay, snapshots, privilege, time };
+  return { store, media, events, traceEvents, chapters, birthDay, snapshots, privilege, time };
 }
 
 export async function loadFamilyArchive(): Promise<FamilyArchive> {

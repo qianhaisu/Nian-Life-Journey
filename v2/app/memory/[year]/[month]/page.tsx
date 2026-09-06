@@ -37,11 +37,11 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const { year, month: monthSegment } = await params;
   if (!/^\d{4}$/.test(year) || !/^\d{2}$/.test(monthSegment)) notFound();
   const month = `${year}-${monthSegment}`;
-  const { chapters, store, snapshots, privilege } = await loadFamilyArchive();
+  const { chapters, store, snapshots, privilege, traceEvents, birthDay } = await loadFamilyArchive();
   const chapter = findMonth(chapters, month);
   if (!chapter) notFound();
 
-  const composition = buildMonthComposition(chapter, privilege);
+  const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay);
   const standfirst = monthStandfirst(composition.daysWithWords);
   const summary = snapshots.find((item) => item.month === month);
   const focusGoals = summary ? focusGoalsForSnapshot(store.monthlyFocusGoals, month) : [];
