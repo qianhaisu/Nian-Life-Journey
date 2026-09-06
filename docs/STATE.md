@@ -162,7 +162,8 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
   写清楚使用边界，比如这次的"callers outside the Organizer's own read path must use getStore()
   instead"——这种警告是真的，不是防御性文档）。修复：加一个只查 `life_events`（按
   profile_id，不按 visibility）的轻量函数替代整个 `getOrganizerStore()` 调用。
-  **已修复并独立验证部署生效（2026-09-06 07:5x UTC，Cowork 核查，非二手报告）**：A 轨
+  **已修复并推上 origin/main，但截至 2026-09-06 08:1x UTC 尚未真正部署到线上（见下方
+  更正）**：A 轨
   commit `7d7fe15` 加了 `Repository.getAllEventIdentities(profileId)`（只查 life_events
   的 id/title/story/occurredAt 四列，两个后端实现都补齐），`loadFamilyArchive()` 换用它。
   Cowork 独立核实：①用 git clone 单独拉一份 origin/main（不信任本地缓存的 remote-tracking
@@ -172,7 +173,10 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
   /memory/2026/06 几个已过期（age>300s）的 ISR 页面手动打一遍，全部在 30~130 秒内
   x-vercel-cache 从 STALE 变回 HIT 且 age 归零——旧的 getOrganizerStore() 查询要 80 秒以上，
   大概率会撞 Vercel 函数超时导致重新生成失败，这次全部干净成功，行为上印证新的快查询路径
-  已经在线上跑。
+  已经在线上跑（**这个结论后来被推翻，见下方 08:1x UTC 更正——这个推理本身有漏洞：
+  seq_scan/age 这类间接信号测的是"有没有发生一次全表扫描"，量不出到底是旧的
+  getOrganizerStore() 那条带 text 大列的查询、还是修复后不带 text 列的 assembleStore()
+  常规查询，两者行为上都会让 STALE→HIT、age 归零，光看这个测不出线上到底跑的是哪个版本**）。
   **另发现两个衍生尾巴，不紧急，记录待后续任务处理**：
   (a) getEventDetail()（postgres-repository.ts 约 411-565 行，事件详情页用）有同一形状的
   问题——db.select().from(t.rawSources) 不带列筛选也不带 WHERE，整表含 text 列都拉出来
@@ -183,6 +187,24 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
   3600 秒——本意是给真正的修复争取时间，但落地时真正的修复已经上线，属于没查 git log
   就重复动手的协作缝隙（无害，3600 秒目前反而是多一层保险，但按它自己 commit message 里
   写的，等确认稳定后应该有人把这 5 个文件的 revalidate 改回 300）。
+  **🚨 08:1x UTC 更正：以上"已确认部署生效"是错的，实际还没部署，钱可能还在烧**。
+  Cowork 起初只看了 STALE→HIT + age 归零当证据，但这测不出线上跑的是哪个版本（见上面
+  两段加的括注）。后来看到另一 session commit `6c59750`：用 `vercel inspect --logs`
+  直接查到过去 1 小时内至少 5 次部署全是 `Error` 状态，卡在 Ignored Build Step 那条命令
+  自己报 `fatal: bad object`（`$VERCEL_GIT_PREVIOUS_SHA` 在这次构建的浅克隆里解析不到），
+  Vercel 把这种脚本崩溃当成部署失败，不是"跳过构建"——线上卡在 2 小时前的旧构建，
+  `7d7fe15`（真正的修复）和 `cb1d634`（revalidate 300→3600 止血）**都没有真正上线**。
+  Cowork 独立核实了这个结论（不只信这条 commit 的自述）：连续观察 `/`、`/about`、
+  `/memory` 几个页面的 `age`，如果 `cb1d634` 真的上线了，revalidate 应该是 3600 秒，
+  但实测这几个页面在被打过一次之后大约 300~360 秒又重新变回 STALE——跟旧的
+  `revalidate=300` 完全吻合，跟 3600 秒对不上，说明这几个页面用的还是旧构建。
+  **现在唯一要做的事，只能 Teddy 手动做**：打开 Vercel 网页 Settings → Build and
+  Deployment → Ignored Build Step，把里面的命令换成：
+  `git cat-file -e "$VERCEL_GIT_PREVIOUS_SHA" 2>/dev/null && git diff --quiet "$VERCEL_GIT_PREVIOUS_SHA" HEAD -- .`
+  换完之后触发一次新部署（推一个空 commit，或者在 Vercel 网页手动点 Redeploy），
+  部署成功后 Cowork 会再核实一遍。这个字段没有任何 session 能远程改，卡住的原因不是
+  代码问题。
+
 - `monthly_snapshot` 只有 `id/profile_id/month/summary/highlights/visibility/created_at` 七列，**没有 status、没有 month_date**，`month` 是文本列。
 
 **Git / 环境**
@@ -283,9 +305,9 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 | 夸克 1,468 张 HEIC 转码入库（P1-2b） | 阻塞（解码器限制） | 中 |
 | B 轨、C 轨入箱已空 | **可以 /clear**（HANDOFF-B/C 已更新） | — |
 | P1-6 真机验收（Teddy 挑一晚跑完首跑 + Cowork 浏览器确认） | 待 worker 首跑决定后 | P2 之后 |
-| **P0 egress 事故修复（loadFamilyArchive 误用 getOrganizerStore）** | ✅ 已修复+已部署+Cowork 独立核实（commit `7d7fe15`，见第 3 节踩坑记录） | — |
+| **P0 egress 事故修复（loadFamilyArchive 误用 getOrganizerStore）** | 🔴 代码已修复+已推上 origin/main（`7d7fe15`），**但部署被 Vercel Ignored Build Step 命令 bug 卡住，线上还是 2 小时前的旧构建，钱可能还在烧**，需要 Teddy 去网页手动改 Settings→Build and Deployment→Ignored Build Step（见第 3 节踩坑记录的更正段） | **现在，需要 Teddy** |
 | getEventDetail() 同类无 scope raw_sources 全表读（P0 的衍生尾巴 a） | 未开始，不紧急（详情页流量小），建议比照 getAllEventIdentities() 处理 | 低 |
-| 5 个公开页 ISR revalidate 300→3600 的止血提交（commit `cb1d634`）待回退 | 未回退，暂时留着无害（P0 的衍生尾巴 b） | 低 |
+| 5 个公开页 ISR revalidate 300→3600 的止血提交（commit `cb1d634`） | 同样卡在部署问题上，还没上线，Ignored Build Step 修好、真正的 P0 修复部署确认后再决定要不要回退到 300 | 低（等上面那条解决） |
 
 **阶段 0 的完成标准**：打开 nianlife.cn 任何一个月都能看到张年；首页「最近」是 2026-09；苏静看过一次并说了一句话。
 
