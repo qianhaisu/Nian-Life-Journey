@@ -37,6 +37,79 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-06 09:14 UTC · A-12-1 + A-12-2 完成（本地 commit，未 push，等 Cowork 复核）
+
+**先说环境**：按指令没有连过生产库——Neon 已降级 Free 且本周期配额耗尽，这轮验证只有
+`npm run typecheck` 和读代码两个手段，接受这个上限，不去尝试连接或绕过。
+
+**1. 本轮线上多了什么家人能读的东西**：这轮不改产品呈现，是修一个数据层的成本/风险问题，
+**没有本地 commit push 上线**（指令明确要求不 push，等 Cowork 复核 + Teddy 恢复 Neon 后统一放行）。
+
+**2. 没做到什么 / 最大的已知 blocker**：这轮的验证受限于数据库不可连接，见下面第 3 点的
+详细说明；此外 A-12-2 的护栏我没有套到 `assembleStore()`/`assembleOrganizerStore()` 的
+`raw_sources`/`media`/`media_assets` 三个已知大表读取上（理由见下），这是我自己做的范围
+收窄决定，不是遗漏，写清楚给 Cowork 判断要不要补。
+
+**3. 下一件事**：等 Cowork 复核这次改动 + Teddy 决定恢复 Neon 的时机，恢复后按 STATE.md
+写的流程先观察 30 分钟出站流量再放行三轨复工。
+
+---
+
+**改了什么（只动了 `v2/lib/db/postgres-repository.ts` 一个文件，没碰 `v2/app/**`）**：
+
+**A-12-1**：`getEventDetail(id)` 原来五个 `Promise.all` 分支里有四个是 `db.select().from(table)`
+整表拉取（`media`/`raw_sources`/`contributors`/`growth_records`/`care_records`），在 JS 里再
+`filter(item => e.xxxIds.includes(item.id))`。改成 `inArray(table.id, e.xxxIds)` 在数据库端过滤，
+`raw_sources` 额外做了列投影（只留 `EvidenceList` 组件实际渲染用到的列：`id/profileId/
+contributorId/sourceType/contentTypes/capturedAt/text/mediaIds/sourceLabel/visibility/
+deletedAt`——`text` 保留是因为证据展示区确实渲染原文，读了 `components/evidence-list.tsx`
+确认过，但现在只取这一个事件引用的几行，不是全表 46,742 行）。`contributors` 按 INBOX
+指示保留整表读（这张表按产品形态判断应该是个位数到几十行：爸妈/爷爷奶奶/育儿嫂/托班老师，
+但**这个判断没有查库验证**——数据库连不上，如实标注）。空数组分支显式短路成
+`Promise.resolve([])`，不生成 `inArray(col, [])` 这种非法/空判定 SQL。
+
+**A-12-2**：加了一个 `guardRowCount(rows, callSite)` 轻量函数——结果行数超过 5,000 时，
+生产环境 `console.warn`，非生产环境直接 `throw`。应用范围：`getEventDetail` 新改的四个
+按 id 过滤的数组 + 新的 `assembleEventIdentities()`（`loadFamilyArchive` 渲染路径用到的那个，
+当前 651 行）。**没有**套到 `assembleStore()`/`assembleOrganizerStore()` 已知的大表读取
+（`raw_sources` 46,742 行、`media_assets` 9,077 行）——这两个已经超过 5,000 的阈值，如果套上
+"非生产环境直接 throw"，会导致 `npm run dev` 一启动就报错崩掉，而这两张表的整表读取是
+`docs/INCIDENT-2026-09-06-neon-egress.md` §3.5 明确定性为"已知的、次要的、持续存在的成本"
+（不是这次事故的诱因，也不是本轮任务范围），不是需要立刻拦下的新问题。这是我自己做的
+范围收窄，不是没做完，写清楚等 Cowork 看要不要单独立项处理 §3.5 那 12 处。
+
+**验证结果，按要求逐条回答**：
+
+**(1) 改完后一次事件详情页渲染还会不会碰到 `raw_sources` 全表？不会。** 原来的
+`db.select().from(t.rawSources)` 已经改成 `db.select({...列投影...}).from(t.rawSources)
+.where(inArray(t.rawSources.id, e.sourceIds))`，这条 SQL 在数据库端就只返回这一个事件自己
+`sourceIds` 数组里的那几行（多数事件是个位数到几十条来源，不是 46,742 行），`text` 列虽然
+保留但只随这几行一起返回，不是整表的 `text` 列。`media`/`growth_records`/`care_records`
+同理都改成了 `inArray` 按 id 过滤。这是从代码逻辑直接看出来的结论，不是靠实跑验证的
+（下面第 3 点说明为什么不能实跑）。
+
+**(2) typecheck 结果**：`npm run typecheck` **通过，无报错**（跑了三次：加完 A-12-1 一次、
+加完 A-12-2 一次、修完一处不准确的注释后再跑一次，全部 clean）。
+
+**(3) 没能验证的部分（如实写）**：
+- **完全没有实跑过页面渲染**——数据库连不上，`getEventDetail`/`assembleEventIdentities`
+  一次都没有真正执行过，`(1)` 的结论是读代码 + SQL 语义推出来的，不是看着请求实际发生
+  过、看着返回结果核对过。
+- **没有验证改动前后页面渲染结果完全一致**（INBOX 里明确要求的"同样的照片、同样的来源
+  条目、同样的成长/照护记录"）——同样是因为连不上库，无法拿一个真实事件 id 跑一遍新旧
+  两版代码对比结果。从代码看，`inArray(id, e.xxxIds)` 语义上等价于"整表 + JS filter
+  includes(id)"，唯一的差别是 `raw_sources` 多做了列投影，而投影的列表是我读
+  `evidence-list.tsx`/`app/events/[id]/page.tsx` 逐个确认过的，但这个"确认过"也是读代码，
+  不是拿真实数据跑出来验证的。
+- **`contributors` 表当前真实行数没有验证**——沿用 INBOX 里"这张表小"的假设，没有查库确认。
+- **`guardRowCount` 的 5,000 阈值本身没有在真实环境里触发过一次**（无法制造超过 5,000 行
+  的场景来看 warn/throw 实际生效），只验证了它能通过 typecheck、逻辑上会在 `rows.length >
+  5000` 时执行对应分支。
+- A-12-2 没有覆盖 `assembleStore()`/`assembleOrganizerStore()` 的已知大表读取，范围决定见上，
+  这不是"没能验证"而是主动排除，两者性质不同，分开说清楚。
+
+**没有 push**，本地 commit 待 Cowork 复核。
+
 ### 2026-09-06 07:43 UTC · 🚨 P0 修复完成 · `loadFamilyArchive()` 不再调用 `getOrganizerStore()`
 
 **先认一个错**：这条 P0 指令是 06:4x UTC 发的，我在等待循环的第 4 次空闲检查前后就已经拉到了

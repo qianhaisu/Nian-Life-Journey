@@ -60,6 +60,33 @@ function taskRowValues(task: ChatImportTask) {
   return { status: task.status, phase: task.phase, currentStage: task.currentStage, processedMessages: task.processedMessages, createdMessages: task.createdMessages, reusedMessages: task.reusedMessages, warnings: task.warnings, warningCounts: task.warningCounts, checkpoint: task.checkpoint ? JSON.stringify(task.checkpoint) : null, leaseOwner: task.leaseOwner ?? null, leaseExpiresAt: task.leaseExpiresAt ?? null, attempt: task.attempt, maxAttempts: task.maxAttempts, cancelRequestedAt: task.cancelRequestedAt ?? null, startedAt: task.startedAt ?? null, completedAt: task.completedAt ?? null, safeErrorCode: task.safeErrorCode ?? null, updatedAt: task.updatedAt };
 }
 
+// A-12-2 (2026-09-06, docs/INCIDENT-2026-09-06-neon-egress.md §3.2/3.5): "a query silently pulled
+// tens of MB" was invisible until the bill arrived. This makes an oversized result set visible at
+// the moment it happens, at the specific call site that produced it, instead of waiting for Neon's
+// month-end number. Deliberately NOT a query-builder wrapper — Drizzle's chainable builder has no
+// single choke point to intercept without changing how every call in this file is written, which
+// is exactly the "don't change query semantics" this guard is required to respect.
+//
+// Applied to: the now-fixed getEventDetail's four id-scoped arrays, and assembleEventIdentities()
+// (loadFamilyArchive's page-render call, currently 651 rows and the one number in a render path
+// that grows unbounded by date/id). Deliberately NOT applied to assembleStore()'s or
+// assembleOrganizerStore()'s raw_sources/media/media_assets reads: those are full-table by design
+// (§3.5 calls this out as a known, already-documented, lower-priority cost, not this incident's
+// cause), already exceed 5,000 rows today (raw_sources 46,742; media_assets 9,077), and this
+// guard's dev-mode branch throws — wrapping them would make `npm run dev` fail on startup for a
+// cost that is already visible in this very file's own comments, not a silent one. Also not
+// applied to this file's ~50 other single-row/id-keyed queries (import/job-queue lookups, etc.) —
+// none of those were implicated in either incident.
+const LARGE_RESULT_ROW_THRESHOLD = 5000;
+function guardRowCount<T>(rows: T[], callSite: string): T[] {
+  if (rows.length > LARGE_RESULT_ROW_THRESHOLD) {
+    const message = `postgres-repository: "${callSite}" returned ${rows.length} rows (> ${LARGE_RESULT_ROW_THRESHOLD}) — likely an unbounded/unscoped read`;
+    if (process.env.NODE_ENV !== "production") throw new Error(message);
+    console.warn(message);
+  }
+  return rows;
+}
+
 // Real PostgreSQL, via drizzle-orm/node-postgres. Every method replicates the exact dedup /
 // idempotency decision made by json-repository.ts for the same call — that behavioral parity,
 // not raw SQL cleverness, is what test/repository-contract.test.mjs verifies against both
@@ -317,7 +344,10 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
   // raw_sources, no media, nothing else.
   async function assembleEventIdentities(profileId: string): Promise<Array<Pick<LifeEvent, "id" | "title" | "story" | "occurredAt">>> {
     const rows = await db.select({ id: t.lifeEvents.id, title: t.lifeEvents.title, story: t.lifeEvents.story, occurredAt: t.lifeEvents.occurredAt }).from(t.lifeEvents).where(eq(t.lifeEvents.profileId, profileId));
-    return rows as unknown as Array<Pick<LifeEvent, "id" | "title" | "story" | "occurredAt">>;
+    // A-12-2: this is a page-render-path call (loadFamilyArchive), one profile's whole life_events
+    // table (currently 651 rows, four narrow columns) — small today but the one growing number in
+    // this file that a render path reads unfiltered by date/id, so worth a tripwire as it grows.
+    return guardRowCount(rows as unknown as Array<Pick<LifeEvent, "id" | "title" | "story" | "occurredAt">>, "getAllEventIdentities");
   }
 
   // One job's evidence, read by id. Four small keyed selects instead of a whole-profile (or
@@ -550,20 +580,49 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       const e = event as unknown as LifeEvent;
       // An unreviewed rule-derived event must 404 rather than stay reachable by direct URL.
       if (!isEventPublishable(e, await reviewIndex())) return null;
-      const [mediaRows, sourceRows, contributorRows, growthRows, careRows] = await Promise.all([
-        db.select().from(t.media),
-        db.select().from(t.rawSources),
+      // A-12-1 (2026-09-06, docs/INCIDENT-2026-09-06-neon-egress.md §3.2): this used to
+      // `select().from(t.rawSources)` — the whole table, `text` column included, no WHERE, no
+      // LIMIT — plus three more full-table reads, just to filter down to one event's own handful
+      // of ids in JS afterward. `generateStaticParams` calling this for every publishable event on
+      // every build turned that into tens of GB of egress in a single build. Every query below is
+      // now scoped by id at the database, matching this exact event's own arrays.
+      //
+      // `inArray(column, [])` is guarded explicitly: Drizzle/postgres-js does not treat an empty
+      // array as "match nothing" for free, and a life_event legitimately can have zero sources,
+      // zero media, etc. (e.g. a text-only memory has no mediaIds).
+      const emptyRows: never[] = [];
+      const [mediaRows, sourceRows, growthRows, careRows, contributorRows] = await Promise.all([
+        e.mediaIds.length ? db.select().from(t.media).where(inArray(t.media.id, e.mediaIds)) : Promise.resolve(emptyRows),
+        e.sourceIds.length
+          ? db.select({
+              id: t.rawSources.id, profileId: t.rawSources.profileId, contributorId: t.rawSources.contributorId,
+              sourceType: t.rawSources.sourceType, contentTypes: t.rawSources.contentTypes, capturedAt: t.rawSources.capturedAt,
+              // EvidenceList (components/evidence-list.tsx) does render the original text, so
+              // `text` stays — but now it is only ever the few rows this one event actually cites,
+              // not all 46,742 raw_sources.
+              text: t.rawSources.text, mediaIds: t.rawSources.mediaIds, sourceLabel: t.rawSources.sourceLabel,
+              visibility: t.rawSources.visibility, deletedAt: t.rawSources.deletedAt,
+            }).from(t.rawSources).where(inArray(t.rawSources.id, e.sourceIds))
+          : Promise.resolve(emptyRows),
+        e.growthRecordIds.length ? db.select().from(t.growthRecords).where(inArray(t.growthRecords.id, e.growthRecordIds)) : Promise.resolve(emptyRows),
+        e.careRecordIds.length ? db.select().from(t.careRecords).where(inArray(t.careRecords.id, e.careRecordIds)) : Promise.resolve(emptyRows),
+        // Contributors is a small, family-scale table (a handful of rows: parents, grandparents,
+        // a nanny, a teacher) — kept as a full read per the A-12-1 dispatch note. Not re-verified
+        // against a live row count this round (see docs/STATUS.md: database is unreachable).
         db.select().from(t.contributors),
-        db.select().from(t.growthRecords),
-        db.select().from(t.careRecords),
       ]);
+      // A-12-2: these four are id-scoped by this one event's own arrays, so a large result here
+      // would mean either a life_event with an implausibly large mediaIds/sourceIds/etc. array or
+      // a future regression back toward an unscoped read — either way, worth surfacing immediately
+      // rather than waiting for a bill. `contributors` stays unguarded: it is deliberately still a
+      // full-table read (see comment above), so warning on it would just be permanent noise.
       return {
         event: e,
-        media: (mediaRows as unknown as Media[]).filter((item) => e.mediaIds.includes(item.id)),
-        sources: (sourceRows as unknown as RawSource[]).filter((item) => e.sourceIds.includes(item.id) && !item.deletedAt),
+        media: guardRowCount(mediaRows as unknown as Media[], "getEventDetail.media"),
+        sources: guardRowCount((sourceRows as unknown as RawSource[]).filter((item) => !item.deletedAt), "getEventDetail.sources"),
         contributors: contributorRows as Store["contributors"],
-        growth: (growthRows as unknown as Store["growthRecords"]).filter((item) => e.growthRecordIds.includes(item.id)),
-        care: (careRows as unknown as Store["careRecords"]).filter((item) => e.careRecordIds.includes(item.id) && item.visibility !== "private"),
+        growth: guardRowCount(growthRows as unknown as Store["growthRecords"], "getEventDetail.growth"),
+        care: guardRowCount((careRows as unknown as Store["careRecords"]).filter((item) => item.visibility !== "private"), "getEventDetail.care"),
       };
     },
     async getMonthArchive(month: string) { return assembleMonthArchive(month); },
