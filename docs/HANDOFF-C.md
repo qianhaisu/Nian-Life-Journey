@@ -19,6 +19,7 @@ app/memory/[year]/[month]/page.tsx（revalidate + generateStaticParams）
 app/api/media/[id]/route.ts（去 getStore，单条查询，长缓存头）
 app/api/internal/revalidate/route.ts（主动刷新通道，Bearer token 鉴权）
 app/api/health/route.ts（DB 连通性 + 计数探针）
+v2/media-tools/warm-reading-path.mjs（C-6 新建，缓存预热工具，不在 v2/scripts/ 下）
 docs/ORCHESTRATOR-INBOX-C.md
 docs/STATUS-C.md
 docs/HANDOFF-C.md（本文）
@@ -37,7 +38,7 @@ docs/ORCHESTRATOR-INBOX-B.md docs/STATUS-B.md docs/HANDOFF-B.md
 
 ## 2 · 现在做到哪
 
-**C-1 ~ C-4 全部验收通过（2026-09-05 15:56 UTC，Cowork 亲自复验）。**
+**C-1 ~ C-6 全部完成。C-5 Cowork 03:05 UTC 亲验通过，C-6 268/268 预热成功、0 触发防护。**
 
 | 任务 | 内容 | 状态 |
 |---|---|---|
@@ -45,6 +46,8 @@ docs/ORCHESTRATOR-INBOX-B.md docs/STATUS-B.md docs/HANDOFF-B.md
 | C-2 | /api/media 去 getStore + 长缓存头 + ETag/304 | ✅ commit bd63bb7 |
 | C-3 | /api/health 恢复（200 + DB 计数） | ✅ commit bd63bb7 |
 | C-4 | generateStaticParams 让年/月页真正走 ISR | ✅ commit f455125 |
+| C-5 | `/api/media` 流式响应 `getStream()`，解决 web 变体冷路径延迟；给 B 轨 variant/尺寸结论（正文用 thumbnail+lazy，hero 用 web+priority） | ✅ commit 2aaced6，Cowork 实测 thumbnail TTFB 0.379s / web 0.452s |
+| C-6 | 预热 2025 阅读路径：年页+12月页实际渲染的图（268 张，非全库），并发≤2+间隔+退避 | ✅ 268/268 成功 0 失败 0 触发防护，回验 8/8 HIT，详见 STATUS-C.md；**B-17 上线后需重跑** |
 
 **Cowork 2026-09-06 独立复验结果**（库数字 + 浏览器，双重验证）：
 - `/` HIT，age=26s；`/memory` STALE；`/memory/2026` STALE；`/memory/2026/08` STALE；`/about` STALE
@@ -58,14 +61,15 @@ docs/ORCHESTRATOR-INBOX-B.md docs/STATUS-B.md docs/HANDOFF-B.md
 
 ## 3 · 下一件事
 
-**暂无 ready 任务。** C 轨这轮结案，入箱无新任务。
-
-可以 /clear。如果 Cowork 派新任务会写进 `docs/ORCHESTRATOR-INBOX-C.md`。
+**暂无 ready 任务。** C-5、C-6 都结案，入箱暂无新任务，正在按常设规则每 5 分钟回读
+`docs/ORCHESTRATOR-INBOX-C.md` 顶部看板等新派单。
 
 已知的潜在后续工作（不主动做，等 Cowork 派单）：
-- `/api/media?variant=web` 夸克大图仍需 5-7s（已绕开用 thumbnail，但 web 变体本身还没优化）
+- **B-17 上线后重跑 C-6 预热**：`cd v2 && node media-tools/warm-reading-path.mjs 2025`——
+  月页正文图片集合会从个位数变几十张，这轮 268 张是旧集合。
 - R2 自定义域名直出（这轮明确不做）
 - 未来新月份 generateStaticParams 自动覆盖（on-demand ISR 已接住，无需手动枚举）
+- 预热工具目前是手动跑，没接 worker/定时任务；worker 上线后可以考虑接进 ingest 收尾流程
 
 ---
 
