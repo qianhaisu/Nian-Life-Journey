@@ -18,6 +18,33 @@
 
 ## 1. 当前位置
 
+### 🛑 全项目停工中（2026-09-06 08:3x UTC）——生产库被人为切断，这是决定，不是故障
+
+**在读下面任何内容之前先知道这件事**：Teddy 已把 Neon 从 Launch **降级到 Free**。本计费周期
+（9/5–10/1）出站流量已用掉 1.37 TB，Free 版每月只有 5 GB，**超额 270 多倍**，所以生产库现在
+硬性拒绝连接（实测报错：`Your project has exceeded the data transfer quota.`）。nianlife.cn
+因此打不开，缓存过期后会陆续变报错。**数据没有丢**——Neon 的限额只封操作、不删数据。
+
+起因是这一天之内 Neon 账单烧到 $87.86（见第 3 节"数据库"小节的事故记录）。Teddy 的原话是
+彻底修好之前不会再付一分钱。**恢复与否只由 Teddy 决定**（10 月 1 号计费周期自动重置，或他主动
+升级），任何 session 不要替他决定、不要催、不要试图绕开。
+
+**三轨（A/B/C）已全部下达停工指令**（写在三个 `docs/ORCHESTRATOR-INBOX*.md` 顶部）：不跑任何
+连生产库的东西、不访问 nianlife.cn 做"验证"、不因为看到 DB 报错去改代码或连接配置、不 push
+（push 会触发注定失败的 Vercel 构建）、不开新任务。
+
+**P0 事故本身已收尾，不需要任何人再动它**：A 的查询修复 `7d7fe15` 在 main 上；C 修好了自己
+引入的 Ignored Build Step 致命命令（那条命令曾让约 6 次部署全部 Error，导致修复迟迟没上线）；
+C 的 revalidate stopgap 已干净撤回（`5684d91`）。Cowork 已从 GitHub 独立重新 clone 复核 main：
+`loadFamilyArchive()` 确实改用了 `getAllEventIdentities()`，5 个页面 `revalidate` 干净回到 300，
+无误伤。**唯一没被 Cowork 独立验证的是"这个构建真的成为了生产别名"**——C 用
+`vercel inspect nianlife.cn` 查证过（这是对的证据类型），但 Cowork 侧的 device_bash 没有 Vercel
+登录态，复核不了，如实标注。
+
+**下次恢复 Neon 时的第一件事**（写给未来的任何 session）：恢复后先盯 30 分钟出站流量曲线，
+确认没有重新爬升，再让三轨复工。不要恢复完就直接开跑。
+
+
 **P1 ✅ 全部通过并结案。2026-09-06 起进入 P2，三条轨已派单（A-6 / B-17 / C-5，见下）。**
 INGESTION_TOKEN 已打通（Cowork 验证 revalidate 返回 200）。worker 首次全量导入 **Teddy 说先放着**，今天不跑。
 
