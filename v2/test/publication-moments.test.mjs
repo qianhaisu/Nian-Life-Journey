@@ -8,7 +8,7 @@ import { buildChapters, findMonth } from "../lib/memory-chapters.ts";
 import { buildMemoryIndex } from "../lib/memory-index.ts";
 import { DEFAULT_MEMORY_IA_POLICY } from "../lib/memory-ia-policy.ts";
 import {
-  BURST_GAP_SECONDS, CHRONICLE_MOMENTS_MAX, MOMENT_SUPPORTING_MAX,
+  BURST_GAP_SECONDS, MOMENT_SUPPORTING_MAX,
   buildMonthComposition, burstGroups, burstRepresentatives, readableEntries,
 } from "../lib/publication-moments.ts";
 
@@ -93,7 +93,7 @@ test("the chapter reads the month start to end; archive-count sentences and plac
   assert.deepEqual(readableEntries(["这一天留下了 3 张照片。"]), []);
 });
 
-test("a photo-only month becomes a weighted chronicle, not a wall: bounded moments, quiet days folded, archive whole", () => {
+test("a photo-only month becomes a weighted chronicle, not a wall: every vouched day shown, archive whole", () => {
   // Production 2026-08 shape: many photographed days, zero real words.
   const media = [];
   for (let day = 1; day <= 14; day += 1) {
@@ -102,8 +102,10 @@ test("a photo-only month becomes a weighted chronicle, not a wall: bounded momen
   }
   const composition = buildMonthComposition(monthOf({ media }, "2026-08"), trust(media));
   assert.equal(composition.chapter.length, 0, "no words exist; none are invented — UNKNOWN > INVENTED COPY");
-  assert.ok(composition.chronicle.length <= CHRONICLE_MOMENTS_MAX);
-  assert.equal(composition.quietDays.length, 14 - composition.chronicle.length, "the rest of the days fold to lines, they do not disappear");
+  // B-17 (2026-09-06): a vouched, deliverable photo day is content — it is never capped out of the
+  // chronicle and folded to a bare quiet-day line just because more than a handful exist in a month.
+  assert.equal(composition.chronicle.length, 14, "every one of the 14 vouched photo days becomes a moment");
+  assert.equal(composition.quietDays.length, 0, "nothing here is unvouched, so nothing folds to a quiet line");
   for (const moment of composition.chronicle) {
     assert.ok(moment.hero, "a reading moment is anchored by a vouched hero");
     assert.ok(moment.supporting.length <= MOMENT_SUPPORTING_MAX);

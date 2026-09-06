@@ -8,7 +8,7 @@ import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
-import { indexReviews, isSnapshotPublishable, mediaBindingTrusted } from "@/lib/organizer/quality-review";
+import { isSnapshotPublishable, mediaBindingTrusted } from "@/lib/organizer/quality-review";
 import { isTrustedPhotoSource } from "@/lib/trusted-photo-sources";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
 import type { MediaPrivilege } from "@/lib/publication-moments";
@@ -30,10 +30,12 @@ export type FamilyArchive = {
   // is missing renders as nothing, so counting it would print a number the family cannot see.
   media: Media[];
   events: LifeEvent[];
-  // P2 trace tier (B-17, 2026-09-06): store_only life_events — the Organizer read them and wrote a
-  // real one-line description, but judged them not significant enough to publish. Today this is the
-  // whole store_only set (A-6's subject-confirmed subset has not landed); publication-moments.ts's
-  // buildTraceNotes still gates each row (garbage/placeholder text) before it can appear.
+  // P2 trace tier (B-17, 2026-09-06): the A-6 subject-confirmed subset of store_only life_events —
+  // rows a human/Cowork read in full and marked "sinks in as real, ordinary life about the child"
+  // (content_quality_reviews target_kind='life_event_trace', decision='trace_eligible'; NOT
+  // target_kind='life_event' — that key holds the real publication decision, deliberately isolated
+  // from this marker by A-6). "宁可没有，不要错的" — the full store_only set is not an acceptable
+  // fallback; a row with no trace_eligible mark does not appear here, full stop.
   traceEvents: LifeEvent[];
   chapters: YearChapter[];
   birthDay?: string;
@@ -82,12 +84,30 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   const publishedMonths = new Set(events.map((event) => calendarMonthOf(event.occurredAt)).filter((value): value is string => Boolean(value)));
   const snapshots = store.monthlySnapshots.filter((item) => isSnapshotPublishable(item.month, publishedMonths));
   const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources);
-  const reviews = indexReviews(store.qualityReviews ?? []);
   // store.events (from getStore()) is already the publishable-only set — the same fail-closed gate
   // getAllEvents() applies — so a store_only event is never in it. `allEvents` is the organizer's
   // own unfiltered read (getOrganizerStore), the one place the app already reads every life_event
   // row regardless of review decision.
-  const traceEvents = allEvents.filter((event) => reviews.get(`life_event:${event.id}`) === "store_only");
+  //
+  // The gate is A-6's own marker, target_kind='life_event_trace' + decision='trace_eligible' — NOT
+  // the raw store_only decision on target_kind='life_event', and deliberately NOT read through
+  // indexReviews()/normalizeQualityDecision(): that helper's QualityDecision union does not include
+  // "trace_eligible", so it silently rewrites every A-6 row to "needs_human_review" and this filter
+  // would always be empty — read the raw ledger rows directly instead. A-6 read every store_only row
+  // in full (not just its title) and rejected the ones whose subject is a pet, a household errand, or
+  // a family member other than the child; the raw store_only set includes those rejects (2026-09-06
+  // acceptance caught three live: "奶奶说儿子有个幸福的家"、"妈妈提醒上传照片到亲宝宝"、
+  // "妈妈问雪姨新游泳圈会不会好点"). "宁可没有，不要错的" — no marker, no trace line.
+  // `targetKind`/`decision` are typed as narrow unions that only name the real publication ledger's
+  // values ("life_event" | "daily_trace" | "monthly_snapshot" / QualityDecision) — the DB columns
+  // are plain text, and A-6 deliberately writes values outside those unions to isolate its marker.
+  // Cast to string for this one comparison; nothing here writes or normalizes the row.
+  const traceEligibleIds = new Set(
+    (store.qualityReviews ?? [])
+      .filter((review) => (review.targetKind as string) === "life_event_trace" && (review.decision as string) === "trace_eligible")
+      .map((review) => review.targetId),
+  );
+  const traceEvents = allEvents.filter((event) => traceEligibleIds.has(event.id));
   const time: ArchiveTime = {
     today: productToday(now),
     activityDay: latestActivityDay({ rawSources: store.rawSources, dailyTraces: traces, events }),

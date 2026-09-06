@@ -108,15 +108,20 @@ export type MonthComposition = {
   // guess at what the photos show, never emotion, never a milestone. A month with readable
   // moments needs no narration — its own words open it.
   narration?: string;
-  // V4 (T16, 2026-09-04): a standfirst for a month that DOES have a chapter — the two counts a
-  // magazine's opening line states before the story starts. Days = how many distinct days actually
-  // carry words in `chapter` (memory_led + text_led; a photo-only day was never "记下"). Photos =
-  // every deliverable picture the month holds, chapter and archive layer alike.
+  // V4 (T16, 2026-09-04), widened B-17 (2026-09-06): a standfirst for a month that DOES have a
+  // chapter — the count a magazine's opening line states before the story starts. Days = how many
+  // distinct days carry a moment across `chapter` AND `chronicle` (memory_led, text_led, photo_led,
+  // trace) — the same set the page renders below the masthead, so the sentence never claims fewer
+  // days than a reader can actually count.
   daysWithWords: number;
   totalPhotoCount: number;
 };
 
 // Bounds. Editorial policy, not facts about current data.
+// Retired 2026-09-06 (B-17 acceptance): capping the chronicle to this many moments folded vouched,
+// deliverable photo days to bare quiet-day lines once a month had more than a handful of them —
+// recreating the empty-date-list problem this whole layer exists to fix. Kept so nothing that
+// imports it breaks; no code path caps the chronicle any more.
 export const CHRONICLE_MOMENTS_MAX = 10;
 export const MOMENT_SUPPORTING_MAX = 2;
 // Retired 2026-09-04 with the wordless-month exception (see photoLedMoment). Kept so nothing that
@@ -280,22 +285,31 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const kindRank = (moment: PublicationMoment) => (moment.kind === "memory_led" ? 0 : 1);
   chapterMoments.sort((a, b) => a.day.localeCompare(b.day) || kindRank(a) - kindRank(b));
 
-  // TRACE — store_only days (see buildTraceNotes), keyed one note per day. A day whose real words
-  // already reached the chapter (a memory, or an approved DailyTrace) does not also get a trace
-  // line: that would be a second, weaker copy of something already told.
+  // TRACE — A-6's subject-confirmed store_only days (see buildTraceNotes), grouped by day. A day
+  // whose real words already reached the chapter (a memory, or an approved DailyTrace) does not
+  // also get a trace line: that would be a second, weaker copy of something already told. Same-day
+  // notes are never deduplicated to one: B-17 acceptance (2026-09-06) caught "妈妈夸小年白得逆光都
+  // 不怕" — the sentence the trace tier exists to keep — silently dropped because another store_only
+  // event landed on the same day and won a last-write-wins Map.set(). A day can carry more than one
+  // trace line; nothing about a good sentence justifies losing it to a scheduling accident.
   const memoryDays = new Set(chapter.memories.map((memory) => memory.signature.day));
   const chapterDays = new Set(chapterMoments.map((moment) => moment.day));
   const monthTraceEvents = traceEvents.filter((event) => calendarMonthOf(event.occurredAt) === chapter.month);
-  const traceNoteByDay = new Map<string, TraceNote>();
+  const traceNotesByDay = new Map<string, TraceNote[]>();
   for (const note of buildTraceNotes(monthTraceEvents, birthDay)) {
-    if (memoryDays.has(note.day) || chapterDays.has(note.day) || traceNoteByDay.has(note.day)) continue;
-    traceNoteByDay.set(note.day, note);
+    if (memoryDays.has(note.day) || chapterDays.has(note.day)) continue;
+    const existing = traceNotesByDay.get(note.day);
+    if (existing) existing.push(note);
+    else traceNotesByDay.set(note.day, [note]);
   }
 
-  // CHRONICLE — the photographed days not already read in the chapter, weighted: the strongest
-  // CHRONICLE_MOMENTS_MAX days become moments, the rest fold to quiet lines. Strength is real and
-  // boring: a vouched hero first, then how much of the day was photographed; ties go to the
-  // earlier day so the outcome is stable across backends.
+  // CHRONICLE — the photographed days not already read in the chapter: every day with a vouched
+  // hero becomes a moment, ascending. There used to be a CHRONICLE_MOMENTS_MAX cap here, folding
+  // the overflow to quiet lines — but a vouched, deliverable photo is exactly a day's content, and
+  // capping it recreated the empty-date-list problem B-17 exists to fix (2026-09-06 acceptance:
+  // 6/8, 6/13, 6/14... had real vouched photos and were still rendering as bare dates because the
+  // cap filled up before reaching them). Quiet days are now only what the archive's own ethics
+  // already required folding: a photographed day nothing vouches for (photoLedMoment's hero gate).
   // A day with words in the chapter may still earn a photo moment here — the two sections make
   // no claim on each other. Only memory days are excluded: their photographs already read inside
   // the memory itself.
@@ -303,30 +317,21 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const scored = candidates
     .map((day) => ({ day, moment: photoLedMoment(day, privilege) }))
     .filter((item): item is { day: PhotoDay; moment: PublicationMoment } => Boolean(item.moment));
-  // A photographed day that also has a trace note absorbs it as text and is never folded away —
-  // its photo may lose the ranking, but the sentence someone wrote about that day must not.
+  // A photographed day that also has trace notes absorbs all of them as text.
   for (const item of scored) {
-    const note = traceNoteByDay.get(item.day.day);
-    if (!note) continue;
-    item.moment.text = [note.text];
-    traceNoteByDay.delete(item.day.day);
+    const notes = traceNotesByDay.get(item.day.day);
+    if (!notes) continue;
+    item.moment.text = notes.map((note) => note.text);
+    traceNotesByDay.delete(item.day.day);
   }
-  const ranked = [...scored].sort((a, b) =>
-    Number(Boolean(b.moment.hero)) - Number(Boolean(a.moment.hero))
-    || b.day.photos.length - a.day.photos.length
-    || a.day.day.localeCompare(b.day.day));
-  const mustKeep = ranked.filter((item) => item.moment.text.length > 0);
-  const capCandidates = ranked.filter((item) => item.moment.text.length === 0);
-  const capRoom = Math.max(0, CHRONICLE_MOMENTS_MAX - mustKeep.length);
-  const kept = new Set([...mustKeep, ...capCandidates.slice(0, capRoom)].map((item) => item.day.day));
-  const chronicleFromPhotos = scored.filter((item) => kept.has(item.day.day)).map((item) => item.moment);
-  // Trace-only days: no photographed day at all, or none with a vouched hero — the note is the
-  // day's whole content. Never capped: a one-line sentence costs nothing to show, and capping it
-  // would recreate the exact disappearance this tier exists to fix (原则七: "去掉所有数字后仍能读出
-  // 这个月的张年" fails if the month's actual sentences are the ones left out).
-  const traceOnly: PublicationMoment[] = [...traceNoteByDay.values()]
-    .filter((note) => !kept.has(note.day))
-    .map((note) => ({ kind: "trace", day: note.day, dateLabel: note.dateLabel, ageLabel: note.ageLabel, text: [note.text], supporting: [], morePhotoCount: 0 }));
+  scored.sort((a, b) => a.day.day.localeCompare(b.day.day));
+  const chronicleFromPhotos = scored.map((item) => item.moment);
+  // Trace-only days: no photographed day at all, or none with a vouched hero — the notes are the
+  // day's whole content. Never capped: a sentence costs nothing to show, and capping it would
+  // recreate the exact disappearance this tier exists to fix (原则七: "去掉所有数字后仍能读出这个月
+  // 的张年" fails if the month's actual sentences are the ones left out).
+  const traceOnly: PublicationMoment[] = [...traceNotesByDay.entries()]
+    .map(([day, notes]) => ({ kind: "trace" as const, day, dateLabel: notes[0].dateLabel, ageLabel: notes[0].ageLabel, text: notes.map((note) => note.text), supporting: [], morePhotoCount: 0 }));
   const chronicle = [...chronicleFromPhotos, ...traceOnly].sort((a, b) => a.day.localeCompare(b.day));
   const chronicleDays = new Set(chronicle.map((moment) => moment.day));
   const quietDays: QuietDay[] = candidates
@@ -393,7 +398,11 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const narration = chapterMoments.length === 0 && chronicle.length === 0 && archivePhotoCount > 0
     ? `这个月还没有整理出来的文字。${photoDaysAsc.length} 天留下了 ${archivePhotoCount} 张照片，都收在月末的档案里，还没有人确认过它们拍的是什么。`
     : undefined;
-  const daysWithWords = new Set(chapterMoments.map((moment) => moment.day)).size;
+  // B-17 acceptance (2026-09-06): this used to count only chapterMoments (memory_led/text_led) —
+  // once the chronicle stopped folding vouched photo days and trace days to quiet lines, that made
+  // the masthead say "记下 1 天" over a page that visibly listed ten. The opening line has to count
+  // the same days the page actually shows: every day with a moment, chapter or chronicle alike.
+  const daysWithWords = new Set([...chapterMoments, ...chronicle].map((moment) => moment.day)).size;
   return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, archiveDays, archiveDaysVisible, archiveFoldedPhotoCount, archiveFoldedDayCount, smallImageCount, cover, preview, narration, daysWithWords, totalPhotoCount: archivePhotoCount };
 }
 

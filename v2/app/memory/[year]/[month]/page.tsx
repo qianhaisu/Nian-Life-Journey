@@ -82,7 +82,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
     </p> : null}
 
     {archivePhotoCount > 0 ? <details className="month-archive">
-      <summary><span className="serif">整月照片档案</span><small>{archivePhotoCount} 张</small></summary>
+      <summary><span className="serif">整月照片档案</span></summary>
       <ol>
         {composition.archiveDaysVisible.map((day) => <li className="month-day" key={day.day}>
           <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} monthAgeLabel={chapter.ageLabel} year={year} />
