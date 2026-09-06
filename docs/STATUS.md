@@ -82,7 +82,10 @@ Teddy 说"wakeup and check updates"之前，这条 P0 在我本地躺了几个�
   单一，typecheck+SQL 双重验证已经比较扎实；如果 Cowork 想要更强的信心，可以在 Vercel
   部署后直接看这次构建的响应时间/Neon 流量图验证）。
 
-**commit**：这次修复即将单独 commit + push（不攒心跳），commit hash 见下一条时间线。
+**commit**：`7d7fe15`，已单独 push（不攒心跳），已确认在 `origin/main` 上。
+
+**P0 到此完成。「孤立昵称+第三方转发」扫描（A-11）刚好在这条指令之前已经做完并交了**
+（见 06:15 UTC 条目），所以没有中断中的进度需要恢复——A-11 已经结案，不用回去接着做。
 
 
 

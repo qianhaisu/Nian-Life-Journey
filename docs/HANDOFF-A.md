@@ -3,7 +3,7 @@
 > **这份文档只能覆盖写，不能追加。** 它永远只描述"现在"，长度保持在 100 行以内。
 > 历史在 `git log` 和 `docs/STATUS.md` 里，不在这。一个刚清空上下文的 Session 只读这一份就能接着干。
 >
-> 最后更新：2026-09-06 07:34 UTC · by Claude Code（A-6~A-11 全部结案，12 次空闲回读无新任务，已收工）
+> 最后更新：2026-09-06 07:43 UTC · by Claude Code（🚨 P0 已修：`loadFamilyArchive()` 不再拉 `raw_sources.text`，commit `7d7fe15`）
 
 ---
 
