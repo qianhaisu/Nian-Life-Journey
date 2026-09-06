@@ -38,7 +38,7 @@ docs/ORCHESTRATOR-INBOX-B.md docs/STATUS-B.md docs/HANDOFF-B.md
 
 ## 2 · 现在做到哪
 
-**C-1 ~ C-6 全部完成。C-5 Cowork 03:05 UTC 亲验通过，C-6 268/268 预热成功、0 触发防护。**
+**C-1 ~ C-6 全部结案。C-6 最终判定：预热前提不成立，接受现状，不再投入。**
 
 | 任务 | 内容 | 状态 |
 |---|---|---|
@@ -47,7 +47,8 @@ docs/ORCHESTRATOR-INBOX-B.md docs/STATUS-B.md docs/HANDOFF-B.md
 | C-3 | /api/health 恢复（200 + DB 计数） | ✅ commit bd63bb7 |
 | C-4 | generateStaticParams 让年/月页真正走 ISR | ✅ commit f455125 |
 | C-5 | `/api/media` 流式响应 `getStream()`，解决 web 变体冷路径延迟；给 B 轨 variant/尺寸结论（正文用 thumbnail+lazy，hero 用 web+priority） | ✅ commit 2aaced6，Cowork 实测 thumbnail TTFB 0.379s / web 0.452s |
-| C-6 | 预热 2025 阅读路径：年页+12月页实际渲染的图，并发≤2+间隔+退避 | ⚠️ **第一轮被退回重做**（预热了错的 URL：浏览器实际走 `/_next/image?url=...&w=...`，工具只认 `/api/media/...`）。路线拍板=A（`unoptimized`），B-18 已上线并确认生效。重跑时又发现工具正则漏掉了含冒号的 `wechat-media:` id（全程 0 张 wechat 来源图被真正预热过），已修。**真正的对照实验结果：预热和不预热的月份读者体验没有差异**——CDN 缓存条目实测约 4-5 分钟就被逐出，跟 `Cache-Control: max-age=31536000` 头无关，是 Vercel 共享边缘缓存自己的驱逐策略。**C-6 当前设计的前提不成立，需要 Cowork/Teddy 重新拍板方向**，详见 STATUS-C.md 完整数据。 |
+| C-6 | 预热 2025 阅读路径 | ✅ **结案（放弃预热，接受现状）**——路线 A（B-18 `unoptimized`）已上线；工具的 `wechat-media:` 冒号正则 bug 已修；真正的对照实验证明预热无效，CDN 缓存条目约 4-5 分钟被逐出（Vercel 共享边缘缓存驱逐策略，跟响应头无关）；真机冷加载实测（无预热）首屏文字秒开、图片平均 1-2 秒/张浮现，判定「可接受但不流畅」，Teddy/Cowork 已认可接受现状，见 `docs/STATE.md` 决策 19。 |
+| Ignored Build Step | Vercel 项目设置，纯 docs push 跳过构建 | ✅ Teddy 网页配置 + 两次真实推送验证通过（`vercel inspect --logs` 确认 exit 0 跳过 / 真代码改动正常构建） |
 
 **Cowork 2026-09-06 独立复验结果**（库数字 + 浏览器，双重验证）：
 - `/` HIT，age=26s；`/memory` STALE；`/memory/2026` STALE；`/memory/2026/08` STALE；`/about` STALE
@@ -61,15 +62,13 @@ docs/ORCHESTRATOR-INBOX-B.md docs/STATUS-B.md docs/HANDOFF-B.md
 
 ## 3 · 下一件事
 
-**暂无 ready 任务。** C-5、C-6 都结案，入箱暂无新任务，正在按常设规则每 5 分钟回读
-`docs/ORCHESTRATOR-INBOX-C.md` 顶部看板等新派单。
+**暂无 ready 任务。** C-1~C-6 和 Ignored Build Step 全部结案，入箱暂无新任务，正在按常设规则
+回读 `docs/ORCHESTRATOR-INBOX-C.md` 顶部看板等新派单。
 
-已知的潜在后续工作（不主动做，等 Cowork 派单）：
-- **C-6 需要重新拍板方向**：预热本身机制没问题（工具已修好两个 bug：`/_next/image` 缓存键
-  问题靠 B-18 `unoptimized` 解决、`wechat-media:` 冒号正则漏洞已修），但 CDN 缓存约 4-5 分钟
-  就被逐出，"提前焐热等未来某时刻访客"这个前提在 Vercel 默认边缘缓存上不成立。可能方向：
-  接受现状（C-5 已经让每次冷 MISS 本身更快）、或考虑更高缓存保证的方案（会触及"不换图片
-  托管方案"这条红线，需要 Teddy 拍板）。
+已知的潜在后续工作（不主动做，等 Cowork/Teddy 拍板）：
+- 如果 Teddy 想让缓存/加载体验更好，唯一路径是换更高缓存保证的方案（R2 自定义域名直出，或
+  Vercel 付费层级）——两者都是红线/花钱决定，不擅自推进。C-5 已经是"不换方案"前提下能拿到
+  的最好结果。
 - R2 自定义域名直出（这轮明确不做）
 - 未来新月份 generateStaticParams 自动覆盖（on-demand ISR 已接住，无需手动枚举）
 - 预热工具目前是手动跑，没接 worker/定时任务；worker 上线后可以考虑接进 ingest 收尾流程
