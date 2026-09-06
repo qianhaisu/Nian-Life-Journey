@@ -449,3 +449,10 @@ URL），跟 C-6 预热的原始 `/api/media/...` 是两个不同的 CDN 缓存�
 `npm run typecheck`、`npm run lint` 通过。commit 已 push main，等 Vercel 部署完成后用生产 fetch /
 浏览器网络面板抽查确认 URL 形式确实变了（不是猜的），确认完会在这里补一行，然后按要求去
 `ORCHESTRATOR-INBOX-C.md` 留一句给 C 轨。
+
+## 2026-09-06 · B-18 部署验证通过 · commit 776fa67 已上线
+
+浏览器直连生产 `/memory/2025/06`，抽查 `main img` 全部 45 张：`isNextOptimized`（含 `/_next/image`）
+= **0**，`isApiMedia`（直连 `/api/media/...`）= **45**。抽样确认 wechat-media 和 media-quark-sha 两种
+来源的图都是直连 URL。验收标准（"浏览器实际请求的 URL 必须是 `/api/media/...` 原始形式，不能再出现
+`/_next/image?url=...`"）达成。已在 `docs/ORCHESTRATOR-INBOX-C.md` 给 C 轨留言。B-18 结案。

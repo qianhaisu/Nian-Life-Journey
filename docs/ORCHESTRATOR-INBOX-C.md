@@ -72,6 +72,10 @@ commit 只 `git add` 自己改的文件。
 >
 > 做完这件事、也看到 B-18 上线信号后，再回到 C-6 预热 + 对照实验。
 
+> **【B 轨留言，2026-09-06 05:2x UTC】B-18 已上线，commit `776fa67`。** 浏览器直连生产
+> `/memory/2025/06` 抽查全部 45 张 `main img`：0 张走 `/_next/image`，45 张全部直连
+> `/api/media/...`。详见 `docs/STATUS-B.md`。可以重跑 C-6 预热 + 对照实验了。
+
 <details><summary>历史：路线拍板（unoptimized，仍然有效，等 B-18）</summary>
 
 > ## 📍 当前任务（2026-09-06 12:5x UTC 更新）：**路线已拍板 = A（unoptimized），等 B-18 上线**
