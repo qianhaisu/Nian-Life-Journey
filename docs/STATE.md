@@ -162,6 +162,27 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
   写清楚使用边界，比如这次的"callers outside the Organizer's own read path must use getStore()
   instead"——这种警告是真的，不是防御性文档）。修复：加一个只查 `life_events`（按
   profile_id，不按 visibility）的轻量函数替代整个 `getOrganizerStore()` 调用。
+  **已修复并独立验证部署生效（2026-09-06 07:5x UTC，Cowork 核查，非二手报告）**：A 轨
+  commit `7d7fe15` 加了 `Repository.getAllEventIdentities(profileId)`（只查 life_events
+  的 id/title/story/occurredAt 四列，两个后端实现都补齐），`loadFamilyArchive()` 换用它。
+  Cowork 独立核实：①用 git clone 单独拉一份 origin/main（不信任本地缓存的 remote-tracking
+  ref）确认 7d7fe15/88f7be7 真的在远端主干；②通读 publication-moments.ts/memory-chapters.ts
+  里 buildTraceNotes/isGarbageLifeEvent/memoryTitle 的实际取值，确认 trace 事件真的只用得到
+  这四个字段，跟 A 报告一致；③生产环境实测：把 /、/about、/memory、/memory/2026/07、
+  /memory/2026/06 几个已过期（age>300s）的 ISR 页面手动打一遍，全部在 30~130 秒内
+  x-vercel-cache 从 STALE 变回 HIT 且 age 归零——旧的 getOrganizerStore() 查询要 80 秒以上，
+  大概率会撞 Vercel 函数超时导致重新生成失败，这次全部干净成功，行为上印证新的快查询路径
+  已经在线上跑。
+  **另发现两个衍生尾巴，不紧急，记录待后续任务处理**：
+  (a) getEventDetail()（postgres-repository.ts 约 411-565 行，事件详情页用）有同一形状的
+  问题——db.select().from(t.rawSources) 不带列筛选也不带 WHERE，整表含 text 列都拉出来
+  在 JS 里按 sourceIds 过滤，跟这次修的 bug 是同一个模式，只是没被这次事故牵连（详情页
+  流量小得多）。建议之后比照 getAllEventIdentities() 的做法给它也加个 scoped 查询。
+  (b) 除 A 轨这条真正的修复外，另一个 session（commit cb1d634，独立于 A 轨）在 A 轨已经
+  修完 13 分钟后又追加了一条止血提交，把这 5 个页面的 ISR revalidate 从 300 秒改成了
+  3600 秒——本意是给真正的修复争取时间，但落地时真正的修复已经上线，属于没查 git log
+  就重复动手的协作缝隙（无害，3600 秒目前反而是多一层保险，但按它自己 commit message 里
+  写的，等确认稳定后应该有人把这 5 个文件的 revalidate 改回 300）。
 - `monthly_snapshot` 只有 `id/profile_id/month/summary/highlights/visibility/created_at` 七列，**没有 status、没有 month_date**，`month` 是文本列。
 
 **Git / 环境**
@@ -255,13 +276,16 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 | **Vercel Ignored Build Step**（docs-only commit 跳过构建） | 🟡 命令已确认，已告知 Teddy 正确位置（Settings → Build and Deployment，不是 Git），等他粘贴 | 等 Teddy |
 | **C-6 图片预热** | ⚪ 放弃（见决策 19：Vercel 边缘缓存 4-5 分钟驱逐，预热前提不成立，改依赖 C-5 冷启动优化） | — |
 | **C-6 收尾：测真实冷加载体验**（无预热，真实浏览器，移动端 375px） | 🟢 派给 C | 现在 |
-| **A：孤立昵称+第三方转发聊天记录扫描** | 🟢 范围已批准，A 可开工（两阶段：SQL 候选 + 人工核对） | 现在 |
+| **A：孤立昵称+第三方转发聊天记录扫描（A-11）** | ✅ 已完成（A 轨 STATUS.md 2026-09-06，在 P0 之前交的） | — |
 | **nianlife-worker.mjs 首次正式跑**——手动跑一次 vs 挂 Windows 定时任务 | ⏸ Teddy 说先放着（2026-09-06） | 暂缓 |
 | **`INGESTION_TOKEN` 填入 `.env.local`**，打通 worker→revalidate | ✅ 已完成（2026-09-06，Cowork 验证 200） | — |
 | subject-gate.ts 收紧「孤立昵称 + 第三方转发聊天记录」判断 | 未开始，需要专门任务 | 中 |
 | 夸克 1,468 张 HEIC 转码入库（P1-2b） | 阻塞（解码器限制） | 中 |
 | B 轨、C 轨入箱已空 | **可以 /clear**（HANDOFF-B/C 已更新） | — |
 | P1-6 真机验收（Teddy 挑一晚跑完首跑 + Cowork 浏览器确认） | 待 worker 首跑决定后 | P2 之后 |
+| **P0 egress 事故修复（loadFamilyArchive 误用 getOrganizerStore）** | ✅ 已修复+已部署+Cowork 独立核实（commit `7d7fe15`，见第 3 节踩坑记录） | — |
+| getEventDetail() 同类无 scope raw_sources 全表读（P0 的衍生尾巴 a） | 未开始，不紧急（详情页流量小），建议比照 getAllEventIdentities() 处理 | 低 |
+| 5 个公开页 ISR revalidate 300→3600 的止血提交（commit `cb1d634`）待回退 | 未回退，暂时留着无害（P0 的衍生尾巴 b） | 低 |
 
 **阶段 0 的完成标准**：打开 nianlife.cn 任何一个月都能看到张年；首页「最近」是 2026-09；苏静看过一次并说了一句话。
 
