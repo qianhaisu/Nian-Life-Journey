@@ -2,6 +2,7 @@ import { getMediaForDelivery } from "@/lib/db/repository";
 import { hotStorage, selectLocation } from "@/lib/storage/hot-storage";
 import type { MediaVariant } from "@/lib/types";
 import { NextResponse } from "next/server";
+// Ignored Build Step verification 2/2 — touches v2/, should trigger a normal build.
 
 const NOT_CACHEABLE = { "Cache-Control": "no-store" };
 
