@@ -149,6 +149,19 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 - **不要无条件信任另一个 session 自己算出来的数字。** 这次巡检 session 报告 life_events=602、monthly_snapshot 12 个月，Cowork 独立查库后发现真实数字是 651 和 16 个月（含 4 个月缺 snapshot）——不是造假，大概率是它在读错文件、上下文比较混乱的情况下算出来的过时/错误对比基准。**每次巡检后，人工看到的汇总数字也要抽查一次，不能连续两层都不验证。**
 - **同一个 6 小时定时检查可能被并发触发两次。** 2026-09-06 01:01 UTC 前后，两个 Cowork session 同时在跑这次编排检查：另一个 session 先一步 commit 了 b809d76（只改了 STATE.md 头部时间戳），把「最后更新」写成「00:35 + 6 小时 = 06:35 UTC」——这是算出来的，不是实际查的当前时间，跟真实时间（当时约 01:01 UTC）对不上。连带效应：它 commit 前后产生的 .git/HEAD.lock 在我这边一度被误判成「僵尸锁」（0 字节、ps 里查不到进程），其实是它 commit 那一瞬间的正常残留，只是沙盒不让 git 自己清理。**教训**：锁文件 0 字节不代表一定是死锁，也可能是刚提交完、清理失败；改「最后更新」时间戳一律用 device_bash 里 date -u 的真实输出，不要对旧时间戳做算术；commit 前最好先 git log -3 确认 HEAD 没有在自己不知情的情况下前进过。
 
+**部署验收（2026-09-06 血的教训）**
+- **判断「改动有没有上线」要看构建产物，不能看渲染结果。** 今天 B、C、Cowork 三方同时误判：
+  页面内容没变 → 都以为"部署没落地"，B 白等 30 分钟、C 写了"production verification blocked"，
+  Cowork 还把这个错误结论写进了两个入箱。**真相是部署全部 Ready**，B-17 的代码早就在线上，
+  只是那段代码筛出来的数据永远是空数组，所以渲染结果跟没上线一模一样。
+  **正确做法**：抓页面引用的 CSS/JS bundle，grep 里面有没有这次改动引入的类名/标识符
+  （这次是 `moment-trace`，CSS 里有 = 代码在线上）；或者直接看 Vercel Deployments 的状态。
+  **渲染结果为空 ≠ 没部署**——它同样可能是数据或逻辑问题，两者长得一模一样。
+- **服务端改动（比如只改数据读取路径）不会改变 CSS/JS hash**，这时只能靠元素计数/内容判断，
+  或者看部署列表。另外注意：**不同路由的 CSS bundle hash 本来就不同**，
+  拿首页的 hash 跟月页的比是没有意义的（Cowork 今天也犯过这个错）。
+- **反复高频请求 nianlife.cn 会触发 bot 防护**（B 轨实测），巡检和预热都要控频。
+
 **验收工具**
 - **`v2/scripts/nianlife-status.mjs`（`nianlife-verify` 技能）一键查真实状态**：表计数、月度覆盖、硬盘 vs 库对照、导入任务、质量审阅、线上探活。跑法：`cd v2 && node scripts/nianlife-status.mjs`（需要 `Nianlife`、`WechatHis`、`NianlifeOps` 三个文件夹授权）。每轮开工前和验收时都跑。
 
