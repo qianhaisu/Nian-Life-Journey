@@ -47,9 +47,14 @@ export function Photo({ media, sizes, priority = false, variant = "web", fit = "
   const width = media.width || 4;
   const height = media.height || 3;
   return <figure className={figureClassName} style={figureStyle}>
+    {/* B-18: these variants are already fixed-width webp generated at ingest time, so Next's
+        optimizer has nothing to do but re-encode them — and split their cache key from the raw
+        /api/media URL, which is what C-6's cache warming actually requests. `unoptimized` makes
+        the browser fetch /api/media/... directly. */}
     <Image
       key={src}
       src={src} alt={media.alt} width={width} height={height} sizes={sizes} priority={priority}
+      unoptimized
       onError={() => (wantsThumbnail ? setFullSize(true) : setFailed(true))}
       onLoad={(event) => {
         const { naturalWidth, naturalHeight } = event.currentTarget;

@@ -65,7 +65,7 @@ function EvidenceItem({ source, mediaById, contributorById, deliverableIds }: {
           <div className="evidence-media">
             {withImages.map((item) => (
               <div className="evidence-media-item" key={item.id}>
-                <Image src={item.thumbnailSrc ?? item.src} alt={presentableAlt(item)} fill sizes="(max-width: 700px) 42vw, 220px" style={{ objectFit: "cover" }} />
+                <Image src={item.thumbnailSrc ?? item.src} alt={presentableAlt(item)} fill sizes="(max-width: 700px) 42vw, 220px" style={{ objectFit: "cover" }} unoptimized />
                 <span className="evidence-media-label">{item.type === "video" ? `视频 ${formatDuration(item.durationSeconds)}`.trim() : "照片"}</span>
               </div>
             ))}

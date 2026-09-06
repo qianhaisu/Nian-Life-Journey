@@ -158,7 +158,7 @@ export function PhotoGallery({
           onClick={() => openViewer(viewerIdxFor(heroIndex!))}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(viewerIdxFor(heroIndex!)); } }}
         >
-          <Image src={heroPhoto.src} alt={heroPhoto.alt} width={heroPhoto.width || 4} height={heroPhoto.height || 3} sizes={heroSizes} priority={priority} />
+          <Image src={heroPhoto.src} alt={heroPhoto.alt} width={heroPhoto.width || 4} height={heroPhoto.height || 3} sizes={heroSizes} priority={priority} unoptimized />
         </figure>
       ) : null}
 
@@ -184,6 +184,7 @@ export function PhotoGallery({
                   height={photo.height || 3}
                   sizes={stripSizes}
                   priority={priority && si === 0 && !heroPhoto}
+                  unoptimized
                 />
               </figure>
             );
