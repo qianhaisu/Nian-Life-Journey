@@ -114,7 +114,12 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 - 会话序号不稳定，稳定身份是 documentDigest。
 - **租约过期 ≠ 进程死亡**，`chat-import-state.ts` 的 claim 会自动捡起断点，不要手动改数据库状态。
 - 导入不会 enqueue Organizer；Quark ingest 会。
-- **P1-6 worker 首跑 = 全量重导，不是真增量。** worker 自己的增量基准跟旧版手动导入脚本的状态文件是两套独立系统，互不认账。首跑日志会显示"first run — full import"，把已导入过的数据当新的全部重新扫一遍（按 documentDigest 去重，不会真的重复写入，但会很慢）。**这是设计上的一次性成本，不是 bug**，挑一段能整晚开着电脑的时间做首跑。
+- **P1-6 worker 首跑 = 全量重扫，不是真增量。** worker 自己的增量基准跟旧版手动导入脚本的状态文件是两套独立系统，互不认账。首跑日志会显示"first run — full import"，把已导入过的数据当新的全部重新扫一遍（按 documentDigest 去重，不会真的重复写入，但会很慢）。**这是设计上的一次性成本，不是 bug**，挑一段能整晚开着电脑的时间做首跑。
+- **首跑的实际影响比字面小得多（Cowork 2026-09-06 读脚本确认，不要凭直觉判断）**：
+  - `created === 0 && mediaCreated === 0` 时，**Phase 2-4 整个跳过**——不跑 Organizer、不重生成 monthly_snapshot、不 revalidate。硬盘上没新东西的话，首跑就是一次几小时的只读扫描，**不花 API 钱、不动任何已有内容**。
+  - 真扫出新消息时，只有「本次真正写入的行所在的月份」会被重新 Organize（affected months 是按 `raw_sources.created_at >= 本次启动时间` 查的），不是全量重跑；已组织过的窗口有指纹短路会跳过。
+  - **唯一的破坏性写操作：受影响月份的 `monthly_snapshot` 会被覆盖重写**（`persistMonthlySnapshot` 是 upsert）。所以某个 2025 月份一旦被扫出新消息，A-4 验过的那份月度回顾会被重新生成，**必须重新抽读**。
+  - **`--since=YYYY-MM-DD` 可以绕过全量重扫直接建基准**：不带 `--no-state-update` 跑一次窄区间，`worker-state.json` 的 `lastRunAt` 就写上了，之后就是真增量。代价是放弃「全量重扫顺带核对源数据完整性」这个副作用。这几个 flag 原本标注为「仅供手动 bounded 测试」，这么用属于 off-label 但机制上成立。
 
 **Quark 入库（P1-2）**
 - 87% 是 .HEIC，sharp/libvips 在 Windows 上无法解码，静默崩溃。`heic-convert`（纯 JS/WASM libheif）已验证方案，1,468 张待转码入库。
