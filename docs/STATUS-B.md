@@ -223,3 +223,8 @@ B-16 结案。B 轨这轮（B-1~B-16）全部验收通过，入箱已清空。�
 - 代码已完成、typecheck/lint 通过、commit c783a6f + e8a0ee2 已 push main。
 - 目前在等 Vercel 部署：`vercel ls` 显示今晚三条轨同时在推，部署队列里堆了 4 条（Queued/Building），我这条改动应该在队列里，还没轮到。持续轮询 `/memory/2025/06` 的 HTML 找 `moment-trace` class 出现。
 - 无新代码改动；下一步：部署生效后立刻浏览器手机 375 + 桌面验收 2025/06、2025/12、2026/08 三个页面。
+
+###  UTC · 中间进度 · B-17
+
+- 仍在等部署。`vercel ls` 显示三轨并发提交导致队列积压（一度 5 条 Queued + 1 条 Building 7 分钟+），单条构建正常约 6-9 分钟，队列预计还要几分钟才能轮到我这条改动。
+- 代码无新变化；持续轮询 `/memory/2025/06` 找 `moment-trace` class。
