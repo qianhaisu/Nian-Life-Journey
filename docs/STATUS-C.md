@@ -534,3 +534,21 @@ DPR，猜不中就是白热。
 Cowork 确认走路线 A，已派 B-18 给 B 轨（photo.tsx/photo-viewer.tsx/evidence-list.tsx 三处加 unoptimized）。在看到 B 轨「B-18 已上线，commit <hash>」之前不重跑，工具代码原样不动。看到后按顺序：①生产 fetch 抽查确认页面只剩 /api/media/...（不再有 /_next/image?url=...），②按对照实验方式（预热 A 月、留 B 月不预热，各抽 5 张报命中率+TTFB 差值）重跑 C-6。继续回读入箱等 B-18 消息。
 
 空闲第 N 次回读，等 B-18：代码已在 main（776fa67，13:04:56 +0800），但生产 /memory/2025/11 还是旧构建（/_next/image 引用仍有 793 个，应该是 0），Vercel 部署还没上线，继续等，不重跑。
+
+## 2026-09-06（Claude Code）Ignored Build Step 任务：已确认设置内容，卡在没有配置通道
+
+**已确认**：
+1. Root Directory 实测确认 = `v2`（`vercel project inspect nian-life-journey` 输出，不是假设）。
+2. `vercel.json` 确实没有这个字段（Cowork 判断对），CLI `vercel project update --help` 列出的所有选项里也没有——这个 CLI 版本（59.11.7）不支持配置 Ignored Build Step，只能走网页 Settings → Git → Ignored Build Step，或者直接调 Vercel REST API（`PATCH /v9/projects/{id}`，字段 `commandForIgnoringBuildStep`）。
+
+**修正一处 Cowork 草稿里的命令**：因为 Root Directory 确实是 `v2`，Vercel 跑这条命令时 cwd 就是 `v2/`，不需要 Cowork 草稿里那串 `:(exclude)../docs` 排除写法（那是假设 Root Directory 是仓库根目录时才需要的写法）。更简单也更准的命令：
+```
+git diff --quiet "${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}" HEAD -- .
+```
+从 `v2/` 内跑，`-- .` 天然只看 `v2/` 底下的改动，`docs/**`、根目录 `*.md`、`.github/**` 本来就在这个 pathspec 之外，不用额外排除。用 `VERCEL_GIT_PREVIOUS_SHA`（Vercel 构建环境提供的"上一次真正部署的 commit"）而不是 `HEAD^`，是因为心跳 commit 一次能堆好几个，`HEAD^` 只退一步，`VERCEL_GIT_PREVIOUS_SHA` 才是真正该比较的基准；取不到时兜底 `HEAD^`，命令本身失败（比如浅克隆没有这个 ref）会返回非零，非零 = 正常构建，不会误伤，符合"宁可少省"的要求。
+
+**卡住的点**：配这个设置需要网页 Settings 页面点击，或者一个 Vercel API token 走 API 改。CLI 已认证（`vercel whoami` → `seriousfish`）但认证信息存在本机凭据文件里，读取被沙箱权限分类器拦下了（合理拦截，不强行绕过）；环境变量里也没有 `VERCEL_TOKEN`。**这一步我做不了，需要二选一**：
+- Teddy 直接在 Vercel 网页 Settings → Git → Ignored Build Step 里粘贴上面那条命令；或
+- 给我一个有项目管理权限的 Vercel API token（临时环境变量传入即可，不用写进任何文件），我用 API 设完之后就不再需要它。
+
+设完之后我会按 Cowork 要求做两次真实验证（纯 docs 改动应显示 Ignored；碰 v2/ 的改动应正常构建），验证通过再报"做完"。**在此之前，这一步暂停，回去继续等 B-18 部署上线**（`/memory/2025/11` 目前 `/_next/image` 引用仍是 793 个，还没变化）。
