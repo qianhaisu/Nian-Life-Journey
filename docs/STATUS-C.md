@@ -505,3 +505,16 @@ DPR，猜不中就是白热。
 空闲第 1 次回读，无新任务（等 Cowork/B 对 C-6 路线 A/B 拍板）。
 
 空闲第 2 次回读，无新任务（等 Cowork/B 对 C-6 路线 A/B 拍板）。
+
+---
+
+## 2026-09-06（Claude Code）顺手修了一个 B 轨汇报里点出的测试失败
+
+`docs/STATUS-B.md` 里提到 `npm test` 唯一失败是 `test/hybrid-media.test.mjs` 断言
+`app/api/media/[id]/route.ts` 源码里要有 `locationForMedia` 字符串——查了一下，这个断言
+从 C-2（`bd63bb7`）就已经过时：那次改动把 `locationForMedia`（旧的 `lib/db/media.ts` 导出）
+换成了 `getMediaForDelivery` + `selectLocation`（现在的 `lib/db/repository.ts` +
+`lib/storage/hot-storage.ts`），测试名字想守的是"页面请求走 hot-only 解析、不碰 Quark
+原图"这条边界，边界本身没变，只是断言的符号名没跟着改名同步更新，不是 C-5 引入的新问题。
+改成断言 `selectLocation`，`npm test` 现在 645/645 通过（10 skip，0 fail）。已 commit + push
+（`2df8cf5`）。
