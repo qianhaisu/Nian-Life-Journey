@@ -37,6 +37,26 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-06 04:45 UTC · 中间进度 · A-10
+
+- 代码改完了：`lib/db/postgres-repository.ts` 的 `reviewFromRow` 不再调用
+  `normalizeQualityDecision`，原样透传存储值；`lib/db/json-repository.ts` 的读取水合
+  （`normalizeStore`）和写入（`persistQualityReview`）两处同样的坑也一并修了（json 仓库是
+  本地开发用的另一个后端，有一模一样的 bug）；`lib/organizer/quality-review.ts` 的
+  `normalizeQualityDecision` 加了一段注释，写清楚这个函数只该在真正计算发布判定的地方调用
+  （`indexReviews`/`isEventPublishable`/`isTracePublishable`），不该在通用读取层提前调用。
+  没有改这三个发布判定函数本身的逻辑。
+- `npm run typecheck` 通过（无报错）。`node --import tsx --test` 跑了 5 个相关测试文件
+  （`deepseek-quality-gate`、`organizer-dailytrace-identity`、`organizer-production-adapter`、
+  `organizer-v2-cutover`、`repository-contract`），**106 个用例全部通过，0 失败**（1 个跳过是
+  postgres contract 套件本来就需要显式设 `CONTRACT_DATABASE_URL` 才跑，这个跳过是设计内行为）。
+- 正在跑一个针对真实生产库的验证脚本（`scripts/a10-verify-getstore-decision.mjs`）：直接调用
+  真实的 `getStore()`（就是 `family-archive.ts` 和所有页面用的那条路径），检查 153 条
+  `target_kind='life_event_trace'` 行读回来的 `decision` 是不是变回 `trace_eligible`——
+  这正是你说的验收标准。跑起来比预期慢（`getStore()` 本身是重查询），还在跑，跑完立刻回报结果。
+
+
+
 ### 2026-09-06 04:37 UTC · A-9 收尾 predeclare（1 条撤销发布，未写库）+ ⚠️ 一条需要单独确认 + 防复发方案修正
 
 **看到 04:45 UTC Teddy 拍板：配图支持的叙述（含引语）可接受。** 收到，A-9 绝大部分作废这件事
