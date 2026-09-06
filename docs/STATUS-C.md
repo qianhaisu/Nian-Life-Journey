@@ -732,3 +732,46 @@ CLI 状态字段显示 `Canceled`（Vercel 没有单独的 "Ignored" 状态枚�
 空闲回读，无新任务，仍等 Cowork 确认。
 
 空闲回读，无新任务，仍等 Cowork 确认。
+
+空闲回读，无新任务，累计 6 条心跳，按规则批量 push。
+
+---
+
+## 🚨 2026-09-06（Claude Code）紧急：Ignored Build Step 命令有 bug，正在挡住所有部署（包括 P0 修复）
+
+**我推的 P0 应急 stopgap（`cb1d634`，5 个页面 revalidate 300→3600）部署失败了，
+去查发现问题更大**：`vercel ls` 显示过去 1 小时内**至少 5 次部署全部 `Error` 状态**，
+`vercel inspect --logs` 全部卡在同一行：
+```
+Running "git diff --quiet "${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}" HEAD -- ."
+fatal: bad object cda241b82a51461050f732215d8c50114ce36788
+```
+**`git diff` 本身报致命错误（对象在浅克隆里找不到），Vercel 把这种情况判成整个部署
+`Error`，不是我之前以为的"命令失败=非零退出=正常构建"那种安全兜底。**
+
+**影响面**：`nianlife.cn` 当前线上跑的还是 **2 小时前**的构建（`73srditgq`，14:29:45），
+**A 轨这段时间的 P0 修复 commit、我的 stopgap commit，全部没有真正上线**——意味着
+`loadFamilyArchive()` 那个吃 64MB 表的 bug **这 1 小时里一直在生产环境上继续跑**，
+钱还在烧，我之前给的这条命令是这次卡住的直接原因，我的责任，现在补救。
+
+**根因**：`$VERCEL_GIT_PREVIOUS_SHA` 指向的 commit 在这次构建的浅克隆里找不到对象
+（`cda241b` 是我早前一次 Ignored Build Step 测试用的 commit，具体为什么后来的浅克隆
+够不到它没深挖，不重要，重要的是这条命令不该在这种情况下让整个部署报错）。
+
+**修复方案（已验证逻辑，命令本身没有再推上生产，因为这个字段我改不了，见之前的说明）**：
+```
+git cat-file -e "$VERCEL_GIT_PREVIOUS_SHA" 2>/dev/null && git diff --quiet "$VERCEL_GIT_PREVIOUS_SHA" HEAD -- .
+```
+逻辑：先用 `git cat-file -e` 确认这个 SHA 在本地浅克隆里能解析，解析不了就直接让
+`&&` 短路，整条命令以非零退出（= 正常构建，不猜、不冒险漏建）；解析得了才真的跑
+`git diff`。**去掉了原来的 `HEAD^` 兜底**——因为 `HEAD^` 只能对比"上一个 commit"，
+如果心跳一次攒了好几个再批量 push（这正是这几个小时我们在做的事），`HEAD^` 会漏看
+那个批次里更早的真代码改动；解析不了 SHA 时"直接建"比"退回到 HEAD^ 猜"更安全。
+
+**这需要 Teddy 去网页 Settings → Build and Deployment → Ignored Build Step 把命令
+换成上面这条，越快越好**——我这边没有 dashboard/API 权限去改（跟之前报的限制一样）。
+**这是当前最高优先级**：不修这个，A 轨的 P0 修复即使 commit 了也上不了线，钱会继续烧。
+
+已经用 `git cat-file -e`/`git diff` 语义在纸上验证过三种分支（能解析且无 diff→跳过、
+能解析且有 diff→构建、解析不了→构建），没有在生产环境反复试错验证（避免再多制造几次
+失败部署）。
