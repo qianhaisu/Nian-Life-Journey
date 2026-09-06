@@ -90,21 +90,27 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   // row regardless of review decision.
   //
   // The gate is A-6's own marker, target_kind='life_event_trace' + decision='trace_eligible' — NOT
-  // the raw store_only decision on target_kind='life_event', and deliberately NOT read through
-  // indexReviews()/normalizeQualityDecision(): that helper's QualityDecision union does not include
-  // "trace_eligible", so it silently rewrites every A-6 row to "needs_human_review" and this filter
-  // would always be empty — read the raw ledger rows directly instead. A-6 read every store_only row
-  // in full (not just its title) and rejected the ones whose subject is a pet, a household errand, or
-  // a family member other than the child; the raw store_only set includes those rejects (2026-09-06
+  // the raw store_only decision on target_kind='life_event'. A-6 read every store_only row in full
+  // (not just its title) and rejected the ones whose subject is a pet, a household errand, or a
+  // family member other than the child; the raw store_only set includes those rejects (2026-09-06
   // acceptance caught three live: "奶奶说儿子有个幸福的家"、"妈妈提醒上传照片到亲宝宝"、
   // "妈妈问雪姨新游泳圈会不会好点"). "宁可没有，不要错的" — no marker, no trace line.
-  // `targetKind`/`decision` are typed as narrow unions that only name the real publication ledger's
-  // values ("life_event" | "daily_trace" | "monthly_snapshot" / QualityDecision) — the DB columns
-  // are plain text, and A-6 deliberately writes values outside those unions to isolate its marker.
-  // Cast to string for this one comparison; nothing here writes or normalizes the row.
+  //
+  // NOT filtered on `review.decision`, even by string cast: postgres-repository.ts's assembleStore()
+  // runs EVERY row (any target_kind) through reviewFromRow(), which unconditionally calls
+  // normalizeQualityDecision() — that function's QualityDecision union does not include
+  // "trace_eligible", so by the time a row reaches `store.qualityReviews` its decision has already
+  // been silently rewritten to "needs_human_review", not just when read through indexReviews(). This
+  // was caught by 2026-09-06 acceptance: item 1 initially still fixed with a decision check that
+  // matched nothing, so ALL trace lines silently vanished, not just the three rejects. Filed as a
+  // proper cross-track bug (v2/lib/db/** is A-track's file, not touched here): `provider` +
+  // `promptVersion` are untouched by reviewFromRow and uniquely identify these 153 rows (verified
+  // 2026-09-06: every target_kind='life_event_trace' row has provider='cowork-a6',
+  // promptVersion='a6-trace-layer-v1', decision='trace_eligible' — no rejected variant is ever
+  // written under this target_kind, so this is not a laxer gate, just a decision-column-safe one).
   const traceEligibleIds = new Set(
     (store.qualityReviews ?? [])
-      .filter((review) => (review.targetKind as string) === "life_event_trace" && (review.decision as string) === "trace_eligible")
+      .filter((review) => (review.targetKind as string) === "life_event_trace" && review.provider === "cowork-a6" && review.promptVersion === "a6-trace-layer-v1")
       .map((review) => review.targetId),
   );
   const traceEvents = allEvents.filter((event) => traceEligibleIds.has(event.id));
