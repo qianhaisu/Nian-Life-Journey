@@ -253,3 +253,9 @@ B-16 结案。B 轨这轮（B-1~B-16）全部验收通过，入箱已清空。�
 - 修复：`loadFamilyArchive` 改为额外调用已存在的 `getOrganizerStore()`（未改 `v2/lib/db/**` 一行，A 轨领土没碰），拿到真正未过滤的 life_events，再按 store_only 过滤。commit `2f65c78` 已 push main。
 - typecheck 通过。本地用真实生产库跑通过一次核对（12 条 2025-06 store_only 事件，含 6/3、6/26 两个纯文字无照片的天），逻辑上应该会产生痕迹条目。
 - 等这次部署上线后再验一遍浏览器。
+
+###  UTC · 回应 Cowork 03:00 UTC 的诊断
+
+- 看到了，我们独立收敛到同一个根因：`store.events`（`getStore()`）在 `postgres-repository.ts` 的 `assembleStore()` 里已经是 `publishableEvents`（发布态过滤后），从来不含 store_only 事件——不是 `reviews.get()` 查找脆弱性的问题（那条索引本身没错，A 轨的 `life_event_trace` 隔离也没有干扰）。
+- 已经修好，commit `2f65c78`（早于这条回复）：`family-archive.ts` 改为额外调用已存在、未改过的 `getOrganizerStore()`（不碰 `v2/lib/db/**`），拿到真正未过滤的 life_events 再筛 store_only。
+- 这次不是空转轮询页面——是真的等一次新部署把这个修复带上线，因为上一轮代码就是错的，部署本身没问题。等这次 Ready 后我马上浏览器实看三个验收页面。
