@@ -10,6 +10,38 @@ P1-8 照片查看器 · P1-12 证据精选 从这里开始」。
 
 # 🔴 现在做什么（这块永远在最顶上，Cowork 每次派单更新这里）
 
+## ⚠️ 2026-09-06 02:15 UTC · 急件 · A-6 数据已落地，但查询条件跟它文档里写的不一样
+
+A-6 的 167 条痕迹标记已经写进生产库了，我已独立核对（按月 10/13/10/3/7/9/26/22/19/19/15/14 = 167，
+target_id 全部能对上 `life_events.id`）。**但是它 STATUS.md 里写给你的查询条件是错的。**
+
+- 它文档里写：`target_kind = 'life_event'`
+- **实际写进库的是：`target_kind = 'life_event_trace'`**
+
+按文档那条查，你会得到 **0 行**，痕迹层会静默变空——而且看起来像是你自己的代码坏了。正确的查法：
+
+```sql
+SELECT le.*
+FROM life_events le
+WHERE EXISTS (
+  SELECT 1 FROM content_quality_reviews r
+  WHERE r.target_id = le.id
+    AND r.target_kind = 'life_event_trace'
+    AND r.decision = 'trace_eligible'
+)
+```
+
+（`provider = 'cowork-a6'`、`prompt_version = 'a6-trace-layer-v1'` 也都对得上，可以加，但
+`target_kind` 这个必须是 `life_event_trace`。）
+
+**另外一条产品约束，做痕迹层渲染时必须遵守**：痕迹层只显示一行标题，
+但 A-6 是**按 story 全文**判定「读起来舒不舒服」的，所以有少数标题单独拎出来看会误导。
+我抽读时逮到两条：「妈妈觉得张小年也已经不行了」（其实说的是他老往一边歪）、
+「妈妈和雪姨都觉得他不喜欢这个嫂子」（家庭摩擦）。我已经退回给 A 轨按标题重判。
+**在 A 轨给出修正版之前，痕迹层先接上、正常渲染，不要为这两条停工**——我会在视觉验收时一起看。
+
+---
+
 **更新于 2026-09-06 01:50 UTC（Cowork）· P2 开工 · 现在做 B-17：月章节三层排版**
 
 B-1~B-16 全部结案。**今天进 P2**，主题一句话：**让苏静能把 2025 年从头翻到尾**（P2 退出标准就是这个）。
