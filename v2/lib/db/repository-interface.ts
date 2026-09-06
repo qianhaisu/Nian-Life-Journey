@@ -137,6 +137,14 @@ export interface Repository extends ChatImportRepository {
   // in code paths that need the full domain (Quark ingestion, capture, the web app) — only for a
   // batch Organizer pass over many source-id groups in one run.
   getOrganizerStore(profileId: string): Promise<Store>;
+  // A-6/B-17 trace tier's ONLY need from the whole-profile Organizer view: every life_event's id,
+  // title, story and occurredAt, regardless of publication decision (so a store_only row marked
+  // trace_eligible is still matchable). 2026-09-06: a page render path was calling
+  // getOrganizerStore() for exactly this, which also pulls raw_sources (including its `text`
+  // column — the single largest table) for nothing this call ever reads; that traced back to a
+  // spike in Neon's outbound data transfer. This query touches only life_events, filtered by
+  // profile_id, with no other table joined.
+  getAllEventIdentities(profileId: string): Promise<Array<Pick<LifeEvent, "id" | "title" | "story" | "occurredAt">>>;
   /** Evidence-window input for one job's sources. See OrganizerWindowInput. */
   getOrganizerWindowInput(sourceIds: string[]): Promise<OrganizerWindowInput>;
   getEventDetail(id: string): Promise<EventDetail | null>;

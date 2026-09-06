@@ -311,6 +311,15 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     };
   }
 
+  // See the Repository interface doc comment (2026-09-06, the Neon egress incident): the trace
+  // tier's actual need from getOrganizerStore() was just event id/title/story/occurredAt for every
+  // life_event regardless of decision. One table, four columns, one profile_id filter — no
+  // raw_sources, no media, nothing else.
+  async function assembleEventIdentities(profileId: string): Promise<Array<Pick<LifeEvent, "id" | "title" | "story" | "occurredAt">>> {
+    const rows = await db.select({ id: t.lifeEvents.id, title: t.lifeEvents.title, story: t.lifeEvents.story, occurredAt: t.lifeEvents.occurredAt }).from(t.lifeEvents).where(eq(t.lifeEvents.profileId, profileId));
+    return rows as unknown as Array<Pick<LifeEvent, "id" | "title" | "story" | "occurredAt">>;
+  }
+
   // One job's evidence, read by id. Four small keyed selects instead of a whole-profile (or
   // whole-database) load — the V2 organizer runs inside a queue worker with a request budget, so
   // its read has to be proportional to the job rather than to the archive.
@@ -533,6 +542,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     },
     async getStore() { return assembleStore(); },
     async getOrganizerStore(profileId: string) { return assembleOrganizerStore(profileId); },
+    async getAllEventIdentities(profileId: string) { return assembleEventIdentities(profileId); },
     async getOrganizerWindowInput(sourceIds: string[]) { return assembleOrganizerWindowInput(sourceIds); },
     async getEventDetail(id: string) {
       const [event] = await db.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, id));

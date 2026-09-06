@@ -107,6 +107,12 @@ export function createJsonRepository(): Repository {
         events: store.events.filter((e) => e.profileId === profileId),
       };
     },
+    // Same contract as the PostgreSQL implementation: id/title/story/occurredAt only, for every
+    // life_event regardless of publication decision.
+    async getAllEventIdentities(profileId: string) {
+      const store = await readCanonicalStore();
+      return store.events.filter((e) => e.profileId === profileId).map((e) => ({ id: e.id, title: e.title, story: e.story, occurredAt: e.occurredAt }));
+    },
     // Same contract as the PostgreSQL implementation: one job's sources, their media, and nothing
     // else. Deleted sources are dropped rather than handed to the Evidence Builder.
     async getOrganizerWindowInput(sourceIds: string[]) {

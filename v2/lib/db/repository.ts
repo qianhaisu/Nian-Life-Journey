@@ -21,6 +21,7 @@ export const getHomeEvents = repository.getHomeEvents.bind(repository);
 export const getAllEvents = repository.getAllEvents.bind(repository);
 export const getStore = repository.getStore.bind(repository);
 export const getOrganizerStore = repository.getOrganizerStore.bind(repository);
+export const getAllEventIdentities = repository.getAllEventIdentities.bind(repository);
 export const getOrganizerWindowInput = repository.getOrganizerWindowInput.bind(repository);
 export const getEventDetail = repository.getEventDetail.bind(repository);
 export const getMonthArchive = repository.getMonthArchive.bind(repository);

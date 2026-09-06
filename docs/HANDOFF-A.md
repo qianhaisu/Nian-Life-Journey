@@ -3,7 +3,7 @@
 > **这份文档只能覆盖写，不能追加。** 它永远只描述"现在"，长度保持在 100 行以内。
 > 历史在 `git log` 和 `docs/STATUS.md` 里，不在这。一个刚清空上下文的 Session 只读这一份就能接着干。
 >
-> 最后更新：2026-09-06 06:1x · by Claude Code（A-11 完成：30 候选全核对，0 真误判，结案）
+> 最后更新：2026-09-06 07:34 UTC · by Claude Code（A-6~A-11 全部结案，12 次空闲回读无新任务，已收工）
 
 ---
 
@@ -25,136 +25,37 @@ v2/lib/publication-moments.ts     docs/ORCHESTRATOR-INBOX-B.md    docs/STATUS-B.
 ```
 
 **Git**：直接在 main 上做；`git add` 只加自己的文件，**绝不 `git add -A`**；commit 前 `git pull --rebase`；
-撞上 `.git/HEAD.lock` 先等 30 秒；0 字节锁超过 30 秒可以删。
+撞上 `.git/HEAD.lock`/`index.lock` 先看年龄——0 字节且超过 30 秒可以删，否则等它自己消失。
+**心跳 commit 不用每次都 push**：纯 docs 心跳攒够 ~6 次或有真代码/数据变更再 push（决策 18）。
 
 ---
 
-## 2 · 现在做到哪了
+## 2 · 现在做到哪了（P1 全部完成，P2 的 A-6~A-11 全部结案）
 
-**P1-6（本地 worker）**：
-- `nianlife-worker.mjs` Phase 5 已接上 `/api/internal/revalidate`（Bearer INGESTION_TOKEN），
-  失败只记日志不让 worker 非零退出。新增 `--since`/`--max-messages`/`--limit`/`--no-state-update`
-  仅供手动 bounded 测试用，定时任务不带参数=原行为不变。
-- `E:\WechatHis` 已有 Teddy 导出的真实数据。跑过 bounded 测试（50 条最近消息）验证四阶段全部
-  正常，幂等性没问题。**全量首次导入还没跑**（主群 conversation 7,244 条消息是大头，5万条仅
-  入库16%里剩下的部分）——等 Teddy 决定手动跑一次（数小时）还是挂 Task Scheduler 03:00 定时
-  任务靠增量消化。**`INGESTION_TOKEN` 已打通**（2026-09-06，Teddy 已分别填进 Vercel 和
-  `.env.local`，Cowork 验证 POST /api/internal/revalidate 返回 200），下次 worker 跑
-  revalidate 阶段不会再跳过。
+**P1**：P1-0~P1-7、主体门+T20-C、信任名单图文绑定、scoped read 全部完成。
+**P1-6（本地 worker）**：代码完成，`INGESTION_TOKEN` 已打通，**全量首次导入还没跑**，等 Teddy 拍板跑法。
+**A-4/A-5（2025 全年回填 + 补 snapshot）**：已完成，life_events 651→1004+，16 个月 snapshot。
 
-**A-4（2025 全年回填）已完成（2026-09-06）**：
-- 2025-01~12 十二个月全部过了 T7 管线（dry-run --max-calls=400 → 抽读 → commit → T20-C 自动
-  分级 → `t18-backfill-media-binding.mjs --commit` → `month-review.mjs --commit`）。
-- life_events 从接近 0 涨到 651 条。8 个月（01/04/07/08/09/10/11/12）有完整月度回顾快照；
-  4 个月（02/03/05/06，新生儿期消息量本来就少）按既有 <5 事件阈值规则停在 quiet index，
-  没放宽标准凑数。实测 `curl nianlife.cn/memory/2025/12` 200，能看到真实记忆文字。
-- **过程中发现并修复一个真实主体门误判**：2025-10-01 有一条把两只家猫（其中一只也叫"年年"，
-  跟孩子昵称撞了）的兽医体检报告错判成孩子看兽医。Teddy 确认后删除（source_memory_links →
-  content_quality_reviews → life_events 级联删，435→434）、重跑该月 month-review。**根因未修**：
-  `subject-gate.ts` 遇到"孤立昵称 + 转发的第三方宠物医院聊天记录"这种组合仍可能误判，这次是
-  人工抽读发现的，不是系统挡住的。全库按宠物/兽医关键词扫描过，确认只此一条，但不能排除别的
-  月份里还有没被抽到的同类问题。**下一个 session 建议专门做一次全库"孤立昵称+第三方转发聊天"
-  模式扫描**（不限于猫，任何跟孩子昵称撞名的人/宠物都有风险）——这属于收紧 subject-gate 判断
-  逻辑，是产品判断，不要在别的任务里顺手改。
+**A-6（痕迹层）→ A-11（昵称误判扫描）今天全部结案，详见 `docs/STATUS.md` 对应时间戳条目**：
 
-**A-5（补 4 个月 monthly_snapshot）已完成（2026-09-06）**：
-跑了 `month-review.mjs --month=2025-0{2,3,5,6} --commit`，四个月判官日志一致：已发布
-（published）life_event 分别只有 4/3/2/1 条，均低于 5 条阈值，脚本在写库前就退出——
-`monthly_snapshot` 仍是 16 个月，**没有新增，是既有规则正常生效，不是遗漏**。
-INBOX 给的 23/14/11/13 是这四个月 life_events 总数（含大量 low 级 not-about-child），
-不是已发布数，两者不是一回事。这四个月页面上仍能看到当月 life_event 列表，只是没有独立的
-月度回顾摘要。
-
-**其余 P1 状态**：P1-0（2026-01~05）✅、P1-1（conversationId 稳定性）✅、P1-2b（HEIC 1,260 张
-入库）✅、P1-3（主体门+T20-C）✅、P1-4（信任名单制图文绑定）✅代码完成，视觉验收未做、
-P1-5（scoped read）✅。
-
----
-
-**A-6（痕迹层数据，2025 全年）已完成（2026-09-06，含一轮修正）**：
-- 217 条 2025 store_only life_events **逐条读完判定**，第一轮 167 条标为「可展示痕迹」；
-  Cowork 抽读后指出痕迹层页面**只渲染标题**，第一轮判断却用了 story 全文语境，点名两条
-  标题单独读会误导/暴露家庭摩擦的漏网。按"只看标题"标准重过一遍，又撤销 14 条，
-  **最终 153 条**。撤销清单和理由见 `docs/STATUS.md` 2026-09-06 03:03 UTC 条目。写进
-  `content_quality_reviews`（`target_kind='life_event_trace'`——**注意不是 `'life_event'`**，
-  见下一条踩坑记录、`provider='cowork-a6'`、`decision='trace_eligible'`、
-  `prompt_version='a6-trace-layer-v1'`）。B 轨读取：
-  `target_kind='life_event_trace' and target_id=<life_event.id> and provider='cowork-a6' and decision='trace_eligible'`
-  存在即可展示为痕迹。脚本：`scripts/a6-export-store-only.mjs`（只读导出）+
-  `scripts/a6-trace-layer-write.mjs`（写库）。每月数字和 2025-06 全表逐条判定见
-  `docs/STATUS.md` 2026-09-06 02:07 UTC 条目。等 Cowork 抽读验收。
-
-**A-7（2025 全年 80 条 approved life_events 逐条核对）已完成核对，等确认（2026-09-06）**：
-80 条全读完（不是抽样），主体误判 0 条；发现 7 条「错」+ 3 条「可疑」，全部是同一种模式：
-**只有 1 条源消息的事件**，正文里加了原文完全没有的具体细节或虚构引语（比如把"张年该睡了"
-写成"张年正在爆哭"并编一句带引号的话；把"崽吃光了"写成"鸡蛋和土豆被吃光了"）。另有
-1 条是真正的**张冠李戴**：妈妈转发的第三方广告链接里"某宝宝"的身高体重数据被当成张年
-自己的写进了正文。**没有主体门问题，问题都在写手阶段的文字层面。** 完整清单和原文对照在
-`docs/STATUS.md` 2026-09-06 03:46 UTC 条目。**没有改动任何数据**，按硬边界 predeclare，
-等 Cowork/Teddy 决定怎么处理这 7 条（重写 story / 降级 / 只改最严重的两条）。
-
-**A-7 拍板结果（2026-09-06 03:55 UTC，Cowork 独立复核过属实）**：7 条错全部处理，按证据密度
-分三组（A 组 4-5 条重写后降级痕迹层；B 组「满12个月」那条撤销发布不给痕迹层标记；C 组 2 条
-可疑顺手去掉推测措辞）。**重写草稿已 predeclare 进 `docs/STATUS.md` 03:55 UTC 条目**，跟原文
-并排列出，**没有写库**，等 Cowork 逐条确认（含"长牙"那条要不要降级还没定）。
-
-**A-8（2026 单源事件核对）已完成（2026-09-06）**：26 条单源 approved 事件**全读完**（不是抽 25
-条，因为总数只有 26 条，全读成本一样）。命中 6 条虚构，**错误率 23.1%**，跟 2025 同一模式
-（证据密度低时写手脑补细节/引语/场景）。清单和原文对照见 `docs/STATUS.md` 03:58 UTC 条目。
-**没有写库**，等 Cowork 定调这 6 条走不走 A-7 同样的流程。
-
-**A-9 基本结案（2026-09-06 04:45 UTC Teddy 拍板）**：配图支持的叙述（含引语）算设计内正确
-行为，不算编造，13 条里绝大部分一条都不改。**但 `event-v2-496fde6db412f3b9b09bbe20171908b9`
-（脑门起了个包）我查了三遍 `media_ids` 都是空数组**——这条跟拍板依据的前提（"这些事件都有
-配图"）不一致，已经单独标出来等 Cowork/Teddy 确认，不能被"一条都不要改"带过去。
-剩两件事：①「满12个月，81厘米24斤半」（张冠李戴，`media_ids=0`）撤销发布的 predeclare
-已写进 `docs/STATUS.md` 04:37 UTC 条目，**等确认后再写库**；②「第七颗牙」类精确序数列出
-不改，攒给 Teddy。防复发方案已按新方向改写：只在"单源 + 无配图"这个更窄交集上收紧写手，
-不再对所有单源事件一刀切。**目前 A-9 全程零写库。**
-
-**A-10 验收通过（2026-09-06）**：Cowork 独立读代码确认 + B 轨生产验证过 153 条 trace_eligible
-显示正确，结案，不需要再补 `getStore()` 活验证。
-
-**A-9 彻底结案（2026-09-06）**：「满12个月」撤销发布（`content_quality_reviews` 1 行
-`decision: approved → store_only`，不给痕迹层标记）+「脑门起了个包」文本重写
-（`life_events` 1 行 title/story 更新，`decision` 保持 `approved` 不变，Cowork/Teddy 拍板：
-单薄不等于不该发布，去掉编造细节后剩下的事实站得住就行，跟决策 8 一个逻辑）。**两次写库
-都单独查库核对过实际影响行数**。13 条问题事件全部处理完，防复发方案存档不实现代码。
-
-**A-10（`reviewFromRow` 静默改写 decision 修复）代码完成（2026-09-06）**：
-`postgres-repository.ts`/`json-repository.ts` 的 `reviewFromRow`/`normalizeStore`/
-`persistQualityReview` 不再对读到的每一行都调用 `normalizeQualityDecision`——那个函数只在
-`indexReviews`/`isEventPublishable`/`isTracePublishable`（真正需要发布判定的地方）里调用。
-`npm run typecheck` + 106 个相关单测全过。**`getStore()` 活验证没跑成**：这个 session 里
-Drizzle 全表查询（不带 LIMIT）会挂起不返回，换一张完全无关的表也一样，`.limit(1)` 秒回——
-是这次 session 的环境/连接池问题，跟这次改的代码无关，也不属于 A-10 范围，没有深挖。
-用原生 SQL 独立确认过 153 行的存储值本来就是 `trace_eligible`，加上代码改动就是"不再重写它"，
-逻辑上 `getStore()` 跑通后必然返回正确值，但这是推出来的，不是亲眼看 `getStore()` 跑出来的，
-已经如实写进 STATUS.md，建议 Cowork 用自己的环境独立验证。
-
-**A-11（孤立昵称+第三方转发聊天扫描）已完成结案（2026-09-06）**：SQL 候选 30 条
-（`life_events` approved+store_only，含通用昵称崽崽/崽/宝宝/宝贝但不含专指名字，
-加风险关键词），**30/30 全核对，0 条真误判**。1 条 approved + 1 条 A-6 trace_eligible
-都核对为"好"（"崽"是常见爱称，上下文清楚指张年）；其余 28 条 store_only 是转发的第三方
-育儿文章/商品链接，"宝宝"是泛指名词，从未被判定发布或进痕迹层。2025-10-01 猫体检误判
-结论仍然是孤例，不是系统性问题。清单和判定见 `docs/STATUS.md` 06:15 UTC 条目。
-**没有改动任何数据**（没有需要改的），没有改 `subject-gate.ts`。
+| 任务 | 结果 |
+|---|---|
+| A-6 痕迹层数据 | 2025 全年 217 条 store_only 逐条判定，167→153 条标 `trace_eligible`（按标题单独读的标准重判撤销 14 条），已上线 |
+| A-7 2025 年 80 条 approved 核对 | 全读完，7 条编造细节 + 1 条张冠李戴，已按 Teddy 拍板（配图支持的叙述可接受）处理：1 条撤销发布 + 1 条文本重写，其余维持原样 |
+| A-8 2026 单源事件核对 | 26 条全读，6 条命中同类问题，已按同一拍板原则处理 |
+| A-9 问题事件处理 | 13 条（A-7+A-8）全部处理完，两次写库都核对过实际影响行数 |
+| A-10 `reviewFromRow` 根因修复 | `postgres-repository.ts`/`json-repository.ts` 不再对每行调用 `normalizeQualityDecision`；typecheck+106 单测过；Cowork 独立验收通过 |
+| A-11 昵称误判扫描 | 30 条候选全核对，0 真误判，确认 2025-10-01 猫体检误判是孤例 |
 
 ## 3 · 下一件事
 
-**先读 INBOX 顶部看板**（`docs/ORCHESTRATOR-INBOX.md`）。A-11 已交，等 Cowork 抽读复核。
+**先读 INBOX 顶部看板**（`docs/ORCHESTRATOR-INBOX.md`）。所有已知任务已交，等 Cowork 派新任务。
 
 已知待做（非阻塞，等 Cowork 派或 Teddy 拍板）：
-- A-9 的 13 条重写等逐条确认，确认后按 STATUS.md 里写的机制执行（`UPDATE` 已有 review 行，
-  不要插入新的 `target_kind='life_event'` 行，会撞 `indexReviews()` 的 Map 覆盖问题）
-- B 组 2 条"撤销发布 vs 降级痕迹层"、A 组第 5 条"长牙要不要保 approved"，这两个点我给了
-  建议但没有替 Cowork/Teddy 拍板，需要明确答复
-- 防复发方案 3 选一等 Teddy 拍板，拍板后再单独立项动代码（这次不动 `lib/organizer/**`）
-- 等 Teddy 决定 P1-6 全量导入的跑法，跑完后验证 revalidate 链路真的让 nianlife.cn 秒级更新
-- **P1-4 视觉验收**：打开 2026-07 月页（Quark 照片最多，204 张），确认 Quark 照片和文字并排
-- 建议：全库"孤立昵称+第三方转发聊天记录"模式扫描（见上，subject-gate 收紧，需要单独立项）
-- A-6 排除的约 6 条"敏感/负面家庭摩擦"内容（育儿嫂怠慢嫌疑、父母因钱起争执等）没有删除，
-  留待 Teddy/苏静决定要不要单独处理，不属于这次痕迹层范围
+- 防复发方案（"单源+无配图才收紧写手"，已存档在 STATUS.md）3 选一等 Teddy 拍板，拍板后再单独立项动代码
+- 等 Teddy 决定 P1-6 全量导入的跑法，跑完后验证 revalidate 链路
+- **P1-4 视觉验收**：打开 2026-07 月页（Quark 照片最多，204 张），确认图文并排
+- A-6 排除的约 6 条"敏感/负面家庭摩擦"内容没有删除，留待 Teddy/苏静决定要不要单独处理
 
 ---
 
@@ -162,16 +63,18 @@ Drizzle 全表查询（不带 LIMIT）会挂起不返回，换一张完全无关
 
 1. **`REPOSITORY_BACKEND` 不设会静默写进本地 JSON**（`v2/.data/nian-life.json`），终端照样打印 "WRITTEN"。写库脚本必须硬编码。
 2. `organizer-month-write.mjs` 的 `--out` 必须是**仓库外**的绝对路径。
-3. **匿名发言人要按"一类规则"查**，不是词表。同理，**孩子的昵称如果跟宠物/其他人重名，孤立出现在第三方转发聊天记录里时主体门可能误判**（2025-10-01 的猫体检报告就是这样）——抽读时留意这类内容。
+3. **匿名发言人要按"一类规则"查**，不是词表。孩子的昵称如果跟宠物/其他人重名，孤立出现在第三方转发聊天记录里时主体门可能误判——A-11 扫过一遍全库，目前只有 2025-10-01 那一条是真误判，其余候选都是"泛指名词"（转发文章里的"宝宝"）不是真的撞名。
 4. **月度回顾是二次生成的**：改了 `life_events` 不会自动改 `monthly_snapshot`，删除/修改 life_event 后要重跑 `month-review.mjs --commit`。
 5. **切换 `AI_MODEL` 重跑一个月，必须加 `--force`**：去重键与模型无关。
 6. **flash 有时会漏掉必填数组字段**——已在 `narrative-validator.ts` 全部加 `?? []`。
-7. 验收看数据，不看进程状态。"终端打印出来了" ≠ "数据库里有了"；抽读时打开真实月度回顾草稿看内容，不能只看 written 数字。
+7. 验收看数据，不看进程状态。"终端打印出来了" ≠ "数据库里有了"。
 8. **巡检/查进度时不要用 `LIKE '%Quark%'`**：会把多个批次加在一起。
 9. **T20-C 分级现在是自动的**（P1-3）：`organizer-month-write.mjs --commit` 结束时自动运行 `gradeMonthEvents`。
-10. **HEAD.lock = 0 字节且超过 30 秒未变化 = 可以删**（先等 30 秒确认是否别的轨在用）。
+10. **HEAD.lock/index.lock = 0 字节且超过 30 秒未变化 = 可以删**（先等确认是否别的轨在用）。
 11. **删除 life_event 要走三张表**：`source_memory_links`（life_event_id）→ `content_quality_reviews`（target_id）→ `life_events`（id），顺序反了会因外键报错。
-12. **往 `content_quality_reviews` 给同一个 life_event 加"第二种标记"时，`target_kind` 绝对不能沿用 `'life_event'`**（A-6 踩过，已修复）：`indexReviews()` 按 `` `${targetKind}:${targetId}` `` 建 Map，底层查询没有 `ORDER BY`，同 key 后来的行会不确定地覆盖先来的真实 T20-C 决定。给标记用一个独立的 `target_kind`（如 `life_event_trace`），从 key 层面隔离，不要靠 `prompt_version` 不同去"防碰撞"——那防得住唯一索引冲突，防不住这个 Map 覆盖问题。
+12. **往 `content_quality_reviews` 给同一个 life_event 加"第二种标记"时，`target_kind` 绝对不能沿用 `'life_event'`**（A-6 踩过，已修复）：`indexReviews()` 按 `` `${targetKind}:${targetId}` `` 建 Map，底层查询没有 `ORDER BY`，同 key 后来的行会不确定地覆盖先来的真实 T20-C 决定。给标记用一个独立的 `target_kind`（如 `life_event_trace`），从 key 层面隔离。
+13. **只有 1 条源消息的 life_event 更容易被写手编造细节**（2025: 9/25=36%，2026: 6/26=23.1%），但**配图能支持的叙述不算编造**（Teddy 2026-09-06 拍板）——只有"两头都薄"（无配图+文字只有一句话）才是真风险区。
+14. **Drizzle 全表查询在某些环境会挂起**（A-10 遇到过，跟改的代码无关）：`db.select().from(table)` 不带 `LIMIT` 可能挂起不返回，`.limit(1)` 正常。遇到类似情况先怀疑环境/连接池，不要立刻怀疑自己刚改的代码。
 
 ---
 

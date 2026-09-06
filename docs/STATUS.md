@@ -37,7 +37,76 @@
 
 ## 时间线（只追加，最新在上）
 
-### 2026-09-06 07:27 UTC · 空闲第 11 次回读，无新任务
+### 2026-09-06 07:43 UTC · 🚨 P0 修复完成 · `loadFamilyArchive()` 不再调用 `getOrganizerStore()`
+
+**先认一个错**：这条 P0 指令是 06:4x UTC 发的，我在等待循环的第 4 次空闲检查前后就已经拉到了
+本地（`ae845cb` 那次 `git pull --rebase`），但我当时只比对了 `git log HEAD..origin/main` 的
+commit 摘要判断"有没有新提交"，**没有重新打开 `ORCHESTRATOR-INBOX.md` 看内容**，所以在
+Teddy 说"wakeup and check updates"之前，这条 P0 在我本地躺了几个空闲周期没被处理。
+**这是个真实的流程漏洞**：以后每次 `git pull`/`fetch` 只要发现本地 HEAD 变了（即使是通过
+之前的 rebase/stash 悄悄带进来的），都要重新读一遍 INBOX 顶部，不能只信"我记得内容没变"。
+
+**根因确认**（跟指令描述一致，我又独立核对了一遍）：`lib/family-archive.ts` 的
+`loadFamilyArchive()` 调用了 `getOrganizerStore(profileId)`，这个函数专门给 Organizer 批处理
+用，会拉 `raw_sources` 整表（含 `text` 大列，全库最大的列）。这行是今天 B 轨 commit `2f65c78`
+（修 trace tier 用错 events 数组）引入的，本意只是想要 `organizerStore.events` 这一个字段
+（去匹配 A-6 的 153 条 `trace_eligible` id），完全不需要 `raw_sources`/`media`/`contributors`
+这些字段。
+
+**修复**（只改了这几个文件，没碰 `getOrganizerStore()`/`assembleOrganizerStore()` 本身——
+它是 Organizer 自己合法在用的函数，没动）：
+
+1. `v2/lib/db/repository-interface.ts`：给 `Repository` 接口加一个新方法
+   `getAllEventIdentities(profileId): Promise<Array<Pick<LifeEvent, "id"|"title"|"story"|"occurredAt">>>`。
+2. `v2/lib/db/postgres-repository.ts`：实现 `assembleEventIdentities()`——
+   `db.select({id, title, story, occurredAt}).from(t.lifeEvents).where(eq(profileId))`，
+   **只碰 `life_events` 一张表，四个字段，不 join 任何其他表**，尤其不碰 `raw_sources`。
+3. `v2/lib/db/json-repository.ts`：本地开发后端加同名方法（保持两个后端行为一致）。
+4. `v2/lib/db/repository.ts`：导出绑定 `getAllEventIdentities`。
+5. `v2/lib/family-archive.ts`：`loadFamilyArchive()` 把 `getOrganizerStore(CANONICAL_PROFILE_ID)`
+   换成 `getAllEventIdentities(CANONICAL_PROFILE_ID)`，其余逻辑（`composeFamilyArchive` 的
+   `allEvents` 参数、`traceEvents` 匹配）完全没变——这几个字段本来就是 `buildTraceNotes`/
+   `isGarbageLifeEvent`/`memoryTitle` 唯一读取的字段（我读了 `lib/publication-moments.ts`
+   和 `lib/memory-chapters.ts` 确认过，`traceEvents` 的消费方只用得到 `id`/`title`/`story`/
+   `occurredAt`，别的字段一个都用不到）。
+
+**验证**：
+- `npm run typecheck` 通过，无报错。
+- 新查询的 SQL 独立跑过（用原生 `pg`，不走会挂起的 Drizzle 全表查询路径，参见 A-10 那次的
+  环境限制）：`select id, title, story, occurred_at from life_events where profile_id=...`，
+  651 行，**7.7 秒**（含连接握手），远快于 `getOrganizerStore()` 那条 80 秒+ 全 profile 扫描。
+- 交叉验证：153 条 `trace_eligible` 的 `target_id` **全部**能在这 651 行 `life_events` 里
+  找到匹配（0 条缺失）——确认这条新查询覆盖的范围跟原来 `organizerStore.events` 一样完整，
+  不会让 B-17 的痕迹层重新消失。
+- 没有跑本地开发服务器实测页面渲染（P0 优先级是先止血，这条改动本身逻辑简单、字段来源
+  单一，typecheck+SQL 双重验证已经比较扎实；如果 Cowork 想要更强的信心，可以在 Vercel
+  部署后直接看这次构建的响应时间/Neon 流量图验证）。
+
+**commit**：这次修复即将单独 commit + push（不攒心跳），commit hash 见下一条时间线。
+
+
+
+### 2026-09-06 07:34 UTC · 空闲第 12 次回读，无新任务 · **收工**
+
+按规矩，12 次空闲回读（约 1 小时）都没有新任务，现在真正收工，不再继续等待循环。
+
+**今天这一轮 A 轨完整总结**（从 A-6 到 A-11，全部结案）：
+
+1. **A-6**（痕迹层数据）：2025 全年 217 条 store_only 逐条读完，167→153 条标为可展示痕迹
+   （按标题单独读的标准重判后撤销 14 条），已上线，苏静能在月页读到。
+2. **A-7**（2025 年 80 条 approved 逐条核对）：全读完，发现 7 条编造细节 + 1 条张冠李戴。
+3. **A-8**（2026 单源事件核对）：26 条单源事件全读，6 条命中同类问题。
+4. **A-9**（13 条问题事件处理）：Teddy 拍板"配图支持的叙述可接受"后，绝大多数维持原样；
+   最终 1 条撤销发布（张冠李戴）+ 1 条文本重写（真正两头无凭据），已写库并核对。
+5. **A-10**（`reviewFromRow` 静默改写 decision 根因修复）：代码修复 + typecheck/测试全过，
+   Cowork 独立验收通过。
+6. **A-11**（孤立昵称+第三方转发聊天扫描）：30 条候选全核对，0 真误判，确认 2025-10-01
+   猫体检误判是孤例。
+
+**没有遗留未确认的 predeclare**。入箱顶部最后一条指令（07:1x 之前）已全部处理完。
+下一步等 Cowork 派新任务——如果是全量导入相关，记得 Teddy 说过先放着，不要主动跑。
+
+
 
 ### 2026-09-06 07:20 UTC · 空闲第 10 次回读，无新任务
 
