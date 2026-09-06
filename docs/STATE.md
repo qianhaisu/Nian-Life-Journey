@@ -1,6 +1,6 @@
 # Nianlife 当前状态（持续维护，读这一份就够）
 
-> 最后更新：2026-09-06 01:12 UTC，由 Cowork 维护（6h 编排检查；发现同一时刻有另一个 Cowork session 也在跑同一次检查，已合并，见第 3 节新增坑）。**本文件是唯一权威版本**（见第 3 节
+> 最后更新：2026-09-06 01:32 UTC，由 Cowork 维护（A-5 完成 + INGESTION_TOKEN 打通，见第 1/6/7 节）。**本文件是唯一权威版本**（见第 3 节
 > "编排检查"踩过的坑——claude.ai Project 里同名文档只作只读镜像，方便手机翻，
 > 不保证被定时/触发式 session 读到，不要以它为准）。
 > 这是一份**活文档**，不是某个时刻的审计快照。docs/ 下那些带日期的报告是历史，不要拿来当现状。
@@ -18,13 +18,16 @@
 
 ## 1. 当前位置
 
-**P1 ✅ 通过。三条轨全部结案，等 Teddy 拍板两件事后可以派下一轮。**
+**P1 ✅ 通过。三条轨全部结案，INGESTION_TOKEN 已打通（2026-09-06 Cowork 验证 revalidate 返回 200），只剩 worker 首次全量导入的跑法等 Teddy 拍板。**
 
 - **A 轨（数据管道）**：入箱 `docs/ORCHESTRATOR-INBOX.md`，出箱 `docs/STATUS.md`，交接稿 `docs/HANDOFF-A.md`。
-  **A-4（2025 全年回填 life_events）已完成**，**A-5（补4个月snapshot）已派单，等 A 轨执行**
+  **A-4（2025 全年回填 life_events）已完成，A-5（补4个月snapshot）也已完成**
   ——12 个月全部有 life_events（见第 4 节），过程中
-  抓到并修复了一个真实的主体门误判（猫和孩子撞昵称，见第 3 节）。**遗留小尾巴**：2025-02/03/05/06
-  这 4 个月有 life_events 但还没生成 monthly_snapshot，需要补跑 `month-review.mjs --commit`。
+  抓到并修复了一个真实的主体门误判（猫和孩子撞昵称，见第 3 节）。**A-5 结论**：2025-02/03/05/06
+  这 4 个月**不是遗漏**——已发布（published）life_event 只有 4/3/2/1 条，低于 5 条阈值，
+  `month-review.mjs` 按既有规则正常跳过写库，`monthly_snapshot` 维持 16 个月不变，是设计生效，
+  不是缺口。（此前 STATE.md 给的 23/14/11/13 是这 4 个月 life_events **总数**，含大量 low 级
+  not-about-child 行，跟"已发布数"不是一回事，是本文档自己算错了对比口径，已更正，见第 6 节。）
   夸克入库卡在 HEIC 解码器（P1-2b，214/1,690 非 HEIC 已入，1,468 张 HEIC 阻塞）。
   微信原始数据全部导入完毕（含 7,244 条消息那个大会话，raw_sources 46,742 已包含），
   **但 `nianlife-worker.mjs` 这个新自动化脚本自己的"首次正式跑"还没做**（它的增量基准是独立的，
@@ -34,10 +37,14 @@
 - **C 轨（性能/缓存）**：入箱 `docs/ORCHESTRATOR-INBOX-C.md`，出箱 `docs/STATUS-C.md`，交接稿 `docs/HANDOFF-C.md`（2026-09-06 新建）。
   C-1~C-4 全部完成并线上验收通过。入箱空，**可以 /clear**。
 
-**需要 Teddy 拍板的两件事（见第 7 节）**：
+**需要 Teddy 拍板的一件事（见第 7 节）**：
 1. `nianlife-worker.mjs` 首次正式跑——手动跑一次，还是挂 Windows 定时任务？
-2. 把 Vercel 上的 `INGESTION_TOKEN` 值填进 `v2/.env.local`，打通 worker → revalidate 主动推送链路
-   （现在没接上不算阻塞——公开页本来就是 ISR 300 秒或首次访问即时生成——但接上体验更好）。
+
+**已解决**：`INGESTION_TOKEN` 已由 Teddy 分别填进 Vercel 环境变量和 `v2/.env.local`（2026-09-06）。
+Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，返回 `200 {"revalidated":["/"]}`，
+链路已打通。注意：`dotenv`/`dotenvx` 会自动去掉 .env 文件里值两边的引号，
+用普通 shell `grep|cut` 读这个值会把引号也读进来导致误判成"没打通"（第一次验证时踩过），
+之后要验证类似 token 一律用 `node -e 'require("dotenv").config(...)'` 读，不要用裸 shell 解析。
 
 四个阶段：0 导入与可读 → 1 审阅台 + recall-first → 2 本地 worker 自动化 → 3 回到 2025 年 + 出版物质感。
 **阶段 0~1 完成，阶段 3（2025 回填）life_events 部分完成，阶段 2（worker 首跑）待 Teddy 拍板。**
@@ -114,7 +121,7 @@
 
 - raw_sources **46,742** / media_assets **9,077** / life_events **651**（全部 visibility=family）
 - life_events 按月覆盖：**2025 全年 12 个月全部 > 0**（01:32 / 02:23 / 03:14 / 04:12 / 05:11 / 06:13 / 07:38 / 08:42 / 09:33 / 10:27 / 11:29 / 12:24，共 298 条）；2026 年 353 条（01-08 每月 29-55 条，09 月 4 条）
-- monthly_snapshot：**16 个月**有摘要（2025-01/04/07/08/09/10/11/12 + 2026-01~08）。**缺口：2025-02/03/05/06 这 4 个月有 life_events 但没有 monthly_snapshot**，需要补跑。
+- monthly_snapshot：**16 个月**有摘要（2025-01/04/07/08/09/10/11/12 + 2026-01~08）。2025-02/03/05/06 这 4 个月**确认不是缺口**——已发布 life_event 分别只有 4/3/2/1 条，低于 5 条阈值，正常停在 quiet index（A-5 结论，2026-09-06）。
 - 夸克入库：214/1,690 非 HEIC 已入；1,468 张 HEIC 阻塞于 P1-2b（Node libheif 解码器限制）。
 - 微信原始数据：全部会话已导入（raw_sources 46,742 包含全部 conversation，含最大一个会话的 7,244 条消息）。`nianlife-worker.mjs` 自动化脚本自己的首次正式跑尚未执行。
 - 线上：`/` HIT age=26s；`/memory`、`/memory/2026`、`/memory/2026/08`、`/about` 均 STALE（ISR 命中，非首次构建）；`/memory/2026/09` 正常渲染（2 个事件）。手机 375px 与桌面视觉复验均通过，内容无退化。
@@ -127,15 +134,18 @@
 
 - **life_events 生成**：✅ 完成，12/12 个月全部 > 0（见第 4 节数字）。
 - **误判修复**：2025-10-01 一条把两只家猫的兽医体检报告错判成孩子看兽医（猫也叫"年年"），已确认删除、重新生成 2025-10 快照。全库按宠物/兽医关键词扫描过，只有这一条误判。**根因未修**（`subject-gate.ts` 遇到孤立昵称 + 转发第三方聊天记录的组合仍可能误判），留给下一轮任务。
-- **monthly_snapshot 生成**：🟡 部分完成，2025-02/03/05/06 这 4 个月还没跑 `month-review.mjs --commit`，是这轮的遗留尾巴。
+- **monthly_snapshot 生成**：✅ 已确认完整。2025-02/03/05/06 这 4 个月跑过 `month-review.mjs --commit`
+  （A-5，2026-09-06），判官日志一致：已发布 life_event 只有 4/3/2/1 条，低于 5 条阈值，脚本在写库前
+  正常退出——`monthly_snapshot` 维持 16 个月不变，这是既有规则生效，不是遗漏。之前认为"有 life_events
+  但缺 snapshot"是把总数（含 low 级 not-about-child 行）误当成已发布数来对比，口径错了。
 
 ## 7. 后续任务
 
 | 事项 | 状态 | 优先级 |
 |---|---|---|
-| **补 4 个月 monthly_snapshot**（2025-02/03/05/06，`month-review.mjs --month=YYYY-MM --commit`） | 🟢 已派（A-5，INBOX.md 2026-09-06 01:10 UTC） | 现在 |
+| **补 4 个月 monthly_snapshot**（2025-02/03/05/06） | ✅ 已确认无需补（A-5，2026-09-06：4 个月已发布事件只有 4/3/2/1 条，正常停在 quiet index） | — |
 | **nianlife-worker.mjs 首次正式跑**——手动跑一次 vs 挂 Windows 定时任务 | ⏳ 等 Teddy 拍板 | 高 |
-| **`INGESTION_TOKEN` 填入 `.env.local`**，打通 worker→revalidate | ⏳ 等 Teddy 提供值 | 中（非阻塞） |
+| **`INGESTION_TOKEN` 填入 `.env.local`**，打通 worker→revalidate | ✅ 已完成（2026-09-06，Cowork 验证 200） | — |
 | subject-gate.ts 收紧「孤立昵称 + 第三方转发聊天记录」判断 | 未开始，需要专门任务 | 中 |
 | 夸克 1,468 张 HEIC 转码入库（P1-2b） | 阻塞（解码器限制） | 中 |
 | B 轨、C 轨入箱已空 | **可以 /clear**（HANDOFF-B/C 已更新） | — |

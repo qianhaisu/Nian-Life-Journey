@@ -38,7 +38,9 @@ v2/lib/publication-moments.ts     docs/ORCHESTRATOR-INBOX-B.md    docs/STATUS-B.
 - `E:\WechatHis` 已有 Teddy 导出的真实数据。跑过 bounded 测试（50 条最近消息）验证四阶段全部
   正常，幂等性没问题。**全量首次导入还没跑**（主群 conversation 7,244 条消息是大头，5万条仅
   入库16%里剩下的部分）——等 Teddy 决定手动跑一次（数小时）还是挂 Task Scheduler 03:00 定时
-  任务靠增量消化。`.env.local` 里还没有 `INGESTION_TOKEN`，本地测试时 revalidate 阶段会跳过。
+  任务靠增量消化。**`INGESTION_TOKEN` 已打通**（2026-09-06，Teddy 已分别填进 Vercel 和
+  `.env.local`，Cowork 验证 POST /api/internal/revalidate 返回 200），下次 worker 跑
+  revalidate 阶段不会再跳过。
 
 **A-4（2025 全年回填）已完成（2026-09-06）**：
 - 2025-01~12 十二个月全部过了 T7 管线（dry-run --max-calls=400 → 抽读 → commit → T20-C 自动
