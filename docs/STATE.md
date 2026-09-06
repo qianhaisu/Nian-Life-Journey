@@ -150,6 +150,7 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 - **device_bash 里跑 git 会留 `.git/index.lock`**（沙箱删不掉）。用 `GIT_INDEX_FILE=$HOME/.git-index-tmp` 建临时 index：先 `git read-tree HEAD` 填充，`git add` 指定文件，`git -c user.name="Ted" -c user.email="teddyyongteng@gmail.com" commit`，最后 `cp $HOME/.git-index-tmp .git/index` 把真实 index 同步回 HEAD，避免下一次 `git status`/`git add` 因为真实 index 是脏的而出现诡异的 `MM`/`D`/`??` 混乱状态。
 - **僵尸 git 锁不要空等。** 0 字节且超过 30 秒的锁（`.git/objects/maintenance.lock` 或 `.git/index.lock`）基本是僵尸锁，直接绕过或删除继续，不会有人来通知。
 - **不要把大文件提交进来**（曾有 241MB 的 skills.zip 进历史，用 `git reset --soft origin/main` 退回处理）。
+- **Cowork 用 Python `open(path,"r")`/`"w"` 文本模式改 CRLF 文件会把整个文件转成 LF**（2026-09-06 真实发生：改 `ORCHESTRATOR-INBOX-B.md`/`-C.md` 各两三行，diff 却是全文件2558/791 行改动）。内容没丢，只是行尾风格被悄悄改了——不是新 bug，是同一个 CRLF/LF 假改动，只是这次是 Cowork 自己的安全替换脚本触发的，不是 `git add -A`。**以后用 `open(path,"rb")`读、`.encode("utf-8")` 写（不用文本模式）**，或者用 `newline=""` 打开，保留原始行尾。
 
 **部署 / 验收**
 - **本地代码 ≠ 线上部署。** 判"没生效"前先确认线上跑的是哪个构建：抓 `/_next/static/css/<hash>.css` 的 hash 对比。
