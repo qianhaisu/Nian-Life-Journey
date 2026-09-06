@@ -63,9 +63,19 @@ P1-5（scoped read）✅。
 
 ## 3 · 下一件事
 
-**先读 INBOX 顶部看板**，确认是否有比下面更急的任务。
+**先读 INBOX 顶部看板**（`docs/ORCHESTRATOR-INBOX.md`），现在最上面是 A-5，明确到命令：
 
-已知待做：
+```
+node scripts/month-review.mjs --month=2025-02 --commit
+node scripts/month-review.mjs --month=2025-03 --commit
+node scripts/month-review.mjs --month=2025-05 --commit
+node scripts/month-review.mjs --month=2025-06 --commit
+```
+
+这 4 个月已经有 life_events（23/14/11/13 条）只差 monthly_snapshot，是 A-4 的收尾尾巴，不是新任务。
+跑完这 4 个月，A 轨入箱才真正清空，才可以 /clear。
+
+其余已知待做（A-5 之后，非阻塞，等 Cowork 派）：
 - 等 Teddy 决定 P1-6 全量导入的跑法，跑完后验证 revalidate 链路真的让 nianlife.cn 秒级更新
 - **P1-4 视觉验收**：打开 2026-07 月页（Quark 照片最多，204 张），确认 Quark 照片和文字并排
 - 建议：全库"孤立昵称+第三方转发聊天记录"模式扫描（见上，subject-gate 收紧，需要单独立项）
@@ -98,4 +108,4 @@ P1-5（scoped read）✅。
 
 ---
 
-=== A 轨已到收尾节点，可以 /clear ===
+=== A 轨还有一件收尾任务（A-5：补4个月snapshot，见 INBOX），做完再 /clear ===

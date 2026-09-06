@@ -1,6 +1,6 @@
 # Nianlife 当前状态（持续维护，读这一份就够）
 
-> 最后更新：2026-09-06 06:35 UTC，由 Cowork 维护（定时巡检）。**本文件是唯一权威版本**（见第 3 节
+> 最后更新：2026-09-06 01:12 UTC，由 Cowork 维护（6h 编排检查；发现同一时刻有另一个 Cowork session 也在跑同一次检查，已合并，见第 3 节新增坑）。**本文件是唯一权威版本**（见第 3 节
 > "编排检查"踩过的坑——claude.ai Project 里同名文档只作只读镜像，方便手机翻，
 > 不保证被定时/触发式 session 读到，不要以它为准）。
 > 这是一份**活文档**，不是某个时刻的审计快照。docs/ 下那些带日期的报告是历史，不要拿来当现状。
@@ -21,7 +21,8 @@
 **P1 ✅ 通过。三条轨全部结案，等 Teddy 拍板两件事后可以派下一轮。**
 
 - **A 轨（数据管道）**：入箱 `docs/ORCHESTRATOR-INBOX.md`，出箱 `docs/STATUS.md`，交接稿 `docs/HANDOFF-A.md`。
-  **A-4（2025 全年回填 life_events）已完成**——12 个月全部有 life_events（见第 4 节），过程中
+  **A-4（2025 全年回填 life_events）已完成**，**A-5（补4个月snapshot）已派单，等 A 轨执行**
+  ——12 个月全部有 life_events（见第 4 节），过程中
   抓到并修复了一个真实的主体门误判（猫和孩子撞昵称，见第 3 节）。**遗留小尾巴**：2025-02/03/05/06
   这 4 个月有 life_events 但还没生成 monthly_snapshot，需要补跑 `month-review.mjs --commit`。
   夸克入库卡在 HEIC 解码器（P1-2b，214/1,690 非 HEIC 已入，1,468 张 HEIC 阻塞）。
@@ -96,6 +97,7 @@
 - **定时/触发式 session（`create_trigger` 起的）不一定挂在 claude.ai Project 下**——即使当初创建它的对话是挂着 Project 的。这类 session 读不到 `claude/nianlife-STATE.md`（Project 文档），如果 prompt 里让它读这个路径，它可能会静默地把它当成仓库相对路径处理，读到/写到一个完全不相关的旧文件（这次真实发生过：读到了 `docs/STATE.md`——一份 2026-09-05 之前就废弃、只有 7 条决策的旧版草稿——并往里面写了新数字，跟真正的活文档完全脱节）。**解法：状态文档唯一权威版本改成本仓库内 `docs/STATE.md`（git 追踪，任何 session 不管挂不挂 Project 都能读到），claude.ai Project 里的同名文档降级为镜像。**
 - **Cowork 侧的 git 操作要小心真实 index 和临时 index 不同步。** 用临时 index 做完 commit 后，如果不把临时 index 同步回 `.git/index`，下一次任何 session（不管是我还是别的 track）跑 `git status`/`git add` 都会看到诡异的 `MM`/`D`/`??` 混合状态，因为真实 index 还停留在上一个未完成操作的中间态。做法见上面 Git/环境小节。
 - **不要无条件信任另一个 session 自己算出来的数字。** 这次巡检 session 报告 life_events=602、monthly_snapshot 12 个月，Cowork 独立查库后发现真实数字是 651 和 16 个月（含 4 个月缺 snapshot）——不是造假，大概率是它在读错文件、上下文比较混乱的情况下算出来的过时/错误对比基准。**每次巡检后，人工看到的汇总数字也要抽查一次，不能连续两层都不验证。**
+- **同一个 6 小时定时检查可能被并发触发两次。** 2026-09-06 01:01 UTC 前后，两个 Cowork session 同时在跑这次编排检查：另一个 session 先一步 commit 了 b809d76（只改了 STATE.md 头部时间戳），把「最后更新」写成「00:35 + 6 小时 = 06:35 UTC」——这是算出来的，不是实际查的当前时间，跟真实时间（当时约 01:01 UTC）对不上。连带效应：它 commit 前后产生的 .git/HEAD.lock 在我这边一度被误判成「僵尸锁」（0 字节、ps 里查不到进程），其实是它 commit 那一瞬间的正常残留，只是沙盒不让 git 自己清理。**教训**：锁文件 0 字节不代表一定是死锁，也可能是刚提交完、清理失败；改「最后更新」时间戳一律用 device_bash 里 date -u 的真实输出，不要对旧时间戳做算术；commit 前最好先 git log -3 确认 HEAD 没有在自己不知情的情况下前进过。
 
 **验收工具**
 - **`v2/scripts/nianlife-status.mjs`（`nianlife-verify` 技能）一键查真实状态**：表计数、月度覆盖、硬盘 vs 库对照、导入任务、质量审阅、线上探活。跑法：`cd v2 && node scripts/nianlife-status.mjs`（需要 `Nianlife`、`WechatHis`、`NianlifeOps` 三个文件夹授权）。每轮开工前和验收时都跑。
@@ -131,7 +133,7 @@
 
 | 事项 | 状态 | 优先级 |
 |---|---|---|
-| **补 4 个月 monthly_snapshot**（2025-02/03/05/06，`month-review.mjs --month=YYYY-MM --commit`） | ⏳ 待派 | 现在 |
+| **补 4 个月 monthly_snapshot**（2025-02/03/05/06，`month-review.mjs --month=YYYY-MM --commit`） | 🟢 已派（A-5，INBOX.md 2026-09-06 01:10 UTC） | 现在 |
 | **nianlife-worker.mjs 首次正式跑**——手动跑一次 vs 挂 Windows 定时任务 | ⏳ 等 Teddy 拍板 | 高 |
 | **`INGESTION_TOKEN` 填入 `.env.local`**，打通 worker→revalidate | ⏳ 等 Teddy 提供值 | 中（非阻塞） |
 | subject-gate.ts 收紧「孤立昵称 + 第三方转发聊天记录」判断 | 未开始，需要专门任务 | 中 |

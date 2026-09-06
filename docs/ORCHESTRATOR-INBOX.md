@@ -29,15 +29,45 @@ Teddy 不必在中间转述。
 > **不要从文件开头往下读全部历史**——上面大半是已经 done 的旧任务。
 > **只看这块。** 这里列的就是当前该做的，按顺序。做完一条在这里标 done。
 
-**更新于 2026-09-05 16:09 UTC（Cowork）· 现在做 A-4：2025 全年回填**
+**更新于 2026-09-06 01:10 UTC（Cowork）· 现在做 A-5：补 4 个月 monthly_snapshot**
 
-P1-2b / P1-6 / A-1（worker 接 revalidate）都已完成，见 STATUS.md 历史。
-**现在唯一要做的是下面的 `## A-4`**——2025 全年 life_events 是 0，整年没跑过整理管线。
-从 2025-12 开始往前推，按月 dry-run → 抽读 → commit，别一口气跑完不汇报。
+A-4（2025 全年回填 life_events，651 条）已完成，见 docs/STATE.md 第 6 节，下面的 `## A-4` 保留作历史记录。
+**现在唯一要做的是下面的 `## A-5`**——2025-02/03/05/06 这 4 个月已经有 life_events 但还没生成 monthly_snapshot，
+是 A-4 收尾时的已知遗留尾巴，不是新任务。跑完这 4 个月后 A 轨入箱清空，可以 /clear，
+等 Teddy 就 worker 首跑和 INGESTION_TOKEN 拍板（见 docs/STATE.md 第 7 节）。
 
 ---
 
-## A-4 · 2025 全年回填：整年只有原始素材，没有一条记忆 — status: **ready，下一件**
+## A-5 · 补 4 个月 monthly_snapshot（2025-02/03/05/06）— status: **ready，下一件**
+
+**背景** Cowork 2026-09-06 01:02 UTC 独立查库确认：monthly_snapshot 目前 16 个月
+（2025-01/04/07/08/09/10/11/12 + 2026-01~08），2025-02/03/05/06 这 4 个月已有 life_events
+（分别 23/14/11/13 条，见 STATE.md 第 4 节月度覆盖）但没有对应 monthly_snapshot 行。
+这是 A-4 收尾时记录的已知遗留尾巴（STATE.md 第 6 节），不是重新讨论范围，是把 A-4 收口。
+
+**目标** 依次跑：
+```
+node scripts/month-review.mjs --month=2025-02 --commit
+node scripts/month-review.mjs --month=2025-03 --commit
+node scripts/month-review.mjs --month=2025-05 --commit
+node scripts/month-review.mjs --month=2025-06 --commit
+```
+
+**硬边界**
+- 沿用既有阈值规则（决策 8：01 月内容阈值不降）——如果这 4 个月本来就该停在 quiet index
+  （事件数低于阈值），保持原样，不要为了凑数放宽标准；只有确认"该生成但没生成"才补跑。
+- 不改 schema，不改判官 / 主体门 / 信任名单逻辑。
+- 每个月跑完在 STATUS.md 写一句中间进度，不要 4 个月一次性跑完才汇报。
+
+**验收** Cowork 查库：monthly_snapshot 从 16 个月增至最多 20 个月
+（新增 2025-02/03/05/06，或给出为什么某月仍停在 quiet index 的判官日志）；
+随机打开 1-2 个新增月份的月页，浏览器确认渲染正常。
+
+**不可接受** 为了让 4 个月都有 snapshot 而放宽既有阈值；不给判官日志就直接下结论"完成"。
+
+---
+
+## A-4 · 2025 全年回填：整年只有原始素材，没有一条记忆 — status: **✅ 已完成（2026-09-06），见 STATE.md 第 6 节，保留作历史参考**
 
 **背景**　Cowork 2026-09-05 16:09 UTC 用 `nianlife-status.mjs` 查库实测：2025-01 到 2025-12 十二个月，**life_events 全部是 0**（只有 2025-08 有 1 条），daily_traces 也全部是 0。同期原始素材不缺——raw_sources 每月 1200-3700 条，media_assets 每月 4-424 张——这不是素材薄，是**整年从没跑过 T7 整理管线**。2026 年每个月都有正常量级的 life_events（29-55 条），2025 年完全空白。
 
