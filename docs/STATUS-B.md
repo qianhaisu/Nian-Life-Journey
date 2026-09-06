@@ -245,3 +245,11 @@ B-16 结案。B 轨这轮（B-1~B-16）全部验收通过，入箱已清空。�
 ###  UTC · 中间进度 · B-17
 
 - 那次 building 已经跑了 7 分钟（正常区间上限），仍未 Ready。持续等待，暂不再追加新 commit 避免给部署队列再添一条。
+
+###  UTC · 中间进度 · B-17 · 找到并修复真实 bug
+
+- 部署终于上线后，浏览器实测 `/memory/2025/06` 仍然是「还有 15 天」、`.moment-trace` = 0——不是缓存问题（ISR age 从 452 重新生成到 18 后内容仍不变）。
+- 用 `getOrganizerStore` 本地脚本 + 直连生产库核对，定位真实根因：`getStore().events` 在 `postgres-repository.ts` 里已经是 `publishableEvents`（发布态过滤后），不是全集。我在 `family-archive.ts` 里用 `store.events.filter(decision===store_only)` 永远是空集，因为已发布事件不可能是 store_only。
+- 修复：`loadFamilyArchive` 改为额外调用已存在的 `getOrganizerStore()`（未改 `v2/lib/db/**` 一行，A 轨领土没碰），拿到真正未过滤的 life_events，再按 store_only 过滤。commit `2f65c78` 已 push main。
+- typecheck 通过。本地用真实生产库跑通过一次核对（12 条 2025-06 store_only 事件，含 6/3、6/26 两个纯文字无照片的天），逻辑上应该会产生痕迹条目。
+- 等这次部署上线后再验一遍浏览器。
