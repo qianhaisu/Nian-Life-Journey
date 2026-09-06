@@ -59,6 +59,81 @@ generateStaticParams 的动态 segment + revalidate」走 on-demand ISR 的机�
 3. **下一件事**：等 Cowork 部署验收；如果 `/memory/[year]/[month]` 第二次访问仍非
    HIT/STALE/PRERENDER，回来补 `generateStaticParams`。
 
+---
+
+## 2026-09-06（Claude Code）C-5 启动，进度 1
+
+线上实测根因（`nianlife.cn` 真实 `/api/media/...?variant=web`，抽了一张 2026-08 的图，curl 三次）：
+- **CDN MISS**（首次见过这张图）：`time_starttransfer` 比 HIT 多出约 **3 秒**——这是 R2
+  `GetObjectCommand` + 该请求打到冷 Lambda 实例的代价，跟 variant 大小关系不大（web 变体
+  ~300KB，thumbnail 也测了同量级差距）。
+- **CDN HIT**（`x-vercel-cache: HIT`）：起始字节时间已经很快（本机测量环境本身有一段固定
+  ~1s 的 TLS 握手噪声，是我这边网络路径的问题，不是服务器的；HIT 相对 MISS 稳定少 3 秒
+  可信）。
+- 结论：`/api/media/[id]/route.ts` 本身**不做任何按需转码**（thumbnail/web 都是入库时
+  `createDerivatives` 一次性生成好存在 R2/local，route 只是原样转发字节），C-2（`bd63bb7`）
+  已经把这条链路里最大的延迟源（`getStore()` 全量读取）去掉了。**剩下的 5-7s 只发生在
+  CDN 缓存 MISS 那一次**——B-17 把几十张此前没被渲染过的照片搬进正文后，这些图片的
+  `/api/media/...` URL 第一次被真实请求到时，会集中触发一批 MISS。
+
+代码改动（已过 typecheck，未 build/部署）：
+- `lib/storage/hot-storage.ts`：`HotStorage` 接口新增 `getStream()`，Local 和 R2 两个
+  实现都改成走底层原生流（本地 `createReadStream` → `Readable.toWeb`；R2 用
+  `GetObjectCommand` 返回体的 `transformToWebStream()`），不再要求先把整个文件读进内存
+  才能开始回包。
+- `app/api/media/[id]/route.ts`：改成优先用 `getStream()` 直接把流接到 `NextResponse`，
+  `Content-Length` 直接用 DB 里 `MediaLocation.fileSize`（入库时已经记录），不用再等文件
+  读完才能算出长度；`getStream` 失败/为空时保留原来的整读 `get()` 兜底，行为不倒退。
+  这减少了 R2 MISS 路径上「等整个对象下载完 + 拷进内存再转发」的那段延迟，对首次访问的
+  大图（部分夸克原图分辨率高、web 变体虽然限宽 1280 但仍有几百 KB）收益更明显。
+- 未改变任何可见性/hot-only/`providerRef` 前缀校验逻辑，404 分支仍然 `no-store`。
+
+接下来：跑 build + lint，然后设计并落地「懒加载 + 尺寸档位」建议给 B 轨，commit + push。
+
+---
+
+## 2026-09-06（Claude Code）C-5 进度 2 —— build 阻塞说明 + 给 B 轨的结论（交付物）
+
+**build 现状**：`npm run typecheck`、`npm run lint` 我这两项全过。`npm run build` 目前失败，
+报错在 `lib/publication-moments.ts:226` `Identifier 'traceByDay' has already been declared`——
+`git diff --stat` 确认这个文件有 70 行未提交改动，最后一次真正提交是 2026-09-05，说明这是
+**B 轨 B-17 正在改的文件，现在处于中间态**，跟我这轮改的 `app/api/media/[id]/route.ts` /
+`lib/storage/hot-storage.ts` 完全无关（这两个文件不 import、不被 `publication-moments.ts`
+import）。我这边不动这个文件，等 B 轨收尾后 build 会恢复。**我自己的两个文件单独过
+typecheck，逻辑改动小而可审查，先 commit，不因为别人未完成的文件阻塞整轮汇报。**
+
+**给 B 轨的结论（本任务交付物，B-17 可以直接照抄）**
+
+实测同一张图两个 variant 的真实线上体积：`thumbnail`（480px webp q78）**48.9 KB**，
+`web`（1280px webp q84）**304.8 KB**——相差 6 倍。月页正文一旦有几十张图，variant 选错
+= 单页体积多几 MB。
+
+1. **正文时间流里的日常照片（大多数，一天可能好几张）→ `variant=thumbnail`**。
+   480px 在手机上（375-420 视口）撑满一整行绰绰有余，肉眼看不出比 1280px 差；
+   `web` 只在用户主动点开单张大图/lightbox 时才请求。
+2. **每月封面 / 当前一张 hero 图（全月只有 1 张）→ `variant=web` + `priority`**（Next
+   `<Image priority>` 或 `<img loading="eager" fetchpriority="high">`）。这是唯一应该
+   立刻请求、不等 CDN 预热的图。
+3. **除 hero 外的所有正文图片 → `loading="lazy"`，不要 `priority`。** 几十张图如果同时
+   `eager`，会在页面打开瞬间对 `/api/media` 发几十个并发请求，把其中还没被 CDN 缓存过的
+   （新搬进正文的这批，第一次真实访问必然是 MISS）全部堆在同一时刻，体感就是「整页卡住」。
+   `lazy` 能把请求摊到用户滚动的过程里，MISS 的代价被分散而不是一次性叠加。
+4. **如果用 `next/image` 组件，正文图片建议加 `unoptimized`（或改用原生 `<img>`）**：
+   `/api/media/...?variant=thumbnail|web` 已经是入库时一次性生成好的定宽 webp，Next 的
+   图片优化器如果不加 `unoptimized` 会再套一层它自己的转码/尺寸协商，对一个已经预生成
+   好的静态字节流没有意义，只会多一趟延迟。
+5. **不要给 `/api/media` 之外再加任何新的 `sizes`/多尺寸协商逻辑**——现在只有
+   thumbnail/web 两档，不需要做成响应式 srcset，选 variant 就是选尺寸档位，两条规则
+   （1 和 2）已经覆盖全部场景。
+
+**代码侧我做的事，直接支撑上面第 3 条**：`/api/media` 现在优先走流式响应
+（`getStream()`），不用等文件整个下载进内存再转发首字节；`Content-Length` 直接用 DB 里
+`MediaLocation.fileSize`，省掉一次隐式的整读。CDN 第二次命中（`x-vercel-cache: HIT`）
+不受影响，缓存头和 ETag/304 分支原样保留。这个改动本身缩短的是**每一次 MISS** 的
+尾部延迟，跟上面「用 thumbnail + lazy 减少 MISS 数量/并发度」是两个互补的手段，不重复。
+
+接下来：commit（只 add 我改的 3 个文件）、push，然后找一段真实渲染了几十张正文图的月页
+（等 B-17 上线后）做验收清单里的秒数实测。
 
 ---
 

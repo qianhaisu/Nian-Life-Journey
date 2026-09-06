@@ -24,7 +24,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const cacheHeaders = { "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable", ETag: etag };
   if (request.headers.get("if-none-match") === etag) return new NextResponse(null, { status: 304, headers: cacheHeaders });
 
+  const contentType = location.mimeType || media.mimeType || "application/octet-stream";
+
+  // Stream straight from the origin (R2/local disk) so TTFB isn't gated on the
+  // whole derivative arriving before we can write a single response byte —
+  // this is the difference that matters on a cache MISS (first view of a
+  // photo), since a cache HIT is already served by the CDN before this code runs.
+  const stream = await hotStorage.getStream(location.providerRef);
+  if (stream) {
+    const headers: Record<string, string> = { "Content-Type": contentType, ...cacheHeaders };
+    if (location.fileSize) headers["Content-Length"] = String(location.fileSize);
+    return new NextResponse(stream, { headers });
+  }
+
   const data = await hotStorage.get(location.providerRef);
   if (!data) return new NextResponse("Media derivative is not ready", { status: 404, headers: NOT_CACHEABLE });
-  return new NextResponse(data as BodyInit, { headers: { "Content-Type": location.mimeType || media.mimeType || "application/octet-stream", "Content-Length": String(data.byteLength), ...cacheHeaders } });
+  return new NextResponse(data as BodyInit, { headers: { "Content-Type": contentType, "Content-Length": String(data.byteLength), ...cacheHeaders } });
 }

@@ -13,6 +13,9 @@ export type HotStorageVerification = { exists: boolean; checksumVerified: boolea
 export interface HotStorage {
   put(input: HotStorageInput): Promise<HotStorageObject>;
   get(key: string): Promise<Uint8Array | null>;
+  // Streams the object instead of buffering it fully in memory — used by the
+  // page-delivery route so TTFB isn't gated on the whole file arriving first.
+  getStream(key: string): Promise<ReadableStream<Uint8Array> | null>;
   delete(key: string): Promise<void>;
   verify(key: string, checksum: string): Promise<HotStorageVerification>;
   url(location: MediaLocation): string | null;
@@ -41,6 +44,13 @@ export class LocalHotStorage implements HotStorage {
   async get(key: string) {
     try { return await fs.readFile(path.join(this.root, safeKey(key))); }
     catch { return null; }
+  }
+
+  async getStream(key: string) {
+    try {
+      await fs.access(path.join(this.root, safeKey(key)));
+      return Readable.toWeb(createReadStream(path.join(this.root, safeKey(key)))) as ReadableStream<Uint8Array>;
+    } catch { return null; }
   }
 
   async delete(key: string) { await fs.rm(path.join(this.root, safeKey(key)), { force: true }); }
@@ -102,6 +112,15 @@ export class R2HotStorage implements HotStorage {
       const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })) as { Body?: { transformToByteArray?: () => Promise<Uint8Array> } };
       if (!result.Body) return null;
       return result.Body.transformToByteArray ? result.Body.transformToByteArray() : null;
+    } catch { return null; }
+  }
+
+  async getStream(key: string) {
+    try {
+      const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })) as { Body?: { transformToWebStream?: () => ReadableStream<Uint8Array> } };
+      if (!result.Body?.transformToWebStream) return null;
+      return result.Body.transformToWebStream();
     } catch { return null; }
   }
 
