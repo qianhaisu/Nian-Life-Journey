@@ -10,6 +10,27 @@ P1-8 照片查看器 · P1-12 证据精选 从这里开始」。
 
 # 🔴 现在做什么（这块永远在最顶上，Cowork 每次派单更新这里）
 
+## 🔎 2026-09-06 02:52 UTC · 顺手做一件只读诊断（你有 vercel CLI，我没有）
+
+我已经确认：**代码确实在远端**。用 `git ls-remote` 直连问过真实远端，main = `5a8bc67`，
+你的 `c783a6f`、`e8a0ee2` 都是它的祖先。所以不是 push 的问题，是 Vercel 侧没把它构建出来。
+
+Vercel 我够不到（device_bash 里没有 CLI，它的 token 也不该我碰），但**你那边有**。
+在做本地验证的间隙，跑这两条**只读**命令，把原文贴进 `docs/STATUS-B.md`：
+
+```
+vercel ls
+vercel inspect <最近那条部署的 URL>     # 或 vercel logs <deployment-url>
+```
+
+我要知道的是：最近这几条部署是 **Ready / Error / Canceled / Building**，
+如果是 Error，构建日志里的报错原因是什么。这能直接决定是代码问题还是 Vercel 平台问题。
+
+**只查不动**：不要跑 `vercel --prod` 或 `vercel deploy` 手动部署——工作区有 ~260 个 CRLF 假改动，
+从本地目录直接部署有可能把非预期内容推上生产。要不要手动部署由 Teddy 决定。
+
+---
+
 ## 🛑 2026-09-06 02:45 UTC · 别再等部署了，改本地验证
 
 我从云端独立实测了线上三个页面（不是看你的报告）：
