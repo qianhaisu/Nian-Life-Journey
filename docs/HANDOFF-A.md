@@ -3,7 +3,7 @@
 > **这份文档只能覆盖写，不能追加。** 它永远只描述"现在"，长度保持在 100 行以内。
 > 历史在 `git log` 和 `docs/STATUS.md` 里，不在这。一个刚清空上下文的 Session 只读这一份就能接着干。
 >
-> 最后更新：2026-09-06 01:2x · by Claude Code（A-5 完成后，A 轨入箱清空）
+> 最后更新：2026-09-06 02:1x · by Claude Code（A-6 完成，等 Cowork 抽读验收）
 
 ---
 
@@ -71,14 +71,25 @@ P1-5（scoped read）✅。
 
 ---
 
+**A-6（痕迹层数据，2025 全年）已完成（2026-09-06）**：
+- 217 条 2025 store_only life_events **逐条读完判定**，167 条标为「可展示痕迹」，写进
+  `content_quality_reviews`（`provider='cowork-a6'`、`decision='trace_eligible'`、
+  `prompt_version='a6-trace-layer-v1'`，纯新增行，不改任何现有 approved/store_only 判定）。
+  B 轨读取：`target_id=<life_event.id> and provider='cowork-a6' and decision='trace_eligible'`
+  存在即可展示为痕迹。脚本：`scripts/a6-export-store-only.mjs`（只读导出）+
+  `scripts/a6-trace-layer-write.mjs`（写库）。每月数字和 2025-06 全表逐条判定见
+  `docs/STATUS.md` 2026-09-06 02:07 UTC 条目。等 Cowork 抽读验收。
+
 ## 3 · 下一件事
 
-**先读 INBOX 顶部看板**（`docs/ORCHESTRATOR-INBOX.md`），A 轨入箱已清空（A-4/A-5 都完成）。
+**先读 INBOX 顶部看板**（`docs/ORCHESTRATOR-INBOX.md`）。A-6 已交，等验收结果。
 
 已知待做（非阻塞，等 Cowork 派或 Teddy 拍板）：
 - 等 Teddy 决定 P1-6 全量导入的跑法，跑完后验证 revalidate 链路真的让 nianlife.cn 秒级更新
 - **P1-4 视觉验收**：打开 2026-07 月页（Quark 照片最多，204 张），确认 Quark 照片和文字并排
 - 建议：全库"孤立昵称+第三方转发聊天记录"模式扫描（见上，subject-gate 收紧，需要单独立项）
+- A-6 排除的约 6 条"敏感/负面家庭摩擦"内容（育儿嫂怠慢嫌疑、父母因钱起争执等）没有删除，
+  留待 Teddy/苏静决定要不要单独处理，不属于这次痕迹层范围
 
 ---
 
