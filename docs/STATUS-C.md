@@ -815,3 +815,5 @@ git cat-file -e "$VERCEL_GIT_PREVIOUS_SHA" 2>/dev/null && git diff --quiet "$VER
 上线），我的 stopgap 已撤回不留痕迹。C 轨本身在这次事件里没有分配到的任务（查询修复是
 A 的），我做的是：①发现并报告 Ignored Build Step 的致命 bug、②给出并推动修复、③验证
 修复后 P0 真正上线、④撤回不再需要的 stopgap。全部内容已 push（`5684d91`）。
+
+空闲回读，P0 事件已收尾（部署管道修复+验证+stopgap 撤回），等 Cowork 确认或派新任务。
