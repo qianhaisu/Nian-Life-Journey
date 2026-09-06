@@ -29,6 +29,14 @@ export function isQualityDecision(value: unknown): value is QualityDecision {
  * the artifact hidden and ask for a human, which is the same direction every other rule in this file
  * fails. Nothing here rewrites the stored row — the mapping is a read-time interpretation, so an
  * existing ledger row stays exactly as it was written and stays auditable.
+ *
+ * A-10 (2026-09-06): call this ONLY at the point that actually computes a fail-closed publication
+ * decision (indexReviews(), isEventPublishable(), isTracePublishable()) — never at generic
+ * read/hydration time (e.g. a repository mapping every row to its typed shape). Doing the latter
+ * silently rewrites a real stored value (A-6's `decision='trace_eligible'` rows, for one) into
+ * `needs_human_review` before any caller ever sees it, which is indistinguishable from an actual
+ * human review outcome that never happened. A generic reader that needs `QualityReview.decision`
+ * should get the raw stored string back, not a fail-closed guess.
  */
 export function normalizeQualityDecision(value: unknown): QualityDecision {
   return isQualityDecision(value) ? value : "needs_human_review";

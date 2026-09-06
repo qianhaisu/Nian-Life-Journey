@@ -3,7 +3,7 @@
 > **这份文档只能覆盖写，不能追加。** 它永远只描述"现在"，长度保持在 100 行以内。
 > 历史在 `git log` 和 `docs/STATUS.md` 里，不在这。一个刚清空上下文的 Session 只读这一份就能接着干。
 >
-> 最后更新：2026-09-06 04:3x · by Claude Code（Teddy 拍板配图叙述可接受，A-9 基本结案，转 A-10）
+> 最后更新：2026-09-06 05:0x · by Claude Code（A-10 代码修复完成，typecheck+测试全过，getStore() 活验证受环境限制没跑成）
 
 ---
 
@@ -111,6 +111,17 @@ P1-5（scoped read）✅。
 已写进 `docs/STATUS.md` 04:37 UTC 条目，**等确认后再写库**；②「第七颗牙」类精确序数列出
 不改，攒给 Teddy。防复发方案已按新方向改写：只在"单源 + 无配图"这个更窄交集上收紧写手，
 不再对所有单源事件一刀切。**目前 A-9 全程零写库。**
+
+**A-10（`reviewFromRow` 静默改写 decision 修复）代码完成（2026-09-06）**：
+`postgres-repository.ts`/`json-repository.ts` 的 `reviewFromRow`/`normalizeStore`/
+`persistQualityReview` 不再对读到的每一行都调用 `normalizeQualityDecision`——那个函数只在
+`indexReviews`/`isEventPublishable`/`isTracePublishable`（真正需要发布判定的地方）里调用。
+`npm run typecheck` + 106 个相关单测全过。**`getStore()` 活验证没跑成**：这个 session 里
+Drizzle 全表查询（不带 LIMIT）会挂起不返回，换一张完全无关的表也一样，`.limit(1)` 秒回——
+是这次 session 的环境/连接池问题，跟这次改的代码无关，也不属于 A-10 范围，没有深挖。
+用原生 SQL 独立确认过 153 行的存储值本来就是 `trace_eligible`，加上代码改动就是"不再重写它"，
+逻辑上 `getStore()` 跑通后必然返回正确值，但这是推出来的，不是亲眼看 `getStore()` 跑出来的，
+已经如实写进 STATUS.md，建议 Cowork 用自己的环境独立验证。
 
 ## 3 · 下一件事
 

@@ -37,6 +37,47 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-06 05:03 UTC · A-10 完成（代码+测试），一个环境限制导致没能跑成活的 `getStore()` 验证
+
+**代码改动**（只在允许的两处文件）：
+- `v2/lib/db/postgres-repository.ts`：`reviewFromRow` 不再调用 `normalizeQualityDecision`，
+  原样透传存储值（原来的实现、原因、影响范围写进了函数上面的注释）。移除了因此变成未使用的
+  `normalizeQualityDecision` import。
+- `v2/lib/db/json-repository.ts`：本地开发用的另一个后端有一模一样的 bug（读取水合
+  `normalizeStore` 和写入 `persistQualityReview` 两处），一并修了，同样加了注释说明。
+- `v2/lib/organizer/quality-review.ts`：给 `normalizeQualityDecision` 加了一段设计意图注释——
+  这个函数只该在真正计算发布判定的地方调用（`indexReviews`/`isEventPublishable`/
+  `isTracePublishable`），不该在通用读取层提前调用。**三个发布判定函数本身逻辑一行没动。**
+
+**验证**：
+- `npm run typecheck` 通过，无报错。
+- `node --import tsx --test` 跑了 5 个相关文件（`deepseek-quality-gate`、
+  `organizer-dailytrace-identity`、`organizer-production-adapter`、`organizer-v2-cutover`、
+  `repository-contract`），**106 个用例全部通过，0 失败**（json 仓库的 contract 套件覆盖了
+  `persistQualityReview`/`findQualityReview` 的行为，postgres 那部分因为没设
+  `CONTRACT_DATABASE_URL` 正常跳过——这是设计内行为，不是没测）。
+- **想额外跑一个活的 `getStore()` 验证（直接对生产库），撞上了一个环境限制，如实汇报**：
+  这个 session 里通过 Drizzle（`lib/db/client.ts` 的 `getDb()`/`Pool`）执行不带 `LIMIT` 的
+  全表查询会挂起不返回——用一个完全无关的最小脚本单独测过：`db.select().from(schema.lifeEvents)`
+  会挂起超过 90 秒无响应，但 `db.select().from(schema.lifeEvents).limit(1)` 1.6 秒内正常返回。
+  这跟 A-10 的改动无关（换一张完全没碰过的表也一样挂），本 session 里用**原生 `pg.Client`**
+  的查询（这次任务里 a6/a7/a8 那些脚本）反而全程正常——说明问题出在 Drizzle/连接池在这个
+  环境里处理大结果集的某个环节，不是数据库本身或者这次改的代码。**没有继续深挖**（不属于
+  A-10 范围，也不该为了验证一次就去动 `lib/db/client.ts` 这种更底层的东西）。
+- **改用等价力度的验证代替**：用原生 SQL 独立确认过 153 行 `target_kind='life_event_trace'`
+  存储值确实是 `decision='trace_eligible'`（多次核对过，见 A-6/A-9 的记录），而这次的改动
+  唯一效果就是"不再对这些值调用会重写它们的函数"——从代码逻辑上看，`getStore()` 一旦能跑通，
+  返回的 `decision` 就必然是原始存储值。**这个结论是从代码推出来的，不是我亲眼看着
+  `getStore()` 跑出来的**，如实说明，不谎报"跑过了"。
+- 建议 Cowork 在自己的环境（或者用 psql 那种直连方式）独立验证 `getStore()` 路径下这 153 行，
+  跟你之前验收 A-6/A-9 用的方法一致。
+
+**没有改动任何数据**，这次是纯代码修复。改动文件：`lib/db/postgres-repository.ts`、
+`lib/db/json-repository.ts`、`lib/organizer/quality-review.ts`。新增只读验证脚本
+`scripts/a10-verify-getstore-decision.mjs`（这次没能跑通，留着给 Cowork 或换个环境用）。
+
+
+
 ### 2026-09-06 04:45 UTC · 中间进度 · A-10
 
 - 代码改完了：`lib/db/postgres-repository.ts` 的 `reviewFromRow` 不再调用

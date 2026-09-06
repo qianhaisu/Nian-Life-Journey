@@ -5,7 +5,7 @@ import type { CareEpisode, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocati
 import { mediaDeliveryUrl, normalizeMediaUrl } from "@/lib/media/paths";
 import { selectLocation } from "@/lib/storage/hot-storage";
 import { newId, organizerJobKey } from "./repository-interface";
-import { normalizeQualityDecision, type QualityReview } from "@/lib/organizer/quality-review";
+import type { QualityReview } from "@/lib/organizer/quality-review";
 import { CANONICAL_PROFILE_ID } from "./config";
 import type { MonthArchiveInput, Repository, Store, UploadPersistInput } from "./repository-interface";
 import { calendarMonthOf } from "@/lib/timeline-dates";
@@ -18,8 +18,14 @@ const storeFile = path.join(dataDir, "nian-life.json");
 
 const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], organizerJobs: [], chatImportTasks: [], qualityReviews: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshots: [monthlySnapshot] });
 
+// A-10 (2026-09-06): qualityReviews used to be re-hydrated through normalizeQualityDecision(),
+// which silently rewrites any decision value outside the QualityDecision union (e.g. A-6's
+// "trace_eligible") into "needs_human_review" — a real business decision, not a safe fallback.
+// This mirrors the same fix in postgres-repository.ts's reviewFromRow: pass the stored value
+// through unchanged; indexReviews() applies that normalization itself at the one place it is
+// actually needed (computing a fail-closed publication decision).
 function normalizeStore(store: Partial<Store>): Store {
-  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [], organizerJobs: store.organizerJobs ?? [], chatImportTasks: (store.chatImportTasks ?? []).map(normalizeChatImportTask), qualityReviews: (store.qualityReviews ?? []).map((review) => ({ ...review, decision: normalizeQualityDecision(review.decision) })) };
+  return { ...initialStore(), ...store, media: store.media ?? [], mediaAssets: store.mediaAssets ?? [], mediaLocations: store.mediaLocations ?? [], connectorStates: store.connectorStates ?? [], rawSources: store.rawSources ?? [], events: store.events ?? [], contributors: store.contributors ?? [], links: store.links ?? [], dailyTraces: store.dailyTraces ?? [], growthRecords: store.growthRecords ?? [], careRecords: store.careRecords ?? [], careEpisodes: store.careEpisodes ?? [], monthlyFocusGoals: store.monthlyFocusGoals ?? monthlyFocusGoals, organizerRuns: store.organizerRuns ?? [], organizerJobs: store.organizerJobs ?? [], chatImportTasks: (store.chatImportTasks ?? []).map(normalizeChatImportTask), qualityReviews: store.qualityReviews ?? [] };
 }
 function hydrateMedia(store: Store): Store {
   store.media = store.media.map((media) => {
@@ -199,7 +205,7 @@ export function createJsonRepository(): Repository {
       return withStoreMutation((store) => {
         const existing = store.qualityReviews.find((item) => item.targetKind === review.targetKind && item.targetId === review.targetId && item.promptVersion === review.promptVersion);
         if (existing) return existing;
-        store.qualityReviews.push({ ...review, decision: normalizeQualityDecision(review.decision) });
+        store.qualityReviews.push(review);
         return review;
       });
     },

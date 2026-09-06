@@ -8,7 +8,7 @@ import { newId, organizerJobKey } from "./repository-interface";
 import { CANONICAL_PROFILE_ID } from "./config";
 import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, MonthArchiveInput, OrganizerWindowInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 import { normalizeSha256 } from "./chat-import-persistence";
-import { indexReviews, isEventPublishable, isTracePublishable, normalizeQualityDecision, type QualityReview } from "@/lib/organizer/quality-review";
+import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
 import { birthDayOf } from "@/lib/time-signature";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { ChatImportStateError, acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
@@ -459,9 +459,18 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     const rows = await db.select().from(t.contentQualityReviews);
     return indexReviews(rows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>);
   }
-  // `decision` is a text column, so what comes back is interpreted through the one canonical
-  // mapping (normalizeQualityDecision) rather than cast and believed.
-  const reviewFromRow = (row: Record<string, unknown>): QualityReview => ({ ...(row as unknown as QualityReview), decision: normalizeQualityDecision(row.decision) });
+  // `decision` is a text column. A-10 (2026-09-06): this used to run every row through
+  // normalizeQualityDecision() here, which silently rewrites any value outside the
+  // QualityDecision union to "needs_human_review" — a real, meaning-bearing business decision,
+  // not a safe placeholder. That made every row's stored decision unreadable as itself once it
+  // reached `store.qualityReviews`: A-6's 153 target_kind='life_event_trace' rows are
+  // decision='trace_eligible' in the database, but getStore() callers saw "needs_human_review",
+  // and had no way to tell an unrecognised value apart from a real one. Read-time narrowing
+  // belongs at the point that actually needs a fail-closed QualityDecision for a publication
+  // decision — indexReviews() (used by isEventPublishable/isTracePublishable) already does that
+  // normalization itself on whatever raw value it is given. So this layer now passes the stored
+  // value through unchanged; only the two publication gates get the narrowed, fail-closed view.
+  const reviewFromRow = (row: Record<string, unknown>): QualityReview => row as unknown as QualityReview;
   // Page-facing event listings belong to the canonical profile only.
   const canonicalEvents = () => db.select().from(t.lifeEvents).where(eq(t.lifeEvents.profileId, CANONICAL_PROFILE_ID));
 
