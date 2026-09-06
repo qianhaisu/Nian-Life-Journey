@@ -348,3 +348,29 @@ life_events），不越界。
 部署一到就查第 5 条，查完全部 6 条都处理完再标 ✅。
 
 ### 2026-09-06 · 中间进度 · 构建进行中 153/251，无新入箱指令
+
+### 2026-09-06 · 重要发现 · A-6 子集切换后痕迹层完全消失，根因在 A 轨文件（跨轨 bug，commit 989cd11）
+
+浏览器直连线上部署（阻力测试，确认过部署已 Ready 且是含 `111c88d` 的 commit）逐句核对 A-6 June
+8 条 `trace_eligible` 句子——**全部消失，不是只有那 3 条被判掉的消失**。定位到真正根因（不在我的代码里）：
+
+`v2/lib/db/postgres-repository.ts` 的 `assembleStore()` 对**每一条** `content_quality_reviews` 行
+（不分 target_kind）都跑一遍 `reviewFromRow()`，而 `reviewFromRow` 无条件调用
+`normalizeQualityDecision(row.decision)`。这个函数的 `QualityDecision` 联合类型里没有
+`"trace_eligible"`，所以 A-6 的 153 行一旦经过 `getStore()`，`decision` 字段就已经被
+**静默改写成 `"needs_human_review"`**——不只是我之前以为的"经过 `indexReviews()` 才会坏"，
+而是**在 `store.qualityReviews` 这个数组本身里就已经坏了**。我之前按文档写的
+`decision==='trace_eligible'` 判断因此永远查不到任何行。
+
+**这是一个真实的跨轨 bug，文件在 A 轨（`v2/lib/db/**`），我没有改它**，改法应该是：`reviewFromRow`
+不该对所有 `target_kind` 一律走"真实发布决策"的归一化——A-6 这类独立 marker 的 `decision` 字段
+不需要、也不应该被 `normalizeQualityDecision` 处理。**转给 A 轨 / Cowork 看一下要不要修
+`postgres-repository.ts`**，虽然不修也不影响我这边（我已经绕开了，见下）。
+
+**我这边的绕过方案（完全在自己的文件里，没碰 `v2/lib/db/**`）**：不再判断 `decision`，改判断
+`provider==='cowork-a6' && promptVersion==='a6-trace-layer-v1'`——这两个字段 `reviewFromRow`
+不会碰，而且核实过 153 条 `life_event_trace` 行**全部**是这个 provider/promptVersion 组合，
+没有一条"判掉"的变体用同一个 target_kind（判掉的事件根本不写行，不是写了行再标 rejected）。
+所以这个绕过在数据层面等价于按 decision 过滤，不是放宽门槛。
+
+commit `989cd11` 已 push main，等下一次部署上线后重新逐句核对 June 8 条。
