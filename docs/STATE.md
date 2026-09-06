@@ -104,7 +104,15 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 13. **视觉方向以 Teddy 2026-09-05 设计稿为准**：大地色 + 全圆角 + 呼吸感微动效（`docs/design/visual-system-v2.md`）。旧版编辑部风移到 `_superseded/`。
 14. **「代表照/封面照」只认夸克家庭相册**：唯一入口 `v2/lib/media/representative.ts` 的 `isPortraitOfZhangnian(media)` = `media.id.startsWith("media-quark-sha-")`。事件页 hero 和月页正文当天的照片不受此限。
 15. **公开阅读页走 ISR**（`revalidate=300`）：`/`、`/about`、`/memory`、`/memory/[year]`、`/memory/[year]/[month]`；`/inbox` 保持实时。写完库要立刻可见走 `POST /api/internal/revalidate`。
-16. **编排的状态文档以本仓库 `docs/STATE.md` 为唯一权威**，claude.ai Project 里的同名文档只是给 Teddy 手机上看的镜像（2026-09-06 定，见第 3 节踩坑记录）。
+16. **配图支持的叙述性描写（含引语）是可接受的，不算编造**（Teddy 2026-09-06 拍板）。
+    写手是**多模态**的：判断一段文字是不是虚构，基准必须是「**文字证据 + 配图**」，
+    **不能只比 `raw_sources.text`**。照片里是雪姨在开车，写手补一句「妈妈喊了一句『雪姨在开车！』」，
+    属于可接受的叙述，不是幻觉。Teddy 的原则是「不接受有图没文字」——**看图生成文字本来就是设计内的正确行为**。
+    仍然算错的只有两类：(a) 完全没有配图、文字证据也不支持的具体断言（例如把转发的带货广告
+    写成孩子自己的数据）；(b) 精确到序数/数量的事实断言而证据无法可靠支撑（例如「第七颗牙」，
+    存疑但不急着改）。**这条不要重新讨论**——2026-09-06 A-7/A-8 曾用"只比文字"的错误基准
+    判出 13 条"编造"，几乎让好内容被删掉，是 Teddy 本人纠正的。
+17. **编排的状态文档以本仓库 `docs/STATE.md` 为唯一权威**，claude.ai Project 里的同名文档只是给 Teddy 手机上看的镜像（2026-09-06 定，见第 3 节踩坑记录）。
 
 ## 3. 踩过的坑（最有价值的一节）
 
