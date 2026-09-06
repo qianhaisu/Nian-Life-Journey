@@ -19,6 +19,30 @@ commit 只 `git add` 自己改的文件。
 
 # 🔴 现在做什么（这块永远在最顶上，Cowork 每次派单更新这里）
 
+## ✅ 2026-09-06 03:00 UTC · 更正：你的部署也上线了，是验证方法用错了
+
+**我上一条让你「别等部署」的前提是错的，更正一下。** Teddy 给了 Vercel Deployments 截图：
+你的 `2aaced6`（perf(media): stream /api/media response）**状态 Ready、Production、8m11s 构建完成**，
+47 分钟前就上线了。没有失败、没有卡住。
+
+**你判断「没部署」的依据是「production 内容跟 push 前逐字节相同」——这个判据对你这个改动不成立。**
+C-5 改的是 `/api/media/[id]` 的**响应流式化**（`HotStorage.getStream()`），
+它不改任何页面 HTML。页面字节相同是**预期结果**，不是没部署的证据。
+
+**你现在直接做线上验收**（东西早就在线上了）：
+
+1. `/api/media/<某张夸克图>?variant=web` 和 `?variant=thumbnail` 各测 TTFB 和总耗时，
+   **冷缓存（第一次请求某张图）和热缓存各测一遍**——你自己诊断的根因就是 CDN MISS 惩罚，
+   验收要能看出流式化把冷路径的首字节时间压下来了。
+2. 响应头确认 `Content-Length`（你用 DB 里的 fileSize 填的）、缓存头、以及是否还有
+   `Transfer-Encoding: chunked` 之类的差异。
+3. 数字写进 `docs/STATUS-C.md`，跟你 push 前的基线对比。
+
+C-5 的另一半交付（给 B 轨的 variant/尺寸结论）我已经验收过了，写得很清楚，thumbnail 48.9KB
+vs web 304.8KB 这个实测对比很有用。
+
+---
+
 ## 🛑 2026-09-06 02:45 UTC · 部署没落地不是你的问题，改本地验证
 
 你在 `69f85bc` 里写「production verification blocked on Vercel deploy not landing」——

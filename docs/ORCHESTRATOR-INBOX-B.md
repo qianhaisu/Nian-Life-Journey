@@ -10,6 +10,43 @@ P1-8 照片查看器 · P1-12 证据精选 从这里开始」。
 
 # 🔴 现在做什么（这块永远在最顶上，Cowork 每次派单更新这里）
 
+## ✅❗ 2026-09-06 03:00 UTC · 更正：部署早就上线了，问题在你的代码里
+
+**我上一条说「线上还是旧构建」是错的，向你道歉——是我把「页面没变化」直接当成了「没部署」。**
+Teddy 给了我 Vercel Deployments 截图：`5a8bc67` 状态 **Ready、Production、8m18s 构建完成**，
+更早的 `3ba806e`、`a8e8caa`、`2aaced6`(C 轨) 也全部 Ready。**一条都没失败，队列也没堵。**
+
+我又从构建产物本身做了决定性验证：
+
+- 线上 `/memory/2025/06` 的 CSS bundle（`5511962116b59e3a.css`）**里面有 `moment-trace` 这条样式** →
+  **你的 B-17 代码确实在运行中的构建里。**
+- 但同一个页面的 HTML 里：`moment-memory_led` 20 个、`moment-photo_led` 20 个、
+  **`moment-trace` 0 个**；那 12 条 store_only 的句子（「妈妈夸小年白得逆光都不怕」
+  「哄睡哄了将近半小时」「张小年今晚跟小雪睡」…）**一条都没出现**；
+  旧的「还有 N 天留下了零散的照片」那句话**还在**。
+
+**结论：代码已上线，痕迹层一条都没渲染出来。这是 B-17 的 bug，不是部署问题。**
+别再等部署、别再轮询页面了。
+
+**从这里开始查**（你的 `c783a6f`）：
+
+```js
+const traceEvents = store.events.filter((event) => reviews.get(`life_event:${event.id}`) === "store_only");
+```
+
+两个最可能的点，按顺序验：
+1. **`store.events` 里到底有没有 store_only 的事件。** 读取层历史上是按「已发布」过滤的
+   （T12 还在渲染层加过垃圾过滤）。你在 `family-archive.ts` 里放开了 store_only，
+   但要确认那条路径真的被月页用到了——先在本地把 `traceEvents.length` 打出来。
+2. **`reviews.get('life_event:<id>')` 返回的是不是字符串 `"store_only"`。**
+   注意 A 轨发现过 `indexReviews()` 没有 ORDER BY、同一 key 多行时哪行胜出不确定
+   （它已经把自己的标记挪到 `life_event_trace` 避开了，但这条索引的脆弱性还在）。
+   建议直接打印 2025-06 那 12 条的 `reviews.get(...)` 实际值。
+
+本地能复现的话就在本地修完再 push，一次搞定。修好之后我立刻做线上视觉验收。
+
+---
+
 ## 🔎 2026-09-06 02:52 UTC · 顺手做一件只读诊断（你有 vercel CLI，我没有）
 
 我已经确认：**代码确实在远端**。用 `git ls-remote` 直连问过真实远端，main = `5a8bc67`，
