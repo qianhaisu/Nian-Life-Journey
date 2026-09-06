@@ -37,6 +37,42 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-06 05:15 UTC · A-9 收尾：已执行撤销发布 + 「脑门起了个包」重写 predeclare（未写库）
+
+**1. 「满12个月，81厘米24斤半」撤销发布——已执行，回报实际影响**
+
+踩了自己一个小坑：predeclare 里给的 review 行 id 少写了 `quality-review-` 前缀
+（真实 id 是 `quality-review-70b40088-96b4-44a1-ae28-bc4d7c45f4eb`，我写成了
+`70b40088-96b4-44a1-ae28-bc4d7c45f4eb`）。第一次执行时按错误 id 查/改，**0 行受影响**，
+没有误改到别的行；发现对不上后马上查出真实 id，重新执行：
+
+```
+UPDATE content_quality_reviews SET decision='store_only'
+WHERE id='quality-review-70b40088-96b4-44a1-ae28-bc4d7c45f4eb'
+```
+
+**实际影响：1 行**。查库确认：该行 `decision` 现在是 `store_only`；`event-v2-565c8283ab7d1a1a8b70e2659f306a76`
+名下没有任何 `target_kind='life_event_trace'` 行（没给痕迹层标记，符合要求）。`life_events.title`/`story`
+文本没有改动。
+
+**2. 「脑门起了个包」重写 predeclare（未写库，等确认）**
+
+`event-v2-496fde6db412f3b9b09bbe20171908b9`，review 行 id `quality-review-181b7a8a-2911-4cfd-832e-e588f3a1161c`（当前 `decision=approved`）
+
+- 原始证据：「张小年早上把头摔了」（唯一的一条源消息，这条事件 `media_ids=[]`，没有配图）
+- 现在：早上摔了一跤，脑门起了个包 / 张小年早上把头摔了，脑门摔了个包。
+- **重写**：张小年早上把头摔了 / 妈妈说，张小年早上把头摔了。
+
+**要不要连带降级到痕迹层，我没有自己定，列出来给你判断**：去掉"起了个包"之后，这条跟
+A 组那 10 条一样单薄（一句话事实），你 04:45 UTC 只说了"去掉无凭据的细节"，没提发布状态；
+如果要保持 approved 也可以（core fact "摔了跤"本身站得住），只是内容量级上会比其他 approved
+条目薄很多。等你一并给个说法，确认后我再写库（文本 UPDATE，需要的话再加 review 行
+decision 改 store_only + trace_eligible 标记）。
+
+**防复发方案**：已按你说的存档在 04:37 UTC 条目里，不写代码，等专门立项。
+
+
+
 ### 2026-09-06 05:03 UTC · A-10 完成（代码+测试），一个环境限制导致没能跑成活的 `getStore()` 验证
 
 **代码改动**（只在允许的两处文件）：

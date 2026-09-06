@@ -3,7 +3,7 @@
 > **这份文档只能覆盖写，不能追加。** 它永远只描述"现在"，长度保持在 100 行以内。
 > 历史在 `git log` 和 `docs/STATUS.md` 里，不在这。一个刚清空上下文的 Session 只读这一份就能接着干。
 >
-> 最后更新：2026-09-06 05:0x · by Claude Code（A-10 代码修复完成，typecheck+测试全过，getStore() 活验证受环境限制没跑成）
+> 最后更新：2026-09-06 05:1x · by Claude Code（A-10 验收通过；A-9 撤销发布已执行；「脑门起了个包」重写等确认）
 
 ---
 
@@ -111,6 +111,16 @@ P1-5（scoped read）✅。
 已写进 `docs/STATUS.md` 04:37 UTC 条目，**等确认后再写库**；②「第七颗牙」类精确序数列出
 不改，攒给 Teddy。防复发方案已按新方向改写：只在"单源 + 无配图"这个更窄交集上收紧写手，
 不再对所有单源事件一刀切。**目前 A-9 全程零写库。**
+
+**A-10 验收通过（2026-09-06）**：Cowork 独立读代码确认 + B 轨生产验证过 153 条 trace_eligible
+显示正确，结案，不需要再补 `getStore()` 活验证。
+
+**A-9 收尾（2026-09-06）**：「满12个月」那条已执行撤销发布（`content_quality_reviews` 1 行
+`decision: approved → store_only`，id `quality-review-70b40088-96b4-44a1-ae28-bc4d7c45f4eb`，
+不给痕迹层标记）——第一次执行时 predeclare 里 id 少写了 `quality-review-` 前缀导致 0 行生效，
+发现后查出真实 id 重新执行成功，过程写进 `docs/STATUS.md` 05:15 UTC。「脑门起了个包」
+（`event-v2-496fde6db412f3b9b09bbe20171908b9`）的文本重写已 predeclare，**等确认**（含要不要
+一并降级痕迹层，我没有自己定）。
 
 **A-10（`reviewFromRow` 静默改写 decision 修复）代码完成（2026-09-06）**：
 `postgres-repository.ts`/`json-repository.ts` 的 `reviewFromRow`/`normalizeStore`/
