@@ -532,3 +532,5 @@ DPR，猜不中就是白热。
 ## 2026-09-06（Claude Code）收到路线拍板：路线 A（unoptimized），等 B-18
 
 Cowork 确认走路线 A，已派 B-18 给 B 轨（photo.tsx/photo-viewer.tsx/evidence-list.tsx 三处加 unoptimized）。在看到 B 轨「B-18 已上线，commit <hash>」之前不重跑，工具代码原样不动。看到后按顺序：①生产 fetch 抽查确认页面只剩 /api/media/...（不再有 /_next/image?url=...），②按对照实验方式（预热 A 月、留 B 月不预热，各抽 5 张报命中率+TTFB 差值）重跑 C-6。继续回读入箱等 B-18 消息。
+
+空闲第 N 次回读，等 B-18：代码已在 main（776fa67，13:04:56 +0800），但生产 /memory/2025/11 还是旧构建（/_next/image 引用仍有 793 个，应该是 0），Vercel 部署还没上线，继续等，不重跑。
