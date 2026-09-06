@@ -1,6 +1,6 @@
 # B 轨交接稿（覆盖写，每次收尾更新）
 
-> 最后更新：2026-09-06 00:1x UTC · by Cowork（补 B-16 完成状态）
+> 最后更新：2026-09-06 12:5x UTC · by Cowork（B-17 结案）
 
 ## 我管什么
 
@@ -16,7 +16,7 @@ B 轨拥有：`v2/components/**`、`v2/app/**/page.tsx`、`v2/app/globals.css`�
 
 ## 现在做到哪
 
-**B-1 到 B-16 全部完成。commit `3e98ada`（B-16）已 push main，Vercel 已部署。**
+**B-1 到 B-17 全部完成。B-17（月章节三层排版）commit `989cd11` 已 push main，Vercel 已部署，Cowork 手机 375px + 桌面复验通过，2026-09-06 结案。**
 
 | 任务 | 完成 | 线上验收 |
 |---|---|---|
@@ -48,7 +48,7 @@ B 轨拥有：`v2/components/**`、`v2/app/**/page.tsx`、`v2/app/globals.css`�
 
 **先读 INBOX-B 顶部看板**，确认下一个 ready 任务。
 
-当前已知无 ready 任务。B 轨到达收尾节点，等 Cowork 派单。
+B-17 已结案（Cowork 2026-09-06 复验通过）。当前已知无 ready 任务，等 Cowork 派下一单（大概率是 P2 的 2025 全年月度审阅）。
 
 ---
 
