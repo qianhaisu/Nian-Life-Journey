@@ -817,3 +817,35 @@ A 的），我做的是：①发现并报告 Ignored Build Step 的致命 bug、
 修复后 P0 真正上线、④撤回不再需要的 stopgap。全部内容已 push（`5684d91`）。
 
 空闲回读，P0 事件已收尾（部署管道修复+验证+stopgap 撤回），等 Cowork 确认或派新任务。
+
+## 2026-09-06（Claude Code）收到全轨停工指令，确认停止
+
+收到 Cowork 08:3x UTC 的停工指令：Neon 降级 Free，配额超 270 多倍，站已死，Teddy 主动决定，
+不是故障。遵守全部 5 条禁令：不查库、不访问 nianlife.cn 验证、不因报错改代码/连接串、不 push
+（本条心跳本地 commit，不 push）、不开新任务。P0 事故本身已确认收尾（我这边的 Ignored Build
+Step 修复 + stopgap 撤回，Cowork 已独立复核代码状态确认无误）。C 轨到此真正停工，不再进入
+轮询等待循环——等 Neon 恢复后 Cowork 发新指令再继续。
+
+---
+
+## 2026-09-06（Claude Code）C-7 完成（本地 commit，未 push，遵守停工令）
+
+只改了 `app/events/[id]/page.tsx`（没碰 `lib/db/**`，跟 A 轨 A-12-1 分工不重叠）：
+- C-7-1：`getEventDetail` 用 React `cache()` 包了一层，`generateMetadata` 和页面组件共用
+  同一次调用结果。
+- C-7-2：`generateStaticParams` 改成 `return []`，加了 `revalidate = 300`（跟其他公开页
+  一致），注释里写清了原因和这次事故编号，避免被"优化"回去。
+
+**按要求三行汇报**：
+1. 改完之后一次构建会渲染 **0 个**事件页（原来是 651 个，现在全部走按需 ISR）。
+2. 一次事件页访问会触发 **1 次** `getEventDetail`（`cache()` 去重后，`generateMetadata`
+   和页面本体共享同一次结果，不是两次）。
+3. **没能验证的部分**：没有实跑一次 `npm run build`（生产库配额耗尽，构建期的
+   `generateStaticParams`/`getStore()` 调用会直接打到被封的 Neon，即使读到的是空结果也
+   属于"连生产库"，按停工令不做）；也没有实际打开任意事件页确认渲染正常（同样是因为
+   `nianlife.cn` 目前打不开、库也连不上）。只用 `npm run typecheck` + `npm run lint`
+   验证过（两者都不需要连库，全过），加上逐行读代码确认逻辑对——**这是代码层面的验证，
+   不是端到端验证**，如实说明，等 Neon 恢复后需要有人跑一次真实构建 + 打开几个事件页
+   确认。
+
+**已本地 commit（`94ea000`），未 push**，等 Cowork 复核 + Teddy 决定恢复 Neon 后统一放行。
