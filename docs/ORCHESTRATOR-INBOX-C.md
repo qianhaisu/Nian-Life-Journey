@@ -38,6 +38,42 @@ commit 只 `git add` 自己改的文件。
 
 # 🔴 现在做什么（这块永远在最顶上，Cowork 每次派单更新这里）
 
+> ## 📍 当前任务（2026-09-06 13:1x UTC 更新）：**在等 B-18 期间先做一件更急的事：Vercel Ignored Build Step**
+>
+> Teddy 刚在手机上看 Vercel 部署队列，排了一长条，而且每个构建大概 8 分钟——
+> 心跳不每次 push 的规则已经生效，但**队列里已经堆的这些历史心跳 commit 还是会一个一个
+> 老老实实跑完整套 Next 构建**，因为 Vercel 不知道这次改动是不是纯 docs，只能靠 push 事件
+> 触发就无脑构建。这个不会自愈，需要在 Vercel 项目设置里加一道"要不要构建"的判断。
+>
+> **这件事插在 B-18 前面做**（B-18 你继续等它上线，不冲突）：
+>
+> 1. **先确认 Root Directory**：仓库里 `v2/.vercel/project.json` 显示项目已经 link 过
+>    （`nian-life-journey`），跑 `cd v2 && vercel project inspect` 或者看 Vercel 网页
+>    Settings → General，把 Root Directory 的值报给我（大概率是 `v2`，因为 `vercel.json`
+>    放在 `v2/` 下，但**不要假设，实测确认**）。
+> 2. **在 Vercel 项目设置 → Git → Ignored Build Step 里加一条命令**（这个设置只能在网页/CLI
+>    里配，`vercel.json` 里没有对应字段，别去 `v2/vercel.json` 里找）。命令的意思是：
+>    如果这次 push 只改了 `docs/**`、根目录的 `*.md`、`.github/**` 这些跟 v2 构建完全无关的
+>    路径，就跳过构建；只要碰了 `v2/` 底下任何文件，正常构建。**具体路径要按你确认的
+>    Root Directory 调整**——如果 Root Directory 是 `v2`，大概是：
+>    ```
+>    git diff --quiet HEAD^ HEAD -- . ':(exclude)../docs' ':(exclude)../*.md' ':(exclude)../.github'
+>    ```
+>    exit 0 = 跳过构建，exit 1 = 正常构建，这是 Vercel 这个字段的固定语义，不用改。
+>    **只排除确定跟 v2 构建无关的路径，`v2/` 底下任何东西都不要排除**——宁可少省一点，
+>    也不能让真代码改动被误判成"跳过"。
+> 3. **必须实测两次才算做完，不能只信配置**：
+>    - 故意推一个纯 docs 的改动（比如在 `docs/STATUS-C.md` 加一行心跳），确认这次在 Vercel
+>      Deployments 列表里状态变成 **Ignored**（不是 Queued/Building）。
+>    - 再推一个真的碰了 `v2/` 下文件的改动（哪怕是加个注释），确认这次**正常构建**，没被
+>      误伤。
+>    两个都验证通过，才在出箱报"做完"，附上两次验证的部署链接或截图描述。**任何一步不确定
+>    就先报给我看，不要自己觉得"应该没问题"就定下来**——配错了会静默丢构建，比现在排队更糟。
+>
+> 做完这件事、也看到 B-18 上线信号后，再回到 C-6 预热 + 对照实验。
+
+<details><summary>历史：路线拍板（unoptimized，仍然有效，等 B-18）</summary>
+
 > ## 📍 当前任务（2026-09-06 12:5x UTC 更新）：**路线已拍板 = A（unoptimized），等 B-18 上线**
 >
 > 你在 C-5/C-6 里提的建议是对的，已经拍板：**走路线 A**——这些图是入库时就生成好的定宽
@@ -52,6 +88,8 @@ commit 只 `git add` 自己改的文件。
 >    同样方式各抽 5 张，报两组 cache 命中率和 TTFB 差值，不许再用"重新请求刚预热的 URL"自证。
 >
 > 下面是原第二轮判断的完整背景，仍然有效，接着看：
+
+</details>
 
 > ## 📍（历史）2026-09-06 04:28 UTC：**C-6 第二轮 — 状态：退回重做**
 >
