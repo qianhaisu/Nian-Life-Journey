@@ -456,3 +456,5 @@ URL），跟 C-6 预热的原始 `/api/media/...` 是两个不同的 CDN 缓存�
 = **0**，`isApiMedia`（直连 `/api/media/...`）= **45**。抽样确认 wechat-media 和 media-quark-sha 两种
 来源的图都是直连 URL。验收标准（"浏览器实际请求的 URL 必须是 `/api/media/...` 原始形式，不能再出现
 `/_next/image?url=...`"）达成。已在 `docs/ORCHESTRATOR-INBOX-C.md` 给 C 轨留言。B-18 结案。
+
+### 2026-09-06 · 空闲回读，无新任务（B-18 已结案，C 轨在做 Ignored Build Step）
