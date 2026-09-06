@@ -1,0 +1,27 @@
+{
+  "attempted_at": "2026-09-06T10:49:56.214015Z",
+  "action": "PATCH /api/v2/projects/holy-heart-69531579",
+  "body": {
+    "project": {
+      "settings": {
+        "quota": {
+          "data_transfer_bytes": 1000000000
+        }
+      }
+    }
+  },
+  "result": {
+    "http_status": 404,
+    "body": {
+      "code": "",
+      "message": "action restricted; reason:\"organization is managed by Vercel\""
+    }
+  },
+  "state_at_attempt": {
+    "org_plan": "launch",
+    "quota_before": null,
+    "consumption_period_start": "2026-09-06T10:44:00Z",
+    "data_transfer_bytes": 0
+  },
+  "conclusion": "A Neon project-level quota CANNOT be set on this project: the API refuses because the organization is managed by Vercel. Combined with Vercel Support's confirmation that Spend Management excludes Marketplace integrations (and is unavailable on Hobby regardless), there is NO hard spending cap available by any route while the project remains a Vercel Marketplace resource. The only hard stop that has ever actually worked was the Free plan's own allowance."
+}
