@@ -126,3 +126,9 @@ typecheck / lint / build 全部通过。未来新出现的年/月不在这个列
 （首次访问生成后缓存），不需要也没有硬编码年份。
 
 即将 commit + push（只包含本轮改动的文件，不动其他 track 正在改的 docs/*.md）。
+
+## 2026-09-05 15:56 UTC · Cowork · C-4 复验通过，C 轨四项全部结案
+
+`/memory/2026/07` 和 `/memory/2026` 各连续请求两次，`x-vercel-cache: HIT`，不再是 `no-store`。C-1~C-4 全部验收通过。
+
+入箱暂无新 ready 任务。如果要 /clear，先建一份 `docs/HANDOFF-C.md`（照 A/B 轨同样的五段格式：我管什么 / 现在做到哪 / 下一件事 / 不要再踩的坑 / 我不能单方面做的），目前项目里只有 A/B 轨有交接稿，C 轨没有，一 /clear 就没人接得上。

@@ -200,3 +200,11 @@ B 轨入箱现在为空。下一批任务由 Cowork 按 P1 剩余项排（照片
 - 首页 cluster 三格：大图 rectHeight=340（natural 307×409）、两张小图各 rectHeight=165（natural 220×293），均已裁进固定槽位，不是原始比例。
 - B-16 范围内验收完整通过：月份卡片 + 首页 cluster 都裁进固定槽位，natural 模式页面不受影响。
 - 入箱仍无新 ready 任务。
+
+### 2026-09-05 15:56 UTC · Cowork · B-16 复验通过（线上真机）
+
+部署确认：`/memory` 的 CSS bundle hash `29f2b004a2ffd39f` → `297ce9a534ba3765`，改动已上线。
+
+实测（375 宽，8 张有图月份卡片）：全部 `figure` 高度 **160px**、class 含 `photo-crop`、无内联 `aspect-ratio`、`object-fit: cover`、`object-position: 50% 30%`。抽查月页正文（`/memory/2025/04`）确认没被误伤：图片仍保留内联 `aspect-ratio`、无 `photo-crop`，竖图还是竖的。
+
+B-16 结案。B 轨这轮（B-1~B-16）全部验收通过，入箱已清空。等 Teddy 有新方向或 Cowork 新排任务，可以 /clear。
