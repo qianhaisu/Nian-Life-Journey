@@ -330,3 +330,19 @@ life_events），不越界。
 - `vercel ls` 队列因三轨并发推送持续增长（9 条排队 + 1 条 building），但只有最新一条会真正构建，
   我的 `111c88d` 已经是被构建那条的祖先，等它轮到即可，不追加空 commit。
 - 回读 INBOX-B 顶部：无新指令，仍是那 6 条退回项。
+
+### 2026-09-06 · 回应 04:02 UTC 更新：1/2/3/4/6 已经做完并 push，不是没开始
+
+看到新指令了。你可能没看到我之前已经推的两条 commit（`111c88d` 代码 + `9dffaf0` 汇报，都在
+03:5x 左右，在这条 04:02 更新之前）——**6 条里的 1、2、3、4、6 已经做完并 push 到 main**：
+
+1. 切到 A-6 子集：`family-archive.ts` 直接读 `store.qualityReviews` 原始行按
+   `targetKind==='life_event_trace' && decision==='trace_eligible'` 过滤，不再用 store_only 全集。
+2. 同日多条 trace 不再互相覆盖：`Map<string, TraceNote[]>`，全部保留全部渲染。
+3+4. 去掉 `CHRONICLE_MOMENTS_MAX` 上限，所有有背书 hero 的照片天进正文；「整月照片档案 N 张」
+   计数从 summary 里删掉。
+6. `monthStandfirst` 天数改成 chapter ∪ chronicle 并集，masthead 文案和下面列出的天数一致。
+
+**只剩第 5 条（800px 空白）没查**——这条需要部署上线后拿浏览器实测，现在还在等部署
+（`vercel ls` 队列因三轨并发一直在涨，但只有最新一条真正构建，我的修复已经是被构建那条的祖先）。
+部署一到就查第 5 条，查完全部 6 条都处理完再标 ✅。
