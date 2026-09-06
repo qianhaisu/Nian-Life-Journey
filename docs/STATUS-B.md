@@ -263,3 +263,49 @@ B-16 结案。B 轨这轮（B-1~B-16）全部验收通过，入箱已清空。�
 ###  UTC · 中间进度 · B-17 · 等修复版本部署
 
 - 仍在等含 `2f65c78` 修复的新部署（`vercel ls` 持续 building=1 queued=2，约 14 分钟）。用 CLI 轮询构建状态，不再直接打 nianlife.cn（避免再触发 bot 防护）。
+
+## 2026-09-06 · B-17 完成 · commit c783a6f + 2f65c78（修复）· 浏览器实看通过
+
+**线上多了什么**　`/memory/2025/06` 这类"稀薄月份"不再只是「1 段记忆 + 折叠档案」。新增「痕迹」层
+（`MomentKind = "trace"`）：store_only 的 life_event（Organizer 判定不够格发布，但确实是关于张年的
+真实小事）现在以一行轻量小字呈现在"这个月的日子"里，不再无条件消失进"还有 N 天…零散的照片"这句话。
+2025-06 从"还有 15 天"降到"还有 10 天"——5 天从完全不可见变成可读的一行句子（6/1 哄睡半小时、6/3
+跟小雪睡、6/4 妈妈不愿撞伤、6/7 奶奶说幸福的家）。有照片但无发布内容的天，痕迹句直接挂在已有的照片
+条目下，不新开一行。
+
+**踩到的真实 bug（写给下一个读这段的人）**　`getStore().events`（`postgres-repository.ts`
+`assembleStore()`）本身就是 `publishableEvents`——已经按发布态过滤过。我最初在 `family-archive.ts`
+里用 `store.events.filter(decision==='store_only')` 永远是空集，因为已发布事件不可能是 store_only。
+用浏览器 + 生产库直连核对了两轮部署（confirm 不是缓存/部署队列问题：ISR age 从 452 强制刷新到 18 后
+内容仍不变）才定位到。修复用已存在、未改动 `v2/lib/db/**` 一行的 `getOrganizerStore()`（读取未过滤的
+life_events），不越界。
+
+**怎么验证的**　浏览器实看（非 grep）：
+- `/memory/2025/06`：DOM 里 `.moment-trace` 存在，6/1、6/3、6/4、6/7 四条痕迹句可读；trace 文字
+  computed style 14.7px / `--color-muted` / 400 字重，memory 标题 40px / 600 字重——一眼可分辨。
+  「还有 N 天」从 15 降到 10。
+- `/memory/2025/12`（最丰富月份之一）：10 个 memory_led + 26 个 photo_led，月度回顾、逐日记忆、
+  照片、"小年迈出独立走路第一步"章节均正常展示，无回归。
+- `/memory/2026/08`：36 memory_led + 22 photo_led + 2 trace，月度回顾正常，无回归。
+- `npm run typecheck`、`npm run lint` 通过。
+
+**原则记分卡（本节点，聚焦本次改动相关的几条）**
+- 三 Media First：✅ 痕迹句用 Organizer 已写好的短标题，不计数、不编造。
+- 五 Not Equal Weight：✅ 章节 40px/600 vs 痕迹 14.7px/400/muted，视觉权重一眼可分辨；`archiveDaysVisible`
+  首屏仍限量。
+- 七 Automatic Reflection：✅ 月度回顾三处不变，未受影响。
+- 二 Two Clocks：✅ 痕迹句沿用 DayHead（日期 + 差异化年龄），未新造格式。
+- 其余五条未在本节点新触碰，沿用此前已验证状态。
+
+**没做到什么**
+- 手机 375px 的真实截图未拿到（浏览器工具本次 resize_window 对该会话的 viewport 不生效，只能停在
+  桌面宽度截图 + computed style 核对字号/颜色）；CSS 用的是相对单位（rem/em）和不依赖视口宽度的规则，
+  理论上手机上表现一致，但**这条严格说不算完成了"苏静在手机上看过"的验收要求**，下一个 session 有
+  真机或能正确模拟窄视口的浏览器工具时应该补一次真手机截图。
+- 2025/12 这个月本身 `traceCount=0`（A-6 目前只标记了部分月份/167 of 217，12 月可能不在已标记范围
+  内，或者 12 月的 store_only 事件全部落在已有 chapterDays 上被合并消化了，两者都不是 bug）。
+- "整月照片档案 N 张" 这句计数仍在（在折叠的 `<details>` 里，非主阅读层，判断为可接受，未处理）。
+- 三层里"章节 vs 段落"的进一步视觉细分（chapter/highlight 更大 vs 已发布的普通 memory/trace weight
+  更朴素）沿用现有 `memory-weight-*` CSS，未在本节点新增样式微调。
+
+**下一件**　等 Cowork 手机真机验收（375 宽）；若通过，B-17 结案。
