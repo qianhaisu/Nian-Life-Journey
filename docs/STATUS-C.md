@@ -775,3 +775,43 @@ git cat-file -e "$VERCEL_GIT_PREVIOUS_SHA" 2>/dev/null && git diff --quiet "$VER
 已经用 `git cat-file -e`/`git diff` 语义在纸上验证过三种分支（能解析且无 diff→跳过、
 能解析且有 diff→构建、解析不了→构建），没有在生产环境反复试错验证（避免再多制造几次
 失败部署）。
+
+空闲第 N 次回读，等 Teddy 确认 Ignored Build Step 已保存。
+
+---
+
+## 2026-09-06（Claude Code）P0 事件收尾：Ignored Build Step 修好，P0 修复确认真正上线，stopgap 已撤
+
+**时间线（如实记录，包括我自己引入的问题）**：
+
+1. 我给 Teddy 的 Ignored Build Step 命令有 bug——`$VERCEL_GIT_PREVIOUS_SHA` 在 Vercel
+   浅克隆里解析不到时，`git diff` 本身报致命错误，Vercel 把这种情况判成整个部署 `Error`，
+   不是我以为的"安全兜底成正常构建"。这在过去约 1.5 小时里让**至少 6 次部署全部失败**，
+   包括 A 轨真正的 P0 修复 commit（`7d7fe15`）和我自己后来加的 stopgap（`cb1d634`）——
+   `nianlife.cn` 那段时间一直卡在一个 2 小时前的旧构建上，P0 的 bug 本体在生产环境
+   持续跑，钱继续在烧。这是我的责任，第一时间报给了 Teddy。
+2. 给出修复命令：`git cat-file -e "$VERCEL_GIT_PREVIOUS_SHA" 2>/dev/null && git diff --quiet "$VERCEL_GIT_PREVIOUS_SHA" HEAD -- .`
+   ——先确认 SHA 能解析，解析不了就直接判定"要构建"（不去猜 `HEAD^`，因为攒了好几个心跳
+   一起 push 的场景下 `HEAD^` 会漏看真代码改动）。Teddy 网页保存后，新推的部署
+   （`f5mf9mroa`）状态是 `Building`，不再是 `Error`——**确认修好**。
+3. `f5mf9mroa` 完整跑完，`Ready`，`vercel inspect nianlife.cn` 确认它就是当前生产别名
+   （`dpl_4jJdqpXgvm6NVNx76wuaL5jSXmkw`）。实测响应：`/`、`/memory/2025/11` 都是 2-3 秒，
+   不是 P0 描述的那种 80 秒+ 卡死——**P0 修复确认真正上线，不只是 commit 落地**。
+4. Cowork 独立复核时点出我的 stopgap（`revalidate` 300→3600）"redundant"——因为它比
+   真正的修复晚了 13 分钟才落地，说得对，真修复本身就解决了根因，stopgap 没有继续存在的
+   必要。**已撤回**（`5684d91`），5 个页面的 `revalidate` 都改回 300，`TEMPORARY` 注释
+   一并删除。
+
+**这次的教训（写给自己，也给下次任何 session 碰 Vercel Ignored Build Step 相关配置时看）**：
+- **验证一条会影响"是否构建"的命令时，光测两个正常分支（能解析且无 diff / 能解析且有 diff）
+  不够**，还要测"SHA 解析不了"这第三种分支——这条分支在生产环境比想象中更容易触发
+  （浅克隆深度、心跳 commit 堆积都会影响），一旦触发就是全站部署失败，比"错误地跳过一次
+  该构建的 push"严重得多。
+- **应急 stopgap 落地前应该先查一下 git log 有没有真正的修复已经在路上**——这次 stopgap
+  本身没有错（逻辑对、没碰 A 的文件、可逆），但如果我当时多看一步 git log 时间戳，
+  会发现 A 的真实修复已经提交在先，stopgap 从一开始就是多余的一步。
+
+**当前状态**：P0 全部结案（A 的查询修复 + Ignored Build Step 修复，两者都确认真正在生产
+上线），我的 stopgap 已撤回不留痕迹。C 轨本身在这次事件里没有分配到的任务（查询修复是
+A 的），我做的是：①发现并报告 Ignored Build Step 的致命 bug、②给出并推动修复、③验证
+修复后 P0 真正上线、④撤回不再需要的 stopgap。全部内容已 push（`5684d91`）。
