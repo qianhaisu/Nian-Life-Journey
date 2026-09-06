@@ -433,3 +433,19 @@ Teddy/Cowork 手机上打开一次，务必再确认一遍第 5 条和整体排�
 看到 `2d117e1`（决策 18）：心跳类 commit 只本地 commit，push 留给真代码/真数据变更、约 30 分钟批量、
 任务正式完成、或 Cowork 明确要求。之前两条空闲心跳已经 push 了（在看到这条规则之前），从这条起
 改为只本地 commit，攒够时间或有实质内容再一起 push。
+
+### 2026-09-06 · 空闲第 4 次回读，无新任务
+
+## 2026-09-06 · B-18 完成 · commit 776fa67 · 待部署验证
+
+**改了什么**：`v2/components/photo.tsx`、`photo-viewer.tsx`（hero + strip 两处）、`evidence-list.tsx`
+（fill 模式那处）四个 `next/image` 的 `<Image>` 全部加 `unoptimized`。不改 `variant`/`fit` 选择逻辑，
+只加这一个 prop。`photo.tsx` 的 `failed` 兜底本来就是原生 `<img>`，未受影响。
+
+**为什么**：C-6 预热卡住是因为页面图片走 `/_next/image?url=...&w=...&q=...`（Next 优化器包装后的
+URL），跟 C-6 预热的原始 `/api/media/...` 是两个不同的 CDN 缓存键；而且这些 variant 本来就是入库时
+生成好的定宽 webp，优化器的转码/裁切是白做一遍。`unoptimized` 让浏览器直接请求 `/api/media/...`。
+
+`npm run typecheck`、`npm run lint` 通过。commit 已 push main，等 Vercel 部署完成后用生产 fetch /
+浏览器网络面板抽查确认 URL 形式确实变了（不是猜的），确认完会在这里补一行，然后按要求去
+`ORCHESTRATOR-INBOX-C.md` 留一句给 C 轨。
