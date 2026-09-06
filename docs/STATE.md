@@ -228,9 +228,12 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 | 事项 | 状态 | 优先级 |
 |---|---|---|
 | **补 4 个月 monthly_snapshot**（2025-02/03/05/06） | ✅ 已确认无需补（A-5，2026-09-06：4 个月已发布事件只有 4/3/2/1 条，正常停在 quiet index） | — |
-| **A-6 痕迹层数据**（2025 store_only 主体确认） | 🟢 已派 A 轨（2026-09-06） | 现在 |
+| **A-6 痕迹层数据**（2025 store_only 主体确认） | ✅ 已完成（153 条 trace_eligible，A-10 修复根因后确认可正常读出） | — |
 | **B-17 月章节三层排版**（P2 主战场） | ✅ 已结案（2026-09-06，Cowork 手机 375px + 桌面复验通过） | — |
-| **C-5 图片交付性能**（B-17 上线前置） | 🟢 已派 C 轨（2026-09-06） | 现在 |
+| **C-5 图片交付性能**（B-17 上线前置） | ✅ 已完成 | — |
+| **B-18 图片 URL 统一**（unoptimized，解决 C-6 缓存键不一致） | ✅ 已完成（commit 776fa67，Cowork 独立复验 90/90 + 4/4） | — |
+| **Vercel Ignored Build Step**（docs-only commit 跳过构建） | 🟡 命令已确认，卡在需要 Teddy 手动粘贴到 Vercel 网页设置 | 等 Teddy |
+| **C-6 图片预热对照实验重跑** | 🟢 进行中（C 轨，预热 2025-12 vs 留空 2025-10 对比） | 现在 |
 | **nianlife-worker.mjs 首次正式跑**——手动跑一次 vs 挂 Windows 定时任务 | ⏸ Teddy 说先放着（2026-09-06） | 暂缓 |
 | **`INGESTION_TOKEN` 填入 `.env.local`**，打通 worker→revalidate | ✅ 已完成（2026-09-06，Cowork 验证 200） | — |
 | subject-gate.ts 收紧「孤立昵称 + 第三方转发聊天记录」判断 | 未开始，需要专门任务 | 中 |
