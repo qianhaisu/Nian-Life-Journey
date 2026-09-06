@@ -137,6 +137,25 @@ typecheck，逻辑改动小而可审查，先 commit，不因为别人未完成�
 
 ---
 
+## 2026-09-06（Claude Code）C-5 进度 3 —— 已 commit + push main（`2aaced6`）
+
+只 add 了 `v2/app/api/media/[id]/route.ts`、`v2/lib/storage/hot-storage.ts`、
+`docs/STATUS-C.md` 三个文件，`git status --short` 确认没混入 A/B 轨正在改的任何文件。
+push 会触发 Vercel 自动部署。
+
+**C-5 现状**：代码侧（根因 + 流式响应）和给 B 轨的 variant/lazy/priority 结论都已交付。
+剩下要做的是**部署后用真实月页做验收清单里的秒数实测**，但这依赖 B-17 把正文图片真正
+搬进页面（现在 `lib/publication-moments.ts` 还在 B 轨本地未提交状态，`npm run build`
+在他们这个中间态会失败，不是我的问题）。**在 B-17 提交、build 恢复、正文图片真正上线之前，
+C-5 的秒数验收（验收清单第 1/2/3 条）没法做真实测量**——这是当前唯一的 blocker，等 B 轨
+推送后回来测。
+
+下一件事：等 `docs/ORCHESTRATOR-INBOX-B.md` / origin/main 出现 B-17 的提交，跑
+`npm run build` 确认恢复，然后打开 `/memory/2025/12`、`/memory/2026/08` 实测手机首屏秒数、
+`/api/media` TTFB、连续两次请求的 `x-vercel-cache`，把数字写回本文件收尾。
+
+---
+
 ## 2026-09-05 15:27 UTC（Cowork）· 验收结果：3/4 通过，1 项需要补丁
 
 ### ✅ 通过
