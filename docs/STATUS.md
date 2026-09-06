@@ -43,18 +43,27 @@
 
 数据库层面新增 167 条「可展示痕迹」标记（2025 全年 store_only life_events 里的子集），
 线上页面暂时看不到变化——**渲染是 B-17 的活，这一步只是打好数据基础**。B 轨接下来能查
-`content_quality_reviews`（`target_id=<life_event.id> and provider='cowork-a6' and decision='trace_eligible'`）
+`content_quality_reviews`（`target_kind='life_event_trace' and target_id=<life_event.id> and provider='cowork-a6' and decision='trace_eligible'`）
 拿到这 167 条 id，渲染成月章节里的第三层「痕迹」。
 
 **表示法**（不改 schema，只新增行）：
 ```sql
 insert into content_quality_reviews
   (target_kind, target_id, decision, reason_codes, provider, prompt_version, policy_version, ...)
-values ('life_event', <life_event.id>, 'trace_eligible', ['<reason>'], 'cowork-a6', 'a6-trace-layer-v1', 'trace-layer-v1', ...)
+values ('life_event_trace', <life_event.id>, 'trace_eligible', ['<reason>'], 'cowork-a6', 'a6-trace-layer-v1', 'trace-layer-v1', ...)
 ```
-`prompt_version='a6-trace-layer-v1'` 是全新值，不会撞上任何真实 T20-C grading 跑出来的
-promptVersion，唯一索引 `(target_kind, target_id, prompt_version)` 保证这是纯新增行，
-**不覆盖、不影响**现有任何一条 approved/store_only/downgrade/rejected 判定。脚本：
+**踩了一个坑，已修复**：一开始 `target_kind` 写的是 `'life_event'`（跟真实 review 同一个
+target_kind）。`lib/organizer/quality-review.ts` 的 `indexReviews()` 把所有 review 按
+`` `${targetKind}:${targetId}` `` 塞进一个 `Map`，而底层查询 `select().from(contentQualityReviews)`
+（`postgres-repository.ts`）**没有 `ORDER BY`**——同一个 key 后写入的行会不确定地覆盖先写入的。
+这样写会导致这 167 个 life_event 的"当前生效决定"在渲染时**有几率**从 `store_only` 被我新插入
+的行"顶替"成一个不在 `QualityDecision` 枚举里的值（归一化为 `needs_human_review`），
+后果是它们从 B-17 `traceEvents` 的 `=== "store_only"` 过滤条件里**直接消失**——跟这次任务的
+目标正好相反。**已发现后立刻改成 `target_kind='life_event_trace'`**，这是一个全新的 map key，
+不会跟任何真实 review 的 `life_event:<id>` key 相撞，从查询顺序上彻底排除了这个风险
+（已删除并重新写入全部 167 行，验证过原 `life_event`/`store_only` 行原样未动）。
+`prompt_version='a6-trace-layer-v1'` 沿用（有意义的审计标签），但已经不需要靠它来避免碰撞，
+`target_kind` 的隔离已经足够。脚本：
 `v2/scripts/a6-export-store-only.mjs`（只读导出）+ `v2/scripts/a6-trace-layer-write.mjs`（写库，
 `--commit` 才真的写）。
 
@@ -136,7 +145,7 @@ promptVersion，唯一索引 `(target_kind, target_id, prompt_version)` 保证�
   这个 `promptVersion` 值在现有真实 T20-C review 里不会出现，所以插入是纯新增行，
   不会覆盖/影响任何一条现有的 approved/store_only/downgrade/rejected 判定。
   B 轨要在页面上判断"这条 store_only 是否可作为痕迹展示"时，查
-  `content_quality_reviews` 里 `target_id=<life_event.id> and provider='cowork-a6' and decision='trace_eligible'`
+  `content_quality_reviews` 里 `target_kind='life_event_trace' and target_id=<life_event.id> and provider='cowork-a6' and decision='trace_eligible'`
   是否存在这一行即可。
 - 写了只读导出脚本 `scripts/a6-export-store-only.mjs`（不写库），拉出 2025 全年
   store_only life_events 的 title/story，按月分组存到 session scratchpad（仓库外）。

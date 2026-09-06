@@ -1,11 +1,22 @@
 #!/usr/bin/env node
 // A-6: writes the "trace layer" marker for 2025 store_only life_events whose subject is clearly
 // 张年 and whose text reads fine years later. Does NOT touch life_events.* or existing
-// content_quality_reviews rows — it only INSERTs new review rows with a dedicated promptVersion
-// ('a6-trace-layer-v1') that no real T20-C grading run has ever used, so the existing unique index
-// on (target_kind, target_id, prompt_version) guarantees this never collides with or overwrites an
-// approved/store_only/downgrade/rejected decision. B track reads eligibility by checking whether a
-// life_event has a row here with decision='trace_eligible'.
+// content_quality_reviews rows.
+//
+// targetKind is deliberately 'life_event_trace', NOT 'life_event': lib/organizer/quality-review.ts's
+// indexReviews() builds a Map keyed by `${targetKind}:${targetId}` from an UNORDERED
+// `select().from(contentQualityReviews)` (no ORDER BY in postgres-repository.ts) and the last row
+// read wins on that key. A second row keyed 'life_event:<id>' for an already-reviewed life_event
+// would race the real T20-C decision for that same map key — decision='trace_eligible' doesn't
+// normalize to a QualityDecision, so if it happened to win the race the event would flip to
+// 'needs_human_review' and silently vanish from B-17's `traceEvents` filter (`=== "store_only"`),
+// which is the opposite of this task's goal. 'life_event_trace' is an entirely separate map key,
+// so this can never collide with or overwrite any real review regardless of row order.
+// promptVersion is still 'a6-trace-layer-v1' for its own sake (readable audit trail, keeps the
+// (targetKind, targetId, promptVersion) unique index meaningful) but no longer needs to avoid a
+// real prompt version, since targetKind already guarantees isolation.
+// B track reads eligibility with: target_kind='life_event_trace' and target_id=<life_event.id> and
+// provider='cowork-a6' and decision='trace_eligible'.
 //
 //   node --import tsx -r dotenv/config scripts/a6-trace-layer-write.mjs --commit dotenv_config_path=.env.local
 //
@@ -225,7 +236,7 @@ for (const id of ids) {
   const res = await client.query(
     `insert into content_quality_reviews
        (id, profile_id, target_kind, target_id, decision, reason_codes, provider, model, prompt_version, policy_version, review_fingerprint)
-     values ($1, $2, 'life_event', $3, 'trace_eligible', $4::jsonb, $5, null, $6, $7, $8)
+     values ($1, $2, 'life_event_trace', $3, 'trace_eligible', $4::jsonb, $5, null, $6, $7, $8)
      on conflict (target_kind, target_id, prompt_version) do nothing`,
     [randomUUID(), PROFILE_ID, id, JSON.stringify([reasonCode]), PROVIDER, PROMPT_VERSION, POLICY_VERSION, `a6-trace:${id}`],
   );

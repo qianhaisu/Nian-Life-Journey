@@ -73,9 +73,10 @@ P1-5（scoped read）✅。
 
 **A-6（痕迹层数据，2025 全年）已完成（2026-09-06）**：
 - 217 条 2025 store_only life_events **逐条读完判定**，167 条标为「可展示痕迹」，写进
-  `content_quality_reviews`（`provider='cowork-a6'`、`decision='trace_eligible'`、
-  `prompt_version='a6-trace-layer-v1'`，纯新增行，不改任何现有 approved/store_only 判定）。
-  B 轨读取：`target_id=<life_event.id> and provider='cowork-a6' and decision='trace_eligible'`
+  `content_quality_reviews`（`target_kind='life_event_trace'`——**注意不是 `'life_event'`**，
+  见下一条踩坑记录、`provider='cowork-a6'`、`decision='trace_eligible'`、
+  `prompt_version='a6-trace-layer-v1'`）。B 轨读取：
+  `target_kind='life_event_trace' and target_id=<life_event.id> and provider='cowork-a6' and decision='trace_eligible'`
   存在即可展示为痕迹。脚本：`scripts/a6-export-store-only.mjs`（只读导出）+
   `scripts/a6-trace-layer-write.mjs`（写库）。每月数字和 2025-06 全表逐条判定见
   `docs/STATUS.md` 2026-09-06 02:07 UTC 条目。等 Cowork 抽读验收。
@@ -106,6 +107,7 @@ P1-5（scoped read）✅。
 9. **T20-C 分级现在是自动的**（P1-3）：`organizer-month-write.mjs --commit` 结束时自动运行 `gradeMonthEvents`。
 10. **HEAD.lock = 0 字节且超过 30 秒未变化 = 可以删**（先等 30 秒确认是否别的轨在用）。
 11. **删除 life_event 要走三张表**：`source_memory_links`（life_event_id）→ `content_quality_reviews`（target_id）→ `life_events`（id），顺序反了会因外键报错。
+12. **往 `content_quality_reviews` 给同一个 life_event 加"第二种标记"时，`target_kind` 绝对不能沿用 `'life_event'`**（A-6 踩过，已修复）：`indexReviews()` 按 `` `${targetKind}:${targetId}` `` 建 Map，底层查询没有 `ORDER BY`，同 key 后来的行会不确定地覆盖先来的真实 T20-C 决定。给标记用一个独立的 `target_kind`（如 `life_event_trace`），从 key 层面隔离，不要靠 `prompt_version` 不同去"防碰撞"——那防得住唯一索引冲突，防不住这个 Map 覆盖问题。
 
 ---
 
