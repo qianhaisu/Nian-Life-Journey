@@ -217,3 +217,9 @@ B-16 结案。B 轨这轮（B-1~B-16）全部验收通过，入箱已清空。�
 - CSS：新增 `.moment-trace` 一行轻量样式（小字、`--color-muted`、无缩进），与「段落」「章节」视觉区分。
 - typecheck ✅、lint ✅ 通过。commit `c783a6f` 已 push main。
 - 下一步：等 Vercel 部署，浏览器手机 375 + 桌面实看 /memory/2025/06、/memory/2025/12、/memory/2026/08 三个验收页面。
+
+###  UTC · 中间进度 · B-17
+
+- 代码已完成、typecheck/lint 通过、commit c783a6f + e8a0ee2 已 push main。
+- 目前在等 Vercel 部署：`vercel ls` 显示今晚三条轨同时在推，部署队列里堆了 4 条（Queued/Building），我这条改动应该在队列里，还没轮到。持续轮询 `/memory/2025/06` 的 HTML 找 `moment-trace` class 出现。
+- 无新代码改动；下一步：部署生效后立刻浏览器手机 375 + 桌面验收 2025/06、2025/12、2026/08 三个页面。
