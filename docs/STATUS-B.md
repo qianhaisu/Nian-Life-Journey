@@ -208,3 +208,12 @@ B 轨入箱现在为空。下一批任务由 Cowork 按 P1 剩余项排（照片
 实测（375 宽，8 张有图月份卡片）：全部 `figure` 高度 **160px**、class 含 `photo-crop`、无内联 `aspect-ratio`、`object-fit: cover`、`object-position: 50% 30%`。抽查月页正文（`/memory/2025/04`）确认没被误伤：图片仍保留内联 `aspect-ratio`、无 `photo-crop`，竖图还是竖的。
 
 B-16 结案。B 轨这轮（B-1~B-16）全部验收通过，入箱已清空。等 Teddy 有新方向或 Cowork 新排任务，可以 /clear。
+
+###  UTC · 中间进度 · B-17
+
+- 读完 STATE.md / 产品原则 / visual-system-v2 / CLAUDE.md / HANDOFF-B / INBOX-B 顶部看板，确认当前任务是 B-17（月章节三层排版）
+- 实现：新增「痕迹」层（MomentKind `"trace"`）。`publication-moments.ts`（B 轨territory）新增 `buildTraceNotes()`：从 store_only 全集（family-archive.ts 新增 `traceEvents` 字段暴露）构建每天一条的一行短句；`buildMonthComposition` 把痕迹并入 chronicle——有照片的天数直接把痕迹文字挂到已有的 photo_led moment 上，纯文字天数新建 kind="trace" 的一行条目，且**不受 CHRONICLE_MOMENTS_MAX 上限约束**（一行句子不该被裁掉，裁掉就是本任务要修的那个"消失"问题重演）。
+- 数据源按入箱要求抽成一个函数（`buildTraceNotes` + family-archive.ts 的 store_only 过滤），A-6 落地后把「全集」换成"标记子集"是一行的事。
+- CSS：新增 `.moment-trace` 一行轻量样式（小字、`--color-muted`、无缩进），与「段落」「章节」视觉区分。
+- typecheck ✅、lint ✅ 通过。commit `c783a6f` 已 push main。
+- 下一步：等 Vercel 部署，浏览器手机 375 + 桌面实看 /memory/2025/06、/memory/2025/12、/memory/2026/08 三个验收页面。
