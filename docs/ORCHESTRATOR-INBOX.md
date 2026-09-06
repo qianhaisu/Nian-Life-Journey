@@ -1,3 +1,75 @@
+# 🔴 现在做这个：恢复 Neon 之前必须完成的查询修复（A 轨，2026-09-06 09:0x UTC）
+
+**背景（一句话）**：昨天那场 $87.86 的 Neon 事故，已修的 `getOrganizerStore` 只是诱因之一。
+Cowork 复盘时在代码里找到**第二个、更严重、至今没修**的同类问题。Teddy 今晚要恢复 Neon，
+**这些修复必须在恢复之前落地**，否则一次构建就可能再烧掉几十 GB。完整报告见
+`docs/INCIDENT-2026-09-06-neon-egress.md`（3.2 节是这条新发现）。
+
+**当前环境约束（很重要，先读）**：
+- **生产数据库现在是关的**（Neon 已降级 Free 且本周期配额耗尽，连接直接被拒）。
+  所以这轮任务**完全不需要、也不可能连数据库验证**。不要试，不要绕，不要以为是故障。
+- **不要 push**。本地 commit 攒着，Cowork 复核过、Teddy 升级 Neon 之后统一放行。
+  （push 会排构建，构建取不到数只会失败。）
+- 验证手段只有两个：`npm run typecheck` + 自己读代码。这轮就接受这个上限。
+
+---
+
+## A-12-1：`getEventDetail()` 去掉五处全表读（最重要）
+
+**问题**（`v2/lib/db/postgres-repository.ts:547` 起）：
+
+```ts
+const [mediaRows, sourceRows, contributorRows, growthRows, careRows] = await Promise.all([
+  db.select().from(t.media),
+  db.select().from(t.rawSources),      // select *，含 text 大列，无 WHERE 无 LIMIT
+  db.select().from(t.contributors),
+  db.select().from(t.growthRecords),
+  db.select().from(t.careRecords),
+]);
+```
+
+五张表整表拉进内存，然后在 JS 里 `filter(item => e.sourceIds.includes(item.id))`。
+`raw_sources` 是 46,742 行、全库最大的 `text` 列都在里面。**这比昨天修的那条还糟**——
+昨天那条至少做了列投影，这里是彻底的 `select *`。
+
+**要做的**：改成按已知 id 精确查询，只选实际用到的列。
+
+- `rawSources` → `inArray(t.rawSources.id, e.sourceIds)`，并且**只选下游真正读的列**
+  （请自己读 `app/events/[id]/page.tsx` 和 `components/evidence-list.tsx` 确认，
+  不要凭印象；如果证据展示区真的要显示原文，那 `text` 列可以留，但必须是按 id 过滤后的少数几行）
+- `media` → `inArray(t.media.id, e.mediaIds)`
+- `growthRecords` → `inArray(..., e.growthRecordIds)`
+- `careRecords` → `inArray(..., e.careRecordIds)`
+- `contributors` → 这张表小，可以整表留着，但请顺手确认行数级别
+
+**硬边界**：
+- 空数组要处理好（`inArray` 传空数组在 Drizzle 里的行为要显式兜住，别生成非法 SQL）
+- 页面渲染结果必须与改动前完全一致：同样的照片、同样的来源条目、同样的成长/照护记录
+- 不改 `EventDetail` 的返回类型结构，不动 `app/` 下的文件（那部分给 C 轨了）
+
+## A-12-2：仓储层加一个"查询规模"护栏
+
+**目的**：让"某个查询悄悄拉了几十 MB"这件事**可见**，而不是等账单来告诉我们。
+
+在 `postgres-repository.ts` 里加一层轻量包装（或等价做法）：单次查询返回行数超过阈值
+（建议 5,000 行）时，`console.warn` 一条明确日志，包含调用点标识和行数。生产只记日志、
+不抛错；`NODE_ENV !== "production"` 时可以直接抛错，让开发期就撞上。
+
+**硬边界**：不引入新依赖、不改查询语义、不影响正常路径的性能。
+
+---
+
+## 完成后
+
+在 `docs/STATUS.md` 按三行格式汇报，并且**明确写出**：
+1. `getEventDetail` 改完之后，一次事件详情页渲染还会不会碰到 `raw_sources` 全表（应该是"不会"）
+2. typecheck 结果
+3. 你**没能**验证的部分是什么（比如"没有实跑页面渲染，因为数据库是关的"）——如实写，不要为了好看而含糊
+
+写完就停，不要 push，等 Cowork 复核。
+
+---
+
 # 🛑 全轨停工（2026-09-06 08:3x UTC，Cowork 写）——生产数据库已被人为切断，不要去修
 
 **现在的事实，先读完再决定做任何事**：

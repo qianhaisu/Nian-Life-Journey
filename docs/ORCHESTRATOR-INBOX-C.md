@@ -1,3 +1,66 @@
+# 🔴 现在做这个：事件页的构建期放大要拆掉（C 轨，2026-09-06 09:0x UTC）
+
+**背景**：Cowork 复盘 $87.86 事故时发现的新问题。完整报告见
+`docs/INCIDENT-2026-09-06-neon-egress.md` 第 3.2 节。你这条和 A 轨的 A-12-1 是同一个 bug 的
+两半：A 修数据层，你修渲染层。**两边改的文件不重叠**（你只动 `app/events/[id]/page.tsx`，
+A 只动 `lib/db/**`），可以并行。
+
+**当前环境约束（先读）**：
+- **生产数据库是关的**（Neon 降级 Free + 本周期配额耗尽）。这轮不需要也不可能连库验证。
+  不要试着去修它，那是 Teddy 主动做的决定。
+- **不要 push**，本地 commit 攒着等 Cowork 复核 + Teddy 升级 Neon 后统一放行。
+- 验证手段：`npm run typecheck` + 读代码。
+
+---
+
+## C-7-1：消除同一请求内的重复数据读取
+
+`app/events/[id]/page.tsx` 里 `getEventDetail(id)` 被调用了**两次**：
+
+- 第 18 行：`generateMetadata()` 里一次（只为了拿标题）
+- 第 30 行：页面组件里一次
+
+而且 **[已确认]** 全仓库没有任何 React `cache()` / `unstable_cache`，所以这两次是真的各打一次
+数据库、各传一份数据，没有任何去重。
+
+**要做的**：用 React 的 `cache()` 包一层（`import { cache } from "react"`），让同一次请求内
+两次调用只真正执行一次。或者让 `generateMetadata` 用更便宜的方式拿标题（它其实只需要
+title 一个字段）——后者可能更干净，你判断。
+
+## C-7-2：`generateStaticParams` 不要再预渲染全部事件页
+
+第 14 行：
+
+```ts
+export async function generateStaticParams() { return (await getAllEvents()).map((e) => ({ id: e.id })); }
+```
+
+这会让**每次构建**把所有可发布事件（量级 651）逐页静态渲染一遍。配合 C-7-1 那个重复调用，
+单次构建仅事件页一项的推算成本就是几十 GB 级别。
+
+**要做的**：改成返回 `[]`（或最近 N 个，你判断哪个对家人体验更合适），其余走按需 ISR。
+`app/memory/[year]/[month]/page.tsx:18-20` 的注释里已经写明这个做法是可接受的——
+"A month absent here still works via on-demand ISR"，事件页同理。
+
+**硬边界**：
+- 不能让事件页变成 404 或不可访问，按需生成必须真的能工作
+- 如果改成 `[]`，请在代码注释里写清原因和日期（引用本次事故），避免以后有人"优化"回去
+- 顺手确认这个页面需不需要加 `export const revalidate`（目前没有）——如果加，跟其他公开页
+  保持一致用 300
+
+---
+
+## 完成后
+
+在 `docs/STATUS-C.md` 按三行格式汇报，明确写出：
+1. 改完之后**一次构建**会渲染多少个事件页（应该是 0 或你选的少量）
+2. 一次事件页访问会触发几次 `getEventDetail`（应该是 1）
+3. 你没能验证的部分（比如没实跑构建，因为库是关的）——如实写
+
+写完就停，不要 push。
+
+---
+
 # 🛑 全轨停工（2026-09-06 08:3x UTC，Cowork 写）——生产数据库已被人为切断，不要去修
 
 **现在的事实，先读完再决定做任何事**：
