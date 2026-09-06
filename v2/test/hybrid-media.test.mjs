@@ -26,7 +26,10 @@ test("migration models assets, locations, and the display-layer media table with
 test("runtime boundaries keep Quark out of page requests", async () => {
   const route = await read("app/api/media/[id]/route.ts");
   const connector = await read("tools/quark-connector/README.md");
-  assert.match(route, /locationForMedia/);
+  // Renamed from locationForMedia to getMediaForDelivery/selectLocation when C-2 (bd63bb7)
+  // replaced the full-store getStore() read with a precise per-id repository query; the
+  // hot-only runtime boundary this test guards is unchanged.
+  assert.match(route, /selectLocation/);
   assert.match(connector, /not a web runtime dependency/);
   assert.match(connector, /explicit folder/);
 });
