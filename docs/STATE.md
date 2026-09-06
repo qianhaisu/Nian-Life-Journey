@@ -157,6 +157,7 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 - **`/api/media/[id]` 曾经每张图都调 `getStore()` 全量读取层**导致空灰框，已改 `getMediaForDelivery(id)` 精确查询修复（C 轨 `bd63bb7`）。
 - **内联 `style={{aspectRatio}}` 会压过 CSS 固定高度。** `Photo` 组件加了显式 `fit` prop（`natural`/`crop`）解决。
 - **公开页 ISR revalidate=300**，`x-vercel-cache: HIT/STALE` + `age` 大 = 看的是缓存页，判断前先看 age。
+- **Vercel「Ignored Build Step」不在 Settings → Git，在 Settings → Build and Deployment。** Cowork 和 C 轨都凭印象猜成 Git 标签页，Teddy 自己截图去 Git 页确认没有这个字段才发现猜错，最后查 vercel.com/docs/project-configuration/project-settings 官方文档核实。教训：Vercel 设置项的具体位置不要凭经验/训练记忆断言，去官方文档核实一次成本很低，猜错了让用户在网页里空转找。
 
 **编排 / 多 session 协作（2026-09-06 新增）**
 - **定时/触发式 session（`create_trigger` 起的）不一定挂在 claude.ai Project 下**——即使当初创建它的对话是挂着 Project 的。这类 session 读不到 `claude/nianlife-STATE.md`（Project 文档），如果 prompt 里让它读这个路径，它可能会静默地把它当成仓库相对路径处理，读到/写到一个完全不相关的旧文件（这次真实发生过：读到了 `docs/STATE.md`——一份 2026-09-05 之前就废弃、只有 7 条决策的旧版草稿——并往里面写了新数字，跟真正的活文档完全脱节）。**解法：状态文档唯一权威版本改成本仓库内 `docs/STATE.md`（git 追踪，任何 session 不管挂不挂 Project 都能读到），claude.ai Project 里的同名文档降级为镜像。**
@@ -232,7 +233,7 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 | **B-17 月章节三层排版**（P2 主战场） | ✅ 已结案（2026-09-06，Cowork 手机 375px + 桌面复验通过） | — |
 | **C-5 图片交付性能**（B-17 上线前置） | ✅ 已完成 | — |
 | **B-18 图片 URL 统一**（unoptimized，解决 C-6 缓存键不一致） | ✅ 已完成（commit 776fa67，Cowork 独立复验 90/90 + 4/4） | — |
-| **Vercel Ignored Build Step**（docs-only commit 跳过构建） | 🟡 命令已确认，卡在需要 Teddy 手动粘贴到 Vercel 网页设置 | 等 Teddy |
+| **Vercel Ignored Build Step**（docs-only commit 跳过构建） | 🟡 命令已确认，已告知 Teddy 正确位置（Settings → Build and Deployment，不是 Git），等他粘贴 | 等 Teddy |
 | **C-6 图片预热对照实验重跑** | 🟢 进行中（C 轨，预热 2025-12 vs 留空 2025-10 对比） | 现在 |
 | **nianlife-worker.mjs 首次正式跑**——手动跑一次 vs 挂 Windows 定时任务 | ⏸ Teddy 说先放着（2026-09-06） | 暂缓 |
 | **`INGESTION_TOKEN` 填入 `.env.local`**，打通 worker→revalidate | ✅ 已完成（2026-09-06，Cowork 验证 200） | — |

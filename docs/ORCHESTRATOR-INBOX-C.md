@@ -51,17 +51,20 @@ commit 只 `git add` 自己改的文件。
 >    （`nian-life-journey`），跑 `cd v2 && vercel project inspect` 或者看 Vercel 网页
 >    Settings → General，把 Root Directory 的值报给我（大概率是 `v2`，因为 `vercel.json`
 >    放在 `v2/` 下，但**不要假设，实测确认**）。
-> 2. **在 Vercel 项目设置 → Git → Ignored Build Step 里加一条命令**（这个设置只能在网页/CLI
->    里配，`vercel.json` 里没有对应字段，别去 `v2/vercel.json` 里找）。命令的意思是：
->    如果这次 push 只改了 `docs/**`、根目录的 `*.md`、`.github/**` 这些跟 v2 构建完全无关的
->    路径，就跳过构建；只要碰了 `v2/` 底下任何文件，正常构建。**具体路径要按你确认的
->    Root Directory 调整**——如果 Root Directory 是 `v2`，大概是：
+> 2. **【已修正，2026-09-06 更新】位置不在 Git 标签页，在 Build and Deployment 标签页**：
+>    Vercel 项目 Settings → **Build and Deployment** → 往下滚到 **Ignored Build Step** 区块
+>    →下拉选 **Custom**（`vercel.json` 里没有对应字段，别去 `v2/vercel.json` 里找；之前
+>    Cowork 和你都误记成 Settings → Git，已用 Vercel 官方文档核实纠正）。
+>    你（C）已经确认 Root Directory 是 `v2`，并给出了正确命令（用 `VERCEL_GIT_PREVIOUS_SHA`
+>    而不是 `HEAD^`，因为心跳 commit 会一次堆好几个）：
 >    ```
->    git diff --quiet HEAD^ HEAD -- . ':(exclude)../docs' ':(exclude)../*.md' ':(exclude)../.github'
+>    git diff --quiet "${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}" HEAD -- .
 >    ```
->    exit 0 = 跳过构建，exit 1 = 正常构建，这是 Vercel 这个字段的固定语义，不用改。
->    **只排除确定跟 v2 构建无关的路径，`v2/` 底下任何东西都不要排除**——宁可少省一点，
->    也不能让真代码改动被误判成"跳过"。
+>    这条命令在 `v2/`（Root Directory）内跑，`-- .` 天然只看 `v2/` 底下的改动，不需要再手动
+>    排除 `docs/**`。exit 0 = 跳过构建，exit 1 = 正常构建。
+>    **这一步只能由 Teddy 本人在网页上粘贴**（你的 CLI 版本 59.11.7 不支持配置这个字段，
+>    你的沙箱也不该硬闯凭证文件去调 REST API）——已经直接告诉 Teddy 了，你不用再等这步，
+>    继续盯 3 的验证。
 > 3. **必须实测两次才算做完，不能只信配置**：
 >    - 故意推一个纯 docs 的改动（比如在 `docs/STATUS-C.md` 加一行心跳），确认这次在 Vercel
 >      Deployments 列表里状态变成 **Ignored**（不是 Queued/Building）。
