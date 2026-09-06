@@ -309,3 +309,18 @@ life_events），不越界。
   更朴素）沿用现有 `memory-weight-*` CSS，未在本节点新增样式微调。
 
 **下一件**　等 Cowork 手机真机验收（375 宽）；若通过，B-17 结案。
+
+### 2026-09-06 · 中间进度 · B-17 第一轮退回项 1/2/3/4/6
+
+回读 INBOX-B 顶部确认 6 条退回项，先做 1/2（内容正确性），再做 3/4（同一件事：照片进正文，空日期自然消失），顺手做 6。commit `111c88d` 已 push main：
+
+- **1（最急）**：`family-archive.ts` 改为直接读 `store.qualityReviews` 原始行，按 `targetKind==='life_event_trace' && decision==='trace_eligible'`（A-6 子集）过滤 traceEvents，不再用 store_only 全集。**过程中发现一个真实的类型安全 bug**：如果按文档写的方式经过 `indexReviews()`/`normalizeQualityDecision()`，`"trace_eligible"` 不在 `QualityDecision` 联合类型里，会被**静默改写成 `"needs_human_review"`**——用那条路径查询永远是空集且查不出原因。typecheck 直接报错抓住了这个（`review.targetKind`/`decision` 类型不重叠），改成直接读原始行 + 显式 `as string` 绕过窄类型比对。
+- **2**：`traceNoteByDay: Map<string, TraceNote>` 改成 `Map<string, TraceNote[]>`，同一天多条 store_only 事件全部保留、全部渲染成多行，不再 last-write-wins 静默丢弃。
+- **3+4（一起做）**：去掉 `CHRONICLE_MOMENTS_MAX` 上限——所有有背书 hero 的照片天都进 chronicle（正文），只有真正无背书的天才折进「零散的照片」一句。「整月照片档案 N 张」的计数从 `<summary>` 里删掉。
+- **6**：`monthStandfirst` 的天数改成 chapter ∪ chronicle 的并集，不再只数 chapterMoments，masthead 的「记下 N 天」现在跟下面实际列出的天数一致。
+- 更新了 `test/publication-moments.test.mjs` 里编码了旧上限行为的测试（原来断言 `chronicle.length <= CHRONICLE_MOMENTS_MAX`，现在断言全部 14 天都进 chronicle、quietDays=0）。
+- `npm run typecheck`、`npm run lint`、`npm test`（644 pass / 1 fail，失败那条是 `hybrid-media.test.mjs` 测 `app/api/media/[id]/route.ts` 缺 `locationForMedia`，跟本次改动无关、不是我的文件）全部跑过。
+
+**第 5 条（800px 空白）还没查**——先等这次部署上线，用 `vercel inspect --logs` 确认构建产物 + 浏览器 computed style 直接量那段区域，不猜 CSS。
+
+下一步：等部署 Ready（用 `vercel ls`/`inspect` 盯构建产物，不直接高频戳 nianlife.cn），上线后浏览器实看 2025/06，核对 1/2/3/4/6 五条，再查第 5 条空白。
