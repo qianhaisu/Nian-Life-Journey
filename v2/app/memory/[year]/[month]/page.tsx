@@ -13,8 +13,7 @@ import { buildMonthComposition, monthStandfirst } from "@/lib/publication-moment
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
 import { formatMonth } from "@/lib/time-signature";
 
-// TEMPORARY P0 stopgap (2026-09-06): see app/page.tsx — revert to 300 once track A's fix ships.
-export const revalidate = 3600;
+export const revalidate = 300;
 
 // Same reasoning as [year]/page.tsx's generateStaticParams: without params known at build time
 // this segment renders fully dynamic on every request. A month absent here still works via
