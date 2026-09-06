@@ -113,6 +113,12 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
     存疑但不急着改）。**这条不要重新讨论**——2026-09-06 A-7/A-8 曾用"只比文字"的错误基准
     判出 13 条"编造"，几乎让好内容被删掉，是 Teddy 本人纠正的。
 17. **编排的状态文档以本仓库 `docs/STATE.md` 为唯一权威**，claude.ai Project 里的同名文档只是给 Teddy 手机上看的镜像（2026-09-06 定，见第 3 节踩坑记录）。
+18. **心跳类 commit（每 5 分钟中间进度）不要每次都 push，只 commit**（2026-09-06 定）。
+    起因：2026-09-06 当天 100 个 commit 里 89 个是纯 docs/心跳，只有 11 个是真代码，
+    Vercel 按 GitHub push 事件排队构建，不看内容是不是 docs——队列被心跳 commit 挤到几十条，
+    真正要紧的代码修复（例如 `989cd11`）排在后面等构建。**改法**：心跳正常写、正常本地 commit，
+    但只在「真代码/真数据变更」「攒够约 30 分钟心跳」「任务正式完成」「Cowork 明确要求」这四种
+    情况下才 `git push`。已写进 A/B/C 三份 `ORCHESTRATOR-INBOX*.md`。
 
 ## 3. 踩过的坑（最有价值的一节）
 
@@ -179,7 +185,7 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 - 同一时间只能有一个 session 对仓库做写操作，三条轨靠文件所有权分区。
 
 **常设规则**
-- **每 5 分钟强制汇报**：A 轨写 STATUS.md，B 轨写 STATUS-B.md，C 轨写 STATUS-C.md。
+- **每 5 分钟强制汇报**：A 轨写 STATUS.md，B 轨写 STATUS-B.md，C 轨写 STATUS-C.md。**心跳只本地 commit，不每次 push**（决策 18，2026-09-06）。
 - **同一个 5 分钟节拍上，先回读自己入箱的顶部看板再写汇报**（`head -60 docs/ORCHESTRATOR-INBOX*.md`）。
   Cowork 每条指令都带 UTC 时间戳，比时间戳就知道有没有新的。**看到新指令先处理指令，再回到原任务**
   ——因为新指令很可能正是在叫你停下（2026-09-06 真实教训：Cowork 02:15 写的更正，B 轨到 03:00
@@ -241,4 +247,4 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 - **原则记分卡不是一次性的**：每完成一个里程碑就照 `docs/nianlife-product-principles.md` 重跑一遍。
 - **不要连续两层都不验证**：巡检 session 自己报的数字，下一个读到报告的人（不管是 Teddy 还是另一个 Cowork）也要抽查一次，不能一路轻信传下去。
 - 每一轮工作结束时，网站上应该多出一样家人能读的东西。
-- **每 5 分钟强制写中间进度到出箱**，沉默 = 被判定死亡。
+- **每 5 分钟强制写中间进度到出箱**，沉默 = 被判定死亡。心跳只本地 commit，不每次 push（决策 18）。
