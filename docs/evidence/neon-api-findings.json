@@ -1,0 +1,50 @@
+{
+  "captured_at": "2026-09-06T10:36:13.545Z",
+  "org": {
+    "id": "org-long-lab-32819208",
+    "name": "Vercel: seriousfish",
+    "plan": "free",
+    "managed_by": "vercel"
+  },
+  "project": {
+    "id": "holy-heart-69531579",
+    "name": "neon-citrine-park",
+    "created_at": "2026-08-28T13:18:23Z",
+    "region": "aws-us-east-1"
+  },
+  "quota_currently_set": null,
+  "consumption_current_period": {
+    "period_start": "2026-09-06T08:14:37Z",
+    "period_end": "2026-10-01T00:00:00Z",
+    "data_transfer_bytes": 31164998386,
+    "active_time_seconds": 592,
+    "compute_time_seconds": 293,
+    "written_data_bytes": 0
+  },
+  "consumption_history_api": {
+    "available": false,
+    "attempts": [
+      {
+        "endpoint": "/api/v2/consumption_history/projects",
+        "status": 403,
+        "body": "This endpoint is not available. It is included with Scale plans and above."
+      },
+      {
+        "endpoint": "/api/v2/consumption_history/v2/projects",
+        "status": 403,
+        "body": "This endpoint is not available. It is included with Launch plans and above."
+      },
+      {
+        "endpoint": "/api/v2/consumption_history/account",
+        "status": 404,
+        "body": "this route does not exist"
+      },
+      {
+        "endpoint": "/api/v2/organizations/{org}/consumption_history/projects",
+        "status": 404,
+        "body": "this route does not exist"
+      }
+    ],
+    "conclusion": "Hourly public_network_transfer_bytes for Sep 5-6 is NOT retrievable on the Free plan. Requires upgrading to Launch (v2 endpoint) or asking Neon support to export it. 168h retention means the Sep 5 data expires around Sep 12."
+  }
+}
