@@ -620,3 +620,5 @@ wechat-media 来源的照片**——`/memory/2025/09` 实测：旧正则只找�
 独立于 C-6 成不成立。
 
 代码修复（正则）已 commit，本节发现整理进本文件。
+
+空闲回读，无新任务。等 Cowork/Teddy 对两件事拍板：①Vercel Ignored Build Step 需要网页/API token，我这边无法配；②C-6 缓存 4-5 分钟就逐出的根本问题怎么处理。
