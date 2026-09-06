@@ -1,31 +1,45 @@
 # Nianlife 当前状态（持续维护，读这一份就够）
 
-> 最后更新：2026-09-04 12:08（Asia/Shanghai），由 Claude (Cowork) 维护。
+> 最后更新：2026-09-06 00:35 UTC，由 Cowork 维护。**本文件是唯一权威版本**（见第 3 节
+> "编排检查"踩过的坑——claude.ai Project 里同名文档只作只读镜像，方便手机翻，
+> 不保证被定时/触发式 session 读到，不要以它为准）。
 > 这是一份**活文档**，不是某个时刻的审计快照。docs/ 下那些带日期的报告是历史，不要拿来当现状。
 > 数字会过期——写生产之前一律重新查库，不要引用本文的数字当实时事实。
 
 ## 0. 新 Session 请按这个顺序读
 
-1. 本文（当前状态、已定决策、踩过的坑）
+1. 本文 `docs/STATE.md`（当前状态、已定决策、踩过的坑）——**不是** claude.ai Project 里的
+   `claude/nianlife-STATE.md`，那份是镜像，触发式/定时 session 大概率读不到。
 2. `docs/nianlife-product-principles.md`（长期产品原则，任何产品/UI/IA 工作前必读）
 3. `CLAUDE.md`（仓库边界、Git 授权、工程执行纪律）
 4. 需要时再翻 `docs/` 下带日期的报告——它们是快照，只在考据具体历史时有用
 
-不要重新做一遍"考古"。本文第 3 节的坑都是今天真金白银踩出来的。
+不要重新做一遍"考古"。本文第 3 节的坑都是真金白银踩出来的。
 
 ## 1. 当前位置
 
-**阶段 0（共四阶段）：把硬盘上的素材全部导进来，并让每个月都有东西可读。**
+**P1 ✅ 通过。三条轨全部结案，等 Teddy 拍板两件事后可以派下一轮。**
 
-计划分两条轨道，不是一条串行链：
+- **A 轨（数据管道）**：入箱 `docs/ORCHESTRATOR-INBOX.md`，出箱 `docs/STATUS.md`，交接稿 `docs/HANDOFF-A.md`。
+  **A-4（2025 全年回填 life_events）已完成**——12 个月全部有 life_events（见第 4 节），过程中
+  抓到并修复了一个真实的主体门误判（猫和孩子撞昵称，见第 3 节）。**遗留小尾巴**：2025-02/03/05/06
+  这 4 个月有 life_events 但还没生成 monthly_snapshot，需要补跑 `month-review.mjs --commit`。
+  夸克入库卡在 HEIC 解码器（P1-2b，214/1,690 非 HEIC 已入，1,468 张 HEIC 阻塞）。
+  微信原始数据全部导入完毕（含 7,244 条消息那个大会话，raw_sources 46,742 已包含），
+  **但 `nianlife-worker.mjs` 这个新自动化脚本自己的"首次正式跑"还没做**（它的增量基准是独立的，
+  首跑会把已有数据当新的重新扫一遍——这是已知的一次性成本，不是 bug，见第 3 节）。
+- **B 轨（渲染/UI）**：入箱 `docs/ORCHESTRATOR-INBOX-B.md`，出箱 `docs/STATUS-B.md`，交接稿 `docs/HANDOFF-B.md`。
+  B-1~B-16 全部完成并线上验收通过。入箱空，**可以 /clear**。
+- **C 轨（性能/缓存）**：入箱 `docs/ORCHESTRATOR-INBOX-C.md`，出箱 `docs/STATUS-C.md`，交接稿 `docs/HANDOFF-C.md`（2026-09-06 新建）。
+  C-1~C-4 全部完成并线上验收通过。入箱空，**可以 /clear**。
 
-- **A 轨（数据库写入，彼此必须串行）**：微信全量导入 → 夸克 2,279 素材入库
-- **B 轨（仓库代码，单写者）**：渲染性能（索引 + scoped read）→ 测试残留读取层过滤 → 月页视觉验证
+**需要 Teddy 拍板的两件事（见第 7 节）**：
+1. `nianlife-worker.mjs` 首次正式跑——手动跑一次，还是挂 Windows 定时任务？
+2. 把 Vercel 上的 `INGESTION_TOKEN` 值填进 `v2/.env.local`，打通 worker → revalidate 主动推送链路
+   （现在没接上不算阻塞——公开页本来就是 ISR 300 秒或首次访问即时生成——但接上体验更好）。
 
-A 与 B 可并行，**唯一例外**是性能测量那半小时必须让 A 轨停下来，否则数字是噪音。
-关键排序理由：性能一旦落地，页面渲染不再拉全库，视觉验证才能和导入并行——它是解锁并行的前置条件，不是收尾的优化项。
-
-四个阶段：0 导入与可读 → 1 审阅台 + recall-first（先做 2026-09→06）→ 2 本地 worker 自动化 → 3 回到 2025 年 + 出版物质感。
+四个阶段：0 导入与可读 → 1 审阅台 + recall-first → 2 本地 worker 自动化 → 3 回到 2025 年 + 出版物质感。
+**阶段 0~1 完成，阶段 3（2025 回填）life_events 部分完成，阶段 2（worker 首跑）待 Teddy 拍板。**
 
 ## 2. 已经定下的决策（不要重新讨论）
 
@@ -35,60 +49,104 @@ A 与 B 可并行，**唯一例外**是性能测量那半小时必须让 A 轨�
 4. 40 条测试残留（`msg N <epoch>`，2026-08-31，4 个合成会话 label）**不删除**，在读取层过滤。
 5. Gemini / OpenAI-compatible provider **不删除**，但生产统一 DeepSeek，其余不再维护。
 6. 陈亚萍私聊判定为低价值：已入库的 2,795 条**保留不删**，但已加入排除名单，不再更新；阶段 1 组织时也要排除它。
-7. 整理与出版**从最近月份做到最旧**（2026 → 2025），但导入不分先后、一次全导。
+7. 整理与出版**从最近月份做到最旧**（2026 → 2025），但导入不分先后、一次全导。**2025 全年回填（A-4）已完成执行**。
+8. **01 月内容阈值不降**，接受内容少的现状原样展示。
+9. **About 页 portrait 应优先选人像照片** ✅ 已完成（commit 5798b7e）。
+10. **Neon 已升级到 Launch 计划**。存储上限 10 GB，按量付费，不设 consumption limit。
+11. **首页回退到有 snapshot 的最近月份** ✅ 已完成（commit 5798b7e）。
+12. **P1 判定通过，P1-6 真机验收挪到 P2 之后**。worker 代码已合入 main 且逻辑自洽，真机首跑是运维执行，不卡 P1/P2。
+13. **视觉方向以 Teddy 2026-09-05 设计稿为准**：大地色 + 全圆角 + 呼吸感微动效（`docs/design/visual-system-v2.md`）。旧版编辑部风移到 `_superseded/`。
+14. **「代表照/封面照」只认夸克家庭相册**：唯一入口 `v2/lib/media/representative.ts` 的 `isPortraitOfZhangnian(media)` = `media.id.startsWith("media-quark-sha-")`。事件页 hero 和月页正文当天的照片不受此限。
+15. **公开阅读页走 ISR**（`revalidate=300`）：`/`、`/about`、`/memory`、`/memory/[year]`、`/memory/[year]/[month]`；`/inbox` 保持实时。写完库要立刻可见走 `POST /api/internal/revalidate`。
+16. **编排的状态文档以本仓库 `docs/STATE.md` 为唯一权威**，claude.ai Project 里的同名文档只是给 Teddy 手机上看的镜像（2026-09-06 定，见第 3 节踩坑记录）。
 
 ## 3. 踩过的坑（最有价值的一节）
 
 **微信导入**
-- **source root 必须是 `E:\WechatHis`，不是 `E:\WechatHis\texts`。** 消息身份含 `documentDigest = sha256(相对路径)`；换根会让已导入的 8,550 条全部变成重复行。已验证现有行对应 `texts/<会话目录>/<会话>.md`。
-- **绝不能用 `--max-media` / `--max-messages` 压缩单次工作量。** 被限额跳过的媒体标记为 `deferred_by_limit` 后直接 `continue`，消息下次运行判定为 reused 而跳过，**照片永久丢失**。
-- 会话序号 = "解析成功的候选按相对路径 sha256 排序后的位置"，**不稳定**（目录里有个 0 消息的 `录音 3.m4a.md` 就会让后面的序号整体偏移）。稳定身份是 documentDigest。排除名单按 digest 持久化在 `v2/.data/wechat-import-all-state.json` 的 `excluded`。
-- 会话对照表：`127873edb9` 乳儿班群 / `2dbe4f1459` 老苏家 / `9646fae782` 阿静私聊 / `c2eb76b212` 陈亚萍私聊(已排除) / `c99073df7a` 温州爸妈 / `d8895951d6` 亲爱的爸爸妈妈 / `d95b2bf01d` 张小年小群 / `e383c80ad7` 主群
-- **租约过期 ≠ 进程死亡。** 长时间媒体哈希会跑过 5 分钟心跳窗口，租约失效而进程还活着并会自行重试。判断死活要看进程和 `updated_at`，不要只看 `lease_expires_at`。
-- 导入**不会** enqueue Organizer（已核实 wechat-worker 不调用 `enqueueOrganizerJob`）。**Quark ingest 会**（`lib/ingest/quark.ts`、`scripts/quark-photo-apply.mjs`）——2,279 个素材可能触发大量 DeepSeek 付费调用，入库前必须先确认。
+- **source root 必须是 `E:\WechatHis`，不是 `E:\WechatHis\texts`。**
+- **绝不能用 `--max-media` / `--max-messages` 压缩单次工作量**——照片会永久丢失。
+- 会话序号不稳定，稳定身份是 documentDigest。
+- **租约过期 ≠ 进程死亡**，`chat-import-state.ts` 的 claim 会自动捡起断点，不要手动改数据库状态。
+- 导入不会 enqueue Organizer；Quark ingest 会。
+- **P1-6 worker 首跑 = 全量重导，不是真增量。** worker 自己的增量基准跟旧版手动导入脚本的状态文件是两套独立系统，互不认账。首跑日志会显示"first run — full import"，把已导入过的数据当新的全部重新扫一遍（按 documentDigest 去重，不会真的重复写入，但会很慢）。**这是设计上的一次性成本，不是 bug**，挑一段能整晚开着电脑的时间做首跑。
+
+**Quark 入库（P1-2）**
+- 87% 是 .HEIC，sharp/libvips 在 Windows 上无法解码，静默崩溃。`heic-convert`（纯 JS/WASM libheif）已验证方案，1,468 张待转码入库。
+- 巡检 SQL 要用 `source_label = 'Quark 历史素材 2026-09-03'` 精确匹配，不要 `LIKE '%Quark%'`。
 
 **数据库**
-- `DATABASE_URL` 是 Neon 的 **pooled** 端点（`-pooler.…`），`DATABASE_URL_UNPOOLED` 是直连。长时间单进程导入用 unpooled（驱动脚本已在自己进程内切换，未改动 `lib/db/config.ts`）。
-- `lib/db/client.ts` 已加 `pool.on("error")`：pg 在空闲 client 掉线时会在任何查询的 promise 链**之外**抛 'error' 事件，没有 listener 就是进程级未捕获异常——今天整轮导入被它带崩过一次。try/catch 抓不住这个。
-- `getStore()` 每次渲染发 18 条无 LIMIT 的 `select *`。在 8,796 行时实测 17.2 MB，`raw_sources` 占 67%；现在行数是当时的 3 倍多。`raw_sources.captured_at` 和 `daily_traces.occurred_at` **没有索引**。这是阶段 0 B 轨要修的东西。
+- `DATABASE_URL` 是 pooled 端点，`DATABASE_URL_UNPOOLED` 直连。
+- `pool.on("error")` 已加，防止空闲连接掉线导致未捕获异常。
+- `getStore()` 每次渲染 18 条无 LIMIT 查询——P1-5 已修，排除大列 + 跳过管道专用表。
+- `monthly_snapshot` 只有 `id/profile_id/month/summary/highlights/visibility/created_at` 七列，**没有 status、没有 month_date**，`month` 是文本列。
 
 **Git / 环境**
-- 工作区约 251 个文件显示为 modified，**全部是 CRLF/LF 差异，不是真实改动**。HEAD 里存的是 **LF**（已用 `git cat-file blob` 直接验证字节，不要用 `git show` 判断，它可能过滤器转换）。提交前按文件核对，别整文件翻转。
-- `.git` 下可能有 `*.stale-*` 残留（Cowork 侧删不掉文件，只能改名绕过），可以随手删。
-- **生产 `ORGANIZER_V2_ENABLED` 是开着的**，判官是冻结的 V6：精度极高、召回接近 0（115 个新窗口 0 Memory，holdout 0/2）。阶段 0 不要触发它。
+- 工作区大量文件显示 modified，**全是 CRLF/LF 差异**，`git add -A` 绝对禁止，只加自己的文件。
+- **device_bash 里跑 git 会留 `.git/index.lock`**（沙箱删不掉）。用 `GIT_INDEX_FILE=$HOME/.git-index-tmp` 建临时 index：先 `git read-tree HEAD` 填充，`git add` 指定文件，`git -c user.name="Ted" -c user.email="teddyyongteng@gmail.com" commit`，最后 `cp $HOME/.git-index-tmp .git/index` 把真实 index 同步回 HEAD，避免下一次 `git status`/`git add` 因为真实 index 是脏的而出现诡异的 `MM`/`D`/`??` 混乱状态。
+- **僵尸 git 锁不要空等。** 0 字节且超过 30 秒的锁（`.git/objects/maintenance.lock` 或 `.git/index.lock`）基本是僵尸锁，直接绕过或删除继续，不会有人来通知。
+- **不要把大文件提交进来**（曾有 241MB 的 skills.zip 进历史，用 `git reset --soft origin/main` 退回处理）。
+
+**部署 / 验收**
+- **本地代码 ≠ 线上部署。** 判"没生效"前先确认线上跑的是哪个构建：抓 `/_next/static/css/<hash>.css` 的 hash 对比。
+- **`/api/media/[id]` 曾经每张图都调 `getStore()` 全量读取层**导致空灰框，已改 `getMediaForDelivery(id)` 精确查询修复（C 轨 `bd63bb7`）。
+- **内联 `style={{aspectRatio}}` 会压过 CSS 固定高度。** `Photo` 组件加了显式 `fit` prop（`natural`/`crop`）解决。
+- **公开页 ISR revalidate=300**，`x-vercel-cache: HIT/STALE` + `age` 大 = 看的是缓存页，判断前先看 age。
+
+**编排 / 多 session 协作（2026-09-06 新增）**
+- **定时/触发式 session（`create_trigger` 起的）不一定挂在 claude.ai Project 下**——即使当初创建它的对话是挂着 Project 的。这类 session 读不到 `claude/nianlife-STATE.md`（Project 文档），如果 prompt 里让它读这个路径，它可能会静默地把它当成仓库相对路径处理，读到/写到一个完全不相关的旧文件（这次真实发生过：读到了 `docs/STATE.md`——一份 2026-09-05 之前就废弃、只有 7 条决策的旧版草稿——并往里面写了新数字，跟真正的活文档完全脱节）。**解法：状态文档唯一权威版本改成本仓库内 `docs/STATE.md`（git 追踪，任何 session 不管挂不挂 Project 都能读到），claude.ai Project 里的同名文档降级为镜像。**
+- **Cowork 侧的 git 操作要小心真实 index 和临时 index 不同步。** 用临时 index 做完 commit 后，如果不把临时 index 同步回 `.git/index`，下一次任何 session（不管是我还是别的 track）跑 `git status`/`git add` 都会看到诡异的 `MM`/`D`/`??` 混合状态，因为真实 index 还停留在上一个未完成操作的中间态。做法见上面 Git/环境小节。
+- **不要无条件信任另一个 session 自己算出来的数字。** 这次巡检 session 报告 life_events=602、monthly_snapshot 12 个月，Cowork 独立查库后发现真实数字是 651 和 16 个月（含 4 个月缺 snapshot）——不是造假，大概率是它在读错文件、上下文比较混乱的情况下算出来的过时/错误对比基准。**每次巡检后，人工看到的汇总数字也要抽查一次，不能连续两层都不验证。**
+
+**验收工具**
+- **`v2/scripts/nianlife-status.mjs`（`nianlife-verify` 技能）一键查真实状态**：表计数、月度覆盖、硬盘 vs 库对照、导入任务、质量审阅、线上探活。跑法：`cd v2 && node scripts/nianlife-status.mjs`（需要 `Nianlife`、`WechatHis`、`NianlifeOps` 三个文件夹授权）。每轮开工前和验收时都跑。
 
 **两侧的能力边界**
-- Cowork 侧（Claude）：能直接读写仓库文件、跑命令、连生产库、用浏览器看线上站。**硬限制：单条命令 180 秒，进程随命令结束被杀**，所以跑不了长任务。**不能 push**（SSH 私钥在 Windows 用户目录，沙箱到不了，也不应去碰凭据）。
-- Claude Code 侧：能跑几小时的进程，能 push。长任务（导入、入库）必须它来跑。
-- 同一时间只能有一个 session 对仓库做写操作（CLAUDE.md 规定）。跑导入的 session 应对仓库保持只读。
+- Cowork 侧（Claude）：能直接读写仓库文件、跑命令、连生产库、用浏览器看线上站。**硬限制：单条命令 180 秒**。**不能 push**（device_bash 无 SSH key），**但能本地 commit**（用上面的临时 index 技巧，commit 不需要 SSH key，只有 push 需要）。
+- Claude Code 侧：能跑几小时的进程，能 push。长任务必须它来跑。
+- 同一时间只能有一个 session 对仓库做写操作，三条轨靠文件所有权分区。
 
-## 4. 现在的真实数字（2026-09-04 12:08，会过期）
+**常设规则**
+- **每 5 分钟强制汇报**：A 轨写 STATUS.md，B 轨写 STATUS-B.md，C 轨写 STATUS-C.md。
 
-- raw_sources **28,228**（目标约 35,177）/ media_assets 2,811 / life_events 83 / daily_traces 155 / pending organizer jobs **0**
-- 已完成会话：乳儿班 70、老苏家 538、陈亚萍 2,795、温州爸妈 9、亲爱的爸爸妈妈 9、张小年小群 11
-- 进行中：**阿静私聊 15,000/19,237**，租约活跃
-- 待办：**主群**（`0cbd0588` 停在 1,000/12,508，租约已死，排在阿静之后重试）
-- 僵尸任务 `e54410c2`（乳儿班，0 条，租约已死）：状态文件已把会话 0 标记 completed，所以重跑和 `--only 0` 都会跳过它，认领逻辑永远碰不到。要收尾得先从状态文件的 `completed` 里去掉 0，再 `--only 0` 跑一次（70 条全走 reused）。低优先级。
-- 按月覆盖已从 2025-01 连续到 2026-09；2026-05 之后几个月还在随阿静的导入继续填充。
-- 已提交未 push：无（`f4f9c20` 及之前都已在 origin）。
+## 4. 现在的真实数字（2026-09-06 00:35 UTC，Cowork 独立查库验证，非二手报告）
 
-## 5. 剩余阶段 0 任务
+- raw_sources **46,742** / media_assets **9,077** / life_events **651**（全部 visibility=family）
+- life_events 按月覆盖：**2025 全年 12 个月全部 > 0**（01:32 / 02:23 / 03:14 / 04:12 / 05:11 / 06:13 / 07:38 / 08:42 / 09:33 / 10:27 / 11:29 / 12:24，共 298 条）；2026 年 353 条（01-08 每月 29-55 条，09 月 4 条）
+- monthly_snapshot：**16 个月**有摘要（2025-01/04/07/08/09/10/11/12 + 2026-01~08）。**缺口：2025-02/03/05/06 这 4 个月有 life_events 但没有 monthly_snapshot**，需要补跑。
+- 夸克入库：214/1,690 非 HEIC 已入；1,468 张 HEIC 阻塞于 P1-2b（Node libheif 解码器限制）。
+- 微信原始数据：全部会话已导入（raw_sources 46,742 包含全部 conversation，含最大一个会话的 7,244 条消息）。`nianlife-worker.mjs` 自动化脚本自己的首次正式跑尚未执行。
+- 线上：`/` HIT age=26s；`/memory`、`/memory/2026`、`/memory/2026/08`、`/about` 均 STALE（ISR 命中，非首次构建）；`/memory/2026/09` 正常渲染（2 个事件）。手机 375px 与桌面视觉复验均通过，内容无退化。
 
-| 轨 | 事项 | 状态 |
+## 5. P1 任务完成情况（✅ 全部通过）
+
+见历史记录（`docs/STATUS.md`、`docs/STATUS-B.md`、`docs/STATUS-C.md`），P1-0/1/2/2b/3/4/5/6/7/portrait/snap 全部 done，B-1~B-16 全部 done，C-1~C-4 全部 done。
+
+## 6. A-4（2025 全年回填）验收结果（2026-09-05~06）
+
+- **life_events 生成**：✅ 完成，12/12 个月全部 > 0（见第 4 节数字）。
+- **误判修复**：2025-10-01 一条把两只家猫的兽医体检报告错判成孩子看兽医（猫也叫"年年"），已确认删除、重新生成 2025-10 快照。全库按宠物/兽医关键词扫描过，只有这一条误判。**根因未修**（`subject-gate.ts` 遇到孤立昵称 + 转发第三方聊天记录的组合仍可能误判），留给下一轮任务。
+- **monthly_snapshot 生成**：🟡 部分完成，2025-02/03/05/06 这 4 个月还没跑 `month-review.mjs --commit`，是这轮的遗留尾巴。
+
+## 7. 后续任务
+
+| 事项 | 状态 | 优先级 |
 |---|---|---|
-| A | 微信全量导入（阿静 → 主群） | 进行中，预计 14:00 前后完成 |
-| A | 夸克 2,279 素材入库 | 未开始；入库前必须先确认是否会 enqueue organizer |
-| B | 渲染性能：索引 + scoped read | 未开始；代码可随时写，**测量需要 A 轨让出安静窗口** |
-| B | 40 条测试残留读取层过滤 | 未开始；不删行，规则要精确到那批合成数据 |
-| B | 月页排版的视觉验证 | 代码已完成（`f4f9c20`），**视觉验证未做**，需在性能落地后进行 |
-| — | 僵尸任务 `e54410c2` 收尾 | 低优先级 |
+| **补 4 个月 monthly_snapshot**（2025-02/03/05/06，`month-review.mjs --month=YYYY-MM --commit`） | ⏳ 待派 | 现在 |
+| **nianlife-worker.mjs 首次正式跑**——手动跑一次 vs 挂 Windows 定时任务 | ⏳ 等 Teddy 拍板 | 高 |
+| **`INGESTION_TOKEN` 填入 `.env.local`**，打通 worker→revalidate | ⏳ 等 Teddy 提供值 | 中（非阻塞） |
+| subject-gate.ts 收紧「孤立昵称 + 第三方转发聊天记录」判断 | 未开始，需要专门任务 | 中 |
+| 夸克 1,468 张 HEIC 转码入库（P1-2b） | 阻塞（解码器限制） | 中 |
+| B 轨、C 轨入箱已空 | **可以 /clear**（HANDOFF-B/C 已更新） | — |
+| P1-6 真机验收（Teddy 挑一晚跑完首跑 + Cowork 浏览器确认） | 待 worker 首跑决定后 | P2 之后 |
 
-**阶段 0 的完成标准**：打开 nianlife.cn 任何一个月都能看到张年（有文字读文字，没文字看照片）；首页「最近」是 2026-09；苏静看过一次并说了一句话。
+**阶段 0 的完成标准**：打开 nianlife.cn 任何一个月都能看到张年；首页「最近」是 2026-09；苏静看过一次并说了一句话。
 
-## 6. 工作方式约定
+## 8. 工作方式约定
 
-- 任务用 **目标 / 硬边界 / 验收 / 不可接受** 四段式，不写 20 步机械施工单。
-- **验收看数据，不看进程状态。** "进程退出了"不等于"导完了"；"测试绿了"不等于"产品成立了"。
-- 每一轮工作结束时，网站上应该多出一样家人能读的东西；否则这一轮不算完成。
-- 结论要分「已证明 / 推断 / 未知」，并说明证据来源。
-- 排序前先问三件事：这一步会不会改变后面步骤的成本基线？两步之间除了写入目标还共用什么资源？每一步的**验收标准本身**要跑多久？把"改变基线"和"依赖基线"的步骤分组，不交错。
+- 任务用 **目标 / 硬边界 / 验收 / 不可接受** 四段式。
+- **验收看数据，不看进程状态。**
+- **每轮验收必须打开真实网页做视觉验证**，不能只解析 HTML。
+- **原则记分卡不是一次性的**：每完成一个里程碑就照 `docs/nianlife-product-principles.md` 重跑一遍。
+- **不要连续两层都不验证**：巡检 session 自己报的数字，下一个读到报告的人（不管是 Teddy 还是另一个 Cowork）也要抽查一次，不能一路轻信传下去。
+- 每一轮工作结束时，网站上应该多出一样家人能读的东西。
+- **每 5 分钟强制写中间进度到出箱**，沉默 = 被判定死亡。
