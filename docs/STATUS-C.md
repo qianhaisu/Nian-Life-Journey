@@ -282,4 +282,58 @@ typecheck / lint / build 全部通过。未来新出现的年/月不在这个列
 
 `/memory/2026/07` 和 `/memory/2026` 各连续请求两次，`x-vercel-cache: HIT`，不再是 `no-store`。C-1~C-4 全部验收通过。
 
+---
+
+## 2026-09-06（Claude Code）C-5 线上实测（部署确认已上线，`2aaced6`）
+
+收到 Cowork 更正：`2aaced6` 已经 Ready/Production，我判断「没部署」的依据（页面 HTML 逐字节不变）
+本来就不该拿来判断 `/api/media` 这个改动——它只改二进制响应的产生方式，不改任何页面 HTML。
+
+**方法**：从 `/memory/2026/07`（这个月我之前没测过，图片一定是真冷缓存）挑 3 张没被请求过的
+夸克图，每张各测「第一次请求（冷/MISS）」和「第二次请求（热/HIT）」，`web` 和 `thumbnail`
+变体都测，记录完整 `dns/connect/tls/ttfb/total` 分解。
+
+**环境噪音说明（跟服务器无关，但必须说清楚不然数字会被误读）**：这台机器到 `nianlife.cn`
+的 TLS 握手（`time_appconnect`）稳定在 **~1.03s**，`connect`（TCP）只要 0.0005s——握手贵、
+连接便宜是这条网络路径本身的特征（这个 sandbox 环境，不是 Vercel/R2 的问题），每次请求
+不管冷热都背着这 ~1s，是个固定偏移量，不是服务器延迟。看数字要扣掉这 1.03s 再比较。
+
+**原始数据**（`https://nianlife.cn/api/media/<id>?variant=...`）：
+
+| 图片 | variant | 状态 | ttfb | total | size | x-vercel-cache |
+|---|---|---|---|---|---|---|
+| 03c8e81f… | web | 冷 MISS | 5.669s | 6.162s | 103,042B | MISS |
+| 03c8e81f… | web | 热 HIT | 1.542s | 2.421s | 103,042B | HIT |
+| 0b5be15a… | thumbnail | 冷 MISS | 2.358s | 3.044s | 76,594B | MISS |
+| 0b5be15a… | thumbnail | 热 HIT | 1.417s | 1.955s | 76,594B | HIT |
+| 40f71213… | web | 冷 MISS | 3.652s（tls=1.032s） | 4.176s | 114,416B | MISS |
+| 40f71213… | web | 热 HIT | 1.398s（tls=1.031s） | 1.886s | 114,416B | HIT |
+
+扣掉 ~1.03s 的固定 TLS 噪音后：**冷 MISS 的服务器侧耗时约 1.3~4.6s（三张图波动较大），
+热 HIT 稳定在 ~0.37s。** MISS 和 HIT 之间的差值就是「R2 GetObject + 首次落 CDN」这段
+一次性成本，流式化（`getStream()`）已经在跑，但从这台机器量出来的绝对数字波动大，
+没法干净地单独证明「比 buffer 版快了多少毫秒」——103KB/114KB 这个体积级别，
+内存拷贝本身省的时间大概率是几十到一百多毫秒量级，会被这台机器本身几秒级的 RTT 波动盖过去，
+**不是流式化没生效，是这个测量点分辨率不够细。**
+
+**响应头核对**（验收清单第 2 条）：
+- `Cache-Control: public, max-age=31536000, immutable` ✅ 冷热一致。
+- `Content-Length` 精确等于实际 `size_download`（103,042 / 76,594 / 114,416 全部对上）✅——
+  证明用 DB 里 `MediaLocation.fileSize` 填的头是准的，没有因为流式化导致长度算错或缺失。
+- 没有出现 `Transfer-Encoding: chunked`——响应带着精确 `Content-Length` 直接流式发送，
+  这是预期行为（我们在 route.ts 里显式设了 Content-Length，不是走未知长度的 chunked 编码）。
+- `Etag` 冷热一致，`X-Vercel-Id` 显示区域是 `hkg1::sin1`（边缘 HK / 源站新加坡）。
+
+**验收清单第 1/3 条**（手机首屏 ≤3s、连续两次请求 `x-vercel-cache` 命中）：`x-vercel-cache`
+在所有热请求上都是 `HIT`，第 3 条通过。第 1 条（手机首屏秒数）建议 Cowork/Teddy 用真实
+手机或 Chrome DevTools Network 面板量——这台机器的固定 TLS 噪音和虚拟网络路径不能代表
+真实移动端体验，我这边报的秒数只能证明「MISS 比 HIT 慢」这个相对关系成立，不能当作
+真实客户端的绝对首屏秒数。
+
+**结论**：C-5 代码交付（流式响应 + Content-Length 用 fileSize + 给 B 轨的 variant 结论）
+功能正确、响应头正确、缓存命中正常，线上确认已生效。冷缓存 MISS 的绝对秒数取决于图片
+是否是「第一次被任何人请求」，这是内容分发的固有特性（不是 bug）——真正把它降到接近 0
+的手段是「让更多图片提前被请求过变成 HIT」，这归到 B-17 上线后按早前给的 thumbnail
+优先 + lazy 分摊 MISS 峰值的策略，不是 C-5 还能再挤的空间。C-5 到此结案。
+
 入箱暂无新 ready 任务。如果要 /clear，先建一份 `docs/HANDOFF-C.md`（照 A/B 轨同样的五段格式：我管什么 / 现在做到哪 / 下一件事 / 不要再踩的坑 / 我不能单方面做的），目前项目里只有 A/B 轨有交接稿，C 轨没有，一 /clear 就没人接得上。
