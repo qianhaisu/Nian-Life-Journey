@@ -38,6 +38,34 @@ commit 只 `git add` 自己改的文件。
 
 # 🔴 现在做什么（这块永远在最顶上，Cowork 每次派单更新这里）
 
+> ## 📍 当前任务（2026-09-06 06:xx UTC 更新，第 7 轮盯梢）：**Ignored Build Step 验证 + C-6 换个问法收尾**
+>
+> **1. Ignored Build Step——Teddy 已在网页上把命令粘贴进 Settings → Build and Deployment →
+> Ignored Build Step → Custom 了**（他截图确认过，Behavior=Custom，Command 是我们给的那条
+> `git diff --quiet "${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}" HEAD -- .`，但没确认他点没点 Save）。
+> **你去做原来第 3 步的两次实测**：
+>    - 推一个纯 docs 改动（比如这个文件加一行心跳），看 Vercel Deployments 里这次是不是
+>      **Ignored**（不是 Queued/Building）。
+>    - 推一个真的碰 `v2/` 下文件的改动（哪怕加个注释），确认**正常构建**，没被误伤。
+>    - 如果第一步就没看到 Ignored（说明 Teddy 可能还没点 Save，或者设置没生效），直接报给我，
+>      不要瞎猜原因。两次都过了才报"做完"。
+>
+> **2. C-6 预热方向已经放弃，不用再做对照实验了**（见 `docs/STATE.md` 决策 19，Cowork 已经
+> 认可你自己找到的根因：Vercel 共享边缘缓存对咱们这种低流量长尾图大概 4-5 分钟就逐出，
+> 跟预热多少次无关，换托管方案是红线不做，付费层级要 Teddy 拍板不默认追加）。
+> **C-6 收尾改成测一个问题：真实、完全没预热的冷加载体验到底有多差，能不能接受。**
+>    - 挑一个今天完全没碰过的月份，**真实浏览器**（不是 curl），**移动端 375px**（苏静真实
+>      会用手机看），完全不预热，直接打开月页，记录：首屏可见时间、图片逐张浮现的观感、
+>      有没有明显卡顿或长时间空白。
+>    - 附上你的主观判断：这个速度，苏静作为普通读者会不会觉得"慢/卡"？
+>    - 这不需要工具或脚本，直接用你能用的浏览器工具跑一次、如实报告即可。
+>    - 报完这个，C-6 就算结案，除非结果明显不能接受，那种情况先报给我，不要自己决定要不要
+>      升级 Vercel 付费层级或换托管方案——这两个都是要 Teddy 拍板的事。
+>
+> 完成顺序：先 1 再 2，两件事都不冲突可以穿插做。
+
+<details><summary>历史：Vercel Ignored Build Step 原始派单（2026-09-06 13:1x UTC）</summary>
+
 > ## 📍 当前任务（2026-09-06 13:1x UTC 更新）：**在等 B-18 期间先做一件更急的事：Vercel Ignored Build Step**
 >
 > Teddy 刚在手机上看 Vercel 部署队列，排了一长条，而且每个构建大概 8 分钟——
@@ -78,6 +106,8 @@ commit 只 `git add` 自己改的文件。
 > **【B 轨留言，2026-09-06 05:2x UTC】B-18 已上线，commit `776fa67`。** 浏览器直连生产
 > `/memory/2025/06` 抽查全部 45 张 `main img`：0 张走 `/_next/image`，45 张全部直连
 > `/api/media/...`。详见 `docs/STATUS-B.md`。可以重跑 C-6 预热 + 对照实验了。
+
+</details>
 
 <details><summary>历史：路线拍板（unoptimized，仍然有效，等 B-18）</summary>
 
