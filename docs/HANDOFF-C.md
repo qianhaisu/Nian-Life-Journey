@@ -47,7 +47,7 @@ docs/ORCHESTRATOR-INBOX-B.md docs/STATUS-B.md docs/HANDOFF-B.md
 | C-3 | /api/health 恢复（200 + DB 计数） | ✅ commit bd63bb7 |
 | C-4 | generateStaticParams 让年/月页真正走 ISR | ✅ commit f455125 |
 | C-5 | `/api/media` 流式响应 `getStream()`，解决 web 变体冷路径延迟；给 B 轨 variant/尺寸结论（正文用 thumbnail+lazy，hero 用 web+priority） | ✅ commit 2aaced6，Cowork 实测 thumbnail TTFB 0.379s / web 0.452s |
-| C-6 | 预热 2025 阅读路径：年页+12月页实际渲染的图（268 张，非全库），并发≤2+间隔+退避 | ✅ 268/268 成功 0 失败 0 触发防护，回验 8/8 HIT，详见 STATUS-C.md；**B-17 上线后需重跑** |
+| C-6 | 预热 2025 阅读路径：年页+12月页实际渲染的图，并发≤2+间隔+退避 | ⚠️ **第一轮被退回重做**（预热了错的 URL：浏览器实际走 `/_next/image?url=...&w=...`，工具只认 `/api/media/...`）。路线拍板=A（`unoptimized`），B-18 已上线并确认生效。重跑时又发现工具正则漏掉了含冒号的 `wechat-media:` id（全程 0 张 wechat 来源图被真正预热过），已修。**真正的对照实验结果：预热和不预热的月份读者体验没有差异**——CDN 缓存条目实测约 4-5 分钟就被逐出，跟 `Cache-Control: max-age=31536000` 头无关，是 Vercel 共享边缘缓存自己的驱逐策略。**C-6 当前设计的前提不成立，需要 Cowork/Teddy 重新拍板方向**，详见 STATUS-C.md 完整数据。 |
 
 **Cowork 2026-09-06 独立复验结果**（库数字 + 浏览器，双重验证）：
 - `/` HIT，age=26s；`/memory` STALE；`/memory/2026` STALE；`/memory/2026/08` STALE；`/about` STALE
@@ -65,8 +65,11 @@ docs/ORCHESTRATOR-INBOX-B.md docs/STATUS-B.md docs/HANDOFF-B.md
 `docs/ORCHESTRATOR-INBOX-C.md` 顶部看板等新派单。
 
 已知的潜在后续工作（不主动做，等 Cowork 派单）：
-- **B-17 上线后重跑 C-6 预热**：`cd v2 && node media-tools/warm-reading-path.mjs 2025`——
-  月页正文图片集合会从个位数变几十张，这轮 268 张是旧集合。
+- **C-6 需要重新拍板方向**：预热本身机制没问题（工具已修好两个 bug：`/_next/image` 缓存键
+  问题靠 B-18 `unoptimized` 解决、`wechat-media:` 冒号正则漏洞已修），但 CDN 缓存约 4-5 分钟
+  就被逐出，"提前焐热等未来某时刻访客"这个前提在 Vercel 默认边缘缓存上不成立。可能方向：
+  接受现状（C-5 已经让每次冷 MISS 本身更快）、或考虑更高缓存保证的方案（会触及"不换图片
+  托管方案"这条红线，需要 Teddy 拍板）。
 - R2 自定义域名直出（这轮明确不做）
 - 未来新月份 generateStaticParams 自动覆盖（on-demand ISR 已接住，无需手动枚举）
 - 预热工具目前是手动跑，没接 worker/定时任务；worker 上线后可以考虑接进 ingest 收尾流程

@@ -31,7 +31,12 @@ const verifyCount = Number(opt("verify", "5"));
 const monthsOverride = opt("months", null); // e.g. --months=01,02,06 for a small validation run
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const MEDIA_URL_RE = /\/api\/media\/[a-zA-Z0-9_-]+\?variant=[a-z_]+/g;
+// Media ids come in two shapes: media-quark-sha-<hex> (hyphens only) and
+// wechat-media:<hex> (contains a colon) — see lib/ingest/wechat-import.ts. The
+// original character class only had [a-zA-Z0-9_-] and silently matched zero
+// wechat-media URLs on any page dominated by WeChat-imported photos (found via
+// /memory/2025/09, which resolved to 0 matches instead of ~129).
+const MEDIA_URL_RE = /\/api\/media\/[a-zA-Z0-9_:.-]+\?variant=[a-z_]+/g;
 
 async function fetchWithBackoff(url, { maxRetries = 4 } = {}) {
   let backoff = 800;
