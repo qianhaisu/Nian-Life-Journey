@@ -152,6 +152,16 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 - `DATABASE_URL` 是 pooled 端点，`DATABASE_URL_UNPOOLED` 直连。
 - `pool.on("error")` 已加，防止空闲连接掉线导致未捕获异常。
 - `getStore()` 每次渲染 18 条无 LIMIT 查询——P1-5 已修，排除大列 + 跳过管道专用表。
+- **P1-5 的修复范围只覆盖了 `assembleStore()`，没覆盖 `assembleOrganizerStore()`**（2026-09-06
+  真实发生，代价是 Neon 账单一天内多花 $87+ 的出站流量）。`assembleOrganizerStore()` 自己的
+  注释写明"只给 Organizer 内部读取路径用，页面渲染不该调它"，但 B-17 的 commit `2f65c78`
+  把 `getOrganizerStore(profileId)` 加进了 `lib/family-archive.ts` 的 `loadFamilyArchive()`——
+  这个函数在 5 个页面组件的顶层直接 await，每次 build/ISR 重渲染都把 `raw_sources.text`
+  （64 MB，全库最大列）整表拉一遍。**教训：任何要在页面渲染路径上新增的数据读取，都要检查
+  调用的函数是不是专门为批处理/后台任务设计的"全量读取"函数**（这类函数的文档注释通常会
+  写清楚使用边界，比如这次的"callers outside the Organizer's own read path must use getStore()
+  instead"——这种警告是真的，不是防御性文档）。修复：加一个只查 `life_events`（按
+  profile_id，不按 visibility）的轻量函数替代整个 `getOrganizerStore()` 调用。
 - `monthly_snapshot` 只有 `id/profile_id/month/summary/highlights/visibility/created_at` 七列，**没有 status、没有 month_date**，`month` 是文本列。
 
 **Git / 环境**

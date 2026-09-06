@@ -45,6 +45,57 @@ Cowork 自己也在这条队列里贡献了一份。
 
 # 🔴 现在做什么（这块永远在文件最顶上，Cowork 每次下任务都更新这里）
 
+> ## 🚨🚨🚨 P0 紧急插队（2026-09-06 06:4x UTC）：生产环境正在实时烧钱，先做这个，「孤立昵称」扫描先暂停
+>
+> **Teddy 的 Neon 账单今天异常，$72.92 → $87.86，Vercel 客服确认是数据库出站流量（Public
+> Network Transfer）1.37 TB，不是 compute 也不是 storage。我刚在 `pg_stat_activity` 里现场
+> 抓到了正在跑的元凶，这不是历史遗留，是现在还在发生的。**
+>
+> **根因**：`lib/family-archive.ts:128` 的 `loadFamilyArchive()`：
+> ```
+> const [events, rawStore, organizerStore] = await Promise.all([getAllEvents(), getStore(), getOrganizerStore(CANONICAL_PROFILE_ID)]);
+> ```
+> 这行调用了 `getOrganizerStore(profileId)`（`lib/db/postgres-repository.ts:292` 的
+> `assembleOrganizerStore`），这个函数自己的注释写得很清楚：**"callers outside the
+> Organizer's own read path must use getStore() instead, not this"**——它是专门给 Organizer
+> 后台任务读的，**不该出现在页面渲染路径上**。它的 `rawSources` select 带了 `text: t.rawSources.text`
+> （`postgres-repository.ts:294`），`raw_sources` 是全库最大的表（64 MB），一个 profile 下
+> 相当于全表拉一遍，这个函数自己没有分页/限制，是刻意为了 Organizer 内部批处理设计的。
+>
+> `loadFamilyArchive()` 在 `app/page.tsx`、`app/about/page.tsx`、`app/memory/page.tsx`、
+> `app/memory/[year]/page.tsx`（build 时按年生成）、`app/memory/[year]/[month]/page.tsx`
+> （build 时按月生成）**这 5 个页面组件的顶层直接 await**，每次 build（今天心跳风暴期间
+> 大概 89 次）、每次 5 分钟 ISR 过期后的重新渲染，都会把这整个 64 MB 表拉一遍，加上
+> `getStore()` 本身另外 13 张表的无限制查询叠在一起。这条路是今天 commit `2f65c78`
+> （"fix(b17): trace tier read the wrong events array, always empty"）新加进去的，
+> **是今天引入的回归，不是老问题**。
+>
+> **B 加这行的真实需求只是要 `organizerStore.events` 这一个字段**（`composeFamilyArchive`
+> 里第 116 行 `traceEvents = allEvents.filter(...)`，因为 `getAllEvents()` 只含已发布事件，
+> 缺 store_only 的痕迹层事件）——**不需要 rawSources/contributors/media/mediaAssets/profile
+> 这些字段，更不需要 `text` 这个大列**。
+>
+> **现在要做的（越快越好，这是真金白银在流）**：
+> 1. 在 `lib/db/postgres-repository.ts` 或者你觉得合适的地方，加一个轻量函数，只查
+>    `life_events`（按 `profile_id` 过滤，不按 `visibility` 过滤，取 id 或者你判断 B 那边
+>    实际需要的最小字段集），**不要碰 `assembleOrganizerStore()` 本身**（它是 Organizer
+>    自己合法在用的函数，改了怕影响 Organizer 主流程），单独给页面渲染这条路用。
+> 2. 把 `lib/family-archive.ts:128` 那行的 `getOrganizerStore(CANONICAL_PROFILE_ID)` 换成
+>    你这个新的轻量查询，只取 `.events` 需要的那部分。
+> 3. **改完立刻验证**：本地起服务或者直接看 SQL，确认新查询不再带 `raw_sources.text`，
+>    确认首页/月页渲染结果不变（`traceEvents` 逻辑不能破坏，B-17 的痕迹层修复效果要保留）。
+> 4. **这条修复不是心跳，改完立刻 commit + push**（决策 18 的例外情形：真代码修复），
+>    不要攒着等下一轮心跳节点。push 之后如果方便的话，看看这次 build 有没有正常触发
+>    （不是被 Ignored Build Step 误伤——这次是真代码改动，应该正常构建）。
+> 5. **顺手确认一下**：`getOrganizerStore()` 返回值里硬编码了 `dailyTraces: []`（空数组占位），
+>    如果 B-17 的痕迹层修复本来期待从这里拿到真的 `dailyTraces`，那这次调用可能从一开始就没
+>    起到 B 以为的作用——如果你发现这一点，报给我，不用自己去改 B-17 的逻辑，先把这次紧急
+>    的查询开销问题解决掉就行。
+>
+> **「孤立昵称+第三方转发」扫描先暂停**，这个修复做完验证通过再回去接着做，不丢进度。
+>
+> 完成后在出箱写清楚：改了哪个文件、新查询选了哪些列、验证方法和结果、commit hash。
+
 > ## 📍 当前任务（2026-09-06 06:xx UTC 更新，第 7 轮盯梢）：**A-9 结案确认，「孤立昵称+第三方转发」范围批准开工**
 >
 > **A-9 结案已独立核实**：直接查库确认 `event-v2-496fde6db412f3b9b09bbe20171908b9` 的
