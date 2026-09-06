@@ -3,7 +3,7 @@
 > **这份文档只能覆盖写，不能追加。** 它永远只描述"现在"，长度保持在 100 行以内。
 > 历史在 `git log` 和 `docs/STATUS.md` 里，不在这。一个刚清空上下文的 Session 只读这一份就能接着干。
 >
-> 最后更新：2026-09-06 00:2x · by Claude Code（A-4 完成后）
+> 最后更新：2026-09-06 01:2x · by Claude Code（A-5 完成后，A 轨入箱清空）
 
 ---
 
@@ -55,6 +55,14 @@ v2/lib/publication-moments.ts     docs/ORCHESTRATOR-INBOX-B.md    docs/STATUS-B.
   模式扫描**（不限于猫，任何跟孩子昵称撞名的人/宠物都有风险）——这属于收紧 subject-gate 判断
   逻辑，是产品判断，不要在别的任务里顺手改。
 
+**A-5（补 4 个月 monthly_snapshot）已完成（2026-09-06）**：
+跑了 `month-review.mjs --month=2025-0{2,3,5,6} --commit`，四个月判官日志一致：已发布
+（published）life_event 分别只有 4/3/2/1 条，均低于 5 条阈值，脚本在写库前就退出——
+`monthly_snapshot` 仍是 16 个月，**没有新增，是既有规则正常生效，不是遗漏**。
+INBOX 给的 23/14/11/13 是这四个月 life_events 总数（含大量 low 级 not-about-child），
+不是已发布数，两者不是一回事。这四个月页面上仍能看到当月 life_event 列表，只是没有独立的
+月度回顾摘要。
+
 **其余 P1 状态**：P1-0（2026-01~05）✅、P1-1（conversationId 稳定性）✅、P1-2b（HEIC 1,260 张
 入库）✅、P1-3（主体门+T20-C）✅、P1-4（信任名单制图文绑定）✅代码完成，视觉验收未做、
 P1-5（scoped read）✅。
@@ -63,19 +71,9 @@ P1-5（scoped read）✅。
 
 ## 3 · 下一件事
 
-**先读 INBOX 顶部看板**（`docs/ORCHESTRATOR-INBOX.md`），现在最上面是 A-5，明确到命令：
+**先读 INBOX 顶部看板**（`docs/ORCHESTRATOR-INBOX.md`），A 轨入箱已清空（A-4/A-5 都完成）。
 
-```
-node scripts/month-review.mjs --month=2025-02 --commit
-node scripts/month-review.mjs --month=2025-03 --commit
-node scripts/month-review.mjs --month=2025-05 --commit
-node scripts/month-review.mjs --month=2025-06 --commit
-```
-
-这 4 个月已经有 life_events（23/14/11/13 条）只差 monthly_snapshot，是 A-4 的收尾尾巴，不是新任务。
-跑完这 4 个月，A 轨入箱才真正清空，才可以 /clear。
-
-其余已知待做（A-5 之后，非阻塞，等 Cowork 派）：
+已知待做（非阻塞，等 Cowork 派或 Teddy 拍板）：
 - 等 Teddy 决定 P1-6 全量导入的跑法，跑完后验证 revalidate 链路真的让 nianlife.cn 秒级更新
 - **P1-4 视觉验收**：打开 2026-07 月页（Quark 照片最多，204 张），确认 Quark 照片和文字并排
 - 建议：全库"孤立昵称+第三方转发聊天记录"模式扫描（见上，subject-gate 收紧，需要单独立项）
@@ -108,4 +106,4 @@ node scripts/month-review.mjs --month=2025-06 --commit
 
 ---
 
-=== A 轨还有一件收尾任务（A-5：补4个月snapshot，见 INBOX），做完再 /clear ===
+=== A 轨已到收尾节点，可以 /clear ===
