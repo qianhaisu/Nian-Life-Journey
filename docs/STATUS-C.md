@@ -716,3 +716,5 @@ CLI 状态字段显示 `Canceled`（Vercel 没有单独的 "Ignored" 状态枚�
 空闲回读，无新任务，仍等 Cowork 确认（之前几条心跳已经随其他轨的 push 一起上了 origin，计数重置）。
 
 空闲回读，无新任务，仍等 Cowork 确认。
+
+空闲回读，无新任务，仍等 Cowork 确认。
