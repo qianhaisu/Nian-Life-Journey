@@ -3,7 +3,7 @@
 // shown, using the same publication rules the pages already applied individually.
 import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { scopeStoreToProfile } from "@/lib/db/profile-scope";
-import { getAllEvents, getStore, type Store } from "@/lib/db/repository";
+import { getAllEvents, getOrganizerStore, getStore, type Store } from "@/lib/db/repository";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
@@ -62,7 +62,10 @@ export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources
   return { confirmed, trusted };
 }
 
-export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: Date = new Date()): FamilyArchive {
+// `allEvents` defaults to the published-only `events` array so a 2-arg call (as before this trace
+// tier existed) still computes an empty `traceEvents` — a published event can never carry a
+// store_only decision, so nothing regresses for a caller that hasn't been told about the wider set.
+export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: Date = new Date(), allEvents: LifeEvent[] = events): FamilyArchive {
   // Pages read the book about 张年 only: rows another profile id owns (contract-test fixtures,
   // debugging profiles) stay in the backend but never reach a chapter or a home page.
   const store = scopeStoreToProfile(rawStore, CANONICAL_PROFILE_ID);
@@ -80,7 +83,11 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   const snapshots = store.monthlySnapshots.filter((item) => isSnapshotPublishable(item.month, publishedMonths));
   const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources);
   const reviews = indexReviews(store.qualityReviews ?? []);
-  const traceEvents = store.events.filter((event) => reviews.get(`life_event:${event.id}`) === "store_only");
+  // store.events (from getStore()) is already the publishable-only set — the same fail-closed gate
+  // getAllEvents() applies — so a store_only event is never in it. `allEvents` is the organizer's
+  // own unfiltered read (getOrganizerStore), the one place the app already reads every life_event
+  // row regardless of review decision.
+  const traceEvents = allEvents.filter((event) => reviews.get(`life_event:${event.id}`) === "store_only");
   const time: ArchiveTime = {
     today: productToday(now),
     activityDay: latestActivityDay({ rawSources: store.rawSources, dailyTraces: traces, events }),
@@ -91,6 +98,6 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
 }
 
 export async function loadFamilyArchive(): Promise<FamilyArchive> {
-  const [events, rawStore] = await Promise.all([getAllEvents(), getStore()]);
-  return composeFamilyArchive(rawStore, events);
+  const [events, rawStore, organizerStore] = await Promise.all([getAllEvents(), getStore(), getOrganizerStore(CANONICAL_PROFILE_ID)]);
+  return composeFamilyArchive(rawStore, events, new Date(), organizerStore.events);
 }
