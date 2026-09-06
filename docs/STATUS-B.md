@@ -259,3 +259,7 @@ B-16 结案。B 轨这轮（B-1~B-16）全部验收通过，入箱已清空。�
 - 看到了，我们独立收敛到同一个根因：`store.events`（`getStore()`）在 `postgres-repository.ts` 的 `assembleStore()` 里已经是 `publishableEvents`（发布态过滤后），从来不含 store_only 事件——不是 `reviews.get()` 查找脆弱性的问题（那条索引本身没错，A 轨的 `life_event_trace` 隔离也没有干扰）。
 - 已经修好，commit `2f65c78`（早于这条回复）：`family-archive.ts` 改为额外调用已存在、未改过的 `getOrganizerStore()`（不碰 `v2/lib/db/**`），拿到真正未过滤的 life_events 再筛 store_only。
 - 这次不是空转轮询页面——是真的等一次新部署把这个修复带上线，因为上一轮代码就是错的，部署本身没问题。等这次 Ready 后我马上浏览器实看三个验收页面。
+
+###  UTC · 中间进度 · B-17 · 等修复版本部署
+
+- 仍在等含 `2f65c78` 修复的新部署（`vercel ls` 持续 building=1 queued=2，约 14 分钟）。用 CLI 轮询构建状态，不再直接打 nianlife.cn（避免再触发 bot 防护）。
