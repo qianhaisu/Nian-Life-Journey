@@ -8,7 +8,8 @@ import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildMemoryIndex, buildYearView } from "@/lib/memory-index";
 
-export const revalidate = 300;
+// TEMPORARY P0 stopgap (2026-09-06): see app/page.tsx — revert to 300 once track A's fix ships.
+export const revalidate = 3600;
 
 // Without this, the [year] segment has no params known at build time and Next renders it fully
 // dynamic on every request (no CDN cache) regardless of `revalidate` above. A year absent from

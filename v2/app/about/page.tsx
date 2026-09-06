@@ -12,7 +12,8 @@ import { ageOn, formatDay, formatMonth, timeSignatureFor } from "@/lib/time-sign
 import type { LifeEvent } from "@/lib/types";
 import { isRecent } from "@/lib/time-truth";
 
-export const revalidate = 300;
+// TEMPORARY P0 stopgap (2026-09-06): see app/page.tsx — revert to 300 once track A's fix ships.
+export const revalidate = 3600;
 export const metadata: Metadata = { title: "张年" };
 
 // Who 张年 is right now — and only then, who he was earlier. The page is split in two eras with

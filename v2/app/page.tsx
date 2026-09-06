@@ -8,7 +8,10 @@ import { buildHomeView } from "@/lib/home-view";
 import { isPortraitOfZhangnian } from "@/lib/media/representative";
 import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
-export const revalidate = 300;
+// TEMPORARY P0 stopgap (2026-09-06): loadFamilyArchive() has a regression pulling a 64MB
+// table on every ISR revalidation (see docs/ORCHESTRATOR-INBOX.md P0). Raised from 300 to
+// cut query frequency ~12x while track A ships the real fix. Revert to 300 once confirmed live.
+export const revalidate = 3600;
 
 // The front page answers one question — 最近怎么样，张年 — with ONE expression, the strongest the
 // archive can honestly make (lib/home-view.ts): a recent memory, a recent moment with real words,

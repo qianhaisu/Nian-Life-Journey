@@ -3,7 +3,8 @@ import { MonthCard } from "@/components/month-card";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { buildMemoryIndex } from "@/lib/memory-index";
 
-export const revalidate = 300;
+// TEMPORARY P0 stopgap (2026-09-06): see app/page.tsx — revert to 300 once track A's fix ships.
+export const revalidate = 3600;
 export const metadata: Metadata = { title: "记忆" };
 
 // The archive read as a publication directory: year pill nav → month cards in a two-column grid.
