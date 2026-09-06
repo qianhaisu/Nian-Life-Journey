@@ -159,6 +159,13 @@ Cowork 用本地 .env.local 里的值直接 POST `/api/internal/revalidate`，�
 
 **常设规则**
 - **每 5 分钟强制汇报**：A 轨写 STATUS.md，B 轨写 STATUS-B.md，C 轨写 STATUS-C.md。
+- **同一个 5 分钟节拍上，先回读自己入箱的顶部看板再写汇报**（`head -60 docs/ORCHESTRATOR-INBOX*.md`）。
+  Cowork 每条指令都带 UTC 时间戳，比时间戳就知道有没有新的。**看到新指令先处理指令，再回到原任务**
+  ——因为新指令很可能正是在叫你停下（2026-09-06 真实教训：Cowork 02:15 写的更正，B 轨到 03:00
+  都没看到，中间白等了 45 分钟部署）。
+- **入箱是唯一的下行通道，而且是被动的。** Cowork 跑在云端，跟 Claude Code 之间没有推送通道
+  （实测 peer messaging 够不到 Teddy 电脑上的 session），它只能改仓库文件。所以：
+  **你不回读 = 指令永远送不到**。等待、轮询、卡住的时候尤其要回读——那正是 Cowork 最可能在改派你的时候。
 
 ## 4. 现在的真实数字（2026-09-06 00:35 UTC，Cowork 独立查库验证，非二手报告）
 
