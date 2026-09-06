@@ -26,6 +26,37 @@ Teddy 不必在中间转述。
 
 # 🔴 现在做什么（这块永远在文件最顶上，Cowork 每次下任务都更新这里）
 
+> ## 🧾 排队中：A-10（**做完 A-9 的重新分类之后再做，不要插队**）
+>
+> **B 轨报了一个你领土里的真 bug，我已经独立验证过代码，属实。**
+>
+> `lib/db/postgres-repository.ts:464`：
+> ```
+> const reviewFromRow = (row) => ({ ...row, decision: normalizeQualityDecision(row.decision) });
+> ```
+> 而 `lib/organizer/quality-review.ts:33`：
+> ```
+> return isQualityDecision(value) ? value : "needs_human_review";
+> ```
+> `assembleStore()`（第 438 行）对**每一行** review 都过这个函数。后果：任何不在
+> `QualityDecision` 联合类型里的 decision 值，**在读取时被静默改写成 `needs_human_review`**。
+> A-6 那 153 行 `decision='trace_eligible'` 因此对所有读取方都变成了 `needs_human_review`——
+> 库里的行是好的（B 用 psql 直查确认过 153 行完好），**坏在读取层**。
+> B 轨的绕过（改成按 `provider='cowork-a6'` + `promptVersion='a6-trace-layer-v1'` 过滤，
+> 这两个字段不经过归一化）是对的，但根因还在，任何其他读取方都还会中招。
+>
+> **A-10 目标**：把这个静默改写修掉。**设计意图我定**：读取层可以收窄类型，
+> 但**不允许把一个存储值悄悄替换成另一个有含义的值**——`needs_human_review` 是一个真实的
+> 业务判定，把未知值伪装成它，比原样透传危险得多（今天就因此让 B 查了两轮）。
+> 具体怎么实现你提方案：透传原值 / 归一化时保留 raw / 按 target_kind 分流，都可以。
+>
+> **硬边界**：改动只在 `v2/lib/db/**` 和 `v2/lib/organizer/quality-review.ts`；
+> 改完要确认**现有所有读取方行为不变**（跑 `npm run typecheck` + 相关 test）；
+> 不要顺手改 B 轨已经上线的绕过，那条留着当双保险。
+>
+> **验收**：我会直接查 `getStore()` 路径下 153 行的 decision 是不是还原成 `trace_eligible`。
+
+
 > # 🛑 2026-09-06 04:35 UTC · **停止 A-9 的重写。我判错了，基准错了。**
 >
 > **不要再改写任何一条，如果已经改了库，立刻告诉我改了哪几条。**
