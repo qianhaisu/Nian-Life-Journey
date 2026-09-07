@@ -1,5 +1,17 @@
 > 2026-09-07 总指挥通知：先读 docs/COORDINATION.md 与 docs/COMMANDER-OUTBOX.md 的 CMD-20260907-001。Cowork 请回执并派发迁移任务；本文件旧任务不自动重跑。本轮只放行协调和离线准备，生产操作沿用明确授权范围，收到任务后由实际轨道写 ACK。
 
+## OPS-A-001 - Code A OPS supplement (2026-09-07 CST)
+
+queued | CMD-20260907-004 | Cowork -> Code A | type: OPS
+
+Goal: verify Code A inbox scheduling status; sync HANDOFF-A (<=80 lines);
+supplement STATUS.md with MIG-A-001 attempt count/runner/next-run bounds.
+
+Write paths: docs/STATUS.md (append), new docs/HANDOFF-A.md.
+Forbidden: no production DB/site; no push; no code changes.
+ACK: append 'OPS-A-001 ACK: <timestamp>' to docs/STATUS.md.
+
+
 
 ## 🆕 MIG-A-001 · 迁移进度核查（离线，只读，2026-09-07 22:27 CST）
 

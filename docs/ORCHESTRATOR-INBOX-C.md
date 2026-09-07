@@ -1,5 +1,19 @@
 > 2026-09-07 总指挥通知：先读 docs/COORDINATION.md 与 docs/COMMANDER-OUTBOX.md 的 CMD-20260907-001。Cowork 请回执并派发迁移任务；本文件旧任务不自动重跑。本轮只放行协调和离线准备，生产操作沿用明确授权范围，收到任务后由实际轨道写 ACK。
 
+## OPS-C-001 - Code C OPS supplement (2026-09-07 CST)
+
+queued | CMD-20260907-004 | Cowork -> Code C | type: OPS
+
+Goal: verify Code C inbox scheduling status; sync HANDOFF-C (<=80 lines);
+supplement migration-C-readiness.md with 4-column format if MIG-C-001 done;
+check if lightweight 60-sec mtime checker supports local message delivery.
+
+Write paths: docs/STATUS-C.md (append), new docs/HANDOFF-C.md,
+docs/migration-C-readiness.md (add columns if exists).
+Forbidden: no production DB/site; no push; no code changes.
+ACK: append 'OPS-C-001 ACK: <timestamp>' to docs/STATUS-C.md.
+
+
 # 🔴🔴 C-8：抢救会过期的证据（最高优先级，2026-09-06 09:2x UTC）
 
 ## 🆕 MIG-C-001 · 迁移依赖与发布就绪核查（离线，2026-09-07 22:27 CST）

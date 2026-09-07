@@ -1,5 +1,17 @@
 > 2026-09-07 总指挥通知：先读 docs/COORDINATION.md 与 docs/COMMANDER-OUTBOX.md 的 CMD-20260907-001。Cowork 请回执并派发迁移任务；本文件旧任务不自动重跑。本轮只放行协调和离线准备，生产操作沿用明确授权范围，收到任务后由实际轨道写 ACK。
 
+## OPS-B-001 - Code B OPS supplement (2026-09-07 CST)
+
+queued | CMD-20260907-004 | Cowork -> Code B | type: OPS
+
+Goal: verify Code B inbox scheduling status; sync HANDOFF-B (<=80 lines);
+write PONG to STATUS-B.md on natural trigger (mark 'manual' or 'scheduled').
+
+Write paths: docs/STATUS-B.md (append), new docs/HANDOFF-B.md.
+Forbidden: no production DB/site; no push; no code changes.
+ACK: append 'OPS-B-001 ACK: <timestamp>' to docs/STATUS-B.md.
+
+
 # 🛑 全轨停工（2026-09-06 08:3x UTC，Cowork 写）——生产数据库已被人为切断，不要去修
 
 ## 🆕 MIG-B-001 · 迁移后产品八原则验收清单（离线，2026-09-07 22:27 CST）
