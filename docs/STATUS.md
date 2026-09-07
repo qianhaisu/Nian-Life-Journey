@@ -37,6 +37,72 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-07 · Code A ACK（三轨协作协议接入，待命中）
+
+**身份/路径**：Code A（数据、备份恢复、仓储与导入轨），工作仓库 `C:\Users\teddy\Documents\Nianlife`（单一
+worktree，`main` 分支），当前 HEAD `634c993`，与 `origin/main` 一致，无未 push 的本地领先提交。
+工作区存量未提交改动（非本 session 产生，未动）：`v2/package-lock.json` 修改、`docs/nianlife-handoff-2026-09-06-neon.md`、
+`v2/db-check-tmp.mjs`、`v2/scripts/quark-heic-ingest-linux.mjs` 三个未跟踪文件。
+
+**唤醒方式**：本 session 由用户交互式启动，非常驻轮询；无固定巡检周期，收到新一轮用户/协调消息即读
+`docs/ORCHESTRATOR-INBOX.md` 顶部看板。
+
+**占用**：无写占用（本轮只读了协调文档，未改代码/数据库）。
+
+**当前状态 — 待命，未收到 Cowork 派发的新任务**：
+1. 已读 `docs/COORDINATION.md`、`AGENTS.md`、`docs/COMMANDER-OUTBOX.md`、`docs/COMMANDER-INBOX.md`、本文件顶部看板。
+2. `docs/COMMANDER-OUTBOX.md` 的 `CMD-20260907-001` 里指名给 Code A 的任务是 **MIG-A-001**（核对 Phase 2
+   第 18 节后实际进度/当前执行者/备份产物元数据），但 `docs/COMMANDER-INBOX.md` 显示 **Cowork 尚未回执/ACK**，
+   该任务也未被派发进本文件对应的 `docs/ORCHESTRATOR-INBOX.md`（本文件顶部仍只是总指挥的通知，不是 Cowork
+   写的任务卡）。按协议"未收到 Cowork 新任务就回报待命，不重跑旧任务"，本轮不代 Cowork 执行 MIG-A-001，
+   也不重跑 `docs/ORCHESTRATOR-INBOX.md` 里已完成的旧任务（A-12-1/A-12-2 已于 2026-09-06 09:14 UTC 完成，
+   等 Cowork 复核，见下方历史条目）。
+3. **没做到什么 / blocker**：Cowork 对总指挥的接入闭环尚未建立（`COMMANDER-INBOX.md` 空白），Code A 因此
+   没有可执行的、来自 Cowork 的当前任务。
+4. **下一件事**：等待 Cowork 在 `docs/ORCHESTRATOR-INBOX.md` 顶部写入实际任务卡（或直接确认 MIG-A-001 转派），
+   到时立即读取并执行；同时提醒可能需要总指挥/Cowork 关注：接入闭环卡在 Cowork 未回执这一步。
+
+---
+
+### 2026-09-07 14:58 UTC · Codex 直连生效 · OPS-A-001 ACK + MIG-A-001 完成（只读）
+
+**协议切换**：已读 `docs/DIRECT-COORDINATION.md`，Cowork 派单/初审移除，本轨直接对接 Codex。
+HEAD `83c0a41`，与 `origin/main` 一致。工作区存量未提交改动（非本 session 产生，未动）：
+`docs/STATUS-C.md`、`v2/package-lock.json` 修改，`docs/nianlife-handoff-2026-09-06-neon.md`、
+`v2/db-check-tmp.mjs`、`v2/scripts/quark-heic-ingest-linux.mjs` 三个未跟踪文件。
+
+**OPS-A-001 ACK: 2026-09-07 14:58 CST**（收件调度设置）：
+本会话用 `CronCreate` 建了唯一每 5 分钟收件任务（job id `9e21b03e`），读
+`docs/ORCHESTRATOR-INBOX.md` 顶部看板，按任务 ID 去重，无变化不写心跳。**真实限制**：
+该调度是 session-only（不落盘），只在本 Claude Code 会话进程存活期间生效，会话退出/机器重启
+即失效，且 7 天后自动过期；不构成真正的"无人值守"常驻调度，依赖本机会话保持运行。首次自然
+触发时会在此文件写 `scheduled PONG`。
+
+**MIG-A-001 完成（只读，2026-09-07 14:58 CST）**：
+1. **Phase 2 实际产物**：`C:\Users\teddy\Downloads\` 只搜到与 Nianlife 相关的脚本/文档
+   （`NIANLIFE-*.bat` 执行脚本共 14 个、`nianlife-P0-report-2026-09-06.md`、
+   `nianlife-P2-backup-execution-2026-09-07.md`、`nianlife-migration-plan-v2.md`、
+   `nianlife-handoff-2026-09-06-neon.md`、`nianlife-prod-ecs.pem`、`nianlife.cn.txt`），
+   **没有备份归档文件**（无 `.dump`/`.backup`/`.sql` 等产物）。`E:\NianlifeBackups\2026-09-07\`
+   目录存在但为空（`total 0`，无子文件）。未枚举 Downloads 其余私人文件。
+2. **第 18 节之后有无新内容**：`docs/nianlife-P2-backup-execution-2026-09-07.md` 共 390 行，
+   第 18 节「总指挥接管脚本验收」是文件最后一节，**没有第 19 节或更新内容**。该节内容是：
+   总指挥用本机合成库（非生产、非 Neon 连接）模拟跑通了 `step12-cliarg.ps1` →
+   `step5-restore.ps1` → `step6-reconcile.ps1` 全链路，180,000 行合成数据验证通过，两个已知
+   bug 已修（空日志 `.Trim()` 报错、清理脚本误杀其他 PostgreSQL 进程），`NIANLIFE-RUN-FULL.bat`
+   已放行为正式执行入口，但**模拟结束后合成库已删除、恢复目标库已清空，未执行归档和生产清理，
+   Downloads/E: 上没有生成测试归档**——与本轮实测结果一致（E: 目录确实是空的）。
+3. **当前阻塞**：正式 Phase 2 备份/恢复尚未针对生产库实际执行过，只完成了本机合成数据的
+   模拟验证。恢复生产需要：① Neon Direct/Unpooled 连接串（文档写"下一次输入后无需再做诊断
+   轮次"，暗示上次诊断已过，但本轮未连接验证 Neon 当前配额/可用性，未做任何生产连接尝试）；
+   ② 实际执行 `NIANLIFE-RUN-FULL.bat` 走完整备份链路并在 Downloads/E: 产出真实归档文件——
+   这一步按任务卡"不启动新备份进程"的禁止操作，本轮未执行，等总指挥明确放行。
+
+**未验证项**：未连接 Neon（禁止），未执行任何备份/恢复脚本（禁止），未验证 Neon 当前实际
+配额状态。
+
+---
+
 ### 2026-09-06 09:14 UTC · A-12-1 + A-12-2 完成（本地 commit，未 push，等 Cowork 复核）
 
 **先说环境**：按指令没有连过生产库——Neon 已降级 Free 且本周期配额耗尽，这轮验证只有
