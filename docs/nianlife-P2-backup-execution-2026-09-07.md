@@ -1,9 +1,9 @@
-# Nianlife Phase 2 数据备份执行方案（v3，独立完整版，待总指挥审核，未执行）
+# Nianlife Phase 2 数据备份执行方案（v4，总指挥已批准，待执行）
 
 生成时间：2026-09-07（Cowork 执行协调）
 配套文档：`docs/nianlife-P0-report-2026-09-06.md`（Phase 0 最终报告，任务卡 P1-07）
 本文件同时存放于：仓库 `docs/nianlife-P2-backup-execution-2026-09-07.md` 与 `C:\Users\teddy\Downloads\nianlife-P2-backup-execution-2026-09-07.md`。
-状态：**本文件是独立、完整、可逐条执行的方案（不依赖"见另附文档"），但本轮仍只是设计，未运行任何一步。未经总指挥批准，不连接、不导出生产数据库，不开始任何代码改造。**
+状态：**总指挥已于 2026-09-07 审核批准备份任务；当前仍未运行任何一步。执行前必须先完成 PostgreSQL 18 工具与两个本地隔离恢复库的准备，之后才可连接、导出生产数据库。**
 
 ---
 
@@ -12,7 +12,7 @@
 - 本文档是执行计划，不是执行记录。本轮**没有**建立任何数据库连接，**没有**运行任何 SQL、`pg_dump`、恢复或核对命令。
 - **全程不得记录连接串、密码、Token 或任何私人内容**：本文档所有命令示例中的连接串、临时环境地址均为占位符（`<...>`），执行时由 Teddy 通过环境变量临时提供，不写入命令行参数、不写入本文档、不写入任何日志文件、不提交进仓库。执行完成后立即 `unset` 相关环境变量。若任何输出（日志、报错信息、查询结果）意外携带了实际的家庭内容/私人文字/媒体片段，一律不摘抄进本文档或任何交付物，只记录"发生了什么类型的事、涉及多少条/多大"这类元信息。
 - **输出目录必须在 Git 仓库之外**：所有备份文件、清单、日志一律写入仓库工作区之外的目录，例如 `~/nianlife-backups/2026-09-07/`（对应 Windows 下 `C:\Users\teddy\nianlife-backups\2026-09-07\`）。该目录不得位于 `C:\Users\teddy\Documents\Nianlife` 仓库工作区内，不得被 `git add`，不进 `.gitignore` 白名单以外的任何提交。
-- 批准流程：总指挥审核本文档 → 确认范围、连接预算、失败处理方式无异议 → 明确批准 → 才允许执行第 3 节的步骤。批准前，不会以任何理由（包括"只查一行验证"）连接 Neon。
+- 批准状态：总指挥已确认范围、连接预算和失败处理方式，批准按本方案执行。工具准备期间仍不得连接 Neon；只有 PostgreSQL 18 客户端、本地恢复服务和仓库外输出目录全部就绪后，才开始第 3 节的生产只读步骤。
 - 依据 Phase 0 报告的实测：Neon 计划保持 **Launch**（Teddy 已决定本轮不降级、不删除项目、不旋转凭据——一旦获批执行，可使用现有凭据，不需要额外的凭据轮换步骤；凭据本身仍然只在执行时临时通过环境变量使用，不写入本文档、仓库或聊天记录）；PostgreSQL **18**；本计费周期（9/6–10/1）此前截图 storage 151.13 MB、network transfer 0 kB。这个数据量级（约 150MB 级别的库）是本方案时间/连接预估的依据。
 
 ---
@@ -34,6 +34,8 @@
 以下命令中所有 `<...>` 均为占位符，执行时由 Teddy 通过环境变量临时提供，不写入本文档、不写入命令行参数、不写入日志。
 
 ### 3.0 客户端版本检查
+
+2026-09-07 在 Teddy 当前 Windows 环境实测：`pg_dump`、`pg_restore`、`psql`、Docker 和 WSL 均未安装；C 盘可用空间约 111 GB。Claude Code 应先安装 PostgreSQL 18 客户端及一个仅监听本机的 PostgreSQL 18 恢复服务，或准备等价的本地隔离 PostgreSQL 18 环境。安装和初始化阶段不得连接 Neon，也不得把任何密码写进仓库、文档或聊天记录。
 
 ```bash
 pg_dump --version
@@ -109,27 +111,30 @@ cd ~/nianlife-backups/2026-09-07
 sha256sum full-backup-1.dump full-backup-2.dump schema-only.sql > checksums.sha256
 ```
 
-用途：确认文件内容一致性（辅助判断两次 dump 之间源库是否发生写入），以及后续任何一次传输/存储后可重新计算校验，确认文件未损坏。
+用途：为每个文件建立独立的完整性指纹，以便在复制、加密和长期保存后重新计算并确认文件没有损坏。**不得要求两个 custom-format dump 的 SHA-256 相同，也不得用二者是否相同判断源库是否发生写入**；两份备份的一致性通过各自恢复后的结构、逐表行数、序列和脱敏字段摘要来判断。
 
-### 3.5 两次隔离恢复（均为 PostgreSQL 18，与生产完全隔离）
+### 3.5 恢复到两个隔离数据库（均为 PostgreSQL 18，与生产完全隔离）
 
 ```bash
-# 隔离环境 1：全新、非生产的 PostgreSQL 18 实例
-export RESTORE_TARGET_1="<临时环境 1 的连接串，非生产，执行时提供>"
-createdb --dbname="$RESTORE_TARGET_1" 2>/dev/null || true
+# 本机 PostgreSQL 18 管理连接；密码只通过当前会话环境变量或安全提示输入
+export LOCAL_ADMIN_URL="<仅监听本机的 PostgreSQL 18 / postgres 管理连接>"
+
+# 每次使用新的、名称唯一的空数据库；如名称已存在立即停止，不覆盖旧库
+createdb --maintenance-db="$LOCAL_ADMIN_URL" nianlife_restore_1
+export RESTORE_TARGET_1="<同一本机服务中的 nianlife_restore_1 连接>"
 pg_restore --no-owner --no-privileges \
   --dbname="$RESTORE_TARGET_1" \
   ~/nianlife-backups/2026-09-07/full-backup-1.dump
 
-# 隔离环境 2：另一个独立、非生产的 PostgreSQL 18 实例
-export RESTORE_TARGET_2="<临时环境 2 的连接串，非生产，执行时提供>"
-createdb --dbname="$RESTORE_TARGET_2" 2>/dev/null || true
+# 隔离环境 2：同一台本机服务中的另一个全新空数据库
+createdb --maintenance-db="$LOCAL_ADMIN_URL" nianlife_restore_2
+export RESTORE_TARGET_2="<同一本机服务中的 nianlife_restore_2 连接>"
 pg_restore --no-owner --no-privileges \
   --dbname="$RESTORE_TARGET_2" \
   ~/nianlife-backups/2026-09-07/full-backup-2.dump
 ```
 
-- 两个恢复目标必须相互隔离（不是恢复到同一个库覆盖测试），且都不是生产/预发环境。
+- 两个恢复目标必须是两个不同的全新空数据库，不能恢复到同一个库后覆盖测试，也不能指向生产、Preview 或任何云端共享环境。`createdb` 返回“已存在”或其他错误时立即停止，不用 `|| true` 吞掉错误。
 
 ### 3.6 恢复后对账（逐表核对，非仅看行数）
 
@@ -146,7 +151,7 @@ pg_restore --no-owner --no-privileges \
 ### 3.7 收尾与凭据清理
 
 ```bash
-unset SOURCE_DATABASE_URL RESTORE_TARGET_1 RESTORE_TARGET_2
+unset SOURCE_DATABASE_URL LOCAL_ADMIN_URL RESTORE_TARGET_1 RESTORE_TARGET_2
 ```
 
 - 执行完成后立即清除本次会话中出现过连接串的环境变量；不在任何文档、日志、聊天记录中回填实际连接串内容。
@@ -178,8 +183,8 @@ unset SOURCE_DATABASE_URL RESTORE_TARGET_1 RESTORE_TARGET_2
 ## 6. 交付物与验收标准
 
 - 交付物：两份完整备份文件及其 SHA-256、一份 schema-only 备份及其 SHA-256、一份全表行数清单、一份序列状态清单、一份扩展/PostgreSQL 版本/时区/collation 记录、两次隔离恢复的逐表对账结果——全部存放于仓库之外的受控目录（例如 `~/nianlife-backups/2026-09-07/`），不进 Git 仓库。
-- 验收标准：两份完整备份的 SHA-256 一致或差异可解释（如两次备份之间源库确有正常写入）；两次隔离恢复的逐表行数、字段摘要、序列状态都与备份内容吻合；全程连接次数、耗时、SQL 类型与本方案第 4 节的预估量级相符，任何显著偏离都需要在交付时说明原因。
+- 验收标准：每个备份文件都有独立 SHA-256，复制或转存后复算结果保持一致；两次隔离恢复的逐表行数、脱敏字段摘要、序列状态都与同一冻结基线吻合；全程连接次数、耗时、SQL 类型与本方案第 4 节的预估量级相符，任何显著偏离都需要在交付时说明原因。
 
 ---
 
-**本方案到此为止，等待总指挥审核批准。批准前不连接 Neon，不导出生产数据库，不开始任何代码改造。**
+**本方案已经总指挥批准。Claude Code 先完成第 3.0 节的本地工具准备；确认工具和两个隔离恢复目标可用后，可按本方案连接 Neon 执行只读备份。**
