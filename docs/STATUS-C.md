@@ -849,3 +849,57 @@ Step 修复 + stopgap 撤回，Cowork 已独立复核代码状态确认无误）
    确认。
 
 **已本地 commit（`94ea000`），未 push**，等 Cowork 复核 + Teddy 决定恢复 Neon 后统一放行。
+
+## 2026-09-07（Claude Code · Code C）ACK：接入三轨协作协议，本轮无新任务，待命
+
+已读 `docs/COORDINATION.md`、`docs/COMMANDER-OUTBOX.md`（`CMD-20260907-001`/`002`）、
+`docs/ORCHESTRATOR-INBOX-C.md` 顶部看板。回执如下：
+
+- **身份**：Code C 执行轨，本机 checkout `C:\Users\teddy\Documents\Nianlife`（唯一
+  worktree，`main` 分支，与 `origin/main` 同步，`HEAD=634c993`）。
+- **唤醒方式**：交互式会话，由用户/协调消息触发，无常驻轮询进程。
+- **当前占用**：工作区存在非本会话产生的改动——`v2/package-lock.json`（modified）、
+  `docs/nianlife-handoff-2026-09-06-neon.md`、`v2/db-check-tmp.mjs`、
+  `v2/scripts/quark-heic-ingest-linux.mjs`（均 untracked）。未确认来源前不回滚/暂存/纳入
+  自己的提交，原样保留。
+- **任务状态**：`ORCHESTRATOR-INBOX-C.md` 顶部标注"本文件旧任务不自动重跑"，其下方
+  C-8（Vercel/Neon 证据抢救）、C-7（事件页构建期放大，本轨已于 2026-09-06 完成并本地
+  commit 未 push，见上）均为迁移协议生效前的旧任务，本轮不重跑。`COMMANDER-OUTBOX.md`
+  的 `MIG-C-001`（离线核对迁移依赖/发布回滚检查点/worker 停用与成本边界，交付
+  `docs/migration-C-readiness.md`）目前状态是"总指挥已 queued 给 Cowork"，Cowork 尚未
+  ACK `CMD-20260907-001`，也尚未把它写入 `ORCHESTRATOR-INBOX-C.md` 的看板派给本轨。
+- **结论**：按协议"只处理本轨当前有效任务……尚未收到 Cowork 新任务就回报待命，不重跑
+  旧任务"，本轮**待命**，不预先假设 `MIG-C-001` 的范围自行开工。等
+  `ORCHESTRATOR-INBOX-C.md` 顶部看板出现 Cowork 写入的任务卡（或收到直接指令）后再执行。
+
+## 2026-09-07（Code C）Cowork 移除，Codex 直接派单：接单 MIG-C-001 + 收件调度
+
+`docs/DIRECT-COORDINATION.md` 已生效，Cowork 派单/初审依赖移除，Codex 直接对接。
+本轮直接接续 `MIG-C-001`（离线迁移准备、费用保护缺口、发布回滚清单），不再等待
+`ORCHESTRATOR-INBOX-C.md` 顶部被 Cowork 写入任务卡。
+
+- **收件调度**：本会话用 `CronCreate` 建了每 5 分钟一次的轮询（job `0d8bb6dd`），只读
+  `ORCHESTRATOR-INBOX-C.md` 顶部看板和 `DIRECT-COORDINATION.md`，对照已完成任务 ID 去重，
+  无变化不写心跳。会话内有效（session-only，7 天自动过期），首次自然触发会写一条
+  scheduled PONG 到本文件确认调度真的生效。
+- **MIG-C-001 交付**：`docs/migration-C-readiness.md`（新建）。核心内容：
+  1. 引用 `docs/nianlife-P0-report-2026-09-06.md` 的部署基线（Vercel Paused、Git 连接
+     断开、Cron 总开关 Disabled、Neon Launch/0.25CU/Enabled），未重新核实控制台，只做
+     代码侧交叉检查。
+  2. **新发现的费用保护缺口**：`app/events/[id]/page.tsx:45` 仍在每次渲染时并发调用
+     `getStore()`（全量读取层，文档注释实测 ~5-10 分钟/全量数据），9-06 事故修复的两个
+     commit（`a04d8d2`/`94ea000`）文件范围都不包含这一行。`generateStaticParams` 已改
+     `[]`，所以触发频率从"每次构建必发生 651 次"降到了"每次访客首次打开一个事件页触发
+     一次、300s ISR 缓存"，风险等级降低但缺口本身未修——如实标注为**未修复**，只做定位，
+     未在本任务内动手改查询逻辑。
+  3. 交叉核实 C-1/C-2/C-3/C-7 均已完成，列出证据，避免下一个接单者重复劳动。
+  4. 发布回滚清单：Production 恢复/迁移切换前的开关核对顺序、环境变量核对、
+     `/api/health` 先行验证、回滚触发条件（对照 Neon 用量曲线）、回滚后留痕要求。
+  5. 明确列出"本任务边界内未做的事"：未改代码修复缺口、未重新核实控制台实时状态。
+
+**未在本轮做的事**：未修复第 2 条的 `getStore()` 缺口本身（超出"离线核查"任务授权，留给
+下一个接单 session 或 Codex 指派的修复任务，定位信息已写清）；未连接生产数据库、未访问
+nianlife.cn、未改任何 Vercel/Neon 控制台设置。
+
+**下一件事**：等 Codex/Cowork 审核 `migration-C-readiness.md`，或直接派发修复
+2.1 节缺口的后续任务。
