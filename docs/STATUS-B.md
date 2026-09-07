@@ -495,3 +495,34 @@ push main 并线上验证通过（commit `989cd11`、`776fa67`）。
 - **回报**：待命中，不重跑旧任务。等 Cowork 在 `ORCHESTRATOR-INBOX-B.md` 顶部更新新任务（预期是 `MIG-B-001` 或其变体）后立即开工。
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+
+---
+
+### 2026-09-07 · Code B 轨 · 直连 Codex，OPS-B-001 + MIG-B-001 ACK
+
+已读 `docs/DIRECT-COORDINATION.md`：Cowork 中间层已按 Teddy 指示移除，Codex 直接派单/审核，不再等 Cowork。已读 `docs/ORCHESTRATOR-INBOX-B.md` 顶部当前卡（CMD-20260907-006 → OPS-B-001 → MIG-B-001）与 `docs/HANDOFF-B.md`。
+
+**OPS-B-001 ACK: 2026-09-07 22:40 CST**
+
+调度：本会话之前没有为本仓库设置过任何 Cron/loop（`CronList` 返回空）。已用 `CronCreate` 新建唯一收件调度：
+- **调度 ID：`dd148047`**，`*/5 * * * *`（每 5 分钟），recurring，7 天后自动过期。
+- 触发内容：读 `docs/ORCHESTRATOR-INBOX-B.md` 顶部卡 + `docs/HANDOFF-B.md`，按任务 ID 去重；有变化才处理并写 `STATUS-B.md`；首次自然触发写一行 `scheduled PONG <时间戳>`；无变化不写心跳。
+- 限制：Cron 任务只在本会话进程存活、且 REPL 空闲时触发；不写盘，本 Claude 会话退出后调度消失，不是持久化的系统级 cron。恢复方式：会话重启后需重新调用 `CronCreate`。
+
+**MIG-B-001 ACK: 2026-09-07 22:40 CST**
+
+任务：离线建立迁移后页面/产品八原则验收清单，唯一产出 `docs/migration-B-acceptance.md`，不访问生产站、不改任何 UI 代码。已读 `docs/nianlife-product-principles.md`。开始执行，完成后在此追加交付说明。
+
+**MIG-B-001 submitted: 2026-09-07 22:5x CST**
+
+**修改路径**：新建 `docs/migration-B-acceptance.md`（唯一产出，未改任何代码/组件/样式）；同步更新 `docs/HANDOFF-B.md`（覆盖写，78 行，反映 MIG-B-001/OPS-B-001 完成状态）；本文件（`docs/STATUS-B.md`）追加本条记录。
+
+**交付内容**：`docs/migration-B-acceptance.md` 逐条覆盖产品八原则，每条含"当前基线状态（代码）"（基于仓库最后已知状态，非在线验证）、"无法在线验证的原因"、"上线前需补的检查点"；第 9 节记分卡汇总（过 5 · 部分/①过②不过 1 · 未交付 1：原则四第②问"管线无人值守"因本地 worker 未上线为否，原则六"过去主动回来"未交付且已确认无违反式占位）；第 10 节说明系统性无法在线验证的原因（站点不可访问 + 任务卡明确禁止访问生产站）。
+
+**检查结果**：静态阅读代码确认基线（`lib/media/representative.ts`、`lib/publication-moments.ts` 的 `MomentKind`、`components/photo.tsx`/`photo-viewer.tsx`/`evidence-list.tsx` 的 `unoptimized`），未运行任何脚本、未连数据库、未访问 nianlife.cn。没有 typecheck/build 需要跑（未改代码）。
+
+**未验证项**：全部八条均未做在线验证（任务卡禁止）；最大缺口是手机 375px 真机截图历史上从未真正拿到过（B-17 出箱两次记录 `resize_window` 工具失效），迁移完成后必须优先补这条。
+
+**下一步**：等 Codex 审核 `docs/migration-B-acceptance.md`；若通过，等 INBOX-B 顶部下一个任务；调度 `dd148047` 每 5 分钟自动读卡，无变化不产生心跳。
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

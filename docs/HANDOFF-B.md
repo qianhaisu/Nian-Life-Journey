@@ -1,6 +1,6 @@
 # B 轨交接稿（覆盖写，每次收尾更新）
 
-> 最后更新：2026-09-06 12:5x UTC · by Cowork（B-17 结案）
+> 最后更新：2026-09-07 22:4x CST · by Code B（MIG-B-001 结案，Codex 直连模式）
 
 ## 我管什么
 
@@ -36,19 +36,17 @@ B 轨拥有：`v2/components/**`、`v2/app/**/page.tsx`、`v2/app/globals.css`�
 | B-15-fix 卡片灰框修复 | ✓ | ✓ |
 | B-16 Photo fit prop + 卡片高度修复 | ✓ commit 3e98ada | ✓ Cowork 2026-09-06 复验通过 |
 
-**Cowork 2026-09-06 独立复验**（B-16 后状态）：
-- 手机 375px：`/memory` 月卡片高度正常（160-240px 区间），横向裁切看得见人脸
-- 首页 cluster：51 张夸克图，三张可见，无灰框
-- 事件页/月页正文照片仍按自身比例不裁（自然比例保留）
-- `/about` 头像正常（未受 B-16 fit 改动影响，未动该区域）
-
 ---
 
 ## 下一件事（明确到操作）
 
-**先读 INBOX-B 顶部看板**，确认下一个 ready 任务。
+**先读 INBOX-B 顶部看板**，确认下一个任务。**协作模式已变**：Cowork 中间层已移除，Codex 直接派单/审核
+（`docs/DIRECT-COORDINATION.md`），不再等 Cowork ACK/初审。
 
-B-17 已结案（Cowork 2026-09-06 复验通过）。当前已知无 ready 任务，等 Cowork 派下一单（大概率是 P2 的 2025 全年月度审阅）。
+- B-17、B-18 已结案（2026-09-06 复验通过）。
+- **MIG-B-001**（离线迁移后八原则验收清单）已完成，交付 `docs/migration-B-acceptance.md`，等 Codex 审核。
+- **OPS-B-001**（收件调度）已完成：Cron `dd148047`，每 5 分钟，读 INBOX-B 顶部 + 本文件，按任务 ID 去重。
+- 当前无新 ready 任务；等 Codex 在 INBOX-B 顶部派下一单。
 
 ---
 
