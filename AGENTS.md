@@ -1,5 +1,9 @@
 # Nian Life Journey V2
 
+## 协作入口（2026-09-07）
+
+先读 `docs/COORDINATION.md`。Codex 是总指挥/总审核，Cowork 负责派单/初审，Claude Code A/B/C 执行。总指挥通过 `docs/COMMANDER-OUTBOX.md` 向 Cowork 投递，Cowork 在 `docs/COMMANDER-INBOX.md` 回执；三轨沿用既有入箱/出箱。用户无需充当传声筒，未收到 ACK 不得宣称自动协作已接通。旧文档中的时点状态不能覆盖当前明确授权，发布、隐私和数据保护原则继续有效。
+
 ## 项目定位
 
 V1 是现有的静态单页产品参考和历史资料。V2 是全新、长期可维护的张年数字人生档案，不能把 V1 HTML 直接重构为 React，也不能以 V1 的 CSS/DOM 组件结构作为 V2 的实现基础。
