@@ -1,6 +1,10 @@
 # 总指挥—Cowork—Code 三轨协作协议
 
+> 已被 `DIRECT-COORDINATION.md` 的最新角色/派单规则替代：Codex 直接对接 A/B/C，Cowork 退出。下文保留旧协议记录，不得据此继续等待 Cowork。
+
 生效：2026-09-07。依据：Teddy 本线程明确指定 Codex 总指挥/总审核、Cowork 分发/初审、Code A/B/C 执行，并要求入箱出箱沟通与定期汇报。
+
+唤醒频率、上下文交接、费用和效率的执行细则见 `COORDINATION-RUNTIME.md`；频率冲突以该细则为准。细则不表示各方调度器已接通。总指挥恢复入口为 `HANDOFF-COMMANDER.md`。
 
 ## 权责与不变原则
 

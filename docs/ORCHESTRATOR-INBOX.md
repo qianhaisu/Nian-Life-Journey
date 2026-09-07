@@ -1,3 +1,5 @@
+> CMD-20260907-006：Teddy 已同意 Codex 直接对接 A/B/C。先读 docs/DIRECT-COORDINATION.md。当前 MIG/OPS 任务由 Codex 直接确认有效：先设置本轨收件调度，再继续 MIG 离线工作，不等 Cowork，不重复已完成任务。旧卡中“Cowork 初审/禁止 push”失效，检查后自动 push main；生产权限不扩大。
+
 > 2026-09-07 总指挥通知：先读 docs/COORDINATION.md 与 docs/COMMANDER-OUTBOX.md 的 CMD-20260907-001。Cowork 请回执并派发迁移任务；本文件旧任务不自动重跑。本轮只放行协调和离线准备，生产操作沿用明确授权范围，收到任务后由实际轨道写 ACK。
 
 ## OPS-A-001 - Code A OPS supplement (2026-09-07 CST)

@@ -1,5 +1,7 @@
 # Nian Life Journey
 
+> 最新协作指令：先读 `docs/DIRECT-COORDINATION.md`。Teddy 已同意 Codex 直接对接 A/B/C，移除 Cowork 派单/初审依赖。当前 MIG/OPS 编号继续执行；旧“等 Cowork”和“禁止 push”不覆盖当前用户要求。
+
 > 2026-09-07 协作入口：先读 `docs/COORDINATION.md` 和 `docs/COMMANDER-OUTBOX.md`。Codex 总指挥/总审核，Cowork 派单/初审，Code A/B/C 执行；沿用三轨箱，新增总指挥双向箱。旧停工与心跳 push 约定按协议限定适用范围，不能覆盖当前用户指令。每次唤醒先看当前任务，回执必须由实际接收者写。
 
 给张年（Teddy 的孩子）做的数字人生档案网站。
