@@ -27,6 +27,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { applyQuarkPhotoArtifact } from "./quark-photo-apply.mjs";
+import { requireQuarkStorageProvider } from "./quark-storage-guard.mjs";
 import { closePool } from "../lib/db/client.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -56,7 +57,12 @@ const mode = hasFlag("--apply") ? "apply" : "dry-run";
 
 process.env.REPOSITORY_BACKEND = "postgres";
 if (mode === "apply" && !process.env.DATABASE_URL) fail("DATABASE_URL is required (postgres backend)");
-if (mode === "apply" && process.env.MEDIA_STORAGE_PROVIDER !== "r2") fail("MEDIA_STORAGE_PROVIDER must be r2 so originals/derivatives land in permanent storage, not local disk");
+// Dry-run stays fully offline — no cloud credential is required unless this run will actually
+// write (mode === "apply"). Accepts "r2" or "oss"; fails before any DB/object write otherwise.
+if (mode === "apply") {
+  try { requireQuarkStorageProvider(); }
+  catch (error) { fail(error instanceof Error ? error.message : String(error)); }
+}
 
 function reliableTakenAtText(row) {
   if (typeof row.takenAt !== "string") return undefined;

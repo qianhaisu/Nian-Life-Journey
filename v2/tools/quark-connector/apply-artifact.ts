@@ -104,7 +104,13 @@ async function main() {
   process.env.REPOSITORY_BACKEND = "postgres";
   requireEnv("DATABASE_URL");
   if (apply) {
-    if (process.env.MEDIA_STORAGE_PROVIDER !== "r2") throw new CliUsageError("MEDIA_STORAGE_PROVIDER must be r2 so originals/derivatives land in permanent storage, not local disk");
+    // Dry-run stays fully offline — no cloud credential required unless this run will actually
+    // write. Accepts "r2" or "oss"; fails before any DB/object write otherwise (Phase 3B2b).
+    // Dynamic import, matching how this file already brings in scripts/quark-photo-apply.mjs
+    // below (see scripts/quark-storage-guard.d.mts / quark-photo-apply.d.mts for their types).
+    const { requireQuarkStorageProvider } = await import("../../scripts/quark-storage-guard.mjs");
+    try { requireQuarkStorageProvider(); }
+    catch (error) { throw new CliUsageError(error instanceof Error ? error.message : String(error)); }
     // Configure the AI Organizer only when this run will organize. GEMINI_API_KEY/AI_MODEL are
     // intentionally NOT hard-required here: the shared core (scripts/quark-photo-apply.mjs) fails
     // closed BEFORE any write only if the run would ingest NEW photos that need organizing. A pure

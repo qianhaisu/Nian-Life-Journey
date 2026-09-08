@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { applyQuarkPhotoArtifact } from "./quark-photo-apply.mjs";
+import { requireQuarkStorageProvider } from "./quark-storage-guard.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadDotenv({ path: path.resolve(__dirname, "../.env.local"), quiet: true });
@@ -40,7 +41,10 @@ const organize = hasFlag("--organize");
 
 process.env.REPOSITORY_BACKEND = "postgres";
 if (!process.env.DATABASE_URL) fail("DATABASE_URL is required (postgres backend)");
-if (process.env.MEDIA_STORAGE_PROVIDER !== "r2") fail("MEDIA_STORAGE_PROVIDER must be r2 so originals/derivatives land in permanent storage, not local disk");
+// This script only ever applies (no dry-run mode of its own) — always a real write. Accepts "r2"
+// or "oss"; fails before any DB/object write otherwise.
+try { requireQuarkStorageProvider(); }
+catch (error) { fail(error instanceof Error ? error.message : String(error)); }
 if (organize) {
   // Production runs one provider (DeepSeek, see CLAUDE.md). This no longer forces `gemini` on the
   // process; whatever AI_PROVIDER/AI_MODEL the environment configures is what the drain uses.

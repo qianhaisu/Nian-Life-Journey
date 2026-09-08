@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { writeFile, mkdir } from "node:fs/promises";
 import { applyQuarkPhotoArtifact } from "./quark-photo-apply.mjs";
+import { requireQuarkStorageProvider } from "./quark-storage-guard.mjs";
 import { closePool } from "../lib/db/client.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -16,7 +17,10 @@ loadDotenv({ path: path.resolve(__dirname, "../.env.local"), quiet: true });
 process.env.REPOSITORY_BACKEND = "postgres";
 
 if (!process.env.DATABASE_URL) { console.error("DATABASE_URL required"); process.exit(1); }
-if (process.env.MEDIA_STORAGE_PROVIDER !== "r2") { console.error("MEDIA_STORAGE_PROVIDER must be r2"); process.exit(1); }
+// This script only ever applies (no dry-run mode of its own) — always a real write, so the
+// provider guard always runs. Accepts "r2" or "oss"; fails before any DB/object write otherwise.
+try { requireQuarkStorageProvider(); }
+catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exit(1); }
 
 const BATCH_ROOT = "C:/Users/teddy/NianlifeOps/quark-history/2026-09-03";
 const TASK_ITEMS = path.join(BATCH_ROOT, "manifests/quark-heic-converted-task-items.jsonl");
