@@ -3,29 +3,16 @@ import { createReadStream, createWriteStream, promises as fs } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { MediaAsset, MediaLocation, MediaVariant } from "@/lib/types";
+import type { MediaAsset, MediaLocation, MediaProvider, MediaVariant } from "@/lib/types";
+import { getOssConfig, OssStorage } from "./oss-storage";
+import type { HotStorage, HotStorageInput } from "./storage-types";
+import { safeKey } from "./storage-types";
 
-export type HotStorageObject = { providerRef: string; mimeType: string; fileSize?: number; width?: number; height?: number; checksum?: string };
-export type HotStorageBody = Uint8Array | AsyncIterable<Uint8Array>;
-export type HotStorageInput = { key: string; body: HotStorageBody; mimeType: string; checksum?: string; fileSize?: number };
-export type HotStorageVerification = { exists: boolean; checksumVerified: boolean; fileSize?: number };
-
-export interface HotStorage {
-  put(input: HotStorageInput): Promise<HotStorageObject>;
-  get(key: string): Promise<Uint8Array | null>;
-  // Streams the object instead of buffering it fully in memory — used by the
-  // page-delivery route so TTFB isn't gated on the whole file arriving first.
-  getStream(key: string): Promise<ReadableStream<Uint8Array> | null>;
-  delete(key: string): Promise<void>;
-  verify(key: string, checksum: string): Promise<HotStorageVerification>;
-  url(location: MediaLocation): string | null;
-}
-
-function safeKey(key: string) {
-  const normalized = key.replaceAll("\\", "/");
-  if (!normalized.startsWith("media/") || normalized.includes("..")) throw new Error("Unsafe storage key");
-  return normalized;
-}
+// Re-exported so every existing `import { type HotStorage } from "@/lib/storage/hot-storage"`
+// (and the sibling Hot*Object/Body/Verification types) keeps working unchanged — the interface
+// itself moved to storage-types.ts only so oss-storage.ts could depend on it without a circular
+// import back into this file.
+export type { HotStorage, HotStorageObject, HotStorageBody, HotStorageInput, HotStorageVerification } from "./storage-types";
 
 // The local adapter is intentionally credential-free and is also the staging
 // implementation used by the development repository.
@@ -148,6 +135,36 @@ export function createHotStorage(env: NodeJS.ProcessEnv = process.env): HotStora
 
 export const hotStorage = createHotStorage();
 
+// Phase 3B1: the "hot" backend above is untouched by any of this — createHotStorage() still only
+// ever reacts to MEDIA_STORAGE_PROVIDER === "r2" (else local disk), exactly as before, so every
+// existing MediaLocation with provider: "hot" keeps reading from wherever it always read from.
+// OSS is a genuinely separate tier, constructed lazily (only when something actually needs it,
+// so an app with no OSS_* vars configured never pays getOssConfig()'s throw just for importing
+// this module).
+let ossSingleton: HotStorage | undefined;
+export function getOssStorage(env: NodeJS.ProcessEnv = process.env): HotStorage {
+  if (!ossSingleton) ossSingleton = new OssStorage(getOssConfig(env));
+  return ossSingleton;
+}
+
+// Which provider a NEW write should target — independent from which backend an EXISTING
+// location's own `provider` field should be read through (that's getStorageForProvider below,
+// keyed off the row itself, never off this). Defaults to "hot" so an unset/misspelled env value
+// behaves exactly like today: new writes keep going to R2/local, tagged "hot".
+export function activeMediaProvider(env: NodeJS.ProcessEnv = process.env): "hot" | "oss" {
+  return env.MEDIA_STORAGE_PROVIDER === "oss" ? "oss" : "hot";
+}
+
+// Every read of an actual object must go through this, keyed off the MediaLocation's own
+// `provider` — never off activeMediaProvider() or a single fixed instance. During migration the
+// database holds a mix of "hot" (R2/legacy) and "oss" rows at once; which one a given row reads
+// through is a property of that row, not of today's write-target setting.
+export function getStorageForProvider(provider: MediaProvider, env: NodeJS.ProcessEnv = process.env): HotStorage {
+  if (provider === "oss") return getOssStorage(env);
+  if (provider === "hot") return hotStorage;
+  throw new Error(`getStorageForProvider: no object storage backend for provider "${provider}"`);
+}
+
 export function preferredVariant(asset: MediaAsset, requested: MediaVariant = "web"): MediaVariant[] {
   if (asset.mediaType === "video") return requested === "preview" ? ["preview", "poster"] : ["poster"];
   if (asset.mediaType === "document" || asset.mimeType === "application/pdf") return ["document_preview"];
@@ -155,10 +172,19 @@ export function preferredVariant(asset: MediaAsset, requested: MediaVariant = "w
   return requested === "thumbnail" ? ["thumbnail", "web"] : ["web", "thumbnail"];
 }
 
+// Phase 3B1: a derivative can now exist at either tier while migration is in progress. For each
+// candidate variant (in preference order), an OSS copy wins over a "hot"/R2 one if both exist and
+// are ready — the point of the migration is to move reads off R2, not to keep preferring it once
+// an OSS copy lands. `original` is unaffected: it is never served to a public page from either
+// tier, only from the archived Quark copy, exactly as before.
 export function selectLocation(locations: MediaLocation[], asset: MediaAsset, requested: MediaVariant = "web") {
   const variants = preferredVariant(asset, requested);
   if (requested === "original") return locations.find((location) => location.variant === "original" && location.provider === "quark" && location.status === "archived") ?? null;
-  return variants.map((variant) => locations.find((location) => location.provider === "hot" && location.variant === variant && location.status === "ready")).find(Boolean) ?? null;
+  return variants
+    .map((variant) =>
+      locations.find((location) => location.provider === "oss" && location.variant === variant && location.status === "ready")
+      ?? locations.find((location) => location.provider === "hot" && location.variant === variant && location.status === "ready"))
+    .find(Boolean) ?? null;
 }
 
 export function derivativePlan(asset: MediaAsset): Array<{ variant: MediaVariant; maxWidth: number }> {

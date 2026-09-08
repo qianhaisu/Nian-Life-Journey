@@ -14,5 +14,5 @@ export function locationForMedia(store: Store, media: Media, variant: MediaVaria
 }
 
 export function deliveryUrl(media: Media, location?: MediaLocation) {
-  return location && location.provider === "hot" && location.variant !== "original" ? mediaDeliveryUrl(media.id, location.variant) : normalizeMediaUrl(media.src);
+  return location && (location.provider === "hot" || location.provider === "oss") && location.variant !== "original" ? mediaDeliveryUrl(media.id, location.variant) : normalizeMediaUrl(media.src);
 }

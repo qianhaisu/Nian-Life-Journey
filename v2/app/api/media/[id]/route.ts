@@ -1,5 +1,5 @@
 import { getMediaForDelivery } from "@/lib/db/repository";
-import { hotStorage, selectLocation } from "@/lib/storage/hot-storage";
+import { getStorageForProvider, selectLocation } from "@/lib/storage/hot-storage";
 import type { MediaVariant } from "@/lib/types";
 import { NextResponse } from "next/server";
 
@@ -14,9 +14,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (value === "original") return new NextResponse("Original media is not available through page delivery", { status: 404, headers: NOT_CACHEABLE });
   const requested: MediaVariant = value === "thumbnail" || value === "poster" || value === "preview" || value === "document_preview" ? value : "web";
   const location = selectLocation(locations, asset, requested);
-  // This route is deliberately Hot Storage only. Original retrieval is an
-  // authenticated connector/admin workflow and is never a page image URL.
-  if (!location || location.provider !== "hot" || location.variant === "original" || !location.providerRef.startsWith("media/")) return new NextResponse("Media derivative is not ready", { status: 404, headers: NOT_CACHEABLE });
+  // This route is deliberately object-storage-derivative only (Phase 3B1: "hot" R2/local or
+  // "oss"). Original retrieval is an authenticated connector/admin workflow and is never a page
+  // image URL — quark/wechat provider rows are never selected here regardless of variant.
+  if (!location || (location.provider !== "hot" && location.provider !== "oss") || location.variant === "original" || !location.providerRef.startsWith("media/")) return new NextResponse("Media derivative is not ready", { status: 404, headers: NOT_CACHEABLE });
 
   // id + variant fully determine the bytes at this URL — content never changes for a given
   // (id, variant), so this is safe to cache for a year at both the browser and the CDN.
@@ -26,18 +27,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const contentType = location.mimeType || media.mimeType || "application/octet-stream";
 
-  // Stream straight from the origin (R2/local disk) so TTFB isn't gated on the
-  // whole derivative arriving before we can write a single response byte —
-  // this is the difference that matters on a cache MISS (first view of a
-  // photo), since a cache HIT is already served by the CDN before this code runs.
-  const stream = await hotStorage.getStream(location.providerRef);
+  // Stream straight from the origin (R2/local disk, or OSS) so TTFB isn't gated on the whole
+  // derivative arriving before we can write a single response byte — this is the difference that
+  // matters on a cache MISS (first view of a photo), since a cache HIT is already served by the
+  // CDN before this code runs. Which backend that origin actually is comes from this location's
+  // own `provider`, never from a single fixed instance (see getStorageForProvider's doc comment).
+  const storage = getStorageForProvider(location.provider);
+  const stream = await storage.getStream(location.providerRef);
   if (stream) {
     const headers: Record<string, string> = { "Content-Type": contentType, ...cacheHeaders };
     if (location.fileSize) headers["Content-Length"] = String(location.fileSize);
     return new NextResponse(stream, { headers });
   }
 
-  const data = await hotStorage.get(location.providerRef);
+  const data = await storage.get(location.providerRef);
   if (!data) return new NextResponse("Media derivative is not ready", { status: 404, headers: NOT_CACHEABLE });
   return new NextResponse(data as BodyInit, { headers: { "Content-Type": contentType, "Content-Length": String(data.byteLength), ...cacheHeaders } });
 }

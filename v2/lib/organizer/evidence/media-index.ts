@@ -61,13 +61,14 @@ export function buildMediaIndex(media: readonly MediaRow[], locations: readonly 
   const index = new Map<string, MediaIndexEntry>();
   for (const row of media) {
     const assetLocations = row.mediaAssetId ? byAsset.get(row.mediaAssetId) ?? [] : [];
-    // A renderable copy is a hot derivative — that is exactly what the delivery route serves, and
-    // an `original` sitting in the source provider is not renderable however healthy it looks.
-    const hasDerivative = assetLocations.some((l) => l.provider === "hot" && l.variant !== "original" && usable(l.status));
+    // A renderable copy is a hot or OSS derivative (Phase 3B1) — that is exactly what the delivery
+    // route serves, and an `original` sitting in the source provider is not renderable however
+    // healthy it looks.
+    const hasDerivative = assetLocations.some((l) => (l.provider === "hot" || l.provider === "oss") && l.variant !== "original" && usable(l.status));
     const hasOriginal = assetLocations.some((l) => l.variant === "original" && usable(l.status));
-    // The provider of the ORIGINAL is where the media actually came from; hot storage is only where
-    // a copy of it lives, so it must never be reported as the provider.
-    const originProvider = row.provider ?? assetLocations.find((l) => l.variant === "original" && l.provider !== "hot")?.provider;
+    // The provider of the ORIGINAL is where the media actually came from; hot/OSS storage is only
+    // where a copy of it lives, so it must never be reported as the provider.
+    const originProvider = row.provider ?? assetLocations.find((l) => l.variant === "original" && l.provider !== "hot" && l.provider !== "oss")?.provider;
 
     index.set(row.mediaId, {
       mediaAssetId: row.mediaAssetId ?? undefined,

@@ -1,5 +1,5 @@
 import { getStore } from "@/lib/db/repository";
-import { hotStorage, selectLocation } from "@/lib/storage/hot-storage";
+import { getStorageForProvider, selectLocation } from "@/lib/storage/hot-storage";
 import type { MediaAsset, MediaLocation, RawSource } from "@/lib/types";
 import type { OrganizerMediaInput } from "./types";
 
@@ -26,8 +26,8 @@ function chooseRepresentative<T>(items: T[], limit: number) {
   return result;
 }
 
-// The resolver intentionally reads only ready Hot Storage derivatives. It has
-// no path to Quark originals and never emits a public URL.
+// The resolver intentionally reads only ready object-storage derivatives (Phase 3B1: "hot"
+// R2/local or "oss"). It has no path to Quark originals and never emits a public URL.
 export class HotStorageMediaInputResolver implements MediaInputResolver {
   async resolve(sources: RawSource[], maxInputs = maxImageInputs()) {
     const store = await getStore();
@@ -40,7 +40,7 @@ export class HotStorageMediaInputResolver implements MediaInputResolver {
         const locations = store.mediaLocations.filter((item) => item.mediaAssetId === asset.id);
         const requested = asset.mediaType === "video" ? "poster" as const : "thumbnail" as const;
         const location = selectLocation(locations, asset, requested);
-        if (!location || location.provider !== "hot" || location.status !== "ready" || !location.providerRef.startsWith("media/")) continue;
+        if (!location || (location.provider !== "hot" && location.provider !== "oss") || location.status !== "ready" || !location.providerRef.startsWith("media/")) continue;
         candidates.push({ source, mediaId, asset, location });
       }
     }
@@ -51,7 +51,7 @@ export class HotStorageMediaInputResolver implements MediaInputResolver {
     const selected = chooseRepresentative(candidates, Math.min(6, maxInputs));
     const inputs: OrganizerMediaInput[] = [];
     for (const item of selected) {
-      const bytes = await hotStorage.get(item.location.providerRef);
+      const bytes = await getStorageForProvider(item.location.provider).get(item.location.providerRef);
       if (!bytes) continue;
       inputs.push({ sourceId: item.source.id, mediaId: item.mediaId, variant: item.location.variant as "thumbnail" | "web" | "poster", mimeType: item.location.mimeType ?? item.asset.mimeType, bytes, width: item.location.width ?? item.asset.width, height: item.location.height ?? item.asset.height });
     }

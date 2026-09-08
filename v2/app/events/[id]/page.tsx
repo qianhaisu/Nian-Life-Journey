@@ -15,18 +15,21 @@ import { timeSignatureFor } from "@/lib/time-signature";
 
 // 2026-09-06 incident (docs/INCIDENT-2026-09-06-neon-egress.md §3.2): generateStaticParams used
 // to prerender every publishable event (651 and growing) on every build, each pulling the full
-// raw_sources table via getEventDetail's unbounded reads — tens of GB of egress per build,
-// same order of magnitude as the day's $87.86 bill. Returning [] here means no event page is
-// built ahead of time; a page is still fully reachable, just generated on first request and then
-// ISR-cached (the same pattern already used by app/memory/[year]/page.tsx for years absent from
-// its own generateStaticParams). Do not revert this to "prerender everything" without re-reading
-// that incident report.
+// raw_sources table via getEventDetail's THEN-unbounded reads — tens of GB of egress per build,
+// same order of magnitude as the day's $87.86 bill. getEventDetail itself was narrowed to
+// id-scoped queries by A-12-1/A-12-2 and Phase 3A (2026-09-08, docs/migration-C-readiness.md
+// §2.1) — the remaining reason to keep this returning [] is build-time cost: prebuilding all 651+
+// pages on every deploy is still wasted work when ISR already serves them on first request.
+// Returning [] here means no event page is built ahead of time; a page is still fully reachable,
+// just generated on first request and then ISR-cached (the same pattern already used by
+// app/memory/[year]/page.tsx for years absent from its own generateStaticParams). Do not revert
+// this to "prerender everything" without re-reading that incident report.
 export async function generateStaticParams() { return []; }
 export const revalidate = 300;
 
-// Request-scoped memoization: generateMetadata and the page body both need the same event, and
-// getEventDetail does several unbounded reads (see the incident note above) — cache() collapses
-// the two calls into one actual fetch per request instead of two.
+// Request-scoped memoization: generateMetadata and the page body both need the same event.
+// getEventDetail's reads are id-scoped (not unbounded — see the note above), but this page still
+// calls it twice per request (metadata + body); cache() collapses that into one actual fetch.
 const getCachedEventDetail = cache(getEventDetail);
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {

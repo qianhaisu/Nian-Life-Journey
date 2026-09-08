@@ -5,7 +5,7 @@ import { appendUpload, enqueueOrganizerJob, markSourcesProcessing, newId, undoOr
 import { kickOrganizerWorker } from "@/lib/organizer/kick";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
-import { hotStorage } from "@/lib/storage/hot-storage";
+import { activeMediaProvider, getStorageForProvider, hotStorage } from "@/lib/storage/hot-storage";
 import type { Media, MediaAsset, MediaLocation, RawSource, SourceType, Visibility } from "@/lib/types";
 
 const allowed = new Map<string, [string, number]>([
@@ -43,16 +43,22 @@ export async function captureSources(formData: FormData) {
     const dimensions: { width?: number; height?: number } = type === "photo" ? await sourceImageMetadata(bytes) : {};
     const asset: MediaAsset = { id: assetId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaType: type, mimeType: file.type, width: dimensions.width, height: dimensions.height, originalFilename: file.name, checksum, archiveStatus: "awaiting_archive", createdAt: now };
     assets.push(asset);
+    // The original always stays on the "hot" R2/local staging tier regardless of
+    // MEDIA_STORAGE_PROVIDER — it feeds the awaiting_archive → Quark pipeline (lib/archive/quark-
+    // archive.ts), which is untouched by Phase 3B1 and still keyed strictly on provider "hot".
     locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant: "original", providerRef: objectKey, mimeType: file.type, fileSize: file.size, width: dimensions.width, height: dimensions.height, status: "awaiting_archive", createdAt: now, updatedAt: now });
+    // Phase 3B1: only the delivered derivative copies follow activeMediaProvider().
+    const derivativeProvider = activeMediaProvider();
+    const derivativeStorage = getStorageForProvider(derivativeProvider);
     try {
       for (const derivative of await createDerivatives(asset, bytes)) {
         const extension = derivative.mimeType === "image/webp" ? "webp" : "svg";
         const derivativeKey = `media/derivatives/${assetId}/${derivative.variant}.${extension}`;
-        await hotStorage.put({ key: derivativeKey, body: derivative.body, mimeType: derivative.mimeType });
-        locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant: derivative.variant, providerRef: derivativeKey, mimeType: derivative.mimeType, fileSize: derivative.body.byteLength, width: derivative.width, height: derivative.height, status: "ready", createdAt: now, updatedAt: now });
+        await derivativeStorage.put({ key: derivativeKey, body: derivative.body, mimeType: derivative.mimeType });
+        locations.push({ id: newId("location"), mediaAssetId: assetId, provider: derivativeProvider, variant: derivative.variant, providerRef: derivativeKey, mimeType: derivative.mimeType, fileSize: derivative.body.byteLength, width: derivative.width, height: derivative.height, status: "ready", createdAt: now, updatedAt: now });
       }
     } catch {
-      for (const variant of type === "photo" ? ["thumbnail", "web"] as const : type === "video" ? ["poster"] as const : ["document_preview"] as const) locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant, providerRef: "", status: "pending", createdAt: now, updatedAt: now });
+      for (const variant of type === "photo" ? ["thumbnail", "web"] as const : type === "video" ? ["poster"] as const : ["document_preview"] as const) locations.push({ id: newId("location"), mediaAssetId: assetId, provider: derivativeProvider, variant, providerRef: "", status: "pending", createdAt: now, updatedAt: now });
     }
     const width = dimensions.width ?? (type === "document" ? 960 : 1280);
     const height = dimensions.height ?? (type === "document" ? 1280 : type === "video" ? 720 : 900);

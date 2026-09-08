@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { appendUpload, enqueueOrganizerJob, getStore, markSourcesProcessing, newId } from "@/lib/db/repository";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
-import { hotStorage } from "@/lib/storage/hot-storage";
+import { activeMediaProvider, getStorageForProvider } from "@/lib/storage/hot-storage";
 import type { Media, MediaAsset, MediaLocation, MediaType, RawSource } from "@/lib/types";
 
 export type QuarkScope = { folder?: string; from?: string; to?: string; query?: string; cursor?: string };
@@ -82,11 +82,16 @@ export async function ingestQuarkFile(file: QuarkFile, options: QuarkImportOptio
   const locations: MediaLocation[] = [{ id: newId("location"), mediaAssetId: assetId, provider: "quark", variant: "original", providerRef: file.providerRef, mimeType: file.mimeType, fileSize: file.size ?? bytes?.byteLength, width: dimensions.width, height: dimensions.height, status: "archived", quarkPathSnapshot: file.path, createdAt: now, updatedAt: now }];
 
   if (bytes) {
+    // Phase 3B1: which tier a new derivative lands in follows activeMediaProvider() — "oss" once
+    // Teddy flips MEDIA_STORAGE_PROVIDER, "hot" (R2/local, unchanged) otherwise. The original above
+    // stays "quark" either way; only the derivative copy's storage tier is affected.
+    const provider = activeMediaProvider();
+    const storage = getStorageForProvider(provider);
     for (const derivative of await createDerivatives(asset, bytes)) {
       const extension = derivative.mimeType === "image/webp" ? "webp" : "svg";
       const key = `media/derivatives/${assetId}/${derivative.variant}.${extension}`;
-      await hotStorage.put({ key, body: derivative.body, mimeType: derivative.mimeType });
-      locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant: derivative.variant, providerRef: key, mimeType: derivative.mimeType, fileSize: derivative.body.byteLength, width: derivative.width, height: derivative.height, status: "ready", createdAt: now, updatedAt: now });
+      await storage.put({ key, body: derivative.body, mimeType: derivative.mimeType });
+      locations.push({ id: newId("location"), mediaAssetId: assetId, provider, variant: derivative.variant, providerRef: key, mimeType: derivative.mimeType, fileSize: derivative.body.byteLength, width: derivative.width, height: derivative.height, status: "ready", createdAt: now, updatedAt: now });
     }
   }
 

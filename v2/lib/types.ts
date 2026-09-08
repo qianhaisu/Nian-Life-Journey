@@ -1,6 +1,9 @@
 export type Visibility = "private" | "family" | "public";
 export type MediaType = "photo" | "video" | "document";
-export type MediaProvider = "quark" | "hot" | "wechat";
+// Phase 3B1: "oss" is a new derivative-storage tier, additive alongside the legacy R2/local
+// "hot" tier — the `provider` DB column is plain text (v2/lib/db/schema.ts), so this needed no
+// migration SQL, only this type and the read/write routing in lib/storage/hot-storage.ts.
+export type MediaProvider = "quark" | "hot" | "oss" | "wechat";
 export type MediaVariant = "original" | "thumbnail" | "web" | "poster" | "preview" | "document_preview";
 export type ArchiveStatus = "awaiting_archive" | "archiving" | "archived" | "archive_failed" | "paused_auth_required";
 export type MediaLocationStatus = "pending" | "ready" | "awaiting_archive" | "archiving" | "archived" | "archive_failed" | "paused_auth_required";
