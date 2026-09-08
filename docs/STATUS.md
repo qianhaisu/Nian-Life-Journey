@@ -3666,3 +3666,67 @@ Commit: `6b3d43b`，已 push `main`。
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
+
+## MIG-C-Phase3B2b：打通真实 Quark CLI 入口的 OSS 配置（2026-09-08）
+
+1. 本轮线上多了什么家人能读的东西：无——只改 CLI 入口守卫逻辑并离线验证
+   （`DATABASE_URL` 指向本机不可达端口，OSS_*/R2_* 全部用假值），未连接任何云服务/生产库，
+   未运行真实 importer。`MEDIA_STORAGE_PROVIDER` 仍未在生产设为 `oss`，行为不变。
+2. 没做到什么 / 最大的已知 blocker：`scripts/quark-heic-ingest-linux.mjs` 是另一 session
+   未提交的工作区文件，仍带自己的 `MEDIA_STORAGE_PROVIDER !== "r2"` 硬闸——按任务要求禁止编辑，
+   未触碰。
+3. 下一件事：本轮到此为止，不开始真实 R2→OSS 搬运；若要真正切到 OSS，仍需要 Teddy 决定
+   OSS 账号/bucket 配置并显式设置 `HOT_STORAGE_BACKEND=r2`（见 Phase 3B1-fix 条目的环境变量
+   组合表）。
+
+**真实命令调用链**（先画清链路，避免只改未被调用的脚本）：
+- `npm run quark:sync:apply` → `tools/quark-connector/apply-artifact.ts` →（动态 import）
+  `scripts/quark-photo-apply.mjs` 的 `applyQuarkPhotoArtifact`。这是唯一挂在 `package.json`
+  里的入口。
+- `scripts/quark-heic-ingest.mjs`、`quark-history-init.mjs`、`quark-photo-init.mjs`：
+  一次性历史批次脚本，不在 `package.json` 里，直接 `node --import tsx scripts/X.mjs` 手动跑，
+  但都直接 import 同一个 `applyQuarkPhotoArtifact`——本轮一并修，是因为任务明确点名，
+  不是因为它们在 npm 命令链路上。
+
+**核心修复**：新增 `scripts/quark-storage-guard.mjs` 导出 `requireQuarkStorageProvider()`，
+四个入口都改成调用它，不再各自硬编码判断。它比 `lib/storage/hot-storage.ts` 的
+`activeMediaProvider()` 更严格——只接受精确的 `"r2"`/`"oss"`，未知值（含未设置）一律在任何
+DB/对象写入前失败，因为这些一次性导入的写入是永久性的，静默落到本地磁盘会造成真实数据丢失
+风险（`activeMediaProvider()` 的宽松默认是给活跃 app 的读写路由用的，语义不同）。变量校验
+复用既有的 `getR2Config()`/`getOssConfig()`，不重复四份变量清单。
+
+**测试**（新增 8 项）：
+- `test/quark-storage-guard.test.mjs`（5 项）：r2 通过标记 hot、oss 通过标记 oss、未知值
+  在任何写入前失败、oss 缺变量失败且不要求 R2 凭据、r2 缺变量失败且不要求 OSS 凭据。
+- `test/quark-cli-entrypoints.test.mjs`（3 项）：真的 spawn `npm run quark:sync:apply` 的
+  实际入口（`apply-artifact.ts`），`DATABASE_URL` 指向 `127.0.0.1:1`（立即拒绝连接，不碰
+  真实网络/数据库）验证真实调用链：① dry-run 完全不提 `MEDIA_STORAGE_PROVIDER`；②
+  `--apply` + `MEDIA_STORAGE_PROVIDER=oss` + 完整 OSS_* 配置能走到数据库依赖的 apply 核心
+  （报错是数据库查询失败，不是守卫拒绝——证明确实穿透到了已适配 OSS 的核心）；③ 未知
+  provider 立即失败，报错不含数据库查询痕迹。未包含"r2 配置通过真实 CLI"用例——本机
+  `.env.local` 已配置真实 R2 凭据，dotenv 默认不覆盖已设置的变量，故意省略 R2_* 会被
+  `.env.local` 悄悄补回，无法做成确定性的"缺变量"测试；这个场景已由
+  `quark-storage-guard.test.mjs` 的直接单元测试（传显式 env 对象，不经过 dotenv）精确覆盖。
+
+**剩余 R2 专用代码及原因**：
+- `lib/storage/hot-storage.ts` 的 `resolveHotBackend()`——基础设施，未改。
+- `app/actions.ts` 的 original 写入——固定 `"hot"`，因为要喂 Quark 归档 staging 管线
+  （`lib/archive/quark-archive.ts`），本轮按要求（第 8 条）未碰。
+- `scripts/quark-heic-ingest-direct.mjs` 自建的 R2/OSS 客户端——Phase 3B2 已经做成
+  provider-aware，是该脚本自己独立的实现（因为它刻意避免 `--import tsx`/drizzle 的启动开销，
+  见文件头注释），不是需要合并的重复判断。
+- `scripts/quark-heic-ingest-linux.mjs`——未提交文件，按要求禁止编辑。
+
+**修改/新增文件**：`scripts/{quark-heic-ingest,quark-history-init,quark-photo-init}.mjs`、
+`tools/quark-connector/apply-artifact.ts`、新增 `scripts/quark-storage-guard.mjs` +
+`.d.mts`、新增 `test/quark-storage-guard.test.mjs` + `test/quark-cli-entrypoints.test.mjs`。
+
+**测试结果**：`npm run typecheck` 通过；`npm run lint` 通过；`npm test` 690 项，
+680 通过、10 跳过，0 失败（连续两次干净跑通；中途一次孤立 flake——`quark-artifact-ingest.test.mjs`
+里一个与本任务无关的既有测试偶发失败，单独重跑 3 次和随后两次完整 `npm test` 均通过，判定为
+瞬时环境抖动，非本次改动引入）；`npm run build` 成功（18 个静态页全部生成）。
+
+Commit: `c5a7cfa`，已 push `main`。
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
