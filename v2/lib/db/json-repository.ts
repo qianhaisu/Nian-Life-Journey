@@ -135,7 +135,25 @@ export function createJsonRepository(): Repository {
         mediaLocations: store.mediaLocations.filter((location) => assetIds.has(location.mediaAssetId)),
       };
     },
-    async getEventDetail(id: string) { const store = await readStore(); const event = store.events.find((item) => item.id === id); if (!event) return null; return { event, media: store.media.filter((item) => event.mediaIds.includes(item.id)), sources: store.rawSources.filter((item) => event.sourceIds.includes(item.id) && !item.deletedAt), contributors: store.contributors, growth: store.growthRecords.filter((item) => event.growthRecordIds.includes(item.id)), care: store.careRecords.filter((item) => event.careRecordIds.includes(item.id) && item.visibility !== "private") }; },
+    async getEventDetail(id: string) {
+      const store = await readStore();
+      const event = store.events.find((item) => item.id === id);
+      if (!event) return null;
+      const media = store.media.filter((item) => event.mediaIds.includes(item.id));
+      const assetIds = new Set(media.map((item) => item.mediaAssetId).filter((v): v is string => Boolean(v)));
+      return {
+        event,
+        media,
+        sources: store.rawSources.filter((item) => event.sourceIds.includes(item.id) && !item.deletedAt),
+        contributors: store.contributors,
+        growth: store.growthRecords.filter((item) => event.growthRecordIds.includes(item.id)),
+        care: store.careRecords.filter((item) => event.careRecordIds.includes(item.id) && item.visibility !== "private"),
+        links: store.links.filter((link) => link.lifeEventId === id),
+        mediaAssets: store.mediaAssets.filter((asset) => assetIds.has(asset.id)),
+        mediaLocations: store.mediaLocations.filter((location) => assetIds.has(location.mediaAssetId)),
+        birthDay: birthDayOf(store.profile),
+      };
+    },
     // Local dev store is small — no need for the PostgreSQL backend's scoped query, just filter the
     // whole (already in-memory) store down to the requested month.
     async getMonthArchive(month: string): Promise<MonthArchiveInput> {

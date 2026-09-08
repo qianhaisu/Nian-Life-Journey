@@ -42,6 +42,16 @@ export type EventDetail = {
   contributors: Contributor[];
   growth: GrowthRecord[];
   care: CareRecord[];
+  // Phase 3A (2026-09-08, docs/migration-C-readiness.md §2.1): app/events/[id]/page.tsx used to
+  // call getStore() just to filter its whole-archive links/mediaAssets/mediaLocations down to this
+  // one event's own rows. These three are scoped by the query itself — links by this event's id,
+  // mediaAssets/mediaLocations by the mediaAssetId set the `media` array above already carries.
+  links: SourceMemoryLink[];
+  mediaAssets: MediaAsset[];
+  mediaLocations: MediaLocation[];
+  // Same narrowing as MonthArchiveInput.birthDay below: the page only ever reads the birth date to
+  // compute an age, never the rest of the profile row.
+  birthDay?: string;
 };
 
 // Just enough of the Store to build ONE month's chapter (lib/memory-chapters.ts buildChapters +

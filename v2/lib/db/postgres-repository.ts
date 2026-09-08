@@ -591,7 +591,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       // array as "match nothing" for free, and a life_event legitimately can have zero sources,
       // zero media, etc. (e.g. a text-only memory has no mediaIds).
       const emptyRows: never[] = [];
-      const [mediaRows, sourceRows, growthRows, careRows, contributorRows] = await Promise.all([
+      const [mediaRows, sourceRows, growthRows, careRows, contributorRows, linkRows, profileRows] = await Promise.all([
         e.mediaIds.length ? db.select().from(t.media).where(inArray(t.media.id, e.mediaIds)) : Promise.resolve(emptyRows),
         e.sourceIds.length
           ? db.select({
@@ -610,19 +610,34 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         // a nanny, a teacher) — kept as a full read per the A-12-1 dispatch note. Not re-verified
         // against a live row count this round (see docs/STATUS.md: database is unreachable).
         db.select().from(t.contributors),
+        // Phase 3A: this event's own source→memory links, not the whole table filtered in JS.
+        db.select().from(t.sourceMemoryLinks).where(eq(t.sourceMemoryLinks.lifeEventId, id)),
+        // Phase 3A: same narrow birthDate-only select assembleMonthArchive already uses — the page
+        // needs an age, never the rest of the profile row.
+        db.select({ birthDate: t.profiles.birthDate }).from(t.profiles).where(eq(t.profiles.id, e.profileId)).limit(1),
       ]);
-      // A-12-2: these four are id-scoped by this one event's own arrays, so a large result here
+      const media = guardRowCount(mediaRows as unknown as Media[], "getEventDetail.media");
+      const assetIds = [...new Set(media.map((item) => item.mediaAssetId).filter((v): v is string => Boolean(v)))];
+      const [assetRows, locationRows] = await Promise.all([
+        assetIds.length ? db.select().from(t.mediaAssets).where(inArray(t.mediaAssets.id, assetIds)) : Promise.resolve(emptyRows),
+        assetIds.length ? db.select().from(t.mediaLocations).where(inArray(t.mediaLocations.mediaAssetId, assetIds)) : Promise.resolve(emptyRows),
+      ]);
+      // A-12-2: these are id-scoped by this one event's own arrays, so a large result here
       // would mean either a life_event with an implausibly large mediaIds/sourceIds/etc. array or
       // a future regression back toward an unscoped read — either way, worth surfacing immediately
       // rather than waiting for a bill. `contributors` stays unguarded: it is deliberately still a
       // full-table read (see comment above), so warning on it would just be permanent noise.
       return {
         event: e,
-        media: guardRowCount(mediaRows as unknown as Media[], "getEventDetail.media"),
+        media,
         sources: guardRowCount((sourceRows as unknown as RawSource[]).filter((item) => !item.deletedAt), "getEventDetail.sources"),
         contributors: contributorRows as Store["contributors"],
         growth: guardRowCount(growthRows as unknown as Store["growthRecords"], "getEventDetail.growth"),
         care: guardRowCount((careRows as unknown as Store["careRecords"]).filter((item) => item.visibility !== "private"), "getEventDetail.care"),
+        links: guardRowCount(linkRows as unknown as Store["links"], "getEventDetail.links"),
+        mediaAssets: guardRowCount(assetRows as unknown as MediaAsset[], "getEventDetail.mediaAssets"),
+        mediaLocations: guardRowCount(locationRows as unknown as MediaLocation[], "getEventDetail.mediaLocations"),
+        birthDay: birthDayOf(profileRows[0] as unknown as { birthDate?: string | null } | undefined),
       };
     },
     async getMonthArchive(month: string) { return assembleMonthArchive(month); },

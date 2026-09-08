@@ -5,12 +5,13 @@ import { cache } from "react";
 import { EvidenceList } from "@/components/evidence-list";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { TimeSignature } from "@/components/time-signature";
-import { getEventDetail, getStore } from "@/lib/db/repository";
+import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
+import { getEventDetail } from "@/lib/db/repository";
 import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { storyLayout } from "@/lib/media/presentation";
 import { mediaBindingTrusted } from "@/lib/organizer/quality-review";
-import { birthDayOf, timeSignatureFor } from "@/lib/time-signature";
+import { timeSignatureFor } from "@/lib/time-signature";
 
 // 2026-09-06 incident (docs/INCIDENT-2026-09-06-neon-egress.md §3.2): generateStaticParams used
 // to prerender every publishable event (651 and growing) on every build, each pulling the full
@@ -42,11 +43,10 @@ const GROWTH_LABEL: Record<string, string> = { language: "那时会说", motor: 
 // is the family's; the material is untouched.
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [detail, store] = await Promise.all([getCachedEventDetail(id), getStore()]);
+  const detail = await getCachedEventDetail(id);
   // An event that is not 张年's (a fixture profile's row reached by URL) is not a page in this book.
-  if (!detail || detail.event.profileId !== store.profile.id) notFound();
-  const { event, media: eventMedia, sources: eventSources, contributors, growth, care } = detail;
-  const eventLinks = store.links.filter((link) => link.lifeEventId === id);
+  if (!detail || detail.event.profileId !== CANONICAL_PROFILE_ID) notFound();
+  const { event, media: eventMedia, sources: eventSources, contributors, growth, care, links: eventLinks, mediaAssets, mediaLocations, birthDay } = detail;
   const sourceRoles: ReadonlyMap<string, "primary" | "supporting" | "context"> = new Map(
     eventLinks.map((link) => [link.rawSourceId, link.role as "primary" | "supporting" | "context"])
   );
@@ -55,9 +55,9 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   // reader can open. The evidence disclosure below is provenance: what the day really left behind,
   // where an undeliverable picture keeps its existence (type, time) but is never drawn as a broken
   // frame. The rows themselves stay in the archive untouched.
-  const deliverable = deliverableMediaIds({ media: eventMedia, mediaAssets: store.mediaAssets, mediaLocations: store.mediaLocations });
+  const deliverable = deliverableMediaIds({ media: eventMedia, mediaAssets, mediaLocations });
   const shownMedia = eventMedia.filter((item) => item.visibility !== "private" && deliverable.has(item.id));
-  const signature = timeSignatureFor(event.occurredAt, birthDayOf(store.profile));
+  const signature = timeSignatureFor(event.occurredAt, birthDay);
   const title = memoryTitle(event);
   // Story-layer media only when the binding can be believed (quality-review.ts). The legacy rule
   // organizer's same-day harvest bound flight screenshots to this archive's memories; those
