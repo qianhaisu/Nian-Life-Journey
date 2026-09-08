@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { applyQuarkPhotoArtifact } from "../scripts/quark-photo-apply.mjs";
+import { __setOssStorageForTests } from "../lib/storage/hot-storage.ts";
 
 function sha256Of(buf) {
   return createHash("sha256").update(buf).digest("hex");
@@ -150,6 +151,62 @@ test("apply mode writes storage and DB for a new JPEG and is idempotent on rerun
   assert.equal(calls2.enqueue.length, 0);
 
   await rm(dir, { recursive: true, force: true });
+});
+
+// Phase 3B2: unlike wechat-worker.ts, THIS module's original is a permanent copy (status
+// "archived" set once, no later Quark-archive step), so with MEDIA_STORAGE_PROVIDER=oss BOTH the
+// original and its derivatives must follow activeMediaProvider(). This drives the real call chain
+// (deps.hotStorage intentionally omitted, so applyQuarkPhotoArtifact resolves the real
+// lib/storage/hot-storage.ts module) with process.env.MEDIA_STORAGE_PROVIDER genuinely set to
+// "oss", substituting only the OSS singleton via __setOssStorageForTests so no network call
+// happens — proving location.provider === "oss" for the original AND the derivatives, not just
+// activeMediaProvider()'s return value.
+test("with MEDIA_STORAGE_PROVIDER=oss really set, an apply writes both original and derivatives through OSS and tags every location \"oss\"", async () => {
+  const bytes = Buffer.from("real-jpeg-bytes-for-oss-apply");
+  const newSha = sha256Of(bytes);
+  const dir = await mkdtemp(path.join(os.tmpdir(), "quark-apply-oss-"));
+  const artifactsDir = path.join(dir, "artifacts");
+  const originalsDir = path.join(dir, "originals");
+  await mkdir(artifactsDir, { recursive: true });
+  await mkdir(originalsDir, { recursive: true });
+  const filename = "oss-new.jpg";
+  const localPath = path.join(originalsDir, filename);
+  await writeFile(localPath, bytes);
+  await writeFile(path.join(artifactsDir, "task-items.jsonl"), JSON.stringify(taskItem({ filename, sha256: newSha, size: bytes.byteLength, local_path: localPath })) + "\n");
+
+  const previousEnv = process.env.MEDIA_STORAGE_PROVIDER;
+  const puts = [];
+  const fakeOss = {
+    put: async (input) => { puts.push(input); return { providerRef: input.key }; },
+    get: async () => null,
+    getStream: async () => null,
+    delete: async () => {},
+    verify: async () => ({ exists: false, checksumVerified: false }),
+    url: () => null,
+  };
+  __setOssStorageForTests(fakeOss);
+  process.env.MEDIA_STORAGE_PROVIDER = "oss";
+  try {
+    const repo = { async findMediaAssetByChecksum() { return null; }, appended: [], async appendUpload(input) { this.appended.push(input); return input.source; }, async enqueueOrganizerJob() { return { id: "job-oss", status: "pending" }; } };
+    const processing = { async sourceImageMetadata() { return { width: 100, height: 100 }; }, async createDerivatives() { return [{ variant: "web", body: Buffer.from("web-bytes"), mimeType: "image/webp", width: 50, height: 50 }]; } };
+    const paths = { mediaDeliveryUrl: (mediaId, variant) => `/api/media/${mediaId}?variant=${variant}` };
+    const deps = { repo, processing, paths };
+
+    const result = await applyQuarkPhotoArtifact({ artifactDir: dir, mode: "apply", permanentSkip: new Map(), organize: false, deps });
+
+    assert.equal(result.summary.newCount, 1);
+    assert.equal(puts.length, 2, "one original + one derivative, both through the fake OSS client");
+    assert.ok(puts.every((p) => p.key.startsWith("media/originals/") || p.key.startsWith("media/derivatives/")));
+    const locations = repo.appended[0].locations;
+    assert.equal(locations.length, 2);
+    assert.ok(locations.every((location) => location.provider === "oss"), "both the original and the derivative must be tagged \"oss\"");
+    assert.equal(locations.find((l) => l.variant === "original")?.status, "archived");
+  } finally {
+    __setOssStorageForTests(undefined);
+    if (previousEnv === undefined) delete process.env.MEDIA_STORAGE_PROVIDER;
+    else process.env.MEDIA_STORAGE_PROVIDER = previousEnv;
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("by default an apply ingests the photos and enqueues nothing, with no key present", async () => {

@@ -19,7 +19,11 @@ if (DRY_RUN) console.log("[dry-run mode]\n");
 
 process.env.REPOSITORY_BACKEND = "postgres";
 if (!process.env.DATABASE_URL) { console.error("DATABASE_URL required"); process.exit(1); }
-if (!DRY_RUN && process.env.MEDIA_STORAGE_PROVIDER !== "r2") { console.error("MEDIA_STORAGE_PROVIDER=r2 required for real run"); process.exit(1); }
+// Phase 3B2: this repair writes the SAME two tiers quark-photo-apply.mjs/quark-heic-ingest-
+// direct.mjs do (a permanent original, status "archived", never staged for later Quark archival)
+// — so it follows lib/storage/hot-storage.ts's activeMediaProvider() like they do, accepting
+// either "r2" (legacy, unchanged) or "oss" for a real run.
+if (!DRY_RUN && process.env.MEDIA_STORAGE_PROVIDER !== "r2" && process.env.MEDIA_STORAGE_PROVIDER !== "oss") { console.error('MEDIA_STORAGE_PROVIDER must be "r2" or "oss" for a real run'); process.exit(1); }
 
 const { default: pg } = await import("pg");
 const pgClient = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -60,8 +64,13 @@ const localFiles = await readdir(originalsRoot);
 const byFilename = new Map(localFiles.map(f => [f, path.join(originalsRoot, f)]));
 
 const { createDerivatives } = await import("../lib/media/processing.ts");
-const { hotStorage } = await import("../lib/storage/hot-storage.ts");
+const { activeMediaProvider, getStorageForProvider } = await import("../lib/storage/hot-storage.ts");
 const { findMediaAssetByChecksum, appendMediaAssetWithLocation } = await import("../lib/db/repository.ts");
+
+// Phase 3B2: both original and derivative are permanent copies here (see the guard block above),
+// so both follow the same provider decision — computed once for the whole run.
+const mediaProvider = DRY_RUN ? "hot" : activeMediaProvider();
+const hotStorage = DRY_RUN ? undefined : getStorageForProvider(mediaProvider);
 
 // appendMediaAssetWithLocation may not exist yet; we'll use direct SQL for location insert
 async function insertLocation(loc) {
@@ -118,7 +127,7 @@ for (const asset of missingLocations) {
   try {
     const originalKey = `media/originals/${assetId}${ext}`;
     await hotStorage.put({ key: originalKey, body: bytes, mimeType, checksum: rawSha, fileSize: bytes.byteLength });
-    await insertLocation({ id: `location-quark-sha-${rawSha}-original`, mediaAssetId: assetId, provider: "hot", variant: "original", providerRef: originalKey, mimeType, fileSize: bytes.byteLength, width: asset.width, height: asset.height, status: "archived" });
+    await insertLocation({ id: `location-quark-sha-${rawSha}-original`, mediaAssetId: assetId, provider: mediaProvider, variant: "original", providerRef: originalKey, mimeType, fileSize: bytes.byteLength, width: asset.width, height: asset.height, status: "archived" });
 
     const pseudoAsset = { id: assetId, mediaType: "photo", mimeType };
     const derivatives = await createDerivatives(pseudoAsset, bytes);
@@ -126,7 +135,7 @@ for (const asset of missingLocations) {
       const derivExt = deriv.mimeType === "image/webp" ? "webp" : "svg";
       const derivKey = `media/derivatives/${assetId}/${deriv.variant}.${derivExt}`;
       await hotStorage.put({ key: derivKey, body: deriv.body, mimeType: deriv.mimeType });
-      await insertLocation({ id: `location-quark-sha-${rawSha}-${deriv.variant}`, mediaAssetId: assetId, provider: "hot", variant: deriv.variant, providerRef: derivKey, mimeType: deriv.mimeType, fileSize: deriv.body.byteLength, width: deriv.width, height: deriv.height, status: "ready" });
+      await insertLocation({ id: `location-quark-sha-${rawSha}-${deriv.variant}`, mediaAssetId: assetId, provider: mediaProvider, variant: deriv.variant, providerRef: derivKey, mimeType: deriv.mimeType, fileSize: deriv.body.byteLength, width: deriv.width, height: deriv.height, status: "ready" });
     }
 
     console.log(`  [OK] ${filename}: uploaded original + ${derivatives.length} derivatives`);

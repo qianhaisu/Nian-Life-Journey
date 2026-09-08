@@ -64,12 +64,12 @@ async function ingestOne(item, ctx) {
 
   const originalKey = `media/originals/${assetId}${item.ext}`;
   await ctx.hotStorage.put({ key: originalKey, body: bytes, mimeType: item.format_type, checksum: sha256, fileSize: bytes.byteLength });
-  const locations = [{ id: `location-quark-sha-${sha256}-original`, mediaAssetId: assetId, provider: "hot", variant: "original", providerRef: originalKey, mimeType: item.format_type, fileSize: bytes.byteLength, width: dims.width, height: dims.height, status: "archived", createdAt: now, updatedAt: now }];
+  const locations = [{ id: `location-quark-sha-${sha256}-original`, mediaAssetId: assetId, provider: ctx.mediaProvider, variant: "original", providerRef: originalKey, mimeType: item.format_type, fileSize: bytes.byteLength, width: dims.width, height: dims.height, status: "archived", createdAt: now, updatedAt: now }];
   for (const derivative of await ctx.createDerivatives(asset, bytes)) {
     const extension = derivative.mimeType === "image/webp" ? "webp" : "svg";
     const key = `media/derivatives/${assetId}/${derivative.variant}.${extension}`;
     await ctx.hotStorage.put({ key, body: derivative.body, mimeType: derivative.mimeType });
-    locations.push({ id: `location-quark-sha-${sha256}-${derivative.variant}`, mediaAssetId: assetId, provider: "hot", variant: derivative.variant, providerRef: key, mimeType: derivative.mimeType, fileSize: derivative.body.byteLength, width: derivative.width, height: derivative.height, status: "ready", createdAt: now, updatedAt: now });
+    locations.push({ id: `location-quark-sha-${sha256}-${derivative.variant}`, mediaAssetId: assetId, provider: ctx.mediaProvider, variant: derivative.variant, providerRef: key, mimeType: derivative.mimeType, fileSize: derivative.body.byteLength, width: derivative.width, height: derivative.height, status: "ready", createdAt: now, updatedAt: now });
   }
 
   const source = { id: sourceId, profileId: ctx.profileId, sourceType: "family_photo", contentTypes: ["daily", "family"], contributorId: ctx.contributorId, capturedAt, importedAt: now, mediaIds: [mediaId], sourceLabel: ctx.sourceLabel, visibility: ctx.visibility, status: "uploaded", originalFilename: item.filename, metadata: { provider: "quark", checksum: sha256 } };
@@ -137,7 +137,17 @@ export async function applyQuarkPhotoArtifact(config) {
 
   const repo = deps.repo ?? (await import("../lib/db/repository.ts"));
   const { sourceImageMetadata, createDerivatives } = deps.processing ?? (await import("../lib/media/processing.ts"));
-  const hotStorage = deps.hotStorage ?? (await import("../lib/storage/hot-storage.ts")).hotStorage;
+  // Phase 3B2: unlike wechat-worker.ts/app/actions.ts, THIS module's "original" write is a
+  // permanent copy (status: "archived" below, set once at ingest — there is no later Quark
+  // archive step for it), the same tier as the derivatives. So both follow the same provider
+  // decision, mirroring lib/storage/hot-storage.ts's activeMediaProvider()/getStorageForProvider()
+  // — decoupled the same way Phase 3B1-fix decoupled them there. `deps.hotStorage`, when given
+  // (existing tests), is a full override: it is used for every write AND tagged "hot", exactly
+  // the pre-3B2 behavior, since a test-injected client's own provider is not this module's to
+  // guess.
+  const storageModule = deps.hotStorage ? undefined : (await import("../lib/storage/hot-storage.ts"));
+  const mediaProvider = deps.hotStorage ? "hot" : storageModule.activeMediaProvider();
+  const hotStorage = deps.hotStorage ?? storageModule.getStorageForProvider(mediaProvider);
   const { mediaDeliveryUrl } = deps.paths ?? (await import("../lib/media/paths.ts"));
   // Imported only when this run will actually organize. A run that only ingests must not so much
   // as load the worker module, so there is no reachable path from here to an AI provider.
@@ -159,7 +169,7 @@ export async function applyQuarkPhotoArtifact(config) {
       ? await (await import("../lib/db/client.ts")).getMediaAssetChecksumIndex()
       : new Map();
 
-  const ctx = { repo, sourceImageMetadata, createDerivatives, hotStorage, mediaDeliveryUrl, profileId, contributorId, visibility, sourceLabel, originalsDir: resolvedOriginals, mode, existingAssetsByChecksum };
+  const ctx = { repo, sourceImageMetadata, createDerivatives, hotStorage, mediaProvider, mediaDeliveryUrl, profileId, contributorId, visibility, sourceLabel, originalsDir: resolvedOriginals, mode, existingAssetsByChecksum };
 
   // Fail-closed preflight (apply only): if this run would ingest any NEW photo, the Organizer will
   // be drained and needs Gemini. Refuse BEFORE writing anything when Gemini is missing, so a partial

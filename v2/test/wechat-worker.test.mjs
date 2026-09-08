@@ -101,6 +101,72 @@ test("worker uploads one verified object set, persists family-visible evidence, 
   }
 });
 
+// Phase 3B2: the original and its derivatives no longer have to share one storage client. With
+// MEDIA_STORAGE_PROVIDER=oss really set on process.env, the original must still land on the
+// legacy "hot" client (it feeds the awaiting_archive → Quark pipeline, untouched by this round)
+// while the derivatives land on a DIFFERENT client and are tagged "oss" — proving the split by
+// checking which fake client actually received which put() calls, not just the location rows.
+test("with MEDIA_STORAGE_PROVIDER=oss, the original still uploads through originalStorage tagged \"hot\" while derivatives upload through derivativeStorage tagged \"oss\"", async () => {
+  const root = await createFixture();
+  const previousEnv = process.env.MEDIA_STORAGE_PROVIDER;
+  process.env.MEDIA_STORAGE_PROVIDER = "oss";
+  try {
+    const repository = createInMemoryRepository();
+    const originalStorage = new CountingStorage();
+    const derivativeStorage = new CountingStorage();
+    const options = { sourceRoot: root, profileId: "profile-wechat-oss-split-test", contributorId: "contributor-system", repository, originalStorage, derivativeStorage, leaseOwner: "synthetic-oss-split-worker", maxMessages: 100, maxMedia: 20, now: new Date().toISOString() };
+    const report = await runWechatImportWorker(options);
+    assert.equal(report.status, "completed_with_warnings");
+    assert.equal(report.uploadedObjects, 3, "one original + two derivatives (thumbnail, web)");
+    assert.equal(originalStorage.putCalls.length, 1, "only the original goes through originalStorage");
+    assert.ok(originalStorage.putCalls[0].key.startsWith("media/original/"));
+    assert.equal(derivativeStorage.putCalls.length, 2, "both derivatives go through derivativeStorage, not originalStorage");
+    assert.ok(derivativeStorage.putCalls.every((call) => call.key.startsWith("media/derivatives/")));
+
+    const store = await repository.getStore();
+    // A "wechat"-provider location (the raw chat-attachment reference, from buildWechatMessageItem
+    // in lib/ingest/wechat-import.ts) also has variant "original" — filter to the hot-staging one.
+    const original = store.mediaLocations.find((location) => location.variant === "original" && location.provider === "hot");
+    const derivatives = store.mediaLocations.filter((location) => location.variant !== "original");
+    assert.equal(original?.provider, "hot", "the original is unaffected by MEDIA_STORAGE_PROVIDER");
+    assert.equal(original?.status, "awaiting_archive");
+    assert.equal(derivatives.length, 2);
+    assert.ok(derivatives.every((location) => location.provider === "oss"), "every derivative must be tagged \"oss\" once MEDIA_STORAGE_PROVIDER=oss");
+    assert.ok(derivatives.every((location) => location.status === "ready"));
+  } finally {
+    if (previousEnv === undefined) delete process.env.MEDIA_STORAGE_PROVIDER;
+    else process.env.MEDIA_STORAGE_PROVIDER = previousEnv;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// A caller that still passes only the legacy single `storage` option (no originalStorage/
+// derivativeStorage) must keep getting EVERY upload through that one client, tagged "hot" for
+// both original and derivative — exactly the pre-3B2 behavior — even with MEDIA_STORAGE_
+// PROVIDER=oss set, since an explicit single-storage override takes precedence over env-driven
+// routing (see runWechatImportWorker's doc comment on originalStorage/derivativeStorage).
+test("the legacy single \"storage\" option still overrides both original and derivative uploads, even with MEDIA_STORAGE_PROVIDER=oss set", async () => {
+  const root = await createFixture();
+  const previousEnv = process.env.MEDIA_STORAGE_PROVIDER;
+  process.env.MEDIA_STORAGE_PROVIDER = "oss";
+  try {
+    const repository = createInMemoryRepository();
+    const storage = new CountingStorage();
+    const options = { sourceRoot: root, profileId: "profile-wechat-legacy-storage-test", contributorId: "contributor-system", repository, storage, leaseOwner: "synthetic-legacy-storage-worker", maxMessages: 100, maxMedia: 20, now: new Date().toISOString() };
+    const report = await runWechatImportWorker(options);
+    assert.equal(report.status, "completed_with_warnings");
+    assert.equal(storage.putCalls.length, 3, "every upload — original and both derivatives — goes through the single override");
+    const store = await repository.getStore();
+    // The "wechat"-provider location (a plain reference row, never uploaded through any storage
+    // client) is unaffected either way — only "hot" vs "oss" is what this test is checking.
+    assert.ok(store.mediaLocations.filter((location) => location.provider !== "wechat").every((location) => location.provider === "hot"), "the legacy single-storage override still tags everything \"hot\", not \"oss\"");
+  } finally {
+    if (previousEnv === undefined) delete process.env.MEDIA_STORAGE_PROVIDER;
+    else process.env.MEDIA_STORAGE_PROVIDER = previousEnv;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("conversationIndex selects a specific conversation deterministically, and an out-of-range index is rejected instead of silently falling back", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "nianlife-wechat-conv-index-"));
   try {

@@ -32,9 +32,26 @@ process.env.REPOSITORY_BACKEND = "postgres";
 
 const DB_URL = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 if (!DB_URL) { console.error("DATABASE_URL required"); process.exit(1); }
-if (process.env.MEDIA_STORAGE_PROVIDER !== "r2") { console.error("MEDIA_STORAGE_PROVIDER must be r2"); process.exit(1); }
-for (const v of ["R2_ACCOUNT_ID","R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY","R2_BUCKET"]) {
-  if (!process.env[v]) { console.error(`${v} required`); process.exit(1); }
+
+// Phase 3B2: unlike wechat-worker.ts/app/actions.ts, THIS script's "original" write is not a
+// staging copy pending Quark archival — it writes status: "archived" directly (see below), i.e.
+// the object it puts IS the permanent copy, same tier as the derivatives. So both original and
+// derivative here follow the same provider decision, mirroring
+// v2/lib/storage/hot-storage.ts's activeMediaProvider()/resolveHotBackend() semantics without
+// importing that module (this script intentionally avoids --import tsx/drizzle for startup
+// memory — see the file header). MEDIA_STORAGE_PROVIDER=oss routes both to OSS and tags
+// provider "oss"; anything else (including unset) keeps the exact prior behavior: R2, tagged
+// "hot". There is no HOT_STORAGE_BACKEND equivalent here because this script has no "existing
+// hot rows" concern — every row it writes is new, created in this same run.
+const ACTIVE_PROVIDER = process.env.MEDIA_STORAGE_PROVIDER === "oss" ? "oss" : "hot";
+if (ACTIVE_PROVIDER === "hot") {
+  for (const v of ["R2_ACCOUNT_ID","R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY","R2_BUCKET"]) {
+    if (!process.env[v]) { console.error(`${v} required (MEDIA_STORAGE_PROVIDER is not "oss", so R2 is the active backend)`); process.exit(1); }
+  }
+} else {
+  for (const v of ["OSS_ENDPOINT","OSS_REGION","OSS_ACCESS_KEY_ID","OSS_ACCESS_KEY_SECRET","OSS_BUCKET"]) {
+    if (!process.env[v]) { console.error(`${v} required (MEDIA_STORAGE_PROVIDER=oss)`); process.exit(1); }
+  }
 }
 
 // --- Constants ---
@@ -70,16 +87,23 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
 });
 
-// --- R2 client ---
-const s3 = new S3Client({
-  region: "auto",
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  },
-});
-const R2_BUCKET = process.env.R2_BUCKET;
+// --- Object storage client: R2 (default) or OSS (MEDIA_STORAGE_PROVIDER=oss) ---
+const s3 = ACTIVE_PROVIDER === "oss"
+  ? new S3Client({
+      region: process.env.OSS_REGION,
+      endpoint: process.env.OSS_ENDPOINT,
+      forcePathStyle: true,
+      credentials: { accessKeyId: process.env.OSS_ACCESS_KEY_ID, secretAccessKey: process.env.OSS_ACCESS_KEY_SECRET },
+    })
+  : new S3Client({
+      region: "auto",
+      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      },
+    });
+const BUCKET = ACTIVE_PROVIDER === "oss" ? process.env.OSS_BUCKET : process.env.R2_BUCKET;
 
 // --- Helpers ---
 function capturedAtIso(item) {
@@ -96,9 +120,9 @@ function eligibleItems(items) {
   );
 }
 
-async function r2Put(key, body, contentType) {
+async function objectPut(key, body, contentType) {
   await s3.send(new PutObjectCommand({
-    Bucket: R2_BUCKET,
+    Bucket: BUCKET,
     Key: key,
     Body: body,
     ContentType: contentType,
@@ -183,13 +207,13 @@ for (const item of items) {
     const originalKey = `media/originals/${assetId}${item.ext}`;
     const mediaSrc = `/api/media/${mediaId}?variant=web`;
 
-    // Upload original to R2
-    await r2Put(originalKey, bytes, item.format_type);
+    // Upload original — permanent copy, follows ACTIVE_PROVIDER (see the guard block above).
+    await objectPut(originalKey, bytes, item.format_type);
 
     const locations = [{
       id: `location-quark-sha-${sha256}-original`,
       mediaAssetId: assetId,
-      provider: "hot",
+      provider: ACTIVE_PROVIDER,
       variant: "original",
       providerRef: originalKey,
       mimeType: item.format_type,
@@ -206,11 +230,11 @@ for (const item of items) {
     for (const deriv of derivatives) {
       const ext = "webp";
       const key = `media/derivatives/${assetId}/${deriv.variant}.${ext}`;
-      await r2Put(key, deriv.body, deriv.mimeType);
+      await objectPut(key, deriv.body, deriv.mimeType);
       locations.push({
         id: `location-quark-sha-${sha256}-${deriv.variant}`,
         mediaAssetId: assetId,
-        provider: "hot",
+        provider: ACTIVE_PROVIDER,
         variant: deriv.variant,
         providerRef: key,
         mimeType: deriv.mimeType,
