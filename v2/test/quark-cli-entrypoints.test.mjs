@@ -9,10 +9,15 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const cliScript = path.join(process.cwd(), "tools", "quark-connector", "apply-artifact.ts");
 
-// Phase 3B2b: these exercise the REAL npm-script-wired entry point (`npm run quark:sync:apply` →
-// tools/quark-connector/apply-artifact.ts), proving the wiring end to end rather than just the
-// shared quark-storage-guard.mjs unit (see test/quark-storage-guard.test.mjs for that). None of
-// this connects to a real database, R2, or OSS: DATABASE_URL points at 127.0.0.1 on a port nothing
+// Phase 3B2b: these run the actual file `npm run quark:sync:apply` points at
+// (tools/quark-connector/apply-artifact.ts) via `node --import tsx`, directly — NOT through `npm
+// run` itself (no npm wrapper process, no package.json script resolution). Since package.json's
+// `quark:sync:apply` is defined as `tsx tools/quark-connector/apply-artifact.ts` with no other
+// logic in between, invoking that same file the same way is the same code path end to end; it
+// just skips npm's own process-spawning layer, which carries no logic of its own to verify. This
+// proves the wiring inside apply-artifact.ts itself, rather than just the shared
+// quark-storage-guard.mjs unit (see test/quark-storage-guard.test.mjs for that). None of this
+// connects to a real database, R2, or OSS: DATABASE_URL points at 127.0.0.1 on a port nothing
 // listens on, which fails fast and deterministically (connection refused) — that failure is itself
 // the proof the run got PAST the object-storage provider guard and reached the shared, DB-backed
 // apply core (scripts/quark-photo-apply.mjs), without ever making it to an actual query result.
@@ -37,12 +42,18 @@ const UNREACHABLE_DATABASE_URL = "postgres://127.0.0.1:1/nianlife-cli-test-unrea
 test("dry-run (no --apply) never requires MEDIA_STORAGE_PROVIDER/R2_*/OSS_* — the guard is not on this code path at all", async () => {
   const dir = await buildArtifact();
   try {
-    const env = { ...process.env, DATABASE_URL: UNREACHABLE_DATABASE_URL };
-    delete env.MEDIA_STORAGE_PROVIDER;
+    // Deliberately an obviously-invalid sentinel, NOT a deleted/unset var: dotenv's default
+    // (non-overriding) load only fills in a var that is ABSENT from process.env, so simply
+    // deleting MEDIA_STORAGE_PROVIDER here would let this machine's real .env.local (which
+    // carries production R2 credentials) silently refill it — and if the guard were wrongly
+    // invoked on this code path, a fully-configured real "r2" would let it PASS, hiding the bug
+    // this test exists to catch. A sentinel value dotenv will never overwrite (it's already set)
+    // guarantees that if the guard runs at all, it fails loudly and visibly.
+    const env = { ...process.env, DATABASE_URL: UNREACHABLE_DATABASE_URL, MEDIA_STORAGE_PROVIDER: "invalid-dry-run-sentinel" };
     const result = await execFileAsync(process.execPath, ["--import", "tsx", cliScript, "--artifact", dir], { env }).catch((error) => error);
     assert.notEqual(result.code, 0, "expected a failure — but from the unreachable database, not from a missing cloud credential");
     const combined = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-    assert.ok(!combined.includes("MEDIA_STORAGE_PROVIDER"), `dry-run must never mention the object-storage provider guard: ${combined}`);
+    assert.ok(!combined.includes("MEDIA_STORAGE_PROVIDER"), `dry-run must never mention the object-storage provider guard, even with an invalid value set: ${combined}`);
     assert.ok(/media_assets|ECONNREFUSED|Failed query/.test(combined), `expected a database-shaped failure, got: ${combined}`);
   } finally {
     await rm(dir, { recursive: true, force: true });

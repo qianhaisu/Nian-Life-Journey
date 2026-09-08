@@ -3698,15 +3698,23 @@ DB/对象写入前失败，因为这些一次性导入的写入是永久性的�
 **测试**（新增 8 项）：
 - `test/quark-storage-guard.test.mjs`（5 项）：r2 通过标记 hot、oss 通过标记 oss、未知值
   在任何写入前失败、oss 缺变量失败且不要求 R2 凭据、r2 缺变量失败且不要求 OSS 凭据。
-- `test/quark-cli-entrypoints.test.mjs`（3 项）：真的 spawn `npm run quark:sync:apply` 的
-  实际入口（`apply-artifact.ts`），`DATABASE_URL` 指向 `127.0.0.1:1`（立即拒绝连接，不碰
-  真实网络/数据库）验证真实调用链：① dry-run 完全不提 `MEDIA_STORAGE_PROVIDER`；②
-  `--apply` + `MEDIA_STORAGE_PROVIDER=oss` + 完整 OSS_* 配置能走到数据库依赖的 apply 核心
-  （报错是数据库查询失败，不是守卫拒绝——证明确实穿透到了已适配 OSS 的核心）；③ 未知
-  provider 立即失败，报错不含数据库查询痕迹。未包含"r2 配置通过真实 CLI"用例——本机
-  `.env.local` 已配置真实 R2 凭据，dotenv 默认不覆盖已设置的变量，故意省略 R2_* 会被
-  `.env.local` 悄悄补回，无法做成确定性的"缺变量"测试；这个场景已由
-  `quark-storage-guard.test.mjs` 的直接单元测试（传显式 env 对象，不经过 dotenv）精确覆盖。
+- `test/quark-cli-entrypoints.test.mjs`（3 项）：**订正**——这 3 项是用 `node --import tsx`
+  直接运行 `npm run quark:sync:apply` 指向的同一个文件（`apply-artifact.ts`），不是真的执行
+  `npm run quark:sync:apply` 本身（没有经过 npm 的包装进程）。因为 `package.json` 里
+  `quark:sync:apply` 的定义就是 `tsx tools/quark-connector/apply-artifact.ts`，中间没有其他
+  逻辑，所以直接跑同一个文件是同一条代码路径，功能结论仍然成立，只是跳过了 npm 自己的进程
+  派生层（那一层没有需要验证的逻辑）；上一版此处写的"真的 spawn `npm run quark:sync:apply`"
+  不准确，已订正。`DATABASE_URL` 指向 `127.0.0.1:1`（立即拒绝连接，不碰真实网络/数据库）
+  验证：① dry-run 完全不提 `MEDIA_STORAGE_PROVIDER`（`MEDIA_STORAGE_PROVIDER` 显式设为哨兵值
+  `invalid-dry-run-sentinel`，而不是删除该变量——删除会被 `.env.local` 里已有的真实配置通过
+  dotenv 的默认非覆盖加载悄悄补回，即使守卫被错误触发也可能因为凭据齐全而蒙混过关；用哨兵值
+  能保证守卫一旦被调用就必然可见地报错）；②`--apply` + `MEDIA_STORAGE_PROVIDER=oss` + 完整
+  OSS_* 配置能走到数据库依赖的 apply 核心（报错是数据库查询失败，不是守卫拒绝——证明确实
+  穿透到了已适配 OSS 的核心）；③ 未知 provider 立即失败，报错不含数据库查询痕迹。未包含
+  "r2 配置通过真实 CLI"用例——本机 `.env.local` 已配置真实 R2 凭据，dotenv 默认不覆盖已设置
+  的变量，故意省略 R2_* 会被 `.env.local` 悄悄补回，无法做成确定性的"缺变量"测试；这个场景
+  已由 `quark-storage-guard.test.mjs` 的直接单元测试（传显式 env 对象，不经过 dotenv）精确
+  覆盖。
 
 **剩余 R2 专用代码及原因**：
 - `lib/storage/hot-storage.ts` 的 `resolveHotBackend()`——基础设施，未改。
