@@ -3610,3 +3610,59 @@ Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
+
+## MIG-C-Phase3B2：补齐微信/Quark 剩余写入管线的 OSS 支持（2026-09-08）
+
+1. 本轮线上多了什么家人能读的东西：无——本轮只改代码并离线验证（不连接 Neon/R2/OSS/Vercel，
+   不跑真实 importer，不上传/复制/删除媒体），`MEDIA_STORAGE_PROVIDER` 仍未在生产设为 `oss`，
+   生产行为不变。
+2. 没做到什么 / 最大的已知 blocker：以下 4 个 Quark 包装脚本仍硬编码
+   `MEDIA_STORAGE_PROVIDER !== "r2"` 就拒绝运行，即使它们调用的共享核心
+   `quark-photo-apply.mjs` 本轮已经支持 OSS——本轮明确排除在范围外，未改：
+   `scripts/quark-heic-ingest.mjs`、`scripts/quark-history-init.mjs`、
+   `scripts/quark-photo-init.mjs`、`tools/quark-connector/apply-artifact.ts`
+   （这是 `npm run quark:sync:apply` 的真正 CLI 入口）。`scripts/quark-heic-ingest-linux.mjs`
+   是另一个 session 未提交的工作区文件，按保护规则未触碰。
+3. 下一件事：视 Teddy/Codex 优先级决定是否需要一个 Phase 3C 去放开上述 4 个包装脚本的
+   `MEDIA_STORAGE_PROVIDER` 门禁（它们的核心逻辑已经支持 oss，只是入口守卫过严）；本轮按要求
+   到此停止，不开始真实 R2→OSS 搬运。
+
+**各条管线 original/derivative 的目标 provider**（判断依据：original 是否会被后续 Quark
+归档步骤接手——是则永远 `hot`；不是（本身已是永久副本）则和 derivative 一起跟随
+`activeMediaProvider()`）：
+
+| 管线 | original | derivative | 判断依据 |
+|---|---|---|---|
+| `lib/ingest/wechat-worker.ts` | 永远 `hot`（`awaiting_archive`，等 Quark 归档） | 跟随 `activeMediaProvider()` | original 还要被 `lib/archive/quark-archive.ts` 接手搬去 Quark，未改 |
+| `app/actions.ts`（人工 capture） | 永远 `hot`（`awaiting_archive`，同上） | 跟随 `activeMediaProvider()` | 同上，Phase 3B1 已定，本轮只补注释 |
+| `scripts/quark-heic-ingest-direct.mjs` | 跟随 `activeMediaProvider()` | 跟随 `activeMediaProvider()` | original 直接写 `status: "archived"`——本身就是永久副本，没有归档后续步骤 |
+| `scripts/quark-photo-apply.mjs`（`quark-photo-init.mjs`/`quark-history-init.mjs`/`apply-artifact.ts`/`quark:sync:apply` 共用的唯一实现） | 跟随 `activeMediaProvider()` | 跟随 `activeMediaProvider()` | 同上，original 同样 `status: "archived"` |
+| `scripts/quark-repair-derivatives.mjs` | 跟随 `activeMediaProvider()` | 跟随 `activeMediaProvider()` | 修复的是同一批永久副本，同上判断 |
+
+**修改文件**：`v2/lib/ingest/wechat-worker.ts`、`v2/scripts/export-media-manifest.mjs`、
+`v2/scripts/quark-heic-ingest-direct.mjs`、`v2/scripts/quark-photo-apply.mjs`、
+`v2/scripts/quark-repair-derivatives.mjs`、`v2/test/quark-sync-apply.test.mjs`、
+`v2/test/wechat-worker.test.mjs`、新增 `v2/test/export-media-manifest.test.mjs`。
+
+**保留的 R2 专用代码及原因**：
+- `lib/archive/quark-archive.ts`——awaiting_archive→Quark 归档管线，严格按
+  `provider==="hot"` 过滤待归档 original，未改；这是 staging 层的既有设计，不是遗漏。
+- `app/actions.ts` 的 original 写入——同上，本轮只补充注释说明配对关系，逻辑未改。
+- 测试文件里大量 `provider: "hot"` 字面量——都是测试 fixture，不是生产写入路径。
+
+**尚未覆盖的路径**：见第 2 点四个包装脚本 + 1 个未提交文件；另外
+`scripts/quark-heic-ingest-direct.mjs`/`quark-repair-derivatives.mjs` 是导入即顶层执行的
+脚本，没有可单独调用的导出函数，本轮无法在不实际连接生产库的前提下对它们做端到端测试——
+覆盖方式是：语法检查通过 + 它们共用的 provider/storage 决策函数
+（`activeMediaProvider`/`getStorageForProvider`，定义于 `lib/storage/hot-storage.ts`）已在
+`test/oss-storage.test.mjs` 里被充分覆盖 + 人工代码审查确认两个脚本内 provider 标记变量与
+实际写入客户端引用的是同一个变量（不会出现 3B1-fix 修的那类 tag/backend 不一致）。
+
+**测试结果**：`npm run typecheck` 通过；`npm run lint` 通过；`npm test` 682 项，672 通过、
+10 跳过（postgres contract 套件按约定跳过），0 失败，连续跑两次结果一致；`npm run build`
+成功（18 个静态页全部生成）。
+
+Commit: `6b3d43b`，已 push `main`。
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
