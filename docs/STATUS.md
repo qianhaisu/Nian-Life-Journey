@@ -3453,3 +3453,27 @@ directory 格式）：
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
+
+## MIG-C-Phase3A：events/[id] 页移除 getStore() 全量读（2026-09-08）
+
+1. 本轮线上多了什么家人能读的东西：无新增可读内容；这是一次费用/性能修复，不改变
+   `events/[id]` 页的呈现——事件详情页仍展示同样的时间签名、正文、照片和资料清单。
+2. 没做到什么 / 最大的已知 blocker：`getEventDetail` 里 `contributors` 仍是全表读（按
+   A-12-1 既定判断保留，家庭规模表，几行数据）；本轮未重新核实生产 Neon 控制台状态，
+   也未连接生产库验证实际查询耗时/字节数——所有验证都是离线 typecheck/lint/test/build，
+   commit `67d71e8` 尚未在生产环境（Vercel 当前 Paused）实际跑过一次事件页请求。
+3. 下一件事：Production 恢复流量后，找一个真实事件页 URL 核实这条路径确实不再触发
+   `getStore()`（例如看 Neon 查询日志里没有对应的全表 `select * from ...` 无 WHERE 语句）。
+
+Commit: `67d71e8`，已 push `main`。
+修改文件：`v2/app/events/[id]/page.tsx`、`v2/lib/db/repository-interface.ts`、
+`v2/lib/db/postgres-repository.ts`、`v2/lib/db/json-repository.ts`。
+查询变化：`getEventDetail` 新增按事件自身 id/mediaAssetId 集合窄查询
+`sourceMemoryLinks`（按 `lifeEventId`）、`mediaAssets`/`mediaLocations`（按事件媒体的
+`mediaAssetId` 集合）、`profiles.birthDate`（按 `profileId`，只选一列）；页面不再调用
+`getStore()`，profile 校验改用固定常量 `CANONICAL_PROFILE_ID`。
+测试结果：`npm run typecheck` 通过；`npm run lint` 通过；`npm test` 655 项全过（postgres
+contract 套件按约定跳过，未连接生产库）；`npm run build` 成功（18 个静态页全部生成）。
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
