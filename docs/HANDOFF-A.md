@@ -1,12 +1,16 @@
 # HANDOFF-A（Code A，直连 Codex，≤80 行）
 
-**更新**：2026-09-07 · 本 session（含 MIG-A-002）
+**更新**：2026-09-08 · 本 session（Phase 2 生产备份已完整完成）
 
 ## 任务 ID 状态
-- A-12-1 / A-12-2：已完成，`a04d8d2`，已在 `main`（`git merge-base --is-ancestor` 确认），已 push。
-- MIG-A-001（离线核对 Phase 2 备份产物/进度/阻塞）：本轮完成，只读，见 `docs/STATUS.md` 2026-09-07 条目。
-- OPS-A-001（调度状态 + HANDOFF-A 同步）：本轮完成，见下方「调度」。
-- MIG-A-002（生产备份受控失败分析）：本轮完成，只读，未连生产、未改脚本，见下方摘要。
+- A-12-1 / A-12-2：已完成，`a04d8d2`，已在 `main`，已 push。
+- MIG-A-001（离线核对 Phase 2 备份产物/进度/阻塞）：已完成，见 `docs/STATUS.md` 2026-09-07 条目。
+- OPS-A-001（调度状态 + HANDOFF-A 同步）：已完成，见下方「调度」。
+- MIG-A-002（生产备份受控失败分析）：已完成，见 `docs/STATUS.md` 2026-09-07 条目。
+- **MIG-A-Phase2（Teddy 直接授权路线 B，directory 格式 + jobs=4 生产备份）：本轮完成，四条客观退出
+  条件全部满足，详见 `docs/STATUS.md` 2026-09-08 条目。** 两份 10,305,188 bytes 备份 + schema-only
+  已在 `E:\NianlifeBackups\2026-09-08\` 和 `C:\Users\teddy\nianlife-backups\final\2026-09-08\`，
+  SHA-256 61 项全部 match；两份都已恢复验证（19/19 表、104,347/104,347 行，与源库完全一致）。
 
 ## 调度
 - `CronCreate` Job ID `acf5497f`，`*/5 * * * *`，本 session 生效，7 天后自动过期。
@@ -33,4 +37,8 @@
 - 未读：`docs/ORCHESTRATOR-INBOX.md` 更早的历史存档段落（按协议不需要）。
 
 ## 下一件事
-等 Codex/Teddy 从 A/B/C 三条路线里选一条并给授权（尤其路线 B 的并发数上限、路线 C 的新功能/套餐决定）；`NIANLIFE-RUN-FULL.bat` 的两处不一致等决定是否现在修；本轨暂无更多离线核查项，回到收件轮询待命。
+Phase 2 已完整完成，无待办。本轮修复了三个自己写的脚本 bug（PowerShell 数组字面量拆分 `--jobs=`、
+`Start-Process` 无 `-Wait` 时 `ExitCode` 不可靠、本地恢复验证连错实例导致 `dropdb`/`createdb`
+挂起 24 分钟），已换用可靠模式（`&`+`$LASTEXITCODE`），新脚本 `ops\step13-dir-parallel.ps1` /
+`ops\step14-restore-verify.ps1` 留存备查。`NIANLIFE-RUN-FULL.bat` 的两处不一致仍未修（不在本轮
+范围内）。本轨回到收件轮询待命。

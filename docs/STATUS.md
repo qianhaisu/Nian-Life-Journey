@@ -3387,3 +3387,69 @@ now 435）。抽读到 2025-10 draft 时发现一条明显错误，**已停止�
 **下一件事**：等 Codex/Teddy 从三条路线里选一条并给出对应授权（尤其是路线 B 需要的最大并发数
 上限、路线 C 需要的新功能/新套餐决定）；`NIANLIFE-RUN-FULL.bat` 的两处不一致已记录，等决定是否
 需要现在修，还是先只用 `NIANLIFE-RUN-PROD-RETRY.bat`。
+
+---
+
+## MIG-A-Phase2 · Phase 2 生产备份完成（2026-09-08 CST，路线 B：directory 格式 + jobs=4）
+
+**Teddy 直接授权路线 B 并在本会话内提供非池化连接串**，改用 `pg_dump --format=directory --jobs=4`
+（新脚本 `ops\step13-dir-parallel.ps1` + `ops\step14-restore-verify.ps1`），不再用旧串行
+custom-format 路线，也不用 `NIANLIFE-RUN-FULL.bat`。
+
+**开始/完成时间**：09:00:16 – 10:09:41 CST（约 69 分钟，含两次脚本 bug 修复后重跑）。
+**版本**：pg_dump / pg_restore 18.6。**jobs**：4（未触发降级到 2 的失败条件，全程未降级）。
+
+**备份产物**：
+- `full-backup-1`：10,305,188 bytes，exit=0，耗时 1043s（~17.4 分钟），`pg_restore --list` 验证
+  178 个对象。
+- `full-backup-2`：10,305,188 bytes，exit=0，耗时 1463s（~24.4 分钟，同一份库、同一并发数，
+  第二份明显更慢，怀疑 Neon 出口侧限速随时间/连接窗口变化，未能排除本机出口带宽本身慢）。
+- `schema-only.sql`：37,758 bytes，exit=0。
+- 两份 directory 格式备份 + schema-only.sql 已复制到
+  `C:\Users\teddy\nianlife-backups\final\2026-09-08\`，与 `E:\NianlifeBackups\2026-09-08\`
+  源文件逐项 SHA-256 比对：**61 项全部 match，0 mismatch**。
+
+**恢复验证**：两份备份都完整恢复到本机独立的验证专用 PostgreSQL 18 集群（`127.0.0.1:5544`，
+上一轮会话为此目的搭建，非 Neon、非默认 5432 实例）：
+- `full-backup-1` 恢复：exit=0，19/19 表，104,347/104,347 行，与源库完全一致。
+- `full-backup-2` 恢复：exit=0，19/19 表，104,347/104,347 行，与源库完全一致。
+- 源库基线：PostgreSQL 18.6、121 MB、19 表、104,347 行（与本轮开工前元数据核对一致）。
+- 验证完成后已清理两个临时验证库（`nianlife_restore_check_1/2_20260908`），并 `pg_ctl stop`
+  停止了整个验证专用集群本身（`127.0.0.1:5544` 现已确认连接被拒绝，即已停止）；未删除其
+  data 目录，供下次复用。**正式备份文件（E: 和 final\ 两处）未触碰、未删除。**
+
+**过程中发现并修复的 3 个真实 bug（非本次备份内容问题，是自己写的脚本的 bug）**：
+1. PowerShell 数组字面量里 `'--jobs='+$jobs` 被静默拆成两个参数元素（`--jobs=` 和 `4`），
+   导致 pg_dump 报 "`-j/--jobs must be in range 1..64`"——用字符串插值 `"--jobs=$jobs"` 修复。
+2. `Start-Process -PassThru` 在不带 `-Wait` 时，`$p.ExitCode` 在本机环境下始终读不到真实值
+   （已用多组对照实验确认，不是偶发），导致第一次 full-backup-1 实际已经成功完整落盘
+   （19 张表数据文件齐全）却被脚本误判为失败——改用 `& $exe @args > $out 2> $err` 配合
+   `$LASTEXITCODE`（直接调用原生命令的标准方式，经验证可靠）取代所有 `Start-Process` 调用。
+3. 本地恢复验证第一次尝试连的是默认 5432 实例且未带密码，本地 `pg_hba.conf` 要求
+   `scram-sha-256`，导致 `dropdb`/`createdb` 在无控制台的隐藏窗口进程里挂起等待密码输入长达
+   24 分钟——发现后改为复用上一轮会话已经建好的专用验证集群（`127.0.0.1:5544`，密码见
+   `nianlife-work-2026-09-07\pgtemp\superpw.txt`），修复后两次恢复均在 2 秒内完成。
+
+**连接字符串处理**：Teddy 最初粘贴的是 Neon **pooled**（`-pooler`）端点，已识别并要求改用非池化
+直连端点后才开始任何 dump；`vercel env pull` 尝试获取 `DATABASE_URL_UNPOOLED` 时返回的是
+`[SENSITIVE]` 占位符而非真实值（Vercel 对标记为 sensitive 的变量的预期行为），因此本轮未能
+自动化取得凭据，全程由 Teddy 手动粘贴到 `nianlife-work-2026-09-08\source-url.tmp`，脚本读取
+后立即清零该文件；连接串未出现在任何日志、文档或 git 提交里。
+
+**未解决问题**：
+- 未定位第二份 dump 明显变慢的根因（Neon 侧限速 vs 本机出口带宽 vs 时段性网络波动，三者未做
+  对照实验区分）。
+- 本地验证专用集群的 data 目录本身未删除（只是停止），如需彻底清理需要额外一步，未在本轮
+  范围内执行。
+
+**Phase 2 完成标准核对**（对照 §3363 之后记录的四条客观退出条件，档位对应调整为
+directory 格式）：
+1. ✅ 两份完整备份 + schema-only 均存在，`step13.status`/`step14.status` 均为 `DONE`（无人为
+   超时终止）。
+2. ✅ 恢复到位、行数对账 mismatches = 0（`reconcileOk1`/`reconcileOk2` 均为 `True`）。
+3. ✅ `final\2026-09-08\` 与 `E:\NianlifeBackups\2026-09-08\` 两处文件的 SHA-256 逐项 match。
+4. ✅ 临时验证集群已停止（`final\2026-09-08\` 目录本身保留作为最终产物）。
+- **四条全部满足，Phase 2 判定为完整完成。**
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
