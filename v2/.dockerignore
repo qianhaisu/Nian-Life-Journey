@@ -1,0 +1,45 @@
+# Nianlife V2 — Docker build context exclusions (MIG-C-Phase3C1).
+# Goal: the image build never sees secrets, local data, media, or dev caches.
+
+# Secrets / local env — never enters the build context.
+.env
+.env.*
+!.env.example
+
+# Local credential / tool state.
+.vercel
+.claude
+
+# Dependencies and build output — reinstalled/rebuilt inside the image.
+node_modules
+.next
+.next-*/
+out
+*.tsbuildinfo
+
+# Local data stores, media manifests, and ad hoc dev artifacts.
+.data
+media-manifest.json
+db-check-tmp.mjs
+media-tools
+
+# WorkBuddy/Quark runtime staging — never part of the app image.
+.quarkclouddrive
+workbuddy
+search-results
+
+# Sandboxed tool npm cache.
+.npm-cache
+
+# VCS/editor noise.
+.git
+.gitignore
+.gitattributes
+*.log
+.DS_Store
+
+# Tests are not needed to run the production server.
+test
+
+# Docs/reports — not runtime files, keep the image minimal.
+*.md

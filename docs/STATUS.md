@@ -3738,3 +3738,71 @@ Commit: `c5a7cfa`，已 push `main`。
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
+
+## MIG-C-Phase3C1：ECS Web 容器化基线（2026-09-08）
+
+1. 本轮线上多了什么家人能读的东西：无——本轮只在仓库里新增可审核的容器构建产物（Dockerfile、
+   `.dockerignore`、`next.config.ts` 的 `output: "standalone"`），未登录 ECS、未连接
+   Neon/R2/OSS/Vercel、未部署、未改 DNS、未启动 worker 或定时任务。生产（Vercel，当前
+   Paused）与线上呈现不变。
+2. 没做到什么 / 最大的已知 blocker：本机无 Docker（`docker --version` 报
+   `command not found`），**镜像构建本轮完全未验证**，只验证了代码层（typecheck/lint/test/
+   `next build` standalone 产物结构）。真实 ECS 运行时行为（容器内 `next start`、健康检查在
+   真实网络下的探测周期、非 root 用户下 sharp/libvips 是否正常工作）同样未验证，留给
+   Phase 3C2 或 Teddy 在有 Docker 的机器上补验。
+3. 下一件事：Phase 3C2——反向代理、默认关闭的 worker/cron（替换 `vercel.json` 里仍保留的
+   `/api/internal/organizer-worker` 调度）、人工发布与回滚流程；本轮按要求到此停止，不开始。
+
+**改动文件**：
+- `v2/next.config.ts`：新增 `output: "standalone"`（+3 行），`distDir`/`images`/域名跳转
+  行为不变。这一项只影响自托管产物结构，不影响 Vercel 构建（Vercel 忽略该字段）。
+- `v2/Dockerfile`（新增）：三阶段构建（`deps` → `builder` → `runner`），基础镜像
+  `node:22-bookworm-slim`（Debian，非 Alpine——为 sharp/libvips 预编译二进制兼容性选择，
+  本机 Node 为 v24，但仓库无 `engines` 锁定，选用当前 Node 22 LTS 作为镜像基线，未额外验证
+  Node 24 镜像）。生产层只从 `builder` 拷贝 `.next/standalone`、`.next/static`、`public`
+  三样，不含 `builder`/`deps` 阶段的完整 `node_modules`、源码或测试文件；以非 root 用户
+  `nextjs`（uid 1001）运行；`EXPOSE 3000`；`HEALTHCHECK` 用 Node 内置 `fetch` 探测容器内
+  `/api/health`（复用现有端点，未新增探针——见下方"未新增探针"说明）；容器只跑
+  `node server.js`（`next start` 的 standalone 等价物），不含 worker/cron 进程或依赖。
+- `v2/.dockerignore`（新增）：排除 `.env*`（保留 `.env.example`）、`.data`、
+  `media-manifest.json`、`db-check-tmp.mjs`、`media-tools`、`.vercel`、`.claude`、
+  `.quarkclouddrive`/`workbuddy`/`search-results`（WorkBuddy/Quark 运行时暂存）、
+  `.npm-cache`、`node_modules`、`.next`/`.next-*`/`out`、`test`、`*.md`、`.git`。
+
+**为什么 `.dockerignore` 排除 `.data` 是硬要求，不是可选项**（本轮实测发现，写清楚避免以后
+被误删）：本机（无 `.dockerignore` 约束的）`npm run build` 产出的 `.next/standalone` 里
+被 Next 的文件追踪自动带入了 `.data/`（含真实本地 dev 数据：`nian-life.json` 及其备份、
+`worker-runs` 等）——推测是因为 `STORAGE_ROOT=.data/media` 这个默认路径在源码里以字面量出现，
+Next standalone 的依赖追踪把构建时刻该路径下实际存在的文件一并复制。**这意味着如果
+Docker 构建上下文不主动排除 `.data`，本地开发数据（可能含家庭敏感信息）会被真实打进镜像。**
+本轮 `.dockerignore` 已将 `.data` 排除在 Docker 构建上下文之外——Docker 场景下这个目录根本
+不会进入 `builder` 阶段的文件系统，因此这条追踪行为不会在镜像里重演；这是本轮唯一在**代码
+证据**层面确认过的隐私风险点，不是纸面推测。
+
+**环境变量说明**：容器本身不烘焙任何变量值，运行时变量清单沿用现有
+`v2/.env.example`（只列名称与用途，无真实值，本轮未新增变量、未读取 `.env.local` 内容）。
+
+**验证结果分层**：
+- **代码验证（已通过）**：`npm run typecheck` 通过；`npm run lint` 通过；`npm test`
+  690 项，680 通过、10 跳过（postgres contract 套件按约定跳过）、0 失败；`npm run build`
+  成功，18 个静态/动态路由全部生成，产出 `.next/standalone/server.js` +
+  `.next/standalone/node_modules`（子集，非完整依赖树）+ `.next/static`，结构与
+  Dockerfile 的 `COPY` 路径一致。DB 连接是惰性的（`v2/lib/db/client.ts` 的
+  `getPool()`/`getDb()` 不在 import 时建连），构建阶段未连接、也不需要连接任何数据库。
+- **镜像验证：未执行**（本机无 Docker，`docker build`/`docker run`/`docker inspect`
+  均未运行）。**未验证项**：镜像能否成功构建、最终镜像体积、`node server.js` 能否在容器内
+  正常起服务、`HEALTHCHECK` 探测是否按预期通过/失败、非 root 用户下 sharp 原生绑定
+  （`node_modules/sharp`、`@img/*` 平台专属二进制）在 `node:22-bookworm-slim` 上是否可用。
+- **ECS 实机验证：未执行**，且本轮明确不做（未登录 ECS、未部署、未连接 Neon/R2/OSS）。
+
+**健康检查**：复用已存在的 `v2/app/api/health/route.ts`（`count(*)` 聚合查询两张表，非
+`getStore()`/`getOrganizerStore()` 全表读——符合 CLAUDE.md 对页面渲染路径新增 DB 读取的
+约束，且这不是新增探针，是既有端点），容器 `HEALTHCHECK` 每 30 秒探测一次，起始宽限期
+20 秒，失败判定连续 3 次超时/非 200。
+
+**容器启动方式**：`docker build -t nianlife-web -f v2/Dockerfile v2`，
+`docker run -p 3000:3000 --env-file <运行时变量文件> nianlife-web`（构建与运行命令本轮
+均未实际执行，此处只是基于 Dockerfile 内容的调用方式说明）。
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
