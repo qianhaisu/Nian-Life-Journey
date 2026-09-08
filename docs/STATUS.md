@@ -3477,3 +3477,67 @@ contract 套件按约定跳过，未连接生产库）；`npm run build` 成功�
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
+
+## MIG-C-Phase3B1：OSS 存储核心适配（离线，不搬运真实媒体）（2026-09-08）
+
+1. 本轮线上多了什么家人能读的东西：无新增可读内容，也不影响当前呈现——`MEDIA_STORAGE_PROVIDER`
+   未设为 `oss`，所有现有 R2/legacy `hot` 媒体读取路径行为不变（`createHotStorage()` 逻辑完全
+   未改）。这一轮是给未来 OSS 迁移打地基的核心适配层，不是产品可见变化。
+2. 没做到什么 / 最大的已知 blocker：
+   - `lib/ingest/wechat-worker.ts` 的 `hotLocation()` 仍把 original 和 derivative 都硬编码
+     `provider: "hot"`，本轮未改——它们共用同一个 `storage` 客户端实例，贯穿
+     `uploadVerified`/`uploadBatchMedia` 整条正在跑的微信导入管线；要把 derivative 拆到可选
+     OSS 需要往这条管线内新增第二个客户端参数，风险高于本轮"核心适配"范围，留给 3B2。
+   - 未做端到端的 `MEDIA_STORAGE_PROVIDER=oss` 真实/网络 mock 集成测试（例如让
+     `ingestQuarkFile` 真的写一次 OSS 再读回）——`OssStorage` 的 `client` 允许注入 fake
+     client 做单元测试，但 `getStorageForProvider`/`getOssStorage` 内部的单例构造没有加测试
+     用的客户端注入口子，贸然加会牵连生产调用点签名。已用等价的路由函数单元测试
+     （`activeMediaProvider`/`getStorageForProvider`）覆盖这条链路的"决定逻辑"，但没有覆盖
+     "真的调用一次 OSS 客户端并写入"这一步。
+   - 未连接或修改生产数据库、R2、OSS、Vercel；`provider` 列本身是 `text`，确认不需要
+     migration SQL。
+3. 下一件事（Phase 3B2 候选清单，`rg`/`grep` 盘点结果，未改动）：
+   - `v2/lib/ingest/wechat-worker.ts:215`（`hotLocation()`，见上方 blocker）
+   - `v2/scripts/quark-heic-ingest-direct.mjs`（两处 `provider: "hot"` 硬编码 + 自建 R2 客户端，
+     未走 `hot-storage.ts` 的适配层）
+   - `v2/scripts/quark-photo-apply.mjs`（两处 `provider: "hot"` 硬编码，original + derivative）
+   - `v2/scripts/quark-repair-derivatives.mjs`（两处 `provider: "hot"` 硬编码，original + 修复
+     derivative）
+   - `v2/scripts/export-media-manifest.mjs`（只读清单脚本按 `provider === "hot"` 过滤
+     derivative，一旦有 OSS derivative 会被这份清单漏掉，不是写入 bug，是报告不完整）
+
+Commit: `44d41ca`，已 push `main`（`67d71e8`/`406230c` 是上一条 Phase 3A 的提交，供对照）。
+
+修改/新增文件：`v2/lib/types.ts`、`v2/lib/storage/storage-types.ts`（新）、
+`v2/lib/storage/oss-storage.ts`（新）、`v2/lib/storage/hot-storage.ts`、
+`v2/app/api/media/[id]/route.ts`、`v2/lib/db/media.ts`、`v2/lib/organizer/media-input.ts`、
+`v2/lib/organizer/context.ts`、`v2/lib/organizer/evidence/media-index.ts`、
+`v2/lib/ingest/quark.ts`、`v2/app/actions.ts`、`v2/app/events/[id]/page.tsx`（两处陈旧注释）、
+`v2/test/oss-storage.test.mjs`（新，18 项测试）。
+
+provider 路由方式：读取一律按 `MediaLocation.provider` 字段本身选后端——`getStorageForProvider(provider)`
+对 `"hot"` 返回既有 `hotStorage` 单例（100% 未变，仍只认 `MEDIA_STORAGE_PROVIDER==="r2"`，否则本地磁盘），
+对 `"oss"` 返回新的 `OssStorage` 单例；这两条完全独立于"当前该往哪写"的设置，迁移期间数据库里
+`hot`/`oss` 两种 location 混存也能各自读对地方。新写入走 `activeMediaProvider()`
+（`MEDIA_STORAGE_PROVIDER==="oss"` 时返回 `"oss"`，否则 `"hot"`，未设置/拼错都安全落回 `"hot"`），
+本轮只接入了 `lib/ingest/quark.ts` 和 `app/actions.ts` 的 derivative 写入点（各自的 original 写入
+仍固定 `"hot"`，因为要喂给 Quark 归档管线）。`selectLocation` 按 variant 优先取 ready 的 `oss`，
+没有才退回 ready 的 `hot`；`original` 永远只能来自已归档的 Quark 副本，两个新旧 tier 都不参与。
+
+新增环境变量（仅名称，不写值）：`OSS_ENDPOINT`、`OSS_REGION`、`OSS_ACCESS_KEY_ID`、
+`OSS_ACCESS_KEY_SECRET`、`OSS_BUCKET`；写入路由复用既有 `MEDIA_STORAGE_PROVIDER`，新增一个
+合法值 `"oss"`（原有 `"r2"`/未设置两种取值行为完全不变）。
+
+兼容旧 R2 的方式：`createHotStorage()`/`hotStorage` 单例的实现和判断条件字面不改一行，
+`MediaProvider` 只是新增一个可选值而非替换；任何现存 `provider: "hot"` 的 `MediaLocation`
+行为、读取路径、归档到 Quark 的流程全部保持原样。
+
+测试结果：`npm run typecheck` 通过；`npm run lint` 通过；`npm test` 672 项，662 通过、10 跳过
+（postgres contract 套件按约定跳过，未连接生产库），0 失败；`npm run build` 成功（18 个静态页
+全部生成）。
+
+未验证项：见第 2 点；另外，全部测试和构建均在本地/离线环境完成，未在生产 Vercel/Neon/R2/OSS
+上验证过任何行为，本轮也没有连接、创建或修改任何真实云端凭据/资源。
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
