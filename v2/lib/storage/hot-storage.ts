@@ -129,20 +129,38 @@ export class R2HotStorage implements HotStorage {
   }
 }
 
+// Phase 3B1-fix (2026-09-08, total-review finding): MEDIA_STORAGE_PROVIDER used to decide BOTH
+// "which tier should a new derivative target" AND "which physical backend serves provider 'hot'"
+// — the same switch. That was a real bug: setting MEDIA_STORAGE_PROVIDER=oss to start routing new
+// writes to OSS also flipped this function's `=== "r2"` check to false, silently downgrading every
+// EXISTING provider:"hot" row (real R2 data) to LocalHotStorage — those rows would 404 in
+// production the moment OSS was turned on, R2 credentials or not. HOT_STORAGE_BACKEND is a
+// separate, explicit switch for the physical backend behind "hot", decoupled from what new writes
+// target. When unset it falls back to the old rule so nothing already deployed changes behavior:
+// MEDIA_STORAGE_PROVIDER === "r2" → r2, anything else → local.
+export function resolveHotBackend(env: NodeJS.ProcessEnv = process.env): "r2" | "local" {
+  if (env.HOT_STORAGE_BACKEND === "r2") return "r2";
+  if (env.HOT_STORAGE_BACKEND === "local") return "local";
+  return env.MEDIA_STORAGE_PROVIDER === "r2" ? "r2" : "local";
+}
+
 export function createHotStorage(env: NodeJS.ProcessEnv = process.env): HotStorage {
-  return env.MEDIA_STORAGE_PROVIDER === "r2" ? new R2HotStorage(getR2Config(env)) : new LocalHotStorage();
+  return resolveHotBackend(env) === "r2" ? new R2HotStorage(getR2Config(env)) : new LocalHotStorage();
 }
 
 export const hotStorage = createHotStorage();
 
-// Phase 3B1: the "hot" backend above is untouched by any of this — createHotStorage() still only
-// ever reacts to MEDIA_STORAGE_PROVIDER === "r2" (else local disk), exactly as before, so every
-// existing MediaLocation with provider: "hot" keeps reading from wherever it always read from.
-// OSS is a genuinely separate tier, constructed lazily (only when something actually needs it,
-// so an app with no OSS_* vars configured never pays getOssConfig()'s throw just for importing
-// this module).
+// OSS is a genuinely separate tier, constructed lazily (only when something actually needs it, so
+// an app with no OSS_* vars configured never pays getOssConfig()'s throw just for importing this
+// module).
 let ossSingleton: HotStorage | undefined;
+// Test-only seam: getOssStorage()'s default path constructs a real S3Client via a real dynamic
+// import, which a fake-client write-path test (e.g. "ingestQuarkFile actually tags a location
+// oss") needs to bypass without touching the network. No production call site ever calls this.
+let ossStorageOverrideForTests: HotStorage | undefined;
+export function __setOssStorageForTests(storage: HotStorage | undefined) { ossStorageOverrideForTests = storage; }
 export function getOssStorage(env: NodeJS.ProcessEnv = process.env): HotStorage {
+  if (ossStorageOverrideForTests) return ossStorageOverrideForTests;
   if (!ossSingleton) ossSingleton = new OssStorage(getOssConfig(env));
   return ossSingleton;
 }
@@ -158,7 +176,15 @@ export function activeMediaProvider(env: NodeJS.ProcessEnv = process.env): "hot"
 // Every read of an actual object must go through this, keyed off the MediaLocation's own
 // `provider` — never off activeMediaProvider() or a single fixed instance. During migration the
 // database holds a mix of "hot" (R2/legacy) and "oss" rows at once; which one a given row reads
-// through is a property of that row, not of today's write-target setting.
+// through is a property of that row, not of today's write-target setting. This routes correctly
+// ONLY if both switches are actually set for the deployment's real state: HOT_STORAGE_BACKEND must
+// still point at wherever the existing "hot" rows' bytes really live (see resolveHotBackend's
+// comment above) even after MEDIA_STORAGE_PROVIDER=oss starts sending new writes elsewhere — an
+// OSS deployment that still has real R2 data needs HOT_STORAGE_BACKEND=r2 kept explicitly, not
+// left unset. Until Phase 3B2 migrates the awaiting_archive → Quark staging pipeline off "hot"
+// (lib/archive/quark-archive.ts, app/actions.ts's original write), an OSS environment must keep
+// valid R2 credentials configured regardless of HOT_STORAGE_BACKEND's value, because that staging
+// tier is unconditionally "hot" today.
 export function getStorageForProvider(provider: MediaProvider, env: NodeJS.ProcessEnv = process.env): HotStorage {
   if (provider === "oss") return getOssStorage(env);
   if (provider === "hot") return hotStorage;

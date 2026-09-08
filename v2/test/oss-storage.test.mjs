@@ -1,14 +1,47 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import sharp from "sharp";
 import { getOssConfig, OssStorage } from "../lib/storage/oss-storage.ts";
-import { activeMediaProvider, getStorageForProvider, hotStorage, selectLocation } from "../lib/storage/hot-storage.ts";
+import { activeMediaProvider, createHotStorage, getStorageForProvider, hotStorage, LocalHotStorage, R2HotStorage, resolveHotBackend, selectLocation, __setOssStorageForTests } from "../lib/storage/hot-storage.ts";
 import { ingestQuarkFile } from "../lib/ingest/quark.ts";
 import { getStore } from "../lib/db/repository.ts";
-import { LocalHotStorage } from "../lib/storage/hot-storage.ts";
 
 const FULL_ENV = { OSS_ENDPOINT: "https://oss-cn-hangzhou.aliyuncs.com", OSS_REGION: "oss-cn-hangzhou", OSS_ACCESS_KEY_ID: "id", OSS_ACCESS_KEY_SECRET: "secret", OSS_BUCKET: "nianlife-media" };
+const FULL_R2_ENV = { R2_ACCOUNT_ID: "account", R2_ACCESS_KEY_ID: "id", R2_SECRET_ACCESS_KEY: "secret", R2_BUCKET: "nianlife-hot" };
+
+// The two tests below persist through the real JSON-file repository (lib/db/json-repository.ts),
+// which is NOT reset between separate `npm test` invocations — unlike an in-memory/transactional
+// DB. A fixed providerRef would collide with a prior run's already-persisted row and hit
+// ingestQuarkFile's own dedup ("existing" short-circuit), silently skipping the very derivative
+// writes these tests exist to check (this is exactly how the write-path test below first failed:
+// it passed alone, then failed on a second `npm test` run because its fixed providerRef had
+// already been ingested). Following storage-phase-2.test.mjs's own pattern: snapshot the JSON
+// store before this file's tests and restore it verbatim after, so this file leaves no residue
+// regardless of how many times it runs.
+const dataFile = path.join(process.cwd(), ".data", "nian-life.json");
+let originalStore;
+try { originalStore = await readFile(dataFile); } catch { originalStore = null; }
+const touchedKeys = new Set();
+test.after(async () => {
+  if (originalStore) await writeFile(dataFile, originalStore);
+  else await rm(dataFile, { force: true });
+  const local = new LocalHotStorage();
+  for (const key of touchedKeys) await local.delete(key);
+});
+
+// The repository dedups a MediaAsset by content checksum (lib/db/chat-import-persistence.ts),
+// independently of ingestQuarkFile's own providerRef dedup — a solid-color JPEG built with a
+// fixed background encodes to byte-identical output every call, so two tests (or two runs of the
+// same test) using the same color would collide on checksum and silently reuse a stale asset
+// instead of creating a fresh one, orphaning the freshly-generated assetId the test asserts
+// against. A random background makes every call's content, and therefore checksum, unique.
+async function uniqueJpegBytes() {
+  const background = { r: Math.floor(Math.random() * 256), g: Math.floor(Math.random() * 256), b: Math.floor(Math.random() * 256) };
+  return sharp({ create: { width: 800, height: 600, channels: 3, background } }).jpeg().toBuffer();
+}
 
 // Phase 3B1 scope note (see the task's own final report): this suite verifies the routing
 // primitives (activeMediaProvider/getStorageForProvider/selectLocation) and the OSS adapter's
@@ -20,16 +53,17 @@ const FULL_ENV = { OSS_ENDPOINT: "https://oss-cn-hangzhou.aliyuncs.com", OSS_REG
 // ingestQuarkFile call still tags its derivative locations "hot", exactly as before.
 test("ingestQuarkFile still tags derivative locations \"hot\" when MEDIA_STORAGE_PROVIDER is unset (default path unaffected by Phase 3B1)", async () => {
   assert.equal(process.env.MEDIA_STORAGE_PROVIDER, undefined, "this test only asserts the default; it does not itself flip the env var");
-  const bytes = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#4d7bb2" } }).jpeg().toBuffer();
-  const file = { providerRef: "quark://oss-regression-test", filename: "regress.jpg", mimeType: "image/jpeg", size: bytes.byteLength, takenAt: "2026-08-28T10:00:00.000Z" };
+  const bytes = await uniqueJpegBytes();
+  // A fresh providerRef every run — see the file-level comment above on why a fixed one would
+  // silently hit ingestQuarkFile's own dedup on a second `npm test` invocation.
+  const file = { providerRef: `quark://oss-regression-test-${randomUUID()}`, filename: "regress.jpg", mimeType: "image/jpeg", size: bytes.byteLength, takenAt: "2026-08-28T10:00:00.000Z" };
   const options = { profileId: "profile-oss-regression-test", contributorId: "contributor-dad", visibility: "family" };
   const result = await ingestQuarkFile(file, options, { download: async () => bytes });
   const store = await getStore();
   const derivativeLocations = store.mediaLocations.filter((location) => location.mediaAssetId === result.assetId && location.variant !== "original");
   assert.ok(derivativeLocations.length > 0, "expected at least one derivative location to have been created");
   assert.ok(derivativeLocations.every((location) => location.provider === "hot"), "derivative locations must stay \"hot\" when MEDIA_STORAGE_PROVIDER is unset");
-  const local = new LocalHotStorage();
-  for (const location of derivativeLocations) await local.delete(location.providerRef);
+  for (const location of derivativeLocations) touchedKeys.add(location.providerRef);
 });
 
 test("getOssConfig fails closed when any OSS_* variable is missing, naming the missing ones", () => {
@@ -174,4 +208,83 @@ test("activeMediaProvider defaults new writes to \"hot\" and only switches to \"
   assert.equal(activeMediaProvider({}), "hot");
   assert.equal(activeMediaProvider({ MEDIA_STORAGE_PROVIDER: "r2" }), "hot");
   assert.equal(activeMediaProvider({ MEDIA_STORAGE_PROVIDER: "oss" }), "oss");
+});
+
+// --- Environment matrix (2026-09-08 fix): resolveHotBackend()/createHotStorage() must decide the
+// PHYSICAL backend behind provider "hot" independently of activeMediaProvider()'s write-target
+// decision. The bug this fixes: MEDIA_STORAGE_PROVIDER=oss used to also flip createHotStorage()'s
+// `=== "r2"` check to false, silently downgrading every existing "hot" (real R2) row to local disk
+// the moment OSS writes were turned on — a 404 for every pre-existing photo, R2 credentials or
+// not. Each case below checks BOTH halves: which physical backend "hot" reads through
+// (resolveHotBackend/createHotStorage) and which provider a new write targets
+// (activeMediaProvider) — the two must be independently correct, not coupled through one flag.
+test("env matrix: MEDIA_STORAGE_PROVIDER=r2, HOT_STORAGE_BACKEND unset → hot reads through R2 (legacy behavior preserved)", () => {
+  const env = { MEDIA_STORAGE_PROVIDER: "r2", ...FULL_R2_ENV };
+  assert.equal(resolveHotBackend(env), "r2");
+  assert.ok(createHotStorage(env) instanceof R2HotStorage);
+  assert.equal(activeMediaProvider(env), "hot");
+});
+
+test("env matrix: MEDIA_STORAGE_PROVIDER=oss, HOT_STORAGE_BACKEND=r2 → new writes target oss, existing hot rows still read through R2", () => {
+  const env = { MEDIA_STORAGE_PROVIDER: "oss", HOT_STORAGE_BACKEND: "r2", ...FULL_R2_ENV, ...FULL_ENV };
+  assert.equal(resolveHotBackend(env), "r2");
+  assert.ok(createHotStorage(env) instanceof R2HotStorage, "existing \"hot\" rows must NOT be silently downgraded to local disk once oss is the write target");
+  assert.equal(activeMediaProvider(env), "oss");
+});
+
+test("env matrix: MEDIA_STORAGE_PROVIDER=oss, HOT_STORAGE_BACKEND=local → new writes target oss, hot reads through local disk", () => {
+  const env = { MEDIA_STORAGE_PROVIDER: "oss", HOT_STORAGE_BACKEND: "local", ...FULL_ENV };
+  assert.equal(resolveHotBackend(env), "local");
+  assert.ok(createHotStorage(env) instanceof LocalHotStorage);
+  assert.equal(activeMediaProvider(env), "oss");
+});
+
+test("env matrix: nothing set → local-dev default preserved (hot is local, new writes still tag hot)", () => {
+  assert.equal(resolveHotBackend({}), "local");
+  assert.ok(createHotStorage({}) instanceof LocalHotStorage);
+  assert.equal(activeMediaProvider({}), "hot");
+});
+
+test("env matrix: HOT_STORAGE_BACKEND is an explicit override — it wins even when MEDIA_STORAGE_PROVIDER would otherwise imply the other backend", () => {
+  assert.equal(resolveHotBackend({ MEDIA_STORAGE_PROVIDER: "r2", HOT_STORAGE_BACKEND: "local" }), "local");
+  assert.equal(resolveHotBackend({ HOT_STORAGE_BACKEND: "r2" }), "r2");
+});
+
+// --- Requirement: a real write-path test, not just activeMediaProvider()'s return value. This
+// drives the actual ingestQuarkFile call chain (activeMediaProvider → getStorageForProvider →
+// getOssStorage) with MEDIA_STORAGE_PROVIDER=oss really set, only substituting a fake `{ put }`
+// client for the OSS singleton via __setOssStorageForTests so no network call happens. If the
+// write path ever stops threading the resolved provider through to both the storage-selection
+// call and the location's own `provider` field, this fails.
+test("ingestQuarkFile, with MEDIA_STORAGE_PROVIDER=oss really set, writes derivatives through the OSS backend and persists location.provider === \"oss\"", async () => {
+  const previousEnv = process.env.MEDIA_STORAGE_PROVIDER;
+  const puts = [];
+  const fakeOss = {
+    put: async (input) => { puts.push(input); return { providerRef: input.key, mimeType: input.mimeType, fileSize: input.body.byteLength }; },
+    get: async () => null,
+    getStream: async () => null,
+    delete: async () => {},
+    verify: async () => ({ exists: false, checksumVerified: false }),
+    url: () => null,
+  };
+  __setOssStorageForTests(fakeOss);
+  process.env.MEDIA_STORAGE_PROVIDER = "oss";
+  try {
+    const bytes = await uniqueJpegBytes();
+    const file = { providerRef: `quark://oss-write-path-test-${randomUUID()}`, filename: "oss-write.jpg", mimeType: "image/jpeg", size: bytes.byteLength, takenAt: "2026-08-28T10:00:00.000Z" };
+    const options = { profileId: "profile-oss-write-path-test", contributorId: "contributor-dad", visibility: "family" };
+    const result = await ingestQuarkFile(file, options, { download: async () => bytes });
+    assert.ok(puts.length > 0, "expected the fake OSS client to receive at least one derivative put()");
+    assert.ok(puts.every((input) => input.key.startsWith("media/derivatives/")), "every derivative must still be written under media/derivatives/");
+    const store = await getStore();
+    const derivativeLocations = store.mediaLocations.filter((location) => location.mediaAssetId === result.assetId && location.variant !== "original");
+    assert.equal(derivativeLocations.length, puts.length, "one location row per fake-OSS put()");
+    assert.ok(derivativeLocations.every((location) => location.provider === "oss"), "every derivative location must be tagged \"oss\", not \"hot\", once MEDIA_STORAGE_PROVIDER=oss");
+    const originalLocation = store.mediaLocations.find((location) => location.mediaAssetId === result.assetId && location.variant === "original");
+    assert.equal(originalLocation?.provider, "quark", "the original is unaffected by MEDIA_STORAGE_PROVIDER — Quark imports always tag their original \"quark\"");
+  } finally {
+    __setOssStorageForTests(undefined);
+    if (previousEnv === undefined) delete process.env.MEDIA_STORAGE_PROVIDER;
+    else process.env.MEDIA_STORAGE_PROVIDER = previousEnv;
+  }
 });

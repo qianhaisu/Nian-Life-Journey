@@ -3516,9 +3516,16 @@ Commit: `44d41ca`，已 push `main`（`67d71e8`/`406230c` 是上一条 Phase 3A 
 `v2/test/oss-storage.test.mjs`（新，18 项测试）。
 
 provider 路由方式：读取一律按 `MediaLocation.provider` 字段本身选后端——`getStorageForProvider(provider)`
-对 `"hot"` 返回既有 `hotStorage` 单例（100% 未变，仍只认 `MEDIA_STORAGE_PROVIDER==="r2"`，否则本地磁盘），
-对 `"oss"` 返回新的 `OssStorage` 单例；这两条完全独立于"当前该往哪写"的设置，迁移期间数据库里
-`hot`/`oss` 两种 location 混存也能各自读对地方。新写入走 `activeMediaProvider()`
+对 `"hot"` 返回既有 `hotStorage` 单例，对 `"oss"` 返回新的 `OssStorage` 单例。
+
+**⚠️ 以下这句结论是错的，总审 2026-09-08 发现，修复见本文件下方 MIG-C-Phase3B1-fix 条目：**
+~~（100% 未变，仍只认 `MEDIA_STORAGE_PROVIDER==="r2"`，否则本地磁盘）；这两条完全独立于"当前该
+往哪写"的设置，迁移期间数据库里 `hot`/`oss` 两种 location 混存也能各自读对地方。~~
+实际情况：`hotStorage` 单例当时确实"仍只认 `MEDIA_STORAGE_PROVIDER==="r2"`"，但这恰恰是
+bug——`MEDIA_STORAGE_PROVIDER=oss` 会让这个判断变 false，导致 `hotStorage` 错误地退化成
+`LocalHotStorage`，现存 `provider="hot"` 的真实 R2 数据一旦打开 OSS 写入就读不到了，不是"混存
+也能各自读对"。修复引入了独立的 `HOT_STORAGE_BACKEND` 开关，见下方条目的环境变量组合表。
+新写入走 `activeMediaProvider()`
 （`MEDIA_STORAGE_PROVIDER==="oss"` 时返回 `"oss"`，否则 `"hot"`，未设置/拼错都安全落回 `"hot"`），
 本轮只接入了 `lib/ingest/quark.ts` 和 `app/actions.ts` 的 derivative 写入点（各自的 original 写入
 仍固定 `"hot"`，因为要喂给 Quark 归档管线）。`selectLocation` 按 variant 优先取 ready 的 `oss`，
@@ -3538,6 +3545,68 @@ provider 路由方式：读取一律按 `MediaLocation.provider` 字段本身选
 
 未验证项：见第 2 点；另外，全部测试和构建均在本地/离线环境完成，未在生产 Vercel/Neon/R2/OSS
 上验证过任何行为，本轮也没有连接、创建或修改任何真实云端凭据/资源。
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
+
+## MIG-C-Phase3B1-fix：解耦"新写入目标"与"legacy hot 后端"（2026-09-08）
+
+总审退回项，修复 Phase 3B1 的一个真实生产风险：`MEDIA_STORAGE_PROVIDER=oss` 时，
+`createHotStorage()` 的判断条件 `=== "r2"` 会变 false，导致 `hotStorage` 单例（`provider="hot"`
+既有 R2 数据的读取入口）错误退化为 `LocalHotStorage`，现存 R2 上的真实照片会在打开 OSS 写入
+的那一刻集体读不到——`getStorageForProvider("hot")` 当时只是把这个"错误初始化的单例"原样
+返回，路由函数本身没错，错在单例的构造条件上。
+
+1. 本轮线上多了什么家人能读的东西：无——这是修复一个"如果启用 OSS 会导致现有照片读不到"的
+   隐患，`MEDIA_STORAGE_PROVIDER` 目前未设置为 `oss`，生产行为在本次修复前后都不变。
+2. 没做到什么 / 最大的已知 blocker：Phase 3B1 报告里遗留的"未做端到端 OSS 写入集成测试"这一条
+   本轮已经补上（见下方测试列表最后一项，真正经过 `ingestQuarkFile` 调用链）；仍未做的是
+   `lib/ingest/wechat-worker.ts` 的 `hotLocation()` 拆分（原 Phase 3B1 报告已列入 3B2 候选，
+   本轮未涉及，不重复记录）。
+3. 下一件事：按要求本轮不开始 Phase 3B2；下一步仍是 Phase 3B2 候选清单（见上一条目）。
+
+**核心修复**：新增 `resolveHotBackend(env)`（`lib/storage/hot-storage.ts`），`HOT_STORAGE_BACKEND`
+是独立于 `MEDIA_STORAGE_PROVIDER` 的显式开关，未设置时按旧规则回退（`MEDIA_STORAGE_PROVIDER
+==="r2"` → r2，否则 local），保证任何已部署环境行为不变。`createHotStorage()` 改为调用
+`resolveHotBackend()` 而不是直接判断 `MEDIA_STORAGE_PROVIDER`。
+
+**环境变量组合表**（新写入目标 = `activeMediaProvider()`，`hot` 物理后端 = `resolveHotBackend()`）：
+
+| MEDIA_STORAGE_PROVIDER | HOT_STORAGE_BACKEND | 新写入 provider | `hot` 实际读/写后端 | 场景 |
+|---|---|---|---|---|
+| 未设置 | 未设置 | `hot` | local | 本地开发默认，行为不变 |
+| `r2` | 未设置 | `hot` | R2 | 现有生产配置，行为不变 |
+| `oss` | 未设置 | `oss` | local | **危险**：如果生产还有真实 R2 数据，会读不到——不要在有存量 R2 数据时这样配置 |
+| `oss` | `r2` | `oss` | R2 | **OSS 迁移期正确配置**：新 derivative 写 OSS，旧 `hot` 位置继续从 R2 读 |
+| `oss` | `local` | `oss` | local | 本地开发下模拟 OSS 迁移，无存量 R2 数据时可用 |
+| `r2` | `local` | `hot` | local | `HOT_STORAGE_BACKEND` 显式覆盖优先于 `MEDIA_STORAGE_PROVIDER` 的旧规则 |
+
+**给 Teddy/Codex 的操作结论**：生产上线 OSS 迁移时，只要现存 R2 数据还没有被 Phase 3B2 迁移或
+淘汰，必须显式设置 `HOT_STORAGE_BACKEND=r2`（连同保留原有 R2_* 凭据）——不能只改
+`MEDIA_STORAGE_PROVIDER=oss` 就假设旧数据还能读到。
+
+**app/actions.ts 的 original 写入**：未改逻辑，只加注释明确——它写入 `hotStorage` 单例并打
+`provider: "hot"`，这两者必须永远配对指向同一个 tier（现在由 `resolveHotBackend` 保证一致）；
+在 Phase 3B2 把 awaiting_archive → Quark 归档管线迁移走之前，OSS 环境仍然需要保留可用的
+`hot` 后端配置（`HOT_STORAGE_BACKEND=r2` + 真实 R2 凭据，或本地开发用 `=local`），否则这一步
+写入会失败。
+
+**新增测试**（`v2/test/oss-storage.test.mjs`，本轮新增 7 项，累计 23 项全过）：
+- 环境矩阵 5 项：`r2`+未设置、`oss`+`HOT_STORAGE_BACKEND=r2`、`oss`+`HOT_STORAGE_BACKEND=local`、
+  全未设置、`HOT_STORAGE_BACKEND` 显式覆盖优先级
+- 1 项真正经过写入调用链的 fake-client 测试：把 `process.env.MEDIA_STORAGE_PROVIDER` 真的设成
+  `"oss"`，用 `__setOssStorageForTests()`（新增的测试专用注入口，生产代码路径不会调用）替换
+  OSS 单例为 fake client，跑一次真实 `ingestQuarkFile`，断言：fake OSS client 收到了
+  `put()` 调用、生成的 derivative `MediaLocation.provider` 确实是 `"oss"`（不是只测
+  `activeMediaProvider()` 的返回值）、original 仍是 `"quark"`
+- 1 项沿用原有的默认路径回归测试（未设置环境变量时 derivative 仍标 `"hot"`）
+
+测试结果：`npm run typecheck` 通过；`npm run lint` 通过；`npm test`（含新增 7 项）全部通过，
+0 失败；`npm run build` 成功。
+
+未验证项：仍未在真实 OSS/R2 环境上验证过 `HOT_STORAGE_BACKEND`/`MEDIA_STORAGE_PROVIDER`
+组合的实际网络行为（本轮全部离线，fake client）；未连接或修改任何云服务、生产数据库；
+未上传或删除任何媒体。
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE

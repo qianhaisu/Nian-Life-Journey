@@ -39,13 +39,21 @@ export async function captureSources(formData: FormData) {
     const now = new Date().toISOString();
     const checksum = createHash("sha256").update(bytes).digest("hex");
     const objectKey = `media/original/${assetId}/${filename}`;
+    // The original always stays on the "hot" staging tier — written through the `hotStorage`
+    // singleton, which resolveHotBackend() (lib/storage/hot-storage.ts) points at R2 or local disk
+    // — regardless of MEDIA_STORAGE_PROVIDER/activeMediaProvider(). It feeds the
+    // awaiting_archive → Quark pipeline (lib/archive/quark-archive.ts), which is untouched by
+    // Phase 3B1/3B1-fix and still keyed strictly on provider "hot". The `provider: "hot"` tag
+    // below MUST stay paired with the `hotStorage` write immediately above it — both must always
+    // name the same tier, since getStorageForProvider("hot") is what later reads this row back.
+    // Until Phase 3B2 migrates this staging step itself, an OSS deployment (MEDIA_STORAGE_
+    // PROVIDER=oss) still needs a working "hot" backend configured (HOT_STORAGE_BACKEND=r2 with
+    // real R2 credentials, or =local for dev) purely for this original write to succeed — see
+    // getStorageForProvider's doc comment.
     await hotStorage.put({ key: objectKey, body: bytes, mimeType: file.type });
     const dimensions: { width?: number; height?: number } = type === "photo" ? await sourceImageMetadata(bytes) : {};
     const asset: MediaAsset = { id: assetId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaType: type, mimeType: file.type, width: dimensions.width, height: dimensions.height, originalFilename: file.name, checksum, archiveStatus: "awaiting_archive", createdAt: now };
     assets.push(asset);
-    // The original always stays on the "hot" R2/local staging tier regardless of
-    // MEDIA_STORAGE_PROVIDER — it feeds the awaiting_archive → Quark pipeline (lib/archive/quark-
-    // archive.ts), which is untouched by Phase 3B1 and still keyed strictly on provider "hot".
     locations.push({ id: newId("location"), mediaAssetId: assetId, provider: "hot", variant: "original", providerRef: objectKey, mimeType: file.type, fileSize: file.size, width: dimensions.width, height: dimensions.height, status: "awaiting_archive", createdAt: now, updatedAt: now });
     // Phase 3B1: only the delivered derivative copies follow activeMediaProvider().
     const derivativeProvider = activeMediaProvider();
