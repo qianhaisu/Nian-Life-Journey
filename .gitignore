@@ -12,3 +12,6 @@ node_modules/
 *.log
 Claude outputs/
 .github/skills.zip
+
+# Local database diagnostics may contain deployment credentials.
+v2/db-check-tmp.mjs
