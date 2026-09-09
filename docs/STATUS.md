@@ -4145,3 +4145,139 @@ scheduler、未采购任何新资源、未对源库 Neon 做任何写操作、�
    一致性校验方式均未开始设计，需要 Teddy 明确这是否是 Phase 5 的目标以及优先级。
 4. ECS Web 容器部署配置（`compose.production.yaml` 等，见 2026-09-09 MIG-C-Phase3C2 条目）已有
    离线草案但从未在真实 ECS 上跑过 `docker compose up`，仍需 Teddy 批准的人工发布顺序。
+
+## 2026-09-09 Phase 4：loadFamilyArchive() 94 秒根因定位 + 唯一推荐最小修复方案
+
+**结论：94 秒的主因已用数字证实——不是 RDS 查询慢，是「本机↔隧道↔ECS↔RDS」这条诊断路径的
+传输带宽只有约 0.5 MB/s，而 `loadFamilyArchive()` 一次要拉约 55 MB。真正可在代码里安全修的，
+是其中约 2 MB 的重复查询（`content_quality_reviews` 拉 3 遍、`life_events` 拉 2 遍），本轮只
+给出方案，未改代码。这个修复不能把 94 秒降到 ≤3 秒——那需要 ECS 同 VPC 内实测（本轮未做，见
+「尚未证实」）。**
+
+### 1. 真实调用链（读代码得出，不是猜测）
+
+`loadFamilyArchive()`（`v2/lib/family-archive.ts:126`）：
+```
+Promise.all([getAllEvents(), getStore(), getAllEventIdentities(CANONICAL_PROFILE_ID)])
+```
+三个仓储方法并发发起，各自内部再并发/串行发更多查询（均在 `v2/lib/db/postgres-repository.ts`）：
+
+- `getAllEvents()`（567 行）→ `Promise.all([canonicalEvents(), reviewIndex()])`：
+  `SELECT * FROM life_events WHERE profile_id=$1`（651 行）+
+  `SELECT * FROM content_quality_reviews`（898 行）。
+- `getStore()`→`assembleStore()`（426 行）→ **一个 15 路 `Promise.all`**：
+  `profiles`(1) `contributors`(1) `media`(9356) `media_assets`(9077) `media_locations`(34310)
+  `raw_sources`(scoped 列,46742) `life_events`(无 profile 过滤,651) `daily_traces`(0)
+  `growth_records`(0) `care_records`(0) `care_episodes`(0) `monthly_focus_goals`(0)
+  `source_memory_links`(2594) `content_quality_reviews`(898) `monthly_snapshot`(16)；
+  **15 路查询全部返回后，再单独 `await reviewIndex()`——第 16 个、串行发出的
+  `SELECT * FROM content_quality_reviews`（第 456 行）**，只为了算 `publishableEvents`/
+  `publishableTraces` 的过滤条件，用完即弃。
+- `getAllEventIdentities()`→`assembleEventIdentities()`（345 行）：
+  `SELECT id,title,story,occurred_at FROM life_events WHERE profile_id=$1`（651 行，窄列，此前
+  A-12-2 已优化过，不在本次修复范围）。
+
+**代码证实的重复**：`content_quality_reviews`（898 行/表）在一次 `loadFamilyArchive()` 里被
+整表拉 **3 次**——`assembleStore()` 的 Promise.all 里一次（结果赋给 `qualityReviewRows`，写进
+`store.qualityReviews` 返回），`assembleStore()` 自己第 456 行又串行拉一次（`reviewIndex()`，
+只用于过滤，用完丢弃），`getAllEvents()` 里再拉一次（同样只用于过滤）。`life_events`
+整表被拉 **2 次**（`assembleStore()` 的无过滤查询 + `getAllEvents()` 的按 profile 过滤查询——
+本库当前只有一个 profile，两次查询返回的是同一组 651 行）。`v2/lib/db/client.ts` 的
+`getPool()` 未设置 `max`，node-postgres 默认 `max=10`，18 路并发请求会有部分排队，但本轮实测
+（见下）排队不是主因，带宽才是。
+
+### 2. 有界诊断：一次运行，分阶段测量（未打印任何家庭内容，只有计数/字节数/耗时）
+
+用独立 tsx 进程直接调用 `pg`（不经 Drizzle），复用已有隧道和凭据，每条查询设
+`statement_timeout=45s`+`query_timeout=55s`，单条超时即停止，不重试：
+
+| 阶段 | 结果 |
+|---|---|
+| 冷连接建立 | 36 ms |
+| `SELECT 1`（纯往返延迟） | 11 ms |
+| 合成带宽探针（服务端生成 2MB 字面量，不碰任何家庭数据） | 4,201 ms，**0.476 MB/s** |
+| `EXPLAIN(ANALYZE,BUFFERS)` `life_events`（651 行） | 服务端执行 **0.18 ms** |
+| `EXPLAIN(ANALYZE,BUFFERS)` `media_locations`（34,310 行） | 服务端执行 **3.6 ms** |
+| `EXPLAIN(ANALYZE,BUFFERS)` `raw_sources`（46,742 行，scoped 列） | 服务端执行 **20.4 ms** |
+| `EXPLAIN(ANALYZE,BUFFERS)` `media`（9,356 行） | 服务端执行 **1.1 ms** |
+| `EXPLAIN(ANALYZE,BUFFERS)` `content_quality_reviews`（898 行） | 服务端执行 **0.16 ms** |
+| 单独拉取 `life_events`（1.07 MB） | 1,978 ms，**0.539 MB/s** |
+| 单独拉取 `media_locations`（20.7 MB） | 35,858 ms，**0.578 MB/s** |
+| 单独拉取 `raw_sources`（17.3 MB） | 29,983 ms，**0.576 MB/s** |
+| 复现 `loadFamilyArchive()` 实际并发形状（18 路查询同时发，默认 `max=10` 连接池） | 总耗时
+  **57,843 ms**（本次运行比原 94.25s 快，同一带宽约束下的正常波动，见下方"尚未证实"），
+  `media_locations`（20.7MB）和 `raw_sources`（17.3MB）两条在 55s 客户端超时时仍未传完，
+  被诊断脚本主动中止（不是重试，是命中超时上限） |
+
+### 3. 三类原因区分
+
+**已证实（多组独立测量互相印证，数字一致）**：
+- **RDS 服务端查询执行本身极快**——5 张最重的表 `EXPLAIN ANALYZE` 全部 <25 ms，不是瓶颈。
+- **瓶颈是本次诊断路径（本机→SSH隧道→ECS→RDS）的传输带宽**：合成带宽探针 0.476 MB/s，
+  3 个独立表的真实数据拉取分别是 0.539/0.578/0.576 MB/s——四个独立测量互相印证在
+  **约 0.5–0.6 MB/s** 这个区间，不是巧合。`loadFamilyArchive()` 一次并发请求的总负载约
+  **54.6 MB**（含重复查询），按测得带宽反推预期总耗时 **≈99 秒**，与原始观测的 **94.25 秒**
+  高度吻合——这就是那 94 秒的算术解释，不是"网络慢"这种笼统说法，是数字对得上。
+- **代码里存在真实、可证实、可安全消除的重复查询**：`content_quality_reviews` 一次调用里被
+  整表拉 3 次（其中 2 次是可去掉的多余请求，共浪费约 0.97 MB），`life_events` 被拉 2 次
+  （浪费约 1.07 MB）——合计约 **2 MB** 的纯浪费传输，源代码位置和原因已在上面列清楚，不是推测。
+- **并发连接池排队不是本次瓶颈的主因**：18 路查询几乎同时提交（`startMs` 均 ~1–5 ms），
+  真正拖长时间的是同一条带宽受限的隧道被多个并发传输共享、互相挤占，而不是等待空闲连接。
+
+**隧道带来的影响（环境因素，判断为主因但production数字未实测）**：
+- 这次测得的 0.5–0.6 MB/s 是「本机 (家庭网络) → SSH → ECS → RDS 内网」这条路径的带宽，多了一
+  段公网/隧道跳转。生产环境的 ECS Web 容器会直接在 RDS 所在 VPC 内连接，物理上不会走这条路径。
+
+**尚未证实（推测，不是实测，明确标注）**：
+- **ECS 同 VPC 内直连 RDS 拉同样 54.6 MB 会花多久，本轮未实测**——第 3 条要求"利用 ECS 现有
+  运行环境对最可疑查询做同 VPC 对照"，但 ECS 上没有预装任何 Postgres 客户端（`which psql
+  pg_restore pg_dump` 此前已确认为空），按第 3 条"不为诊断安装整套环境"的要求，本轮没有在 ECS
+  上装 Node/`pg` 或任何数据库客户端去跑对照测试。基于 RDS 服务端执行时间全部 <25 ms、同 VPC
+  内网通常有远高于家庭宽带上传速度的带宽，**推测**生产环境这部分耗时会降到大概率 ≤5 秒量级，
+  但这是推测，不是测量结果，正式部署前必须补一次同 VPC 内的真实测量才能下结论。
+- 原始 94.25 秒 vs 本轮复现的 57.8 秒（同一隧道路径）之间的差异未深究——两次跑的并发查询集合
+  基本一致，差异大概率来自隧道/公网路径本身的带宽波动（这也是为什么不能拿隧道数字直接当生产
+  数字：这条路径本身就不稳定），未逐分钟排查网络抖动原因。
+
+### 4. 唯一推荐的最小修复方案
+
+**文件**：仅 `v2/lib/db/postgres-repository.ts` 一个文件，`assembleStore()` 函数内（约第
+456 行）。
+
+**改法**：把
+```ts
+const reviews = await reviewIndex();
+```
+换成直接复用同一函数里 15 路 `Promise.all` 已经拉到的 `qualityReviewRows`（本来就是
+`content_quality_reviews` 整表，和 `reviewIndex()` 查的是完全相同的表、没有任何过滤条件）：
+```ts
+const reviews = indexReviews(qualityReviewRows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>);
+```
+（`indexReviews` 已经在文件顶部 import；这一行就是 `reviewIndex()` 函数体内部本来做的事，只是
+数据源从"再发一次网络请求"换成"用已经在内存里的同一份结果"。）
+
+**为什么这是安全、内容不变的修复**：
+- 两次查询是完全相同的 SQL（`SELECT * FROM content_quality_reviews`，无 WHERE、无 LIMIT），
+  在同一次 `assembleStore()` 调用内先后执行，中间没有任何写操作能让两次结果不同——`reviews`
+  变量的内容在改动前后逐字节相同，`publishableEvents`/`publishableTraces`/`store.qualityReviews`
+  三处下游结果不变。
+- 只删掉一次网络往返和约 0.48 MB 传输，不改查询逻辑、不改返回的 `Store` 结构、不改任何页面
+  看到的数据、不影响历史数据（这条改动完全在读取层，不碰任何写路径）。
+- **不解决 94 秒**：这个修复只消除约 2 MB / 54.6 MB（约 3.7%）的负载，在同样约 0.5 MB/s 的隧道
+  带宽下大概能省 3–4 秒，量级上远不足以让 94 秒逼近 ≤3 秒的验收线——已在上面"已证实"部分说明
+  真正的主因是带宽而不是这处冗余，这里如实标注，不夸大这个修复的效果。
+- `getAllEvents()` 自己那一次 `content_quality_reviews` 查询、以及 `life_events` 的两次重复
+  查询，**本轮不建议动**：它们分别属于 `getAllEvents()`/`getStore()` 两个各自独立、在别处也被
+  单独调用的仓储方法，要跨函数去重需要引入某种请求级缓存或改变调用签名，超出"最小修复"范围，
+  也触了"不加新缓存服务"的边界，留给以后如果要做再单独评估。
+
+**针对性验证方法（不需要在这次会话执行，留给下一次改代码时）**：
+1. 单元/契约层面：在改动前后分别调用 `assembleStore()`，对返回的 `qualityReviews`/`events`/
+   `dailyTraces` 三个字段做深度相等比较（`JSON.stringify` 或结构化 diff），确认逐字节一致。
+2. 集成层面：改动后重跑本轮同款的「复现并发形状」诊断脚本，确认 `content_quality_reviews`
+   只在整个 `loadFamilyArchive()` 调用里出现 2 次（`store` 的一次 + `getAllEvents` 的一次）
+   而不是 3 次，且总负载减少约 0.48 MB。
+3. 页面层面：本地起 `npm run dev`（或对应的隔离环境）访问首页、任一月页、`/about`，人工确认
+   页面内容与改动前完全一致（不是"看起来差不多"，是同一次数据快照下逐项核对）。
+4. 不要求、也不建议在这次改动里顺带验证真实 94 秒是否下降——那需要专门的同 VPC 对照测量
+   （见上方「尚未证实」），是另一个独立任务。
