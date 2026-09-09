@@ -4727,3 +4727,93 @@ MIG-C-Phase3B1 条目已经把这个文件列进"Phase 3B2 候选清单"），�
 **下一件事**：由 Teddy 一次性批准本节方案（或指出需要调整的具体条款）；批准后的第一步是
 先完成"一、现状核查"里列出的四步 OSS 账号/bucket/凭据准备，再按"四、唯一推荐执行方案"的
 第 1 步（50 个对象小批量验证）开始执行，不需要另开三轨或调度。
+
+## 2026-09-09 OSS 迁移已批准执行：脚本已写好并验证接线，卡在一处真实缺口——没有阿里云账号访问能力
+
+**结论：Teddy 已批准杭州地域、私有 bucket、RAM 最小权限、真实复制，本轮据此推进到"可以立刻
+跑"的状态——迁移脚本已经写好、在真实 ECS 容器里验证过完整接线（除了两个云端凭据外，其余
+路径全部走通）。但本轮没有真正跑迁移，因为撞上一个真实的能力缺口：这个 Session 没有任何
+阿里云账号级 API/控制台访问能力（没有 AccessKey、没有 RAM 权限、`~/.aliyun/secrets.json`
+是空的 `{}`），**无法自己创建 OSS bucket 或 RAM 用户**——这不是选择不做，是没有这个工具。
+按指令第 1 条"若缺少云控制台访问能力，只回报需要 Teddy 完成的最少具体操作，并继续其余准备"
+处理：下面先给 Teddy 的最少操作，然后是本轮已经做完、可复用的准备。
+
+### 一、需要 Teddy 完成的最少操作（只有这一处，不是本轮偷懒省略）
+
+1. 阿里云控制台 → 对象存储 OSS → 创建 Bucket：区域选"华东1（杭州）"（`cn-hangzhou`，与
+   RDS/ECS 同区域，已用 ECS 元数据服务核实 `region-id=cn-hangzhou`），读写权限选**私有**，
+   其余保持默认即可。记下 Bucket 名称（建议 `nianlife-media`，若已被占用则任选一个能记住
+   的名字）。
+2. RAM 访问控制 → 创建一个 RAM 用户（建议 `nianlife-oss-migration`），**不勾选控制台登录**，
+   只需要它能生成 AccessKey。
+3. 给这个 RAM 用户新建一条自定义权限策略，只授予对这一个 bucket 的 `oss:GetObject` +
+   `oss:PutObject`（`Resource` 精确写这个 bucket，例如
+   `acs:oss:*:*:<bucket名>` 和 `acs:oss:*:*:<bucket名>/*`，不要用 `*` 通配到所有 bucket），
+   挂到这个 RAM 用户上——这就是"RAM 最小必要权限"。
+4. 为这个 RAM 用户生成一对 AccessKey ID / AccessKey Secret。
+5. 把下面 5 个值写进 **`C:\Users\teddy\nianlife-oss.env`**（本机仓库外，格式仿照已有的
+   `nianlife-rds.env`，一行一个 `KEY=value`）：
+   ```
+   OSS_ENDPOINT=oss-cn-hangzhou-internal.aliyuncs.com
+   OSS_REGION=cn-hangzhou
+   OSS_BUCKET=<第 1 步的 bucket 名称>
+   OSS_ACCESS_KEY_ID=<第 4 步的 AccessKey ID>
+   OSS_ACCESS_KEY_SECRET=<第 4 步的 AccessKey Secret>
+   ```
+   `OSS_ENDPOINT` 用的是**内网 endpoint**（ECS 和 bucket 同区域，走内网不计流量费，见
+   2402845 的费用估算）；如果这个内网 endpoint 在实际控制台里名字不完全一致，以控制台
+   显示的"内网访问域名"为准。
+6. 写完这个文件后告诉我一声"好了"即可——不需要、也请不要把这几个值粘贴在对话里，我会直接
+   读这个文件，不会打印其中任何一个值。
+
+这五步做完，我可以立刻从下面"已完成的准备"直接接着跑，不需要再重新走一遍设计或重新批准。
+
+### 二、本轮已经做完、可以直接复用的准备
+
+**迁移脚本**：新增 `v2/scripts/oss-migrate-derivatives.mjs`（`npm run media:migrate-oss`
+调用），完全按 2402845 定的方案实现，没有任何偏离：
+- **候选集固定死**：`provider='hot' AND variant IN ('thumbnail','web') AND status='ready'`，
+  硬编码在 SQL 里，不接受运行时参数改变这个过滤条件——原件（`variant='original'`，任何
+  provider）在这个查询里完全不会出现，不依赖调用者记得传对参数。
+- **复用真实代码，不是重新实现**：R2 读取用现有 `hotStorage`（`lib/storage/hot-storage.ts`），
+  OSS 写入/回读用现有 `getOssStorage()`（同文件），数据库连接用现有 `getDb()`/`schema`
+  （`lib/db/client.ts`、`lib/db/schema.ts`）——没有绕开这些适配层自己拼 S3 请求。
+- **顺序严格是"读 R2→（若 OSS 该 key 已有对象且哈希不同则判为冲突，直接跳过不覆盖）→写
+  OSS→回读→独立重算 SHA-256 比对→比对通过才 `INSERT` 一行新 `media_locations`**"；`INSERT`
+  本身还带了数据库唯一约束（`provider`+`provider_ref`）的 `onConflictDoNothing` 兜底，双重
+  防重复。全程只有 `SELECT`/`INSERT`，代码里没有一处 `UPDATE`/`DELETE` 触碰
+  `media_locations`，也没有碰 `media_assets`。
+- **断点续传以数据库为准，不依赖本地文件**：每次运行先查一遍"哪些候选的 `provider_ref` 已经
+  在 `provider='oss'` 里出现过"，已出现的直接跳过（零网络调用），不依赖某个进度文件是否还
+  在——即使执行环境的临时文件全丢了，从数据库重新算一遍待办列表就能继续，行为不变。本地还是
+  留了一份 JSONL 审计日志（每个对象的处理结果+时间戳），但只是辅助排查，不是恢复所需的
+  真相来源。
+- **参数完全对应指令**：`--limit`（本次最多处理多少个待办对象，验证阶段传 50）、
+  `--batch-size`（默认 200）、`--concurrency`（默认 8）、`--object-timeout-ms`（默认
+  30000）；单批失败超过 5% 立即停止本次运行、打印失败详情，不自动继续下一批。
+- **未做的事**（本轮范围内，按指令排除）：不修改 `MEDIA_STORAGE_PROVIDER`/
+  `HOT_STORAGE_BACKEND`（脚本完全不碰这两个开关，读写走的是两个 storage 实例本身，不经过
+  这两个路由开关，跟"应用切换读取哪个 tier"没有关系）；不启动任何常驻进程/worker；不删除
+  任何源对象。
+
+**验证情况（本轮能做到的部分，卡在凭据之前）**：
+- `npm run typecheck`、`npm run lint`、`npm test`（691 项，681 过，10 项 postgres contract
+  套件按约定跳过）全部通过，脚本文件本身也过了 `eslint` 单独检查。
+- 本地和真实 ECS 容器（复用已有的 `nianlife-builder:diag` 镜像，`docker run --rm` 挂载脚本
+  文件，不发布端口、不常驻）两处分别跑过 `--limit 1`：**报错位置完全符合预期**——`[FATAL]
+  Error: DATABASE_URL is not set.`，说明脚本的 import 链路（`lib/db/client.ts`、
+  `lib/db/schema.ts`、`lib/storage/hot-storage.ts`、`drizzle-orm`）在容器环境里全部解析
+  正确，没有缺包、没有路径错误、没有语法错误——**唯一卡住的就是缺 `DATABASE_URL`/`OSS_*`
+  这几个凭据本身**，不是代码问题。
+- ECS 上建好了 `/home/ecs-user/nianlife-oss-migration/`（含 `logs/` 子目录，`chmod 700`），
+  脚本已经放在那，Teddy 的 5 个值一到，我马上能把 RDS 只读凭据（复用已有 `nianlife-rds.env`）
+  和这 5 个 OSS 值一起组装成 ECS 侧的 `.env.runtime`（同样只在会话内组装、不落进仓库、不
+  打印），立刻跑 `--limit 50` 验证。
+
+**提交**：`v2/scripts/oss-migrate-derivatives.mjs`（新增）、`v2/package.json`
+（新增 `media:migrate-oss` 脚本入口）——commit SHA 见 push 记录，**这一步提交的只是脚本
+代码，没有执行任何真实复制、没有写一行 `media_locations`、没有创建任何云资源**。
+
+**下一件事**：等 Teddy 按上面"一"完成 5 步、丢一句"好了"，我立刻组装凭据、跑 `--limit 50`
+验证，通过后按 `--batch-size 200` 直接推进到全量（按已批准的指令，不需要再次审批），完成后
+按"完成验收清单"逐项核对并一次性回报数量、字节数、失败/跳过项、原 location 保留情况。
