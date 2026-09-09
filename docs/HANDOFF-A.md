@@ -21,8 +21,15 @@
 - 未确认：序列、扩展版本、timezone/collation、脱敏字段摘要。撤回“与源库完全一致”及
   “Phase 2 完整 final_pass”；当前应记为“核心备份/恢复成功，完整一致性验收 partial / changes_requested”。
 - 无需重跑备份或连接生产。明文双副本事实保留；原批准方案的加密归档要求与后续四条件允许明文
-  副本的口径差异，待总指挥确认。下一步仅准备 RDS 恢复/对账 runbook；RDS 采购和目标写入仍需
-  Teddy 明确批准。
+  副本的口径差异，待总指挥确认。RDS 采购和目标写入仍需 Teddy 明确批准。
+
+### 2026-09-09 RDS 恢复 Runbook 文档修正
+- `docs/RUNBOOK-RDS-RESTORE.md` 已按 Teddy 反馈修正为 v2：Phase 2 状态改为 partial /
+  changes_requested；PG18 以下目标版本默认停止（需单独兼容性验证+批准）；`pg_restore` 退出码
+  检查修正（不再用 `| tee` 掩盖）；验收禁止只用 `n_live_tup`；locale 改为执行前查源库实际值，
+  不硬编码 `en_US.UTF-8`；`DROP DATABASE` 改为需单独批准，移出默认回滚；Neon egress 取不到记
+  「未确认」，不为此新增监控/API Key；ECS→RDS 明确内网优先。纯文档任务，未连接任何数据库。
+  详见 `docs/STATUS.md` 2026-09-09 条目。
 
 ## 调度
 - `CronCreate` Job ID `acf5497f`，`*/5 * * * *`，本 session 生效，7 天后自动过期。

@@ -3883,3 +3883,19 @@ Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
 运行配置为本地/假值（数据库指向 `127.0.0.1:1`，worker=false），锁定 Next 15.5.24；`npm run
 build` 成功，18 个路由生成且 standalone trace 完成。构建中外部资源 TLS 首次握手失败后由
 Next 自动 retry 1/3 成功，不影响最终 exit 0；没有数据库连接证据，也未提供任何生产凭据。
+
+## 2026-09-09 RDS 恢复 Runbook 文档修正（`docs/RUNBOOK-RDS-RESTORE.md`）
+
+1. 本轮线上没有变化——纯文档任务，未连接任何数据库、未部署、未改 DNS。按 Teddy 反馈修正
+   `docs/RUNBOOK-RDS-RESTORE.md`（v1→v2）：Phase 2 状态明确写为「核心备份/恢复成功；完整一致
+   性验收 partial / changes_requested」；目标 PG 版本低于源库 PG18 默认停止，需单独兼容性验证
+   +Teddy 批准才能继续；`pg_restore | tee` 掩盖退出码问题已改为重定向+显式 `$?` 检查并加
+   `--exit-on-error`；最终验收禁止只用 `n_live_tup`，要求全部业务表精确 `COUNT(*)` +序列+扩展
+   +timezone+collation 逐项对账；不再硬编码 `en_US.UTF-8`，改为执行前查询源库实际 locale 并确
+   认 RDS 支持；`DROP DATABASE` 改为需 Teddy 单独批准的破坏性操作，移出默认回滚流程；Neon 出
+   站用量未取得时记为「未确认」，不为此新增监控连接或 API Key；ECS→RDS 连接方式明确内网/VPC/
+   安全组优先，公网白名单仅在确有需要时使用；所有 RDS 实例 ID/区域/内网地址/版本/白名单 IP/
+   备份路径等继续保留为待填写占位符，未做任何猜测填充。
+2. 最大已知 blocker：本 Runbook 仍未执行——RDS 实例信息、源库实际 locale、Neon egress 用量等
+   第 4 节待确认项均未取得，执行前需 Teddy 授权连接并逐项补齐。
+3. 下一件事：等待 Teddy 授权后按 Runbook 第 2 节前置条件逐项核验，再进入 Phase 3 实际恢复。
