@@ -12,6 +12,18 @@
   已在 `E:\NianlifeBackups\2026-09-08\` 和 `C:\Users\teddy\nianlife-backups\final\2026-09-08\`，
   SHA-256 61 项全部 match；两份都已恢复验证（19/19 表、104,347/104,347 行，与源库完全一致）。
 
+### 2026-09-09 总审纠正（追加，不改写上述历史回报）
+- 离线复核确认：`step13.status=FAIL`、`step14.status=DONE`；step13 的两份备份、schema-only、
+  双位置复制和 SHA-256 阶段已成功，随后因本地验证库创建失败退出；step14 后续完成两份本地恢复。
+- 已独立核实：两处各 61 个文件且 0 哈希差异；两份备份各 30 个文件、10,305,188 bytes，
+  schema-only 37,758 bytes；两次 restore exit 0；源基线及两份恢复的逐表清单均为 19 表、
+  104,347 行，三份逐表清单完全一致。
+- 未确认：序列、扩展版本、timezone/collation、脱敏字段摘要。撤回“与源库完全一致”及
+  “Phase 2 完整 final_pass”；当前应记为“核心备份/恢复成功，完整一致性验收 partial / changes_requested”。
+- 无需重跑备份或连接生产。明文双副本事实保留；原批准方案的加密归档要求与后续四条件允许明文
+  副本的口径差异，待总指挥确认。下一步仅准备 RDS 恢复/对账 runbook；RDS 采购和目标写入仍需
+  Teddy 明确批准。
+
 ## 调度
 - `CronCreate` Job ID `acf5497f`，`*/5 * * * *`，本 session 生效，7 天后自动过期。
 - 会话/设备不可用即失效；压缩或重启后需重新确认 `CronList` 是否还有该 Job，没有则重建。

@@ -3454,6 +3454,34 @@ directory 格式）：
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
 
+### 2026-09-09 · MIG-A-Phase2 总审纠正（追加，不改写 2026-09-08 历史回报）
+
+**总审结论**：撤回上文“与源库完全一致”和“Phase 2 完整完成 / final_pass”的结论。当前状态为
+**核心备份与恢复成功；完整一致性验收 `partial / changes_requested`**。
+
+**已核实的文件/日志证据**：
+- `C:\Users\teddy\nianlife-backups\ops\logs\step13.status` 实际为 `FAIL`，
+  `step14.status` 实际为 `DONE`，与上文“二者均 DONE”不一致。step13 日志证明两份目录备份、
+  schema-only、双位置复制和 SHA-256 已成功；之后因本地验证库创建失败而退出。step14 随后在本地
+  PostgreSQL 18 验证集群中完成两份恢复，二者 restore exit 均为 0。
+- `E:\NianlifeBackups\2026-09-08\` 与
+  `C:\Users\teddy\nianlife-backups\final\2026-09-08\` 各有 61 个文件；离线逐项重算为
+  0 missing、0 extra、0 hash mismatch。两份备份各 30 个文件、10,305,188 bytes；
+  schema-only 为 37,758 bytes。
+- `ops\meta-2026-09-08\table-rowcounts.txt` 与工作目录内两份恢复行数清单均为 19 表、
+  104,347 行；离线按表名排序后逐行比较，三份清单完全一致。验证集群端口当前未监听。
+
+**未确认项**：现有生产证据未形成序列值、扩展及版本、timezone/collation、脱敏字段摘要与两份
+恢复结果的对账，因此不能把“逐表行数一致”扩大为“源库完全一致”。无需重跑备份、无需重新连接
+Neon；先保留现有产物，后续只从已有备份或目标恢复环境补齐可离线取得的证据，无法取得的明确标
+“未确认”。
+
+**归档口径差异**：当前核实到的是 C/E 两处明文副本及逐文件 SHA-256；原批准方案要求加密归档
+A/B，而后续四条件允许 `step7-plain` 明文路线。该差异不在本轮擅自裁决，交总指挥确认最终验收口径。
+
+**下一步**：Phase 3 的 A 轨只准备 RDS 恢复与对账 runbook；RDS 采购、目标连接和任何写入必须等
+Teddy 明确批准。未获批准前不采购、不连接、不恢复。
+
 ## MIG-C-Phase3A：events/[id] 页移除 getStore() 全量读（2026-09-08）
 
 1. 本轮线上多了什么家人能读的东西：无新增可读内容；这是一次费用/性能修复，不改变
