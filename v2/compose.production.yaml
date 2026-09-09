@@ -1,0 +1,23 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.runtime
+    restart: unless-stopped
+    expose:
+      - "3000"
+    # This compose baseline intentionally has no scheduler or worker service.
+    # Organizer jobs remain pending unless the separately authenticated endpoint
+    # is called after ORGANIZER_WORKER_ENABLED=true is explicitly configured.
+
+  proxy:
+    image: caddy:2.10-alpine
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped

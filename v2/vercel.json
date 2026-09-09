@@ -1,5 +1,0 @@
-{
-  "crons": [
-    { "path": "/api/internal/organizer-worker", "schedule": "0 3 * * *" }
-  ]
-}

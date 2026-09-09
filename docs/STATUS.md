@@ -3806,3 +3806,52 @@ Docker 构建上下文不主动排除 `.data`，本地开发数据（可能含�
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_0116WUhu2fCRDahq8ohvPWeE
+
+## MIG-C-Phase3C2：ECS 反向代理与 Organizer 默认关闭基线（2026-09-09）
+
+1. 本轮线上多了什么家人能读的东西：无——只新增离线可审核的 Compose/Caddy 配置和
+   Organizer worker 硬门禁；未登录 ECS，未连接 Neon/R2/OSS/Vercel，未部署、未采购、未改
+   DNS，也没有启动 worker、cron 或任何生产进程。当前线上呈现和数据均未改变。
+2. 没做到什么 / 最大的已知 blocker：本机仍无 Docker，故没有执行 `docker compose config`、
+   `docker build`、`docker compose up`、Caddy 转发或容器健康检查；Compose 只通过本地 YAML
+   解析，镜像/容器/ECS/ALB 行为仍属未验证。`v2/package.json` 与 HEAD 中的 lock 原本不一致，
+   本轮隔离构建使用工作区现有 `package-lock.json` 的只读副本后 `npm ci`，但按保护边界没有
+   修改、暂存或提交该 lock；这个依赖改动应由其原会话单独提交。
+3. 下一件事：有 Docker 的机器先离线执行 `docker compose -f compose.production.yaml config`
+   和镜像/健康检查；取得 Teddy 的人工发布批准后才可配置 ECS/ALB。数据与页面验收通过前，
+   `ORGANIZER_WORKER_ENABLED=false` 保持不变且不创建任何 scheduler。
+
+**本轮改动**：
+- `compose.production.yaml`：仅定义 `web` 与 `proxy`。Web 从现有 Dockerfile 构建，只 `expose`
+  3000；Caddy 固定承接宿主机 80 端口并转发至 `web:3000`；TLS 明确由未来 ECS/ALB 终止。
+  配置刻意不含 scheduler/worker 服务，运行变量来自不入库的 `.env.runtime`。
+- `Caddyfile`：最小反向代理 `:80 -> web:3000`，无证书、DNS 或外部供应商配置。
+- `.env.example`：新增 `CRON_SECRET` 和默认值 `false` 的 `ORGANIZER_WORKER_ENABLED`，只列名称/
+  占位值，不含真实凭据。
+- `lib/organizer/worker-gate.ts`：只有字符串精确等于 `"true"` 才放行；未设置、`false`、大小写
+  错误都关闭。`lib/organizer/kick.ts` 在调用 Next `after()` 前应用该门禁；内部 worker API 在
+  Bearer 鉴权后再次应用门禁，关闭时返回 503，不 claim job。
+- 删除 `vercel.json`：移除旧 Vercel 每日 cron 声明；迁移基线不会把它自动复制到 ECS。
+- `test/organizer-worker-gate.test.mjs`：覆盖 unset/false/TRUE/true 四种状态。
+
+**人工放行顺序（本轮未执行）**：
+1. 在 ECS 主机外部准备不入库的 `.env.runtime`，初始强制 worker=false；先做 Compose 配置检查、
+   镜像构建与本机容器健康检查。
+2. 记录待发布 commit SHA、当前可恢复的 Vercel/旧目标和回滚负责人；未得到 Teddy 批准前不创建
+   ECS/ALB、不开放流量。
+3. 新环境先只接内部健康检查，核对 `/api/health`、页面和迁移后数据数量；未通过则保持 DNS/
+   生产入口不变。
+4. Teddy 人工批准切流后才改入口；观察健康、错误率与数据库用量。数据验收完成前仍不启用 worker。
+5. worker 若要放行，另行设置专用 `CRON_SECRET`，显式改为 worker=true 并先手工跑一次有界批次；
+   scheduler 是后续独立、默认关闭的操作，不属于本配置。
+
+**回滚顺序（本轮未执行）**：先把 worker=false 并停止新目标流量，再按发布记录恢复旧目标；保留
+新环境日志和数据库/媒体历史，不删数据、不清理资源。旧 Vercel 当前是否仍可直接恢复需发布时
+重新核验，不能仅凭历史 Paused 记录宣称已有可用回滚站点。
+
+**离线验证**：针对性 worker 门禁/batch 测试 5/5 通过；`npm run typecheck` 通过；`npm run lint`
+通过；`npm test` 691 项（681 pass、10 skip、0 fail）；Compose 文件由已安装的 `js-yaml` 成功
+解析并确认含 web/proxy 两个服务。隔离构建在临时 git-archive 副本执行，无 `.env.local`，所有
+运行配置为本地/假值（数据库指向 `127.0.0.1:1`，worker=false），锁定 Next 15.5.24；`npm run
+build` 成功，18 个路由生成且 standalone trace 完成。构建中外部资源 TLS 首次握手失败后由
+Next 自动 retry 1/3 成功，不影响最终 exit 0；没有数据库连接证据，也未提供任何生产凭据。

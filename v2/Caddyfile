@@ -1,0 +1,5 @@
+# Phase 3C2 edge proxy. ECS/ALB owns TLS; this container only accepts private
+# HTTP traffic forwarded from it and relays it to the Web container.
+:80 {
+  reverse_proxy web:3000
+}
