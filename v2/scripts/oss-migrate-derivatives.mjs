@@ -31,12 +31,22 @@ import * as t from "../lib/db/schema.ts";
 import { newId } from "../lib/db/repository-interface.ts";
 import { hotStorage, getOssStorage } from "../lib/storage/hot-storage.ts";
 
+// Accepts both --flag=value and --flag value (space-separated) — the latter is the more natural
+// invocation and its absence was a real bug: `--limit 1` silently parsed as limit="true" (Number
+// -> NaN), and Array.prototype.slice(0, NaN) coerces NaN to 0, so it processed zero objects
+// while printing a plausible-looking "will attempt 0 objects" line instead of erroring loudly.
 const args = new Map();
-for (const arg of process.argv.slice(2)) {
-  const m = /^--([a-z-]+)(?:=(.*))?$/.exec(arg);
-  if (m) args.set(m[1], m[2] ?? "true");
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i++) {
+  const m = /^--([a-z-]+)(?:=(.*))?$/.exec(argv[i]);
+  if (!m) continue;
+  if (m[2] !== undefined) { args.set(m[1], m[2]); continue; }
+  const next = argv[i + 1];
+  if (next !== undefined && !next.startsWith("--")) { args.set(m[1], next); i += 1; }
+  else args.set(m[1], "true");
 }
 const LIMIT = args.has("limit") ? Number(args.get("limit")) : Infinity;
+if (args.has("limit") && !Number.isFinite(LIMIT)) throw new Error(`--limit value is not a finite number: ${JSON.stringify(args.get("limit"))}`);
 const BATCH_SIZE = Number(args.get("batch-size") ?? 200);
 const CONCURRENCY = Number(args.get("concurrency") ?? 8);
 const OBJECT_TIMEOUT_MS = Number(args.get("object-timeout-ms") ?? 30_000);

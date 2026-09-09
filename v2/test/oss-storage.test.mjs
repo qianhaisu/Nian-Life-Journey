@@ -73,6 +73,16 @@ test("getOssConfig fails closed when any OSS_* variable is missing, naming the m
   assert.doesNotThrow(() => getOssConfig(FULL_ENV));
 });
 
+// 2026-09-09: a real production run hit "Invalid URL" from @aws-sdk/client-s3 the moment
+// OSS_ENDPOINT was set to a bare hostname (e.g. "oss-cn-hangzhou-internal.aliyuncs.com") -- the
+// exact form Alibaba Cloud's own console shows and this file's getOssConfig comment documents as
+// accepted. new URL() requires a scheme, so getOssConfig must normalize it.
+test("getOssConfig normalizes a schemeless OSS_ENDPOINT to https://, and leaves one with a scheme untouched", () => {
+  assert.equal(getOssConfig({ ...FULL_ENV, OSS_ENDPOINT: "oss-cn-hangzhou-internal.aliyuncs.com" }).endpoint, "https://oss-cn-hangzhou-internal.aliyuncs.com");
+  assert.equal(getOssConfig({ ...FULL_ENV, OSS_ENDPOINT: "http://oss-cn-hangzhou.aliyuncs.com" }).endpoint, "http://oss-cn-hangzhou.aliyuncs.com");
+  assert.equal(getOssConfig(FULL_ENV).endpoint, FULL_ENV.OSS_ENDPOINT);
+});
+
 function fakeClient() {
   const sent = [];
   const client = { send: async (command) => { sent.push(command); return command.__result ?? {}; } };

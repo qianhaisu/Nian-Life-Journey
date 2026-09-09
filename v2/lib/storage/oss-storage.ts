@@ -19,8 +19,11 @@ export function getOssConfig(env: NodeJS.ProcessEnv = process.env): OssConfig {
   return {
     // Accepts either a public endpoint (oss-cn-hangzhou.aliyuncs.com) or Alibaba Cloud's
     // VPC-internal one (oss-cn-hangzhou-internal.aliyuncs.com) — this file has no opinion on
-    // which; that choice belongs to whoever deploys the worker that talks to OSS.
-    endpoint: env.OSS_ENDPOINT!,
+    // which; that choice belongs to whoever deploys the worker that talks to OSS. A bare hostname
+    // (no scheme) is what Alibaba Cloud's own docs show and what OSS_ENDPOINT is documented above
+    // to accept, but @aws-sdk/client-s3's endpoint option is parsed with `new URL()`, which throws
+    // "Invalid URL" on a schemeless string — normalize here so either form works.
+    endpoint: /^https?:\/\//i.test(env.OSS_ENDPOINT!) ? env.OSS_ENDPOINT! : `https://${env.OSS_ENDPOINT}`,
     region: env.OSS_REGION!,
     bucket: env.OSS_BUCKET!,
     accessKeyId: env.OSS_ACCESS_KEY_ID!,
