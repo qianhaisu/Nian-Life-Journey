@@ -1,6 +1,6 @@
 # HANDOFF-A（Code A，直连 Codex，≤80 行）
 
-**更新**：2026-09-08 · 本 session（Phase 2 生产备份已完整完成）
+**更新**：2026-09-09 · 本 session（Phase 4 恢复尝试：预检阶段 STOP，未连接 RDS）
 
 ## 任务 ID 状态
 - A-12-1 / A-12-2：已完成，`a04d8d2`，已在 `main`，已 push。
@@ -30,6 +30,19 @@
   不硬编码 `en_US.UTF-8`；`DROP DATABASE` 改为需单独批准，移出默认回滚；Neon egress 取不到记
   「未确认」，不为此新增监控/API Key；ECS→RDS 明确内网优先。纯文档任务，未连接任何数据库。
   详见 `docs/STATUS.md` 2026-09-09 条目。
+
+### 2026-09-09 Phase 4 恢复执行：预检阶段 STOP（未连接 RDS，未执行 pg_restore）
+- Teddy 授权后按 Runbook 执行只读预检。Neon 源库只读查询完成：PG18.6、encoding UTF8、
+  timezone GMT、`datcollate`/`datctype`=`C.UTF-8`/`C.UTF-8`、扩展仅 `plpgsql`、19 张业务表行数
+  与序列均与 2026-09-08 基线一致（无新增数据）。`psql`/`pg_restore` 18.6 定位于
+  `C:\Program Files\PostgreSQL\18\bin`；备份 A/B 定位于
+  `nianlife-backups\final\2026-09-08\full-backup-1`/`full-backup-2`。
+- **两条独立停止条件触发，本轮完全未连接 RDS**：① locale 不兼容——源库 `C.UTF-8`/`C.UTF-8` 与
+  目标库已固定的 `Collate=C`/`Ctype=en_US.utf8` 不是同一 locale；② 执行环境（`.env.local`/
+  shell 环境变量/`~/.aliyun`）中没有 `pgm-bp11778gex0hi870` 的数据库账号密码，未新建任何凭据。
+- 未重试、未清空、未改白名单/安全组/DNS、未动备份 B、未对任何库做写操作。详见
+  `docs/STATUS.md` 2026-09-09「Phase 4 恢复：预检阶段停止」条目。
+- 下一件事：等 Teddy 对 locale 差异裁决 + 提供 RDS 数据库凭据，两者齐备前不再尝试连接 RDS。
 
 ## 调度
 - `CronCreate` Job ID `acf5497f`，`*/5 * * * *`，本 session 生效，7 天后自动过期。

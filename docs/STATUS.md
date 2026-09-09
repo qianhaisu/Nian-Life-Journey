@@ -3913,3 +3913,52 @@ Next 自动 retry 1/3 成功，不影响最终 exit 0；没有数据库连接证
    partial / changes_requested 结论和全部禁止生产操作的边界不变。
 3. 下一件事：等待 Teddy 授权后，先查源库实际 locale 与目标库已固定的 Collate C/Ctype en_US.utf8
    核对是否兼容，再按 Runbook 第 2 节其余前置条件逐项核验。
+
+## 2026-09-09 Phase 4 恢复：预检阶段停止（未连接 RDS，未执行 pg_restore）
+
+**结论：STOP at precheck。两条独立停止条件同时触发，均在 Teddy 授权范围内的只读预检阶段发现，
+未进入任何写操作。**
+
+**已完成的只读预检（Neon 源库，`DATABASE_URL_UNPOOLED`，全程只读查询，未打印/记录连接串）**：
+- `psql`/`pg_restore` 版本：`C:\Program Files\PostgreSQL\18\bin\`，18.6（不在系统 PATH，需用绝对
+  路径调用；与目标 RDS 18.0 兼容）。
+- 源库版本：`PostgreSQL 18.6 (c5250a2) on aarch64-unknown-linux-gnu`（Neon 托管）。
+- 源库 encoding=UTF8，timezone=GMT。
+- 源库 `pg_database.datcollate` / `datctype` = **`C.UTF-8` / `C.UTF-8`**。
+- 源库扩展：仅 `plpgsql 1.0`，无其他扩展需要在目标库预先启用。
+- 业务表 19 张（`information_schema.tables`，public schema，与 2026-09-08 基线一致）：
+  `care_episodes`(0)、`care_records`(0)、`chat_import_tasks`(27)、`connector_states`(1)、
+  `content_quality_reviews`(898)、`contributors`(1)、`daily_traces`(0)、`growth_records`(0)、
+  `life_events`(651)、`media`(9356)、`media_assets`(9077)、`media_locations`(34310)、
+  `monthly_focus_goals`(0)、`monthly_snapshot`(16)、`organizer_jobs`(13)、`organizer_runs`(659)、
+  `profiles`(2)、`raw_sources`(46742)、`source_memory_links`(2594)。全部与 2026-09-08 已有基线
+  逐一核对一致，本轮无新增数据。
+- 序列：仅 `__drizzle_migrations_id_seq`，`last_value=13`。
+- 备份 A/B 定位：`C:\Users\teddy\nianlife-backups\final\2026-09-08\full-backup-1`（A）、
+  `full-backup-2`（B），目录格式，各 30 个数据文件；SHA-256 清单
+  `ops\meta-2026-09-08\sha256-manifest-2026-09-08.txt` 61 项此前已全部 `match=True`，本轮未重新
+  计算（未改动文件，视为仍然有效，未做额外读写）。
+
+**触发的停止条件（两条，任一已足够停止，未连接 RDS 验证第二条）**：
+1. **locale 不兼容**：源库 `datcollate`/`datctype` = `C.UTF-8`/`C.UTF-8`；目标 RDS `nianlife`
+   已固定为 `Collate=C`/`Ctype=en_US.utf8`（2026-09-09 控制台截图确认）。`C.UTF-8` 与 `C` 不是
+   同一 collation，`en_US.utf8` 与 `C.UTF-8` 的排序/大小写规则也不同——按 Runbook 第 1.2 节和第
+   0 节停止条件，二者不一致必须先停，不得自行判断接受差异，不得重建目标库（重建属于第 5.1 节
+   破坏性操作，需 Teddy 单独批准）。
+2. **RDS 数据库连接凭据缺失**：执行环境（`v2/.env.local`、shell 环境变量、`~/.aliyun/`）中未
+   发现任何 `pgm-bp11778gex0hi870` 的数据库账号/密码；`.env.local` 中的凭据均为 Neon/R2/
+   DeepSeek，没有 RDS 条目。`~/.aliyun/` 是 CLI 控制台鉴权目录，即便配置了 AccessKey 也不等同于
+   RDS 数据库账号密码，未使用、未新建任何 Aliyun API Key。因此**本轮完全未连接 RDS**——未验证
+   目标库是否为空、未做任何 RDS 侧只读查询、未执行 `pg_restore`。
+
+**未做的事（按停止指令，未扩大范围）**：未重试、未清空任何东西、未修改白名单/安全组/DNS、未
+创建 API Key 或监控连接、未触碰备份 B、未对 Neon 或 RDS 做任何写操作、未把家庭原始数据传输到
+新环境。
+
+**未确认项**：RDS 数据库账号密码来源（需 Teddy 提供，通过环境变量或不入库密钥文件）；locale
+差异是否可接受或需要 Teddy 批准重建目标库；ECS 执行机 IP；具体安全组入站规则；Neon egress 用量
+（本轮未检查，不为此新增监控）。
+
+**下一件事**：Teddy 对 locale 不一致（`C.UTF-8` vs `C`/`en_US.utf8`）给出裁决——接受差异继续，
+或批准按第 5.1 节重建目标库为兼容 locale；并提供 RDS 数据库账号凭据（环境变量或不入库密钥文
+件）。两者未同时满足前不会再次尝试连接 RDS 或执行 `pg_restore`。
