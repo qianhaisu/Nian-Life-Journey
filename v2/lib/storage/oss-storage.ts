@@ -46,7 +46,11 @@ export class OssStorage implements HotStorage {
     this.client = client ?? import("@aws-sdk/client-s3").then(({ S3Client }) => new S3Client({
       endpoint: config.endpoint,
       region: config.region,
-      forcePathStyle: true,
+      // Unlike R2 (see R2HotStorage's forcePathStyle: true), Alibaba Cloud OSS's S3-compatible
+      // endpoint only accepts virtual-hosted-style requests (bucket.endpoint/key) — a real request
+      // with path-style addressing came back "Please use virtual hosted style to access." This
+      // class must never set forcePathStyle: true.
+      forcePathStyle: false,
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.accessKeySecret },
     }));
   }
