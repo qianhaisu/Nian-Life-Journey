@@ -4334,3 +4334,131 @@ Node+`pg`，或者等 ECS Web 容器正式部署后顺带量出这个数字）�
 对照测量；(b) 还是等 ECS Web 容器按既定发布顺序正式部署后，用真实容器直接量出
 `loadFamilyArchive()` 在同 VPC 下的耗时，不再单独搭诊断环境。去重修复本身已经是完成状态，
 不阻塞这个决定。
+
+## 2026-09-09 ECS Docker 环境就绪 + 镜像构建成功 + 同 VPC 真实测量：94 秒问题证实是隧道带宽，不是 RDS 或应用代码
+
+**结论：选了上一条记录的 (a)——在 ECS 上装了 Docker（不是裸 Node+`pg`），用应用自己的真实
+`Dockerfile` 建出生产镜像，在 ECS 内直连 RDS 跑了真实 `loadFamilyArchive()` 和真实页面渲染。
+同 VPC 的 repository 耗时 **1,884 ms**，同 VPC 的页面首屏（未预渲染的月份，真实触发 ISR
+on-demand 渲染）**2,161 ms**——都在产品原则"≤3 秒"目标以内。94 秒 ≈ 现在的 1.88 秒的 50 倍，
+数字直接证实上一轮的判断：瓶颈是「本机→隧道→ECS→RDS」这条诊断路径的带宽，不是 RDS、不是
+应用代码、不是 54.6 MB 这个读取量本身。**
+
+**一、Docker 环境安装（按要求先查后装）**：
+- 安装前检查：Ubuntu 24.04.4，40G 盘（35G 可用）、3.5G 内存、2 核；无 Docker/containerd；无
+  冲突服务（只有系统自带服务在跑，80/443 未被占用）；`ufw inactive`；cgroup v2、overlay
+  内核模块均已具备；apt 能直接从 Ubuntu 官方 universe 源（走已配置好的阿里云镜像）装
+  `docker.io` 29.1.3 + `docker-compose-v2` 2.40.3，不需要加 Docker Inc. 的第三方源。
+- 影响评估（安装前已报告）：不需要重启（内核已支持，无 pending reboot）；不替换任何现有
+  服务；网络层面唯一变化是 Docker 建自己的 `docker0` 网桥和 DOCKER/DOCKER-ISOLATION
+  iptables 链做容器间隔离——这是本机内部配置，不改变安全组、不改变对公网的暴露面。
+- 执行结果：`sudo apt-get install -y docker.io docker-compose-v2` 成功，`systemctl enable --now
+  docker` 成功，`docker --version` = 29.1.3，`docker compose version` = 2.40.3，服务 active。
+- **一处额外必要配置（安装计划外，实测后追加）**：`docker pull node:22-bookworm-slim` 直连
+  `registry-1.docker.io` 超时（该 ECS 到 Docker Hub 的出站路径不通，与本机之前发现的"阿里云
+  ECS 出站限制"是同类问题，不是这次新引入的）。测了几个公开镜像地址后，`docker.m.daocloud.io`
+  可达（`/v2/` 返回 401，是正常的匿名探测响应），在 `/etc/docker/daemon.json` 加了
+  `registry-mirrors: ["https://docker.m.daocloud.io"]` 并重启 docker 服务——这是 Docker 官方
+  文档支持的标准配置项（只改 Docker 自己的镜像拉取源，不改宿主机防火墙/DNS/安全组），加完后
+  `docker pull node:22-bookworm-slim` 立即成功。
+
+**二、Dockerfile/Compose 复核（未改动，直接复用）**：
+- `v2/Dockerfile`（三阶段：deps → builder → runner，`output: "standalone"`）和
+  `v2/.dockerignore` 已经把凭据、`.env*`、`.data`、`.vercel`、`test`、WorkBuddy/Quark 运行时
+  目录、`*.md` 全部排除在构建上下文外——复核后确认可以直接用，本轮未改一行。
+- 构建上下文没有直接在 ECS 上跑 `docker build .`（那样会依赖 `.dockerignore` 单独兜底），
+  而是先 `git archive HEAD -- v2` 只导出**已提交**的 v2 目录内容（多一层保证：未跟踪的临时
+  脚本、本地未提交改动天然不在 archive 里），本地核对 archive 里没有任何 `.env`/凭据/密钥
+  文件（只有 `.env.example` 模板），再 `scp` 到 ECS 解压，构建上下文 9.9 MB。**构建过程中
+  没有设置任何 `DATABASE_URL`，`npm run build` 全程未连接任何数据库（生产 Neon 或 RDS 均未
+  触碰）**——`generateStaticParams()` 在无 `DATABASE_URL` 时走仓库默认的 JSON backend
+  （`REPOSITORY_BACKEND` 未设置时默认 `json`），构建产物里 `/memory/2026/07`、
+  `/memory/2026/08` 两个预渲染月份来自这个空/默认 JSON store，不是任何真实数据。
+- `docker build -t nianlife-web:diag .` 成功，8m35s（2 核机器，`npm ci` 装 392 个包占了约
+  4 分钟，其余是 `next build`）；`docker build --target builder -t nianlife-builder:diag .`
+  复用同一批构建缓存，秒级完成——这是"最小临时诊断容器"用的镜像（含完整 `node_modules`，
+  包括 `tsx`，`runner` 阶段镜像本身没有 `tsx`/`scripts`，不能直接跑诊断脚本）。
+
+**三、`package.json`/`package-lock.json` 不一致核查（结论：找到真实归属，已纳入本轮修复，
+已在 f14f67a 提交推送）**：`package.json` 自 2026-09-05 提交 `d0ea2e4`（"feat(p1-6): local
+daily worker..."）起就声明了 `heic-convert`（供 `scripts/quark-heic-convert.mjs` 等 HEIC
+批转换脚本使用），但那次提交只改了 `package.json`，从未同步过 `package-lock.json`——已提交
+的锁文件里完全没有 `heic-convert`/`heic-decode`/`jpeg-js`/`libheif-js`/`pngjs` 这五个包的
+记录，`npm ci`（Dockerfile 的 deps 阶段用的正是这条命令）在这种状态下会直接报
+"Invalid: lock file does not satisfy package.json" 失败。工作区里已经有另一个会话跑过
+`npm install` 生成的新锁文件（本会话开始时已经是未提交的工作区改动），核对其 diff 是纯新增
+51 行、只对应上面这 5 个包、没有动其他任何包的已解析版本——确认可归属、确认是本应用构建
+真正需要的修正，`npm ci --dry-run` 验证一致后单独提交（f14f67a，已 push）。这也是这次
+ECS 构建能一次成功、没有在 `npm ci` 卡住的原因。
+
+**四、同 VPC 诊断执行（不发布端口、不起 worker/scheduler、有超时）**：
+- 诊断脚本 `diag-loadarchive.mjs`（未提交进仓库，只在 ECS `/tmp` 临时目录跑完即删）直接
+  `import` 真实的 `./lib/family-archive.ts`（`loadFamilyArchive`）和
+  `./lib/db/repository.ts`（`getAllEvents`/`getStore`/`getAllEventIdentities`），每个调用包一层
+  45 秒超时。用 `docker run --rm`（跑完自动删除容器，不常驻）挂载诊断脚本到
+  `nianlife-builder:diag` 镜像里执行 `npx tsx diag-loadarchive.mjs`，`--env-file` 传入只在
+  这次会话内组装、从未写进仓库或打印到终端的 RDS 连接串（复用已有 `nianlife-rds.env` 里的
+  账号，未新建账号、未 GRANT）。全程不发布任何宿主机端口，脚本本身不启动 HTTP 服务。
+- **`loadFamilyArchive()` 同 VPC 真实耗时：1,884 ms**（对照上一轮隧道路径 94,252 ms，约
+  1/50）。返回结构：chapters=2、events=212、traceEvents=153、media=9216、snapshots=16——与
+  上一轮（2026-09-09 Phase 4 隧道路径测量）的数字逐项一致，确认这次连的是同一份已恢复数据，
+  不是别的库。
+- 分阶段（**顺序、独立**调用，量级参考，不是并发内部真实耗时，与上面并发总数分开报告）：
+  `getAllEvents()` 25 ms（212 行）；`getStore()` 999 ms，序列化后 50.60 MB
+  （`rawSources=46742 events=212 dailyTraces=0 media=9356 mediaAssets=9077 qualityReviews=898
+  monthlySnapshots=16`）；`getAllEventIdentities()` 9 ms（651 行）。
+  `loadFamilyArchive()` 整体序列化后约 61.08 MB（JS 对象大小的近似值，不是精确网络字节数，
+  量级上与上一轮估算的 54.6 MB 一致）。
+- 顺带记录一个未深入的数据观察，不属于本轮任务范围，如实写下不展开：`getStore()` 返回的
+  `dailyTraces` 数组长度是 0（该字段是发布过滤后的结果——`assembleStore()` 用
+  `isTracePublishable` 过滤，只有 `decision === "approved"` 的 DailyTrace 才会出现在这里）。
+  这是否符合预期、是否需要跟进，留给对 Organizer/judgment 有判断权限的人评估，本轮不展开、
+  不改代码。
+
+**五、镜像启动验证（结论：成功，页面能用真实 RDS 数据渲染出完整 HTML）**：
+- `docker run -d --rm -p 127.0.0.1:3000:3000 --env-file .env.runtime nianlife-web:diag`——只绑
+  ECS 自己的回环地址 `127.0.0.1`，不改安全组、不改 DNS、不改 TLS，外部网络访问不到这个端口。
+  容器内置的 `HEALTHCHECK`（`GET /api/health`）第 2 次探测即 200，容器状态 `Up ... (health:
+  starting)`。
+- 先测了首页 `/`、`/about`、`/memory/2026/08`：全部在 10–45 ms 内返回——但这是**假信号**，
+  这三个路径要么在构建期已经用（空的）JSON store 预渲染成静态 HTML（`/memory/2026/07`、
+  `/memory/2026/08` 在构建日志里标为 `●  (SSG)`），要么是 5 分钟 ISR 静态缓存，命中的是
+  构建产物里烤进去的旧静态页，**根本没有真的在这次请求里查询 RDS**。
+- 换成构建时不在预渲染列表里的 `/memory/2026/09`（`generateStaticParams` 只列出了 JSON
+  store 里的月份，2026-09 不在其中，Next.js 的 on-demand ISR 会在首次请求时真正触发
+  `loadFamilyArchive()`）：**首次请求（真实 RDS 渲染）2,161 ms**（`time_starttransfer`），
+  返回 200，40,368 字节 HTML；第二次请求命中 ISR 缓存后降到 15 ms（预期行为，证明第一次
+  确实是缓存未命中触发的真实渲染，不是巧合）。
+- **repository 耗时（1,884 ms）与页面首屏耗时（2,161 ms）分开报告，不混为一个指标**：两者
+  差值（约 280 ms）是 React Server Component 渲染 + HTML 序列化 + Next.js 自身开销，量级
+  合理，不是新的性能问题。
+- 测试结束后 `docker stop nianlife-diag-web`（`--rm` 自动清理容器）；确认端口回收
+  （`ss -tlnp` 复查，只剩 SSH/DNS/containerd 自身的回环监听）；`.env.runtime` 里的连接串
+  用 `shred -u` 清除；ECS `/tmp` 下的构建上下文和诊断脚本临时文件已删除，镜像本身
+  （`nianlife-web:diag`、`nianlife-builder:diag`）保留在 ECS 本地供后续复用，未 push 到任何
+  镜像仓库。
+
+**六、实测结论（按要求逐条给）**：
+- **同 VPC 真实耗时**：repository 层 `loadFamilyArchive()` = 1,884 ms；页面首屏（真实触发
+  RDS 渲染的路径）= 2,161 ms。两者都在"≤3 秒"目标以内。
+- **镜像启动是否成功**：成功。健康检查通过，用真实 RDS 数据完整渲染出月页 HTML（chapters/
+  events/media 等结构都对，不是错误页或空页）。
+- **54 MB 读取是否仍构成实际瓶颈**：**不再构成实际瓶颈**。同 VPC 环境下 50.6 MB
+  （`getStore()`）在 999 ms 内传完；94 秒的成因已经证实完全是隧道路径的带宽，不是这个读取
+  量本身在同 VPC 场景下的问题。
+- **下一步是否需要收窄查询，依据是什么**：**不是当前优先级**——同 VPC 下两个数字都已经在
+  验收线以内，没有紧迫的性能压力去动 `getStore()`/`getOrganizerStore()` 的查询范围。如果
+  之后请求量、并发读者数、或 ECS/RDS 之间的网络条件变化，61 MB 的序列化 payload 仍然是一个
+  已知可以继续收窄的方向（`docs/STATE.md` 已经记录了 `getStore()`/`getOrganizerStore()`
+  不能被页面渲染路径滥用的边界），但不是本轮结论要求现在动。
+
+**未做的事**：未修改安全组、DNS、TLS；未公开任何流量或端口；未启动 worker/scheduler；未新建
+数据库账号或执行 GRANT；未重扫 Neon；未重跑数据库恢复；未搬运 OSS 媒体；未把镜像推到任何镜像
+仓库；未修改 `Dockerfile`/`compose.production.yaml`（复核后确认不需要改）；除
+`package-lock.json` 同步修复（f14f67a，前一条已提交推送）外未改任何应用代码。
+
+**下一件事**：ECS Web 容器部署配置（`compose.production.yaml`）已经在真实 ECS 上验证过镜像
+能跑、能连 RDS、性能达标——离正式发布只差 Teddy 批准的人工发布顺序（DNS/证书切流、
+`compose.production.yaml` 里 `proxy` 服务对外 80 端口这一步本轮按要求没有跑，留给正式发布
+时处理）。应用专用（非 admin）数据库账号仍未配置，上一轮记录的这个未确认项本轮未处理，
+继续留给 Teddy 决定。
