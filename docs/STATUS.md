@@ -3962,3 +3962,48 @@ Next 自动 retry 1/3 成功，不影响最终 exit 0；没有数据库连接证
 **下一件事**：Teddy 对 locale 不一致（`C.UTF-8` vs `C`/`en_US.utf8`）给出裁决——接受差异继续，
 或批准按第 5.1 节重建目标库为兼容 locale；并提供 RDS 数据库账号凭据（环境变量或不入库密钥文
 件）。两者未同时满足前不会再次尝试连接 RDS 或执行 `pg_restore`。
+
+## 2026-09-09 Phase 4 恢复（续）：完成兼容性判断与目录格式命令纠正，仍卡在执行位置/凭据
+
+**结论：本轮完成了 Teddy 要求的最小 locale 兼容性判断（技术结论：兼容，可以继续），并纠正了
+Runbook 里过严/过时的步骤；但仍未能连接 RDS——真实前置条件（RDS 数据库账号、ECS 执行机信息）
+本轮仍不存在于任何允许查找的位置，按指令停在这一步，未扩大搜索范围、未自行创建凭据。**
+
+**locale 兼容性判断（按 Runbook 1.2 节 2026-09-09 纠正版方法）**：
+- 检查了 `v2/lib/db/schema.ts` 全部 `unique()`/`uniqueIndex()`：均建在 checksum、
+  organizationFingerprint、`provider+providerExternalId`/`providerRef`、jobKey、
+  `profileId+month` 等 hash/ID/复合业务键上，不是自然语言文本。
+- 全仓库 `grep` 未发现 `ILIKE`/`LIKE '...'`/显式 `COLLATE`/`LOWER()`/`UPPER()`。
+- 仅两处 `ORDER BY`（`postgres-repository.ts` 里 chat_import_tasks/organizer_jobs 的任务领取
+  查询），排序键是 `created_at asc, id asc`，`id` 只是并发抢占的 tie-breaker，不影响数据正确性。
+- 依据 PostgreSQL 官方文档：`C`、`C.UTF-8`、`en_US.utf8`（libc 非 ICU）均为确定性
+  （deterministic）collation，`=` 等值比较和唯一约束不受 locale 影响，locale 只影响
+  `ORDER BY`/`LIKE`/字符分类。
+- **结论：源库 `C.UTF-8`/`C.UTF-8` 与目标库 `Collate=C`/`Ctype=en_US.utf8` 对当前 schema/查询
+  模式技术兼容，可以继续，不需要重建目标库**。已把这条判断方法和结论写回
+  `docs/RUNBOOK-RDS-RESTORE.md`（v3→v4），把此前"名称不一致就停"的过严规则改为"先做最小判断"。
+
+**Runbook 同步纠正的其他过时内容（v3→v4）**：
+- 备份 A/B 是 `pg_dump --format=directory` 目录产物（`full-backup-1`/`full-backup-2`，含
+  `toc.dat`+`<oid>.dat.gz`），Runbook 此前示例命令误写成单文件 `backup_a.dump`，已改为
+  `pg_restore --format=directory ... full-backup-1`，SHA-256 校验也改为对整个目录逐文件计算。
+- 源库扩展已查明仅 `plpgsql`（PostgreSQL 内置），删除了"如源库有扩展需提前启用"的占位提醒。
+- 第 6 节验收标准里"collation 与源库一致"改为"完成第 1.2 节兼容性判断并记录结论"，不再要求
+  字符串完全相同。
+
+**真实前置条件缺失（本轮唯一剩余阻塞，未扩大搜索范围）**：
+1. **RDS 数据库账号凭据**：`v2/.env.local`、shell 环境变量、约定俗成的仓库外文件路径均未发现。
+   已在 Runbook 第 4 节写明约定：环境变量 `RDS_PGHOST`/`RDS_PGPORT`/`RDS_PGUSER`/
+   `RDS_PGPASSWORD`/`RDS_PGDATABASE`（或单一 `RDS_DATABASE_URL`），或仓库外文件（如
+   `C:\Users\teddy\nianlife-rds.env`）。
+2. **ECS 执行机信息**：内网白名单为 `172.16.0.0/12`，2026-09-09 已验证本机（家庭网络
+   192.168.31.x）DNS 能解析到内网 IP `172.24.16.96` 但 TCP 5432 直连超时——本机确认不在该
+   VPC 内，必须经已有 ECS 跳转。`C:\Users\teddy\Downloads\nianlife-prod-ecs.pem` 密钥文件存在，
+   但按隐私边界此前从未记录其对应主机名/IP，需 Teddy 通过环境变量（如 `NIANLIFE_ECS_HOST`/
+   `NIANLIFE_ECS_SSH_USER`）提供，本轮未搜索历史聊天或其他无关目录去找它。
+
+**未做的事**：未连接 RDS、未创建任何新凭据/API Key、未修改白名单/安全组/DNS、未触碰备份 B、
+未对任何数据库做写操作。
+
+**下一件事**：等 Teddy 提供上述两项（RDS 数据库账号凭据 + ECS 主机/登录信息）后，直接从「执行
+顺序」第 1 步继续，无需重新走已完成的 locale 判断和 Runbook 纠正。

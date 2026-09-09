@@ -1,9 +1,9 @@
 # Nianlife RDS 恢复/对账 Runbook
 
-> 版本：v3，2026-09-09，Cowork 起草 v1，Code 会话按 Teddy 反馈修正（v2）、按 RDS 控制台截图确认信息更新（v3）
+> 版本：v4，2026-09-09，Cowork 起草 v1，Code 会话按 Teddy 反馈修正（v2）、按 RDS 控制台截图确认信息更新（v3）、按 Phase 4 执行反馈纠正过严的 locale 停止条件与目录格式备份命令（v4）
 > 权威版本：本仓库 `docs/RUNBOOK-RDS-RESTORE.md`
-> 适用阶段：Phase 3（目标库恢复）—— 在 Teddy 提供连接授权并确认 RDS 可用后执行
-> 本次更新（v3）仅为文档修改：未连接 RDS、未连接 Neon、未执行任何恢复/写入操作，以下信息均来自 Teddy 提供的 RDS 控制台截图确认结果。
+> 适用阶段：Phase 4（目标库恢复，Teddy 已授权持续有效：只读读 Neon、写 RDS `nianlife`，不 DROP/不改 DNS/不公开流量，遇停止条件立即停）
+> v4 仍是文档修改：本轮未连接 RDS（缺 RDS 数据库账号凭据与 ECS 执行机信息，见第 4 节），已完成的是 Neon 只读复核与 locale 兼容性判断，均不写入任何数据库。
 
 ---
 
@@ -23,7 +23,7 @@
 | Ctype | `en_US.utf8` |
 | 默认白名单组 | `172.16.0.0/12` |
 
-**仍未确认，禁止猜测**（见第 4 节）：ECS 执行机 IP、源库实际 locale/collation、源库最新逐表行数、Neon egress 用量、（除默认白名单组外的）安全组规则细节。目标库的 Collate/Ctype 已固定为 `C` / `en_US.utf8`，能否与源库实际 locale 兼容仍需第 1.2 节查询后核对，不能因为目标库信息已知就跳过该核对。
+**仍未确认，禁止猜测**（见第 4 节）：ECS 执行机 IP、源库最新逐表行数、Neon egress 用量、（除默认白名单组外的）安全组规则细节。源库实际 locale（`C.UTF-8`/`C.UTF-8`）已于 2026-09-09 查明，并按第 1.2 节完成最小兼容性判断（结论：与目标库 `Collate=C`/`Ctype=en_US.utf8` 技术兼容），不再是待确认项。
 
 ---
 
@@ -48,7 +48,7 @@
 - pg_restore 报错，或退出码非 0（即使日志看起来"non-fatal"也先停，见第 3.3 节退出码检查）
 - 目标 RDS PostgreSQL 版本低于源库 PG18，且未完成单独的兼容性验证并获得 Teddy 批准（见第 2 节；已确认目标为 18.0，此条当前不触发，但仍需保留检查步骤，不得删除）
 - RDS 存储用量或网络出量出现非预期大幅增长
-- 无法确认源库实际 locale/collation，或确认后发现与目标库已固定的 `Collate=C` / `Ctype=en_US.utf8` 不一致（目标库已存在，locale 无法事后免代价更改，见 3.1 节）
+- 无法确认源库实际 locale/collation；或确认后按第 1.2 节的最小兼容性判断，发现某项唯一约束/排序/大小写/字符分类的实际依赖会被 locale 差异影响、且当场无法排除（locale 名称不同本身不是停止理由，见第 1.2 节 2026-09-09 纠正）
 
 ---
 
@@ -93,7 +93,12 @@ SHOW timezone;
 查到结果后：
 
 1. 与目标库已确认的固定值对比：`Collate=C`、`Ctype=en_US.utf8`、`server_encoding=UTF8`（见「已确认的 RDS 目标环境信息」表）。目标库 `nianlife` 已存在，locale 是建库时固定的，无法事后免代价更改。
-2. 若源库 locale 与目标库已固定的值不一致，先停止，上报 Teddy，不得自行决定接受差异或重建目标库（重建属于第 5.1 节的破坏性操作，需单独批准）。
+2. **locale 名称不同不自动等同于不兼容**（2026-09-09 纠正：v2/v3 曾要求名称不一致就无条件停止，过严）。名称不一致时不要直接停，改做以下最小判断：
+   - 检查 schema 里依赖文本排序、大小写转换、字符分类或显式 `COLLATE` 的用法：`grep` 唯一约束/索引定义（是否建在自然语言文本列上，还是 hash/UUID/复合业务键上）、`ORDER BY` 是否作用于用户可读文本列、是否用了 `ILIKE`/`LIKE`/`LOWER()`/`UPPER()`/显式 `COLLATE`。
+   - libc（非 ICU）locale——包括 `C`、`C.UTF-8`、`en_US.utf8`——都是**确定性（deterministic）collation**：字节相同的字符串才判等，`=` 等值比较和唯一约束不受 locale 影响；locale 只影响 `ORDER BY`/`<`/`>` 的排序顺序和 `LIKE`/正则的字符分类。
+   - 只有当业务确实依赖跨 locale 会变化的排序/大小写/字符分类（例如用户可读文本的字典序展示、`ILIKE` 模糊匹配）时，才需要在 RDS 上做有界、只读的常量表达式验证（如 `SELECT 'a' < 'B' COLLATE "en_US.utf8"` 之类），并把判断结论和依据记进本节，判断通过后直接继续，不必单独另建审计任务等待批准。
+   - 2026-09-09 对本仓库当前 schema/查询的判断结论：`v2/lib/db/schema.ts` 里所有 `unique()`/`uniqueIndex()` 都建在 checksum、fingerprint、provider+external-id、jobKey、profileId+month 等 hash/ID/复合业务键上，不是自然语言文本；全仓库未发现 `ILIKE`/`LIKE '...'`/`COLLATE`/`LOWER()`/`UPPER()`；仅有的两处 `ORDER BY`（`postgres-repository.ts` 里 `chat_import_tasks`/`organizer_jobs` 的任务领取查询）排序键是 `created_at asc, id asc`，`id` 只作为并发抢占时的 tie-breaker，不影响业务数据正确性。结论：**源库 `C.UTF-8`/`C.UTF-8` 与目标库 `Collate=C`/`Ctype=en_US.utf8` 对当前 schema/查询模式技术上兼容**，可以继续，不需要重建目标库。若后续 schema 增加了依赖文本排序/大小写/字符分类的新用法，需要重新做此判断，不能援引这条历史结论。
+   - 若判断发现某项唯一约束、数据正确性或实际业务行为可能受影响、且当场无法排除，仍要先停，说明具体影响后再交给 Teddy 决定，不自行重建目标库（重建属于第 5.1 节的破坏性操作，需单独批准）。
 
 ---
 
@@ -102,7 +107,7 @@ SHOW timezone;
 - [ ] Teddy 已明确授权本次恢复操作
 - [x] 阿里云 RDS 实例已创建，可连接——实例 `pgm-bp11778gex0hi870`，杭州可用区 H，运行中（2026-09-09 控制台截图确认，见上表）
 - [x] 已确认 RDS PostgreSQL 版本 = `18.0` ≥ 源库 PG18，版本门禁满足，无需单独兼容性验证
-- [ ] 已按第 1.2 节查询源库实际 locale/collation，并与目标库已固定的 `Collate=C`/`Ctype=en_US.utf8` 核对一致——**仍未确认，不得假设一致**
+- [x] 已按第 1.2 节查询源库实际 locale/collation（`C.UTF-8`/`C.UTF-8`）并完成最小兼容性判断——与目标库 `Collate=C`/`Ctype=en_US.utf8` 名称不同但对当前 schema/查询模式技术兼容（2026-09-09，见 1.2 节判断依据），不阻塞
 - [ ] 已确认 RDS 存储空间 ≥ 源库逻辑数据量的 3 倍
 - [ ] 备份文件 A 已传输到执行环境（ECS 或本机），SHA-256 已重新校验与 Phase 2 记录一致
 - [x] 目标库已存在——`nianlife`（UTF8 / Collate C / Ctype en_US.utf8，2026-09-09 控制台截图确认），第 3.1 节改为核对而非新建
@@ -137,33 +142,31 @@ SHOW lc_ctype;          -- 预期 en_US.utf8
 
 若核对结果与预期不符，先停止，上报 Teddy，不得继续恢复。
 
-在与第 1.2 节查到的源库实际 locale 比对之前，**不得假设 `Collate=C`/`Ctype=en_US.utf8` 与源库兼容**——两者不一致时的处理需 Teddy 决定（接受差异 vs. 走第 5.1 节重建目标库），不得自行判断。
+locale 兼容性判断结论见第 1.2 节 2026-09-09 纠正：源库 `C.UTF-8`/`C.UTF-8` 与目标库 `Collate=C`/`Ctype=en_US.utf8` 名称不同但技术兼容，不阻塞本步骤。
 
-如源库有扩展，需提前在 `nianlife` 库内启用（实际列表从 Phase 2 产物读取，不得凭记忆列举）：
+2026-09-09 已查明：源库扩展仅 `plpgsql`（PostgreSQL 内置，任何库默认自带），没有其他扩展需要在 `nianlife` 库内提前启用，本步骤跳过。
 
-```sql
--- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
--- CREATE EXTENSION IF NOT EXISTS "pg_trgm";
-```
+### 3.2 校验备份文件（目录格式，不是单文件 `-Fc`）
 
-### 3.2 校验备份文件
+备份 A/B 是 `pg_dump --format=directory` 产物，每份是一个目录（`full-backup-1`/`full-backup-2`），内含 `toc.dat` + 多个 `<oid>.dat.gz` 数据文件，不是单一 `backup_a.dump` 文件——不得假设文件名，按目录实际内容校验：
 
 ```bash
-# 在执行机器上重新计算 SHA-256，对比 Phase 2 记录
-sha256sum backup_a.dump   # 应与 Phase 2 SHA-256 清单一致
-sha256sum backup_b.dump   # 同上
+# 在执行机器上，对目录内全部文件重新计算 SHA-256，与 Phase 2 清单
+# ops/meta-2026-09-08/sha256-manifest-2026-09-08.txt 逐项比对（61 项，含 full-backup-1/2 全部文件）
+find full-backup-1 -type f -exec sha256sum {} \;
 
-# 快速探查备份结构（不做恢复）
-pg_restore --list backup_a.dump | head -50
+# 快速探查备份结构（不做恢复），目录格式需要 --format=directory
+pg_restore --format=directory --list full-backup-1 | head -50
 ```
 
 ### 3.3 执行 pg_restore 到目标库
 
 ```bash
-# 使用备份 A（B 作为备用）
+# 使用备份 A（目录 full-backup-1；B/full-backup-2 本轮只保留，不作为恢复目标）
 # 不在命令行写密码，使用 PGPASSWORD 环境变量或 .pgpass
 
 pg_restore \
+  --format=directory                 \
   --host=pgm-bp11778gex0hi870.pg.rds.aliyuncs.com \
   --port=5432                        \
   --username=<RDS用户名，待填写>    \
@@ -172,7 +175,8 @@ pg_restore \
   --no-privileges                    \
   --exit-on-error                    \
   --verbose                          \
-  backup_a.dump > restore.log 2>&1
+  --jobs=1                           \
+  full-backup-1 > restore.log 2>&1
 RESTORE_EXIT_CODE=$?
 
 # 不要用 `pg_restore | tee` ——管道会让 $? 拿到 tee 的退出码而不是 pg_restore 的，
@@ -267,14 +271,22 @@ DATABASE_URL="postgresql://<只读用户>:<pass>@pgm-bp11778gex0hi870.pg.rds.ali
 | RDS PostgreSQL 版本 | `18.0` ✅ 已确认 |
 | 目标库编码/Collate/Ctype | `UTF8` / `C` / `en_US.utf8` ✅ 已确认（`nianlife` 已存在） |
 | 默认白名单组 | `172.16.0.0/12` ✅ 已确认（不等同于「实际放行执行机的安全组规则」，见下） |
-| 源库实际 locale/collation（见 1.2 节） | `待填写` —— 仍未查询，禁止假设与目标库一致 |
-| 源库扩展列表 | `待从 Phase 2 产物读取` |
-| 备份文件 A 路径（执行机） | `待填写` |
-| 备份文件 A SHA-256（Phase 2 记录） | `待从 Phase 2 产物读取` |
+| 源库实际 locale/collation（见 1.2 节） | `C.UTF-8` / `C.UTF-8` ✅ 已查询（2026-09-09），兼容性判断结论见 1.2 节 |
+| 源库扩展列表 | 仅 `plpgsql 1.0` ✅ 已查询（2026-09-09），无需额外启用 |
+| 备份文件 A 路径（执行机） | `C:\Users\teddy\nianlife-backups\final\2026-09-08\full-backup-1`（目录格式） ✅ 已确认；**尚待确认是否已传输到实际执行 `pg_restore` 的机器（ECS 或本机），见 ECS 执行机行** |
+| 备份文件 A SHA-256（Phase 2 记录） | `ops\meta-2026-09-08\sha256-manifest-2026-09-08.txt`，61 项已全部 `match=True` ✅ |
+| ECS 执行机（主机/IP，用于经内网连接 RDS） | `待填写` —— 禁止猜测。已知存在密钥文件 `C:\Users\teddy\Downloads\nianlife-prod-ecs.pem`，但按隐私边界未记录其对应主机/IP，需 Teddy 提供 |
 | 执行机器 IP（若走公网白名单路径，见 2.1 节） | `待填写` —— 禁止猜测 |
 | 具体安全组入站规则（放行哪个执行源） | `待填写` —— 禁止猜测，默认白名单组不代表已配置好实际规则 |
-| 执行时重新查的源库行数（全部业务表） | `待执行前查询填写` |
+| RDS 数据库账号（用户名/密码） | `待填写` —— 禁止猜测/搜索无关凭据目录，需 Teddy 通过环境变量或仓库外密钥文件提供，见下方约定 |
+| 执行时重新查的源库行数（全部业务表） | 复用 2026-09-08 基线（19 表精确行数），2026-09-09 已核对一致，未发现新增数据 |
 | Neon 出站流量用量（执行前后差值） | `待确认`——见第 6 节说明，不为获取此数据新增监控连接或创建 API Key |
+
+**RDS 数据库账号凭据约定**（2026-09-09 新增，供 Teddy 放置凭据）：二选一，不要放进仓库：
+- 环境变量：`RDS_PGHOST`、`RDS_PGPORT`（默认 5432）、`RDS_PGUSER`、`RDS_PGPASSWORD`、`RDS_PGDATABASE`（默认 `nianlife`）；或单一 `RDS_DATABASE_URL`（`postgresql://user:pass@host:port/db` 形式）。
+- 仓库外文件：例如 `C:\Users\teddy\nianlife-rds.env`（`.gitignore` 覆盖范围之外的路径即可），内容为上述同名变量，执行时通过 `source`/环境变量加载，不读取到聊天记录或提交历史中。
+
+**ECS 执行机约定**：若走 2.1 节「内网优先」路径，需要 Teddy 提供 ECS 的主机名或 IP（例如环境变量 `NIANLIFE_ECS_HOST`），以及该密钥文件对应的登录用户名（例如 `NIANLIFE_ECS_SSH_USER`）。执行环境未被告知这两项前，不会尝试连接任何未知主机。
 
 ---
 
@@ -306,7 +318,7 @@ DROP DATABASE nianlife;
 - [ ] 所有业务表行数与执行前刷新的最新源库基准完全一致（精确 COUNT，差值 = 0；`n_live_tup` 仅供摸底，不作为验收依据，见 3.4 节）
 - [ ] 序列状态一致或差异可解释（见 3.5 节）
 - [ ] 扩展列表完整（见 3.6 节）
-- [ ] timezone、collation 与源库一致（见 3.6 节）
+- [ ] timezone 记录并核对差异是否有实际影响；collation 不要求字符串完全一致，但必须完成第 1.2 节的最小兼容性判断并记录结论（见 3.6 节）
 - [ ] 应用层冒烟查询返回正确数字（见 3.7 节）
 - [ ] `pg_restore` 退出码为 0（见 3.3 节，非管道遮蔽后的假象），且 `restore.log` 无非预期错误（允许仅 "no privileges could be revoked" 类 WARNING）
 - [ ] Neon egress 用量：若能取得执行前后差值则记录；若无法取得，记录为"未确认"，不得为此新增监控连接或创建 API Key（见第 4 节）

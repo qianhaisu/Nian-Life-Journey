@@ -1,6 +1,6 @@
 # HANDOFF-A（Code A，直连 Codex，≤80 行）
 
-**更新**：2026-09-09 · 本 session（Phase 4 恢复尝试：预检阶段 STOP，未连接 RDS）
+**更新**：2026-09-09 · 本 session（Phase 4：locale 判断已过，仍卡在 RDS 凭据/ECS 执行位置）
 
 ## 任务 ID 状态
 - A-12-1 / A-12-2：已完成，`a04d8d2`，已在 `main`，已 push。
@@ -31,18 +31,23 @@
   「未确认」，不为此新增监控/API Key；ECS→RDS 明确内网优先。纯文档任务，未连接任何数据库。
   详见 `docs/STATUS.md` 2026-09-09 条目。
 
-### 2026-09-09 Phase 4 恢复执行：预检阶段 STOP（未连接 RDS，未执行 pg_restore）
-- Teddy 授权后按 Runbook 执行只读预检。Neon 源库只读查询完成：PG18.6、encoding UTF8、
-  timezone GMT、`datcollate`/`datctype`=`C.UTF-8`/`C.UTF-8`、扩展仅 `plpgsql`、19 张业务表行数
-  与序列均与 2026-09-08 基线一致（无新增数据）。`psql`/`pg_restore` 18.6 定位于
-  `C:\Program Files\PostgreSQL\18\bin`；备份 A/B 定位于
-  `nianlife-backups\final\2026-09-08\full-backup-1`/`full-backup-2`。
-- **两条独立停止条件触发，本轮完全未连接 RDS**：① locale 不兼容——源库 `C.UTF-8`/`C.UTF-8` 与
-  目标库已固定的 `Collate=C`/`Ctype=en_US.utf8` 不是同一 locale；② 执行环境（`.env.local`/
-  shell 环境变量/`~/.aliyun`）中没有 `pgm-bp11778gex0hi870` 的数据库账号密码，未新建任何凭据。
+### 2026-09-09 Phase 4 恢复执行（第二轮）：locale 判断已过，卡在真实凭据/执行位置
+- 完成 Teddy 要求的最小 locale 兼容性判断：schema 唯一约束全部建在 hash/ID/复合业务键上，
+  全仓库无 `ILIKE`/`COLLATE`/`LOWER()`/`UPPER()`，仅两处 `ORDER BY` 且 id 只是并发 tie-breaker；
+  `C`/`C.UTF-8`/`en_US.utf8` 均为确定性 collation，等值比较不受影响。**结论：源库 `C.UTF-8` 与
+  目标库 `Collate=C`/`Ctype=en_US.utf8` 技术兼容，不阻塞，不需要重建目标库。** 已写回
+  `docs/RUNBOOK-RDS-RESTORE.md`（v3→v4），同时把示例命令从单文件 `-Fc` 纠正为目录格式
+  `pg_restore --format=directory`（备份 A/B 实际就是目录）。
+- **仍完全未连接 RDS**——真实缺口是执行位置和凭据，不是 locale：本机（家庭网络）DNS 能解析到
+  RDS 内网 IP `172.24.16.96` 但 TCP 5432 直连超时，确认不在 `172.16.0.0/12` VPC 内，必须经已有
+  ECS 跳转；`Downloads\nianlife-prod-ecs.pem` 存在但按隐私边界从未记录其主机/IP；RDS 数据库账号
+  密码在 `.env.local`/环境变量/`~/.aliyun` 均未找到。已在 Runbook 第 4 节写明约定的环境变量名
+  （`RDS_PGHOST`/`RDS_PGUSER`/`RDS_PGPASSWORD`/…或 `RDS_DATABASE_URL`；ECS 用
+  `NIANLIFE_ECS_HOST`/`NIANLIFE_ECS_SSH_USER`），未搜索历史聊天或其他无关目录。
 - 未重试、未清空、未改白名单/安全组/DNS、未动备份 B、未对任何库做写操作。详见
-  `docs/STATUS.md` 2026-09-09「Phase 4 恢复：预检阶段停止」条目。
-- 下一件事：等 Teddy 对 locale 差异裁决 + 提供 RDS 数据库凭据，两者齐备前不再尝试连接 RDS。
+  `docs/STATUS.md` 2026-09-09「Phase 4 恢复（续）」条目。
+- 下一件事：Teddy 通过上述环境变量或仓库外文件提供 RDS 账号凭据 + ECS 主机/登录信息后，直接
+  从 Runbook「执行顺序」第 1 步继续，无需重新做 locale 判断。
 
 ## 调度
 - `CronCreate` Job ID `acf5497f`，`*/5 * * * *`，本 session 生效，7 天后自动过期。
@@ -69,8 +74,6 @@
 - 未读：`docs/ORCHESTRATOR-INBOX.md` 更早的历史存档段落（按协议不需要）。
 
 ## 下一件事
-Phase 2 已完整完成，无待办。本轮修复了三个自己写的脚本 bug（PowerShell 数组字面量拆分 `--jobs=`、
-`Start-Process` 无 `-Wait` 时 `ExitCode` 不可靠、本地恢复验证连错实例导致 `dropdb`/`createdb`
-挂起 24 分钟），已换用可靠模式（`&`+`$LASTEXITCODE`），新脚本 `ops\step13-dir-parallel.ps1` /
-`ops\step14-restore-verify.ps1` 留存备查。`NIANLIFE-RUN-FULL.bat` 的两处不一致仍未修（不在本轮
-范围内）。本轨回到收件轮询待命。
+Phase 2 备份/恢复已完整完成（历史，见上）。当前唯一待办是 Phase 4：等 Teddy 提供 RDS 数据库
+账号凭据 + ECS 执行机信息（见上方 2026-09-09 Phase 4 条目），到位后立即继续恢复，不重做已完成
+的 locale 判断。`NIANLIFE-RUN-FULL.bat` 的两处历史 bug 仍未修（不在本轮范围内）。
