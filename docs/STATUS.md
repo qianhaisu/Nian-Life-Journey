@@ -3899,3 +3899,17 @@ Next 自动 retry 1/3 成功，不影响最终 exit 0；没有数据库连接证
 2. 最大已知 blocker：本 Runbook 仍未执行——RDS 实例信息、源库实际 locale、Neon egress 用量等
    第 4 节待确认项均未取得，执行前需 Teddy 授权连接并逐项补齐。
 3. 下一件事：等待 Teddy 授权后按 Runbook 第 2 节前置条件逐项核验，再进入 Phase 3 实际恢复。
+
+## 2026-09-09 RDS Runbook 补充确认信息（v2→v3，纯文档）
+
+1. 本轮线上没有变化——纯文档任务，未连接任何数据库或云服务。按 Teddy 提供的 RDS 控制台截图，
+   把已确认信息写入 `docs/RUNBOOK-RDS-RESTORE.md`：实例 ID `pgm-bp11778gex0hi870`、杭州可用区 H、
+   内网地址 `pgm-bp11778gex0hi870.pg.rds.aliyuncs.com:5432`、PostgreSQL 18.0（满足 ≥源库 PG18
+   门禁）、实例运行中、目标库 `nianlife` 已存在（UTF8 / Collate C / Ctype en_US.utf8）、默认白
+   名单组 `172.16.0.0/12`。同步把第 3.1 节从「新建目标库」改为「核对目标库已有 locale 与源库
+   是否兼容」，因为库已存在、不应重新 `CREATE DATABASE`。
+2. 最大已知 blocker：ECS 执行机 IP、源库实际 locale/collation、源库最新逐表行数、Neon egress、
+   具体安全组入站规则（不同于已知的默认白名单组）仍未确认，按要求未填写、未猜测，保留 Phase 2
+   partial / changes_requested 结论和全部禁止生产操作的边界不变。
+3. 下一件事：等待 Teddy 授权后，先查源库实际 locale 与目标库已固定的 Collate C/Ctype en_US.utf8
+   核对是否兼容，再按 Runbook 第 2 节其余前置条件逐项核验。

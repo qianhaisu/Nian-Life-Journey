@@ -1,8 +1,29 @@
 # Nianlife RDS 恢复/对账 Runbook
 
-> 版本：v2，2026-09-09，Cowork 起草 v1，Code 会话按 Teddy 反馈修正
+> 版本：v3，2026-09-09，Cowork 起草 v1，Code 会话按 Teddy 反馈修正（v2）、按 RDS 控制台截图确认信息更新（v3）
 > 权威版本：本仓库 `docs/RUNBOOK-RDS-RESTORE.md`
 > 适用阶段：Phase 3（目标库恢复）—— 在 Teddy 提供连接授权并确认 RDS 可用后执行
+> 本次更新（v3）仅为文档修改：未连接 RDS、未连接 Neon、未执行任何恢复/写入操作，以下信息均来自 Teddy 提供的 RDS 控制台截图确认结果。
+
+---
+
+## 已确认的 RDS 目标环境信息（2026-09-09，Teddy 控制台截图确认）
+
+| 项目 | 值 |
+|---|---|
+| 实例 ID | `pgm-bp11778gex0hi870` |
+| 区域 / 可用区 | 杭州 / 可用区 H |
+| 内网地址 | `pgm-bp11778gex0hi870.pg.rds.aliyuncs.com` |
+| 端口 | `5432` |
+| PostgreSQL 版本 | `18.0` |
+| 实例状态 | 运行中 |
+| 目标数据库 | `nianlife`（已存在，无需重新执行 `CREATE DATABASE`，见 3.1 节） |
+| 字符集 | `UTF8` |
+| Collate | `C` |
+| Ctype | `en_US.utf8` |
+| 默认白名单组 | `172.16.0.0/12` |
+
+**仍未确认，禁止猜测**（见第 4 节）：ECS 执行机 IP、源库实际 locale/collation、源库最新逐表行数、Neon egress 用量、（除默认白名单组外的）安全组规则细节。目标库的 Collate/Ctype 已固定为 `C` / `en_US.utf8`，能否与源库实际 locale 兼容仍需第 1.2 节查询后核对，不能因为目标库信息已知就跳过该核对。
 
 ---
 
@@ -25,9 +46,9 @@
 
 - 任何步骤出现连接失败、超时、或行数与基准偏差 > 0.1%
 - pg_restore 报错，或退出码非 0（即使日志看起来"non-fatal"也先停，见第 3.3 节退出码检查）
-- 目标 RDS PostgreSQL 版本低于源库 PG18，且未完成单独的兼容性验证并获得 Teddy 批准（见第 2 节）
+- 目标 RDS PostgreSQL 版本低于源库 PG18，且未完成单独的兼容性验证并获得 Teddy 批准（见第 2 节；已确认目标为 18.0，此条当前不触发，但仍需保留检查步骤，不得删除）
 - RDS 存储用量或网络出量出现非预期大幅增长
-- 无法确认源库实际 locale/collation，且 RDS 目标版本不支持该 locale
+- 无法确认源库实际 locale/collation，或确认后发现与目标库已固定的 `Collate=C` / `Ctype=en_US.utf8` 不一致（目标库已存在，locale 无法事后免代价更改，见 3.1 节）
 
 ---
 
@@ -71,52 +92,56 @@ SHOW timezone;
 
 查到结果后：
 
-1. 确认目标 RDS 实例创建时是否支持该 locale（阿里云 RDS PostgreSQL 部分 locale 需要在建实例时指定，无法事后更改）。
-2. 若源库 locale 与计划中的 RDS locale 不一致，先停止，上报 Teddy，不得自行选择替代 locale。
+1. 与目标库已确认的固定值对比：`Collate=C`、`Ctype=en_US.utf8`、`server_encoding=UTF8`（见「已确认的 RDS 目标环境信息」表）。目标库 `nianlife` 已存在，locale 是建库时固定的，无法事后免代价更改。
+2. 若源库 locale 与目标库已固定的值不一致，先停止，上报 Teddy，不得自行决定接受差异或重建目标库（重建属于第 5.1 节的破坏性操作，需单独批准）。
 
 ---
 
 ## 2. 前置条件（执行前必须全部成立）
 
 - [ ] Teddy 已明确授权本次恢复操作
-- [ ] 阿里云 RDS 实例已创建，可连接
-- [ ] 已确认 RDS PostgreSQL 版本，且满足以下之一：
-  - RDS 版本 ≥ 源库 PG18（可直接继续）；或
-  - RDS 版本 < 源库 PG18，且已**单独完成兼容性验证**（用 schema-only 备份在非生产环境试恢复、核对语法/扩展/数据类型兼容性）**并获得 Teddy 明确批准**——未完成验证或未获批准，默认在此停止，不得继续执行第 3 节
-- [ ] 已按第 1.2 节查询源库实际 locale/collation，并确认目标 RDS 支持
+- [x] 阿里云 RDS 实例已创建，可连接——实例 `pgm-bp11778gex0hi870`，杭州可用区 H，运行中（2026-09-09 控制台截图确认，见上表）
+- [x] 已确认 RDS PostgreSQL 版本 = `18.0` ≥ 源库 PG18，版本门禁满足，无需单独兼容性验证
+- [ ] 已按第 1.2 节查询源库实际 locale/collation，并与目标库已固定的 `Collate=C`/`Ctype=en_US.utf8` 核对一致——**仍未确认，不得假设一致**
 - [ ] 已确认 RDS 存储空间 ≥ 源库逻辑数据量的 3 倍
 - [ ] 备份文件 A 已传输到执行环境（ECS 或本机），SHA-256 已重新校验与 Phase 2 记录一致
-- [ ] 目标库已创建（建库语句见第 3.1 节，locale 按第 1.2 节查到的实际值填写，不用占位符默认值）
-- [ ] ECS → RDS 连接方式已按第 2.1 节确认，且已验证连通
+- [x] 目标库已存在——`nianlife`（UTF8 / Collate C / Ctype en_US.utf8，2026-09-09 控制台截图确认），第 3.1 节改为核对而非新建
+- [ ] ECS → RDS 连接方式已按第 2.1 节确认，且已验证连通（内网地址已知，执行机 IP、安全组具体规则仍待填写）
 - [ ] 执行环境已安装 `pg_restore`，版本 ≥ 源库主版本（建议用 PG 官方镜像，避免版本不匹配）
 - [ ] 此时没有其他会话对 Neon 或目标 RDS 做任何操作
 
 ### 2.1 ECS → RDS 连接方式（优先级）
 
-1. **优先**：ECS 与 RDS 在同一 VPC，通过内网地址 + 安全组规则连接（不经公网）。安全组只放行执行用的 ECS 实例，不放行整个 VPC 网段。
-2. **仅在确有需要时**：RDS 公网地址 + IP 白名单。使用前确认没有内网路径可用（例如执行环境不在阿里云内），白名单只加执行机器的实际出口 IP，用完后移除。
+1. **优先**：ECS 与 RDS 在同一 VPC，通过内网地址（`pgm-bp11778gex0hi870.pg.rds.aliyuncs.com:5432`）+ 安全组规则连接（不经公网）。已知默认白名单组为 `172.16.0.0/12`（2026-09-09 控制台截图确认）；具体放行哪个执行用 ECS 实例/安全组规则仍待执行时确认，不得假设默认白名单组已经覆盖实际执行机。
+2. **仅在确有需要时**：RDS 公网地址 + IP 白名单。使用前确认没有内网路径可用（例如执行环境不在阿里云内），白名单只加执行机器的实际出口 IP（待填写，见第 4 节），用完后移除。
 
 ```bash
 # 内网连通性验证（ECS 内执行）
-psql -h <RDS内网地址> -U <用户> -d postgres -c "SELECT 1"
+psql -h pgm-bp11778gex0hi870.pg.rds.aliyuncs.com -p 5432 -U <用户> -d nianlife -c "SELECT 1"
 ```
 
 ---
 
 ## 3. 执行步骤
 
-### 3.1 在 RDS 上建目标库
+### 3.1 目标库核对（`nianlife` 已存在，不重新建库）
+
+2026-09-09 控制台截图确认目标数据库 `nianlife` 已存在，编码 `UTF8`、`Collate=C`、`Ctype=en_US.utf8`，**不需要、也不应该重新执行 `CREATE DATABASE`**。执行恢复前改为连接核对：
 
 ```sql
--- 连接 RDS（postgres 超级用户或有 CREATEDB 权限的用户）
--- LC_COLLATE / LC_CTYPE 必须填第 1.2 节查到的源库实际值，不得使用 en_US.UTF-8 默认值
-CREATE DATABASE nianlife
-  ENCODING '<源库 server_encoding，见 1.2 节>'
-  LC_COLLATE '<源库 lc_collate，见 1.2 节>'
-  LC_CTYPE   '<源库 lc_ctype，见 1.2 节>'
-  TEMPLATE template0;
+-- 连接 RDS 目标库 nianlife，核对实际值与控制台截图一致
+SHOW server_encoding;   -- 预期 UTF8
+SHOW lc_collate;        -- 预期 C
+SHOW lc_ctype;          -- 预期 en_US.utf8
+```
 
--- 如源库有扩展，需提前启用（实际列表从 Phase 2 产物读取，不得凭记忆列举）：
+若核对结果与预期不符，先停止，上报 Teddy，不得继续恢复。
+
+在与第 1.2 节查到的源库实际 locale 比对之前，**不得假设 `Collate=C`/`Ctype=en_US.utf8` 与源库兼容**——两者不一致时的处理需 Teddy 决定（接受差异 vs. 走第 5.1 节重建目标库），不得自行判断。
+
+如源库有扩展，需提前在 `nianlife` 库内启用（实际列表从 Phase 2 产物读取，不得凭记忆列举）：
+
+```sql
 -- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 ```
@@ -139,7 +164,7 @@ pg_restore --list backup_a.dump | head -50
 # 不在命令行写密码，使用 PGPASSWORD 环境变量或 .pgpass
 
 pg_restore \
-  --host=<RDS内网地址，待填写>       \
+  --host=pgm-bp11778gex0hi870.pg.rds.aliyuncs.com \
   --port=5432                        \
   --username=<RDS用户名，待填写>    \
   --dbname=nianlife                  \
@@ -215,7 +240,7 @@ SHOW lc_ctype;
 
 ```bash
 # 在 ECS 上（或本机），用只读账号测试应用能否连上目标库
-DATABASE_URL="postgresql://<只读用户>:<pass>@<RDS内网>:5432/nianlife" \
+DATABASE_URL="postgresql://<只读用户>:<pass>@pgm-bp11778gex0hi870.pg.rds.aliyuncs.com:5432/nianlife" \
   node -e "
     const { Pool } = require('pg');
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -234,18 +259,20 @@ DATABASE_URL="postgresql://<只读用户>:<pass>@<RDS内网>:5432/nianlife" \
 
 以下内容在写本 Runbook 时未从生产获取，执行时必须实际查询/填入，不得用占位符之外的猜测值替代：
 
-| 项目 | 待填写 |
+| 项目 | 状态 |
 |---|---|
-| RDS 实例 ID | `待填写` |
-| RDS 区域 | `待填写` |
-| RDS 内网地址 | `待填写` |
-| RDS PostgreSQL 版本 | `待填写` |
-| 源库实际 locale/collation（见 1.2 节） | `待填写` |
-| 目标库 locale/collation（须与源库一致或已获批准的替代方案） | `待填写` |
+| RDS 实例 ID | `pgm-bp11778gex0hi870` ✅ 已确认（2026-09-09 控制台截图） |
+| RDS 区域 | 杭州 / 可用区 H ✅ 已确认 |
+| RDS 内网地址 | `pgm-bp11778gex0hi870.pg.rds.aliyuncs.com:5432` ✅ 已确认 |
+| RDS PostgreSQL 版本 | `18.0` ✅ 已确认 |
+| 目标库编码/Collate/Ctype | `UTF8` / `C` / `en_US.utf8` ✅ 已确认（`nianlife` 已存在） |
+| 默认白名单组 | `172.16.0.0/12` ✅ 已确认（不等同于「实际放行执行机的安全组规则」，见下） |
+| 源库实际 locale/collation（见 1.2 节） | `待填写` —— 仍未查询，禁止假设与目标库一致 |
 | 源库扩展列表 | `待从 Phase 2 产物读取` |
 | 备份文件 A 路径（执行机） | `待填写` |
 | 备份文件 A SHA-256（Phase 2 记录） | `待从 Phase 2 产物读取` |
-| 执行机器 IP（若走公网白名单路径，见 2.1 节） | `待填写` |
+| 执行机器 IP（若走公网白名单路径，见 2.1 节） | `待填写` —— 禁止猜测 |
+| 具体安全组入站规则（放行哪个执行源） | `待填写` —— 禁止猜测，默认白名单组不代表已配置好实际规则 |
 | 执行时重新查的源库行数（全部业务表） | `待执行前查询填写` |
 | Neon 出站流量用量（执行前后差值） | `待确认`——见第 6 节说明，不为获取此数据新增监控连接或创建 API Key |
 
