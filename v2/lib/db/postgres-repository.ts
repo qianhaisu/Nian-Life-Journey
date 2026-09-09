@@ -453,7 +453,9 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     if (!profileRows[0]) throw new Error(`PostgreSQL repository: no profile row "${CANONICAL_PROFILE_ID}" found. Run the JSON→Postgres migration first.`);
     // Same publication gate as getHomeEvents/getAllEvents: the store feeds the memory timeline and
     // the homepage canvas, so unreviewed rule-derived artifacts must not reach it either.
-    const reviews = await reviewIndex();
+    // Reuses qualityReviewRows fetched above instead of calling reviewIndex(), which would issue
+    // a second, identical content_quality_reviews query.
+    const reviews = indexReviews(qualityReviewRows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>);
     const publishableEvents = (events as unknown as LifeEvent[]).filter((event) => isEventPublishable(event, reviews));
     const publishableTraces = (dailyTraces as unknown as DailyTrace[]).filter((trace) => isTracePublishable(trace, reviews));
     return {

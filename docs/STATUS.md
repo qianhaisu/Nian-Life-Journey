@@ -4281,3 +4281,56 @@ const reviews = indexReviews(qualityReviewRows as unknown as Array<Omit<QualityR
    页面内容与改动前完全一致（不是"看起来差不多"，是同一次数据快照下逐项核对）。
 4. 不要求、也不建议在这次改动里顺带验证真实 94 秒是否下降——那需要专门的同 VPC 对照测量
    （见上方「尚未证实」），是另一个独立任务。
+
+## 2026-09-09 去重修复已落地并验证；ECS 缺 Node/Docker，同 VPC 实测本轮未完成
+
+**一、去重修复（已完成，已验证）**：`v2/lib/db/postgres-repository.ts` 的 `assembleStore()`
+（改动前 456 行）按上一轮记录的方案改好——`const reviews = await reviewIndex();`
+（会对 `content_quality_reviews` 再发一次独立查询）换成
+`const reviews = indexReviews(qualityReviewRows as unknown as ...)`，直接复用同一次 `Promise.all`
+里已经取到的 `qualityReviewRows`。单文件单函数，无 schema/数据改动。
+
+验证方式（本轮实际跑的，不是「留给下一次」的清单）：
+1. **等价性**：写了一个隔离脚本（不连数据库、不改仓库），用真实的、未改动的 `indexReviews()`/
+   `isEventPublishable()`/`isTracePublishable()`（直接从 `lib/organizer/quality-review.ts` import）
+   跑一组覆盖 approved/rejected/无记录/无法识别 decision 值四种情形的合成 fixture，分别模拟
+   「改动前：两次独立 fetch」和「改动后：复用同一次 fetch」两条路径，断言 `qualityReviews`、
+   reviews 索引（Map）、`publishableEvents`、`publishableTraces` 四项输出逐项相等，同时用一个
+   fetch 计数器证明 `content_quality_reviews` 在 `assembleStore()` 内部从 2 次降到 1 次。
+   四条断言全部通过（`OK: before/after equivalence holds...` / `OK: ...before=2, after=1`）。
+   顺带确认了这处改动是纯收益：改动前两次 fetch 之间理论上存在极小的并发写竞态窗口（两次查询
+   可能读到不同结果），改动后只有一次 fetch，这个窗口被关闭，不是新引入的风险。
+2. **类型检查**：`npm run typecheck` 通过，无输出。
+3. **Lint**：`npm run lint` 通过，无输出。
+4. **测试**：`npm test`——691 个测试，681 通过、0 失败、10 skipped（10 个是需要
+   `CONTRACT_DATABASE_URL` 才跑的 PostgreSQL 契约套件，按约定未设置该变量，正常跳过，不是失败）。
+5. **隔离构建**：`NEXT_DIST_DIR=.next-verify DATABASE_URL="postgres://isolated:isolated@127.0.0.1:1/isolated" REPOSITORY_BACKEND=json npm run build`
+   ——用一个连不上的假连接串和独立 distDir 跑生产构建，17 个路由全部生成成功，证明构建期不依赖
+   真实数据库连接（应用是运行时按需读取,不在构建期预取）。构建把 `.next-verify/types/**/*.ts`
+   顺手写进了 `tsconfig.json`/`next-env.d.ts`（Next.js 的正常副作用），已用
+   `git checkout -- tsconfig.json next-env.d.ts` 还原，`.next-verify/` 目录已删除，未带进提交。
+
+**二、ECS 同 VPC 实测（本轮未完成，缺运行环境，未自行安装）**：沿用已有 SSH 授权
+（`nianlife-rds.env` 里的 `NIANLIFE_ECS_HOST`/`NIANLIFE_ECS_SSH_USER` + 已验证的
+`nianlife-prod-ecs.pem`）登录 ECS，只检查是否已有可复用的 Node 或 Docker 运行条件——
+`command -v node nodejs npm npx docker docker-compose` 全部为空，`node --version`/
+`docker --version` 均报 `command not found`。系统是 Ubuntu 24.04，装了 `python3`，但未验证
+是否有可用的 Postgres 驱动（如 `psycopg2`），且按第 4 条约束（"缺运行环境不为这项诊断自行安装
+整套环境"）没有去装它或任何 Node/Docker。上一轮已确认的 `psql`/`pg_dump`/`pg_restore` 缺失
+结论依旧成立。**结论：ECS 上没有可以直接拿来跑 `loadFamilyArchive()` 的现成运行时，本轮没有
+执行同 VPC 内的真实读取测量，也没有在本机再拉一次 54.6MB 去冒充同 VPC 结果。**
+
+**未做的事**：未在 ECS 上安装 Node/Docker/任何数据库客户端；未做同 VPC 内的
+`loadFamilyArchive()` 实测；未启动任何 Web 服务、未开放端口、未起 worker；未连生产 Vercel
+环境；未修改网络权限、白名单或安全组；未重扫 Neon、未恢复数据库、未采购任何资源。
+
+**仍然成立、需要反复强调的边界**：这处去重修复只消除约 0.48 MB / 54.6 MB（约 0.9%）的负载，
+不是"性能问题已解决"。94 秒的主因仍是本机↔隧道↔ECS↔RDS 这条诊断路径的传输带宽（上一轮已证实
+的 ~0.5 MB/s），真正的生产数字需要 ECS 直接在同 VPC 内连 RDS 实测，而 ECS 目前没有可用的运行
+时去做这件事——这是本轮唯一剩的、留给总指挥判断如何处理的缺口（例如是否批准在 ECS 上装
+Node+`pg`，或者等 ECS Web 容器正式部署后顺带量出这个数字）。
+
+**下一件事**：由总指挥决定——(a) 是否批准在 ECS 上装最小 Node+`pg` 运行时专门做这一次同 VPC
+对照测量；(b) 还是等 ECS Web 容器按既定发布顺序正式部署后，用真实容器直接量出
+`loadFamilyArchive()` 在同 VPC 下的耗时，不再单独搭诊断环境。去重修复本身已经是完成状态，
+不阻塞这个决定。
