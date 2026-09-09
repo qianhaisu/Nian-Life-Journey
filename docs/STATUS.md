@@ -4007,3 +4007,60 @@ Runbook 里过严/过时的步骤；但仍未能连接 RDS——真实前置条�
 
 **下一件事**：等 Teddy 提供上述两项（RDS 数据库账号凭据 + ECS 主机/登录信息）后，直接从「执行
 顺序」第 1 步继续，无需重新走已完成的 locale 判断和 Runbook 纠正。
+
+## 2026-09-09 Phase 4 恢复：目标库恢复完成，对账全部通过
+
+**结论：备份 A 已恢复到 RDS `nianlife`，逐表精确行数、序列、扩展、表数量全部与源库一致；
+`pg_restore` 退出码 0，日志无任何 error/warning。timezone 记录了差异（非阻塞，见下）。**
+
+**执行位置**：Teddy 提供凭据后，SSH 登录 ECS（公网 IP 由 Teddy 提供，按既有隐私边界不记录进
+仓库；密钥沿用 `Downloads\nianlife-prod-ecs.pem` 的临时受限权限副本）验证成功，取得 ECS 私网
+地址并核实其与 RDS 内网地址处于同一 /24 网段（实测而非仅凭白名单网段推断，具体 IP 不记录）。
+ECS→RDS 5432 端口 TCP 直连成功（`RDS_TCP_OK`）。ECS 上未安装任何 PostgreSQL 客户端工具（`which
+psql/pg_restore/pg_dump` 均为空），因此改用 SSH 本地端口转发（`-L 15432:RDS内网地址:5432`）
+把 ECS 当跳板，实际 `pg_restore`/`psql` 命令在本机执行（已验证的 18.6 客户端，
+`C:\Program Files\PostgreSQL\18\bin`），全程通过该隧道到达 RDS——与直接在 ECS 上安装客户端、
+把备份目录拷贝过去执行相比，效果等价（连通性瓶颈是网络路径，不是执行主机），但不需要在生产
+ECS 上安装软件包、不需要把家庭数据的第二份拷贝落到 ECS 磁盘上，恢复完成后隧道已关闭。
+
+**目标只读预检（恢复前）**：`current_database=nianlife`；`version=PostgreSQL 18.4`（控制台显示
+18.0 是大版本号，实际运行 18.4 小版本，满足 ≥PG18 门禁）；`datcollate=C`/`datctype=en_US.utf8`/
+`encoding=UTF8`，与已确认信息一致；扩展仅 `plpgsql`；**`public` schema 下业务表数量为 0，确认
+是空库**——满足"目标库已存在但为空"的继续条件，未触发"已有数据"停止条件。
+
+**备份 A 完整性复核**：对 `full-backup-1` 目录 30 个文件重新计算 SHA-256，与
+`ops\meta-2026-09-08\sha256-manifest-2026-09-08.txt` 逐项比对，30/30 一致（首次比对脚本因
+manifest 文件首行 UTF-8 BOM 误判 1 个文件"未匹配"，直接核对该文件哈希字符串后确认实为一致，
+非数据问题）。
+
+**恢复执行**：`pg_restore --format=directory --host=127.0.0.1 --port=15432（经隧道）--dbname
+nianlife --no-owner --no-privileges --exit-on-error --verbose full-backup-1`，未用 `--clean`，
+未 `DROP` 任何对象。**退出码 0**（脱敏日志 165 行，`grep -iE "error|warning"` 结果为 0 条）。
+
+**恢复后对账（逐项，全部通过）**：
+- 19 张业务表精确 `COUNT(*)`，与源库 2026-09-06 基线 + 本轮开始时的 Neon 复查完全一致：
+  `care_episodes`(0)、`care_records`(0)、`chat_import_tasks`(27)、`connector_states`(1)、
+  `content_quality_reviews`(898)、`contributors`(1)、`daily_traces`(0)、`growth_records`(0)、
+  `life_events`(651)、`media`(9356)、`media_assets`(9077)、`media_locations`(34310)、
+  `monthly_focus_goals`(0)、`monthly_snapshot`(16)、`organizer_jobs`(13)、`organizer_runs`(659)、
+  `profiles`(2)、`raw_sources`(46742)、`source_memory_links`(2594)。
+- 序列：`__drizzle_migrations_id_seq` `last_value=13`，与源库一致。
+- 扩展：仅 `plpgsql 1.0`，与源库一致。
+- `information_schema.tables` 业务表计数 = 19，与源库一致。
+- **timezone 差异（记录，非阻塞）**：目标 `Asia/Shanghai`，源库 `GMT`。这是会话级显示设置，
+  `timestamptz` 列在磁盘上按 UTC 存储，不受此设置影响，只影响未来查询/应用层不显式转换时区时
+  客户端看到的默认显示时区；不要求两边字符串一致，实际影响已记录，未发现需要处理的数据正确性
+  问题。
+- 只读应用层冒烟（只取非内容字段）：`life_events` 651 行，`occurred_at` 范围
+  `2025-01-05` ~ `2026-09-03`，与预期时间跨度吻合。
+
+**未确认项**：Neon egress 用量本轮未检查（不为此新增监控）；备份 B（`full-backup-2`）本轮只
+保留，未做第二次恢复；目标库权限/角色细节（`--no-privileges` 恢复后未逐条核对 GRANT，应用连接
+账号权限需另行配置，不在本轮授权范围内）。
+
+**未做的事**：未 `DROP` 任何对象、未修改白名单/安全组/DNS、未公开流量、未启用 worker/
+scheduler、未采购任何新资源、未对源库 Neon 做任何写操作、未打印/记录任何密码或连接串。
+
+**下一件事**：Teddy 确认恢复结果后决定 Phase 4 后续（例如是否需要基于 RDS 做应用连接测试、
+何时评估切流）；`C:\Users\teddy\nianlife-rds.env` 中的凭据仍留在原处，本轮未清除，如需要作废
+请 Teddy 自行处理。
