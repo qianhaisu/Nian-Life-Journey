@@ -4817,3 +4817,79 @@ MIG-C-Phase3B1 条目已经把这个文件列进"Phase 3B2 候选清单"），�
 **下一件事**：等 Teddy 按上面"一"完成 5 步、丢一句"好了"，我立刻组装凭据、跑 `--limit 50`
 验证，通过后按 `--batch-size 200` 直接推进到全量（按已批准的指令，不需要再次审批），完成后
 按"完成验收清单"逐项核对并一次性回报数量、字节数、失败/跳过项、原 location 保留情况。
+
+## 2026-09-09 OSS 迁移执行中发现两处真实 bug（已修复），中途按要求暂停核实（已确认安全，已恢复）
+
+**凭据到位后的第一轮验证，不是空跑通过**：`--limit 1` 真实撞了两个从未被真实网络测试覆盖过的
+bug，都在 `lib/storage/oss-storage.ts`（Phase 3B1 写的代码，此前只做过 fake-client 单元测试，
+本轮是它第一次打真实 OSS 请求）：
+
+1. **`OSS_ENDPOINT` 裸主机名导致 `Invalid URL`**——`@aws-sdk/client-s3` 用 `new URL()` 解析
+   `endpoint` 选项，要求带协议头，而 `getOssConfig()` 的注释原文写的例子就是裸主机名
+   （`oss-cn-hangzhou.aliyuncs.com`）。修复：没有协议头时自动补 `https://`，已有协议头的不变。
+2. **`forcePathStyle: true` 导致 OSS 拒绝请求**（`Please use virtual hosted style to
+   access.`）——这行是从 `R2HotStorage` 抄过来的，R2 认路径风格，阿里云 OSS 的 S3 兼容
+   接口只认虚拟主机风格（`bucket.endpoint/key`）。修复：`OssStorage` 固定用
+   `forcePathStyle: false`。
+
+两处都是脚本自己的 5% 批失败硬停在 1/1 = 100% 时立刻抓到的（零字节写入，没有留下任何东西
+要清理）；修复后补了一条单元测试覆盖 endpoint 归一化。commit `c0ca26b`（endpoint 归一化 +
+迁移脚本自身一处 CLI 参数解析 bug，见下）、`70540f5`（`forcePathStyle`），均已 push，
+`npm run typecheck`/`lint`/`test`（692 项，682 过，10 跳过）全过。
+
+**顺带修的迁移脚本自身 bug**：CLI 参数解析原来只认 `--limit=1` 这种写法，`--limit 1`
+（空格分隔）会被静默解析成 `limit="true"` → `Number()` 得 `NaN` → `Array.prototype.slice(0,
+NaN)` 被 JS 强制转成 `slice(0, 0)`，实际处理 0 个对象，但日志会打印一行看起来正常的
+"will attempt 0 objects"——不是崩溃，是安静地什么都没干。已修复为两种写法都认，并且
+`--limit` 解析不出有限数字时直接抛错，不再允许静默退化。
+
+**50 个对象验证 + 全量启动**：修完两个 bug 后重建 ECS 镜像（`docker build --target
+builder`，复用缓存，2m22s），`--limit 1` 首次真实成功（1 个 web 派生图，7,622 字节），
+`--limit 49` 补满验证批次（49/49 成功，0 失败），随后独立只读核对：`oss` 行数、字节数、
+variant 分布与预期完全一致，逐行核对每个新 `oss` 行的 `file_size` 与对应 `hot` 行一致
+（0 条不一致），`hot` 的 17,928 条候选行原封不动。验证通过后按已授权指令直接启动全量
+（`docker run -d`，容器化跑 `npx tsx scripts/oss-migrate-derivatives.mjs`，无 `--limit`），
+`--batch-size 200`/`--concurrency 8` 按方案默认值，未改。
+
+**跑到 5,050/17,928 时按要求暂停核实**：另一 Session 提出的顾虑——`selectLocation()` 对同
+variant 优先选 `oss`+`ready`，新增 `oss` 行可能立刻改变某个正在服务的读取路径，而 `OssStorage`
+没有"OSS 读失败退回 R2"的兜底——是真实、有效的代码事实（`lib/storage/hot-storage.ts` 的
+`selectLocation()` 确实这么写，`OssStorage.get/getStream` 失败就是返回 `null`/抛错，不会
+自动去查 `hot` 行）。收到提醒后立即 `docker stop`（没有等当前批次跑完再停——脚本"整对象
+原子"的设计下，跑到一半强制停止和批次边界停止安全性一样：复制→回读校验→才 `INSERT`，
+中途被杀掉的对象最多是没插入那一行，不会有半写或坏数据，独立核对也证实了这一点，见下），
+比"等这批跑完"更保守，不违反"暂停核实、不是取消迁移"的要求。
+
+**核实结果（只读，未改任何环境/DNS/部署）**：
+1. **迁移实际写入 Aliyun RDS**（`*.pg.rds.aliyuncs.com`）——本轮迁移从第一个对象到暂停前
+   写的全部是这台已恢复的 RDS 副本。
+2. **Vercel 生产实际读取 Neon**（`*.neon.tech`）——从 `v2/.env.local`（Vercel 拉取的
+   Production/Preview 共用配置）核实，`DATABASE_URL` 的 host 是 Neon 域名，跟 RDS 是完全
+   不同的两个云厂商实例，Vercel 从未配置过指向这台 RDS。只回报数据库身份（host 的域名
+   后缀），没有输出任何连接串或凭据。
+3. **暂停时点状态**：累计 `migrated=5050`（含validation阶段的50个）、`failed=3`（其中 2 条
+   是本轮修 bug 过程中的历史失败记录，真正全量运行阶段只失败 1 次——单次 R2 读取 30 秒超时，
+   孤立事件，不是系统性问题）、`conflict=0`。独立核对 `media_locations`：`oss` 行 5,050 条，
+   总字节 308,588,470；`oss` 行与对应 `hot` 行 `file_size` 逐一比对，0 条不一致；`hot` 的
+   17,928 条原候选行**完全未被更新或删除**。**没有任何对外服务读取这批新增 `oss`
+   行**——生产（Vercel）连的是 Neon，Neon 里一行 `oss` 都没有；这台 RDS 上此刻也没有任何
+   公开流量在读（此前搭建的诊断用 Web 容器早已停止、且从未公开绑定过端口）。`selectLocation()`
+   的 OSS 优先逻辑虽然已经在生产分支代码里，但因为它读的 `reviews`/`locations` 数据来自
+   Vercel 实际连接的 Neon，而不是这台 RDS，所以对任何真实读者来说完全不生效——这不是"风险
+   被消除"，是"这批新增行物理上还够不到任何读者"。
+
+**结论：满足直接恢复的条件，已恢复，未重新审批**——迁移只写 RDS、Vercel 只读独立的 Neon、
+没有对外服务受这批新增行影响。恢复方式：`docker rm` 旧容器（已停止、非 `--rm`，需要先删除
+才能复用容器名）→ 重新 `docker run -d` 同一条命令，脚本自身的"以数据库现状为准"续传逻辑
+自动识别出 5,050 个已完成、跳过，继续处理剩余 12,878 个待办——没有重新处理已完成的对象，
+没有重复插入。
+
+**记录一条硬性前提，供以后 ECS 接管生产流量时核对**（本轮不涉及，如实标记为将来的阻塞项）：
+**在 ECS Web 容器真正切流、开始服务真实读者之前，必须先验证 OSS 读取路径本身可用**——
+`OssStorage.get()`/`getStream()`失败时直接返回 `null`，没有退回 R2 的兜底，`selectLocation()`
+一旦在真正被读取的那份数据库（未来是 RDS，不再是 Neon）里看到 `oss`+`ready` 的行，就会
+优先选它，如果那时候 OSS 侧凭据/网络/bucket 出问题，用户会直接看到图片加载失败，而不是
+悄悄退回能用的 R2 副本。这条已经是本轮撞见的真实代码事实（不是猜测），必须在切流前找一个
+不影响生产的窗口做一次真实端到端验证（起码是"打一个已经迁移到 OSS 的 derivative，确认能
+通过 `/api/media/[id]` 正常取到"），本轮不做（不在授权范围内，本轮目标数据库也不是 Vercel
+实际读取的那个）。
