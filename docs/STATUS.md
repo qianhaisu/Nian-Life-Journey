@@ -4064,3 +4064,84 @@ scheduler、未采购任何新资源、未对源库 Neon 做任何写操作、�
 **下一件事**：Teddy 确认恢复结果后决定 Phase 4 后续（例如是否需要基于 RDS 做应用连接测试、
 何时评估切流）；`C:\Users\teddy\nianlife-rds.env` 中的凭据仍留在原处，本轮未清除，如需要作废
 请 Teddy 自行处理。
+
+## 2026-09-09 Phase 4：RDS 应用接入验证——数据库恢复完成，应用真实读取路径全部跑通
+
+**结论：数据库恢复完成（见上文 2026-09-09「Phase 4 恢复：目标库恢复完成」条目）。本轮用应用
+真实的 Drizzle/pg repository 代码（不是直接 psql）连到 RDS，跑了首页/月页/事件详情三个页面依赖
+的读取路径，全部成功返回预期结构；权限、索引、约束、Drizzle migration 记录复核通过；发现一个
+真实的性能问题（非阻塞但需要记录）。OSS 媒体迁移和 ECS 部署切流仍未开始。**
+
+**执行方式**：沿用已有 SSH 隧道（本机→ECS→RDS 内网，凭据取自 `nianlife-rds.env`，未改
+`v2/.env.local`）。用 `npx tsx` 在独立进程里直接 `import` 应用真实模块
+（`@/lib/family-archive`、`@/lib/db/repository`），把 `DATABASE_URL`/`REPOSITORY_BACKEND=postgres`
+只设在该进程的环境变量里，不写入任何配置文件；`ORGANIZER_WORKER_ENABLED=false`
+`AI_ORGANIZER_ENABLED=false` 显式关闭，只调用只读方法（`loadFamilyArchive`/`getMonthArchive`/
+`getEventDetail`/`listArchiveMonths`），未调用任何写入/enqueue 路径。
+
+**权限/索引/约束/迁移核对（经隧道只读查询）**：
+- 当前连接账号 `nianlife_admin` 对全部 19 张业务表有 SELECT/INSERT/UPDATE/DELETE，对数据库有
+  CONNECT/CREATE——复用已有账号，未新建账号、未执行任何 GRANT。这是一个权限较宽的账号（接近
+  admin），不是最小权限的应用专用账号；如果之后要给 Web 容器配一个权限受限的连接账号，需要
+  Teddy 决定新建还是继续用这个账号，本轮未擅自处理。
+- `drizzle.__drizzle_migrations` 13 行，与本地 `v2/drizzle/meta/_journal.json` 的 13 条迁移记录
+  条目数一致，序列 `last_value=13` 也一致——迁移历史完整，无待应用的迁移。
+- `public` schema 下 52 个索引，`pg_index` 里 0 个 `indisvalid=false`（无失败/未完成的索引）；
+  215 个约束，0 个 `convalidated=false`（无未验证约束）——索引和约束状态健康，此前恢复未留下
+  隐患。
+
+**应用真实读取路径结果（脱敏：仅数量/耗时/错误类型，无内容）**：
+- `loadFamilyArchive()`（首页 `app/page.tsx`、月页 `app/memory/[year]/[month]/page.tsx`、
+  `/about` 共用的读取入口）：**成功，耗时 94,252 ms**。返回 chapters=2、events=212（已发布口径，
+  非原始 651 行）、traceEvents=153、media=9216、snapshots=16、原始 store 内 rawSources=46742、
+  mediaAssets=9077；`time.today`=2026-09-09、`activityDay`=2026-09-03、`birthDay`=2025-01-03，
+  均与预期一致。
+- `listArchiveMonths()` + `getMonthArchive("2026-09")`：成功，`listArchiveMonths` 592 ms
+  （21 个月），`getMonthArchive` 1,629 ms。
+- `getEventDetail(<一个真实 life_events id>)`：成功，895 ms，media=3、sources=24、
+  `occurredAt` 正常返回。
+
+**性能问题（真实发现，非阻塞，记录不忽略）**：`loadFamilyArchive()` 94 秒，远超
+`docs/nianlife-product-principles.md` 里"月页几秒内出现照片，目标 ≤3 秒"的验收线。**这个数字
+不能直接当作生产环境的真实数字**——本次测量的路径是「本机 → SSH 隧道 → ECS → RDS」，多一层公网
++ECS 中转的往返延迟，比未来 ECS Web 容器直接在同一 VPC 内连 RDS 慢得多；但根因本身是项目已知的
+既有设计问题（`getStore()` 拉整个 store，`CLAUDE.md` 已经点名"`getOrganizerStore()` 已知不能给
+页面渲染路径用"，`loadFamilyArchive()` 走的 `getStore()` 同样是全表读取，只是相对没那么重），
+不是本轮新引入、也不是恢复导致的数据问题——**这个问题在切到 ECS 部署之后仍然存在，不会因为网络
+路径变了就自动消失，需要在正式部署前单独排查**（不在本轮授权范围内处理，仅如实报告）。
+
+**日期边界/时区行为（重点核实项，结论：设计上安全，验证通过）**：目标库会话 `timezone` 是
+`Asia/Shanghai`，源库 `GMT`——`getEventDetail` 返回的 `occurredAt` 字符串带 `+08` 偏移
+（源库同一时刻会显示成 `+00`）。读了 `v2/lib/timeline-dates.ts` 的 `calendarDayOf()` 实现：
+它用正则检测偏移后缀（不是硬编码 `+00`），用 `new Date()` 解析（正确处理任意偏移，`+08` 和
+`+00` 表示的是同一个瞬间只是写法不同），再用 `Intl.DateTimeFormat` 显式转换到
+`PROFILE_TIMEZONE="Asia/Shanghai"` 取日历日——**不管源库还是目标库的会话 timezone 是什么，
+这条链路都会转换到同一个日历日，Two Clocks 原则依赖的日期边界逻辑不受这次 timezone 差异影响**。
+`daily_traces.occurred_at` 是不带时区的 `timestamp`（"本地墙钟日"语义），完全不受会话 timezone
+影响。
+
+**未确认项**：
+- 应用专用（非 admin）连接账号尚未配置——本轮按指令未新建账号/GRANT，需 Teddy 决定后续账号
+  策略。
+- 94 秒的 `loadFamilyArchive()` 耗时里，隧道往返延迟占比多少、ECS 内直连 RDS 会是什么数字，
+  本轮未拆解（拆解需要在 ECS 上直接跑同样的读取，本轮未部署 ECS Web，不在授权范围内）。
+- 只测试了一个真实月份（2026-09）和一个真实事件 id，未逐月/逐事件穷举。
+- Neon egress 用量本轮未查（不为此新增监控）。
+
+**未做的事**：未部署 ECS Web、未开放任何端口、未切换现有生产配置（Vercel/DNS 均未动）、未新建
+数据库账号或执行 GRANT、未调用任何写入/enqueue 路径、未打印任何密码或连接串。
+
+**旧三轨调度说明作废**：`docs/HANDOFF-A.md`「调度」一节记录的 `CronCreate` Job（`acf5497f`,
+`*/5 * * * *`）是 2026-09-07 前后 Cowork 派单/三轨协作模式下建的心跳调度，`docs/DIRECT-COORDINATION.md`
+已确认改为直接对接、不再经 Cowork 派单——该调度说明标记为**历史失效**，本轮不恢复、不续期、
+不新建替代调度。
+
+**下一步 ECS 应用 + OSS 迁移仍缺的具体条件**：
+1. 一个权限范围明确的应用专用数据库账号（当前只有偏 admin 的 `nianlife_admin`），或 Teddy 确认
+   继续用这个账号也可以接受。
+2. `loadFamilyArchive()` 94 秒（隧道路径）背后的真实瓶颈拆解——需要在 ECS 内直连 RDS 实测，
+   本轮的隧道数字不能替代。
+3. OSS 迁移本轮完全未涉及：媒体文件目前仍在原有存储（R2），迁移到阿里云 OSS 的路径、凭据、
+   一致性校验方式均未开始设计，需要 Teddy 明确这是否是 Phase 5 的目标以及优先级。
+4. ECS Web 容器部署配置（`compose.production.yaml` 等，见 2026-09-09 MIG-C-Phase3C2 条目）已有
+   离线草案但从未在真实 ECS 上跑过 `docker compose up`，仍需 Teddy 批准的人工发布顺序。

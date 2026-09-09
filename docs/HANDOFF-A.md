@@ -1,6 +1,6 @@
 # HANDOFF-A（Code A，直连 Codex，≤80 行）
 
-**更新**：2026-09-09 · 本 session（Phase 4：备份 A 已恢复到 RDS `nianlife`，对账全部通过）
+**更新**：2026-09-09 · 本 session（Phase 4：数据库恢复完成 + 应用真实读取路径验证通过）
 
 ## 任务 ID 状态
 - A-12-1 / A-12-2：已完成，`a04d8d2`，已在 `main`，已 push。
@@ -12,29 +12,11 @@
   已在 `E:\NianlifeBackups\2026-09-08\` 和 `C:\Users\teddy\nianlife-backups\final\2026-09-08\`，
   SHA-256 61 项全部 match；两份都已恢复验证（19/19 表、104,347/104,347 行，与源库完全一致）。
 
-### 2026-09-09 总审纠正 + Runbook 文档修正（历史，详见 `docs/STATUS.md` 对应日期条目）
-- 总审撤回了「与源库完全一致」及「Phase 2 完整 final_pass」的早期结论，改记为「核心备份/恢复
-  成功，完整一致性验收 partial / changes_requested」（序列/扩展/timezone/collation 当时未逐项
-  对账）；无需重跑备份，明文双副本口径差异待总指挥确认。
-- `docs/RUNBOOK-RDS-RESTORE.md` v1→v2 按 Teddy 反馈修正过严/掩盖问题的步骤（locale 硬编码、
-  `pg_restore \| tee` 掩盖退出码、`n_live_tup` 单一依据、`DROP DATABASE` 移出默认回滚等）；
-  v2→v3 填入控制台截图确认的 RDS 目标环境信息。
-
-### 2026-09-09 Phase 4 恢复执行（第二轮）：locale 判断已过，卡在真实凭据/执行位置
-- 完成 Teddy 要求的最小 locale 兼容性判断：schema 唯一约束全部建在 hash/ID/复合业务键上，
-  全仓库无 `ILIKE`/`COLLATE`/`LOWER()`/`UPPER()`，仅两处 `ORDER BY` 且 id 只是并发 tie-breaker；
-  `C`/`C.UTF-8`/`en_US.utf8` 均为确定性 collation，等值比较不受影响。**结论：源库 `C.UTF-8` 与
-  目标库 `Collate=C`/`Ctype=en_US.utf8` 技术兼容，不阻塞，不需要重建目标库。** 已写回
-  `docs/RUNBOOK-RDS-RESTORE.md`（v3→v4），同时把示例命令从单文件 `-Fc` 纠正为目录格式
-  `pg_restore --format=directory`（备份 A/B 实际就是目录）。
-- **仍完全未连接 RDS**——真实缺口是执行位置和凭据，不是 locale：本机（家庭网络）DNS 能解析到
-  RDS 内网 IP `172.24.16.96` 但 TCP 5432 直连超时，确认不在 `172.16.0.0/12` VPC 内，必须经已有
-  ECS 跳转；`Downloads\nianlife-prod-ecs.pem` 存在但按隐私边界从未记录其主机/IP；RDS 数据库账号
-  密码在 `.env.local`/环境变量/`~/.aliyun` 均未找到。已在 Runbook 第 4 节写明约定的环境变量名
-  （`RDS_PGHOST`/`RDS_PGUSER`/`RDS_PGPASSWORD`/…或 `RDS_DATABASE_URL`；ECS 用
-  `NIANLIFE_ECS_HOST`/`NIANLIFE_ECS_SSH_USER`），未搜索历史聊天或其他无关目录。
-- 未重试、未清空、未改白名单/安全组/DNS、未动备份 B、未对任何库做写操作。详见
-  `docs/STATUS.md` 2026-09-09「Phase 4 恢复（续）」条目。
+### 2026-09-09 Phase 4 历史（第一〜三轮，详见 `docs/STATUS.md` 对应日期条目，不复述）
+- 总审撤回早期「与源库完全一致」结论，改记 partial/changes_requested；Runbook v1→v4 按 Teddy
+  反馈逐步修正（locale 硬编码、`pg_restore \| tee` 掩盖退出码、目录格式命令、locale 名称不同
+  不自动等于不兼容的最小判断方法）；第二轮完成 locale 兼容性判断（结论：源库 `C.UTF-8` 与目标
+  `Collate=C`/`Ctype=en_US.utf8` 技术兼容），仍卡在 RDS 凭据/ECS 执行位置未连接。
 
 ### 2026-09-09 Phase 4 恢复执行（第三轮）：备份 A 已恢复到 RDS，对账全部通过
 - Teddy 在 `nianlife-rds.env` 填好凭据后：SSH 登录 ECS 验证成功，实测 ECS 私网地址与 RDS 同一
@@ -55,17 +37,33 @@
   密码/连接串。详见 `docs/STATUS.md` 2026-09-09「Phase 4 恢复：目标库恢复完成」条目。
   `nianlife-rds.env` 凭据仍留原处，需要作废请 Teddy 自行处理。
 
-## 调度
-- `CronCreate` Job ID `acf5497f`，`*/5 * * * *`，本 session 生效，7 天后自动过期。
-- 会话/设备不可用即失效；压缩或重启后需重新确认 `CronList` 是否还有该 Job，没有则重建。
-- 首次自然触发写一次 scheduled PONG 到 `docs/STATUS.md`，之后无新任务不再写心跳。
+### 2026-09-09 Phase 4 应用接入验证（第四轮）：真实读取路径全部跑通，发现一个真实性能问题
+- 沿用同一 SSH 隧道，用 `npx tsx` 在独立进程里直接 `import` 应用真实模块
+  （`@/lib/family-archive`、`@/lib/db/repository`），仅在该进程环境变量设 `DATABASE_URL`/
+  `REPOSITORY_BACKEND=postgres`，未改 `.env.local`；`ORGANIZER_WORKER_ENABLED=false` 关闭，只调
+  只读方法，未走任何写入/enqueue 路径。
+- 权限/索引/约束/迁移核对：`nianlife_admin` 对 19 张业务表有全部 CRUD 权限（偏 admin，非最小权
+  限专用账号，复用已有账号未新建）；`drizzle.__drizzle_migrations` 13 行与本地 journal 13 条一
+  致；52 索引 0 invalid、215 约束 0 未验证。
+- **首页/月页/`/about` 共用的 `loadFamilyArchive()`：成功但耗时 94,252 ms**，远超产品原则
+  ≤3 秒验收线——真实发现，非本轮引入，是既有 `getStore()` 全表读取设计的已知问题，切到 ECS 部
+  署后网络路径会变但根因不会自动消失，需要单独排查（本轮只读测量，未改代码）。
+  `getMonthArchive`（1,629 ms）、`getEventDetail`（895 ms）耗时正常。
+- 日期边界/时区行为核实通过：读了 `lib/timeline-dates.ts` 的 `calendarDayOf()`，确认它用正则
+  检测偏移后缀（非硬编码 `+00`）、`Date` 正确解析任意偏移、显式转换到 `Asia/Shanghai` 取日历
+  日——目标库会话 timezone（`Asia/Shanghai`）与源库（`GMT`）不同不影响这条链路的正确性。
+- 详见 `docs/STATUS.md` 2026-09-09「Phase 4：RDS 应用接入验证」条目（含逐项数字、未确认项、
+  下一步 ECS/OSS 缺口清单）。
+
+## 调度（历史失效，2026-09-09 起不恢复）
+- `CronCreate` Job ID `acf5497f`（`*/5 * * * *`）是旧三轨 Cowork 派单协作模式下的心跳调度；
+  `docs/DIRECT-COORDINATION.md` 已确认改为直接对接，不再经 Cowork 派单。**本条已作废，不续期、
+  不重建、不再要求"每次唤醒先查 CronList"。**
 
 ## MIG-A-001 / MIG-A-002 结论摘要（历史，详见 `docs/STATUS.md` 2026-09-07 条目）
-- MIG-A-001：早期 Downloads/E 盘目录均无真正备份文件；发现 `nianlife-prod-ecs.pem` 存在于
-  Downloads，未读取内容。
-- MIG-A-002：串行 `pg_dump` 单连接带宽受限（≈2.2KB/s），推动转向 directory 格式 + jobs 并行
-  路线（后由 MIG-A-Phase2 完成）；`NIANLIFE-RUN-FULL.bat` 有两处已知 bug 标记不可用，最小修复
-  方向已写入 STATUS.md 未实施。
+- MIG-A-001：早期 Downloads/E 盘目录均无真正备份文件；发现 `nianlife-prod-ecs.pem` 存在。
+- MIG-A-002：串行 `pg_dump` 单连接带宽受限，推动转向 directory 格式 + jobs 并行路线（后由
+  MIG-A-Phase2 完成）；`NIANLIFE-RUN-FULL.bat` 有两处已知 bug 标记不可用，未实施修复。
 
 ## 占用
 - 本轮无仓库写占用冲突；`docs/STATUS.md`/`docs/STATUS-C.md`/`v2/package-lock.json` 的既有未提交改动非本 session 产生，未触碰，仅在 STATUS.md 追加新条目。
@@ -75,6 +73,7 @@
 - 未读：`docs/ORCHESTRATOR-INBOX.md` 更早的历史存档段落（按协议不需要）。
 
 ## 下一件事
-Phase 4 备份 A 已恢复到 RDS `nianlife`，对账全部通过（见上方 2026-09-09 第三轮条目）。等 Teddy
-确认结果后决定后续（应用连接测试/评估切流时机）。`NIANLIFE-RUN-FULL.bat` 的两处历史 bug 仍未
-修（不在本轮范围内）。
+**数据库恢复完成，应用真实读取路径验证通过**（见上方第三/四轮条目）。**尚未完成**：OSS 媒体
+迁移（本轮完全未涉及，路径/凭据/一致性校验均未设计）、ECS Web 部署切流（配置草案存在但从未
+在真实 ECS 上跑过）。下一步缺口清单见 `docs/STATUS.md` 同日条目末尾「下一步 ECS 应用 + OSS
+迁移仍缺的具体条件」。`NIANLIFE-RUN-FULL.bat` 的两处历史 bug 仍未修（不在本轮范围内）。
