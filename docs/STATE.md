@@ -1,5 +1,88 @@
 # Nianlife 当前状态（持续维护，读这一份就够）
 
+## 当前摘要（2026-09-10，私有诊断站验收复核轮次；下方历史全部保留）
+
+**协作形态**：Codex 总指挥/review，用户手动把单条任务交给单个 Code 执行。本轮由 Claude Code
+执行「已批准顺序」的**第 1 步：复核现有私有站点验收证据，只补缺项**。第 2–5 步的具体内容
+目前**没有写进仓库任何文档**，本轮不臆造，等总指挥补写后再接。
+
+**验收对象**：阿里云 ECS 上的私有诊断站 `nianlife-diag-web`，接 RDS + OSS，只经
+loopback + SSH 隧道访问（备案前不开公网入口）。**正式站点 nianlife.cn / Vercel 本轮未发布、
+未部署**——单独记录，不作为失败，也不触发部署。
+
+### 一、本轮亲自验证（证据在本轮会话里重新取过，不是转述）
+
+- **实际运行版本**：容器 `nianlife-diag-web` 跑镜像 `nianlife-web:8b8b58290df090d5b0fcf6cbb86b10f2aed64d31`
+  （image id `1dec65996892`，2026-09-10 09:44 CST 构建，healthy）。构建日志
+  `/tmp/nianlife-diag/build-8b8b582.log` 记录同一 image id 与 tag，构建上下文是
+  `/tmp/nianlife-diag/buildctx-8b8b582`。该上下文里 `lib/media/hero.ts`、`lib/media/presentation.ts`、
+  `lib/db/config.ts`、两个 `app/memory/[year]...page.tsx`、三个测试文件，**去掉 CRLF 后 sha256
+  与 `8b8b582` 的 git blob 逐个相等**，所以 `d3efa81` + `c57e475` + `8b8b582` 三处改动确实在运行版本里。
+  另：`c57e475`、`d3efa81` 经 `git merge-base --is-ancestor` 确认都是 `8b8b582` 的祖先。
+- **连接与配置**（只记非敏感标识）：`DATABASE_URL` 指向
+  `pgm-bp11778gex0hi870.pg.rds.aliyuncs.com:5432/nianlife`（阿里云 RDS，实测 `PostgreSQL 18.4`）；
+  `REPOSITORY_BACKEND=postgres`；`MEDIA_STORAGE_PROVIDER=oss`，bucket `nianlife-media-teddy-202609`，
+  内网 endpoint `oss-cn-hangzhou-internal.aliyuncs.com`；Organizer 关闭
+  （`ORGANIZER_WORKER_ENABLED=false`、`AI_ORGANIZER_ENABLED=false`、`MEMORY_ORGANIZER=rule`）。
+- **归档月页构建期修复确实生效**：镜像里 `.next` **没有任何预渲染的月页/事件页 HTML**，
+  `prerender-manifest` 里 `/memory/[year]`、`/memory/[year]/[month]` 只作为 dynamicRoutes 存在；
+  构建日志中没有出现过 `REPOSITORY_BACKEND` 或 build-arg。容器里那些 `memory/2026/*.html`
+  是**运行期 ISR 产物**（mtime 全在容器启动之后），不是构建产物。
+- **OSS 读取是真的走到了 OSS**：取月页上真实渲染的两张图，四个派生
+  （web/thumbnail × 2）经真实 `/api/media` 隧道取回的字节 **sha256 与直接从 OSS bucket 读回
+  同一 object 的字节 sha256 逐个相等**，大小也与 `media_locations.file_size` 相等；同时容器内
+  `/app/.data` 根本不存在，本地盘不可能是来源。这一条不是靠配置或 HTTP 200 推断的。
+- **旧存储不再承担页面读取**：`media_locations` 里 `hot` 的 `web`/`thumbnail` 各 8,964 条，
+  `oss` 的 `web`/`thumbnail` 各 8,964 条（合计 17,928，与迁移声明一致），
+  **没有任何一条 hot 派生缺少同 providerRef 的 oss 对应行**。剩下只在 hot 的是 `original`
+  （archived 1,789 + awaiting_archive 7,175），而 `/api/media` 按设计从不交付 original。
+
+### 二、本轮补验发现的问题（与上一轮 session 的回执不一致，需要判断）
+
+1. **08-19 的误配图在月页上仍然在。** `/events/event-v2-80445fc5d6c717f30f10b9e0403d1d76`
+   详情页确实只剩文字、零 `<img>`（哨兵值 `hero_media_id='none'` 生效，且该事件的三张附件
+   全部 hero-eligible，所以这就是 `d3efa81` 生效的反证）。但 `/memory/2026/08` 的
+   **8 月 19 日整块仍渲染一张页宽主图 + 两张缩略图**，主图就是「好好吃饭吧」餐牌照，
+   缩略图之一正是被摘掉的 `wechat-media:f919…967`。截图见本轮回执。
+   **原因**：月页的图片绑定走 `lib/publication-moments.ts`，它按「当天媒体 + 尺寸 + privilege」
+   选 `hero`/`supporting`，**从不读 `heroMediaId`，也不认识 `NO_HERO_MEDIA_ID`**；哨兵值只被
+   `lib/media/presentation.ts`（详情页）和 `lib/memory-chapters.ts`（章节 lead）消费。
+   上一轮回执里「08-19 月页确认只剩文字、无图」这句，按现在的页面**不成立**。
+2. **首页和归档索引仍然在构建期烤进 mock。** 镜像里 `/app/.next/server/app/index.html`
+   （13,141 bytes）内容是 mock：链接 `/events/event-car`、`/events/event-daycare-ball`、
+   `/events/event-lake`，正文是「追着哥哥姐姐一起踢球」等种子数据；`memory.html` 只列
+   2026/07、2026/08 两个 mock 月份。运行期 ISR 刷新后才变真（现在首页真实、归档索引列出
+   2025-01 → 2026-09 共 21 个月，三个 mock 事件 URL 均 404）。也就是说 `8b8b582` 只堵住了
+   月页这一条路径，**`/` 和 `/memory` 在每次容器启动/新部署后的头 5 分钟仍会先发 mock 页**。
+   这正好打在原则一的检验句上（第一次打开的家人看到什么）。
+3. **视频仍然不可交付。** 121 条 video media（29 条挂在事件上），
+   `media_assets`+`media_locations` 里 video 只有 `wechat/original/ready` 120 条，
+   **任何 provider 都没有 poster / preview 派生**，所以 `/api/media?variant=web|thumbnail|poster|preview`
+   四种全部 404。好消息是呈现层确实把它们扣住了：2025-11 月页和挂着视频的那个事件页
+   **零 `<video>`、零对该 media 的引用**，读者看不到坏元素。这是既有状态，不是本轮改动造成的。
+
+### 三、未确认 / 阻塞
+
+- **移动端未确认**：本轮浏览器工具的 `resize_window` 改不动渲染视口（`innerWidth` 始终 2560、
+  `matchMedia('(max-width: 600px)')` 为 false），**没有拿到真实窄屏渲染证据**，不冒充。
+  桌面端（1568×778）已验证：首页/月页图片实际可见并加载完成、无横向溢出、`readyState=complete`。
+- **凭据轮换**：上一轮排查诊断容器时曾把完整环境变量（含 RDS 密码、OSS AccessKey）打印到
+  会话终端。**单独待办，本轮未处理**，是否轮换由 Teddy 判断。
+- **数据账本**：等已有的只读收敛结果，**不重开同一次盘点，不执行 222 条全量任务**
+  （八月那份 222 条清单已确认全部入库、缺口 0，见 STATUS「更正三」）。
+
+### 四、边界与回滚（本轮均未执行）
+
+- **OSS 完成范围**：只覆盖固定的 `variant IN ('thumbnail','web') AND status='ready'` 派生集合，
+  **不代表全部原图和视频归档完成**。旧来源保留，**不退役 R2**。
+- **镜像回滚与数据回滚相互独立**：换回旧 image tag 不会撤销 RDS 里 `hero_media_id='none'`
+  那一行；要回到本轮改动前的完整状态，两件事都要做。本轮不执行回滚。
+- **公开切换阶段**：仍需先制定保护 RDS 新写入的方案（回滚数据会覆盖切换后产生的新写入），
+  该方案尚未制定。
+- 备案前继续 loopback + SSH 隧道，不开公网入口。18080 隧道由其他 session 维护，本轮只复用。
+
+---
+
 > 2026-09-07 总指挥迁移通知：下方 9/6 停工、计划与库数字为旧时点记录。迁移当前证据见 `nianlife-P2-backup-execution-2026-09-07.md` 第 18 节：本机模拟通过，生产备份未在此确认完成。先读 `COORDINATION.md`、`COMMANDER-OUTBOX.md`；Cowork 请按 CMD-20260907-001 接入并刷新本页摘要。允许本轮协调与离线准备，生产权限不扩大。
 
 > 最后更新：2026-09-07 22:27 CST，由 Cowork 维护（CMD-20260907-001 ACK 已写，三轨迁移任务已派单，等待三轨 ACK）。**本文件是唯一权威版本**（见第 3 节
