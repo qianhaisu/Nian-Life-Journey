@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildChapters, splitOpenMonths, latestMemory, findMonth, excerptOf, memoryTitle, editorialMemory } from "../lib/memory-chapters.ts";
 import { storyLayout, STORY_SUPPORTING_MAX, presentableAlt, orientationOf, aspectRatioOf } from "../lib/media/presentation.ts";
+import { NO_HERO_MEDIA_ID } from "../lib/media/hero.ts";
 import { BIRTH, buildFixture, photo, event } from "./fixtures/editorial-archive.mjs";
 
 const fixture = buildFixture();
@@ -105,4 +106,20 @@ test("media presentation: alt fallback, orientation, and the one-hero story layo
   // No qualifying photo at all → a text page, not an upscaled fragment.
   assert.equal(storyLayout([photo("only", { width: 90, height: 120 })]).hero, undefined);
   assert.equal(storyLayout([photo("only", { width: 90, height: 120 })]).supporting.length, 0);
+});
+
+test("storyLayout: NO_HERO_MEDIA_ID is a reviewed text-only story, not a hero that failed to resolve", () => {
+  // event-v2-80445fc5d6c717f30f10b9e0403d1d76 (2026-08-19): three attached photos are all
+  // hero/thumbnail eligible, but the event was reviewed and none belongs on this story. A
+  // heroMediaId that merely fails to resolve still falls back to the first eligible photo (and
+  // shows the rest as supporting) — the sentinel must show none of them, hero or supporting.
+  const candidates = [photo("meal-photo"), photo("nap-photo"), photo("classroom-photo")];
+  const noHero = storyLayout(candidates, NO_HERO_MEDIA_ID);
+  assert.equal(noHero.hero, undefined);
+  assert.deepEqual(noHero.supporting, []);
+  assert.equal(noHero.remaining, 0);
+  // An unset heroMediaId on the same candidates still falls back, unlike the sentinel above.
+  const unset = storyLayout(candidates, undefined);
+  assert.equal(unset.hero.id, "meal-photo");
+  assert.ok(unset.supporting.length > 0);
 });

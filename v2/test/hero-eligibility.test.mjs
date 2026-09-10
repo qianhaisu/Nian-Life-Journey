@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isHeroEligible, heroCandidates, selectHeroMedia, isThumbnailEligible, THUMBNAIL_MIN_SIDE } from "../lib/media/hero.ts";
+import { isHeroEligible, heroCandidates, selectHeroMedia, isThumbnailEligible, THUMBNAIL_MIN_SIDE, NO_HERO_MEDIA_ID } from "../lib/media/hero.ts";
 
 function photo(id, width, height, overrides = {}) {
   return { id, profileId: "p", type: "photo", src: `/api/media/${id}`, alt: id, takenAt: "2026-01-01T00:00:00.000Z", visibility: "family", width, height, ...overrides };
@@ -52,6 +52,21 @@ test("heroCandidates returns an empty list when no photo in the event qualifies"
 
 test("selectHeroMedia returns undefined (not a thrown error or a tiny image) when nothing qualifies", () => {
   assert.equal(selectHeroMedia("a", [photo("a", 90, 120)]), undefined);
+});
+
+test("NO_HERO_MEDIA_ID means explicitly no photo — it does not fall back to any other candidate", () => {
+  // event-v2-80445fc5d6c717f30f10b9e0403d1d76 (2026-08-19): all three attached photos are
+  // hero-eligible by size, but none of them belongs on this story. Unlike a heroMediaId that fails
+  // to resolve (falls back to `eligible`, tested above), the sentinel must return nothing at all.
+  const candidates = [photo("meal-photo", 1280, 1708), photo("nap-photo", 1279, 1706), photo("classroom-photo", 1280, 960)];
+  assert.deepEqual(heroCandidates(NO_HERO_MEDIA_ID, candidates), []);
+  assert.equal(selectHeroMedia(NO_HERO_MEDIA_ID, candidates), undefined);
+});
+
+test("an unset heroMediaId (undefined) keeps falling back to the event's other eligible photos, unlike NO_HERO_MEDIA_ID", () => {
+  const candidates = [photo("a", 1000, 1000), photo("b", 1200, 900)];
+  assert.deepEqual(heroCandidates(undefined, candidates).map((item) => item.id), ["a", "b"]);
+  assert.deepEqual(heroCandidates(NO_HERO_MEDIA_ID, candidates), []);
 });
 
 test("thumbnail eligibility rejects sticker- and icon-sized media", () => {
