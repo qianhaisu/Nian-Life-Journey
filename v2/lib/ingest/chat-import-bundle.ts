@@ -20,11 +20,18 @@ export interface ChatImportBundle { schemaVersion: typeof CHAT_IMPORT_SCHEMA_VER
 // unchanged, so a re-scoped run still reuses rows it already imported rather than duplicating them.
 // Omitting `since` keeps the original, unscoped id, so callers that import whole conversations
 // (wechat-import.ts) keep matching the tasks they already created.
-export function chatImportBatchId(exportSnapshot: { rootFingerprint: string; conversationDigest: string }, since?: string): string {
+// `batchKey` exists because (root, conversation, since) is NOT a unique description of a unit of
+// work once approved batches enter the picture. Two different id-file batches over the same document
+// and the same --since — the text-only half and the media half of one conversation, say — used to
+// collapse onto one importBatchId. createChatImportTask upserts on that column and returns the
+// EXISTING row, so the second batch found a completed task and returned a report of all zeros while
+// printing "completed": it imported nothing and looked like it had succeeded. Passing the batch's id
+// set digest keeps the two apart.
+export function chatImportBatchId(exportSnapshot: { rootFingerprint: string; conversationDigest: string }, since?: string, batchKey?: string): string {
   const base = `wechat-import:${exportSnapshot.rootFingerprint}:${exportSnapshot.conversationDigest}`;
-  if (since === undefined) return base;
-  const parsed = Date.parse(since);
-  return `${base}:since=${Number.isNaN(parsed) ? since : new Date(parsed).toISOString()}`;
+  const parsed = since === undefined ? undefined : Date.parse(since);
+  const withSince = since === undefined ? base : `${base}:since=${parsed !== undefined && Number.isNaN(parsed) ? since : new Date(parsed!).toISOString()}`;
+  return batchKey === undefined ? withSince : `${withSince}:batch=${batchKey}`;
 }
 
 export function canonicalMessageId(input: Omit<ChatMessage, "messageId">, occurrenceRank: number): string {

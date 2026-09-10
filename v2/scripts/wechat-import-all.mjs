@@ -71,9 +71,11 @@ const retryFailed = hasFlag("--retry-failed");
 // as the ids, so a batch is never identified by a conversation index (that is a position in digest
 // order and moves when the export root gains a transcript).
 //
-// Shape: { document, fileSha256, conversationId?, messageIds: [...] }
-// Every mismatch below is fatal. Importing "most of" an approved batch silently is the one outcome
-// worth crashing to avoid.
+// Shape: { document, fileSha256, conversationId?, messageIds: [...], recordOrdinals: [...] }
+// The ordinals select (they are stable across the parser's two passes, canonicalMessageId is not —
+// see WechatBundleOptions in lib/ingest/wechat-snapshot.ts) and the ids verify: after loading, the
+// selected messages' ids must equal the approved set exactly. Every mismatch below is fatal.
+// Importing "most of" an approved batch silently is the one outcome worth crashing to avoid.
 const idFile = option("--id-file");
 let batch;
 if (idFile !== undefined) {
@@ -82,12 +84,17 @@ if (idFile !== undefined) {
   try { raw = JSON.parse(readFileSync(idFile, "utf8")); }
   catch (error) { process.stderr.write(`--id-file could not be read as JSON: ${error instanceof Error ? error.message : String(error)}\n`); process.exit(1); }
   const ids = raw?.messageIds;
+  const ordinals = raw?.recordOrdinals;
   if (typeof raw?.document !== "string" || !raw.document) { process.stderr.write("--id-file needs a non-empty string \"document\"\n"); process.exit(1); }
   if (typeof raw?.fileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(raw.fileSha256)) { process.stderr.write("--id-file needs \"fileSha256\" as 64 lowercase hex characters\n"); process.exit(1); }
   if (!Array.isArray(ids) || ids.length === 0 || ids.some((value) => typeof value !== "string" || !value)) { process.stderr.write("--id-file needs a non-empty \"messageIds\" array of strings\n"); process.exit(1); }
+  if (!Array.isArray(ordinals) || ordinals.length === 0 || ordinals.some((value) => !Number.isInteger(value) || value < 1)) { process.stderr.write("--id-file needs a non-empty \"recordOrdinals\" array of positive integers\n"); process.exit(1); }
   const unique = new Set(ids);
   if (unique.size !== ids.length) { process.stderr.write(`--id-file lists ${ids.length} ids but only ${unique.size} are distinct — refusing a batch with duplicate ids\n`); process.exit(1); }
-  batch = { document: raw.document, fileSha256: raw.fileSha256, conversationId: typeof raw.conversationId === "string" ? raw.conversationId : undefined, ids: unique, idSetDigest: createHash("sha256").update([...unique].sort().join("\n"), "utf8").digest("hex") };
+  const uniqueOrdinals = new Set(ordinals);
+  if (uniqueOrdinals.size !== ordinals.length) { process.stderr.write(`--id-file lists ${ordinals.length} ordinals but only ${uniqueOrdinals.size} are distinct\n`); process.exit(1); }
+  if (uniqueOrdinals.size !== unique.size) { process.stderr.write(`--id-file has ${unique.size} id(s) but ${uniqueOrdinals.size} ordinal(s) — they must describe the same messages\n`); process.exit(1); }
+  batch = { document: raw.document, fileSha256: raw.fileSha256, conversationId: typeof raw.conversationId === "string" ? raw.conversationId : undefined, ids: unique, ordinals: uniqueOrdinals, idSetDigest: createHash("sha256").update([...unique].sort().join("\n"), "utf8").digest("hex") };
   log(`--id-file: ${unique.size} message id(s), document ${batch.document}, id-set ${batch.idSetDigest.slice(0, 12)}…`);
 }
 const mediaConcurrency = option("--media-concurrency") !== undefined ? Number(option("--media-concurrency")) : undefined;
@@ -161,7 +168,7 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
   if (only && !only.has(index)) continue;
   let probe;
   try {
-    probe = await loadWechatBundle(sourceRoot, { maxMessages: 1, maxMedia: 1, conversationIndex: index, since, messageIds: batch?.ids });
+    probe = await loadWechatBundle(sourceRoot, { maxMessages: 1, maxMedia: 1, conversationIndex: index, since, recordOrdinals: batch?.ordinals });
   } catch (error) {
     if (error instanceof Error && error.message === "WECHAT_NO_VALID_SESSION") { log(`no conversation at index ${index} — ${index} conversation(s) seen, done scanning`); break; }
     throw error;
@@ -184,6 +191,18 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
       process.stderr.write(`batch allowlist matched ${probe.availableMessageCount} of ${batch.ids.size} message(s) in ${batch.document}\nRefusing to import a partial batch. Re-derive the batch file against the current export.\n`);
       process.exit(1);
     }
+    // The ordinals selected; now the approved ids must be exactly what came back. This is the check
+    // that makes ordinal-based selection safe: if the document were edited such that the same
+    // ordinals now hold different messages, the ids would differ and the run stops here.
+    const verify = await loadWechatBundle(sourceRoot, { maxMessages: batch.ids.size, maxMedia: Math.max(probe.availableMediaRefCount, 1), conversationIndex: index, since, recordOrdinals: batch.ordinals });
+    const got = verify.bundle.messages.map((message) => message.messageId);
+    const missingIds = [...batch.ids].filter((id) => !got.includes(id));
+    const extraIds = got.filter((id) => !batch.ids.has(id));
+    if (got.length !== batch.ids.size || missingIds.length || extraIds.length) {
+      process.stderr.write(`approved message ids do not match what the document yields\n  approved: ${batch.ids.size}\n  selected: ${got.length}\n  approved but absent: ${missingIds.length}\n  selected but not approved: ${extraIds.length}\nRefusing to import. Re-derive the batch file against the current export.\n`);
+      process.exit(1);
+    }
+    log(`--id-file: all ${got.length} approved id(s) verified against the document`);
   }
   totals.conversations += 1;
   // Exclusion is keyed by this digest, not by `index` — probed up front (cheap: maxMessages/maxMedia
@@ -223,7 +242,8 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
       maxMedia: Math.max(mediaRefs, 1),
       conversationIndex: index,
       since,
-      messageIds: batch?.ids,
+      recordOrdinals: batch?.ordinals,
+      batchKey: batch?.idSetDigest,
       retryFailed,
       mediaConcurrency,
     });
@@ -234,7 +254,17 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
     log(`conversation ${index}: threw ${info.code} (${info.message}) · not marked complete — re-run this script to retry it`);
     continue;
   }
-  const ok = report.status === "completed" || report.status === "completed_with_warnings";
+  // An approved batch must account for every message in it, as created or as reused. A report of
+  // "completed" with fewer than that is the silent no-op this driver must never pass off as success
+  // (it happened once: two batches over one document collided on importBatchId and the second
+  // returned all zeros). Not marking it complete leaves it retryable.
+  let batchShortfall;
+  if (batch) {
+    const accounted = report.createdMessages + report.reusedMessages;
+    if (accounted !== batch.ids.size) batchShortfall = `accounted for ${accounted} of ${batch.ids.size} approved message(s)`;
+  }
+  const ok = !batchShortfall && (report.status === "completed" || report.status === "completed_with_warnings");
+  if (batchShortfall) log(`conversation ${index}: ${batchShortfall} — treating as FAILED, not marked complete`);
   log(`conversation ${index}: ${report.status}${report.safeErrorCode ? ` (${report.safeErrorCode})` : ""} · messages +${report.createdMessages} / reused ${report.reusedMessages} · media assets +${report.createdMediaAssets} / reused ${report.reusedMediaAssets} · objects uploaded ${report.uploadedObjects}${report.warningCounts?.length ? ` · warnings ${JSON.stringify(report.warningCounts)}` : ""}`);
   totals.created += report.createdMessages; totals.reused += report.reusedMessages;
   totals.mediaCreated += report.createdMediaAssets; totals.mediaReused += report.reusedMediaAssets;
@@ -242,7 +272,7 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
   if (ok) { completed.add(completionKey(conversationDigest)); writeState({ ...state, completed: [...completed], excluded: [...excluded], updatedAt: new Date().toISOString() }); }
   else {
     totals.failed += 1;
-    failures.push({ index, code: report.safeErrorCode ?? report.status });
+    failures.push({ index, code: batchShortfall ? "BATCH_SHORTFALL" : (report.safeErrorCode ?? report.status) });
     log(`conversation ${index}: not marked complete — re-run this script to retry it`);
   }
 }
@@ -256,3 +286,6 @@ if (batch && batchMatches !== 1) {
 
 log(`done · conversations seen ${totals.conversations} · messages +${totals.created} (reused ${totals.reused}) · media assets +${totals.mediaCreated} (reused ${totals.mediaReused}) · objects uploaded ${totals.uploaded} · conversations still failing ${totals.failed}${failures.length ? ` · failed: ${failures.map((f) => `#${f.index}(${f.code})`).join(", ")}` : ""}`);
 if (!dryRun) log(`state file: ${STATE_PATH} (delete it or pass --reset-state to start over)`);
+// Exit non-zero when anything failed, so a caller chaining batches stops instead of reading a
+// zero status as "all of it landed".
+if (totals.failed > 0) process.exit(1);

@@ -9,14 +9,21 @@ import { isWeflowJson, parseWeflowJson } from "./wechat-weflow-json";
 
 export type WechatSnapshotEntry = { relativePath: string; absolutePath: string; kind: "markdown" | "weflow-json" | "jpeg" | "other"; size: number; mtimeMs: number; contentDigest?: string };
 export type WechatSnapshot = { rootFingerprint: string; fileCount: number; files: WechatSnapshotEntry[] };
-// `messageIds`, when given, is an exact allowlist of canonicalMessageId values. It is applied AFTER
-// `since` and BEFORE the maxMessages slice, and that order is the whole point: applied before
-// `since` it could resurrect a message the caller excluded by time, and applied after the slice the
-// truncation would silently eat allowlisted messages and import fewer than asked. A formal batch is
-// pinned by (source file sha256, message id set) rather than by a conversation index, because the
-// index is a position in digest order and shifts whenever the export root gains or loses a
-// transcript — which it did three times on 2026-09-10.
-export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number; since?: string; messageIds?: ReadonlySet<string> };
+// `recordOrdinals`, when given, is an exact allowlist of `sourceLocator.recordOrdinal` values. It is
+// applied AFTER `since` and BEFORE the maxMessages slice, and that order is the whole point: applied
+// before `since` it could resurrect a message the caller excluded by time, and applied after the
+// slice the truncation would silently eat allowlisted messages and import fewer than asked.
+//
+// Why the ordinal and not canonicalMessageId, which is what the caller actually approves: this
+// function parses the document TWICE. The first pass runs with an empty media map to discover which
+// messages exist, and only then are the referenced files hashed and the document reparsed with real
+// checksums. canonicalMessageId takes the attachment checksums as input, so for any message carrying
+// media the two passes produce DIFFERENT ids — an id allowlist matches nothing in the first pass and
+// the whole batch silently selects zero messages. The record ordinal is assigned by scanning lines
+// and is identical in both passes, so it is the only stable handle at this layer. The caller still
+// pins the batch by (source file sha256, approved id set) and must assert the resulting ids against
+// that set; see scripts/wechat-import-all.mjs, which refuses the run on any mismatch.
+export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number; since?: string; recordOrdinals?: ReadonlySet<number> };
 export type WechatBundleLoad = { snapshot: WechatSnapshot; bundle: ChatImportBundle; selectedDocument: string; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number };
 export type WechatCapacityAudit = { fileCount: number; markdownFileCount: number; jpegFileCount: number; otherFileCount: number; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number; presentMediaCount: number; missingMediaCount: number; needsReviewMediaCount: number; invalidMediaCount: number; hashChangedMediaCount: number; deferredByLimitMediaCount: number; messageLimitReached: boolean; mediaLimitReached: boolean; maxMessages: number; maxMedia: number };
 
@@ -169,11 +176,12 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   if (!Number.isInteger(conversationIndex) || conversationIndex < 0) throw new Error("WECHAT_CONVERSATION_INDEX_INVALID");
   const selected = candidates[conversationIndex];
   if (!selected) throw new Error("WECHAT_NO_VALID_SESSION");
-  const allowed = options.messageIds;
+  const allowed = options.recordOrdinals;
   if (allowed !== undefined && allowed.size === 0) throw new Error("WECHAT_MESSAGE_ALLOWLIST_EMPTY");
-  // since -> allowlist -> truncate. See the WechatBundleOptions doc comment for why this order.
+  // since -> allowlist -> truncate. See the WechatBundleOptions doc comment for why this order, and
+  // for why the allowlist keys on the record ordinal rather than on canonicalMessageId.
   const afterSince = sinceMs !== undefined ? selected.messages.filter((message) => Date.parse(message.sentAt) >= sinceMs) : selected.messages;
-  const eligibleMessages = allowed ? afterSince.filter((message) => allowed.has(message.messageId)) : afterSince;
+  const eligibleMessages = allowed ? afterSince.filter((message) => allowed.has(message.sourceLocator.recordOrdinal)) : afterSince;
   const availableMessageCount = eligibleMessages.length;
   const selectedMessages = eligibleMessages.slice(0, maxMessages);
   const availableMediaRefCount = refsFromMessages(eligibleMessages).size;
@@ -193,7 +201,7 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   }
   const reparsed = parseTranscript(selected.entry, path.resolve(sourceRoot), selected.text, media);
   const reparsedAfterSince = sinceMs !== undefined ? reparsed.messages.filter((message) => Date.parse(message.sentAt) >= sinceMs) : reparsed.messages;
-  const reparsedEligible = allowed ? reparsedAfterSince.filter((message) => allowed.has(message.messageId)) : reparsedAfterSince;
+  const reparsedEligible = allowed ? reparsedAfterSince.filter((message) => allowed.has(message.sourceLocator.recordOrdinal)) : reparsedAfterSince;
   const messages = reparsedEligible.slice(0, maxMessages);
   const mediaRefs = [...new Map(messages.flatMap((message) => message.mediaRefs).map((ref) => [ref.id, ref])).values()];
   const bundle: ChatImportBundle = {
