@@ -37,6 +37,57 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-10 · Claude Code · 08-19「能跟着老师的音乐互动了」误配图修正 + 归档月页构建期误读 mock 数据修复
+
+**本轮线上多了什么家人能读的东西**：08-19 那条记忆不再显示一张与内容无关的餐盘照——
+`hero_media_id` 改为哨兵值 `"none"`（`lib/media/hero.ts`），月页和详情页都只剩文字，代码层面
+新增了"明确无图、不回退到其它照片"的能力（之前只有"unset 就自动回退"一种行为）。同时修了一个
+波及更大的构建期 bug：诊断/预览环境每次重新构建镜像，7 月、8 月月页会先把 `lib/mock-data.ts`
+的种子数据错当真实归档冻结进静态页面，要等 5 分钟 ISR 窗口过后才刷新成真——`app/memory/[year]`
+和 `app/memory/[year]/[month]` 的 `generateStaticParams` 现在只在显式 `REPOSITORY_BACKEND=postgres`
+时才枚举月份（`lib/db/config.ts` 新增 `buildTimeArchiveEnumerationAllowed()`），否则直接交给
+on-demand ISR，不再预烤 mock 内容。
+
+**交付 SHA**：`8b8b58290df090d5b0fcf6cbb86b10f2aed64d31`（已 push `origin/main`；`d3efa81` hero
+哨兵值修复、`c57e475` 对应测试、`8b8b582` 归档月页修复，三个提交均在这条 SHA 的历史里）。
+
+**检查结果**：`npm run typecheck` / `npm run lint` / `npm test`（698 通过，0 失败，10 跳过）/
+`npm run build` 全部在这条 SHA 上跑绿；`build` 输出确认 `/memory/[year]`、`/memory/[year]/[month]`
+不再列出任何预渲染子路径。
+
+**诊断容器验收**：ECS 上 `nianlife-diag-web` 已用这条 SHA 重新构建并替换（只影响这一个诊断
+容器，隧道 `localhost:18080` → 该容器 3000 端口，`ORGANIZER_WORKER_ENABLED=false` 等运行时配置
+原样保留）。容器启动、健康检查通过后**第一次请求**（未等 ISR）`/memory/2026/07`、`/memory/2026/08`
+即为真实数据，不含 mock id。从真实 Windows 会话经隧道逐项核对：08-19 月页/详情页确认只剩文字、
+无图、无照片数量提示；08-17、03-02 详情页、3 月索引卡片（本来就无封面，`isPortraitOfZhangnian`
+过滤下 3 月没有夸克来源候选，设计如此）、4 月摘要均未受影响。
+
+**正式站点（nianlife.cn / Vercel 生产）本轮未发布、未部署**——这条 SHA 目前只跑在上面那台
+ECS 诊断容器里，正式站点的部署仍按现行规则等人工批准执行。
+
+**没做到什么 / 最大的已知 blocker**：
+1. **凭据轮换仍未处理，单独待办**——排查这台诊断容器时发生过一次误将完整环境变量（含
+   RDS 密码、OSS AccessKey）打印到会话终端的事故，已在过程中如实报告给 Teddy，是否轮换由
+   他判断，本轮未动。
+2. 3 月以外其它「index 模式」月份卡片是否也普遍因 `isPortraitOfZhangnian` 缺封面，未扩大抽查
+   （按 Teddy 本轮指示，不扩大范围）。
+
+**回滚，三级，都还没执行过，务必分清楚**：
+- **只回滚数据**（08-19 的 `hero_media_id` 改回原值）：`UPDATE life_events SET hero_media_id =
+  'wechat-media:f91920696d7005d4abca0e10e3d0888e3b56b12e06620e39e6d9902fefbdd967' WHERE id =
+  'event-v2-80445fc5d6c717f30f10b9e0403d1d76' AND hero_media_id = 'none';`——只改 Neon/RDS 里这
+  一行，**不涉及镜像，不需要重启任何容器**。
+- **只回滚诊断容器镜像**（`docker run` 换回旧 tag，如 `nianlife-web:c57e475...` 或
+  `nianlife-web:prev-c1fc17aa`）：**只是换掉容器跑的代码版本，不会自动把 RDS 里已经写成
+  `"none"` 的那一行改回去**——数据库是独立状态，镜像回滚不会撤销数据库更新，这两件事没有
+  绑定关系。
+- **要恢复到本轮改动前的完整状态**（数据 + 展示都还原）：**上面两步都要做**——先按第一条把
+  RDS 那一行数据改回原值，再按第二条把诊断容器换回旧镜像，缺一不可。
+
+**下一件事**：等 Teddy 决定正式站点何时发布这批改动；凭据轮换单独找时机处理。
+
+---
+
 ### 2026-09-07 15:15 UTC · MIG-A-002 撞车说明（本 session 独立分析完，发现另一 Code A session 已先完成，不重复提交）
 
 本 session 收到收件轮询提示后独立分析了 MIG-A-002（同样只读 step12/step5-8/RUN-FULL/
