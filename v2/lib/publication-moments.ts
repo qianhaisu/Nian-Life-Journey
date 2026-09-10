@@ -15,10 +15,13 @@
 // Two rules from the archive's ethics apply throughout:
 //   - Same-day text and photographs share a date heading, never a caption: a moment's text block
 //     and its photos are siblings under the day, and no photo is ever described by trace text.
-//   - Publication privilege is provenance, not guesswork: a large photograph may lead a page only
-//     when something real vouches for it (it belongs to a published memory, or it came from the
-//     family's own photo archive). An unvouched WeChat image can appear small and can live in the
-//     archive layer, but never becomes a hero or a month's face. No content detector is faked.
+//   - Publication privilege is provenance, not guesswork: a photograph may be shown at all only
+//     when something real vouches for it (it is part of a published memory's own material, or it
+//     came from the family's own photo archive or a conversation confirmed to be about this child).
+//     An unvouched chat image reaches no reading surface and, since 2026-09-10, not the month's
+//     photo section either — it stays in the archive itself, untouched and reachable, but a page
+//     that calls something 「这个月的照片」 may not fill it with the chat stream. No content
+//     detector is faked: this is who a picture came from, never what is in it.
 import type { EditorialMemory, MediaRef, MonthChapter, PhotoDay } from "@/lib/memory-chapters";
 import { isArchiveCountNote, isGarbageLifeEvent, memoryTitle } from "@/lib/memory-chapters";
 import { containsTechnicalPlaceholder } from "@/lib/organizer/quality-review";
@@ -86,8 +89,9 @@ export type MonthComposition = {
   chronicle: PublicationMoment[];
   // Photographed days folded to one line each: they exist, the archive layer has them whole.
   quietDays: QuietDay[];
-  // Every deliverable, drawable photograph of the month, day by day, ascending — the full record.
-  // Nothing is ever deleted from this; it is the count `archiveFoldedPhotoCount` is measured against.
+  // The month's photographs — vouched, deliverable and drawable — day by day, ascending. This is
+  // what 「这个月的照片」 shows, and what `archiveFoldedPhotoCount` is measured against. It is a
+  // display set, not the archive: unvouched rows are absent here and unchanged in the database.
   archiveDays: PhotoDay[];
   // T20-A3: the subset of archiveDays actually rendered by default — a screenful (photo-days that
   // already carry a published moment first, then newest), ascending for reading order. The rest is
@@ -95,8 +99,9 @@ export type MonthComposition = {
   archiveDaysVisible: PhotoDay[];
   archiveFoldedPhotoCount: number;
   archiveFoldedDayCount: number;
-  // Deliverable rows too small to draw at all (20x20 icons, 67x120 sticker thumbs): counted, never
-  // rendered, never deleted.
+  // Vouched, deliverable rows too small to draw at all (20x20 icons, 67x120 sticker thumbs):
+  // counted, never rendered, never deleted. Unvouched rows are not counted here — they are not
+  // being withheld for their size.
   smallImageCount: number;
   // The month's face for index surfaces. Only a vouched photograph or a memory's own lead may be
   // it; a month with neither shows type, not a guessed picture.
@@ -229,6 +234,36 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const photoDaysAsc = [...chapter.photoDays].sort((a, b) => a.day.localeCompare(b.day));
   const traceByDay = new Map(chapter.traceDays.map((day) => [day.day, day]));
 
+  // THE MONTH'S PHOTO SET — what 「这个月的照片」 may show, computed once so the first screen, the
+  // expand-all payload (app/memory/[year]/[month]/actions.ts returns archiveDays straight from
+  // here) and every count and date the page prints all describe the same set.
+  //
+  // 2026-09-10: this section used to show every deliverable, drawable picture the month held. Once
+  // stories stopped borrowing photographs it became the month's main photographic surface and was
+  // opened by default — and what that surfaced, alongside the child's days, was the chat stream's
+  // screenshots: in 2026-08, 115 of 664 images came from conversations no one has vouched for,
+  // including financial records. Calling those 「这个月的照片」 was wrong on its own terms.
+  //
+  // The gate is the same `isPrivileged` the day-level moments and the month cover already use —
+  // the family's own photo archive, or a conversation Teddy confirmed is about this child. It is
+  // deliberately NOT the hero size floor: an ordinary small snapshot is still one of the month's
+  // photographs, so only the thumbnail floor (can it be drawn at all) applies below.
+  //
+  // What this is not: a content check. Source trust says who the picture came from, never what is
+  // in it, so a sensitive image inside a trusted conversation would still pass here. It also
+  // deletes nothing and hides nothing from the archive itself — every row stays exactly as it is,
+  // reachable to scripts, audits and the evidence disclosure; this narrows one display surface.
+  const albumPhotosByDay = new Map<string, MediaRef[]>();
+  let smallImageCount = 0;
+  for (const day of photoDaysAsc) {
+    const vouched = day.photos.filter((item) => isPrivileged(item, privilege));
+    const drawable = vouched.filter(thumbnailSized);
+    // Counted among the vouched only: the sentence this feeds says these are too small to draw,
+    // and an unvouched picture is not being withheld for its size.
+    smallImageCount += vouched.length - drawable.length;
+    albumPhotosByDay.set(day.day, drawable);
+  }
+
   // CHAPTER — what is worth reading, in the order the month happened. Memories first within a day.
   //
   // 2026-09-10: a chapter moment no longer carries photographs of its own. It used to — T11 Part C
@@ -327,18 +362,19 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
     .map(([day, notes]) => ({ kind: "trace" as const, day, dateLabel: notes[0].dateLabel, ageLabel: notes[0].ageLabel, text: notes.map((note) => note.text), supporting: [], morePhotoCount: 0 }));
   const chronicle = [...chronicleFromPhotos, ...traceOnly].sort((a, b) => a.day.localeCompare(b.day));
   const chronicleDays = new Set(chronicle.map((moment) => moment.day));
+  // A quiet day's line says its photographs are down in 「这个月的照片」, so it may only be printed
+  // for a day that actually has some there.
   const quietDays: QuietDay[] = candidates
     .filter((day) => !chronicleDays.has(day.day))
-    .map((day) => ({ day: day.day, dateLabel: day.dateLabel, photoCount: day.photos.length }));
+    .map((day) => ({ day: day.day, dateLabel: day.dateLabel, photoCount: (albumPhotosByDay.get(day.day) ?? []).length }))
+    .filter((day) => day.photoCount > 0);
 
-  // ARCHIVE — the month whole, ascending; days read morning to evening already. Only rows too
-  // small to draw at all are counted out.
+  // ARCHIVE — the month's photographs, ascending; days read morning to evening already. Built from
+  // the one album set above, so nothing here can disagree with the first screen or the expander.
   const archiveDays: PhotoDay[] = [];
-  let smallImageCount = 0;
   for (const day of photoDaysAsc) {
-    const drawable = day.photos.filter(thumbnailSized);
-    smallImageCount += day.photos.length - drawable.length;
-    if (drawable.length > 0) archiveDays.push({ ...day, photos: drawable });
+    const photos = albumPhotosByDay.get(day.day) ?? [];
+    if (photos.length > 0) archiveDays.push({ ...day, photos });
   }
 
   // T20-A3 (原则五, "大部分内容默认不出现"): 507 photos flat in one page was the whole point being

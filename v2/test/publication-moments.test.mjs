@@ -61,8 +61,13 @@ test("a wordless month publishes nothing rather than publishing the wrong thing"
   assert.deepEqual(composition.preview, []);
   assert.equal(composition.mode, "typography");
   assert.deepEqual(composition.chronicle, [], "nothing vouches for these, so nothing reaches the reading layer");
-  assert.equal(composition.archiveDays.flatMap((day) => day.photos).length, 2, "…but every picture stays reachable in the archive");
-  assert.match(composition.narration ?? "", /还没有人确认过/, "…and the page says where they are and that no one has confirmed them");
+  // 2026-09-10: nor the month's photo section. It used to hold them — which is how a bank record
+  // and a housing-fund statement came to sit under 「这个月的照片」 once that section was opened by
+  // default. The rows are untouched in the archive itself; this is one display surface narrowing.
+  assert.deepEqual(composition.archiveDays, [], "unvouched pictures are not the month's photographs");
+  assert.equal(composition.totalPhotoCount, 0, "…and the month does not count them as such either");
+  assert.equal(composition.smallImageCount, 0, "they are not withheld for their size, so they are not counted as small");
+  assert.equal(composition.narration, undefined, "with nothing to point at, the page does not point");
 });
 
 test("a month that has words keeps the strict rule: unvouched pictures stay out of the reading layer", () => {
@@ -70,9 +75,31 @@ test("a month that has words keeps the strict rule: unvouched pictures stay out 
   const traces = [trace("t", "2025-10-20 00:00:00", ["晚上自己扶着沙发站了一会儿"])];
   const composition = buildMonthComposition(monthOf({ media, traces }, "2025-10"));
   assert.deepEqual(composition.chapter.map((m) => m.kind), ["text_led"]);
-  assert.deepEqual(composition.chronicle, [], "the month can speak for itself, so uncertain pictures stay in the archive");
-  assert.deepEqual(composition.quietDays.map((day) => day.day), ["2025-10-14"]);
-  assert.equal(composition.archiveDays.flatMap((day) => day.photos).length, 2);
+  assert.deepEqual(composition.chronicle, [], "the month can speak for itself, so uncertain pictures stay out");
+  // The quiet-day line says "that day's photographs are down in 这个月的照片". With nothing of that
+  // day in the section, the line would send the reader somewhere empty — so it is not printed.
+  assert.deepEqual(composition.quietDays, []);
+  assert.deepEqual(composition.archiveDays, []);
+});
+
+test("the photo section shows vouched pictures at any size, and the same set on the first screen and after expanding", () => {
+  // The gate is source trust, not the hero floor: an ordinary small snapshot from the family's own
+  // album is still one of the month's photographs. Only the thumbnail floor (can it be drawn)
+  // applies. And because the expander returns composition.archiveDays verbatim
+  // (app/memory/[year]/[month]/actions.ts), one set feeds the first screen, the expansion and every
+  // count the page prints.
+  const small = photo("small-but-real", "2026-08-10T08:00:00.000Z", { width: 300, height: 300 });
+  const sticker = photo("sticker", "2026-08-10T08:30:00.000Z", { width: 67, height: 120 });
+  const chat = photo("unvouched-chat", "2026-08-11T08:00:00.000Z", { width: 1180, height: 2556 });
+  const media = [small, sticker, chat];
+  const composition = buildMonthComposition(monthOf({ media }, "2026-08"), trust([small, sticker]));
+  assert.deepEqual(composition.archiveDays.flatMap((day) => day.photos.map((p) => p.id)), ["small-but-real"],
+    "below the hero floor but vouched: kept; vouched but undrawable: counted; unvouched: absent");
+  assert.equal(composition.smallImageCount, 1, "the sticker is the only one withheld for its size");
+  assert.equal(composition.totalPhotoCount, 1);
+  assert.deepEqual(composition.archiveDaysVisible.flatMap((day) => day.photos.map((p) => p.id)), ["small-but-real"]);
+  assert.equal(composition.archiveFoldedPhotoCount, 0, "first screen and full set agree");
+  assert.equal(composition.archiveFoldedDayCount, 0);
 });
 
 test("text-only is a first-class moment, and a month can publish with zero representative photos", () => {
