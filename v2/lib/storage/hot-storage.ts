@@ -206,18 +206,39 @@ export function preferredVariant(asset: MediaAsset, requested: MediaVariant = "w
   return requested === "thumbnail" ? ["thumbnail", "web"] : ["web", "thumbnail"];
 }
 
+/**
+ * Which tier a READ should try first when a derivative exists at both. Defaults to "oss", which is
+ * the migration's intent and the behaviour before this switch existed.
+ *
+ * It exists because a tier can be reachable, correctly configured, holding the right bytes, and
+ * still refuse to serve them. On 2026-09-11 every photograph on the private site returned 404
+ * "Media derivative is not ready"; the database was correct (both tiers ready, refs well-formed),
+ * DNS and TLS were fine, and OSS itself answered `UserDisable` / HTTP 403 to GetObject, HeadObject
+ * and ListObjectsV2 alike — an account-level suspension, not a missing object. The bytes were
+ * still in R2, byte-for-byte, but nothing could ask for them because tier preference was a
+ * constant.
+ *
+ * This is deliberately an OPERATOR switch, not an automatic failover. A read that silently falls
+ * back on error hides exactly this class of outage — the site would look fine while its storage
+ * account was gone, and nobody would go and fix it. Someone has to decide to flip it, and to flip
+ * it back.
+ */
+export function resolveReadPreference(env: NodeJS.ProcessEnv = process.env): "oss" | "hot" {
+  return env.MEDIA_READ_PREFERENCE === "hot" ? "hot" : "oss";
+}
+
 // Phase 3B1: a derivative can now exist at either tier while migration is in progress. For each
-// candidate variant (in preference order), an OSS copy wins over a "hot"/R2 one if both exist and
-// are ready — the point of the migration is to move reads off R2, not to keep preferring it once
-// an OSS copy lands. `original` is unaffected: it is never served to a public page from either
-// tier, only from the archived Quark copy, exactly as before.
-export function selectLocation(locations: MediaLocation[], asset: MediaAsset, requested: MediaVariant = "web") {
+// candidate variant (in preference order), the preferred tier's copy wins when both exist and are
+// ready, and the other tier is used when only it has one. `original` is unaffected: it is never
+// served to a public page from either tier, only from the archived Quark copy, exactly as before.
+export function selectLocation(locations: MediaLocation[], asset: MediaAsset, requested: MediaVariant = "web", preference: "oss" | "hot" = resolveReadPreference()) {
   const variants = preferredVariant(asset, requested);
   if (requested === "original") return locations.find((location) => location.variant === "original" && location.provider === "quark" && location.status === "archived") ?? null;
+  const [first, second] = preference === "hot" ? ["hot", "oss"] as const : ["oss", "hot"] as const;
+  const ready = (variant: MediaVariant, provider: string) =>
+    locations.find((location) => location.provider === provider && location.variant === variant && location.status === "ready");
   return variants
-    .map((variant) =>
-      locations.find((location) => location.provider === "oss" && location.variant === variant && location.status === "ready")
-      ?? locations.find((location) => location.provider === "hot" && location.variant === variant && location.status === "ready"))
+    .map((variant) => ready(variant, first) ?? ready(variant, second))
     .find(Boolean) ?? null;
 }
 

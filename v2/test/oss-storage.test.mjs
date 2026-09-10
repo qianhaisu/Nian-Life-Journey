@@ -5,7 +5,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { getOssConfig, OssStorage } from "../lib/storage/oss-storage.ts";
-import { activeMediaProvider, createHotStorage, getStorageForProvider, hotStorage, LocalHotStorage, R2HotStorage, resolveHotBackend, selectLocation, __setOssStorageForTests } from "../lib/storage/hot-storage.ts";
+import { activeMediaProvider, createHotStorage, getStorageForProvider, hotStorage, LocalHotStorage, R2HotStorage, resolveHotBackend, resolveReadPreference, selectLocation, __setOssStorageForTests } from "../lib/storage/hot-storage.ts";
 import { ingestQuarkFile } from "../lib/ingest/quark.ts";
 import { getStore } from "../lib/db/repository.ts";
 
@@ -191,6 +191,44 @@ test("selectLocation falls back to the ready hot/R2 derivative when no OSS copy 
   ];
   const selected = selectLocation(locations, asset, "web");
   assert.equal(selected?.id, "hot-web");
+});
+
+// 2026-09-11: OSS answered UserDisable / 403 to every read while holding the right bytes, and R2
+// still held the same derivatives. Tier preference had to become something an operator can move.
+
+test("MEDIA_READ_PREFERENCE=hot makes a read take the R2 copy while OSS is unusable", () => {
+  const asset = { id: "asset", profileId: "profile-test", mediaType: "photo", mimeType: "image/jpeg", createdAt: "" };
+  const locations = [
+    { id: "hot-web", mediaAssetId: "asset", provider: "hot", variant: "web", providerRef: "media/derivatives/asset/web-hot.webp", status: "ready", createdAt: "", updatedAt: "" },
+    { id: "oss-web", mediaAssetId: "asset", provider: "oss", variant: "web", providerRef: "media/derivatives/asset/web-oss.webp", status: "ready", createdAt: "", updatedAt: "" },
+  ];
+  assert.equal(selectLocation(locations, asset, "web", "hot")?.id, "hot-web");
+  assert.equal(selectLocation(locations, asset, "web", "oss")?.id, "oss-web", "and flipping it back restores the migration's intent");
+});
+
+test("preferring hot still returns the OSS copy when that is the only one — preference is not exclusion", () => {
+  const asset = { id: "asset", profileId: "profile-test", mediaType: "photo", mimeType: "image/jpeg", createdAt: "" };
+  const locations = [
+    { id: "oss-web", mediaAssetId: "asset", provider: "oss", variant: "web", providerRef: "media/derivatives/asset/web-oss.webp", status: "ready", createdAt: "", updatedAt: "" },
+  ];
+  assert.equal(selectLocation(locations, asset, "web", "hot")?.id, "oss-web");
+});
+
+test("resolveReadPreference defaults to oss and only 'hot' moves it", () => {
+  assert.equal(resolveReadPreference({}), "oss");
+  assert.equal(resolveReadPreference({ MEDIA_READ_PREFERENCE: "hot" }), "hot");
+  assert.equal(resolveReadPreference({ MEDIA_READ_PREFERENCE: "oss" }), "oss");
+  assert.equal(resolveReadPreference({ MEDIA_READ_PREFERENCE: "r2" }), "oss", "an unrecognised value must not silently change where reads go");
+  assert.equal(resolveReadPreference({ MEDIA_READ_PREFERENCE: "" }), "oss");
+});
+
+test("preference never reaches `original`: that is still only the archived Quark copy", () => {
+  const asset = { id: "asset", profileId: "profile-test", mediaType: "photo", mimeType: "image/jpeg", createdAt: "" };
+  const locations = [
+    { id: "hot-original", mediaAssetId: "asset", provider: "hot", variant: "original", providerRef: "media/originals/asset.jpg", status: "ready", createdAt: "", updatedAt: "" },
+    { id: "quark-original", mediaAssetId: "asset", provider: "quark", variant: "original", providerRef: "quark://a", status: "archived", createdAt: "", updatedAt: "" },
+  ];
+  assert.equal(selectLocation(locations, asset, "original", "hot")?.id, "quark-original");
 });
 
 test("selectLocation never returns an original from oss or hot — only the archived Quark copy", () => {
