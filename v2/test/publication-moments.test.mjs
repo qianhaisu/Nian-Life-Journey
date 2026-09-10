@@ -298,8 +298,12 @@ test("no story on the month page carries a borrowed photo, and an associated lea
   const normal = composition.chapter.find((moment) => moment.memory?.id === "normal-same-day");
   assert.equal(normal.memory.lead.id, "other-story", "the same day's other story keeps its own photo");
 
-  // Nothing was deleted or hidden — the month still holds both pictures, now on their own day.
-  assert.deepEqual(monthPhotoIds(composition).sort(), ["meal-board", "other-story"]);
+  // Nothing was deleted or hidden — both pictures are still read on the page, each exactly once:
+  // the story's own lead inside its card, the meal board under the day's neutral heading.
+  assert.deepEqual(monthPhotoIds(composition), ["meal-board"],
+    "the day group carries the day's other picture, not the one already read above it");
+  assert.deepEqual([...monthPhotoIds(composition), normal.memory.lead.id].sort(), ["meal-board", "other-story"]);
+  assert.equal(composition.totalPhotoCount, 2, "the month still counts both photographs");
 });
 
 test("a story with no associated photo is text-only, even when the day is full of trusted ones", () => {
@@ -449,4 +453,24 @@ test("a photograph the month's photo section would withhold is not admitted by a
   assert.deepEqual(composition.dayPhotoGroups, [], "unvouched stays out, and a 20x20 icon is still undrawable");
   assert.deepEqual(composition.archiveDays, []);
   assert.equal(composition.smallImageCount, 1);
+});
+
+test("a story's own lead photograph is not repeated in that day's group", () => {
+  // Basis A: the picture arrived in one of the very sources the story was written from, so it reads
+  // inside the story as its lead. It is also one of the day's vouched photographs, which is how it
+  // ended up rendered twice on one screen — once in the card, once again a few centimetres below
+  // under 「这一天的照片」. The day group is the day's OTHER pictures; the lead has already been read.
+  const lead = photo("written-from-this", "2026-08-21T03:00:00.000Z");
+  const alsoThatDay = photo("just-the-same-day", "2026-08-21T07:00:00.000Z");
+  const media = [lead, alsoThatDay];
+  const events = [event("story", "2026-08-21 00:00:00+00", ["written-from-this"], { heroMediaId: "written-from-this" })];
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+
+  const moment = composition.chapter.find((item) => item.memory?.id === "story");
+  assert.equal(moment.memory.lead?.id, "written-from-this", "Basis A still puts it inside the story");
+  assert.deepEqual(composition.dayPhotoGroups.map((d) => d.photos.map((p) => p.id)), [["just-the-same-day"]],
+    "the day group shows the rest of the day, not the picture already read above");
+  // Still nothing lost: every photograph is read exactly once somewhere on the page.
+  assert.deepEqual([...monthPhotoIds(composition), moment.memory.lead.id].sort(),
+    ["just-the-same-day", "written-from-this"]);
 });

@@ -396,10 +396,15 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // Same rows, same gates: `albumPhotosByDay` is the one vouched/deliverable/drawable set the
   // archive is built from, so grouping cannot surface a picture the month's photo section would
   // have withheld.
+  // A picture already read inside the chapter is not shown again directly underneath it. A memory's
+  // lead is the one photograph the archive can say belongs to a story (Basis A, lib/media/story-binding.ts)
+  // — it renders in the story's own card, and without this it also came back a few centimetres below
+  // under 「这一天的照片」. The group is the day's OTHER pictures.
+  const chapterLeadIds = new Set(chapter.memories.map((memory) => memory.lead?.id).filter(Boolean) as string[]);
   const dayPhotoGroups: PhotoDay[] = [];
   for (const day of photoDaysAsc) {
     if (!chapterDays.has(day.day)) continue;
-    const photos = albumPhotosByDay.get(day.day) ?? [];
+    const photos = (albumPhotosByDay.get(day.day) ?? []).filter((item) => !chapterLeadIds.has(item.id));
     if (photos.length > 0) dayPhotoGroups.push({ ...day, photos });
   }
   const groupedDays = new Set(dayPhotoGroups.map((day) => day.day));
@@ -477,11 +482,13 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // the masthead say "记下 1 天" over a page that visibly listed ten. The opening line has to count
   // the same days the page actually shows: every day with a moment, chapter or chronicle alike.
   const daysWithWords = new Set([...chapterMoments, ...chronicle].map((moment) => moment.day)).size;
-  // The month's photographs, wherever they are read: the day groups plus what is left in the photo
-  // section. Counting `archiveDays` alone would have quietly dropped every picture that moved onto
-  // a story day — 284 of 2026-08's 549.
-  const groupedPhotoCount = dayPhotoGroups.reduce((sum, day) => sum + day.photos.length, 0);
-  return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, dayPhotoGroups, archiveDays, archiveDaysVisible, archiveFoldedPhotoCount, archiveFoldedDayCount, smallImageCount, cover, preview, narration, daysWithWords, totalPhotoCount: archivePhotoCount + groupedPhotoCount };
+  // The month's photographs, counted where they actually are: the one album set, independent of
+  // which surface reads each picture (a day group, the photo section, or a story's own lead).
+  // Counting `archiveDays` alone would have quietly dropped every picture that moved onto a story
+  // day — 284 of 2026-08's 549.
+  let albumPhotoCount = 0;
+  for (const photos of albumPhotosByDay.values()) albumPhotoCount += photos.length;
+  return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, dayPhotoGroups, archiveDays, archiveDaysVisible, archiveFoldedPhotoCount, archiveFoldedDayCount, smallImageCount, cover, preview, narration, daysWithWords, totalPhotoCount: albumPhotoCount };
 }
 
 // V4 (T16, 2026-09-04), corrected by T21 (Cowork, 2026-09-04): the original draft also stated the
