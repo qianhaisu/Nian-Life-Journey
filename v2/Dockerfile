@@ -10,7 +10,14 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# The only host that builds this image is the Hangzhou ECS, and it cannot reach
+# registry.npmjs.org: on 2026-09-10 every tarball fetch came back ETIMEDOUT or ECONNRESET (the
+# handful that got through took 100-130s each) until npm gave up with "Exit handler never called!".
+# npmmirror carries the same registry, and package-lock.json's integrity hashes still decide what
+# may be installed, so a mirror cannot substitute content — a mismatch fails the install.
+# Pass --build-arg NPM_REGISTRY=https://registry.npmjs.org on a host that can reach npmjs directly.
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+RUN npm ci --registry="$NPM_REGISTRY"
 
 # ---- builder: type-checked production build ----
 FROM node:22-bookworm-slim AS builder
