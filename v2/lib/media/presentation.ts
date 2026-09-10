@@ -1,5 +1,5 @@
 import type { Media } from "@/lib/types";
-import { isHeroEligible, isThumbnailEligible } from "@/lib/media/hero";
+import { NO_HERO_MEDIA_ID, isHeroEligible, isThumbnailEligible } from "@/lib/media/hero";
 
 // Display-only decisions about photos. Nothing here touches Media identity, storage or the import
 // pipeline; it decides how an existing record is *shown*.
@@ -57,6 +57,9 @@ export const STORY_SUPPORTING_MAX = 6;
 export type StoryMediaLayout = { hero?: Media; supporting: Media[]; remaining: number };
 
 export function storyLayout(candidates: Media[], preferredId?: string): StoryMediaLayout {
+  // Reviewed, no photo: unlike an unset heroMediaId, this does not fall back to the event's other
+  // attached media (see lib/media/hero.ts's NO_HERO_MEDIA_ID) — the story is text-only, full stop.
+  if (preferredId === NO_HERO_MEDIA_ID) return { hero: undefined, supporting: [], remaining: 0 };
   const drawable = candidates.filter(isThumbnailEligible);
   const preferred = preferredId ? drawable.find((item) => item.id === preferredId) : undefined;
   const hero = preferred && isHeroEligible(preferred) ? preferred : drawable.find(isHeroEligible);

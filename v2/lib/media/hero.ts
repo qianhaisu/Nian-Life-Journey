@@ -29,11 +29,20 @@ export function isHeroEligible(media: Media | undefined | null): media is Media 
   return heroSized(media);
 }
 
+// A heroMediaId of exactly this value means "reviewed, and no photo belongs on this story" — not
+// "unset". An unset/undefined heroMediaId still falls back to whatever eligible photo the event
+// carries (below); this sentinel exists because that fallback is otherwise unconditional, so it is
+// the only way to bind "no picture" to an event that still has ineligible or mismatched media
+// attached. Real media ids are always provider-prefixed (wechat-media:, media-quark-sha-, ...), so
+// a bare "none" can never collide with one.
+export const NO_HERO_MEDIA_ID = "none";
+
 // Eligible candidates in preference order: the event's own heroMediaId first (if it qualifies),
 // then the rest of its photos in their existing order. Callers that render an <img> should walk
 // this list on load failure instead of trusting the first entry alone — a candidate can pass the
 // dimension check yet still have no ready derivative in storage.
 export function heroCandidates(preferredId: string | undefined, candidates: Media[]): Media[] {
+  if (preferredId === NO_HERO_MEDIA_ID) return [];
   const eligible = candidates.filter(isHeroEligible);
   const preferred = preferredId ? eligible.find((item) => item.id === preferredId) : undefined;
   if (!preferred) return eligible;
