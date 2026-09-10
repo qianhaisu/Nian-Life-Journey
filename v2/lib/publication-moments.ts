@@ -396,10 +396,17 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // Same rows, same gates: `albumPhotosByDay` is the one vouched/deliverable/drawable set the
   // archive is built from, so grouping cannot surface a picture the month's photo section would
   // have withheld.
-  // A picture already read inside the chapter is not shown again directly underneath it. A memory's
-  // lead is the one photograph the archive can say belongs to a story (Basis A, lib/media/story-binding.ts)
-  // — it renders in the story's own card, and without this it also came back a few centimetres below
-  // under 「这一天的照片」. The group is the day's OTHER pictures.
+  // A picture the card actually draws is not drawn again directly underneath it. What a month-page
+  // story renders is exactly `memory.lead` — one photograph (components/editorial-memory.tsx; a
+  // chapter moment's own hero/supporting have been empty since 2026-09-10) — so that, and only
+  // that, is held back. Deliberately NOT "everything bound" or "everything Basis A associated": a
+  // second associated picture the card had no room for, and anything the old same-day backfill
+  // bound, are still the day's and must stay findable under 「这一天的照片」 rather than nowhere.
+  // A story reviewed as noPhoto draws nothing, so it holds nothing back either.
+  //
+  // Scope of the guarantee: the group never repeats what a card drew, and the group and the photo
+  // section never overlap. It is not a page-wide uniqueness claim — one photograph written from by
+  // two stories is drawn by both cards, which is correct, since it really is each story's picture.
   const chapterLeadIds = new Set(chapter.memories.map((memory) => memory.lead?.id).filter(Boolean) as string[]);
   const dayPhotoGroups: PhotoDay[] = [];
   for (const day of photoDaysAsc) {

@@ -298,8 +298,8 @@ test("no story on the month page carries a borrowed photo, and an associated lea
   const normal = composition.chapter.find((moment) => moment.memory?.id === "normal-same-day");
   assert.equal(normal.memory.lead.id, "other-story", "the same day's other story keeps its own photo");
 
-  // Nothing was deleted or hidden — both pictures are still read on the page, each exactly once:
-  // the story's own lead inside its card, the meal board under the day's neutral heading.
+  // Nothing was deleted or hidden — both pictures are still read here: the story's own lead inside
+  // its card, the meal board under the day's neutral heading, and neither repeats the other.
   assert.deepEqual(monthPhotoIds(composition), ["meal-board"],
     "the day group carries the day's other picture, not the one already read above it");
   assert.deepEqual([...monthPhotoIds(composition), normal.memory.lead.id].sort(), ["meal-board", "other-story"]);
@@ -470,7 +470,54 @@ test("a story's own lead photograph is not repeated in that day's group", () => 
   assert.equal(moment.memory.lead?.id, "written-from-this", "Basis A still puts it inside the story");
   assert.deepEqual(composition.dayPhotoGroups.map((d) => d.photos.map((p) => p.id)), [["just-the-same-day"]],
     "the day group shows the rest of the day, not the picture already read above");
-  // Still nothing lost: every photograph is read exactly once somewhere on the page.
+  // Still nothing lost: both are read, and the group does not repeat what the card drew. (Not the
+  // stronger "once per page" — one picture led by two stories is drawn by both; see the
+  // two-stories test below.)
   assert.deepEqual([...monthPhotoIds(composition), moment.memory.lead.id].sort(),
     ["just-the-same-day", "written-from-this"]);
+});
+
+test("only the picture the card actually shows is held back — the rest of the day stays findable", () => {
+  // The exclusion is the rendered lead, not "everything bound" and not "everything Basis A".
+  // A month-page story card draws exactly one photograph (components/editorial-memory.tsx renders
+  // memory.lead; moment.hero/supporting are empty for chapter moments since 2026-09-10), so a
+  // second associated picture, and anything merely bound, are still the day's — and a reader must
+  // be able to find them under 「这一天的照片」 rather than nowhere at all.
+  const shownLead = photo("shown-as-lead", "2026-08-22T02:00:00.000Z");
+  const alsoAssociated = photo("associated-but-not-shown", "2026-08-22T04:00:00.000Z");
+  const merelyBound = photo("bound-by-the-old-backfill", "2026-08-22T06:00:00.000Z");
+  const media = [shownLead, alsoAssociated, merelyBound];
+  // Written from the first two; the third is the same-day backfill's doing, so it is not associated.
+  const events = [event("story", "2026-08-22 00:00:00+00", ["shown-as-lead", "associated-but-not-shown", "bound-by-the-old-backfill"], {
+    sourceIds: [sourceOf("shown-as-lead"), sourceOf("associated-but-not-shown")],
+    heroMediaId: "shown-as-lead",
+  })];
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+
+  const moment = composition.chapter.find((item) => item.memory?.id === "story");
+  assert.equal(moment.memory.lead?.id, "shown-as-lead", "one picture is drawn in the card");
+  assert.deepEqual(composition.dayPhotoGroups.map((d) => d.photos.map((p) => p.id)),
+    [["associated-but-not-shown", "bound-by-the-old-backfill"]],
+    "the associated picture the card did not draw, and the merely-bound one, are both still findable");
+  assert.equal(composition.totalPhotoCount, 3, "and the month counts all three");
+});
+
+test("one photograph led by two stories is drawn once per story — the page-wide claim is per surface, not per page", () => {
+  // Two published stories on one day both written from the source the picture arrived in: each
+  // card legitimately draws it, because it really is each story's picture. So the honest invariant
+  // is narrower than "every photograph appears once on the page": the day group never repeats what
+  // a card drew, and the group and the photo section never overlap. Cross-story repetition is left
+  // alone deliberately — deduplicating it would mean deciding which story does not get its photo.
+  const shared = photo("written-from-by-both", "2026-08-23T03:00:00.000Z");
+  const events = [
+    event("first", "2026-08-23 00:00:00+00", ["written-from-by-both"], { heroMediaId: "written-from-by-both" }),
+    event("second", "2026-08-23 00:00:00+00", ["written-from-by-both"], { heroMediaId: "written-from-by-both" }),
+  ];
+  const composition = buildMonthComposition(monthOf({ media: [shared], events }, "2026-08"), trust([shared]));
+
+  const leads = composition.chapter.filter((m) => m.memory).map((m) => m.memory.lead?.id);
+  assert.deepEqual(leads, ["written-from-by-both", "written-from-by-both"],
+    "documented, not endorsed: both cards draw it, so the page shows it twice");
+  assert.deepEqual(composition.dayPhotoGroups, [],
+    "the day group still does not add a third copy");
 });

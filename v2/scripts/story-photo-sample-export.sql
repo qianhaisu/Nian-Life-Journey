@@ -8,8 +8,30 @@
 -- needs the binding side of the data, which the rendered page does not expose.
 --
 -- WHAT IT DELIBERATELY DOES NOT READ
--- `raw_sources.text` is never selected. Message bodies are not needed to judge association: the
--- timing, the conversation and the roles are. Photograph bytes are not touched either.
+-- `raw_sources.text` is never selected, and photograph bytes are not touched.
+--
+-- To be clear about what that costs: this export gives association *clues*, not a verdict. Timing,
+-- conversation and role cannot settle whether a picture belongs to a story — the 08-19 meal board
+-- shares a day, a conversation and a role with the music story and is still not it. Every sample
+-- must still be judged by actually reading the story, its original context and the photograph.
+-- Bodies are omitted here only because that reading is done on the page's own evidence disclosure
+-- (/events/<id>), which already renders the messages in full and needs no second copy of them.
+--
+-- KNOWN MISSING, DO NOT SUBSTITUTE
+--   * Reply / quote relations are NOT stored anywhere. WeChat's 「[引用 …]」 survives only as literal
+--     characters inside raw_sources.text; no column records which message was quoted, so the
+--     strongest available basis for restoring a binding cannot be queried and has to be read off
+--     the evidence chain by eye. Treat its absence as absence, not as "no quote existed".
+--   * Conversation identity: for WeChat rows `raw_sources.source_label` IS the conversation id
+--     verbatim (lib/ingest/wechat-import.ts sets sourceLabel = message.conversationId), and
+--     metadata->>'conversationDigest' is its stable digest. Both are selected below. They are the
+--     identifier, not a stand-in for one — but note the same column carries batch labels for
+--     non-WeChat sources, so match on source_type before comparing.
+--
+-- STATUS: NOT YET EXECUTED AGAINST A REAL DATABASE (as of 2026-09-11).
+-- Written against lib/db/schema.ts, not validated by a live run. If a statement errors, report the
+-- error rather than adapting it in place, so the correction lands here instead of in a shell
+-- history. This line stays until someone has actually run it.
 --
 -- SAFETY
 -- Every statement is a SELECT. No table is written, created or locked beyond a read snapshot.
@@ -48,8 +70,11 @@ SELECT
   l.raw_source_id,
   l.role,
   s.captured_at,
-  s.source_label,
   s.source_type,
+  s.source_label,                              -- WeChat: the conversation id verbatim
+  s.metadata ->> 'conversationDigest' AS conversation_digest,
+  s.provider_external_id AS message_id,        -- stable per-message id, for pinning context
+  s.metadata ->> 'recordOrdinal' AS record_ordinal,
   jsonb_array_length(s.media_ids) AS source_media_count
 FROM source_memory_links l
 JOIN life_events e ON e.id = l.life_event_id
@@ -64,10 +89,13 @@ SELECT
   m.taken_at,
   m.type,
   m.visibility,
+  m.life_event_id,                             -- the other half of the original binding record
   m.raw_source_id,
   s.captured_at AS source_captured_at,
-  s.source_label,
-  s.source_type
+  s.source_type,
+  s.source_label,                              -- WeChat: the conversation id verbatim
+  s.metadata ->> 'conversationDigest' AS conversation_digest,
+  s.provider_external_id AS message_id
 FROM media m
 LEFT JOIN raw_sources s ON s.id = m.raw_source_id
 WHERE to_char(m.taken_at, 'YYYY-MM') = :'month'
