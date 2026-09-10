@@ -8,6 +8,7 @@ import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
+import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { findMonth } from "@/lib/memory-chapters";
 import { buildMonthComposition, monthStandfirst } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
@@ -18,7 +19,19 @@ export const revalidate = 300;
 // Same reasoning as [year]/page.tsx's generateStaticParams: without params known at build time
 // this segment renders fully dynamic on every request. A month absent here still works via
 // on-demand ISR — new months don't need to be pre-listed.
+//
+// 2026-09-10 incident: this used to call listArchiveMonths() unconditionally. The Docker builder
+// stage never has DATABASE_URL (by design — see v2/Dockerfile), so resolveRepositoryBackend()
+// silently resolved to "json" during that build and listArchiveMonths() enumerated whichever
+// months exist in the local mock fixture (lib/mock-data.ts happens to seed 2026-07 and 2026-08).
+// Those two months got frozen into the image as static HTML built from mock content and served in
+// place of the real archive until each page's own 300s ISR window elapsed on a live request — a
+// production diagnostic container served fabricated August entries for roughly five minutes after
+// every fresh deploy. buildTimeArchiveEnumerationAllowed() (lib/db/config.ts) keeps this list empty
+// unless the build was actually given REPOSITORY_BACKEND=postgres — an empty list here still works,
+// on-demand ISR renders every month correctly against the real database at runtime.
 export async function generateStaticParams() {
+  if (!buildTimeArchiveEnumerationAllowed()) return [];
   const months = await listArchiveMonths();
   return months.map((month) => ({ year: month.slice(0, 4), month: month.slice(5, 7) }));
 }

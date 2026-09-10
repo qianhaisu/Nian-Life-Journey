@@ -25,3 +25,18 @@ export function requireDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string
   if (!url) throw new Error("DATABASE_URL is not set.");
   return url;
 }
+
+// A generateStaticParams that enumerates the archive (which months/years exist) must never bake
+// that list in from the local JSON fallback store (lib/mock-data.ts) — that store exists only for
+// credential-less local dev, and the Docker builder stage deliberately gets no DATABASE_URL (see
+// v2/Dockerfile's comment: "This image never talks to ... at build time"). Left unguarded,
+// resolveRepositoryBackend() silently resolves to "json" during that build, so whichever months
+// happen to exist in the mock fixture get frozen into static HTML and served — in place of the
+// real archive — until each page's own ISR window happens to elapse on a live request. Any
+// generateStaticParams that would otherwise call listArchiveMonths() must check this guard first
+// and return an empty list when it is false, exactly like app/events/[id]/page.tsx already does
+// unconditionally (2026-09-06 incident) — every path still renders correctly at runtime via
+// on-demand ISR, where REPOSITORY_BACKEND/DATABASE_URL are the real ones.
+export function buildTimeArchiveEnumerationAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.REPOSITORY_BACKEND ?? "").trim().toLowerCase() === "postgres";
+}

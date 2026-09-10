@@ -9,7 +9,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CONTRACT_DATABASE_URL, SKIP_REASON } from "./fixtures/contract-database.mjs";
 import { createJsonRepository } from "../lib/db/json-repository.ts";
-import { resolveRepositoryBackend } from "../lib/db/config.ts";
+import { resolveRepositoryBackend, buildTimeArchiveEnumerationAllowed } from "../lib/db/config.ts";
 
 // The JSON repository writes to a single shared .data/nian-life.json — same convention as
 // test/ai-organizer.test.mjs and test/quark-artifact-ingest.test.mjs. Without this restore, rows
@@ -491,4 +491,18 @@ test("resolveRepositoryBackend defaults to json when unset", () => {
 });
 test("resolveRepositoryBackend rejects an unknown value", () => {
   assert.throws(() => resolveRepositoryBackend({ REPOSITORY_BACKEND: "sqlite" }), /Unsupported REPOSITORY_BACKEND/);
+});
+
+// 2026-09-10 incident: a Docker build with no DATABASE_URL (the builder stage never gets one —
+// v2/Dockerfile) used to let generateStaticParams enumerate the local JSON mock fixture's months
+// and freeze them into the production image, serving fabricated August entries until ISR caught up.
+test("buildTimeArchiveEnumerationAllowed is false with no env at all — exactly the Docker builder stage's condition", () => {
+  assert.equal(buildTimeArchiveEnumerationAllowed({}), false);
+});
+test("buildTimeArchiveEnumerationAllowed is false for REPOSITORY_BACKEND=json (the local-dev default)", () => {
+  assert.equal(buildTimeArchiveEnumerationAllowed({ REPOSITORY_BACKEND: "json" }), false);
+});
+test("buildTimeArchiveEnumerationAllowed is true only once REPOSITORY_BACKEND=postgres is explicitly set", () => {
+  assert.equal(buildTimeArchiveEnumerationAllowed({ REPOSITORY_BACKEND: "postgres" }), true);
+  assert.equal(buildTimeArchiveEnumerationAllowed({ REPOSITORY_BACKEND: "Postgres" }), true, "case-insensitive, like resolveRepositoryBackend");
 });
