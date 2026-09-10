@@ -123,3 +123,24 @@ test("storyLayout: NO_HERO_MEDIA_ID is a reviewed text-only story, not a hero th
   assert.equal(unset.hero.id, "meal-photo");
   assert.ok(unset.supporting.length > 0);
 });
+
+test("noPhoto separates a reviewed text-only story from one that merely found no photo", () => {
+  // `lead === undefined` has three causes and only one of them is a decision. Downstream layers
+  // (lib/publication-moments.ts) are allowed to put a day photo beside the other two, so the
+  // decision has to travel as its own field or it stops holding the moment it leaves this file.
+  const media = new Map([["p", photo("p")]]);
+  const reviewed = editorialMemory(event("reviewed", "2026-08-19 00:00:00+00", ["p"], { heroMediaId: NO_HERO_MEDIA_ID }), media, BIRTH);
+  assert.equal(reviewed.noPhoto, true);
+  assert.equal(reviewed.lead, undefined);
+
+  const unset = editorialMemory(event("unset", "2026-08-19 00:00:00+00", ["p"]), media, BIRTH);
+  assert.equal(unset.noPhoto, false, "no decision was made about this one");
+  assert.equal(unset.lead.id, "p");
+
+  const nothingQualified = editorialMemory(
+    event("tiny", "2026-08-19 00:00:00+00", ["t"]),
+    new Map([["t", photo("t", { width: 67, height: 120 })]]),
+    BIRTH);
+  assert.equal(nothingQualified.noPhoto, false, "a photo that failed the size floor is not a review decision");
+  assert.equal(nothingQualified.lead, undefined);
+});

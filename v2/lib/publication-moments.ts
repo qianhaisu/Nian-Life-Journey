@@ -243,9 +243,21 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // same day don't repeat the same hero. Keyed by day string.
   const heroClaimedOnDay = new Map<string, string>();
   for (const memory of [...chapter.memories].sort((a, b) => a.signature.day.localeCompare(b.signature.day))) {
-    // If the memory has no own lead photo, bind the day's first privileged hero photo (T11 Part C).
+    // If the memory has no own lead photo, bind the day's first privileged hero photo (T11 Part C)
+    // — unless the story was reviewed as text-only (`noPhoto`, from heroMediaId === "none").
+    //
+    // 2026-09-10: this borrow is what put the picture back. 08-19「能跟着老师的音乐互动了」was
+    // reviewed and its hero set to the NO_HERO_MEDIA_ID sentinel, which the detail page honours —
+    // but here `!memory.lead` was true for both "nothing qualified" and "reviewed, no photo", so
+    // the month page borrowed the day's pictures and re-published the daycare meal-board photo as
+    // that memory's hero, with the very media the review had excluded beside it. A reviewed
+    // text-only story stays text-only wherever it is rendered.
+    //
+    // Scope is this memory's own moment, deliberately: the day's other events keep their photos,
+    // and the day's loose pictures are untouched in the archive layer. One story saying "not this
+    // picture" is not the day saying "no pictures".
     const photoDay = photoDaysAsc.find((day) => day.day === memory.signature.day);
-    const dayPhotos = !memory.lead ? pickDayPhotos(photoDay, privilege) : { hero: undefined, supporting: [], morePhotoCount: 0 };
+    const dayPhotos = !memory.lead && !memory.noPhoto ? pickDayPhotos(photoDay, privilege) : { hero: undefined, supporting: [], morePhotoCount: 0 };
     if (dayPhotos.hero) heroClaimedOnDay.set(memory.signature.day, dayPhotos.hero.id);
     chapterMoments.push({
       kind: "memory_led",

@@ -2,9 +2,23 @@
 
 ## 当前摘要（2026-09-10，私有诊断站验收复核轮次；下方历史全部保留）
 
-**协作形态**：Codex 总指挥/review，用户手动把单条任务交给单个 Code 执行。本轮由 Claude Code
-执行「已批准顺序」的**第 1 步：复核现有私有站点验收证据，只补缺项**。第 2–5 步的具体内容
-目前**没有写进仓库任何文档**，本轮不臆造，等总指挥补写后再接。
+**协作形态**：Codex 总指挥/review，用户手动把单条任务交给单个 Code 执行。当前在**第 1 步**。
+
+### 已批准的执行顺序（用户 2026-09-10 确认，按此推进，不跳步）
+
+1. **私有站端到端验收**：更新当前总摘要，完成明确 commit SHA 的 ECS + RDS + OSS 私有站点端到端
+   验收。备案前仅 loopback + SSH 隧道。← **现在这一步，未通过**
+2. **收敛数据账本**：接收已有的微信强匹配、乳儿班 60/70、夸克全库集合的只读结果，区分
+   确定缺失 / 已存在 / 重复候选 / 无法确认。不凭标签或简单减法判断，不无限扩张排查。
+3. **幂等小批**：从确定缺失项里选最多 6 个做幂等小批，Organizer 关闭；新增准确、重复执行零新增
+   之后，再确定批量范围。**现有 222 条清单未获全量执行许可。**
+4. **准备公开切换**：明确唯一写入端、Neon→RDS 备份之后的增量或冻结方案、发布 SHA，以及不覆盖
+   RDS 新写入的回滚方案。备案与公开入口条件满足、用户最终批准后**人工**切换。无需等全部历史补齐，
+   但必须保证现有内容可读且不丢新增。
+5. **恢复产品建设**：有界恢复 Organizer，推进月章节、2025 全年阅读和年度书；验收目标是苏静能
+   从头翻完 2025 年。自动化和回忆浮现不插队。
+
+原始媒体长期归档是后续必做项，但**不把全部原始媒体迁完当作当前网站验收的前置**。
 
 **验收对象**：阿里云 ECS 上的私有诊断站 `nianlife-diag-web`，接 RDS + OSS，只经
 loopback + SSH 隧道访问（备案前不开公网入口）。**正式站点 nianlife.cn / Vercel 本轮未发布、
@@ -37,6 +51,32 @@ loopback + SSH 隧道访问（备案前不开公网入口）。**正式站点 ni
   **没有任何一条 hot 派生缺少同 providerRef 的 oss 对应行**。剩下只在 hot 的是 `original`
   （archived 1,789 + awaiting_archive 7,175），而 `/api/media` 按设计从不交付 original。
 
+### 一之二、第 1 步剩余项的修复（2026-09-10 第二轮，代码已在 main，等私有容器验收）
+
+下面第二节记的四个问题里，前两个已改代码并本地验证，第三个只做了只读检查和方案，第四个已补齐证据。
+**本轮没有替换诊断容器**——它仍跑 `8b8b582`，所以这些修复还没有在真实数据上被看见过。
+
+- **月页误配图（已修）**：`EditorialMemory` 新增 `noPhoto` 字段，由
+  `heroMediaId === NO_HERO_MEDIA_ID` 直接决定，与 `mediaBindingTrusted` 无关；
+  `buildMonthComposition` 的 memory_led 分支从 `!memory.lead` 改成 `!memory.lead && !memory.noPhoto`，
+  被审阅为纯文字的故事不再借当天的照片。**范围就是这条故事自己的 moment**：同一天其它事件的
+  合法照片照旧，当天散落的照片照旧留在月末档案层，没有删除或修改任何媒体行。
+  回归测试三条：`test/publication-moments.test.mjs` 两条（哨兵事件零主图零缩略图 + 同日另一事件
+  仍有自己的照片 + 两张照片都还在档案层；以及「未设 heroMediaId 仍然借图」的 T11 Part C 护栏），
+  `test/memory-chapters.test.mjs` 一条（`noPhoto` 区分「已审阅无图」「未设置」「尺寸不达标」）。
+- **首页 / 归档索引 / 张年页构建期 mock（已修）**：新增 `lib/render-on-demand.ts`，三个无参数页面
+  `/`、`/memory`、`/about` 调 `connection()` 退出构建期预渲染。**`/about` 是本轮顺带查出来的同一
+  类缺陷**（镜像里也有 `about.html`），一起改了。构建产物已核对：`.next/server/app` 里
+  `index.html`、`memory.html`、`about.html` 全部消失，`build` 输出把三条路由标为
+  `ƒ (Dynamic) server-rendered on demand`；只剩 `_not-found`/`archive`/`timeline`/`capture` 四个
+  不读库的静态壳。这三页因此没有 Next 路由缓存了，所以档案读取改走
+  `loadFamilyArchiveOnDemand()`（`lib/family-archive.ts`，300 秒 TTL、缓存 Promise 让并发首请求
+  共用一次读、失败立即失效），**不是靠缩短刷新间隔**，也没有让 ISR 页面多一层 TTL。
+  测试 `test/render-on-demand.test.mjs` 五条，其中一条是结构护栏：任何无参数页面只要读档案又不
+  调 `renderOnDemand()`，测试就红。
+- **验收口径**：「新构建首次请求即真实数据」只能在接 RDS 的私有容器上验；本地构建用的是 mock
+  store，只能证明这三页不再有构建期 HTML。**这一条留给该 SHA 的私有容器验收。**
+
 ### 二、本轮补验发现的问题（与上一轮 session 的回执不一致，需要判断）
 
 1. **08-19 的误配图在月页上仍然在。** `/events/event-v2-80445fc5d6c717f30f10b9e0403d1d76`
@@ -61,11 +101,50 @@ loopback + SSH 隧道访问（备案前不开公网入口）。**正式站点 ni
    四种全部 404。好消息是呈现层确实把它们扣住了：2025-11 月页和挂着视频的那个事件页
    **零 `<video>`、零对该 media 的引用**，读者看不到坏元素。这是既有状态，不是本轮改动造成的。
 
+### 二之二、视频缺口：只读检查结论（本轮不转码、不迁移、不改存量记录）
+
+三个状态必须分开说，混成一句「视频没有」会把该做的事说错：
+
+| 状态 | 结论 | 证据 |
+|---|---|---|
+| 原始文件存在 | **是** | 代表视频 `20251113_112533_4077.mp4` 在 `E:\WechatHis\texts\群聊_…\media\videos\` |
+| 原始文件可读 | **是** | 本地读出 943,379 字节，sha256 `ff481dfb…5c14`，与 `media_assets.checksum` 完全相同 |
+| 页面可播放 | **否** | 见下面三个各自独立的缺口 |
+
+- **缺口一：任何 provider 都没有视频派生。** 120 条 video location 全是
+  `wechat/original/ready`，`archive_status` 全是 `awaiting_archive`，`provider_ref` 是
+  219 字符的摘要三元组（`wechat:document:<sha>:path:<sha>:ref:<sha>`）——**它不是可读地址**，
+  `getStorageForProvider("wechat")` 按设计直接抛错。视频字节从来没有进过 R2 或 OSS。
+- **缺口二：派生生成链路对视频是占位图。** `lib/media/processing.ts` 的 `createDerivatives()`
+  遇到 `mediaType === "video"` 返回一张写着「视频预览稍后可用」的 SVG，**没有抽帧**。
+  机器上没有 `ffmpeg` / `ffprobe`（Playwright 缓存里带了一个 `ffmpeg-1011`，但那是它自己录屏用的）。
+- **缺口三：家庭页面根本没有播放器。** `lib/media/deliverability.ts` 写明「a video is only ever
+  shown through its poster (there is no inline player on a family page)」，全仓库没有 `<video>`。
+  所以就算补了 poster，视频也只是变成一张静止图。
+
+**最短可播放方案（一个代表性视频，四步，估算改动很小但含一个产品判断）**：
+
+1. 用文件名把 DB 行对回硬盘原件（已验证可行），SHA-256 复核后再用；
+2. 装 ffmpeg，抽一帧做 `poster`（webp），转一份 faststart H.264/AAC 的 `preview`（mp4）；
+3. 两个派生按现有 key 规则传 OSS（`media/derivatives/<assetId>/poster.webp`、`preview.mp4`），
+   插 `oss/poster/ready`、`oss/preview/ready` 两行 location。**`/api/media` 不用改**：
+   `preferredVariant()` 对 video 已经是 `["preview","poster"]`，`providerRef` 也满足 `media/` 前缀；
+4. **需要新增一个小播放器组件**（`<video controls poster=…?variant=poster src=…?variant=preview>`）
+   并接进 PhotoGallery / evidence 列表。这一步是产品判断，不只是工程：一旦 poster 就绪，
+   `deliverableMediaIds()` 会立刻把这些视频放进页面和计数，**在没有播放器之前它们会以静止图出现**。
+
+顺带查到的事实（不是任务）：`E:\WechatHis` 下共 **665 个 mp4**，库里只有 121 条 video media，
+差额属于「没导入的会话/时间段」，与派生无关，留给第 2 步的数据账本，不在本轮扩张排查。
+
 ### 三、未确认 / 阻塞
 
-- **移动端未确认**：本轮浏览器工具的 `resize_window` 改不动渲染视口（`innerWidth` 始终 2560、
-  `matchMedia('(max-width: 600px)')` 为 false），**没有拿到真实窄屏渲染证据**，不冒充。
-  桌面端（1568×778）已验证：首页/月页图片实际可见并加载完成、无横向溢出、`readyState=complete`。
+- **移动端已补验通过**（改用仓库里已装的 Playwright，真正设置渲染视口）：`innerWidth=390`、
+  `devicePixelRatio=3`、`matchMedia('(max-width: 600px)')` 为 **true**。首页 / `/memory/2026/08` /
+  08-19 事件页在 390×844 与 1440×900 两档下：**零横向溢出**（最宽元素右边界恰好等于视口宽）、
+  **零坏图**、零请求失败、`readyState=complete`；进入过视口的图片全部渲染成功
+  （移动 14/14、桌面 20/20）。折叠区之外的懒加载图片始终不加载，这是 `loading="lazy"` 的正常
+  行为，不是失败。此前浏览器扩展工具的 `resize_window` 改不动渲染视口（`innerWidth` 恒为 2560），
+  那条「未确认」到此解除。
 - **凭据轮换**：上一轮排查诊断容器时曾把完整环境变量（含 RDS 密码、OSS AccessKey）打印到
   会话终端。**单独待办，本轮未处理**，是否轮换由 Teddy 判断。
 - **数据账本**：等已有的只读收敛结果，**不重开同一次盘点，不执行 222 条全量任务**

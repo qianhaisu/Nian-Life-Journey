@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
 import { MonthCard } from "@/components/month-card";
-import { loadFamilyArchive } from "@/lib/family-archive";
+import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildMemoryIndex } from "@/lib/memory-index";
+import { renderOnDemand } from "@/lib/render-on-demand";
 
-export const revalidate = 300;
+// No `export const revalidate` here on purpose: this page is rendered on demand
+// (lib/render-on-demand.ts), so there is no Next route cache for a revalidate window to
+// govern — leaving the export would state a caching promise the route no longer makes. The
+// same 300s lives one layer down, on the archive read itself
+// (ON_DEMAND_ARCHIVE_TTL_MS in lib/family-archive.ts).
 export const metadata: Metadata = { title: "记忆" };
 
 // The archive read as a publication directory: year pill nav → month cards in a two-column grid.
 // Each month is one card: cropped cover photo + month label + age + first snapshot sentence.
 // No counts. Months without a cover photo still get a card (text-only). Newest year first.
 export default async function MemoryPage() {
-  const { chapters, privilege, snapshots } = await loadFamilyArchive();
+  // Never prerender this page from the build's mock store — see lib/render-on-demand.ts.
+  await renderOnDemand();
+  const { chapters, privilege, snapshots } = await loadFamilyArchiveOnDemand();
   const index = buildMemoryIndex(chapters, undefined, privilege);
 
   // First readable line from each month's snapshot summary.

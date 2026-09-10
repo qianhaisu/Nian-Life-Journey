@@ -7,7 +7,7 @@
 // photo on the server and the client receives only that.
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
-import { heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
+import { NO_HERO_MEDIA_ID, heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
 import { isPortraitOfZhangnian } from "@/lib/media/representative";
 import { mediaBindingTrusted } from "@/lib/organizer/quality-review";
 import { presentableAlt } from "@/lib/media/presentation";
@@ -36,6 +36,12 @@ export type EditorialMemory = {
   weight: MemoryWeight;
   signature: TimeSignature;
   lead?: MediaRef;
+  // Reviewed: no photo belongs on this story (the event's heroMediaId is NO_HERO_MEDIA_ID). This is
+  // NOT the same as `lead === undefined`, which also happens when nothing qualified or the binding
+  // is untrusted — those cases may still borrow one of the day's own pictures on the month page
+  // (lib/publication-moments.ts, T11 Part C). A reviewed "no photo" must survive that borrow, or
+  // the decision only holds on the detail page and the month page quietly puts a picture back.
+  noPhoto: boolean;
   photoCount: number;
   videoCount: number;
 };
@@ -122,6 +128,9 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
     weight: event.memoryWeight,
     signature,
     lead: lead ? toMediaRef(lead, title) : undefined,
+    // Carried independently of `mediaBindingTrusted`: the sentinel is a review decision about this
+    // story, not a statement about how its media were bound.
+    noPhoto: event.heroMediaId === NO_HERO_MEDIA_ID,
     photoCount: media.filter((item) => item.type === "photo").length,
     videoCount: media.filter((item) => item.type === "video").length,
   };

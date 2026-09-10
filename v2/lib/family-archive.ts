@@ -123,6 +123,41 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   return { store, media, events, traceEvents, chapters, birthDay, snapshots, privilege, time };
 }
 
+// How long an on-demand page may reuse one archive read. Deliberately the same 300s the ISR pages
+// use, so the site's staleness story stays one number, not two.
+export const ON_DEMAND_ARCHIVE_TTL_MS = 300_000;
+
+let onDemandArchive: { at: number; archive: Promise<FamilyArchive> } | undefined;
+
+// Test-only: the memo below is module state, so a test that exercises it must be able to clear it.
+export function __resetOnDemandArchiveForTests(): void { onDemandArchive = undefined; }
+
+// The archive read for pages that are rendered on demand rather than prerendered
+// (lib/render-on-demand.ts: /, /memory, /about — they must never be built from the build's mock
+// store). Those pages have no Next route cache any more, so without this every single request
+// would re-run loadFamilyArchive(), and that is a whole-store read: `getStore()` plus
+// `getAllEvents()` plus `getAllEventIdentities()`. Serving three readers is not a reason to read
+// the entire archive per page view — the 2026-09-06 egress incident was exactly this shape.
+//
+// The promise, not the resolved value, is what gets memoised: concurrent first requests then share
+// one read instead of starting several. A rejected read is evicted immediately so a transient
+// database error cannot be pinned in front of the site for five minutes.
+//
+// The ISR pages keep calling loadFamilyArchive() directly and must keep doing so: stacking this
+// TTL under a 300s route cache would make their worst-case staleness 600s, which is a different
+// product promise than the one they document.
+export function loadFamilyArchiveOnDemand(
+  load: () => Promise<FamilyArchive> = loadFamilyArchive,
+  nowMs: number = Date.now(),
+): Promise<FamilyArchive> {
+  if (!onDemandArchive || nowMs - onDemandArchive.at >= ON_DEMAND_ARCHIVE_TTL_MS) {
+    const archive = load();
+    onDemandArchive = { at: nowMs, archive };
+    archive.catch(() => { if (onDemandArchive?.archive === archive) onDemandArchive = undefined; });
+  }
+  return onDemandArchive.archive;
+}
+
 export async function loadFamilyArchive(): Promise<FamilyArchive> {
   // 2026-09-06 (Neon egress incident): this used to call getOrganizerStore(), which also pulls
   // every raw_source's `text` column — the largest table in the database — for a call that only

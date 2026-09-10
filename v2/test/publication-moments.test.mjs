@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { buildChapters, findMonth } from "../lib/memory-chapters.ts";
 import { buildMemoryIndex } from "../lib/memory-index.ts";
 import { DEFAULT_MEMORY_IA_POLICY } from "../lib/memory-ia-policy.ts";
+import { NO_HERO_MEDIA_ID } from "../lib/media/hero.ts";
 import {
   BURST_GAP_SECONDS, MOMENT_SUPPORTING_MAX,
   buildMonthComposition, burstGroups, burstRepresentatives, readableEntries,
@@ -220,4 +221,48 @@ test("/memory previews come from the composition: vouched pictures or none — n
   const jul = index.years[0].months.find((month) => month.chapter.month === "2026-07");
   assert.deepEqual(jul.preview, [], "an unvouched month shows type");
   assert.equal(jul.compositionMode, "typography");
+});
+
+test("a story reviewed as text-only stays text-only on the month page, and only that story", () => {
+  // Production 08-19「能跟着老师的音乐互动了」(2026-09-10). Its hero was set to the
+  // NO_HERO_MEDIA_ID sentinel because the bound picture — a daycare meal board — is not that
+  // story. The detail page honoured it; the month page did not, because `!memory.lead` was true
+  // both for "nothing qualified" and for "reviewed, no photo", and the composition layer borrowed
+  // the day's pictures into the memory's own moment. The excluded photo came back as its hero.
+  const excluded = photo("meal-board", "2026-08-19T03:00:00.000Z", { width: 1280, height: 1708 });
+  const otherStorysPhoto = photo("other-story", "2026-08-19T09:00:00.000Z");
+  const media = [excluded, otherStorysPhoto];
+  const events = [
+    event("reviewed-text-only", "2026-08-19 00:00:00+00", ["meal-board"], { heroMediaId: NO_HERO_MEDIA_ID }),
+    event("normal-same-day", "2026-08-19 00:00:00+00", ["other-story"], { heroMediaId: "other-story" }),
+  ];
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+
+  const reviewed = composition.chapter.find((moment) => moment.memory?.id === "reviewed-text-only");
+  assert.equal(reviewed.memory.noPhoto, true, "the sentinel is carried into the composition layer");
+  assert.equal(reviewed.memory.lead, undefined);
+  assert.equal(reviewed.hero, undefined, "no borrowed hero on a story reviewed as text-only");
+  assert.deepEqual(reviewed.supporting, [], "…and no borrowed thumbnails beside it either");
+
+  // The other event on the same day is untouched: one story saying "not this picture" is not the
+  // day saying "no pictures".
+  const normal = composition.chapter.find((moment) => moment.memory?.id === "normal-same-day");
+  assert.equal(normal.memory.lead.id, "other-story", "the same day's other story keeps its own photo");
+
+  // Nothing was deleted or hidden from the archive layer — the month still holds both pictures.
+  assert.deepEqual(
+    composition.archiveDays.flatMap((day) => day.photos.map((item) => item.id)).sort(),
+    ["meal-board", "other-story"],
+  );
+});
+
+test("an unset heroMediaId still borrows the day's photo — the sentinel is the only thing that stops it", () => {
+  // Guards T11 Part C against the fix above: a memory with no photo of its own is still allowed to
+  // be set beside the day's vouched photography. Only an explicit review decision blocks that.
+  const dayPhoto = photo("day-photo", "2026-08-20T03:00:00.000Z");
+  const events = [event("no-hero-set", "2026-08-20 00:00:00+00", [])];
+  const composition = buildMonthComposition(monthOf({ media: [dayPhoto], events }, "2026-08"), trust([dayPhoto]));
+  const moment = composition.chapter.find((item) => item.memory?.id === "no-hero-set");
+  assert.equal(moment.memory.noPhoto, false);
+  assert.equal(moment.hero.id, "day-photo", "unset ≠ reviewed-no-photo; the borrow still happens");
 });

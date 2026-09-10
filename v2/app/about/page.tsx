@@ -2,17 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { GrowthChart } from "@/components/growth-chart";
 import { Photo } from "@/components/photo";
-import { loadFamilyArchive } from "@/lib/family-archive";
+import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { latestPortrait, memoryTitle, recentTraceNotes } from "@/lib/memory-chapters";
 import { isPrivileged } from "@/lib/publication-moments";
+import { renderOnDemand } from "@/lib/render-on-demand";
 import { calendarDayOf } from "@/lib/timeline-dates";
 import { ageOn, formatDay, formatMonth, timeSignatureFor } from "@/lib/time-signature";
 import type { LifeEvent } from "@/lib/types";
 import { isRecent } from "@/lib/time-truth";
 
-export const revalidate = 300;
+// No `export const revalidate` here on purpose: this page is rendered on demand
+// (lib/render-on-demand.ts), so there is no Next route cache for a revalidate window to
+// govern — leaving the export would state a caching promise the route no longer makes. The
+// same 300s lives one layer down, on the archive read itself
+// (ON_DEMAND_ARCHIVE_TTL_MS in lib/family-archive.ts).
 export const metadata: Metadata = { title: "张年" };
 
 // Who 张年 is right now — and only then, who he was earlier. The page is split in two eras with
@@ -46,7 +51,10 @@ function extractFamilyQuotes(events: LifeEvent[], birthDay?: string, max = 3): F
 }
 
 export default async function AboutPage() {
-  const { chapters, store, birthDay, time, privilege, snapshots, events } = await loadFamilyArchive();
+  // Never prerender this page from the build's mock store — see lib/render-on-demand.ts. Found in
+  // the same 2026-09-10 check as / and /memory: about.html was baked from the seed fixture too.
+  await renderOnDemand();
+  const { chapters, store, birthDay, time, privilege, snapshots, events } = await loadFamilyArchiveOnDemand();
   const age = birthDay ? ageOn(birthDay, time.today) : undefined;
   const portrait = latestPortrait(chapters, (photo) => isPrivileged(photo, privilege));
   const portraitRecent = portrait ? isRecent(portrait.day, time) : false;

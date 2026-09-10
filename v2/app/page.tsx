@@ -3,19 +3,26 @@ import { EditorialMemory } from "@/components/editorial-memory";
 import { Photo } from "@/components/photo";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
-import { loadFamilyArchive } from "@/lib/family-archive";
+import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildHomeView } from "@/lib/home-view";
 import { isPortraitOfZhangnian } from "@/lib/media/representative";
+import { renderOnDemand } from "@/lib/render-on-demand";
 import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
-export const revalidate = 300;
+// No `export const revalidate` here on purpose: this page is rendered on demand
+// (lib/render-on-demand.ts), so there is no Next route cache for a revalidate window to
+// govern — leaving the export would state a caching promise the route no longer makes. The
+// same 300s lives one layer down, on the archive read itself
+// (ON_DEMAND_ARCHIVE_TTL_MS in lib/family-archive.ts).
 
 // The front page answers one question — 最近怎么样，张年 — with ONE expression, the strongest the
 // archive can honestly make (lib/home-view.ts): a recent memory, a recent moment with real words,
 // one recent photographed day with a visual center, or the newest dated memory presented as what
 // it is. Nothing rotates, nothing counts at the reader, nothing asks them to upload.
 export default async function HomePage() {
-  const archive = await loadFamilyArchive();
+  // Never prerender this page from the build's mock store — see lib/render-on-demand.ts.
+  await renderOnDemand();
+  const archive = await loadFamilyArchiveOnDemand();
   const { cover, mark, laterLifeNote, thisMonth, summary, changeLabel, changeHref, monthHref } = buildHomeView(archive);
   const alternates = cover.kind === "memory" ? cover.lead.month.memories.filter((memory) => memory.id !== cover.lead.memory.id).slice(0, 2) : [];
   // Don't show "本月入口" when it repeats the cover's own month.
