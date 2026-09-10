@@ -60,9 +60,140 @@
 
 原始媒体长期归档是后续必做项，但**不把全部原始媒体迁完当作当前网站验收的前置**。
 
+### 第 5 步的第一个小批：可直接执行的方案（2026-09-10 定稿，**尚未启动**）
+
+本方案只描述**一个**有界小批，不启动积压队列，不改判断逻辑。所有数字都来自当天的 RDS 只读复查
+（脚本在 `v2/.data/`，不进 Git）；启动前必须重新核对第 0 条，其余按顺序执行。
+
+#### 0. 唯一写入端与备份现状（启动前必须自己证明，不许假设）
+
+- **唯一写入端是 RDS**：`nianlife` / `PostgreSQL 18.4` / 会话时区 `Asia/Shanghai` /
+  `raw_sources`（wechat）46,433 行。今天那 1,474 条补录就写在这里，已逐条查到。
+- **驱动脚本读的是 `.env.local` 里的 `DATABASE_URL_UNPOOLED || DATABASE_URL`**
+  （`organizer-month-write.mjs:125`），**这个值本轮没有核实过指向哪里**。
+  所以第一步不是跑批，是**打印一行不含密钥的连接指纹**（`current_database()` +
+  `version()` + `count(*) from raw_sources where provider='wechat'`），与上面三个值逐项相同才继续；
+  不同就停下来报告，**不要改环境变量去"对齐"**。
+- **备份不覆盖补录后的状态**：`docs/RUNBOOK-RDS-RESTORE.md` 第 1 节那两份已验证可恢复的完整备份
+  是 **Neon 源库、2026-09-07 之前**的产物，早于今天这 1,474 条，也早于 RDS 成为写入端。
+  **本轮不重做整套备份审计**（用户已明确），改用**针对性回滚标识**：本小批只 INSERT
+  `life_events` / `source_memory_links` / `organizer_runs` / `content_quality_reviews`，
+  并把用到的 `raw_sources.status` 从 `uploaded` 翻成 `organized`。回滚 = 按下面预声明的
+  `organizationFingerprint` 与派生 id 删除这几行、把 status 翻回去，不需要恢复整库。
+  **强制重跑那一档（见第 3 条）会覆盖已有故事的标题和正文，所以它多一个前置：先把受影响的行
+  导出到仓库外的文件**，否则旧正文无法恢复。
+
+#### 1. 先回答"会不会丢来源关系"——会，而且已经在丢
+
+| 事实 | 证据 |
+|---|---|
+| Organizer 自己**算得出**可靠的图文关系 | `production-adapter.ts:204` 用 `planMedia(window, policy, story.usedMediaIds)`；`organizer-month-write.mjs:377` 只允许 `confirmed` 一档，也就是**照片和文字在同一条微信消息里**（`evidence/media-tier.ts` 的 `same_message_mixed`） |
+| 但**必跑的后续步骤把它覆盖掉** | `t18-backfill-media-binding.mjs` 对每一行 `organizer_version='organizer-v2-t7-subject-gate'` **无条件** `update life_events set media_ids=…, hero_media_id=…`，选法是"同一天里可信来源的照片"，**根本不看这条故事自己的 `source_ids`**。它被写在 `organizer-month-write.mjs` 的头注释里当作 REQUIRED FOLLOW-UP |
+| 结果可以量化 | 2025 年有 hero 的 **205** 条故事里，hero 来自这条故事自己的来源消息的只有 **1** 条，其余 **204** 条来自当天别处 |
+| 同一天还会撞图 | 2025-08-29 两条故事（`event-v2-f9ad3324…` 与 `event-v2-fe6b9494…`）hero 是同一个 `wechat-media:40cf5066…` |
+| t18 的可交付判据已经过时 | 它只认 `provider='hot'` 的 web/thumbnail 派生；今天新导入的 452 张照片里 **452 张有 `oss` 派生、只有 4 张有 `hot` 派生**，t18 眼里等于不存在 |
+
+**启动前的最小修复（两条，不新增判断逻辑、不动 Organizer 内核）**：
+
+1. **本小批不跑 `t18-backfill-media-binding.mjs`。** 让 Organizer 自己写的 `confirmed` 绑定留在库里。
+2. **改 t18 一行语义：只填 `media_ids` 为空的行，永不覆盖非空的行。** 因为它按
+   `organizer_version` 选行，而本小批写出来的行 organizerVersion 相同，**将来任何人再跑一次 t18
+   都会把这次的可靠绑定重新抹掉**。这一条不改不能开工。
+
+不做的：不给绑定加"来源标签"字段、不改 tier 规则、不动展示层。那是更大的改动，不是启动前置。
+
+#### 2. 批次范围：2025-08 的三天，来源 456 条
+
+选月依据（不是"资料多"，而是"照片和文字长在同一条消息上"，因为只有这种才配得上 `confirmed`）：
+2025 全年这种消息只有 121 条，**2025-08 占 38 条、分布在 17 天**，是全年最多的一个月；
+2025-12 一条都没有，2025-01/02/03/04 也是 0。
+
+| 日 | 会话 | 来源消息 | 其中图文同条 | 有照片 | 当前已有故事 |
+|---|---|---|---|---|---|
+| 2025-08-05 | 主力群 `856b8ec2…` | 108 | 4 | 13 | 2 |
+| 2025-08-05 | 妈妈私聊 `0567a44e…` | 2 | 0 | 1 | — |
+| 2025-08-11 | 主力群 | 107 | 5 | 12 | 3 |
+| 2025-08-11 | 妈妈私聊 | 29 | 0 | 3 | — |
+| 2025-08-11 | 奶奶私聊 | 2 | 0 | 0 | — |
+| 2025-08-29 | 主力群 | 167 | 6 | 25 | 3 |
+| 2025-08-29 | 妈妈私聊 | 41 | 0 | 6 | — |
+| **合计** | | **456** | **15** | **60** | **8** |
+
+**条数上限是三样一起卡死的**：`--day` 一次只跑一天（过滤发生在任何模型调用之前）、
+`--max-days=1`、`--max-calls=N`。三天分三次跑，不合并。
+
+#### 3. 模型调用与费用上限
+
+- 一个过门的窗口固定花 **2 次** DeepSeek 调用（Memory Editor 一次、Writer v2 一次），
+  `reserveCall()` 是同步的检查-自增，并发下也不会超（`organizer-month-write.mjs:265`）。
+- **第一步是零费用盘点**：同样的命令加 `--max-calls=0`，窗口照建、指纹照查，
+  到调用前全部 `skipped`，**一分钱不花、一行不写**，输出里就有这三天真实的窗口数。
+  先拿这个数，再定 `--max-calls`。
+- **建议上限 `--max-calls=24`**（≤12 个窗口）。按每次调用的证据包量级估，三天合计
+  **不超过 20 万 token**，按 DeepSeek 现行每百万 token 计价的量级，**费用在个位数人民币以内**；
+  确切单价本轮没有核实，**硬上限是 `--max-calls`，不是这句估算**。
+- **一个已知的费用陷阱**：指纹短路只保护"上次产出了东西"的窗口——`organizer_runs` 只有 **659 行**
+  （652 candidate + 6 store_only + 1 daily_trace），**被判不值得写的窗口根本没有留行**，
+  所以重跑会重新为它们付钱。这三天已有 8 条故事，短路能挡住的就是这 8 个窗口。
+
+#### 4. 重复整理、审阅状态、只处理批准集合
+
+- **不会出现重复故事**：artifact id 由 `organizationFingerprint` 派生
+  （`artifactIdFor`，`production-adapter.ts`），指纹 = `conversationId|day|sourceIds`，
+  **不含模型和 prompt 版本**。重跑落在同一行上，是替换不是新增。这也意味着
+  **换模型后普通重跑会静默 no-op**，要重做必须显式 `--force`——而 `--force` 会覆盖已有正文，
+  所以它归到第 0 条那个"先导出旧行"的前置里。
+- **审阅状态**：AI 内容在 `requiresQualityReview()` 里**失败关闭**——没有一条
+  `content_quality_reviews` 明确 approved，故事就不会出现在页面上。
+  `organizer-month-write.mjs` 目前会把 `plan.review.decision` 强行改成 `approved`，
+  脚本自己的注释写明"这个覆盖必须先有人真的读过"。**所以流程是：先跑不带 `--commit` 的一遍
+  （完全不写库），我逐条读完并把结论写进账本，再带 `--commit` 跑同一条命令。**
+  不接受"跑完再看"。
+- **只处理批准集合**：`organizer_jobs` 里那 13 行属于**另一条**流水线（V1 的
+  `scripts/organizer-worker.mjs`），本方案的驱动从不碰它。**不要运行 `nianlife-worker.mjs`
+  或 `organizer-worker.mjs`**，只运行带 `--day` 的 `organizer-month-write.mjs`。
+  跑完复查 `organizer_jobs` 仍是 13。
+
+#### 5. 与页面任务的分工（不互相改）
+
+- **我负责**：生成并保存可靠的来源关系——`life_events.source_ids`、`source_memory_links`、
+  以及来自 `confirmed` 绑定的 `media_ids`/`hero_media_id`。产出一张"哪条故事配了哪张图、
+  凭哪条消息"的对照表。
+- **页面任务负责**：现有故事的配图恢复与版面。**不改 `lib/organizer/**`、不跑
+  `organizer-month-write.mjs`**。
+- 上面第 1 条那两个数字（205 里只有 1 条 hero 出自本故事来源；新导入 452 张只有 4 张有 hot 派生）
+  是给页面任务的输入，**由页面任务决定怎么用，我不代它改展示层**。
+
+#### 6. 预声明与停止条件
+
+跑 `--commit` 之前把这几项写进账本，跑完逐项核对，不符立刻停、不自动删、不扩大范围：
+输入（哪一天、哪些 `source_ids`）、预期 `life_events` / `source_memory_links` /
+`organizer_runs` / `content_quality_reviews` 的增量、回滚标识（`organizationFingerprint` 列表）。
+**任一触发即停**：`organizer_jobs` 离开 13；出现预期之外的 `life_events` 增量；
+连接指纹与第 0 条不符；`--force` 之前没有导出旧行；任何一条故事的 hero 不在它自己的 `source_ids` 里。
+
 **验收对象**：阿里云 ECS 上的私有诊断站 `nianlife-diag-web`，接 RDS + OSS，只经
 loopback + SSH 隧道访问（备案前不开公网入口）。**正式站点 nianlife.cn / Vercel 本轮未发布、
 未部署**——单独记录，不作为失败，也不触发部署。
+
+**当前私有运行版本（2026-09-10 22:40 CST 更新，供页面任务验收）**：
+`e5bdedf2aa0f61f5aab0c60b4227d684e2624144`，镜像 `nianlife-web:e5bdedf2aa…`，
+image id **`bffa103fee13`**（`sha256:bffa103fee13d7e1dba3980b343cdf643408a04ceb33aff893579f8920563485`）。
+含月页「这一天的照片」那一版（`0e0b877` 已用 `git merge-base --is-ancestor` 确认是它的祖先）。
+构建上下文由 `git archive HEAD` 生成，**`lib/publication-moments.ts` 与月页 `page.tsx` 去掉 CRLF 后
+sha256 与该 commit 的 git blob 逐个相等**（`a71d14fc…`、`fe8fefdb…`）。
+**回滚点**：镜像 `nianlife-web:c58b4a274fdf…`（`sha256:33845713c05d…`）仍在，旧容器保留为
+`nianlife-diag-web-pre-e5bdedf-20260910-223553`，回滚文件
+`/tmp/nianlife-diag/rollback-e5bdedf-20260910-223553-*`。
+换容器沿用 `update-container.sh`：端口、重启策略、全部环境变量（含 `INGESTION_TOKEN`）与容器内
+`/tmp` 文件都带过去了，健康检查 `/`、`/memory`、`/about`、`/api/health` 全 200。RDS、18080、DNS 未动。
+
+**这次构建为什么改了 Dockerfile**（commit `e5bdedf`，只动一个文件）：`8b8d3a8` 的构建卡死在
+`npm ci`，读日志（`/tmp/nianlife-diag/npmlogs-8b8d3a8/`）看到几乎每个 tarball 都是 ETIMEDOUT /
+ECONNRESET，少数拿到的耗时 100–130 秒，最后 npm 以 `Exit handler never called!` 退出——
+**这台 ECS 到 `registry.npmjs.org` 不通**（宿主机 curl 也超时），`registry.npmmirror.com` 0.12 秒 200。
+所以 `npm ci` 改成走 `ARG NPM_REGISTRY`（默认 npmmirror，可用 `--build-arg` 覆盖）。
+`package-lock.json` 的 integrity 仍然决定能装什么，镜像换不了内容。**这不是盲目重试，是照日志改因。**
 
 ### 一、本轮亲自验证（证据在本轮会话里重新取过，不是转述）
 
