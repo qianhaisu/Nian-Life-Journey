@@ -315,6 +315,19 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-reading .moment-continued { padding-top: clamp(12px, 1.8vw, 16px); }
 .month-reading .moment-text { max-width: 34em; font-weight: 400; font-size: clamp(1.05rem, 2.8vw, 1.15rem); line-height: 1.95; }
 .month-reading .moment-text p { margin: 0; font-size: inherit; line-height: inherit; text-indent: 2em; }
+/* 「这一天的照片」 — the day's own pictures, after the day's words. Set apart from the story above
+   it (its own air, a quiet heading) so it reads as the date's photographs, not as an illustration
+   the story is claiming. Grid and cap match 「这个月的照片」 so the two read as one archive. */
+.day-photos { margin: clamp(20px, 3vw, 28px) 0 clamp(28px, 4vw, 40px); }
+.day-photos > .section-mark { display: block; margin: 0 0 10px; }
+.day-photos .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 0; }
+.day-photos .photo { max-height: 220px; }
+.day-photos .day-photos-expand { margin: 10px 0 0; }
+@media (min-width: 900px) {
+  /* Aligns with the story column above: the date gutter stays empty, pictures start where the
+     words start. */
+  .month-reading .day-photos { margin-left: calc(6.5rem + 32px); }
+}
 /* A published memory is the month's heavier unit: a rule and extra air open it, its own date line
    gives way to the running head above it, and its title keeps the size a story has earned. */
 .month-reading .moment-memory_led { margin-top: clamp(56px, 6vw, 72px); padding-top: clamp(26px, 4vw, 38px); }

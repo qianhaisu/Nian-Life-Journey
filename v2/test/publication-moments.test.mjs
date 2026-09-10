@@ -30,6 +30,10 @@ function event(id, occurredAt, mediaIds = [], extra = {}) {
   return { id, profileId: "p", title: `记忆 ${id}`, story: "一段真实的故事。", occurredAt, people: [], tags: [], contentTypes: ["family"], mediaIds, sourceIds: mediaIds.map(sourceOf), growthRecordIds: [], careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"], visibility: "family", keptInYearbook: false, ...extra };
 }
 const trust = (media) => ({ confirmed: new Set(), trusted: new Set(media.map((item) => item.id)) });
+// The month's photographs wherever they are read: a chapter day's pictures travel with the day
+// (「这一天的照片」), the rest stay in 「这个月的照片」. A picture is in exactly one of the two.
+const monthPhotoIds = (composition) =>
+  [...composition.dayPhotoGroups, ...composition.archiveDays].flatMap((day) => day.photos.map((item) => item.id));
 const monthOf = (input, month) => findMonth(buildChapters({ events: [], traces: [], media: [], birthDay: BIRTH, ...input }), month);
 
 test("tiny production sizes never gain publication privilege anywhere, and stay counted in the archive", () => {
@@ -191,10 +195,12 @@ test("a trusted photo does NOT bind beside same-day trace text (T11 Part C, reve
   assert.equal(textMoment.kind, "text_led");
   assert.equal(textMoment.hero, undefined, "the day's words read on their own");
   assert.deepEqual(textMoment.supporting, []);
-  // Nothing is lost: the photograph still stands as its own day in the chronicle, and is still
-  // whole in the month's archive layer.
-  assert.deepEqual(composition.chronicle.map((moment) => [moment.day, moment.hero.id]), [["2026-08-05", "m"]]);
-  assert.deepEqual(composition.archiveDays.flatMap((day) => day.photos.map((p) => p.id)), ["m"]);
+  // Nothing is lost: the photograph is read on its own day, under 「这一天的照片」, below the words.
+  // It is not also a chronicle moment — the day is already being read in the chapter, and showing
+  // it twice was the old shape.
+  assert.deepEqual(composition.chronicle, [], "a day already read in the chapter is not read again below");
+  assert.deepEqual(composition.dayPhotoGroups.map((day) => [day.day, day.photos.map((p) => p.id)]), [["2026-08-05", ["m"]]]);
+  assert.deepEqual(composition.archiveDays, [], "…and it is not left at the end of the month as well");
 });
 
 test("an unprivileged photo does not bind to a text moment", () => {
@@ -292,11 +298,8 @@ test("no story on the month page carries a borrowed photo, and an associated lea
   const normal = composition.chapter.find((moment) => moment.memory?.id === "normal-same-day");
   assert.equal(normal.memory.lead.id, "other-story", "the same day's other story keeps its own photo");
 
-  // Nothing was deleted or hidden from the archive layer — the month still holds both pictures.
-  assert.deepEqual(
-    composition.archiveDays.flatMap((day) => day.photos.map((item) => item.id)).sort(),
-    ["meal-board", "other-story"],
-  );
+  // Nothing was deleted or hidden — the month still holds both pictures, now on their own day.
+  assert.deepEqual(monthPhotoIds(composition).sort(), ["meal-board", "other-story"]);
 });
 
 test("a story with no associated photo is text-only, even when the day is full of trusted ones", () => {
@@ -312,7 +315,8 @@ test("a story with no associated photo is text-only, even when the day is full o
   assert.equal(moment.memory.lead, undefined, "heroMediaId alone does not make a picture this story's");
   assert.equal(moment.hero, undefined);
   assert.deepEqual(moment.supporting, []);
-  assert.deepEqual(composition.archiveDays.flatMap((d) => d.photos.map((p) => p.id)), ["day-photo"], "the photograph is still in the month");
+  assert.deepEqual(monthPhotoIds(composition), ["day-photo"], "the photograph is still in the month");
+  assert.deepEqual(composition.dayPhotoGroups.map((d) => d.day), ["2026-08-20"], "…read on its own day, outside the story");
 });
 
 test("privilege: a published story confirms only the pictures it was actually written from", () => {
@@ -368,7 +372,7 @@ test("a video reaches the month's media section but can never illustrate a story
   assert.equal(story.memory.lead, undefined, "a video named by heroMediaId is still not this story's");
   assert.equal(story.hero, undefined);
 
-  const inAlbum = composition.archiveDays.flatMap((day) => day.photos);
+  const inAlbum = [...composition.dayPhotoGroups, ...composition.archiveDays].flatMap((day) => day.photos);
   assert.deepEqual(inAlbum.map((item) => item.id).sort(), ["clip", "still"], "both are the month's media");
   assert.equal(inAlbum.find((item) => item.id === "clip").type, "video", "…and the page can tell which is which");
   for (const moment of composition.chronicle) {
@@ -380,4 +384,69 @@ test("an unvouched video does not reach the media section either", () => {
   const clip = { ...photo("chat-clip", "2026-08-15T09:00:00.000Z", { width: 720, height: 1280 }), type: "video" };
   const composition = buildMonthComposition(monthOf({ media: [clip] }, "2026-08"), { confirmed: new Set(), trusted: new Set() });
   assert.deepEqual(composition.archiveDays, []);
+});
+
+// 「这一天的照片」 — a chapter day keeps its photographs on the day instead of at the end of the
+// month. The reason is reading distance: measured on production 2026-08 before this, the eleven
+// days that carry stories held 284 of the month's 549 photographs, and every one of them sat below
+// the entire chronicle inside a section that ships folded.
+test("a chapter day's photographs are read on that day, and are not also left in the month's photo section", () => {
+  const media = [
+    photo("story-day-1", "2026-08-19T02:00:00.000Z"),
+    photo("story-day-2", "2026-08-19T09:00:00.000Z"),
+    photo("quiet-day", "2026-08-06T05:00:00.000Z"),
+  ];
+  // The archive's ordinary shape: written from chat text, pictures arrived separately.
+  const events = [event("story", "2026-08-19 00:00:00+00", [], { sourceIds: ["chat-text"] })];
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+
+  assert.deepEqual(composition.dayPhotoGroups.map((day) => [day.day, day.photos.map((p) => p.id)]),
+    [["2026-08-19", ["story-day-1", "story-day-2"]]],
+    "the story's day carries its own photographs, in the order the day happened");
+  assert.deepEqual(composition.archiveDays.map((day) => day.day), ["2026-08-06"],
+    "a day with no story of its own keeps its existing entry in 「这个月的照片」");
+
+  // No picture is shown twice and none is stranded: the two surfaces partition the month.
+  const grouped = composition.dayPhotoGroups.flatMap((day) => day.photos.map((p) => p.id));
+  const archived = composition.archiveDays.flatMap((day) => day.photos.map((p) => p.id));
+  assert.deepEqual([...grouped, ...archived].sort(), ["quiet-day", "story-day-1", "story-day-2"]);
+  assert.equal(new Set([...grouped, ...archived]).size, 3, "no picture appears on both surfaces");
+  assert.equal(composition.totalPhotoCount, 3, "the month counts every photograph, wherever it is read");
+
+  // The expander's contract still holds over the narrowed archive: what it can deliver is exactly
+  // what is not already on screen, so expanding cannot reveal a duplicate or miss a day.
+  const visibleDays = new Set(composition.archiveDaysVisible.map((day) => day.day));
+  const deliverable = composition.archiveDays.filter((day) => !visibleDays.has(day.day));
+  assert.equal(composition.archiveFoldedDayCount, deliverable.length);
+  assert.equal(composition.archiveFoldedPhotoCount, deliverable.reduce((sum, day) => sum + day.photos.length, 0));
+});
+
+test("a story that says it has no photograph still shows none, and the day group is not a way back in", () => {
+  // noPhoto is a decision about the story, never about the day: the picture stays one of the
+  // month's photographs and is read under the date, which is the only relation it actually has.
+  const dayPhoto = photo("the-day", "2026-08-21T06:00:00.000Z");
+  const events = [event("withdrawn", "2026-08-21 00:00:00+00", ["the-day"], { sourceIds: [sourceOf("the-day")], heroMediaId: NO_HERO_MEDIA_ID })];
+  const composition = buildMonthComposition(monthOf({ media: [dayPhoto], events }, "2026-08"), trust([dayPhoto]));
+
+  const moment = composition.chapter.find((item) => item.memory?.id === "withdrawn");
+  assert.equal(moment.memory.noPhoto, true);
+  assert.equal(moment.memory.lead, undefined, "an explicit withdrawal is respected even when the source matches");
+  assert.equal(moment.hero, undefined);
+  assert.deepEqual(moment.supporting, [], "nothing inside the story's card");
+  assert.deepEqual(composition.dayPhotoGroups.map((d) => d.photos.map((p) => p.id)), [["the-day"]],
+    "the day still shows the day's photograph, outside the card and under its own heading");
+});
+
+test("a photograph the month's photo section would withhold is not admitted by a day group either", () => {
+  // Same gates, same set: grouping decides where a picture is read, never whether it may be.
+  const unvouched = photo("from-a-chat-no-one-vouched-for", "2026-08-19T04:00:00.000Z");
+  const tooSmall = photo("icon", "2026-08-19T05:00:00.000Z", { width: 20, height: 20 });
+  const events = [event("story", "2026-08-19 00:00:00+00", [], { sourceIds: ["chat-text"] })];
+  const composition = buildMonthComposition(
+    monthOf({ media: [unvouched, tooSmall], events }, "2026-08"),
+    trust([tooSmall]));
+
+  assert.deepEqual(composition.dayPhotoGroups, [], "unvouched stays out, and a 20x20 icon is still undrawable");
+  assert.deepEqual(composition.archiveDays, []);
+  assert.equal(composition.smallImageCount, 1);
 });

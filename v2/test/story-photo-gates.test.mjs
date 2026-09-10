@@ -67,6 +67,10 @@ test("gate 4 — a story with no association borrows nothing, and the day's phot
   assert.equal(moment.memory.lead, undefined);
   assert.equal(moment.hero, undefined);
   assert.deepEqual(moment.supporting, []);
-  assert.deepEqual(composition.archiveDays.flatMap((d) => d.photos.map((p) => p.id)), ["of-that-day"],
+  assert.deepEqual(
+    [...composition.dayPhotoGroups, ...composition.archiveDays].flatMap((d) => d.photos.map((p) => p.id)),
+    ["of-that-day"],
     "it is still one of the month's photographs, just not this story's");
+  assert.deepEqual(composition.dayPhotoGroups.map((d) => d.day), ["2026-08-20"],
+    "…and it is read under the day it belongs to, outside the story's card");
 });

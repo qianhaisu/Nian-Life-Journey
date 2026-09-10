@@ -89,9 +89,23 @@ export type MonthComposition = {
   chronicle: PublicationMoment[];
   // Photographed days folded to one line each: they exist, the archive layer has them whole.
   quietDays: QuietDay[];
-  // The month's photographs — vouched, deliverable and drawable — day by day, ascending. This is
-  // what 「这个月的照片」 shows, and what `archiveFoldedPhotoCount` is measured against. It is a
-  // display set, not the archive: unvouched rows are absent here and unchanged in the database.
+  // A day that carries a chapter moment keeps its photographs on that day, shown after the day's
+  // stories as 「这一天的照片」 rather than at the far end of the month. Ascending; a day appears
+  // here or in `archiveDays`, never both, so no picture is shown twice or lost between them.
+  //
+  // These are the same rows `archiveDays` would have carried — the identical vouched, deliverable,
+  // drawable set from `albumPhotosByDay`. Moving a day here changes where the month's photography
+  // is read, never which pictures are eligible to be read: per-photo visibility, deliverability and
+  // source vouching are all decided upstream and are not re-opened by this grouping.
+  //
+  // It is deliberately not a story binding. The group renders outside the story's card under a
+  // neutral date heading, and a story that says it has no photograph still has none inside it —
+  // 「这一天的照片」 claims the day, never the story.
+  dayPhotoGroups: PhotoDay[];
+  // The month's photographs — vouched, deliverable and drawable — day by day, ascending, for the
+  // days that did not get a group of their own above. This is what 「这个月的照片」 shows, and what
+  // `archiveFoldedPhotoCount` is measured against. It is a display set, not the archive: unvouched
+  // rows are absent here and unchanged in the database.
   archiveDays: PhotoDay[];
   // T20-A3: the subset of archiveDays actually rendered by default — a screenful (photo-days that
   // already carry a published moment first, then newest), ascending for reading order. The rest is
@@ -341,7 +355,11 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // A day with words in the chapter may still earn a photo moment here — the two sections make
   // no claim on each other. Only memory days are excluded: their photographs already read inside
   // the memory itself.
-  const candidates = photoDaysAsc.filter((day) => !memoryDays.has(day.day));
+  // A day whose words are already in the chapter is not also a chronicle moment or a quiet line:
+  // its photographs are shown right under those words as 「这一天的照片」 (dayPhotoGroups below).
+  // Before that group existed only memory days were excluded here, so a text_led day was read
+  // twice — once for its sentences in the chapter, once as a photo moment down in the chronicle.
+  const candidates = photoDaysAsc.filter((day) => !chapterDays.has(day.day));
   const scored = candidates
     .map((day) => ({ day, moment: photoLedMoment(day, privilege) }))
     .filter((item): item is { day: PhotoDay; moment: PublicationMoment } => Boolean(item.moment));
@@ -369,10 +387,29 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
     .map((day) => ({ day: day.day, dateLabel: day.dateLabel, photoCount: (albumPhotosByDay.get(day.day) ?? []).length }))
     .filter((day) => day.photoCount > 0);
 
-  // ARCHIVE — the month's photographs, ascending; days read morning to evening already. Built from
-  // the one album set above, so nothing here can disagree with the first screen or the expander.
+  // DAY GROUPS — a chapter day's own photographs, kept on the day instead of at the end of the
+  // month. A reader who has just read what 8/19 left behind can see 8/19's pictures without
+  // crossing the rest of August to reach them; measured on 2026-08 before this, the eleven days
+  // that carry stories held 284 of the month's 549 photographs and every one of them sat below the
+  // whole chronicle, inside a section that ships folded.
+  //
+  // Same rows, same gates: `albumPhotosByDay` is the one vouched/deliverable/drawable set the
+  // archive is built from, so grouping cannot surface a picture the month's photo section would
+  // have withheld.
+  const dayPhotoGroups: PhotoDay[] = [];
+  for (const day of photoDaysAsc) {
+    if (!chapterDays.has(day.day)) continue;
+    const photos = albumPhotosByDay.get(day.day) ?? [];
+    if (photos.length > 0) dayPhotoGroups.push({ ...day, photos });
+  }
+  const groupedDays = new Set(dayPhotoGroups.map((day) => day.day));
+
+  // ARCHIVE — the month's remaining photographs, ascending; days read morning to evening already.
+  // Built from the one album set above minus the days already grouped, so nothing here can disagree
+  // with the first screen or the expander, and no picture is reachable from two places at once.
   const archiveDays: PhotoDay[] = [];
   for (const day of photoDaysAsc) {
+    if (groupedDays.has(day.day)) continue;
     const photos = albumPhotosByDay.get(day.day) ?? [];
     if (photos.length > 0) archiveDays.push({ ...day, photos });
   }
@@ -440,7 +477,11 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // the masthead say "记下 1 天" over a page that visibly listed ten. The opening line has to count
   // the same days the page actually shows: every day with a moment, chapter or chronicle alike.
   const daysWithWords = new Set([...chapterMoments, ...chronicle].map((moment) => moment.day)).size;
-  return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, archiveDays, archiveDaysVisible, archiveFoldedPhotoCount, archiveFoldedDayCount, smallImageCount, cover, preview, narration, daysWithWords, totalPhotoCount: archivePhotoCount };
+  // The month's photographs, wherever they are read: the day groups plus what is left in the photo
+  // section. Counting `archiveDays` alone would have quietly dropped every picture that moved onto
+  // a story day — 284 of 2026-08's 549.
+  const groupedPhotoCount = dayPhotoGroups.reduce((sum, day) => sum + day.photos.length, 0);
+  return { month: chapter.month, mode, chapter: chapterMoments, chronicle, quietDays, dayPhotoGroups, archiveDays, archiveDaysVisible, archiveFoldedPhotoCount, archiveFoldedDayCount, smallImageCount, cover, preview, narration, daysWithWords, totalPhotoCount: archivePhotoCount + groupedPhotoCount };
 }
 
 // V4 (T16, 2026-09-04), corrected by T21 (Cowork, 2026-09-04): the original draft also stated the

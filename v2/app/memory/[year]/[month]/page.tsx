@@ -1,7 +1,9 @@
+import { Fragment } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArchiveExpander } from "@/components/archive-expander";
+import { DayPhotos } from "@/components/day-photos";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
@@ -61,11 +63,14 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const yearChapter = chapters.find((item) => item.year === year);
   const siblings = yearChapter?.months.filter((item) => item.month !== month) ?? [];
   const archivePhotoCount = composition.archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
+  const dayGroups = new Map(composition.dayPhotoGroups.map((day) => [day.day, day]));
   // The section is named for what is actually in it. A month with a playable clip says so; a month
   // without one is not promised a video it does not have.
   const albumHasVideo = composition.archiveDays.some((day) => day.photos.some((item) => item.type === "video"));
   const albumLabel = albumHasVideo ? "这个月的照片与视频" : "这个月的照片";
-  const empty = composition.chapter.length === 0 && composition.chronicle.length === 0 && composition.quietDays.length === 0 && archivePhotoCount === 0;
+  // Emptiness is about the whole month, not one section: a month whose photographs all sit in day
+  // groups has plenty to read even when 「这个月的照片」 is empty.
+  const empty = composition.chapter.length === 0 && composition.chronicle.length === 0 && composition.quietDays.length === 0 && composition.totalPhotoCount === 0;
 
   return <div className="month-page reading-wrap">
     <header className="chapter-masthead">
@@ -76,16 +81,28 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       {summary?.summary ? <SnapshotSummary text={summary.summary} className="chapter-summary serif" /> : null}
       {!summary && composition.narration ? <p className="chapter-narration serif">{composition.narration}</p> : null}
       {!summary && !composition.narration && standfirst ? <p className="chapter-standfirst serif">{standfirst}</p> : null}
-      {/* The month's photographs are the archive's largest thing by far, and since stories stopped
-          borrowing them (2026-09-10) this is where nearly all of them live. It is the first link in
-          the chapter for that reason — on a phone it sits under the title, one tap from the top,
-          rather than at the far end of a long scroll. */}
+      {/* A jump to 「这个月的照片」, which now holds the days that told no story of their own —
+          the rest travel with their day, above. Kept at the top because those remaining days are
+          still the longest thing on the page on a phone. */}
       {archivePhotoCount > 0 ? <p className="chapter-meta"><a className="text-link" href="#month-photos">{albumLabel} →</a></p> : null}
     </header>
 
     {composition.chapter.length > 0 ? <section className="month-reading" aria-labelledby="reading-title">
       <h2 id="reading-title" className="section-mark">这个月记下来的</h2>
-      {composition.chapter.map((moment, index) => <MonthMoment moment={moment} year={year} monthAgeLabel={chapter.ageLabel} priority={index === 0} continued={composition.chapter[index - 1]?.day === moment.day} key={`${moment.day}-${moment.kind}-${moment.memory?.id ?? ""}`} />)}
+      {/* A day's photographs follow the last of that day's stories, as 「这一天的照片」 — outside the
+          story cards, under the day's own heading. The reader finishes 8/19's words and 8/19's
+          pictures are right there, instead of at the far end of the month inside a folded section.
+          The group belongs to the date, not to any story above it: composition puts every one of a
+          chapter day's photographs here and none of them in 「这个月的照片」 (lib/publication-moments.ts),
+          so nothing is shown twice and nothing is stranded. */}
+      {composition.chapter.map((moment, index) => {
+        const dayEnds = composition.chapter[index + 1]?.day !== moment.day;
+        const group = dayEnds ? dayGroups.get(moment.day) : undefined;
+        return <Fragment key={`${moment.day}-${moment.kind}-${moment.memory?.id ?? ""}`}>
+          <MonthMoment moment={moment} year={year} monthAgeLabel={chapter.ageLabel} priority={index === 0} continued={composition.chapter[index - 1]?.day === moment.day} />
+          {group ? <DayPhotos photos={group.photos} dateLabel={group.dateLabel} ageLabel={group.ageLabel} /> : null}
+        </Fragment>;
+      })}
     </section> : null}
 
     {composition.chronicle.length > 0 ? <section className="month-days" aria-labelledby="days-title">
