@@ -326,3 +326,29 @@ test("privilege: a published story confirms only the pictures it was actually wr
   assert.deepEqual([...privilege.confirmed], ["written-from"]);
   assert.deepEqual([...privilege.trusted], [], "no trusted raw sources were supplied");
 });
+
+test("everything the photo section counts as folded is actually reachable when expanded", () => {
+  // The expander asks for "the days you have not shown me" by day key
+  // (components/archive-expander.tsx). While the first screen filled its budget by slicing a day in
+  // half, the rest of that day was counted in 还有 N 张 and then never requested — 27 pictures of
+  // 2026-08 were unreachable by any route the page offered. Whole days only, so the two agree.
+  const media = [];
+  for (let d = 1; d <= 3; d += 1) {
+    for (let n = 0; n < 20; n += 1) {
+      media.push(photo(`d${d}-${n}`, `2026-08-0${d}T${String(6 + n).padStart(2, "0")}:00:00.000Z`));
+    }
+  }
+  const composition = buildMonthComposition(monthOf({ media }, "2026-08"), trust(media));
+  const all = composition.archiveDays.flatMap((day) => day.photos.map((p) => p.id));
+  const shown = composition.archiveDaysVisible.flatMap((day) => day.photos.map((p) => p.id));
+  const shownDays = new Set(composition.archiveDaysVisible.map((day) => day.day));
+  // What the expander would deliver: every day it was not shown, whole.
+  const expandable = composition.archiveDays.filter((day) => !shownDays.has(day.day)).flatMap((day) => day.photos.map((p) => p.id));
+  assert.deepEqual([...shown, ...expandable].sort(), [...all].sort(), "no picture is counted but unreachable");
+  assert.equal(composition.archiveFoldedPhotoCount, expandable.length, "and the number offered is the number delivered");
+  assert.equal(composition.archiveFoldedDayCount, composition.archiveDays.length - composition.archiveDaysVisible.length);
+  for (const day of composition.archiveDaysVisible) {
+    const whole = composition.archiveDays.find((d) => d.day === day.day);
+    assert.equal(day.photos.length, whole.photos.length, "a day on the first screen is shown whole");
+  }
+});

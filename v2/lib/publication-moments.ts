@@ -386,14 +386,22 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const referencedDays = new Set([...chapterMoments, ...chronicle].map((moment) => moment.day));
   const archiveDaysRanked = [...archiveDays].sort((a, b) =>
     Number(referencedDays.has(b.day)) - Number(referencedDays.has(a.day)) || b.day.localeCompare(a.day));
+  //
+  // Whole days only, and this matters for more than tidiness. The first screen used to be filled to
+  // exactly ARCHIVE_FIRST_SCREEN_MAX by slicing whichever day ran over — and ArchiveExpander asks
+  // for "the days you have not shown me" by day key, so the rest of that sliced day was never
+  // requested and never reachable. Measured on 2026-08 before this fix: the section offered "还有
+  // 28 天、525 张照片", and expanding delivered 498 — the remaining 27 pictures of a partially shown
+  // day existed, were counted, and could not be opened by any means the page provided. A day is the
+  // unit the reader browses by, so it is the unit the budget spends. The first ranked day is always
+  // taken whole, even if it alone is over budget: a month must show something, and every image here
+  // is lazy, so a long day costs DOM nodes rather than bandwidth.
   const archiveDaysVisible: PhotoDay[] = [];
   let visiblePhotoCount = 0;
   for (const day of archiveDaysRanked) {
-    if (visiblePhotoCount >= ARCHIVE_FIRST_SCREEN_MAX) break;
-    const room = ARCHIVE_FIRST_SCREEN_MAX - visiblePhotoCount;
-    const photos = day.photos.slice(0, room);
-    archiveDaysVisible.push({ ...day, photos });
-    visiblePhotoCount += photos.length;
+    if (archiveDaysVisible.length > 0 && visiblePhotoCount + day.photos.length > ARCHIVE_FIRST_SCREEN_MAX) break;
+    archiveDaysVisible.push(day);
+    visiblePhotoCount += day.photos.length;
   }
   archiveDaysVisible.sort((a, b) => a.day.localeCompare(b.day));
   const visibleCountByDay = new Map(archiveDaysVisible.map((day) => [day.day, day.photos.length]));
