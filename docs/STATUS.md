@@ -5028,3 +5028,188 @@ oss-migrate-derivatives.log.jsonl`（约 7.4 MB，只有对象 key/哈希/时间
 2. 没做到：六文件试导批次无法成立（缺失项全部落在视频/无日期两类被现有管线明确拒绝的范围）；
    主力群 JSON 侧新增量仍无法确认；19,237 行标签仍无法归属。
 3. 下一件：等上面两个产品决定；在决定之前，主力群导入因身份漂移会整批重复写，不要触碰。
+
+## 2026-09-10（第二轮，只读）无日期照片入库方案核查 + 视频入口静态核查
+
+**本轮只读**：没有导入、没有连数据库、没有连对象存储、没有重跑会覆盖 batch manifest 的 dry-run、
+没有动 18080 隧道、没有碰冻结清单。唯一的写操作是把 `v2/lib/types.ts` 临时改两处、跑 `tsc` 量化
+改动面，随后已还原（`git status` 对该文件干净）；另外只读解析了 batch 的三个 manifest，只输出计数，
+不输出家庭文件名与路径。
+
+### 1. takenAt 的必填约束在哪一层（已证明，逐行）
+
+| 层 | 位置 | 现状 |
+|---|---|---|
+| `raw_sources.captured_at` | `v2/lib/db/schema.ts:37` | **NOT NULL** — 硬约束之一 |
+| `media_assets.taken_at` | `v2/lib/db/schema.ts:64` | 已可空，线上已有这种行（`lib/ingest/quark-artifact-asset.ts:40` 就写 `takenAt: null`） |
+| `media.taken_at` | `v2/lib/db/schema.ts:111` | **NOT NULL** — 硬约束之二，展示层的那一个 |
+| TypeScript | `lib/types.ts:55` `Media.takenAt: string`、`:56` `RawSource.capturedAt: string` | 与上面两条 NOT NULL 一致 |
+
+**日期未知时（假设能存进去）现有展示层的真实行为**——查过每一处，不是推断：
+
+- 月份归属：`calendarMonthOf(null)` 返回 undefined，`familyMediaByMonth` 直接 `continue`
+  （`lib/memory-chapters.ts:153`），`groupPhotoDays` 同样跳过（`:172`）。不会混进任何月份。
+- 月页与静态参数：`getMonthArchive` 用 `gte/lt` 过滤 `media.taken_at`（`postgres-repository.ts:396`），
+  NULL 天然落选；`listArchiveMonths`（`:655`）也不会因此多出月份。
+- 年龄：`groupPhotoDays` 里 `timeSignatureFor` 只在有 day 时才算，没有日期就没有年龄标。
+- 首页"最近"：`latestActivityDay` 读的是 `raw_sources.capturedAt`（`lib/time-truth.ts:46`）。
+  **只有 `captured_at` 真写 NULL，导入才不会把"张年最近有动静"改写成导入当天**；写导入时间就会。
+- 结论：NULL 进得去就不会污染月份 / 年龄 / 时间线，**但也彻底不可见**——所以必须同时给一个明确的
+  "日期未知"陈列面，否则等于没导。
+
+**本轮新发现的一处真实混淆（拍摄时间被导入时间顶替）**：
+`v2/lib/ingest/quark.ts:102` 写的是 `takenAt: file.takenAt ?? now`——没有拍摄时间就拿当前时间当拍摄
+时间。这条路径由 `app/api/internal/ingest/route.ts:5` 可达（token 门），属于产品原则二禁止的编造日期。
+方案里一并改成 null。反向的正面先例在 `scripts/wechat-video-backfill.mjs:143`：宽高时长未知就留
+NULL，"honest and fail-closed, not a broken promise"。
+
+### 2. 最小改动方案（推荐 A）
+
+**需要数据库迁移：是，一个 migration，两列。**
+
+```
+0013_undated_media.sql
+alter table media alter column taken_at drop not null;
+alter table raw_sources alter column captured_at drop not null;
+alter table raw_sources add constraint raw_sources_captured_at_known
+  check (captured_at is not null or metadata->>'dateUnknown' = 'true');
+```
+
+第三条是护栏：日期未知必须被**显式声明**，防止别的导入器以后悄悄写 NULL。现有行 `captured_at`
+全部非空，约束加上即通过。
+
+**改动面是实测的，不是估计**（临时改类型跑 `tsc --noEmit`，随后还原）：
+
+- 只放开 `media.taken_at`：**全仓库 1 处类型错**（`lib/organizer/context.ts:42`）。
+- 再放开 `raw_sources.captured_at`：**再多 23 处**，分布是 organizer 20 处
+  （`rule-based.ts` 6、`pre-group.ts` 6、`evidence/window.ts` 3、`context.ts` 3、`media-input.ts` 2）
+  加 `components/evidence-list.tsx` 4 处。
+
+organizer 那 20 处**不逐个改判断逻辑**（判断逻辑在停下清单里），改法是两条：
+
+1. `postgres-repository.ts:323`（`assembleOrganizerStore` 的 rawSources 查询）加 `isNotNull(capturedAt)`，
+   无日期的源永远进不了 Organizer 的读边界。
+2. 新增 `type DatedRawSource = RawSource & { capturedAt: string }`，organizer 的入口类型
+   （`evidence/types.ts:85` 的 `WindowSource` 等）改用它。这条顺带把"Organizer 只处理有日期的材料"
+   写进类型系统。
+
+`components/evidence-list.tsx` 那 4 处必须真改：证据列表遇到无日期来源时显示"日期未知"，不显示假日期。
+
+**导入侧（只动脚本，不动生产渲染路径）**：
+
+- `scripts/quark-photo-apply.mjs`：加 `allowUndated`（默认 false）。`eligibleItems` 分两条泳道；
+  undated 泳道写 `capturedAt: null`、`asset.takenAt: null`、`media.takenAt: null`，
+  `raw_sources.metadata` 写 `{ dateUnknown: true, reason: "no reliable capture time in manifest" }`；
+  `byDate` 分桶跳过 undated（不 enqueue，`organize` 仍默认 false）；summary 增加 `undatedCount`。
+- `scripts/quark-history-init.mjs`：加 `--include-undated`，把 undated 行喂进这条泳道（继续排除 HEIC）。
+- **checksum 去重、`organize:false`、sha 派生的幂等 id 全部不变**——走的还是同一个 `ingestOne`，
+  只是日期字段为 null。
+- **已有有日期照片不受影响**：新分支只在 `capture_time.reliable !== true` 时进入。
+
+**展示层（最小）**：
+
+- 新增 repository 方法 `listUndatedFamilyMedia(limit)`：`where profile_id = ? and taken_at is null`，
+  带 asset/location 做 deliverability 判定。**有 LIMIT、不读 `raw_sources.text`、不走 `getStore()`**，
+  符合 CLAUDE.md 对渲染路径新增数据库读取的规则。
+- 新增 `/memory/undated`（`revalidate = 300`）：只有照片和一句"这些照片没有可靠的拍摄时间，
+  先放在这里"。不显示日期、不显示年龄、不显示张数（原则三禁计数式描述）。
+- `/memory` 底部一行安静入口。不做红点、不做催促、不做上传引导（原则四）。
+
+**不需要迁移的部分**：`media_assets.taken_at` 已经可空；`/api/media/[id]` 的投递与日期无关。
+
+**替代方案 B（不推荐，但记下来）**：无日期照片不建 `raw_source`，`media`/`media_assets` 的
+`raw_source_id` 留空。好处是只动 `media.taken_at` 一列、只有 1 处类型错，不碰 organizer。代价是
+丢掉原则八的证据链，且要把 `UploadPersistInput.source` 改成可选（两个 repository 实现 + 契约测试），
+还要放松 `quark-photo-apply.mjs:48` 那句 `existing asset ... has no rawSourceId` 的守卫。
+综合看 A 更诚实、也更不容易在以后被误读。
+
+### 3. 视频入口静态核查（只报告，本轮不实现、不扩大为通用媒体重构）
+
+**缺失能力（四条）**：
+
+1. `lib/media/processing.ts:9` 的 `sourceImageMetadata()` 是 sharp，喂 mp4/mov 直接抛；没有 ffprobe，
+   拿不到 `width`/`height`/`durationSeconds`，而 `media.width`/`height` 是 NOT NULL。
+2. **最危险的一条**：`createDerivatives()` 对 video 返回的是一张写着"视频预览稍后可用"的 SVG 占位图
+   （`processing.ts:16`），不是真首帧。而 deliverability 判定视频**只看有没有 poster**
+   （`lib/media/deliverability.ts:25`）。所以视频一旦走通入库，259 个视频会立刻变成 259 张一模一样的
+   占位卡进月页——不会报错，直接上线，违反原则三与原则五。**真首帧到位之前不要让视频进 `media` 表。**
+3. 没有播放器：`components/` 里没有任何 `<video>`，也没有一处读 `posterSrc`。
+4. `/api/media/[id]` 不支持 Range，且明确拒绝 `variant=original`（`route.ts:14`、`:20`），
+   无法边下边播或拖动进度。
+
+**可复用的部分（三条）**：
+
+- `MediaType` 的 `"video"` 与 `MediaVariant` 的 `"preview"` 都已存在，且投递路由**已经接受**
+  `preview`（`route.ts:16`）——转码后的 web mp4 可以直接落在这个变体上，不用新造变体。
+- `scripts/wechat-video-backfill.mjs:143` 已经建立了正确的保守姿势：宽高时长未知留 NULL/0、
+  不生成假 poster、因此不可投递、页面上干脆不出现。夸克 259 个视频照抄这条就能"先入库、不展示"。
+- `components/evidence-list.tsx:69/76` 已有时长格式化和"还没整理成可以翻看的样子"的家人措辞。
+
+### 4. 52 / 277 / 329 的集合关系（只读对账，算清了，不存在重复统计）
+
+方法：只读 `quark-history-manifest.jsonl`、`quark-heic-converted-task-items.jsonl` 与三个侧写文件，
+用 `quark-history-init.mjs` 自己的谓词复算，只输出计数。
+
+```
+2,279 = 2,019 照片 + 260 视频
+照片 2,019 = 1,690 有可靠日期 + 329 无日期
+  有日期 1,690 = 1,468 HEIC（已转码入库，crosswalk 正好 1,468 条一一对应）+ 222 非 HEIC（已入库）
+  无日期   329 = 277 非 HEIC + 52 HEIC
+```
+
+**52 就是"无日期的那 52 张 HEIC"，是 329 的子集，不是 277 之外的另一个缺口。**
+之前把它单列成"无法映射"，是因为对账走的是"原件 sha → 转码产物 sha"的 crosswalk，而这 52 张
+**从来没被转码过**：`quark-heic-convert.mjs:27` 的输入是 `heic-decode-unsupported.jsonl`，那个文件
+只装有日期的 HEIC；转码函数本身对无日期行直接返回 `skipped_undated`（`quark-heic-convert.mjs:43`）。
+没有产物 sha 可查，才被归进第三个桶。
+
+**因此真实缺口应该表述为 588 = 259 视频 + 329 无日期照片（277 非 HEIC + 52 HEIC），
+而不是"536 加 52 两笔"。** 上一条记录里 536 / 52 的分桶方式没错，但读起来像两个独立缺口，更正为这一句。
+
+两个待核实项（都标为推断，不作事实使用）：
+
+- 52 张 HEIC "确实未入库"是**推断**：没有转码产物、HEIC 在本机 libheif 下不可解码、sharp 拿不到
+  它们的宽高，所以原件字节不可能被现有管线写进库。坐实只需要一次只读查询：这 52 个原件 sha 是否
+  出现在 `media_assets.checksum`。本轮按"不连数据库"的要求没做。
+- 260 个视频里只有 259 被判为缺失，**有 1 个视频的 sha 已在库中**（推断来自另一条链路，例如微信
+  视频回填）。未核实。
+
+无日期的原因分布（只读解析）：325 行 `takenAt` 为 null，4 行是无法解析的字符串。另有 **31 行带一个
+从文件名猜出来的 `month` 字段——不要拿它当拍摄时间**（原则二），它是文件名，不是拍摄时间。
+
+### 5. 验收方式（产品决定做出、代码落地之后逐条对，对不上就停）
+
+首次导入 277 张非 HEIC 无日期照片：
+
+- `media_assets` 新增 277 行，`taken_at IS NULL`
+- `raw_sources` 新增 277 行，`captured_at IS NULL`、`metadata->>'dateUnknown' = 'true'`、
+  `source_label = 'Quark 历史素材 2026-09-03'`
+- `media` 新增 277 行，`taken_at IS NULL`
+- `organizer_jobs` 新增 0
+- `listArchiveMonths()` 的月份集合与导入前**完全相同**，一个月份都不许多
+- 首页的 `latestActivityDay` 与导入前**完全相同**（导入不能让"最近"变成今天）
+- 随便打开一个月页，照片数量与导入前相同
+- `/memory/undated` 能打开、能看到照片，页面上**没有任何日期、年龄、张数**
+
+重跑同一批：`created: 0 / reused: 277`，三张表行数不变。
+
+停止条件（出现任一项立刻停）：任何一行 `taken_at` 或 `captured_at` 非 NULL；出现任何新月份；
+`organizer_jobs` 有新增；`/memory/undated` 上出现了日期或年龄。
+
+### 6. 阻塞项
+
+1. **产品决定没做**：无日期照片要不要进库、要不要给家人看。方案已备好，没有这句话不动手。
+2. **52 张 HEIC 还差一次转码**：`quark-heic-convert.mjs --input` 指向无日期 HEIC 清单 + 同样的
+   undated 泳道。注意转码产物 sha 才是身份，换 quality 或 libheif 版本就换 sha → 会写重复行。
+3. **259 个视频四件事都没有**（真首帧、时长、播放器、Range）。决定之前不要让视频进 `media` 表。
+4. **放开 `captured_at` 可空会碰 organizer 的 20 处类型点**。用读边界过滤 + `DatedRawSource` 收窄，
+   不改判断逻辑；若连这也不想碰，退到方案 B，代价见第 2 节。
+
+### 三行汇报
+
+1. 线上没有变化——本轮只读代码与清单，只写了这份文档。
+2. 没做到：无日期入库仍未实现（等产品决定）；52 张 HEIC 未入库是推断，要一次只读 DB 查询坐实；
+   1 个已在库的视频来源未查。另外发现 `lib/ingest/quark.ts:102` 在生产可达路径上用导入时间顶替
+   拍摄时间，属原则二违规，已并入方案一起改。
+3. 下一件：等 Teddy 一句"导 / 不导"。同意就按第 2 节做 migration + 导入侧泳道 + `/memory/undated`，
+   先导 277 张非 HEIC，52 张 HEIC 随后补转码。
