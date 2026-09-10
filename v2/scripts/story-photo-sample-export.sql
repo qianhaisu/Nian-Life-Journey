@@ -17,6 +17,20 @@
 -- Bodies are omitted here only because that reading is done on the page's own evidence disclosure
 -- (/events/<id>), which already renders the messages in full and needs no second copy of them.
 --
+-- TIME SEMANTICS — VERIFIED 2026-09-11, DO NOT INFER FROM COLUMN NAMES
+-- The two timestamps this comparison depends on are stored in different conventions, and nothing
+-- in their names says so:
+--   raw_sources.captured_at  timestamptz — comes back as +08 (e.g. 2026-08-01 11:47:15+08)
+--   media.taken_at           timestamp WITHOUT time zone — holds the UTC instant (…03:47:15)
+-- They are 8 hours apart for the same event. Confirmed on real rows: a photograph whose own source
+-- was captured at 11:47:15+08 carries taken_at 03:47:15. Comparing them directly silently shifts
+-- every window by 8h and yields confident, wrong answers about whether a photograph falls inside
+-- the messages a story was written from.
+--
+-- So: compare like with like. Result set 3 selects `s.captured_at AS source_captured_at` for
+-- exactly this reason — use it, not taken_at, against result set 2's captured_at. If a future
+-- column is added here, check its declared type rather than trusting the name.
+--
 -- KNOWN MISSING, DO NOT SUBSTITUTE
 --   * Reply / quote relations are NOT stored anywhere. WeChat's 「[引用 …]」 survives only as literal
 --     characters inside raw_sources.text; no column records which message was quoted, so the
