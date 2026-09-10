@@ -194,24 +194,16 @@ function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMo
   };
 }
 
-// Pick hero + supporting photos from a PhotoDay for text/memory moments. Only privileged photos
-// are candidates — unvouched chat images cannot anchor a reading moment's photography slot.
-// excludeIds: hero IDs already claimed by another moment on the same day (T11 Part C: avoid
-// showing the same photo in both memory_led and text_led slots on the same day).
-//
-// Exported (T18, 2026-09-04): this is now also the backfill/write-time binding used to persist
-// media_ids/heroMediaId onto a life_event row (scripts/t18-backfill-media-binding.mjs) — the same
-// function, not a re-implementation, is what keeps the month page, the event detail page and the
-// home page showing the same picture for the same day.
-export function pickDayPhotos(photoDay: PhotoDay | undefined, privilege: MediaPrivilege, excludeIds?: ReadonlySet<string>): { hero?: MediaRef; supporting: MediaRef[]; morePhotoCount: number } {
-  if (!photoDay) return { hero: undefined, supporting: [], morePhotoCount: 0 };
-  const reps = burstRepresentatives(photoDay.photos);
-  const eligible = reps.filter((r) => !excludeIds?.has(r.id));
-  const hero = eligible.find((r) => heroEligibleRef(r, privilege));
-  const supporting = eligible.filter((r) => r !== hero && isPrivileged(r, privilege) && thumbnailSized(r)).slice(0, MOMENT_SUPPORTING_MAX);
-  const shownCount = (hero ? 1 : 0) + supporting.length;
-  return { hero, supporting, morePhotoCount: Math.max(0, photoDay.photos.length - shownCount) };
-}
+// `pickDayPhotos` lived here until 2026-09-10. It answered "which of this day's photographs should
+// be set beside this day's words", and every story image the site ever showed came from it —
+// including the ones scripts/t18-backfill-media-binding.mjs then wrote into life_events.media_ids
+// and hero_media_id, which is why that column cannot be read as evidence today. Removed rather
+// than left available: its inputs were the day, the size, the source's trustworthiness and the
+// sort order, and no combination of those is a reason to tell a reader that a picture belongs to a
+// story. What replaced it is lib/media/story-binding.ts, which asks whether the photograph is part
+// of the material the story was written from. Day-level photography still reaches the page through
+// photoLedMoment (a day that was only photographed, standing as itself) and through the month's
+// own photo section.
 
 export type TraceNote = { day: string; dateLabel: string; ageLabel?: string; text: string };
 
@@ -238,27 +230,19 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const traceByDay = new Map(chapter.traceDays.map((day) => [day.day, day]));
 
   // CHAPTER — what is worth reading, in the order the month happened. Memories first within a day.
+  //
+  // 2026-09-10: a chapter moment no longer carries photographs of its own. It used to — T11 Part C
+  // bound the day's first vouched photo to a memory that had none, and to a day's trace text, on
+  // the reasoning that shared provenance on a shared day was close enough to shared subject. It is
+  // not, and the page said otherwise to the reader: a page-wide picture directly under a story
+  // reads as that story's picture, whatever the composition layer meant by it. 08-19 illustrated a
+  // music story with a meal board that way, and 523 of the archive's 524 bound stories rest on the
+  // same kind of selection. A memory's own lead still travels inside EditorialMemory, where it now
+  // has to be part of the material the story was written from (lib/media/story-binding.ts). Every
+  // other picture of the day keeps its place in the month's photo section, presented as the
+  // month's photography rather than as anyone's illustration — nothing is deleted or unbound.
   const chapterMoments: PublicationMoment[] = [];
-  // Track which photo IDs have been claimed by memory_led moments, so text_led moments on the
-  // same day don't repeat the same hero. Keyed by day string.
-  const heroClaimedOnDay = new Map<string, string>();
   for (const memory of [...chapter.memories].sort((a, b) => a.signature.day.localeCompare(b.signature.day))) {
-    // If the memory has no own lead photo, bind the day's first privileged hero photo (T11 Part C)
-    // — unless the story was reviewed as text-only (`noPhoto`, from heroMediaId === "none").
-    //
-    // 2026-09-10: this borrow is what put the picture back. 08-19「能跟着老师的音乐互动了」was
-    // reviewed and its hero set to the NO_HERO_MEDIA_ID sentinel, which the detail page honours —
-    // but here `!memory.lead` was true for both "nothing qualified" and "reviewed, no photo", so
-    // the month page borrowed the day's pictures and re-published the daycare meal-board photo as
-    // that memory's hero, with the very media the review had excluded beside it. A reviewed
-    // text-only story stays text-only wherever it is rendered.
-    //
-    // Scope is this memory's own moment, deliberately: the day's other events keep their photos,
-    // and the day's loose pictures are untouched in the archive layer. One story saying "not this
-    // picture" is not the day saying "no pictures".
-    const photoDay = photoDaysAsc.find((day) => day.day === memory.signature.day);
-    const dayPhotos = !memory.lead && !memory.noPhoto ? pickDayPhotos(photoDay, privilege) : { hero: undefined, supporting: [], morePhotoCount: 0 };
-    if (dayPhotos.hero) heroClaimedOnDay.set(memory.signature.day, dayPhotos.hero.id);
     chapterMoments.push({
       kind: "memory_led",
       day: memory.signature.day,
@@ -266,32 +250,29 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
       ageLabel: memory.signature.ageLabel,
       memory,
       text: [],
-      hero: dayPhotos.hero,
-      supporting: dayPhotos.supporting,
-      morePhotoCount: dayPhotos.morePhotoCount,
+      hero: undefined,
+      supporting: [],
+      morePhotoCount: 0,
     });
   }
-  // Bind privileged same-day photos beside text moments (T11 Part C). Sharing provenance is the
-  // binding here: a daycare-group photo appearing beside daycare-group text on the same day is not
-  // a guess at what the sentence depicts — both come from the same people at the same time.
-  // Unvouched WeChat images (chat stream screenshots, forwards) remain excluded: privilege is the gate.
+  // A day's trace text reads on its own, for the same reason a memory does. The old argument here
+  // was that a daycare-group photo beside daycare-group text on one day shares provenance, so it is
+  // not a guess — but shared provenance says the picture and the sentence came from the same place,
+  // never that the picture shows what the sentence says. Set directly under the words it still
+  // reads as their illustration. The day's photographs are in the month's photo section.
   for (const traceDay of [...chapter.traceDays].sort((a, b) => a.day.localeCompare(b.day))) {
     const text = readableEntries(traceDay.entries).slice(0, MOMENT_TEXT_MAX);
     if (text.length === 0) continue;
     const photoDay = photoDaysAsc.find((day) => day.day === traceDay.day);
-    // Exclude any hero already shown by a memory_led moment on the same day.
-    const alreadyClaimed = heroClaimedOnDay.get(traceDay.day);
-    const excludeIds = alreadyClaimed ? new Set([alreadyClaimed]) : undefined;
-    const dayPhotos = pickDayPhotos(photoDay, privilege, excludeIds);
     chapterMoments.push({
       kind: "text_led",
       day: traceDay.day,
       dateLabel: traceDay.dateLabel,
       ageLabel: photoDay?.ageLabel,
       text,
-      hero: dayPhotos.hero,
-      supporting: dayPhotos.supporting,
-      morePhotoCount: dayPhotos.morePhotoCount,
+      hero: undefined,
+      supporting: [],
+      morePhotoCount: 0,
     });
   }
   const kindRank = (moment: PublicationMoment) => (moment.kind === "memory_led" ? 0 : 1);

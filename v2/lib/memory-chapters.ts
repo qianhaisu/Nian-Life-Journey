@@ -9,7 +9,7 @@ import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { NO_HERO_MEDIA_ID, heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
 import { isPortraitOfZhangnian } from "@/lib/media/representative";
-import { mediaBindingTrusted } from "@/lib/organizer/quality-review";
+import { storyAssociatedMedia } from "@/lib/media/story-binding";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
 
@@ -36,11 +36,11 @@ export type EditorialMemory = {
   weight: MemoryWeight;
   signature: TimeSignature;
   lead?: MediaRef;
-  // Reviewed: no photo belongs on this story (the event's heroMediaId is NO_HERO_MEDIA_ID). This is
-  // NOT the same as `lead === undefined`, which also happens when nothing qualified or the binding
-  // is untrusted — those cases may still borrow one of the day's own pictures on the month page
-  // (lib/publication-moments.ts, T11 Part C). A reviewed "no photo" must survive that borrow, or
-  // the decision only holds on the detail page and the month page quietly puts a picture back.
+  // Reviewed: no photo belongs on this story (the event's heroMediaId is NO_HERO_MEDIA_ID). Kept
+  // distinct from `lead === undefined`, which now means only "nothing here can show it belongs to
+  // this story" (lib/media/story-binding.ts). The two answer different questions — one is a
+  // decision that was made, the other is evidence that is missing — and a reader-facing surface
+  // that ever offers to fill an empty slot must honour the first without waiting for the second.
   noPhoto: boolean;
   photoCount: number;
   videoCount: number;
@@ -117,10 +117,13 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
   if (!signature) return undefined;
   const media = event.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
   const title = memoryTitle(event);
-  // A lead photo claims "this picture is this story". Only a trusted binding may claim that
-  // (lib/organizer/quality-review.ts mediaBindingTrusted); a rule-harvested same-day image—in
-  // production, a flight-booking screenshot—must not become the memory's face. Text-only is valid.
-  const lead = mediaBindingTrusted(event) ? heroCandidates(event.heroMediaId, media)[0] : undefined;
+  // A lead photo claims "this picture is this story", so only a picture that can show why may be
+  // one: it has to be part of the material the story was written from (lib/media/story-binding.ts).
+  // Sharing a calendar day is not that, and neither is being named by heroMediaId — that column
+  // records an earlier same-day selection, not evidence. Text-only is a valid memory; the event's
+  // other pictures are untouched and appear as the month's photographs instead.
+  const associated = storyAssociatedMedia(event, media);
+  const lead = heroCandidates(event.heroMediaId, associated)[0];
   return {
     id: event.id,
     title,
@@ -128,8 +131,8 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
     weight: event.memoryWeight,
     signature,
     lead: lead ? toMediaRef(lead, title) : undefined,
-    // Carried independently of `mediaBindingTrusted`: the sentinel is a review decision about this
-    // story, not a statement about how its media were bound.
+    // A review decision about this story, independent of whether any of its pictures could have
+    // been associated with it in the first place.
     noPhoto: event.heroMediaId === NO_HERO_MEDIA_ID,
     photoCount: media.filter((item) => item.type === "photo").length,
     videoCount: media.filter((item) => item.type === "video").length,

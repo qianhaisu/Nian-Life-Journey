@@ -8,7 +8,8 @@ import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
-import { isSnapshotPublishable, mediaBindingTrusted } from "@/lib/organizer/quality-review";
+import { isSnapshotPublishable } from "@/lib/organizer/quality-review";
+import { isStoryAssociated } from "@/lib/media/story-binding";
 import { isTrustedPhotoSource } from "@/lib/trusted-photo-sources";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
 import type { MediaPrivilege } from "@/lib/publication-moments";
@@ -50,13 +51,30 @@ export type FamilyArchive = {
   time: ArchiveTime;
 };
 
-// `confirmed`: claimed by a published (quality-approved) event WHOSE MEDIA BINDING is trusted —
-// the legacy rule organizer bound every same-day chat image to its events, and that harvest must
-// not vouch a screenshot into a hero slot (quality-review.ts mediaBindingTrusted). `trusted`: the
+// `confirmed`: the picture is part of the material a published event was written from — the one
+// per-item association this archive actually records (lib/media/story-binding.ts). `trusted`: the
 // picture's RawSource passes isTrustedPhotoSource (lib/trusted-photo-sources.ts) — either a
 // family_photo import (Quark album) or a WeChat group Teddy confirmed contains only Zhang Nian.
+//
+// The two are different claims and neither implies the other. `trusted` says "this is a real
+// photograph of this child, from a source the family stands behind", which is what lets a picture
+// be drawn large as the month's own photography. `confirmed` says "this picture belongs to this
+// story", which is the only thing that may put it next to that story's words.
 export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources: Pick<RawSource, "id" | "sourceType" | "sourceLabel">[]): MediaPrivilege {
-  const confirmed = new Set<string>(events.filter(mediaBindingTrusted).flatMap((event) => event.mediaIds));
+  // `confirmed` used to mean "listed in the media_ids of an event whose organizerVersion we trust".
+  // That trust was circular: the version was trusted because its bindings came from pickDayPhotos,
+  // and pickDayPhotos picked by day, size and sort order. A picture cannot vouch for itself through
+  // a story it was only ever placed beside. Now a picture is confirmed by a published event only
+  // when it is part of the material that event was written from (lib/media/story-binding.ts) —
+  // measured against production 2026-09-10, that is 4 pictures, not 1,401.
+  const byId = new Map(media.map((item) => [item.id, item]));
+  const confirmed = new Set<string>(
+    events.flatMap((event) =>
+      event.mediaIds.filter((id) => {
+        const item = byId.get(id);
+        return item ? isStoryAssociated(event, item) : false;
+      })),
+  );
   const trustedSources = new Set(
     rawSources.filter(isTrustedPhotoSource).map((source) => source.id),
   );

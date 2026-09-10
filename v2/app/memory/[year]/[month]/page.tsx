@@ -72,6 +72,11 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       {summary?.summary ? <SnapshotSummary text={summary.summary} className="chapter-summary serif" /> : null}
       {!summary && composition.narration ? <p className="chapter-narration serif">{composition.narration}</p> : null}
       {!summary && !composition.narration && standfirst ? <p className="chapter-standfirst serif">{standfirst}</p> : null}
+      {/* The month's photographs are the archive's largest thing by far, and since stories stopped
+          borrowing them (2026-09-10) this is where nearly all of them live. It is the first link in
+          the chapter for that reason — on a phone it sits under the title, one tap from the top,
+          rather than at the far end of a long scroll. */}
+      {archivePhotoCount > 0 ? <p className="chapter-meta"><a className="text-link" href="#month-photos">这个月的照片 →</a></p> : null}
     </header>
 
     {composition.chapter.length > 0 ? <section className="month-reading" aria-labelledby="reading-title">
@@ -90,12 +95,16 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
 
     {composition.quietDays.length > 0 && (composition.chapter.length > 0 || composition.chronicle.length > 0) ? <p className="month-quiet-days serif">
       {composition.quietDays.length > 8
-        ? `这个月还有 ${composition.quietDays.length} 天留下了零散的照片，收在下面的档案里。`
-        : `${composition.quietDays.map((day) => dayLabel(day.dateLabel, year)).join("、")}也留下了零散的照片，收在下面的档案里。`}
+        ? `这个月还有 ${composition.quietDays.length} 天留下了零散的照片，收在下面「这个月的照片」里。`
+        : `${composition.quietDays.map((day) => dayLabel(day.dateLabel, year)).join("、")}也留下了零散的照片，收在下面「这个月的照片」里。`}
     </p> : null}
 
-    {archivePhotoCount > 0 ? <details className="month-archive">
-      <summary><span className="serif">整月照片档案</span></summary>
+    {/* Open by default and addressable by id: "这个月的照片" is a place the reader is sent to from
+        the top of the page, and a link that lands on a collapsed accordion has not taken them
+        anywhere. What ships in the first render is still the same screenful the archive layer
+        always capped itself to (ARCHIVE_FIRST_SCREEN_MAX); the rest is behind ArchiveExpander. */}
+    {archivePhotoCount > 0 ? <details className="month-archive" id="month-photos" open>
+      <summary><span className="serif">这个月的照片</span></summary>
       <ol>
         {composition.archiveDaysVisible.map((day) => <li className="month-day" key={day.day}>
           <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} monthAgeLabel={chapter.ageLabel} year={year} />

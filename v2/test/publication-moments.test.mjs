@@ -8,6 +8,7 @@ import { buildChapters, findMonth } from "../lib/memory-chapters.ts";
 import { buildMemoryIndex } from "../lib/memory-index.ts";
 import { DEFAULT_MEMORY_IA_POLICY } from "../lib/memory-ia-policy.ts";
 import { NO_HERO_MEDIA_ID } from "../lib/media/hero.ts";
+import { mediaPrivilegeOf } from "../lib/family-archive.ts";
 import {
   BURST_GAP_SECONDS, MOMENT_SUPPORTING_MAX,
   buildMonthComposition, burstGroups, burstRepresentatives, readableEntries,
@@ -15,14 +16,18 @@ import {
 
 const BIRTH = "2025-01-03";
 
+const sourceOf = (mediaId) => `source-of-${mediaId}`;
 function photo(id, takenAt, dims = { width: 1600, height: 1200 }) {
-  return { id, profileId: "p", type: "photo", src: `/api/media/${id}`, alt: "WeChat image", takenAt, visibility: "family", ...dims };
+  return { id, profileId: "p", type: "photo", src: `/api/media/${id}`, alt: "WeChat image", takenAt, visibility: "family", rawSourceId: sourceOf(id), ...dims };
 }
 function trace(id, occurredAt, entries) {
   return { id, profileId: "p", occurredAt, entries, sourceIds: [], scopes: ["family"], visibility: "family" };
 }
+// sourceIds defaults to the sources this event's own pictures arrived in — a story that really
+// was written from them. Pass `sourceIds: []` for the archive's common case: a story whose
+// pictures only share its day.
 function event(id, occurredAt, mediaIds = [], extra = {}) {
-  return { id, profileId: "p", title: `记忆 ${id}`, story: "一段真实的故事。", occurredAt, people: [], tags: [], contentTypes: ["family"], mediaIds, sourceIds: [], growthRecordIds: [], careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"], visibility: "family", keptInYearbook: false, ...extra };
+  return { id, profileId: "p", title: `记忆 ${id}`, story: "一段真实的故事。", occurredAt, people: [], tags: [], contentTypes: ["family"], mediaIds, sourceIds: mediaIds.map(sourceOf), growthRecordIds: [], careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"], visibility: "family", keptInYearbook: false, ...extra };
 }
 const trust = (media) => ({ confirmed: new Set(), trusted: new Set(media.map((item) => item.id)) });
 const monthOf = (input, month) => findMonth(buildChapters({ events: [], traces: [], media: [], birthDay: BIRTH, ...input }), month);
@@ -147,19 +152,22 @@ test("burst grouping is temporal redundancy only: one representative reads, ever
   assert.equal(burstGroups(spaced.map((item) => ({ ...item, alt: "" }))).length, 2);
 });
 
-test("a trusted photo binds beside its trace text when they share a day (T11 Part C)", () => {
-  // T11 Part C, 2026-09-04: privileged (trusted/confirmed) photos now appear beside same-day text
-  // moments. Provenance is the binding — daycare photos are trusted because every image there is
-  // of 张年, so showing them beside the day's text is not a caption-guessing exercise.
+test("a trusted photo does NOT bind beside same-day trace text (T11 Part C, reversed 2026-09-10)", () => {
+  // T11 Part C used to put a privileged same-day photo beside a day's words, arguing that trusted
+  // provenance made it "not a caption-guessing exercise". Trusted provenance says the picture is
+  // really of this child, from a source the family stands behind. It never said the picture shows
+  // what the sentence says — and set directly under the words, that is what a reader takes it for.
   const media = [photo("m", "2026-08-05T08:00:00.000Z")];
   const traces = [trace("t", "2026-08-05 00:00:00", ["第一次自己扶着栏杆站了一会儿"])];
   const composition = buildMonthComposition(monthOf({ media, traces }, "2026-08"), trust(media));
   const textMoment = composition.chapter[0];
   assert.equal(textMoment.kind, "text_led");
-  assert.equal(textMoment.hero?.id, "m", "privileged same-day photo binds to text moment");
-  assert.equal(textMoment.supporting.length, 0);
-  // The photograph also keeps its chronicle place — chronicle excludes only memory days.
+  assert.equal(textMoment.hero, undefined, "the day's words read on their own");
+  assert.deepEqual(textMoment.supporting, []);
+  // Nothing is lost: the photograph still stands as its own day in the chronicle, and is still
+  // whole in the month's archive layer.
   assert.deepEqual(composition.chronicle.map((moment) => [moment.day, moment.hero.id]), [["2026-08-05", "m"]]);
+  assert.deepEqual(composition.archiveDays.flatMap((day) => day.photos.map((p) => p.id)), ["m"]);
 });
 
 test("an unprivileged photo does not bind to a text moment", () => {
@@ -185,11 +193,13 @@ test("a published memory's own lead is the month's face, above loose photography
   assert.equal(composition.chapter[0].memory.id, "e");
 });
 
-test("a rule-organizer event cannot lend its harvested media a face: no lead, text-only memory moment", () => {
+test("a same-day harvest cannot lend an event a face: no lead, text-only memory moment", () => {
   // Production case: 好想站起来的这一天 carries a same-day flight-booking screenshot bound by the
-  // legacy rule organizer. Approved TEXT does not vouch the pictures.
+  // legacy rule organizer. What disqualifies it is not who bound it — it is that the screenshot
+  // arrived in its own source and the story was written from other material, so nothing connects
+  // the two but the date. Approved TEXT vouches for no picture either.
   const screenshot = photo("shot", "2025-08-11T08:00:00.000Z", { width: 1280, height: 1708 });
-  const events = [event("stand", "2025-08-11 00:00:00+00", ["shot"], { heroMediaId: "shot", createdBy: "rule", organizerVersion: "rule-based-v1" })];
+  const events = [event("stand", "2025-08-11 00:00:00+00", ["shot"], { sourceIds: ["chat-text-only"], heroMediaId: "shot", createdBy: "rule", organizerVersion: "rule-based-v1" })];
   const composition = buildMonthComposition(monthOf({ media: [screenshot], events }, "2025-08"));
   const moment = composition.chapter.find((m) => m.kind === "memory_led");
   assert.equal(moment.memory.lead, undefined, "the memory reads as text; its pictures stay in the evidence layer");
@@ -223,12 +233,13 @@ test("/memory previews come from the composition: vouched pictures or none — n
   assert.equal(jul.compositionMode, "typography");
 });
 
-test("a story reviewed as text-only stays text-only on the month page, and only that story", () => {
-  // Production 08-19「能跟着老师的音乐互动了」(2026-09-10). Its hero was set to the
-  // NO_HERO_MEDIA_ID sentinel because the bound picture — a daycare meal board — is not that
-  // story. The detail page honoured it; the month page did not, because `!memory.lead` was true
-  // both for "nothing qualified" and for "reviewed, no photo", and the composition layer borrowed
-  // the day's pictures into the memory's own moment. The excluded photo came back as its hero.
+test("no story on the month page carries a borrowed photo, and an associated lead still reads", () => {
+  // Production 08-19「能跟着老师的音乐互动了」. Its hero was set to the NO_HERO_MEDIA_ID sentinel
+  // because the bound picture — a daycare meal board — is not that story; the detail page honoured
+  // it and the month page did not, because it borrowed the day's pictures whenever a memory had no
+  // lead of its own. The borrow is gone entirely now, so this asserts both halves that matter: a
+  // reviewed text-only story shows nothing, and the day's other story still shows the picture it
+  // was actually written from.
   const excluded = photo("meal-board", "2026-08-19T03:00:00.000Z", { width: 1280, height: 1708 });
   const otherStorysPhoto = photo("other-story", "2026-08-19T09:00:00.000Z");
   const media = [excluded, otherStorysPhoto];
@@ -243,6 +254,11 @@ test("a story reviewed as text-only stays text-only on the month page, and only 
   assert.equal(reviewed.memory.lead, undefined);
   assert.equal(reviewed.hero, undefined, "no borrowed hero on a story reviewed as text-only");
   assert.deepEqual(reviewed.supporting, [], "…and no borrowed thumbnails beside it either");
+  // Belt and braces: no memory moment anywhere carries moment-level photography any more.
+  for (const moment of composition.chapter) {
+    assert.equal(moment.hero, undefined, `${moment.kind} moment must not borrow a hero`);
+    assert.deepEqual(moment.supporting, [], `${moment.kind} moment must not borrow thumbnails`);
+  }
 
   // The other event on the same day is untouched: one story saying "not this picture" is not the
   // day saying "no pictures".
@@ -256,13 +272,30 @@ test("a story reviewed as text-only stays text-only on the month page, and only 
   );
 });
 
-test("an unset heroMediaId still borrows the day's photo — the sentinel is the only thing that stops it", () => {
-  // Guards T11 Part C against the fix above: a memory with no photo of its own is still allowed to
-  // be set beside the day's vouched photography. Only an explicit review decision blocks that.
+test("a story with no associated photo is text-only, even when the day is full of trusted ones", () => {
+  // The archive's ordinary shape: the story was written from chat text, the day's photographs came
+  // in separately, and nothing records a relationship between them. That is not a licence to
+  // illustrate — and it is not an accusation either. The pictures are untouched and stay in the
+  // month's own photography, both as their own day and in the archive layer.
   const dayPhoto = photo("day-photo", "2026-08-20T03:00:00.000Z");
-  const events = [event("no-hero-set", "2026-08-20 00:00:00+00", [])];
+  const events = [event("no-associated-media", "2026-08-20 00:00:00+00", ["day-photo"], { sourceIds: ["chat-text-only"], heroMediaId: "day-photo" })];
   const composition = buildMonthComposition(monthOf({ media: [dayPhoto], events }, "2026-08"), trust([dayPhoto]));
-  const moment = composition.chapter.find((item) => item.memory?.id === "no-hero-set");
-  assert.equal(moment.memory.noPhoto, false);
-  assert.equal(moment.hero.id, "day-photo", "unset ≠ reviewed-no-photo; the borrow still happens");
+  const moment = composition.chapter.find((item) => item.memory?.id === "no-associated-media");
+  assert.equal(moment.memory.noPhoto, false, "no review decision was made here — evidence is simply missing");
+  assert.equal(moment.memory.lead, undefined, "heroMediaId alone does not make a picture this story's");
+  assert.equal(moment.hero, undefined);
+  assert.deepEqual(moment.supporting, []);
+  assert.deepEqual(composition.archiveDays.flatMap((d) => d.photos.map((p) => p.id)), ["day-photo"], "the photograph is still in the month");
+});
+
+test("privilege: a published story confirms only the pictures it was actually written from", () => {
+  // mediaPrivilegeOf's `confirmed` half used to be "every media_id of an event whose organizer
+  // version we trust", and that version was trusted because its bindings came from the same-day
+  // picker. A picture cannot vouch for itself through a story it was only placed beside.
+  const written = photo("written-from", "2026-08-21T03:00:00.000Z");
+  const alongside = photo("same-day-only", "2026-08-21T04:00:00.000Z");
+  const events = [event("e", "2026-08-21 00:00:00+00", ["written-from", "same-day-only"], { sourceIds: [`source-of-written-from`] })];
+  const privilege = mediaPrivilegeOf(events, [written, alongside], []);
+  assert.deepEqual([...privilege.confirmed], ["written-from"]);
+  assert.deepEqual([...privilege.trusted], [], "no trusted raw sources were supplied");
 });

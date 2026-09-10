@@ -129,28 +129,20 @@ export function eventRendersCleanly(event: LifeEvent): boolean {
   return !containsTechnicalPlaceholder(event.title) && !containsTechnicalPlaceholder(event.story);
 }
 
-/**
- * Whether an event's media BINDING may be presented as part of its story. The legacy rule
- * organizer attached every same-day chat image to the event it created — production's
- * "好想站起来的这一天" carries a flight-booking screenshot bound that way, and its heroMediaId is a
- * 120x67 sticker. Sharing a calendar day is not evidence a picture belongs to a story, so
- * rule-bound media never reach a story layer, a memory lead, or a month cover; they remain intact
- * and reachable in the evidence disclosure. A human-authored event, or a future pipeline that
- * grades bindings (confirmed / strong_contextual), is trusted. Approving an event's TEXT through
- * the quality ledger says nothing about its pictures — the two decisions stay separate.
- */
-// T18, 2026-09-04: T7's subject-gate pipeline is exactly the "future pipeline that grades
-// bindings" this function's own comment anticipated. Its media_ids/heroMediaId are never a
-// same-day blanket harvest — they come from lib/publication-moments.ts's pickDayPhotos, gated on
-// MediaPrivilege (a Quark family-photo import, or the daycare group Teddy confirmed is entirely
-// about him), the identical function the month page itself uses. Trusting this exact
-// organizerVersion is trusting that specific, narrow binding — not AI authorship in general.
-const TRUSTED_BINDING_ORGANIZER_VERSIONS: ReadonlySet<string> = new Set(["organizer-v2-t7-subject-gate"]);
-
-export function mediaBindingTrusted(event: Pick<LifeEvent, "createdBy" | "organizerVersion" | "organizerRun">): boolean {
-  if (event.organizerVersion && TRUSTED_BINDING_ORGANIZER_VERSIONS.has(event.organizerVersion)) return true;
-  return !requiresQualityReview(event);
-}
+// Retired 2026-09-10: `mediaBindingTrusted(event)`.
+//
+// It answered "may this event's media_ids be presented as part of its story?" at the level of the
+// whole event — trusted if a human wrote it, or if its organizerVersion was on a list. The list
+// held exactly one entry, "organizer-v2-t7-subject-gate", justified by the claim that its bindings
+// "are never a same-day blanket harvest" because they came from pickDayPhotos. pickDayPhotos chose
+// by day, size, source trust and sort order, so the justification was the harvest describing
+// itself in narrower words, and 523 of the archive's 524 bound stories inherited it.
+//
+// The question is not answerable per event anyway: two pictures attached to the same story can
+// have entirely different claims on it. It is now asked per picture, in lib/media/story-binding.ts
+// — is this photograph part of the material this story was written from? Callers that used to gate
+// on this (the memory lead, the event detail page's story layer, and the `confirmed` half of
+// MediaPrivilege) filter their candidates through that instead.
 
 // A MonthlySnapshot is a written summary of a month. It may only be shown when that month actually
 // has published memories behind it. The archive shipped with a seeded snapshot for 2026-08 whose

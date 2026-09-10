@@ -8,12 +8,20 @@ const PORTRAIT = { width: 1080, height: 1920 };
 const LANDSCAPE = { width: 1920, height: 1080 };
 const STICKER = { width: 90, height: 120 };
 
+// Every picture arrives in some raw source, exactly as it does in production; naming that source
+// after the photo is what lets a fixture express "this story was written from the material this
+// photograph came in" (lib/media/story-binding.ts) without inventing a second id scheme.
+export const sourceOf = (mediaId) => `source-of-${mediaId}`;
+
 export function photo(id, dims = PORTRAIT, overrides = {}) {
-  return { id, profileId: "p", type: "photo", src: `/api/media/${id}`, thumbnailSrc: `/api/media/${id}?thumb`, alt: "WeChat image", takenAt: "2026-01-01T00:00:00.000Z", visibility: "family", ...dims, ...overrides };
+  return { id, profileId: "p", type: "photo", src: `/api/media/${id}`, thumbnailSrc: `/api/media/${id}?thumb`, alt: "WeChat image", takenAt: "2026-01-01T00:00:00.000Z", visibility: "family", rawSourceId: sourceOf(id), ...dims, ...overrides };
 }
 
+// Default: the event was written from the sources its own pictures came in, i.e. a correctly
+// associated story. Pass `sourceIds: []` to model the archive's real majority — a story whose
+// pictures share only a calendar day with it.
 export function event(id, occurredAt, mediaIds, overrides = {}) {
-  return { id, profileId: "p", title: `记忆 ${id}`, story: `第一段故事 ${id}。`.repeat(12), occurredAt, people: [], tags: [], contentTypes: ["daily"], mediaIds, sourceIds: [], growthRecordIds: [], careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"], visibility: "family", keptInYearbook: false, ...overrides };
+  return { id, profileId: "p", title: `记忆 ${id}`, story: `第一段故事 ${id}。`.repeat(12), occurredAt, people: [], tags: [], contentTypes: ["daily"], mediaIds, sourceIds: mediaIds.map(sourceOf), growthRecordIds: [], careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"], visibility: "family", keptInYearbook: false, ...overrides };
 }
 
 export function trace(id, occurredAt, entries = ["午睡后自己穿了鞋"]) {

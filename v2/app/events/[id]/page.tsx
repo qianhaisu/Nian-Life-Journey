@@ -10,7 +10,7 @@ import { getEventDetail } from "@/lib/db/repository";
 import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { storyLayout } from "@/lib/media/presentation";
-import { mediaBindingTrusted } from "@/lib/organizer/quality-review";
+import { storyAssociatedMedia } from "@/lib/media/story-binding";
 import { timeSignatureFor } from "@/lib/time-signature";
 
 // 2026-09-06 incident (docs/INCIDENT-2026-09-06-neon-egress.md §3.2): generateStaticParams used
@@ -62,10 +62,12 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const shownMedia = eventMedia.filter((item) => item.visibility !== "private" && deliverable.has(item.id));
   const signature = timeSignatureFor(event.occurredAt, birthDay);
   const title = memoryTitle(event);
-  // Story-layer media only when the binding can be believed (quality-review.ts). The legacy rule
-  // organizer's same-day harvest bound flight screenshots to this archive's memories; those
-  // pictures keep their place in the evidence disclosure below, never beside the story.
-  const layout = mediaBindingTrusted(event) ? storyLayout(shownMedia, event.heroMediaId) : { hero: undefined, supporting: [], remaining: 0 };
+  // Story-layer media only for pictures that can show they belong to this story: part of the
+  // material it was written from (lib/media/story-binding.ts). Same day, right size and a name in
+  // hero_media_id are not that — the column records an earlier same-day selection, not evidence.
+  // Everything else keeps its place in the evidence disclosure below, where it is presented as
+  // what the day left behind rather than as this story's picture. Nothing is deleted or unbound.
+  const layout = storyLayout(storyAssociatedMedia(event, shownMedia), event.heroMediaId);
   const hero = layout.hero ? toMediaRef(layout.hero, title) : undefined;
   const supporting = layout.supporting.map((item) => toMediaRef(item, title));
   const paragraphs = [event.story, ...(event.storySections ?? [])].map((text) => text?.trim()).filter((text): text is string => Boolean(text));
