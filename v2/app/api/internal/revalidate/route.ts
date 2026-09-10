@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { invalidateOnDemandArchive } from "@/lib/family-archive";
+import { ON_DEMAND_ARCHIVE_PATHS } from "@/lib/render-on-demand";
 
 function authorized(request: Request) {
   const expected = process.env.INGESTION_TOKEN;
@@ -19,5 +21,11 @@ export async function POST(request: Request) {
   const paths = Array.isArray(body?.paths) ? body.paths.filter((p: unknown): p is string => typeof p === "string" && p.startsWith("/") && p.length <= 200) : null;
   if (!paths || paths.length === 0 || paths.length > 50) return NextResponse.json({ error: "paths must be a non-empty array of up to 50 absolute paths" }, { status: 400 });
   for (const path of paths) revalidatePath(path);
-  return NextResponse.json({ revalidated: paths });
+  // revalidatePath cannot reach the pages that are rendered on demand — they have no route cache,
+  // and the 300s archive memo they read through is module state Next knows nothing about. Clearing
+  // it here is what makes a worker push visible on the front page immediately rather than whenever
+  // the window happens to lapse. One flag for all three: they share one read.
+  const clearedArchiveMemo = paths.some((path: string) => ON_DEMAND_ARCHIVE_PATHS.includes(path));
+  if (clearedArchiveMemo) invalidateOnDemandArchive();
+  return NextResponse.json({ revalidated: paths, clearedArchiveMemo });
 }

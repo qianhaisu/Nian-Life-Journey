@@ -61,6 +61,10 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const yearChapter = chapters.find((item) => item.year === year);
   const siblings = yearChapter?.months.filter((item) => item.month !== month) ?? [];
   const archivePhotoCount = composition.archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
+  // The section is named for what is actually in it. A month with a playable clip says so; a month
+  // without one is not promised a video it does not have.
+  const albumHasVideo = composition.archiveDays.some((day) => day.photos.some((item) => item.type === "video"));
+  const albumLabel = albumHasVideo ? "这个月的照片与视频" : "这个月的照片";
   const empty = composition.chapter.length === 0 && composition.chronicle.length === 0 && composition.quietDays.length === 0 && archivePhotoCount === 0;
 
   return <div className="month-page reading-wrap">
@@ -76,7 +80,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
           borrowing them (2026-09-10) this is where nearly all of them live. It is the first link in
           the chapter for that reason — on a phone it sits under the title, one tap from the top,
           rather than at the far end of a long scroll. */}
-      {archivePhotoCount > 0 ? <p className="chapter-meta"><a className="text-link" href="#month-photos">这个月的照片 →</a></p> : null}
+      {archivePhotoCount > 0 ? <p className="chapter-meta"><a className="text-link" href="#month-photos">{albumLabel} →</a></p> : null}
     </header>
 
     {composition.chapter.length > 0 ? <section className="month-reading" aria-labelledby="reading-title">
@@ -95,8 +99,8 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
 
     {composition.quietDays.length > 0 && (composition.chapter.length > 0 || composition.chronicle.length > 0) ? <p className="month-quiet-days serif">
       {composition.quietDays.length > 8
-        ? `这个月还有 ${composition.quietDays.length} 天留下了零散的照片，收在下面「这个月的照片」里。`
-        : `${composition.quietDays.map((day) => dayLabel(day.dateLabel, year)).join("、")}也留下了零散的照片，收在下面「这个月的照片」里。`}
+        ? `这个月还有 ${composition.quietDays.length} 天留下了零散的照片，收在下面「${albumLabel}」里。`
+        : `${composition.quietDays.map((day) => dayLabel(day.dateLabel, year)).join("、")}也留下了零散的照片，收在下面「${albumLabel}」里。`}
     </p> : null}
 
     {/* Open by default and addressable by id: "这个月的照片" is a place the reader is sent to from
@@ -104,7 +108,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         anywhere. What ships in the first render is still the same screenful the archive layer
         always capped itself to (ARCHIVE_FIRST_SCREEN_MAX); the rest is behind ArchiveExpander. */}
     {archivePhotoCount > 0 ? <details className="month-archive" id="month-photos" open>
-      <summary><span className="serif">这个月的照片</span></summary>
+      <summary><span className="serif">{albumLabel}</span></summary>
       <ol>
         {composition.archiveDaysVisible.map((day) => <li className="month-day" key={day.day}>
           <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} monthAgeLabel={chapter.ageLabel} year={year} />

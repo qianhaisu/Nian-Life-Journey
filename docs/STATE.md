@@ -53,6 +53,49 @@ loopback + SSH 隧道访问（备案前不开公网入口）。**正式站点 ni
   **没有任何一条 hot 派生缺少同 providerRef 的 oss 对应行**。剩下只在 hot 的是 `original`
   （archived 1,789 + awaiting_archive 7,175），而 `/api/media` 按设计从不交付 original。
 
+### 一之负四、一个代表视频交付 + 档案缓存失效修复（2026-09-10 第八轮，第 1 步收尾）
+
+#### 一、单个视频
+
+**开始前的资格核对**（不符合就停，不绕规则）：代表视频 `wechat-media:d3d2d2df…0bcc`，
+来源 `conversation:856b8ec2b8f3ec2871782ca6`，**在可信名单上**；`visibility=family`；
+硬盘原件 sha256 与 `media_assets.checksum` 完全相同（`ff481dfb…5c14`，943,379 字节，两端各算一次）。
+它与所属故事**没有可靠关联**，所以只进媒体区，不作为故事配图。
+
+**做了什么**：ECS 上装 ffmpeg（授权范围内），对这一个文件抽真实帧做 poster、转一份浏览器可播的
+preview。原件是 **HEVC 720×1280 / 9.07 秒**——这正是浏览器放不了的原因，preview 转成 H.264 + AAC、
+faststart。原件与旧来源都保留，没有批量迁移，没有新建故事，没有改任何审阅状态。
+
+**精确写入范围**（预先声明，事后核对一致）：
+
+| 目标 | 写入 |
+|---|---|
+| OSS | 2 个对象：`media/derivatives/ff481dfb…5c14/poster.webp`（66,076 B）、`preview.mp4`（1,492,550 B） |
+| `media_locations` | +2 行：`location-oss-poster-ff481dfb…`、`location-oss-preview-ff481dfb…`，provider `oss`，status `ready`，720×1280 |
+| `media` | 1 行更新：width 0→720、height 0→1280、duration null→9、poster_src null→`/api/media/…?variant=poster`（只在还是导入器留下的 0 时才写） |
+
+实测 delta：`media_locations` 52,238 → 52,240，`media` 行数不变（9,356）。
+**幂等**：第二次执行全部报 already there / already present / left as it was，计数仍是 52,240。
+**恢复办法**（本轮不执行）：删那两行 location，把 media 行改回 0/0/null/null，
+必要时删掉那个 OSS 前缀下的两个对象。脚本 `v2/scripts/attach-video-derivatives.mjs` 自己会打印这段。
+
+**播放能力先于交付**：新增 `components/video-player.tsx`（原生控件、poster、`preload="metadata"`、
+不自动播放、不伪造字幕），`PhotoGallery` 遇到 `type === "video"` 渲染播放器而不是图片，
+并把视频排除在图片查看器的胶片之外（那是可缩放的静图卷轴，点进去反而不能播）。
+月页那一区在**当月确实有视频时**改叫「这个月的照片与视频」，没有视频的月份不变。
+
+#### 二、缓存失效
+
+`/api/internal/revalidate` 现在除了 `revalidatePath()`，还会在收到 `/`、`/memory`、`/about`
+任意一条时清掉进程内的档案 memo（`invalidateOnDemandArchive()`），并在响应里回报 `clearedArchiveMemo`。
+接口的鉴权与路径限制**没有放松**。三个页面共用一次读取，所以一个标志覆盖三条。
+worker 每轮推送的路径集合本来就固定含 `/` 和 `/memory`——它一直在推，只是推不到东西。
+Organizer 保持关闭。
+
+**测试**：`test/render-on-demand.test.mjs` 增 3 条（通知后下一次读取取到新档案、窗口内正常复用不多读、
+读取失败仍然立即失效）；`test/publication-moments.test.mjs` 增 2 条（视频进媒体区但永远不当故事配图、
+不可信视频连媒体区都进不了）。全量 **732 条 722 通过 0 失败 10 跳过**；typecheck / lint / build 通过。
+
 ### 一之负三、首页「最近的一段生活」改为最近 30 天随机（2026-09-10 第七轮）
 
 **原来为什么一直是 8/28**：不是 bug，也不是随机坏了——首页从来就没有随机过。

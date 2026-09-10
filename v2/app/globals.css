@@ -398,6 +398,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* Photos: each at its own proportions */
 .photo { position: relative; margin: 0; overflow: hidden; background: var(--paper-dark); }
 .photo img { width: 100%; height: 100%; object-fit: contain; }
+/* A clip lays out in the same box a photograph would, and keeps its whole frame: cropping a video
+   to fill a grid cell would cut the child out of half of them. Native controls stay on top. */
+.photo-video video { width: 100%; height: 100%; object-fit: contain; background: var(--paper-dark); display: block; }
+.photo-strip .photo-video video { object-fit: contain; }
 .photo-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; align-items: start; }
 .photo-strip .photo { max-height: 60vh; }
 .photo-strip .photo img { object-fit: cover; object-position: 50% 40%; }

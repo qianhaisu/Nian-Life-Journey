@@ -10,7 +10,8 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ON_DEMAND_ARCHIVE_TTL_MS, __resetOnDemandArchiveForTests, loadFamilyArchiveOnDemand } from "../lib/family-archive.ts";
+import { ON_DEMAND_ARCHIVE_TTL_MS, __resetOnDemandArchiveForTests, invalidateOnDemandArchive, loadFamilyArchiveOnDemand } from "../lib/family-archive.ts";
+import { ON_DEMAND_ARCHIVE_PATHS } from "../lib/render-on-demand.ts";
 
 const appDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "app");
 
@@ -86,5 +87,45 @@ test("a failed read is not pinned in front of the site for the rest of the windo
   await assert.rejects(() => loadFamilyArchiveOnDemand(async () => { throw new Error("database is down"); }, 9_000));
   const recovered = await loadFamilyArchiveOnDemand(async () => ({ label: "back" }), 9_001);
   assert.equal(recovered.label, "back", "the next request retries instead of replaying the failure");
+  __resetOnDemandArchiveForTests();
+});
+
+test("a revalidate notification drops the memo, so the next read sees the new archive", () => {
+  // scripts/nianlife-worker.mjs POSTs /api/internal/revalidate after every write and its path list
+  // always contains "/" and "/memory" — the whole point being that new content does not wait out a
+  // cache window. Those routes have no Next route cache any more, and revalidatePath() cannot see
+  // this memo at all, so before this the push reported success and changed nothing for 300s.
+  assert.deepEqual([...ON_DEMAND_ARCHIVE_PATHS], ["/", "/memory", "/about"]);
+});
+
+test("cache: filled, then notified, then the next read is fresh — and reuse still works in between", async () => {
+  __resetOnDemandArchiveForTests();
+  let reads = 0;
+  const load = () => { reads += 1; return Promise.resolve({ generation: reads }); };
+
+  const first = await loadFamilyArchiveOnDemand(load, 1_000);
+  assert.equal(first.generation, 1);
+  // Normal reuse: inside the window, no second read.
+  assert.equal((await loadFamilyArchiveOnDemand(load, 1_100)).generation, 1);
+  assert.equal(reads, 1);
+
+  // The worker writes and notifies.
+  invalidateOnDemandArchive();
+  const afterNotice = await loadFamilyArchiveOnDemand(load, 1_200);
+  assert.equal(afterNotice.generation, 2, "the very next read goes back to the archive, well inside the 300s window");
+  assert.equal(reads, 2);
+
+  // And the window restarts from there rather than expiring early.
+  assert.equal((await loadFamilyArchiveOnDemand(load, 1_300)).generation, 2);
+  assert.equal(reads, 2);
+});
+
+test("cache: a failed read still evicts itself, notification or not", async () => {
+  __resetOnDemandArchiveForTests();
+  let reads = 0;
+  await assert.rejects(() => loadFamilyArchiveOnDemand(() => { reads += 1; return Promise.reject(new Error("db down")); }, 2_000));
+  const recovered = await loadFamilyArchiveOnDemand(() => { reads += 1; return Promise.resolve({ generation: "back" }); }, 2_001);
+  assert.equal(recovered.generation, "back");
+  assert.equal(reads, 2, "the failure was not held in front of the site until the window lapsed");
   __resetOnDemandArchiveForTests();
 });

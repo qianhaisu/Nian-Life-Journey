@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { orientationOf, aspectRatioOf } from "@/lib/media/presentation";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
+import { VideoPlayer } from "@/components/video-player";
 
 // Subset of MediaRef — pass MediaRef directly; all fields are present there.
 export type GalleryPhoto = {
@@ -13,7 +14,16 @@ export type GalleryPhoto = {
   alt: string;
   width: number;
   height: number;
+  // "video" gets a player instead of a picture. Optional so every existing caller that hands over a
+  // list of photographs keeps working untouched.
+  type?: string;
+  durationSeconds?: number | null;
 };
+
+// A video is not opened in the photo viewer: the viewer is a zoomable still reel, and a clip that
+// stopped being playable the moment you tapped it would be a worse answer than the frame it
+// replaced. It plays where it sits, with its own controls.
+const isVideo = (item: GalleryPhoto) => item.type === "video";
 
 // Full-screen viewer: scroll-snap reel + double-tap zoom + keyboard nav + back-button close.
 function ViewerModal({
@@ -138,17 +148,24 @@ export function PhotoGallery({
   const heroPhoto = heroIndex !== undefined ? photos[heroIndex] : undefined;
   const stripPhotos = heroPhoto ? photos.filter((_, i) => i !== heroIndex) : photos;
   // Viewer order: hero first (index 0), then strip order
-  const viewerPhotos = heroPhoto ? [heroPhoto, ...stripPhotos] : photos;
+  const viewerPhotos = (heroPhoto ? [heroPhoto, ...stripPhotos] : photos).filter((item) => !isVideo(item));
 
+  // Straight lookup into the reel's own list rather than arithmetic over the original one: with
+  // videos filtered out of the reel, any offset-based mapping would open the wrong picture as soon
+  // as a clip sat before a photograph on the same day.
   function viewerIdxFor(originalIdx: number): number {
-    if (!heroPhoto) return originalIdx;
-    if (originalIdx === heroIndex) return 0;
-    return stripPhotos.indexOf(photos[originalIdx]) + 1;
+    return Math.max(0, viewerPhotos.indexOf(photos[originalIdx]));
   }
 
   return (
     <>
-      {heroPhoto ? (
+      {heroPhoto && isVideo(heroPhoto) ? (
+        <figure className={`photo photo-video photo-${orientationOf(heroPhoto)} ${heroClassName}`.trim()} style={{ aspectRatio: aspectRatioOf(heroPhoto) }}>
+          <VideoPlayer mediaId={heroPhoto.id} alt={heroPhoto.alt} durationSeconds={heroPhoto.durationSeconds} />
+        </figure>
+      ) : null}
+
+      {heroPhoto && !isVideo(heroPhoto) ? (
         <figure
           className={`photo photo-${orientationOf(heroPhoto)} ${heroClassName}`.trim()}
           style={{ aspectRatio: aspectRatioOf(heroPhoto) }}
@@ -166,6 +183,13 @@ export function PhotoGallery({
         <div className={`photo-strip photo-strip-${Math.min(stripPhotos.length, 5)}`}>
           {stripPhotos.map((photo, si) => {
             const origIdx = heroPhoto ? photos.indexOf(photo) : si;
+            if (isVideo(photo)) {
+              return (
+                <figure key={photo.id} className={`photo photo-video photo-${orientationOf(photo)}`} style={{ aspectRatio: aspectRatioOf(photo) }}>
+                  <VideoPlayer mediaId={photo.id} alt={photo.alt} durationSeconds={photo.durationSeconds} />
+                </figure>
+              );
+            }
             return (
               <figure
                 key={photo.id}

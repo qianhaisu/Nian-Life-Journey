@@ -150,6 +150,16 @@ let onDemandArchive: { at: number; archive: Promise<FamilyArchive> } | undefined
 // Test-only: the memo below is module state, so a test that exercises it must be able to clear it.
 export function __resetOnDemandArchiveForTests(): void { onDemandArchive = undefined; }
 
+// Drop the memo so the next request re-reads the archive.
+//
+// The worker POSTs /api/internal/revalidate after every write precisely so new content does not
+// have to wait out a cache window, and its path list always includes "/" and "/memory". Those
+// routes stopped having a Next route cache when they became on-demand, so revalidatePath() had
+// nothing left to clear there — and it cannot see this memo at all, which is plain module state.
+// The result was a push that reported success and changed nothing for up to five minutes. This is
+// the other half of that notification: same trigger, the layer that actually holds the data.
+export function invalidateOnDemandArchive(): void { onDemandArchive = undefined; }
+
 // The archive read for pages that are rendered on demand rather than prerendered
 // (lib/render-on-demand.ts: /, /memory, /about — they must never be built from the build's mock
 // store). Those pages have no Next route cache any more, so without this every single request

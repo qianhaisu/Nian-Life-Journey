@@ -352,3 +352,32 @@ test("everything the photo section counts as folded is actually reachable when e
     assert.equal(day.photos.length, whole.photos.length, "a day on the first screen is shown whole");
   }
 });
+
+test("a video reaches the month's media section but can never illustrate a story", () => {
+  // The first playable video (2026-09-10). A clip is vouched the same way a photograph is — by its
+  // source — and it is drawn the same way: not as anyone's hero, because heroSized() only ever
+  // answers true for type "photo", and not as a story's picture, because it shares no source with
+  // one. It belongs to the day it was taken and to the month's own media.
+  const clip = { ...photo("clip", "2026-08-14T09:00:00.000Z", { width: 720, height: 1280 }), type: "video" };
+  const stillPhoto = photo("still", "2026-08-14T10:00:00.000Z");
+  const media = [clip, stillPhoto];
+  const events = [event("same-day-story", "2026-08-14 00:00:00+00", ["clip"], { sourceIds: ["written-from-chat"], heroMediaId: "clip" })];
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+
+  const story = composition.chapter.find((moment) => moment.memory?.id === "same-day-story");
+  assert.equal(story.memory.lead, undefined, "a video named by heroMediaId is still not this story's");
+  assert.equal(story.hero, undefined);
+
+  const inAlbum = composition.archiveDays.flatMap((day) => day.photos);
+  assert.deepEqual(inAlbum.map((item) => item.id).sort(), ["clip", "still"], "both are the month's media");
+  assert.equal(inAlbum.find((item) => item.id === "clip").type, "video", "…and the page can tell which is which");
+  for (const moment of composition.chronicle) {
+    assert.notEqual(moment.hero?.id, "clip", "a video is never a day's page-width hero");
+  }
+});
+
+test("an unvouched video does not reach the media section either", () => {
+  const clip = { ...photo("chat-clip", "2026-08-15T09:00:00.000Z", { width: 720, height: 1280 }), type: "video" };
+  const composition = buildMonthComposition(monthOf({ media: [clip] }, "2026-08"), { confirmed: new Set(), trusted: new Set() });
+  assert.deepEqual(composition.archiveDays, []);
+});
