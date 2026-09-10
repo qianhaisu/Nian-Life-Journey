@@ -22,19 +22,37 @@ function inside(root: string, candidate: string) {
   return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
 }
 
+// A file that is listed by the directory scan but gone by the time it is opened means the export
+// tool is writing right now: WeFlow creates and then removes `.<name>.weflow-partial-<pid>-<id>.md`
+// beside the real transcript while it exports. The snapshot no longer describes the disk, so the
+// only safe answer is to fail verification and stop. Skipping the file and carrying on would turn a
+// half-finished export into a half-finished import, silently.
+function snapshotRace(error: unknown): never {
+  if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") throw new Error("WECHAT_SNAPSHOT_CHANGED_DURING_SCAN");
+  throw error;
+}
+
 async function assertSafeEntry(root: string, rootReal: string, candidate: string) {
-  const info = await lstat(candidate);
+  let info;
+  try {
+    info = await lstat(candidate);
+  } catch (error) { snapshotRace(error); }
   if (info.isSymbolicLink()) throw new Error("WECHAT_SOURCE_SYMLINK");
-  const real = await realpath(candidate);
+  let real;
+  try {
+    real = await realpath(candidate);
+  } catch (error) { snapshotRace(error); }
   if (!inside(rootReal, real)) throw new Error("WECHAT_SOURCE_OUTSIDE_ROOT");
   return info;
 }
 
 async function streamDigest(absolutePath: string) {
-  const stream = createReadStream(absolutePath);
   const hash = createHash("sha256");
   let size = 0;
-  for await (const chunk of stream) { hash.update(chunk); size += chunk.byteLength; }
+  try {
+    const stream = createReadStream(absolutePath);
+    for await (const chunk of stream) { hash.update(chunk); size += chunk.byteLength; }
+  } catch (error) { snapshotRace(error); }
   return { digest: hash.digest("hex"), size };
 }
 
@@ -129,7 +147,10 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   const transcripts = snapshot.files.filter((file) => file.kind === "markdown" || file.kind === "weflow-json").toSorted((a, b) => digest(a.relativePath).localeCompare(digest(b.relativePath)));
   const candidates: Array<{ entry: WechatSnapshotEntry; text: string; conversationId: string; messages: ReturnType<typeof parseWechatMarkdown>["messages"] }> = [];
   for (const entry of transcripts) {
-    const text = await readFile(entry.absolutePath, "utf8");
+    let text;
+    try {
+      text = await readFile(entry.absolutePath, "utf8");
+    } catch (error) { snapshotRace(error); }
     if (entry.contentDigest && digest(text) !== entry.contentDigest) throw new Error("WECHAT_SNAPSHOT_CHANGED_DURING_SCAN");
     const parsed = parseTranscript(entry, path.resolve(sourceRoot), text, new Map());
     if (parsed.messages.length) candidates.push({ entry, text, conversationId: parsed.conversationId, messages: parsed.messages });
