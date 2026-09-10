@@ -9,7 +9,14 @@ import { isWeflowJson, parseWeflowJson } from "./wechat-weflow-json";
 
 export type WechatSnapshotEntry = { relativePath: string; absolutePath: string; kind: "markdown" | "weflow-json" | "jpeg" | "other"; size: number; mtimeMs: number; contentDigest?: string };
 export type WechatSnapshot = { rootFingerprint: string; fileCount: number; files: WechatSnapshotEntry[] };
-export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number; since?: string };
+// `messageIds`, when given, is an exact allowlist of canonicalMessageId values. It is applied AFTER
+// `since` and BEFORE the maxMessages slice, and that order is the whole point: applied before
+// `since` it could resurrect a message the caller excluded by time, and applied after the slice the
+// truncation would silently eat allowlisted messages and import fewer than asked. A formal batch is
+// pinned by (source file sha256, message id set) rather than by a conversation index, because the
+// index is a position in digest order and shifts whenever the export root gains or loses a
+// transcript — which it did three times on 2026-09-10.
+export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number; since?: string; messageIds?: ReadonlySet<string> };
 export type WechatBundleLoad = { snapshot: WechatSnapshot; bundle: ChatImportBundle; selectedDocument: string; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number };
 export type WechatCapacityAudit = { fileCount: number; markdownFileCount: number; jpegFileCount: number; otherFileCount: number; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number; presentMediaCount: number; missingMediaCount: number; needsReviewMediaCount: number; invalidMediaCount: number; hashChangedMediaCount: number; deferredByLimitMediaCount: number; messageLimitReached: boolean; mediaLimitReached: boolean; maxMessages: number; maxMedia: number };
 
@@ -162,7 +169,11 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   if (!Number.isInteger(conversationIndex) || conversationIndex < 0) throw new Error("WECHAT_CONVERSATION_INDEX_INVALID");
   const selected = candidates[conversationIndex];
   if (!selected) throw new Error("WECHAT_NO_VALID_SESSION");
-  const eligibleMessages = sinceMs !== undefined ? selected.messages.filter((message) => Date.parse(message.sentAt) >= sinceMs) : selected.messages;
+  const allowed = options.messageIds;
+  if (allowed !== undefined && allowed.size === 0) throw new Error("WECHAT_MESSAGE_ALLOWLIST_EMPTY");
+  // since -> allowlist -> truncate. See the WechatBundleOptions doc comment for why this order.
+  const afterSince = sinceMs !== undefined ? selected.messages.filter((message) => Date.parse(message.sentAt) >= sinceMs) : selected.messages;
+  const eligibleMessages = allowed ? afterSince.filter((message) => allowed.has(message.messageId)) : afterSince;
   const availableMessageCount = eligibleMessages.length;
   const selectedMessages = eligibleMessages.slice(0, maxMessages);
   const availableMediaRefCount = refsFromMessages(eligibleMessages).size;
@@ -181,7 +192,8 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
     if (state.availability === "present") hashedMedia += 1;
   }
   const reparsed = parseTranscript(selected.entry, path.resolve(sourceRoot), selected.text, media);
-  const reparsedEligible = sinceMs !== undefined ? reparsed.messages.filter((message) => Date.parse(message.sentAt) >= sinceMs) : reparsed.messages;
+  const reparsedAfterSince = sinceMs !== undefined ? reparsed.messages.filter((message) => Date.parse(message.sentAt) >= sinceMs) : reparsed.messages;
+  const reparsedEligible = allowed ? reparsedAfterSince.filter((message) => allowed.has(message.messageId)) : reparsedAfterSince;
   const messages = reparsedEligible.slice(0, maxMessages);
   const mediaRefs = [...new Map(messages.flatMap((message) => message.mediaRefs).map((ref) => [ref.id, ref])).values()];
   const bundle: ChatImportBundle = {

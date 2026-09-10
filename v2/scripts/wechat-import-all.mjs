@@ -18,7 +18,8 @@
 //   - It prints counts, statuses and error codes only — never a message, a name or a file path
 //     from the family's conversations.
 import path from "node:path";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { config as loadDotenv } from "dotenv";
 
 loadDotenv({ path: path.resolve(process.cwd(), ".env.local"), quiet: true });
@@ -61,6 +62,34 @@ if (skip && [...skip].some((value) => !Number.isInteger(value) || value < 0)) { 
 // no maxAttempts budget). It is not a status edit: a task the queue refuses to transition stays
 // refused. Off by default — a cancelled task was cancelled on purpose.
 const retryFailed = hasFlag("--retry-failed");
+// --id-file pins a formal batch to an exact set of messages instead of "everything at or after a
+// date". A plain --since cannot express "these and only these": for the two private chats, the
+// earliest missing message is a year back, so --since would also pick up ~13,000 messages that are
+// already in the archive under a conversation label written before the conversationId scheme
+// changed — and because canonicalMessageId drifted too, they would be inserted again as duplicates
+// rather than deduplicated. The file carries the document path and the source file's sha256 as well
+// as the ids, so a batch is never identified by a conversation index (that is a position in digest
+// order and moves when the export root gains a transcript).
+//
+// Shape: { document, fileSha256, conversationId?, messageIds: [...] }
+// Every mismatch below is fatal. Importing "most of" an approved batch silently is the one outcome
+// worth crashing to avoid.
+const idFile = option("--id-file");
+let batch;
+if (idFile !== undefined) {
+  if (only) { process.stderr.write("--id-file and --only are mutually exclusive: the batch file already identifies the conversation\n"); process.exit(1); }
+  let raw;
+  try { raw = JSON.parse(readFileSync(idFile, "utf8")); }
+  catch (error) { process.stderr.write(`--id-file could not be read as JSON: ${error instanceof Error ? error.message : String(error)}\n`); process.exit(1); }
+  const ids = raw?.messageIds;
+  if (typeof raw?.document !== "string" || !raw.document) { process.stderr.write("--id-file needs a non-empty string \"document\"\n"); process.exit(1); }
+  if (typeof raw?.fileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(raw.fileSha256)) { process.stderr.write("--id-file needs \"fileSha256\" as 64 lowercase hex characters\n"); process.exit(1); }
+  if (!Array.isArray(ids) || ids.length === 0 || ids.some((value) => typeof value !== "string" || !value)) { process.stderr.write("--id-file needs a non-empty \"messageIds\" array of strings\n"); process.exit(1); }
+  const unique = new Set(ids);
+  if (unique.size !== ids.length) { process.stderr.write(`--id-file lists ${ids.length} ids but only ${unique.size} are distinct — refusing a batch with duplicate ids\n`); process.exit(1); }
+  batch = { document: raw.document, fileSha256: raw.fileSha256, conversationId: typeof raw.conversationId === "string" ? raw.conversationId : undefined, ids: unique, idSetDigest: createHash("sha256").update([...unique].sort().join("\n"), "utf8").digest("hex") };
+  log(`--id-file: ${unique.size} message id(s), document ${batch.document}, id-set ${batch.idSetDigest.slice(0, 12)}…`);
+}
 const mediaConcurrency = option("--media-concurrency") !== undefined ? Number(option("--media-concurrency")) : undefined;
 if (mediaConcurrency !== undefined && (!Number.isInteger(mediaConcurrency) || mediaConcurrency < 2 || mediaConcurrency > 24)) { process.stderr.write("--media-concurrency takes an integer from 2 to 24\n"); process.exit(1); }
 
@@ -96,7 +125,15 @@ const state = resetState ? { completed: [], excluded: [], startedAt: new Date().
 // A legacy bare-digest entry (no `|`) predates this fix and always meant "done from birth day", the
 // only `since` any run used before --since existed for this driver — normalized on read so those
 // conversations are not silently re-run.
-const completionKey = (digest) => `${digest}|${since}`;
+// The id-set digest joins the completion key too. Two different approved batches over the same
+// document and the same --since must not be able to mark each other complete.
+const completionKey = (digest) => (batch ? `${digest}|${since}|ids:${batch.idSetDigest}` : `${digest}|${since}`);
+
+async function fileSha256(absolutePath) {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(absolutePath)) hash.update(chunk);
+  return hash.digest("hex");
+}
 const completed = new Set(
   (state.completed ?? [])
     .filter((value) => typeof value === "string")
@@ -119,14 +156,34 @@ function safeErrorInfo(error) {
   return { code, message };
 }
 
+let batchMatches = 0;
 for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
   if (only && !only.has(index)) continue;
   let probe;
   try {
-    probe = await loadWechatBundle(sourceRoot, { maxMessages: 1, maxMedia: 1, conversationIndex: index, since });
+    probe = await loadWechatBundle(sourceRoot, { maxMessages: 1, maxMedia: 1, conversationIndex: index, since, messageIds: batch?.ids });
   } catch (error) {
     if (error instanceof Error && error.message === "WECHAT_NO_VALID_SESSION") { log(`no conversation at index ${index} — ${index} conversation(s) seen, done scanning`); break; }
     throw error;
+  }
+  // With a batch file the conversation is chosen by document path, never by index. Anything else is
+  // skipped before it can be counted, excluded or marked complete.
+  if (batch && probe.selectedDocument !== batch.document) continue;
+  if (batch) {
+    batchMatches += 1;
+    const actualSha = await fileSha256(path.resolve(sourceRoot, batch.document));
+    if (actualSha !== batch.fileSha256) {
+      process.stderr.write(`source file changed since the batch was approved\n  document: ${batch.document}\n  approved: ${batch.fileSha256}\n  on disk:  ${actualSha}\nRefusing to import: the approved message ids describe the approved file, not this one.\n`);
+      process.exit(1);
+    }
+    if (batch.conversationId && probe.bundle.messages[0] && probe.bundle.messages[0].conversationId !== batch.conversationId) {
+      process.stderr.write(`conversation identity mismatch\n  approved: ${batch.conversationId}\n  parsed:   ${probe.bundle.messages[0].conversationId}\n`);
+      process.exit(1);
+    }
+    if (probe.availableMessageCount !== batch.ids.size) {
+      process.stderr.write(`batch allowlist matched ${probe.availableMessageCount} of ${batch.ids.size} message(s) in ${batch.document}\nRefusing to import a partial batch. Re-derive the batch file against the current export.\n`);
+      process.exit(1);
+    }
   }
   totals.conversations += 1;
   // Exclusion is keyed by this digest, not by `index` — probed up front (cheap: maxMessages/maxMedia
@@ -166,6 +223,7 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
       maxMedia: Math.max(mediaRefs, 1),
       conversationIndex: index,
       since,
+      messageIds: batch?.ids,
       retryFailed,
       mediaConcurrency,
     });
@@ -187,6 +245,13 @@ for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
     failures.push({ index, code: report.safeErrorCode ?? report.status });
     log(`conversation ${index}: not marked complete — re-run this script to retry it`);
   }
+}
+
+// A batch file that matched no document, or more than one, means the run did nothing it was asked to
+// do. Exiting 0 there would read as success.
+if (batch && batchMatches !== 1) {
+  process.stderr.write(`batch document matched ${batchMatches} conversation(s), expected exactly 1\n  document: ${batch.document}\n`);
+  process.exit(1);
 }
 
 log(`done · conversations seen ${totals.conversations} · messages +${totals.created} (reused ${totals.reused}) · media assets +${totals.mediaCreated} (reused ${totals.mediaReused}) · objects uploaded ${totals.uploaded} · conversations still failing ${totals.failed}${failures.length ? ` · failed: ${failures.map((f) => `#${f.index}(${f.code})`).join(", ")}` : ""}`);
