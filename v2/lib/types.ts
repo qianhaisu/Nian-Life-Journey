@@ -39,6 +39,27 @@ export interface OrganizerRunMetadata {
   fallbackReason?: string;
   latencyMs?: number;
   tokenUsage?: { input?: number; output?: number; total?: number };
+  /**
+   * What this run actually ADOPTED as the memory's media, and on what evidence — kept apart from
+   * what the evidence window merely OFFERED the model.
+   *
+   * `mediaInputCount` above counts the offer. It has been read as if it counted the adoption, and
+   * the two are not the same thing: every photograph in the window is shown to the Writer, and the
+   * Writer names back only the ones it used. Without this record nothing downstream can tell a
+   * photograph a story was written from apart from one that merely shared its window, which is the
+   * same confusion that let a same-day meal board illustrate a music story.
+   *
+   * `tier` is a MediaBindingTier (lib/organizer/evidence/media-tier.ts), widened to `string` here
+   * so this shared type file keeps no organizer-internal import.
+   */
+  mediaBinding?: {
+    /** Media the window offered the Writer. Input candidates, never an implicit selection. */
+    candidateCount: number;
+    /** Media the Writer named AND the policy permitted. These are the story's photographs. */
+    adopted: Array<{ mediaId: string; tier: string; boundSourceId?: string; basis: string }>;
+    /** Media the Writer named that the policy refused, with why. */
+    refused: Array<{ mediaId: string; tier: string; reason: string }>;
+  };
 }
 export interface OrganizerRun extends OrganizerRunMetadata {
   id: string;

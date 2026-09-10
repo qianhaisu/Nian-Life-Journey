@@ -87,8 +87,13 @@ export type PersistencePlan = {
   /** A NEW review row for a NEW artifact. Never reuses another artifact's decision. */
   review?: QualityReviewPlan;
   run: OrganizerRun;
-  /** Media the Judgment layer's evidence permitted, with why each one was allowed or refused. */
-  mediaDecisions: Array<{ mediaId: string; tier: MediaBindingTier; linked: boolean; reason: string }>;
+  /**
+   * Media the Judgment layer's evidence permitted, with why each one was allowed or refused.
+   * `boundSourceId` is the raw source the picture actually arrived in — the evidence the read
+   * layer's Basis A test (lib/media/story-binding.ts) is made of, recorded at write time so a
+   * stored binding can explain itself without re-deriving the window.
+   */
+  mediaDecisions: Array<{ mediaId: string; tier: MediaBindingTier; linked: boolean; reason: string; boundSourceId?: string; basis?: string }>;
   /** Non-fatal notes worth surfacing in a dry run. */
   notes: string[];
 };
@@ -129,18 +134,30 @@ export type PlanInput = {
   latencyMs?: number;
 };
 
-/** Media the window's own bindings permit, at the tiers this policy allows. */
+/**
+ * Media the Writer actually used, at the tiers this policy allows.
+ *
+ * `requested` is the Writer's own list of what it used. Everything else in `window.mediaBindings`
+ * is an INPUT CANDIDATE: it was shown to the model so the model could decide, and being shown is
+ * not being chosen. This used to fall back to `[...byMediaId.keys()]` when the Writer named
+ * nothing, which silently turned "the model used no photograph" into "attach every photograph in
+ * the window" — the whole window's images became the story's illustrations on the strength of
+ * having shared a conversation and an hour with it. A Writer that names nothing used nothing.
+ */
 function planMedia(window: EvidenceWindow, policy: AdapterPolicy, requested: string[] | undefined): PersistencePlan["mediaDecisions"] {
   const allowed = new Set(policy.allowedMediaTiers);
   const byMediaId = new Map(window.mediaBindings.map((binding) => [binding.mediaId, binding]));
+  const boundSourceOf = (boundItemId: string | undefined) =>
+    boundItemId ? window.items.find((item) => item.itemId === boundItemId)?.sourceId : undefined;
   // A Writer may only ever narrow what the evidence offered. If it asked for media the window does
   // not contain, that is a contract violation, surfaced here rather than written.
-  const candidates = requested ?? [...byMediaId.keys()];
+  const candidates = requested ?? [];
   return candidates.map((mediaId) => {
     const binding = byMediaId.get(mediaId);
     if (!binding) return { mediaId, tier: "unbound" as const, linked: false, reason: "not present in this window's evidence" };
-    if (!allowed.has(binding.tier)) return { mediaId, tier: binding.tier, linked: false, reason: `tier ${binding.tier} is not attachable under this policy` };
-    return { mediaId, tier: binding.tier, linked: true, reason: `tier ${binding.tier} permitted` };
+    const boundSourceId = boundSourceOf(binding.boundItemId);
+    if (!allowed.has(binding.tier)) return { mediaId, tier: binding.tier, linked: false, boundSourceId, basis: binding.basis, reason: `tier ${binding.tier} is not attachable under this policy` };
+    return { mediaId, tier: binding.tier, linked: true, boundSourceId, basis: binding.basis, reason: `tier ${binding.tier} permitted` };
   });
 }
 
@@ -205,6 +222,16 @@ export function planArtifacts(input: PlanInput): PersistencePlan {
     const refused = mediaDecisions.filter((d) => !d.linked);
     if (refused.length) notes.push(`${refused.length} media reference(s) refused: ${refused.map((d) => `${d.mediaId} (${d.reason})`).join("; ")}`);
     const mediaIds = mediaDecisions.filter((d) => d.linked).map((d) => d.mediaId);
+    if (window.mediaBindings.length > 0 && mediaIds.length === 0) {
+      notes.push(`${window.mediaBindings.length} media candidate(s) were offered to the Writer and none was adopted; this Memory is text-only`);
+    }
+    // The adoption record, kept beside the offer count rather than replacing it — see
+    // OrganizerRunMetadata.mediaBinding in lib/types.ts for why the two must stay distinguishable.
+    const mediaBinding = {
+      candidateCount: window.mediaBindings.length,
+      adopted: mediaDecisions.filter((d) => d.linked).map((d) => ({ mediaId: d.mediaId, tier: d.tier, boundSourceId: d.boundSourceId, basis: d.basis ?? "" })),
+      refused: refused.map((d) => ({ mediaId: d.mediaId, tier: d.tier, reason: d.reason })),
+    };
 
     const eventId = artifactIdFor("event", organizationFingerprint);
     const contentTypes = [...new Set(window.items.flatMap((item) => item.contentTypes))] as ContentType[];
@@ -224,7 +251,7 @@ export function planArtifacts(input: PlanInput): PersistencePlan {
       createdBy: "ai",
       organizerVersion: policy.organizerVersion,
       organizationFingerprint,
-      organizerRun: { organizerType: "ai", organizerVersion: policy.organizerVersion, provider: policy.provider, model: policy.model, promptVersion: policy.promptVersion, processedAt: now, organizationFingerprint, sourceCount: sourceIds.length, mediaInputCount: window.mediaBindings.length, latencyMs: input.latencyMs ?? 0 },
+      organizerRun: { organizerType: "ai", organizerVersion: policy.organizerVersion, provider: policy.provider, model: policy.model, promptVersion: policy.promptVersion, processedAt: now, organizationFingerprint, sourceCount: sourceIds.length, mediaInputCount: window.mediaBindings.length, latencyMs: input.latencyMs ?? 0, mediaBinding },
     };
     const links: SourceMemoryLink[] = sourceIds.map((sourceId, index) => ({ rawSourceId: sourceId, lifeEventId: eventId, role: index === 0 ? "primary" : "supporting", createdAt: now }));
 
@@ -240,7 +267,7 @@ export function planArtifacts(input: PlanInput): PersistencePlan {
       promptVersion: policy.promptVersion, policyVersion: policy.policyVersion,
       reviewFingerprint: reviewFingerprintOf(organizationFingerprint, "life_event"),
     };
-    return { ...base, lifeEvent: { event, links }, review, mediaDecisions, run: { ...run, targetId: eventId } };
+    return { ...base, lifeEvent: { event, links }, review, mediaDecisions, run: { ...run, targetId: eventId, mediaBinding } };
   }
 
   if (outcome.action === "daily_trace") {

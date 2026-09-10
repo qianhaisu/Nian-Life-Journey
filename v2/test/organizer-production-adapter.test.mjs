@@ -216,6 +216,70 @@ test("11b. the review row is keyed to its own artifact and always needs review",
   assert.equal(result.review.gateA, "explicit");
 });
 
+// ---------------------------------------------------------------- offered vs adopted (2026-09-11)
+//
+// Being shown to the Writer is not being chosen by it. These pin the distinction, because the
+// adapter used to erase it: when the Writer named no media, `planMedia` fell back to every binding
+// in the window and the whole window's photographs became the story's illustrations.
+
+test("offered≠adopted: a Writer that names no photograph adopts none, even with a confirmed one in the window", () => {
+  const window = windowOf([source({ mediaIds: ["m-offered"] })], photoIndex("m-offered"));
+  assert.equal(window.mediaBindings.length, 1, "the window did offer it to the Writer");
+  assert.equal(window.mediaBindings[0].tier, "confirmed", "and at the strongest tier");
+
+  const result = plan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-oa1", story: storyOf([]) });
+  assert.deepEqual(result.lifeEvent.event.mediaIds, [], "named nothing, so used nothing");
+  assert.equal(result.lifeEvent.event.heroMediaId, undefined, "and therefore no hero");
+  assert.equal(result.lifeEvent.event.organizerRun.mediaBinding.candidateCount, 1, "the offer is still recorded");
+  assert.deepEqual(result.lifeEvent.event.organizerRun.mediaBinding.adopted, []);
+  assert.match(result.notes.join(" "), /none was adopted/);
+});
+
+test("offered≠adopted: mediaInputCount counts the offer, mediaBinding.adopted counts the use", () => {
+  const items = [source({ mediaIds: ["m-used"] }), source({ text: "", mediaIds: ["m-unused"] })];
+  const window = windowOf(items, buildMediaIndex(
+    [
+      { mediaId: "m-used", mediaAssetId: "asset-used", mediaType: "photo", provider: "wechat", checksum: "c".repeat(64) },
+      { mediaId: "m-unused", mediaAssetId: "asset-unused", mediaType: "photo", provider: "wechat", checksum: "d".repeat(64) },
+    ],
+    [
+      { mediaAssetId: "asset-used", provider: "hot", variant: "web", status: "ready" },
+      { mediaAssetId: "asset-unused", provider: "hot", variant: "web", status: "ready" },
+    ],
+  ));
+  const result = plan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-oa2", story: storyOf(["m-used"]) });
+  const binding = result.lifeEvent.event.organizerRun.mediaBinding;
+  assert.equal(result.lifeEvent.event.organizerRun.mediaInputCount, window.mediaBindings.length);
+  assert.equal(binding.candidateCount, window.mediaBindings.length);
+  assert.deepEqual(binding.adopted.map((a) => a.mediaId), ["m-used"], "only what the Writer named");
+  assert.equal(result.lifeEvent.event.mediaIds.includes("m-unused"), false);
+});
+
+test("offered≠adopted: each adopted photograph records the source it arrived in, and why it qualified", () => {
+  const window = windowOf([source({ id: "wechat-message:with-photo", mediaIds: ["m-photo"] })], photoIndex("m-photo"));
+  const result = plan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-oa3", story: storyOf(["m-photo"]) });
+  const [adopted] = result.lifeEvent.event.organizerRun.mediaBinding.adopted;
+  assert.equal(adopted.mediaId, "m-photo");
+  assert.equal(adopted.tier, "confirmed");
+  // Basis A, recorded at write time: this is the very source the story was written from, so the
+  // read layer's isStoryAssociated() will agree without re-deriving the window.
+  assert.equal(adopted.boundSourceId, "wechat-message:with-photo");
+  assert.ok(result.lifeEvent.event.sourceIds.includes(adopted.boundSourceId), "the picture's source is one of the story's sources");
+  assert.match(adopted.basis, /same message/);
+});
+
+test("offered≠adopted: a refused reference is recorded as refused, not quietly dropped", () => {
+  const items = [source({ text: "", mediaIds: ["m-adj"], capturedAt: "2026-03-01T10:00:00.000Z" }), source({ text: "刚睡醒的样子", capturedAt: "2026-03-01T10:00:30.000Z" })];
+  const window = windowOf(items, photoIndex("m-adj"));
+  assert.equal(window.mediaBindings[0].tier, "strong_contextual");
+  const result = plan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-oa4", story: storyOf(["m-adj"]) });
+  const binding = result.lifeEvent.event.organizerRun.mediaBinding;
+  assert.deepEqual(binding.adopted, []);
+  assert.equal(binding.refused.length, 1);
+  assert.equal(binding.refused[0].mediaId, "m-adj");
+  assert.match(binding.refused[0].reason, /not attachable/);
+});
+
 // ---------------------------------------------------------------- provenance
 
 test("provenance: an outcome may not cite a source outside its evidence window", () => {

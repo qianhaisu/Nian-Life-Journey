@@ -33,10 +33,23 @@
 // "life_event_candidate" and memoryWeight is forced down to "trace" (see below) so T7's output reads
 // the same as everything else while still sorting behind real highlights/chapters.
 //
-// REQUIRED FOLLOW-UP for every month written here (T18, 2026-09-04):
-//   node --import tsx scripts/t18-backfill-media-binding.mjs --commit
-//   Binds media_ids/heroMediaId onto the rows this script just wrote — this script itself never
-//   does (media_ids stays []), so the event detail page and home page show no photo without it.
+// NOT A REQUIRED FOLLOW-UP any more (2026-09-11). This used to read:
+//   "REQUIRED FOLLOW-UP for every month written here (T18, 2026-09-04):
+//    node --import tsx scripts/t18-backfill-media-binding.mjs --commit"
+// It was wrong twice over, and following it would have undone this script's own work.
+//
+// First, the premise stopped being true: this script does NOT leave media_ids empty. planArtifacts
+// writes the media the Writer actually named, at `confirmed` tier only — photo and text in the same
+// WeChat message. That is the strongest binding the archive has.
+//
+// Second, t18 selected by calendar day, not by this story's sources, and it updated every row with
+// this exact organizer_version unconditionally — so running it afterwards replaced each confirmed
+// binding with a same-day pick. In the 2025 rows it had already processed, 204 of 205 heroes came
+// from somewhere other than their own story's sources.
+//
+// t18 has since been narrowed: it only fills a row that has NO binding, only from that row's own
+// sources, and it never touches the NO_HERO_MEDIA_ID review sentinel. Run it if you want, or don't
+// — this script's output no longer depends on it.
 //
 // T20-C grading (P1-3, 2026-09-05) is now AUTOMATIC: when --commit is given and events were
 // written, this script grades them all at the end (high/medium/low → memoryWeight + store_only).
