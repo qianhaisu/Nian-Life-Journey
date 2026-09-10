@@ -99,6 +99,25 @@ test("usedSourceIdsFor is empty when the story cites nothing, so provenance stay
   assert.deepEqual(ids, []);
 });
 
+test("an adopted photograph brings the message it arrived in, or the page cannot draw its own hero", () => {
+  // A `confirmed` binding means the picture and the words were the same message. If that message is
+  // not in source_ids, lib/media/story-binding.ts refuses the photograph and the story renders with
+  // a hero it is not allowed to show. Found on 2025-07-07, the first story to adopt a picture.
+  const ids = usedSourceIdsFor(pkg(), out({
+    narrativeClaims: [{ text: "他现在不扶着也能站几秒", supportedByClaimIds: ["claim-0"] }],
+    usedClaimIds: ["claim-0"], usedQuoteIds: [], usedMediaIds: ["m-confirmed"],
+  }));
+  assert.ok(ids.includes("src-1"), "the photograph's own source is in the trail");
+});
+
+test("a photograph the story did not adopt does not widen its provenance", () => {
+  const ids = usedSourceIdsFor(pkg(), out({
+    narrativeClaims: [{ text: "他现在不扶着也能站几秒", supportedByClaimIds: ["claim-0"] }],
+    usedClaimIds: ["claim-0"], usedQuoteIds: [], usedMediaIds: [],
+  }));
+  assert.equal(ids.includes("src-9"), false, "the same-day day_level photo was never used, so its source stays out");
+});
+
 test("declining to write is a complete, valid answer", () => {
   const r = validateNarrative({ pkg: pkg(), output: { contractVersion: "writer-v2-output-contract-v1", insufficient: true, narrativeClaims: [], usedClaimIds: [], usedQuoteIds: [], usedMediaIds: [] } });
   assert.equal(r.ok, true);

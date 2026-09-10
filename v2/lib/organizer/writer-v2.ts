@@ -357,20 +357,29 @@ export function packageHasAssertableMaterial(pkg: VerifiedMemoryEvidencePackage)
  * all, and provenance records what the writing used.
  */
 export function usedSourceIdsFor(
-  pkg: Pick<VerifiedMemoryEvidencePackage, "claims" | "quotes" | "longitudinal">,
-  output: Pick<WriterV2Output, "narrativeClaims" | "usedClaimIds" | "usedQuoteIds">,
+  pkg: Pick<VerifiedMemoryEvidencePackage, "claims" | "quotes" | "longitudinal" | "media">,
+  output: Pick<WriterV2Output, "narrativeClaims" | "usedClaimIds" | "usedQuoteIds" | "usedMediaIds">,
 ): string[] {
   const claimById = new Map(pkg.claims.map((c) => [c.claimId, c]));
   const quoteById = new Map(pkg.quotes.map((q) => [q.quoteId, q]));
+  const mediaById = new Map((pkg.media ?? []).map((m) => [m.mediaId, m]));
   const used = new Set<string>();
   const addClaim = (id: string) => { for (const s of claimById.get(id)?.sourceIds ?? []) used.add(s); };
   const addQuote = (id: string) => { const s = quoteById.get(id)?.sourceId; if (s) used.add(s); };
+  // A photograph is part of the story too, and the message it arrived in is what proves it. A
+  // `confirmed` binding means the picture and the words were the SAME message, so that message
+  // belongs in the trail — leave it out and the read layer's Basis A test (lib/media/story-binding.ts)
+  // correctly refuses the photograph, and the story goes to the page with a hero it cannot draw.
+  // Found on 2025-07-07, the first story of the night that adopted a picture at all.
+  const addMedia = (id: string) => { const s = mediaById.get(id)?.boundSourceId; if (s) used.add(s); };
 
   for (const id of output.usedClaimIds ?? []) addClaim(id);
   for (const id of output.usedQuoteIds ?? []) addQuote(id);
+  for (const id of output.usedMediaIds ?? []) addMedia(id);
   for (const nc of output.narrativeClaims ?? []) {
     for (const id of nc.supportedByClaimIds ?? []) addClaim(id);
     for (const id of nc.supportedByQuoteIds ?? []) addQuote(id);
+    for (const id of nc.supportedByMediaIds ?? []) addMedia(id);
     // The Writer may also name sources directly; those are still only trusted when the package
     // contains them, which the caller enforces by intersecting with the window.
     for (const id of nc.supportedBySourceIds ?? []) used.add(id);
