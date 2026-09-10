@@ -13,6 +13,11 @@ export interface HotStorage {
   // Streams the object instead of buffering it fully in memory — used by the
   // page-delivery route so TTFB isn't gated on the whole file arriving first.
   getStream(key: string): Promise<ReadableStream<Uint8Array> | null>;
+  // Bytes [start, end] inclusive, for a Range request. Optional: a backend that does not implement
+  // it makes the delivery route fall back to fetching the object and slicing, which is correct but
+  // reads more than it needs. Video is why this exists — a browser will not let the reader drag the
+  // scrubber unless the server answers ranges (see app/api/media/[id]/route.ts).
+  getRange?(key: string, start: number, end: number): Promise<ReadableStream<Uint8Array> | null>;
   delete(key: string): Promise<void>;
   verify(key: string, checksum: string): Promise<HotStorageVerification>;
   url(location: MediaLocation): string | null;

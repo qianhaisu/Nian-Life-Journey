@@ -33,14 +33,47 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // CDN before this code runs. Which backend that origin actually is comes from this location's
   // own `provider`, never from a single fixed instance (see getStorageForProvider's doc comment).
   const storage = getStorageForProvider(location.provider);
+
+  // Range, and why it is not optional now that a video can be played here (2026-09-10). A browser
+  // will not let the reader drag a video's scrubber unless the server advertises ranges and answers
+  // them: with a plain 200 the media element reports nothing seekable, and setting currentTime
+  // snaps straight back to zero — measured on the first playable clip before this existed. Photos
+  // are unaffected; nothing requests a range for them.
+  const totalSize = location.fileSize ?? undefined;
+  const rangeHeader = request.headers.get("range");
+  if (rangeHeader && totalSize) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+    if (match && (match[1] || match[2])) {
+      // "bytes=-500" means the last 500 bytes; "bytes=500-" means from 500 to the end.
+      const start = match[1] ? Number(match[1]) : Math.max(0, totalSize - Number(match[2]));
+      const end = match[1] ? (match[2] ? Math.min(Number(match[2]), totalSize - 1) : totalSize - 1) : totalSize - 1;
+      if (!(Number.isFinite(start) && Number.isFinite(end)) || start > end || start >= totalSize) {
+        return new NextResponse(null, { status: 416, headers: { "Content-Range": `bytes */${totalSize}`, "Accept-Ranges": "bytes", ...NOT_CACHEABLE } });
+      }
+      const rangeHeaders = {
+        "Content-Type": contentType,
+        "Content-Range": `bytes ${start}-${end}/${totalSize}`,
+        "Content-Length": String(end - start + 1),
+        "Accept-Ranges": "bytes",
+        ...cacheHeaders,
+      };
+      const ranged = storage.getRange ? await storage.getRange(location.providerRef, start, end) : null;
+      if (ranged) return new NextResponse(ranged, { status: 206, headers: rangeHeaders });
+      // A backend without a ranged read still answers correctly, just less efficiently.
+      const whole = await storage.get(location.providerRef);
+      if (whole) return new NextResponse(whole.slice(start, end + 1) as BodyInit, { status: 206, headers: rangeHeaders });
+      return new NextResponse("Media derivative is not ready", { status: 404, headers: NOT_CACHEABLE });
+    }
+  }
+
   const stream = await storage.getStream(location.providerRef);
   if (stream) {
-    const headers: Record<string, string> = { "Content-Type": contentType, ...cacheHeaders };
+    const headers: Record<string, string> = { "Content-Type": contentType, "Accept-Ranges": "bytes", ...cacheHeaders };
     if (location.fileSize) headers["Content-Length"] = String(location.fileSize);
     return new NextResponse(stream, { headers });
   }
 
   const data = await storage.get(location.providerRef);
   if (!data) return new NextResponse("Media derivative is not ready", { status: 404, headers: NOT_CACHEABLE });
-  return new NextResponse(data as BodyInit, { headers: { "Content-Type": contentType, "Content-Length": String(data.byteLength), ...cacheHeaders } });
+  return new NextResponse(data as BodyInit, { headers: { "Content-Type": contentType, "Content-Length": String(data.byteLength), "Accept-Ranges": "bytes", ...cacheHeaders } });
 }

@@ -82,6 +82,15 @@ export class OssStorage implements HotStorage {
     } catch { return null; }
   }
 
+  async getRange(key: string, start: number, end: number) {
+    try {
+      const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key), Range: `bytes=${start}-${end}` })) as { Body?: { transformToWebStream?: () => ReadableStream<Uint8Array> } };
+      if (!result.Body?.transformToWebStream) return null;
+      return result.Body.transformToWebStream();
+    } catch { return null; }
+  }
+
   async delete(key: string) { const { DeleteObjectCommand } = await import("@aws-sdk/client-s3"); await (await this.client).send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })); }
 
   async verify(key: string, checksum: string) {

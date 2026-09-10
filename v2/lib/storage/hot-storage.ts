@@ -40,6 +40,14 @@ export class LocalHotStorage implements HotStorage {
     } catch { return null; }
   }
 
+  async getRange(key: string, start: number, end: number) {
+    try {
+      const target = path.join(this.root, safeKey(key));
+      await fs.access(target);
+      return Readable.toWeb(createReadStream(target, { start, end })) as ReadableStream<Uint8Array>;
+    } catch { return null; }
+  }
+
   async delete(key: string) { await fs.rm(path.join(this.root, safeKey(key)), { force: true }); }
   async verify(key: string, checksum: string) {
     try {
