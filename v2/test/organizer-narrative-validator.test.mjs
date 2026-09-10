@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validateNarrative } from "../lib/organizer/narrative-validator.ts";
-import { ageAt, isAssertable, mediaTierFor, mayIllustrateStory, packageHasAssertableMaterial } from "../lib/organizer/writer-v2.ts";
+import { ageAt, isAssertable, mediaTierFor, mayIllustrateStory, packageHasAssertableMaterial, usedSourceIdsFor } from "../lib/organizer/writer-v2.ts";
 
 // The Narrative Validator is the deterministic gate between the Writer and 张年's archive. These
 // tests are the failure taxonomy it exists to stop, each one written as the thing a fluent model
@@ -52,6 +52,51 @@ const codes = (r) => r.issues.map((i) => i.code);
 test("a well-supported story passes", () => {
   const r = validateNarrative({ pkg: pkg(), output: out() });
   assert.equal(r.ok, true, `unexpected issues: ${JSON.stringify(r.issues)}`);
+});
+
+// ---------------------------------------------------------------- provenance (2026-09-11)
+//
+// The trail has to lead to the words. Measured on the 2025-08-08 story: it quoted a real sentence,
+// correctly attributed, from a message that was never recorded among its sources — so a family
+// member opening the evidence chain found a different message and not the quoted one.
+
+test("usedSourceIdsFor returns every source the story rests on, through claims and through quotes", () => {
+  const ids = usedSourceIdsFor(pkg(), out({
+    narrativeClaims: [{ text: "他现在不扶着也能站几秒", supportedByClaimIds: ["claim-0"], supportedByQuoteIds: ["quote-0"] }],
+    usedClaimIds: ["claim-0"], usedQuoteIds: ["quote-0"],
+  }));
+  assert.deepEqual(ids, ["src-1"], "one message, reached two ways, counted once");
+});
+
+test("usedSourceIdsFor surfaces a source the subject gate did not keep — the 金链子 case", () => {
+  // claim-2 rests on src-3. If the gate kept only src-1, src-3 is exactly the message whose absence
+  // from source_ids broke the evidence chain.
+  const ids = usedSourceIdsFor(pkg(), out({
+    narrativeClaims: [{ text: "妈妈说他还不会叫妈", supportedByClaimIds: ["claim-2"] }],
+    usedClaimIds: ["claim-2"], usedQuoteIds: [],
+  }));
+  assert.ok(ids.includes("src-3"), "the message the sentence rests on must come back");
+  const gated = ["src-1"];
+  const provenance = [...new Set([...gated, ...ids])];
+  assert.deepEqual(provenance, ["src-1", "src-3"], "gated first, then what the writing used");
+});
+
+test("usedSourceIdsFor keeps a source the Writer named directly, and ignores ids it invented", () => {
+  const ids = usedSourceIdsFor(pkg(), out({
+    narrativeClaims: [{ text: "他现在不扶着也能站几秒", supportedByClaimIds: ["claim-0"], supportedBySourceIds: ["src-1", "src-not-in-window"] }],
+    usedClaimIds: ["claim-0"], usedQuoteIds: [],
+  }));
+  assert.ok(ids.includes("src-1"));
+  // The function reports what the Writer said; the caller intersects with the window, which is what
+  // stops an invented id from ever reaching a row.
+  assert.ok(ids.includes("src-not-in-window"));
+  const windowSourceIds = new Set(["src-1", "src-2", "src-3"]);
+  assert.deepEqual(ids.filter((id) => windowSourceIds.has(id)), ["src-1"]);
+});
+
+test("usedSourceIdsFor is empty when the story cites nothing, so provenance stays the gated set", () => {
+  const ids = usedSourceIdsFor(pkg(), out({ narrativeClaims: [], usedClaimIds: [], usedQuoteIds: [] }));
+  assert.deepEqual(ids, []);
 });
 
 test("declining to write is a complete, valid answer", () => {

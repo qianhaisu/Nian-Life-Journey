@@ -2,7 +2,8 @@
 // chat text must never enter the repository, so these assert the RULES, not the corpus.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { coerceSubjectRelevance, coerceTemporalStatus, resolveSubject } from "../lib/organizer/deepseek-editor.ts";
+import { clampSelectionReason, coerceSubjectRelevance, coerceTemporalStatus, resolveSubject, SELECTION_REASON_MAX } from "../lib/organizer/deepseek-editor.ts";
+import { validateMemoryEditorVerdict } from "../lib/organizer/contract.ts";
 import { containsTechnicalPlaceholder, decisionPublishes, indexReviews, isEventPublishable, isTracePublishable, requiresQualityReview } from "../lib/organizer/quality-review.ts";
 import { extractQuotes, validateFamilyWriterOutput } from "../lib/organizer/family-writer.ts";
 import { presentableEvidenceText, presentableSourceLabel } from "../lib/organizer/evidence-text.ts";
@@ -19,6 +20,46 @@ function windowWith(texts, neighborTexts = []) {
     neighbors: { before: neighborTexts.map((text, index) => ({ itemId: `n-${index}`, text })), after: [] },
   };
 }
+
+// A day of the child's life must not be thrown away because a note about it ran long.
+// 2026-09-11: 6 of 15 windows in the first 2025-08 batch died on exactly this.
+
+test("a long selectionReason is trimmed to the contract's cap instead of destroying the verdict", () => {
+  const verbose = "模".repeat(400);
+  assert.ok(verbose.length > SELECTION_REASON_MAX, "the fixture has to actually be too long");
+  const clamped = clampSelectionReason(verbose);
+  assert.equal(clamped.length, SELECTION_REASON_MAX);
+  assert.ok(clamped.startsWith("模"), "it is the model's own reason, just shorter");
+});
+
+test("the gate's verdict survives truncation, because that is the part that carries meaning", () => {
+  const clamped = clampSelectionReason("模".repeat(400), "gate_a_family_context_only");
+  assert.ok(clamped.length <= SELECTION_REASON_MAX);
+  assert.ok(clamped.startsWith("gate_a_family_context_only: "), "the reason for the gate is never the part that gets cut");
+});
+
+test("a missing selectionReason clamps to empty rather than the string 'undefined'", () => {
+  assert.equal(clampSelectionReason(undefined), "");
+  assert.equal(clampSelectionReason(null), "");
+});
+
+test("the contract still refuses an over-long selectionReason — the clamp is the boundary's job, not a loosened rule", () => {
+  const window = { windowId: "window:test", items: [{ itemId: "item-0", spans: [{ id: "s0" }] }] };
+  const verdict = {
+    windowId: "window:test", subjectRelevance: "unrelated", subjectIds: [], temporalStatus: "past",
+    occurredAtProposal: { value: "2025-08-04", basis: "sent_at", evidenceRefs: ["item-0#s0"] },
+    coreFacts: [], quotableLines: [], worthinessDimensions: {}, duplicateCandidates: [],
+    uncertainty: { time: "low", subject: "low", semantics: "low" },
+    sensitivityFlags: [], prohibitedInferences: [], proposedAction: "store_only", confidence: 0.5,
+  };
+  assert.throws(
+    () => validateMemoryEditorVerdict({ ...verdict, selectionReason: "模".repeat(400) }, window),
+    /selectionReason/,
+    "the contract keeps what is STORED bounded",
+  );
+  const ok = validateMemoryEditorVerdict({ ...verdict, selectionReason: clampSelectionReason("模".repeat(400)) }, window);
+  assert.equal(ok.selectionReason.length, SELECTION_REASON_MAX, "and the clamped value passes it");
+});
 
 test("Gate A maps the fine-grained relevance label onto the canonical enum", () => {
   const named = windowWith(["小年今天自己爬上了沙发"]);

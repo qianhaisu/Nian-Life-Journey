@@ -51,18 +51,24 @@
 // sources, and it never touches the NO_HERO_MEDIA_ID review sentinel. Run it if you want, or don't
 // — this script's output no longer depends on it.
 //
-// T20-C grading (P1-3, 2026-09-05) is now AUTOMATIC: when --commit is given and events were
-// written, this script grades them all at the end (high/medium/low → memoryWeight + store_only).
-// t20c-regrade-memories.mjs is kept for manual re-runs after prompt changes, but is no longer a
-// required follow-up step.
+// TWO THINGS THAT USED TO HAPPEN AUTOMATICALLY AND ARE NOW OPT-IN (2026-09-11, Teddy).
 //
-// Why a review row still needs an explicit "approved" override here (see quality-review.ts):
-// requiresQualityReview() fails CLOSED for any artifact whose organizerRun.organizerType is "ai".
-// planArtifacts's life_event_candidate branch already writes a review row, but ADAPTER_REVIEW_DECISION
-// is "needs_human_review" — correct for the real production pipeline, which has no review desk yet
-// either, but wrong here: Cowork's "通过" in docs/STATUS.md IS the human review for T7's output, so
-// this script overrides plan.review.decision to "approved" before applyPlan persists it. That override
-// must never fire without a Cowork "通过" having happened first.
+// --self-approve (was: always on). This script used to overwrite plan.review.decision with
+//   "approved" before applyPlan persisted it, on the grounds that Cowork's "通过" in docs/STATUS.md
+//   was the human review. There is no Cowork any more (docs/DIRECT-COORDINATION.md), and the note
+//   below always said the override "must never fire without a 通过 having happened first" — so the
+//   safe reading of that sentence is that it must not fire by default. Without the flag a new
+//   Memory keeps ADAPTER_REVIEW_DECISION ("needs_human_review") and therefore does not publish:
+//   requiresQualityReview() fails CLOSED for any artifact whose organizerRun.organizerType is "ai".
+//   Read the output first, then decide; the flag exists for after that decision, not before it.
+//
+// --grade (was: always on with --commit). T20-C grading (P1-3, 2026-09-05) does not grade the rows
+//   this run wrote — it grades EVERY T7 event in the month, and for anything it calls low tier it
+//   sets that event's existing content_quality_reviews decision to "store_only". On a month with
+//   already-published stories that silently takes them off the site, which is a publication
+//   decision this script has no business making as a side effect of writing one new day. Its API
+//   calls also sit OUTSIDE --max-calls (one per 12 events), so with it on the ceiling is not a
+//   ceiling. Off by default; t20c-regrade-memories.mjs still exists for a deliberate re-grade.
 import { createHash, randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -81,7 +87,7 @@ const { groundClaims } = await import("../lib/organizer/claim-grounding.ts");
 const { validateMemoryEditorVerdict } = await import("../lib/organizer/contract.ts");
 const { FAMILY_REGISTRY } = await import("../lib/organizer/family-registry.ts");
 const { resolveSpeaker } = await import("../lib/organizer/identity.ts");
-const { buildEvidencePackage, packageHasAssertableMaterial } = await import("../lib/organizer/writer-v2.ts");
+const { buildEvidencePackage, packageHasAssertableMaterial, usedSourceIdsFor } = await import("../lib/organizer/writer-v2.ts");
 const { WRITER_V2_SYSTEM_PROMPT, WRITER_V2_TOOL_NAME, WRITER_V2_TOOL_SCHEMA, WRITER_V2_PROMPT_VERSION, buildWriterV2Prompt } = await import("../lib/organizer/writer-v2-prompt.ts");
 const { NARRATIVE_VALIDATOR_VERSION, validateNarrative } = await import("../lib/organizer/narrative-validator.ts");
 const { subjectGateFor, passesSubjectGate, SUBJECT_NAMES } = await import("../lib/organizer/subject-gate.ts");
@@ -105,6 +111,10 @@ const COMMIT = hasFlag("commit");
 // window instead of regenerating it — found 2026-09-05 when P1-0's flash months needed a pro
 // redo. Use deliberately: this re-spends a DeepSeek call on every window in scope.
 const FORCE = hasFlag("force");
+// See the header. Both default to OFF: writing a Memory and publishing it are different decisions,
+// and re-grading a month's existing stories is a third one.
+const SELF_APPROVE = hasFlag("self-approve");
+const GRADE = hasFlag("grade");
 const CONCURRENCY = Math.max(1, Math.min(16, Number(argOf("concurrency", "8")) || 8));
 // --day and --from/--to slice which days of the month are actually processed. T10, 2026-09-04:
 // Cowork's environment has a 175s hard ceiling per command and no surviving background process, so a
@@ -367,9 +377,21 @@ async function processItem(item) {
   // ---------------------------------------------------------------- persist (T7 step 3, real write)
   const contentTypes = [...new Set(item.w.items.map((i) => i.contentTypes ?? []).flat())];
   const now = new Date().toISOString();
+  // Provenance is what the story RESTS ON, not what the gate happened to keep. The gate decides
+  // whether this window gets written at all; once it does, every message the finished page cites or
+  // quotes has to be in the trail, or the evidence chain leads somewhere other than the words.
+  // Gated sources stay FIRST so the primary source_memory_link is still a gated message.
+  const windowSourceIds = new Set(item.w.items.map((i) => i.sourceId));
+  const usedSourceIds = usedSourceIdsFor(pkg, writer.output).filter((id) => windowSourceIds.has(id));
+  const provenanceSourceIds = [...new Set([...item.keptSourceIds, ...usedSourceIds])];
+  entry.provenance = {
+    gatedSources: item.keptSourceIds.length,
+    addedByUse: provenanceSourceIds.length - item.keptSourceIds.length,
+    total: provenanceSourceIds.length,
+  };
   const outcome = {
     action: "life_event_candidate",
-    sourceIds: item.keptSourceIds,
+    sourceIds: provenanceSourceIds,
     windowId: item.w.windowId,
     policyVersion: T7_POLICY_ID,
     modelVersion: editor.model,
@@ -393,12 +415,13 @@ async function processItem(item) {
   let applied;
   try {
     const plan = planArtifacts({ window: item.w, outcome, windowFingerprint: item.fp, policy, story: writerStory, now, newId: newIdOf });
-    // T7's review IS Cowork's "通过" in docs/STATUS.md, already given before this script is ever run
-    // with --commit — planArtifacts's default ADAPTER_REVIEW_DECISION ("needs_human_review") is right
-    // for the real production pipeline, which has no review desk, but wrong here; this override must
-    // never fire without that "通过" having actually happened.
-    plan.review.decision = "approved";
-    plan.review.reasonCodes = [...plan.review.reasonCodes, "t7-subject-gate", "cowork-reviewed"];
+    // Publication is a separate decision from writing, and it is not this script's to make unless
+    // a human has said so on this run. Default: keep ADAPTER_REVIEW_DECISION, which is fail-closed.
+    plan.review.reasonCodes = [...plan.review.reasonCodes, "t7-subject-gate"];
+    if (SELF_APPROVE) {
+      plan.review.decision = "approved";
+      plan.review.reasonCodes = [...plan.review.reasonCodes, "self-approved-by-flag"];
+    }
     // T7's output is everyday observation, not a curated highlight — memoryWeight stays at the
     // pipeline's lowest tier so it never outranks a real chapter/highlight in curateMemories' sort.
     plan.lifeEvent.event.memoryWeight = "trace";
@@ -428,11 +451,34 @@ console.log(`Concurrency: ${CONCURRENCY} worker(s).`);
 await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => worker(i)));
 
 const publishable = results.filter((r) => r.proposed);
+// Token usage from BOTH halves. The writer's usage was already carried on each entry; the editor's
+// only ever lived in editor.stats and never reached the report, so a run's real cost could not be
+// added up afterwards — it had to be estimated, which is not good enough when there is a budget.
+const editorUsage = editor.stats.reduce((acc, s) => {
+  acc.calls += 1;
+  acc.inputTokens += s.inputTokens ?? 0;
+  acc.outputTokens += s.outputTokens ?? 0;
+  if (!s.ok) acc.failed += 1;
+  return acc;
+}, { calls: 0, inputTokens: 0, outputTokens: 0, failed: 0 });
+const writerUsage = results.reduce((acc, r) => {
+  if (!r.usage) return acc;
+  acc.calls += 1;
+  acc.inputTokens += r.usage.input_tokens ?? 0;
+  acc.outputTokens += r.usage.output_tokens ?? 0;
+  return acc;
+}, { calls: 0, inputTokens: 0, outputTokens: 0 });
 const summary = {
   month: MONTH, generatedAt: new Date().toISOString(), commit: COMMIT,
   editor: { name: editor.name, model: editor.model, promptVersion: editor.promptVersion },
   writerPromptVersion: WRITER_V2_PROMPT_VERSION, validatorVersion: NARRATIVE_VALIDATOR_VERSION,
-  deepseekCalls: calls, gate: gateStats,
+  deepseekCalls: calls,
+  tokenUsage: {
+    editor: editorUsage, writer: writerUsage,
+    totalInputTokens: editorUsage.inputTokens + writerUsage.inputTokens,
+    totalOutputTokens: editorUsage.outputTokens + writerUsage.outputTokens,
+  },
+  gate: gateStats,
   daysConsidered: days.length, windowsProcessed: results.length, daysWithText: new Set(publishable.map((r) => r.lifeDate)).size,
   refused: results.filter((r) => r.skipped).length, written,
 };
@@ -440,11 +486,12 @@ console.log(`\n=== SUMMARY ===\n${JSON.stringify(summary, null, 2)}`);
 writeFileSync(outPath, JSON.stringify({ summary, results }, null, 2), "utf8");
 console.log(`\n${COMMIT ? `Wrote ${written} life_event row(s).` : "DRY RUN — nothing was written to the database."} Report: ${outPath} (contains family chat text; keep it outside the repository)`);
 
-// P1-3: T20-C grading runs automatically after writing (single judgment point).
-// Grades ALL events in this month (not just the ones written this run) so the whole month is
-// consistently graded even when --day/--from/--to was used to process only a slice.
-if (COMMIT) {
-  console.log(`\n--- T20-C auto-grade (P1-3) ---`);
+// T20-C grading, only when asked for. It reaches every T7 event in the month, including ones this
+// run did not write and ones already published, and it spends calls --max-calls does not count.
+if (COMMIT && GRADE) {
+  console.log(`\n--- T20-C grade (--grade given; this also re-grades the month's EXISTING events) ---`);
   const gradeModel = process.env.AI_MODEL || "deepseek-v4-pro";
   await gradeMonthEvents(MONTH, { dbUrl, apiKey, baseUrl, model: gradeModel, persistQualityReview, commit: true });
+} else if (COMMIT) {
+  console.log(`\nT20-C grading skipped (pass --grade to re-grade this whole month, existing events included).`);
 };

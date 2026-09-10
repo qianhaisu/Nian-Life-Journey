@@ -145,6 +145,30 @@ export function coerceTemporalStatus(raw: unknown): { temporalStatus: string; co
   return { temporalStatus: "uncertain", coerced: true };
 }
 
+/** The contract's cap on `selectionReason` (contract.ts). Kept here so the boundary can honour it. */
+export const SELECTION_REASON_MAX = 120;
+
+/**
+ * Fits the model's own explanation inside the contract's length cap.
+ *
+ * `selectionReason` is an explanatory note: it is stored, shown to a reviewer, and read by nothing
+ * — no gate, no score, no route consults it. The contract still caps it at 120 characters, and
+ * until 2026-09-11 only the gate-A branch respected that cap. A model whose prose ran long threw
+ * "Invalid memory editor verdict: selectionReason", which callers must treat as a safe degrade, so
+ * the ENTIRE window was discarded after its request and tokens had already been paid for. Measured
+ * on the first 2025-08 batch under deepseek-flash: 6 of 15 windows — 40% of that stretch of the
+ * child's life — lost to the length of a sentence nobody acts on.
+ *
+ * Clamping belongs here, at the provider boundary where model output is normalised, not in the
+ * contract: what gets stored stays bounded, and a verbose model stops costing us a day.
+ */
+export function clampSelectionReason(raw: unknown, gateAReason?: string): string {
+  const reason = String(raw ?? "");
+  if (!gateAReason) return reason.slice(0, SELECTION_REASON_MAX);
+  // The gate's own verdict is the part that must survive truncation, so it is written first.
+  return `${gateAReason}: ${reason.slice(0, 100)}`.slice(0, SELECTION_REASON_MAX);
+}
+
 export function coerceSubjectRelevance(raw: Record<string, unknown>, window: EvidenceWindow, subject: { primaryName: string; aliases: string[] }, bounded?: BoundedSubjectResolution): { subjectRelevance: string; gateAReason?: string } {
   const detail = raw.subjectRelevanceDetail;
   if (detail === "family_context_only" || detail === "unrelated") return { subjectRelevance: "unrelated", gateAReason: `gate_a_${detail}` };
@@ -310,7 +334,7 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         // H9 alignment: an unrelated/ambiguous subject may not carry subjectIds, and the contract
         // rejects subjectIds on "ambiguous" outright.
         if (subjectRelevance !== "primary") raw.subjectIds = [];
-        if (gateAReason) raw.selectionReason = `${gateAReason}: ${String(raw.selectionReason ?? "").slice(0, 100)}`.slice(0, 120);
+        raw.selectionReason = clampSelectionReason(raw.selectionReason, gateAReason);
         raw.windowId = window.windowId;
 
         const support = raw.transitionSupport as { priorEvidence?: Array<{ sourceId?: string }> } | undefined;

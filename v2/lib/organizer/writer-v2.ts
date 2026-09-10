@@ -340,3 +340,40 @@ export function buildEvidencePackage(input: BuildPackageInput): VerifiedMemoryEv
 export function packageHasAssertableMaterial(pkg: VerifiedMemoryEvidencePackage): boolean {
   return pkg.claims.some((claim) => claim.assertable);
 }
+
+/**
+ * Every raw source the finished story actually rests on — the messages a reader must be able to
+ * open in order to check it.
+ *
+ * This exists because the two were allowed to differ. A story's persisted provenance used to be the
+ * subject gate's `kept` subset alone, while the Writer was given, and legitimately used, the whole
+ * window. Measured on 2025-08-08: the story quoted 「今天又收获金链子一枚」 verbatim and correctly
+ * attributed it to 妈妈 — the sentence is real, she really said it — but the message carrying it was
+ * not among the story's recorded sources, so the evidence chain a family member opens showed a
+ * different message and not that one. Nothing was invented; the trail simply did not lead where the
+ * words came from, which is the one thing the archive promises.
+ *
+ * Union it with the gated set (never replace it): the gate decides whether a window is written at
+ * all, and provenance records what the writing used.
+ */
+export function usedSourceIdsFor(
+  pkg: Pick<VerifiedMemoryEvidencePackage, "claims" | "quotes" | "longitudinal">,
+  output: Pick<WriterV2Output, "narrativeClaims" | "usedClaimIds" | "usedQuoteIds">,
+): string[] {
+  const claimById = new Map(pkg.claims.map((c) => [c.claimId, c]));
+  const quoteById = new Map(pkg.quotes.map((q) => [q.quoteId, q]));
+  const used = new Set<string>();
+  const addClaim = (id: string) => { for (const s of claimById.get(id)?.sourceIds ?? []) used.add(s); };
+  const addQuote = (id: string) => { const s = quoteById.get(id)?.sourceId; if (s) used.add(s); };
+
+  for (const id of output.usedClaimIds ?? []) addClaim(id);
+  for (const id of output.usedQuoteIds ?? []) addQuote(id);
+  for (const nc of output.narrativeClaims ?? []) {
+    for (const id of nc.supportedByClaimIds ?? []) addClaim(id);
+    for (const id of nc.supportedByQuoteIds ?? []) addQuote(id);
+    // The Writer may also name sources directly; those are still only trusted when the package
+    // contains them, which the caller enforces by intersecting with the window.
+    for (const id of nc.supportedBySourceIds ?? []) used.add(id);
+  }
+  return [...used];
+}
