@@ -5587,3 +5587,42 @@ image `sha256:f1eb1a4a807491000e959e9d4a288000e005f0e1b377d7102a59b2d6e6ea5fa6`�
 
 **运行 SHA**：容器仍是 `410a0005b675fa7df417442b2f70bba3c6022d5b`，image `sha256:f1eb1a4a8074…`，healthy，本轮未换容器。
 未改任何 Organizer 代码、未改审阅决定、未发布、未处理其余月份、未改 DNS 与公网入口。
+
+---
+
+## 2026-09-11 下午（Claude Code，单 session）：Organizer 三项定点修复 + 有界验证
+
+1. **本轮线上多了什么家人能读的东西**：**零**。全程 dry run，没有写入一行，24 篇待审阅故事、
+   发布状态、`hero_media_id` 一个字节未动。私有站 `http://127.0.0.1:18080/` 仍在跑（PID 54172，
+   本 session 维护），容器 SHA 未换。本轮的产出是修复本身与它的证据。
+
+2. **没做到什么 / 最大的已知 blocker**：三项修复都落地并验证了，但 8 个代表窗口里只有 3 个能出稿。
+   修复内容：①编辑器判 `unrelated` 时在写作前停下，白名单式放行，缺失或异常的 verdict 一律不算相关；
+   ②`zeroAnaphoraAntecedent` 与被冻结的耦合策略解耦后单独启用，并让窗口内以明确点名解析出主体的 claim
+   参与写作（`antecedent_in_neighbour` 与 `conversation_continuity` 明确排除——同一天、同一个群，
+   永远不构成认定）；③图文绑定改用已有的占位符识别，后续时间规则也一并要求候选消息真的说了话，
+   时间接近只产生候选、绑定仍落在不可叙述的 `strong_contextual`。
+   配套：驱动脚本的 `allowedMediaTiers` 改读 `ORGANIZER_V2_MEDIA_TIERS`（默认仍 `confirmed`），
+   验证时在进程内设为 `confirmed,strong_contextual`，**未改任何全局生产配置、未开 worker**；
+   新增 `--fingerprints=` 让一次验证只跑指定窗口。
+   修复 2 顺带暴露并补掉一个洞：叙事校验器拦 `家人` 却不拦 `家里`，模型写出了「家里回…」。
+   已补动词门控规则（收紧，不是放宽）。
+   离线全量对比（零调用，24 个窗口）：39 张照片里 **31 张原本绑在没有文字的占位符上，现在 30 张绑在真句子上**。
+   一次 DeepSeek 验证（deepseek-flash，**18 次调用、约 ¥0.21**，上限 30 次 / ¥10）：
+   成人无关话题 2/2 被挡；最好的一例 7 条 claim 全通过、逐句可溯源、无据事实 0、配图绑到「单手拿奶瓶」并被采用；
+   仍失败的三例——一例被校验器以「把心思写成事实」拒稿、一例因发送人 digest `4366d185…` 不在
+   `FAMILY_REGISTRY` 而只能写成匿名声音后被拒、一例重心已转但成人话题仍留在页上（编辑器 coreFacts 选取问题）。
+   **照片采用仍只有 1/9**：被 tier 策略拒绝 0 张，写作提示词说「不用提照片」，模型就一张都不认领。
+   「摔下沙发」单列回归：编辑器自己判的是 `care_observation` + health 标记，六个价值轴 milestone/change 都是 0
+   ——**来源不支持提权**，问题在驱动脚本丢掉了 `proposedAction` 又无条件压成 `trace`。建议记录而非自动改权重。
+
+3. **下一件事**：两件零费用的前置——确认 `4366d185…` 这个发送人是谁（只有 Teddy 能定），
+   以及让写作提示词对已提供的照片必须表态（采用或写明为何不用）。这两件之前不建议开新月份。
+   另需 Teddy 决定生产环境是否设 `ORGANIZER_V2_MEDIA_TIERS=confirmed,strong_contextual`，不设则配图为 0。
+
+**验证与证据（含家庭聊天原文，不进 Git）**：`C:\Users\teddy\NianlifeOps\night-2026-09-11\review\`
+下的 `fix-verification-2026-09-11.md`（结论与逐例对比）、`offline-compare-24.json`、
+`verify-2025-07.json`、`verify-2025-08.json`、`verify-2025-08b.json`（含编辑器 verdict、候选媒体、
+实际采用媒体与判定依据）。
+
+**验证命令**：`npm run typecheck`、`npm test`（801 条，791 通过 0 失败 10 跳过）、`npm run lint`、`npm run build` 全部通过。

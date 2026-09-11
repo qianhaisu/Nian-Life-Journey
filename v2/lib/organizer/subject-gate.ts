@@ -1,3 +1,5 @@
+import type { ClaimSubjectBasis } from "./claim-grounding";
+import type { SubjectRelevance } from "./contract";
 import type { EvidenceWindow } from "./evidence/types";
 
 // Which messages may become a record of 张年's life, decided before any model is called.
@@ -155,4 +157,79 @@ export function passesSubjectGate(window: EvidenceWindow, gate: SubjectGate): Ga
   // A window earns a model call only if something in it is actually about him. One eligible message
   // in a window of thirty is enough to look; it is not enough to publish, and nothing here says it is.
   return { passes: kept.length > 0, kept, rejected };
+}
+
+/**
+ * The Memory Editor's own Gate A verdict, used as a stop condition instead of being merely recorded.
+ *
+ * Found 2026-09-11, reading the 24 stories the T7 run wrote: two of them were about the parents'
+ * savings account and a rejected errand, and the Editor had already called both `unrelated`. The
+ * driver stored that verdict in its report and never consulted it, so the only thing standing
+ * between an adult conversation and a page in the child's archive was whether his name happened to
+ * appear in the sentence — which in both of those it did.
+ *
+ * The list is what MAY PROCEED, never what must stop, so a verdict that is missing, misspelled or
+ * from some future vocabulary fails closed instead of defaulting to relevant. `ambiguous` proceeds:
+ * it is a declared answer meaning the Editor could not pin the subject, and the per-claim resolver
+ * and the narrative validator are the two layers that then decide, on evidence, whether any
+ * sentence may be written at all.
+ */
+const RELEVANCE_MAY_PROCEED: ReadonlySet<string> = new Set<SubjectRelevance>(["primary", "mentioned", "ambiguous"]);
+
+export function subjectRelevanceMayProceed(subjectRelevance: unknown): { proceed: boolean; reason: string } {
+  if (typeof subjectRelevance !== "string" || !subjectRelevance) {
+    return { proceed: false, reason: "editor verdict carried no subjectRelevance; a missing verdict is not a relevant one" };
+  }
+  if (subjectRelevance === "unrelated") {
+    return { proceed: false, reason: "editor judged this window unrelated to the child" };
+  }
+  if (!RELEVANCE_MAY_PROCEED.has(subjectRelevance)) {
+    return { proceed: false, reason: `unrecognised subjectRelevance "${subjectRelevance}"; only a known-relevant verdict may proceed` };
+  }
+  return { proceed: true, reason: `subjectRelevance=${subjectRelevance}` };
+}
+
+/**
+ * Bases that rest on an EXPLICIT naming of the child inside the window the claim belongs to. A
+ * window is one conversational episode (the Evidence Builder cuts it at a 45-minute gap, a 3-hour
+ * span or 40 messages), and `resolveClaimSubject` runs its competing-person check over that window
+ * plus its neighbours before any of these can be returned.
+ *
+ * `antecedent_in_neighbour` and `conversation_continuity` are deliberately NOT here. They resolve a
+ * subject across the episode boundary, which is enough to attribute a claim but not enough to let
+ * that claim reach the page on its own — being in the same day, or in a conversation that is usually
+ * about him, must never be what makes a sentence his.
+ */
+const GATE_BYPASS_BASES: ReadonlySet<string> = new Set<ClaimSubjectBasis>([
+  "explicit_in_span",
+  "antecedent_in_window",
+  "antecedent_in_window_zero_anaphora",
+]);
+
+/**
+ * Whether one grounded claim may reach the Writer, given the messages that passed the message-level
+ * gate in the same window.
+ *
+ * The message gate admits a message only when the child's name is in it (or when the same speaker is
+ * still mid-thought). That is the right test for deciding whether to LOOK at a window, and the wrong
+ * one for deciding what the window says: Chinese family chat names him once and then says 他 for the
+ * next ten messages, so requiring every claim to touch a named message left the archive with the
+ * adults' quoted remarks and none of what the child actually did that day. Of the 24 stories written
+ * on 2026-09-11, ten were centred on the adult who spoke for exactly this reason — the sentences
+ * describing the child's own day sat one message away and were dropped.
+ *
+ * So a claim also survives when its subject was RESOLVED to the child on a basis that rests on an
+ * explicit naming inside this same episode. The window has already passed the message gate, the
+ * competing-person check has already run, and nothing here relaxes who may be named as a speaker.
+ */
+export function claimPassesSubjectGate(
+  claim: { sourceIds?: readonly string[]; subject?: { resolved?: boolean; basis?: string } },
+  keptSourceIds: ReadonlySet<string> | readonly string[],
+): { passes: boolean; reason: string } {
+  const kept = keptSourceIds instanceof Set ? keptSourceIds : new Set(keptSourceIds);
+  if ((claim.sourceIds ?? []).some((id) => kept.has(id))) return { passes: true, reason: "traces back to a message that passed the gate" };
+  if (claim.subject?.resolved && GATE_BYPASS_BASES.has(claim.subject.basis ?? "")) {
+    return { passes: true, reason: `subject resolved in this window (${claim.subject.basis})` };
+  }
+  return { passes: false, reason: claim.subject?.resolved ? `resolved only as ${claim.subject.basis}, outside this window` : "no gated source and no subject resolved in this window" };
 }

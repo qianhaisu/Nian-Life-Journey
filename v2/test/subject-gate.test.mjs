@@ -2,7 +2,7 @@
 // is drawn from something production actually published or nearly published.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { subjectGateFor, passesSubjectGate, isEmptyMessage, namesSubject } from "../lib/organizer/subject-gate.ts";
+import { subjectGateFor, passesSubjectGate, isEmptyMessage, namesSubject, subjectRelevanceMayProceed, claimPassesSubjectGate } from "../lib/organizer/subject-gate.ts";
 
 const NURSERY = "conversation:2109e1e89306b57b8334d349";
 const MAIN = "conversation:a673c0e0563be6ecf1867094";
@@ -116,4 +116,74 @@ test("a conversation superseded by a fuller re-export is excluded outright, even
   assert.equal(verdict.passes, false);
   assert.equal(verdict.kept.length, 0);
   assert.equal(verdict.rejected.length, 2);
+});
+
+// ---------------------------------------------------------------- the Editor's own verdict, 2026-09-11
+//
+// Reading the 24 stories the T7 run wrote: two were about the parents' savings account and a
+// rejected errand, and the Memory Editor had already called both `unrelated`. The driver stored that
+// verdict in its report and never consulted it.
+
+test("an editor verdict of unrelated stops the window before the writer", () => {
+  const decision = subjectRelevanceMayProceed("unrelated");
+  assert.equal(decision.proceed, false);
+  assert.match(decision.reason, /unrelated/);
+});
+
+test("a missing or unrecognised verdict is not a relevant one", () => {
+  for (const value of [undefined, null, "", 0, {}, "primary_child", "PRIMARY"]) {
+    assert.equal(subjectRelevanceMayProceed(value).proceed, false, `${JSON.stringify(value)} must fail closed`);
+  }
+});
+
+test("the three verdicts that may proceed are the declared relevant ones", () => {
+  for (const value of ["primary", "mentioned", "ambiguous"]) {
+    assert.equal(subjectRelevanceMayProceed(value).proceed, true, `${value} must still be allowed through`);
+  }
+});
+
+// ---------------------------------------------------------------- which claims reach the writer
+//
+// The message gate admits a message only when his name is in it. That decides whether to LOOK at a
+// window; it must not decide what the window says, or the archive keeps the adults' quoted remarks
+// and drops the sentences describing what the child did.
+
+const claim = (over = {}) => ({ claimId: "c1", sourceIds: ["s-ungated"], subject: { resolved: false }, ...over });
+
+test("a claim resting on a gated message passes, as it always did", () => {
+  const verdict = claimPassesSubjectGate(claim({ sourceIds: ["s-gated"] }), new Set(["s-gated"]));
+  assert.equal(verdict.passes, true);
+  assert.match(verdict.reason, /passed the gate/);
+});
+
+test("a claim whose subject was resolved inside this window passes without a gated source", () => {
+  // 2025-08-04: 「他5点钟完全清醒」「玩了差不多一个多小时」 — his own day, one message after the
+  // message that named him, dropped entirely because the name was not repeated.
+  for (const basis of ["explicit_in_span", "antecedent_in_window", "antecedent_in_window_zero_anaphora"]) {
+    const verdict = claimPassesSubjectGate(claim({ subject: { resolved: true, basis } }), new Set(["s-gated"]));
+    assert.equal(verdict.passes, true, `${basis} rests on an explicit naming in this episode`);
+    assert.match(verdict.reason, new RegExp(basis));
+  }
+});
+
+test("a bare pronoun nobody resolved is still refused", () => {
+  for (const basis of ["unresolved_no_reference", "unresolved_competing_person", "unresolved_no_antecedent"]) {
+    const verdict = claimPassesSubjectGate(claim({ subject: { resolved: false, basis } }), new Set(["s-gated"]));
+    assert.equal(verdict.passes, false, `${basis} must not reach the writer`);
+  }
+});
+
+test("being in the same conversation, or the same day, is never what makes a sentence his", () => {
+  // Both of these resolve a subject across the episode boundary. Enough to attribute a claim;
+  // deliberately not enough to carry it to the page on its own.
+  for (const basis of ["antecedent_in_neighbour", "conversation_continuity"]) {
+    const verdict = claimPassesSubjectGate(claim({ subject: { resolved: true, basis } }), new Set(["s-gated"]));
+    assert.equal(verdict.passes, false, `${basis} must not bypass the gate`);
+    assert.match(verdict.reason, /outside this window/);
+  }
+});
+
+test("a claim with no sources and no resolution is refused", () => {
+  assert.equal(claimPassesSubjectGate({ claimId: "c" }, new Set(["s-gated"])).passes, false);
+  assert.equal(claimPassesSubjectGate({ claimId: "c" }, []).passes, false);
 });

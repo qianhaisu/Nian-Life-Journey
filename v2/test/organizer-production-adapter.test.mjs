@@ -447,3 +447,56 @@ test("15b. the same evidence always yields the same artifact id; different evide
   assert.notEqual(artifactIdFor("event", "fp-a"), artifactIdFor("event", "fp-b"));
   assert.notEqual(artifactIdFor("event", "fp-a"), artifactIdFor("trace", "fp-a"), "an event and a trace are different artifacts");
 });
+
+// ---------------------------------------------------------------- widened tiers (2026-09-11)
+//
+// The binding fix means a WeChat photograph now reaches `strong_contextual` instead of a bogus
+// `confirmed` on its own placeholder message, so a run that wants photographs at all has to permit
+// that tier. These pin what must NOT change when it does.
+
+const WIDE_POLICY = { ...POLICY, allowedMediaTiers: ["confirmed", "strong_contextual"] };
+const widePlan = (input) => planArtifacts({ policy: WIDE_POLICY, now: NOW, newId, ...input });
+
+test("widened tiers: a Writer that names no photograph still adopts none", () => {
+  // The tier policy says which photographs MAY be kept. It never says one must be.
+  const items = [source({ text: "[media]", mediaIds: ["m-adj"], capturedAt: "2026-03-01T10:00:00.000Z" }), source({ text: "刚睡醒的样子", capturedAt: "2026-03-01T10:00:30.000Z" })];
+  const window = windowOf(items, photoIndex("m-adj"));
+  assert.equal(window.mediaBindings[0].tier, "strong_contextual", "offered at the widened tier");
+  const result = widePlan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-wide1", story: storyOf([]) });
+  assert.deepEqual(result.lifeEvent.event.mediaIds, []);
+  assert.equal(result.lifeEvent.event.heroMediaId, undefined, "no hero may appear because a tier was widened");
+  assert.deepEqual(result.lifeEvent.event.organizerRun.mediaBinding.adopted, []);
+});
+
+test("widened tiers: an adopted adjacent photograph records the message it was bound to, and why", () => {
+  const items = [
+    source({ id: "wechat-message:the-photo", text: "[media]", mediaIds: ["m-adj"], capturedAt: "2026-03-01T10:00:00.000Z" }),
+    source({ id: "wechat-message:the-words", text: "今天又收获金链子一枚", capturedAt: "2026-03-01T10:00:08.000Z" }),
+  ];
+  const window = windowOf(items, photoIndex("m-adj"));
+  const result = widePlan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-wide2", story: storyOf(["m-adj"]) });
+  const [adopted] = result.lifeEvent.event.organizerRun.mediaBinding.adopted;
+  assert.equal(adopted.mediaId, "m-adj");
+  assert.equal(adopted.tier, "strong_contextual");
+  assert.equal(adopted.boundSourceId, "wechat-message:the-words", "bound to the sentence, not to the placeholder");
+  assert.match(adopted.basis, /within 90s/, "the basis has to be readable, not just a number");
+  assert.ok(result.lifeEvent.event.sourceIds.includes(adopted.boundSourceId));
+});
+
+test("widened tiers: an unbound photograph is still refused, however near in time it sat", () => {
+  const items = [
+    source({ text: "[media]", mediaIds: ["m-far"], capturedAt: "2026-03-01T10:00:00.000Z" }),
+    source({ text: "晚饭吃什么", capturedAt: "2026-03-01T10:40:00.000Z" }),
+  ];
+  const window = windowOf(items, photoIndex("m-far"));
+  assert.equal(window.mediaBindings[0].tier, "unbound");
+  const result = widePlan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-wide3", story: storyOf(["m-far"]) });
+  assert.deepEqual(result.lifeEvent.event.mediaIds, [], "the Writer asked; the evidence refused");
+  assert.equal(result.lifeEvent.event.organizerRun.mediaBinding.refused.length, 1);
+});
+
+test("widened tiers: day_level and month_level remain unconfigurable", () => {
+  for (const tier of ["day_level", "month_level", "unbound"]) {
+    assert.throws(() => assertPolicy({ ...POLICY, allowedMediaTiers: ["confirmed", tier] }), AdapterContractError);
+  }
+});

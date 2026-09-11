@@ -131,3 +131,73 @@ test("only confirmed is narratable, and narratable implies attachable", () => {
     if (mayNarrateAsDepicting(tier)) assert.ok(mayAttachToMemory(tier), `${tier} narratable but not attachable`);
   }
 });
+
+// ---------------------------------------------------------------- the placeholder, 2026-09-11
+//
+// A WeChat photo is its own message whose body is the exporter's placeholder. Measured on the
+// 2025-07/08 windows the Organizer ran: 265 of 299 media-bearing messages read `[media]`, the other
+// 34 were video links. The binding rule asked only "is there text", so every one of them bound to
+// ITSELF at `confirmed` — the tier that licenses "this photo shows this moment" — pointing at a
+// message with nothing said in it, and the two adjacency rules below it never ran once on real data.
+
+test("a photograph whose whole body is the [media] placeholder does not bind to itself", () => {
+  const [binding] = bindMedia([item("\n[media]\n", { mediaIds: ["m1"] })]);
+  assert.notEqual(binding.rule, "same_message_mixed", "a placeholder is not the family saying something");
+  assert.equal(binding.tier, "unbound", "alone in the window there is nothing to bind it to");
+});
+
+test("the placeholder binds to the sentence its own sender wrote seconds later", () => {
+  // 2025-08-08, verbatim shape: the photo at 13:53:55, then 「今天又收获金链子一枚」 eight seconds later.
+  const items = [
+    item("[media]", { mediaIds: ["m1"], sentAt: T0 }),
+    item("今天又收获金链子一枚", { sentAt: at(T0, 8) }),
+  ];
+  const [binding] = bindMedia(items);
+  assert.equal(binding.rule, "same_sender_after_90s");
+  assert.equal(binding.tier, "strong_contextual", "near in time is a candidate, never a depiction claim");
+  assert.equal(binding.boundItemId, items[1].itemId, "bound to the words, not to the placeholder");
+  assert.equal(mayNarrateAsDepicting(binding.tier), false);
+  assert.ok(mayAttachToMemory(binding.tier));
+});
+
+test("a video's markdown link counts as a placeholder too", () => {
+  const items = [
+    item("[视频文件](media/videos/20250811_052958_3348.mp4)", { mediaIds: ["v1"], sentAt: T0 }),
+    item("睡眠信号来了", { sentAt: at(T0, 20) }),
+  ];
+  const [binding] = bindMedia(items);
+  assert.equal(binding.tier, "strong_contextual");
+  assert.equal(binding.boundItemId, items[1].itemId);
+});
+
+test("a burst of photographs never binds one placeholder to another", () => {
+  // Three photos in a row, then nothing said. Binding a picture to a picture would be a binding to
+  // nothing, and it would carry a basis sentence that cannot be read.
+  const items = [
+    item("[media]", { mediaIds: ["m1"], sentAt: T0 }),
+    item("[media]", { mediaIds: ["m2"], sentAt: at(T0, 1) }),
+    item("[media]", { mediaIds: ["m3"], sentAt: at(T0, 2) }),
+  ];
+  for (const binding of bindMedia(items)) {
+    assert.equal(binding.tier, "unbound", `${binding.mediaId} bound to a message that says nothing`);
+    assert.equal(binding.boundItemId, undefined);
+  }
+});
+
+test("a real mixed message still binds confirmed", () => {
+  // The change must not cost the strongest binding the archive has.
+  const [binding] = bindMedia([item("看亲宝宝里面\n[media]", { mediaIds: ["m1"] })]);
+  assert.equal(binding.rule, "same_message_mixed");
+  assert.equal(binding.tier, "confirmed");
+});
+
+test("a placeholder far from every sentence stays unbound — same day is not a binding", () => {
+  const items = [
+    item("他今天很开心", { sentAt: T0 }),
+    item("[media]", { mediaIds: ["m1"], sentAt: at(T0, 3600) }),
+    item("晚饭吃什么", { sentAt: at(T0, 7200) }),
+  ];
+  const [binding] = bindMedia(items);
+  assert.equal(binding.tier, "unbound", "an hour apart is the same day, not the same moment");
+  assert.equal(mayAttachToMemory(binding.tier), false);
+});

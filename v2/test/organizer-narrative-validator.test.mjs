@@ -481,3 +481,20 @@ test("v2.3: the prompt offers only quotes the validator will accept", async () =
   const r = validateNarrative({ pkg: p, output: out({ usedQuoteIds: ["quote-plan"] }) });
   assert.ok(codes(r).includes("quote_from_unassertable_material"));
 });
+
+test("家里 as a speaker is the same anonymous voice as 家人, and is refused", () => {
+  // 2026-09-11, from a real dry run. Once a claim no longer needed a message that names the child to
+  // reach the Writer, a private-chat line whose sender is not in family-registry reached it too, and
+  // the Writer answered the grandmother with 「家里回他今天早上吃了」.
+  for (const story of ["家里回他今天早上吃了。", "奶奶问饭量，家里又说他今天吃得少。"]) {
+    const r = validateNarrative({ pkg: pkg(), output: out({ story }) });
+    assert.ok(codes(r).includes("generic_family_collective"), `${story} -> ${JSON.stringify(r.issues)}`);
+  }
+});
+
+test("家里 meaning the house is not a speaker and stays allowed", () => {
+  for (const story of ["他在家里玩了一下午。", "家里的灯坏了，妈妈说明天换。"]) {
+    const r = validateNarrative({ pkg: pkg(), output: out({ story }) });
+    assert.ok(!codes(r).includes("generic_family_collective"), `${story} -> ${JSON.stringify(r.issues)}`);
+  }
+});

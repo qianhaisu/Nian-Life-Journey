@@ -81,7 +81,12 @@ const CLICHES = [
 // stand-in for that (a full parse-every-attribution-clause-and-resolve-against-the-registry checker
 // would be the complete version, not built here) — verb-gated on 有人/大家 so it doesn't fire on an
 // unrelated "有人" that isn't introducing a quote or judgment.
-const GENERIC_FAMILY_COLLECTIVE = /家人|家里人|一家人|长辈|亲戚|家属|家庭成员|有人(说|问|讲|提到|回|答|猜|觉得)|大家(说|问|讲|提到|都说|都觉得)/;
+// 家里 as a speaker joined this list on 2026-09-11, from a real refusal. Once claims stopped
+// needing a named message to reach the Writer, a private-chat line whose sender is not in
+// family-registry reached it too, and the Writer wrote 「家里回他今天早上吃了」 — the same
+// anonymous voice as 家人, one character shorter and straight past this pattern. Verb-gated like
+// 有人/大家 so it never fires on 家里 meaning the house (「家里的灯」, 「在家里玩」).
+const GENERIC_FAMILY_COLLECTIVE = /家人|家里人|一家人|长辈|亲戚|家属|家庭成员|有人(说|问|讲|提到|回|答|猜|觉得)|大家(说|问|讲|提到|都说|都觉得)|家里(又|也|还)?(说|问|讲|提到|回|答|猜|觉得)/;
 
 // The pipeline's own reasoning must never reach the family. Found in the first Writer v2 shadow:
 // asked to be careful about an unresolved subject, the model wrote the CAUTION into the story —

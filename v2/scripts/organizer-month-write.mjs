@@ -39,8 +39,9 @@
 // It was wrong twice over, and following it would have undone this script's own work.
 //
 // First, the premise stopped being true: this script does NOT leave media_ids empty. planArtifacts
-// writes the media the Writer actually named, at `confirmed` tier only — photo and text in the same
-// WeChat message. That is the strongest binding the archive has.
+// writes the media the Writer actually named, at the tiers this run permits — `confirmed` by
+// default (photo and text in the same WeChat message, the strongest binding the archive has), and
+// whatever ORGANIZER_V2_MEDIA_TIERS says when a run opts into more.
 //
 // Second, t18 selected by calendar day, not by this story's sources, and it updated every row with
 // this exact organizer_version unconditionally — so running it afterwards replaced each confirmed
@@ -90,7 +91,8 @@ const { resolveSpeaker } = await import("../lib/organizer/identity.ts");
 const { buildEvidencePackage, packageHasAssertableMaterial, usedSourceIdsFor } = await import("../lib/organizer/writer-v2.ts");
 const { WRITER_V2_SYSTEM_PROMPT, WRITER_V2_TOOL_NAME, WRITER_V2_TOOL_SCHEMA, WRITER_V2_PROMPT_VERSION, buildWriterV2Prompt } = await import("../lib/organizer/writer-v2-prompt.ts");
 const { NARRATIVE_VALIDATOR_VERSION, validateNarrative } = await import("../lib/organizer/narrative-validator.ts");
-const { subjectGateFor, passesSubjectGate, SUBJECT_NAMES } = await import("../lib/organizer/subject-gate.ts");
+const { subjectGateFor, passesSubjectGate, subjectRelevanceMayProceed, claimPassesSubjectGate, SUBJECT_NAMES } = await import("../lib/organizer/subject-gate.ts");
+const { STORY_MEDIA_TIERS } = await import("../lib/organizer/writer-v2.ts");
 const { planArtifacts, applyPlan } = await import("../lib/organizer/production-adapter.ts");
 const { persistDailyTrace, persistOrganizerRun, findOrganizerRun, persistOrganization, markSourcesOrganized, persistQualityReview } = await import("../lib/db/repository.ts");
 const { gradeMonthEvents } = await import("./t20c-grade-events.mjs");
@@ -133,9 +135,27 @@ const inDayRange = (lifeDate) => {
   if (TO && lifeDate > TO) return false;
   return true;
 };
+// --fingerprints=<32hex>[,<32hex>…] narrows a run to named windows, the same way --day narrows it to
+// one day and for the same reason: a day holds several windows, so re-running one window to check a
+// change otherwise re-spends a model call on every other window that shares its date. Added
+// 2026-09-11 to verify the subject-gate and media-binding fixes on eight chosen windows inside a
+// 30-request ceiling. Filters BEFORE any editor call, like every other filter here.
+const FINGERPRINTS = (argOf("fingerprints", "") || "").split(",").map((f) => f.trim()).filter(Boolean);
+if (FINGERPRINTS.some((f) => !/^[0-9a-f]{32}$/.test(f))) { console.error("--fingerprints takes comma-separated 32-character hex window fingerprints"); process.exit(1); }
 const PROFILE_ID = "profile-zhangnian";
 const SUBJECT = { primaryName: "张年", aliases: SUBJECT_NAMES.filter((n) => n !== "张年") };
 const OPTS = { registry: FAMILY_REGISTRY, singleChildHousehold: true };
+// Zero-anaphora subject resolution, DECOUPLED from judgment-v7-coupled-za-promotion (2026-09-11).
+// That policy bundles it with a changed promotion rule and is frozen for that reason; this pipeline
+// does not consult promotion routing at all — the subject gate is its publication gate — so the
+// grounding option is taken on its own and nothing about promotion moves. What it buys: a claim
+// whose span drops the subject entirely ("放到床上就睡着了") takes the same bounded antecedent walk a
+// claim saying 他 already takes, behind the same competing-person check, and never past the window.
+const GROUNDING_OPTS = { ...OPTS, zeroAnaphoraAntecedent: true };
+// Media tiers this RUN permits, read from the environment instead of hardcoded, so the tier policy
+// and the binding code can be changed together in one process without touching production config.
+// Default stays `confirmed`: a deployment opts into strong_contextual deliberately or not at all.
+const MEDIA_TIERS = (process.env.ORGANIZER_V2_MEDIA_TIERS ?? "confirmed").split(",").map((t) => t.trim()).filter(Boolean);
 
 // T7's own policy identity — deliberately NOT "judgment-v6-frozen": this pipeline bypasses V6
 // worthiness entirely (the subject gate is the publication gate here), so the record must say what
@@ -224,7 +244,7 @@ for (const [conversation, sources] of byConversation) {
   }
 }
 selected.sort((a, b) => a.lifeDate.localeCompare(b.lifeDate));
-const inRange = selected.filter((s) => inDayRange(s.lifeDate));
+const inRange = selected.filter((s) => inDayRange(s.lifeDate) && (FINGERPRINTS.length === 0 || FINGERPRINTS.includes(s.fp)));
 const days = [...new Set(inRange.map((s) => s.lifeDate))].slice(0, MAX_DAYS);
 const work = inRange.filter((s) => days.includes(s.lifeDate));
 console.log(`Gate: ${gateStats.windowsInMonth} window(s) in ${MONTH}, ${gateStats.windowsPassed} passed, over ${days.length} day(s)${DAY || FROM || TO ? ` (day filter: ${DAY ?? `${FROM ?? "start"}..${TO ?? "end"}`})` : ""}. Messages kept ${gateStats.messagesKept}, rejected ${gateStats.messagesRejected}.`);
@@ -232,6 +252,7 @@ console.log(`Gate: ${gateStats.windowsInMonth} window(s) in ${MONTH}, ${gateStat
 // ---------------------------------------------------------------- the writer (T7 step 2)
 const editor = createDeepSeekMemoryEditor(process.env, SUBJECT, { variant: "v4", ...OPTS });
 console.log(`Editor ${editor.name} ${editor.model} ${editor.promptVersion} · Writer ${WRITER_V2_PROMPT_VERSION} · Validator ${NARRATIVE_VALIDATOR_VERSION}`);
+console.log(`Grounding zeroAnaphoraAntecedent=${GROUNDING_OPTS.zeroAnaphoraAntecedent === true} · media tiers [${MEDIA_TIERS.join(",")}] (ORGANIZER_V2_MEDIA_TIERS${process.env.ORGANIZER_V2_MEDIA_TIERS ? "" : " unset, default"})`);
 
 async function callWriter(pkg) {
   const body = JSON.stringify({
@@ -330,7 +351,7 @@ async function processItem(item) {
     const raw = (await editor.organize(item.w)).verdict;
     verdict = validateMemoryEditorVerdict(raw, item.w);
     const axes = editor.axesByWindowId.get(item.w.windowId);
-    grounding = groundClaims(item.w, { ...verdict, worthinessAxis: axes?.worthinessAxis }, SUBJECT, OPTS);
+    grounding = groundClaims(item.w, { ...verdict, worthinessAxis: axes?.worthinessAxis }, SUBJECT, GROUNDING_OPTS);
   } catch (error) {
     entry.skipped = `editor: ${String(error?.message ?? error)}`;
     console.log(`  ${item.lifeDate} EDITOR ERROR ${entry.skipped}`);
@@ -338,10 +359,23 @@ async function processItem(item) {
   }
   entry.subjectRelevance = verdict.subjectRelevance;
   entry.groundedClaims = grounding.claims.length;
+  // The Editor's own Gate A verdict, as a stop condition rather than a field in a report. Fails
+  // closed on a missing or unrecognised verdict — see subjectRelevanceMayProceed.
+  const relevance = subjectRelevanceMayProceed(verdict.subjectRelevance);
+  entry.subjectRelevanceDecision = relevance;
+  // Kept even when the window stops here, so the refusal can be re-read against its own evidence.
+  entry.editorVerdict = verdict;
+  if (!relevance.proceed) {
+    entry.skipped = `editor gate: ${relevance.reason}`;
+    console.log(`  ${item.lifeDate} — STOPPED before the writer (${relevance.reason})`);
+    return entry;
+  }
 
   const kept = new Set(item.keptSourceIds);
-  const groundedInKept = grounding.claims.filter((claim) => (claim.sourceIds ?? []).some((id) => kept.has(id)));
+  const claimGate = grounding.claims.map((claim) => ({ claim, verdict: claimPassesSubjectGate(claim, kept) }));
+  const groundedInKept = claimGate.filter((c) => c.verdict.passes).map((c) => c.claim);
   entry.claimsFromGatedSources = groundedInKept.length;
+  entry.claimGate = claimGate.map((c) => ({ claimId: c.claim.claimId, passes: c.verdict.passes, reason: c.verdict.reason, basis: c.claim.subject?.basis, resolved: Boolean(c.claim.subject?.resolved) }));
   if (groundedInKept.length === 0) { entry.skipped = "no grounded claim traces back to a message that passed the gate"; console.log(`  ${item.lifeDate} — no claim from gated sources`); return entry; }
   grounding = { ...grounding, claims: groundedInKept };
 
@@ -352,6 +386,18 @@ async function processItem(item) {
     quotableLines: (verdict.quotableLines ?? []).map((q) => ({ text: q.text, evidenceRef: q.evidenceRef, speakerRole: q.speakerRole })),
     longitudinal: [], lifeDate: item.lifeDate,
   });
+  // Private run evidence: every photograph this window bound, HOW it was bound and WHICH message it
+  // was bound to, so an adoption (or a refusal) can be checked offline without re-deriving the
+  // window. `offeredToWriter` is what the prompt actually listed; `attachableUnderPolicy` is what
+  // this run's tier configuration would allow if the Writer named it. The two are separate on
+  // purpose — being shown a photograph is not being allowed to keep it.
+  entry.mediaCandidates = item.w.mediaBindings.map((b) => ({
+    mediaId: b.mediaId, rule: b.rule, tier: b.tier, confidence: b.confidence, basis: b.basis,
+    boundItemId: b.boundItemId,
+    boundSourceId: b.boundItemId ? item.w.items.find((i) => i.itemId === b.boundItemId)?.sourceId : undefined,
+    offeredToWriter: STORY_MEDIA_TIERS.has(b.tier),
+    attachableUnderPolicy: MEDIA_TIERS.includes(b.tier),
+  }));
   if (!packageHasAssertableMaterial(pkg)) { entry.skipped = "nothing assertable after grounding"; console.log(`  ${item.lifeDate} — nothing assertable`); return entry; }
 
   if (!reserveCall()) { entry.skipped = "max-calls reached before this window's writer call"; return entry; }
@@ -370,6 +416,16 @@ async function processItem(item) {
     return entry;
   }
   entry.proposed = { title: writer.output.title, story, usedMediaIds: writer.output.usedMediaIds ?? [], claims: writer.output.narrativeClaims ?? [] };
+  // What the Writer asked to keep, and whether this run's tier policy would let it — the same test
+  // planMedia applies at persistence, recorded here so a dry run carries the identical evidence.
+  entry.mediaAdoption = (writer.output.usedMediaIds ?? []).map((mediaId) => {
+    const candidate = entry.mediaCandidates?.find((c) => c.mediaId === mediaId);
+    if (!candidate) return { mediaId, linked: false, reason: "not present in this window's evidence" };
+    return { mediaId, tier: candidate.tier, basis: candidate.basis, boundSourceId: candidate.boundSourceId, linked: candidate.attachableUnderPolicy, reason: candidate.attachableUnderPolicy ? `tier ${candidate.tier} permitted` : `tier ${candidate.tier} is not attachable under this policy` };
+  });
+  if (entry.mediaCandidates?.some((c) => c.offeredToWriter) && (writer.output.usedMediaIds ?? []).length === 0) {
+    entry.mediaNote = "photographs were offered and the Writer named none; this page would be text-only";
+  }
   console.log(`  ${item.lifeDate} OK  ${story.slice(0, 60)}…`);
 
   if (!COMMIT) return entry;
@@ -409,7 +465,7 @@ async function processItem(item) {
     policyVersion: T7_POLICY_ID,
     provider: editor.name,
     model: editor.model,
-    allowedMediaTiers: ["confirmed"],
+    allowedMediaTiers: MEDIA_TIERS,
   };
   const writerStory = { title: writer.output.title, story, usedMediaIds: writer.output.usedMediaIds ?? [] };
   let applied;
