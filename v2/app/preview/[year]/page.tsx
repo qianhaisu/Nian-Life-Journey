@@ -6,6 +6,7 @@ import { Photo } from "@/components/photo";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
+import { previewReadingEnabled } from "@/lib/preview-access";
 import { buildPreviewYear, confirmedPhotoIdsByEvent, monthlyReviewDraftsFrom, previewEventIdsFrom, type PreviewStory } from "@/lib/preview-reading";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import type { MediaRef } from "@/lib/memory-chapters";
@@ -45,7 +46,10 @@ function PreviewStoryBlock({ story, year, monthAgeLabel }: { story: PreviewStory
 // stories a reviewer marked readable in private (lib/preview-reading.ts). Nothing here publishes
 // anything, and nothing here relaxes what the family's own pages are allowed to show.
 export default async function PreviewYearPage({ params }: { params: Promise<{ year: string }> }) {
+  // renderOnDemand() FIRST — see the note in app/preview/page.tsx. Then the gate, still ahead of
+  // the archive read: a request to a surface this deployment does not serve costs it no database read.
   await renderOnDemand();
+  if (!previewReadingEnabled()) notFound();
   const { year } = await params;
   if (!/^\d{4}$/.test(year)) notFound();
   const archive = await loadFamilyArchiveOnDemand();

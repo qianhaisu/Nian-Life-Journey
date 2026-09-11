@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
+import { previewReadingEnabled } from "@/lib/preview-access";
 import { monthlyReviewDraftsFrom, previewEventIdsFrom } from "@/lib/preview-reading";
 import { renderOnDemand } from "@/lib/render-on-demand";
 
@@ -13,7 +15,14 @@ export const metadata: Metadata = { title: "试读", robots: { index: false, fol
 const YEARS = ["2026", "2025"] as const;
 
 export default async function PreviewIndexPage() {
+  // renderOnDemand() FIRST, then the gate. Reversing these two lines silently breaks the switch:
+  // without connection() the build prerenders this route, the gate runs at build time where the
+  // flag is unset, and Next freezes a 404 into static HTML that no runtime environment variable can
+  // reopen. Caught in the build output — `/preview` turned from ƒ into ○ — not by any test.
   await renderOnDemand();
+  // Closed unless this deployment opened it. 404, not a redirect or an explanation: a surface that
+  // may hold unreviewed drafts should not announce that it exists. See lib/preview-access.ts.
+  if (!previewReadingEnabled()) notFound();
   const archive = await loadFamilyArchiveOnDemand();
   const reviews = archive.store.qualityReviews ?? [];
   const previewIds = previewEventIdsFrom(reviews);

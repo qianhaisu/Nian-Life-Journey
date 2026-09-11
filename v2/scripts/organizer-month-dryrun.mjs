@@ -45,6 +45,17 @@ const MONTH = argOf("month", null);
 const OUT = argOf("out", null);
 const MAX_CALLS = Number(argOf("max-calls", "60"));
 const MAX_DAYS = Number(argOf("max-days", "31"));
+// An explicit allow-list of life dates inside --month. Without it the run covers the whole month,
+// which for a month that is partly written already means paying for days nobody asked about and
+// muddying any comparison against what a person wrote. With it, the set of windows this run may
+// touch is stated up front and enforced here rather than trusted to a reviewer reading the output.
+// Example: --days=2026-09-04,2026-09-05,2026-09-06,2026-09-07,2026-09-08,2026-09-09,2026-09-10
+const DAYS_ARG = argOf("days", null);
+const DAY_ALLOW = DAYS_ARG ? DAYS_ARG.split(",").map((d) => d.trim()).filter(Boolean) : null;
+if (DAY_ALLOW) {
+  const bad = DAY_ALLOW.filter((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d) || !d.startsWith(MONTH ?? ""));
+  if (bad.length) { console.error(`--days must be YYYY-MM-DD inside --month; bad: ${bad.join(",")}`); process.exit(1); }
+}
 const PROFILE_ID = "profile-zhangnian";
 const SUBJECT = { primaryName: "张年", aliases: SUBJECT_NAMES.filter((n) => n !== "张年") };
 const OPTS = { registry: FAMILY_REGISTRY, singleChildHousehold: true };
@@ -120,6 +131,7 @@ for (const [conversation, sources] of byConversation) {
     gateStats.windowsBuilt += 1;
     const lifeDate = lifeDateOf(w);
     if (!lifeDate?.startsWith(MONTH)) continue;
+    if (DAY_ALLOW && !DAY_ALLOW.includes(lifeDate)) continue;
     gateStats.windowsInMonth += 1;
     stat.windows += 1;
     const verdict = passesSubjectGate(w, gate);
@@ -136,7 +148,9 @@ for (const [conversation, sources] of byConversation) {
 selected.sort((a, b) => a.lifeDate.localeCompare(b.lifeDate));
 const days = [...new Set(selected.map((s) => s.lifeDate))].slice(0, MAX_DAYS);
 const work = selected.filter((s) => days.includes(s.lifeDate));
-console.log(`Gate: ${gateStats.windowsInMonth} window(s) in ${MONTH}, ${gateStats.windowsPassed} passed, over ${days.length} day(s). Messages kept ${gateStats.messagesKept}, rejected ${gateStats.messagesRejected}.`);
+console.log(`Gate: ${gateStats.windowsInMonth} window(s) in ${MONTH}${DAY_ALLOW ? ` limited to ${DAY_ALLOW.length} named day(s)` : ""}, ${gateStats.windowsPassed} passed, over ${days.length} day(s). Messages kept ${gateStats.messagesKept}, rejected ${gateStats.messagesRejected}.`);
+// The ceiling, printed before a single call is made, so an operator can stop here if it is wrong.
+console.log(`Ceiling: at most ${MAX_CALLS} model call(s) (--max-calls); this run has ${work.length} window(s) queued, each costing up to 2 (editor, then writer).`);
 
 // ---------------------------------------------------------------- the writer (T7 step 2)
 const editor = createDeepSeekMemoryEditor(process.env, SUBJECT, { variant: "v4", ...OPTS });
