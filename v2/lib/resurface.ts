@@ -1,12 +1,20 @@
 // 原则六 · Bring the Past Back — 让过去主动回来.
 //
-// The first version of this is deliberately one small module showing one thing at a time, and it is
-// built on the only relation this archive can currently state without guessing: the calendar.
-// 「去年的今天」 means a published story whose day is exactly one year before today, and nothing
-// else; when there is no such day, the relation the archive can still state honestly is the month —
-// 「去年的 9 月」 — and it is written as the month, never as a day. A year-old month printed as "一年
-// 前的今天" would be the module inventing a relation it does not have, which is the failure 原则六
-// names by name (随机轮播 / 无条件占位).
+// One small module, one relation at a time, and every relation is one the archive can show its
+// working for. There are two kinds, and the stronger one is preferred:
+//
+// 1. A GROUP — the same change in him, read at its different stages: 「同一种成长变化的前后」 and
+//    「第一次 vs 现在」 from 原则六's own list. 问他鼻子在哪里他去摸你的鼻子 (10 个月) → 会说 ball
+//    (1 岁 7 个月) → 老师说他开始要说话了 (1 岁 8 个月) is a thing that happened to a person over
+//    nine months, and reading it in one place is the whole point of keeping an archive. Which
+//    stories belong to one group is NOT computed here and must never be guessed from titles or
+//    tags: somebody read them and recorded the grouping in the review ledger (echoGroupsFrom).
+//
+// 2. THE CALENDAR — 「去年的今天」 means a published story whose day is exactly one year before
+//    today, and nothing else; when there is no such day, the relation still honestly available is
+//    the month, 「去年的 9 月」, and it is written as the month, never as a day. A year-old month
+//    printed as "一年前的今天" would be the module inventing a relation it does not have, which is
+//    the failure 原则六 names by name (随机轮播 / 无条件占位).
 //
 // What this refuses to do:
 //   - reach for a picture. It picks a STORY; the story's own lead photograph travels with it if it
@@ -23,13 +31,49 @@
 import type { EditorialMemory, YearChapter } from "@/lib/memory-chapters";
 import type { MemoryWeight } from "@/lib/types";
 
-export type Resurfaced = {
-  // The relation, in the words the page prints. Always a真实 relation, never a guess.
-  relation: string;
-  // "day": exactly one year ago today. "month": the same month a year ago, some other day.
-  kind: "day" | "month";
-  memory: EditorialMemory;
-};
+// `relation` is the line the page prints, and in every case it is a relation somebody can check:
+// a date, a month, or the name a reviewer gave a group of stories about one change.
+export type Resurfaced =
+  // "day": exactly one year ago today. "month": that month a year ago, some other day.
+  | { kind: "day" | "month"; relation: string; memory: EditorialMemory }
+  // "echo": the same change read at its stages, oldest first.
+  | { kind: "echo"; relation: string; stages: EditorialMemory[] };
+
+/** The review-ledger rows that record "these stories are stages of one change". */
+export const ECHO_GROUP_KIND = "echo_group";
+export const ECHO_GROUP_PROVIDER = "nianlife-preview";
+export const ECHO_GROUP_PROMPT_VERSION = "echo-group-v1";
+// A group reads as a group, not as a list: two stages are a before and an after, and beyond four
+// the module stops being the small thing 原则六 asks for.
+export const ECHO_STAGES_MIN = 2;
+export const ECHO_STAGES_MAX = 4;
+
+export type EchoGroup = { key: string; label: string; eventIds: string[] };
+
+/**
+ * Reads the groupings out of the review ledger. One row per (group, story):
+ * `target_kind = "echo_group"`, `target_id = "<groupKey>|<eventId>"`, and `reason_codes[0]` is the
+ * name the page prints for the group. Gated on target_kind + provider + prompt_version, not on
+ * `decision` — assembleStore() rewrites any decision value outside its own union, so that column
+ * cannot carry meaning here (lib/preview-reading.ts documents the same hazard).
+ */
+export function echoGroupsFrom(
+  reviews: ReadonlyArray<{ targetKind?: string | null; targetId?: string | null; provider?: string | null; promptVersion?: string | null; reasonCodes?: string[] | null }>,
+): EchoGroup[] {
+  const byKey = new Map<string, EchoGroup>();
+  for (const review of reviews) {
+    if (review.targetKind !== ECHO_GROUP_KIND) continue;
+    if (review.provider !== ECHO_GROUP_PROVIDER || review.promptVersion !== ECHO_GROUP_PROMPT_VERSION) continue;
+    const parts = (review.targetId ?? "").split("|");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
+    const label = (review.reasonCodes ?? []).map((line) => line.trim()).find(Boolean);
+    if (!label) continue;
+    const existing = byKey.get(parts[0]);
+    if (existing) existing.eventIds.push(parts[1]);
+    else byKey.set(parts[0], { key: parts[0], label, eventIds: [parts[1]] });
+  }
+  return [...byKey.values()];
+}
 
 const WEIGHT_RANK: Record<MemoryWeight, number> = { chapter: 0, highlight: 1, memory: 2, trace: 3 };
 
@@ -49,11 +93,40 @@ function published(chapters: YearChapter[]): EditorialMemory[] {
 }
 
 /**
- * One story the archive can honestly say the reader is being reminded of, or nothing.
- * `excludeIds` are the stories already on the page — the front page's own cover, so that "忽然想起"
- * never shows the reader what they are already looking at.
+ * The strongest group the archive can read today, or nothing. A group needs at least two stages the
+ * family can actually open — a draft is not a stage on the front page — and among the groups that
+ * qualify the one whose latest stage is most recent wins, because that is the change he is in the
+ * middle of. Deterministic: refreshing the page does not rotate through them.
  */
-export function resurface(chapters: YearChapter[], today: string, excludeIds: ReadonlySet<string> = new Set()): Resurfaced | undefined {
+export function selectEchoGroup(groups: EchoGroup[], chapters: YearChapter[], today: string, excludeIds: ReadonlySet<string> = new Set()): Resurfaced | undefined {
+  const byId = new Map(published(chapters).map((memory) => [memory.id, memory]));
+  const readable = groups
+    .map((group) => ({
+      label: group.label,
+      // Oldest first: a change is read in the order it happened, and the ages beside the dates are
+      // what carry the distance between the stages.
+      stages: [...new Set(group.eventIds)]
+        .map((id) => byId.get(id))
+        .filter((memory): memory is EditorialMemory => Boolean(memory) && !excludeIds.has(memory!.id) && memory!.signature.day <= today)
+        .sort((a, b) => a.signature.day.localeCompare(b.signature.day) || a.id.localeCompare(b.id))
+        .slice(0, ECHO_STAGES_MAX),
+    }))
+    .filter((group) => group.stages.length >= ECHO_STAGES_MIN);
+  if (readable.length === 0) return undefined;
+  const newest = (group: { stages: EditorialMemory[] }) => group.stages[group.stages.length - 1].signature.day;
+  const best = [...readable].sort((a, b) => newest(b).localeCompare(newest(a)) || a.label.localeCompare(b.label))[0];
+  return { kind: "echo", relation: best.label, stages: best.stages };
+}
+
+/**
+ * One thing the archive can honestly say the reader is being reminded of, or nothing.
+ * `excludeIds` are the stories already on the page — the front page's own cover, so that "忽然想起"
+ * never shows the reader what they are already looking at. `groups` is optional: with none recorded,
+ * this falls back to the calendar, which is what the front page showed before groups existed.
+ */
+export function resurface(chapters: YearChapter[], today: string, excludeIds: ReadonlySet<string> = new Set(), groups: EchoGroup[] = []): Resurfaced | undefined {
+  const echo = selectEchoGroup(groups, chapters, today, excludeIds);
+  if (echo) return echo;
   const anniversary = sameDayLastYear(today);
   const lastYearMonth = anniversary.slice(0, 7);
   const candidates = published(chapters).filter((memory) => !excludeIds.has(memory.id) && memory.signature.day <= today);

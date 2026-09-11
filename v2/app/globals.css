@@ -248,6 +248,19 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-resurface { padding: clamp(48px, 7vw, 80px) 0 clamp(32px, 5vw, 56px); }
 .resurface-relation { margin: 10px 0 18px; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--color-secondary); }
 .home-resurface .memory { margin-top: 0; }
+/* A group's stages: the change read in the order it happened. The date and the age sit together on
+   the left so the distance between two stages is legible at a glance, and each line is its own tap
+   target back to that story. */
+.echo-stages { margin: 0; padding: 0; list-style: none; counter-reset: none; }
+.echo-stages a { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px 14px; min-height: 48px; padding: 10px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
+.echo-stages a:hover { color: var(--color-accent); }
+.echo-stages time { color: var(--color-secondary); font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.echo-age { color: var(--color-muted); font-size: .78rem; white-space: nowrap; }
+.echo-title { grid-column: 1 / -1; font-size: 1.15rem; }
+@media (min-width: 700px) {
+  .echo-stages a { grid-template-columns: 9em 7em 1fr; }
+  .echo-title { grid-column: auto; }
+}
 .home-same-day-mark { margin: 28px 0 4px; }
 .home-same-day .memory-line a { grid-template-columns: minmax(0, 1fr); }
 .home-lead .memory-lines { margin: 0 0 18px; }

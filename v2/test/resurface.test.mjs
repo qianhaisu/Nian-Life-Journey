@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildChapters } from "../lib/memory-chapters.ts";
-import { resurface, sameDayLastYear } from "../lib/resurface.ts";
+import { echoGroupsFrom, resurface, sameDayLastYear } from "../lib/resurface.ts";
 
 const BIRTH = "2025-01-03";
 const TODAY = "2026-09-11";
@@ -61,4 +61,49 @@ test("a milestone surfaces before an ordinary day, and a date after today never 
 test("同月同日 crosses the year boundary as plain string arithmetic", () => {
   assert.equal(sameDayLastYear("2026-01-01"), "2025-01-01");
   assert.equal(sameDayLastYear("2026-02-29"), "2025-02-29", "a date the previous year never had simply matches nothing");
+});
+
+// A GROUP — 同一种成长变化的前后 / 第一次 vs 现在 (原则六's own list). Which stories belong to one
+// group is never computed from titles or tags: somebody read them and recorded it in the ledger.
+const groupRow = (key, eventId, label) => ({
+  targetKind: "echo_group", targetId: `${key}|${eventId}`, provider: "nianlife-preview",
+  promptVersion: "echo-group-v1", reasonCodes: [label], decision: "needs_human_review",
+});
+
+test("a recorded group is read as the change it is, oldest stage first, and beats the calendar", () => {
+  const chapters = chaptersOf([
+    event("late", "2026-09-02 00:00:00+00"),
+    event("early", "2025-11-13 00:00:00+00"),
+    event("middle", "2026-08-28 00:00:00+00"),
+    event("calendar-hit", "2025-09-12 00:00:00+00"),
+  ]);
+  const groups = echoGroupsFrom([groupRow("speech", "late", "开口说话"), groupRow("speech", "early", "开口说话"), groupRow("speech", "middle", "开口说话")]);
+  const hit = resurface(chapters, TODAY, new Set(), groups);
+  assert.equal(hit.kind, "echo");
+  assert.equal(hit.relation, "开口说话");
+  assert.deepEqual(hit.stages.map((s) => s.id), ["early", "middle", "late"]);
+  assert.ok(hit.stages.every((s) => s.signature.ageLabel), "两个时钟: every stage carries its age, which is what makes the distance readable");
+});
+
+test("a group whose stages are not published cannot surface: fewer than two readable, no group", () => {
+  const chapters = chaptersOf([event("only-published", "2025-11-13 00:00:00+00")]);
+  const groups = echoGroupsFrom([
+    groupRow("sleep", "only-published", "自己睡"),
+    groupRow("sleep", "still-a-draft", "自己睡"),
+  ]);
+  assert.equal(resurface(chapters, TODAY, new Set(), groups), undefined, "a draft is not a stage on the family's page, and one stage is not a relation");
+});
+
+test("malformed or foreign ledger rows never become a group", () => {
+  assert.deepEqual(echoGroupsFrom([
+    { targetKind: "echo_group", targetId: "no-pipe", provider: "nianlife-preview", promptVersion: "echo-group-v1", reasonCodes: ["x"] },
+    { targetKind: "echo_group", targetId: "k|e", provider: "someone-else", promptVersion: "echo-group-v1", reasonCodes: ["x"] },
+    { targetKind: "echo_group", targetId: "k|e", provider: "nianlife-preview", promptVersion: "echo-group-v1", reasonCodes: [] },
+    { targetKind: "media_binding", targetId: "k|e", provider: "nianlife-preview", promptVersion: "echo-group-v1", reasonCodes: ["x"] },
+  ]), []);
+});
+
+test("with no groups recorded the front page falls back to the calendar, exactly as before", () => {
+  const chapters = chaptersOf([event("mid-month", "2025-09-04 00:00:00+00")]);
+  assert.equal(resurface(chapters, TODAY, new Set(), []).relation, "去年的 9 月");
 });

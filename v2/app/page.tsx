@@ -9,7 +9,7 @@ import { buildHomeView } from "@/lib/home-view";
 import { LAST_SHOWN_DAY_COOKIE, latestStory, pickRecentStory, recentStoryDays, RECENT_WINDOW_DAYS } from "@/lib/home-recent-pick";
 import { RememberShownDay } from "@/components/remember-shown-day";
 import { renderOnDemand } from "@/lib/render-on-demand";
-import { resurface } from "@/lib/resurface";
+import { echoGroupsFrom, resurface } from "@/lib/resurface";
 import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
@@ -48,7 +48,12 @@ export default async function HomePage() {
   const showThisMonth = thisMonth && pick?.month.month !== thisMonth.month;
   // 忽然想起 (原则六). One relation, one story, drawn from published stories only — and absent from
   // the page entirely when the calendar holds no relation worth stating (lib/resurface.ts).
-  const remembered = resurface(archive.chapters, archive.time.today, new Set([pick?.memory.id, fallback?.memory.id].filter((id): id is string => Boolean(id))));
+  const remembered = resurface(
+    archive.chapters,
+    archive.time.today,
+    new Set([pick?.memory.id, fallback?.memory.id].filter((id): id is string => Boolean(id))),
+    echoGroupsFrom(archive.store.qualityReviews ?? []),
+  );
   // B-14: 3 recent published memories with a lead photograph, excluding the cover.
   //
   // 2026-09-11: the extra `media-quark-sha-` test that used to sit here was both redundant and
@@ -61,7 +66,8 @@ export default async function HomePage() {
   // to belong to a story, the same picture would otherwise be drawn twice on one page — once as
   // something the archive remembered, once as a recent tile — and a picture shown twice reads as
   // two occasions rather than one.
-  const alreadyShownPhotoIds = new Set([pick?.memory.lead?.id, remembered?.memory.lead?.id].filter((id): id is string => Boolean(id)));
+  const rememberedPhotoIds = remembered ? (remembered.kind === "echo" ? remembered.stages.map((stage) => stage.lead?.id) : [remembered.memory.lead?.id]) : [];
+  const alreadyShownPhotoIds = new Set([pick?.memory.lead?.id, ...rememberedPhotoIds].filter((id): id is string => Boolean(id)));
   const recentCluster: { memory: EditorialMemoryType; photo: MediaRef }[] = [];
   outer: for (const year of archive.chapters) {
     for (const month of year.months) {
@@ -115,16 +121,6 @@ export default async function HomePage() {
       <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
     </section> : null}
 
-    {/* 忽然想起 (原则六, 2026-09-11). Renders only when lib/resurface.ts found a relation the
-        calendar really holds — a story from exactly a year ago today, or from that month a year
-        ago, named as the month it is. No hit, no section: there is no placeholder here, no
-        「暂无」, and no random old picture standing in for a relation. */}
-    {remembered ? <section className="home-resurface reading-wrap" aria-labelledby="resurface-title">
-      <h2 id="resurface-title" className="section-mark">忽然想起</h2>
-      <p className="resurface-relation serif">{remembered.relation}</p>
-      <EditorialMemory memory={remembered.memory} />
-    </section> : null}
-
     {/* B-14: 最近的一组 — 1 large + 2 small trusted photos, no text, no count */}
     {recentCluster.length >= 2 ? <section className="home-cluster reading-wrap" aria-label="最近的照片">
       <div className="home-cluster-grid">
@@ -139,6 +135,35 @@ export default async function HomePage() {
           ))}
         </div>
       </div>
+    </section> : null}
+
+    {/* 忽然想起 (原则六, 2026-09-11). Renders only when lib/resurface.ts found a relation the
+        calendar really holds — a story from exactly a year ago today, or from that month a year
+        ago, named as the month it is. No hit, no section: there is no placeholder here, no
+        「暂无」, and no random old picture standing in for a relation.
+
+        It sits BELOW 最近的一组 and not above it. Set above, the photo strip landed directly under
+        this story's last line with nothing between them, and a pair of pictures under a story reads
+        as that story's pictures — which they are not: they are recent photographs, and the story
+        this module shows is a year old and usually has no picture of its own. That misreading is
+        the exact one lib/media/story-binding.ts exists to stop, and layout can commit it just as
+        easily as a data binding can. */}
+    {remembered ? <section className="home-resurface reading-wrap" aria-labelledby="resurface-title">
+      <h2 id="resurface-title" className="section-mark">忽然想起</h2>
+      <p className="resurface-relation serif">{remembered.relation}</p>
+      {/* A group is read as the change it is: its stages in the order they happened, each with both
+          clocks, so the distance between them — ten months, or two years — is on the page as itself
+          rather than as a sentence about it (原则二). A single-story relation keeps the ordinary
+          chapter entry it always had. */}
+      {remembered.kind === "echo"
+        ? <ol className="echo-stages">{remembered.stages.map((stage) => <li key={stage.id}>
+          <Link href={`/events/${stage.id}`}>
+            <time dateTime={stage.signature.day}>{stage.signature.dateLabel}</time>
+            {stage.signature.ageLabel ? <span className="echo-age">当时 {stage.signature.ageLabel}</span> : null}
+            <span className="serif echo-title">{stage.title}</span>
+          </Link>
+        </li>)}</ol>
+        : <EditorialMemory memory={remembered.memory} />}
     </section> : null}
 
     {/* 本月入口：整块可点的圆角卡片 */}
