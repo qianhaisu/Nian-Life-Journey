@@ -172,8 +172,11 @@ export function buildWriterV2Prompt(pkg: VerifiedMemoryEvidencePackage): string 
   // belongs to while being told nobody has seen it, and the only consistent answer is "none" — which
   // is what it answered, for every photograph, on the first run of this prompt.
   const boundText = (m: VerifiedMemoryEvidencePackage["media"][number]) => (m.boundText ?? "").replace(/\s+/g, " ").trim().slice(0, 40) || "（这条消息没有文字）";
-  const confirmedMedia = pkg.media.filter((m) => m.tier === "confirmed");
-  const contextualMedia = pkg.media.filter((m) => m.tier === "strong_contextual");
+  // A photograph whose bound words belong to someone else is not offered at all — not as a candidate
+  // to decline, because there is nothing for the Writer to decide. See writer-v2.buildEvidencePackage.
+  const his = (m: VerifiedMemoryEvidencePackage["media"][number]) => m.belongsToSubject?.allowed !== false;
+  const confirmedMedia = pkg.media.filter((m) => m.tier === "confirmed" && his(m));
+  const contextualMedia = pkg.media.filter((m) => m.tier === "strong_contextual" && his(m));
   const storyMedia = [...confirmedMedia, ...contextualMedia];
   const mediaLines = pkg.media.length
     ? [

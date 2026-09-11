@@ -181,3 +181,38 @@ test("an explicit naming inside the span still wins, and is never downgraded to 
     assert.equal(resolveClaimSubject(window, [spanOf(explicit)], SUBJECT, options).basis, "explicit_in_span");
   }
 });
+
+// ---------------------------------------------------------------- another person in the claim
+//
+// 2025-11-17, written and only caught by reading it: the nanny's 「简简今天吃的是生菜、虾和米饭」
+// walked to a naming of 张年 elsewhere in the window and became his dinner.
+
+const V7_NAMED = { ...V7, otherNamedPeople: ["永滕", "滕小时候", "简简"] };
+
+test("a claim that names another child does not walk to his name elsewhere in the window", () => {
+  const named = item("张小年今天特别开心");
+  const other = item("简简今天吃的是生菜、虾和米饭");
+  const window = windowOf([named, other]);
+  const subject = resolveClaimSubject(window, [spanOf(other)], SUBJECT, V7_NAMED);
+  assert.equal(subject.resolved, false);
+  assert.equal(subject.basis, "unresolved_competing_person");
+  assert.deepEqual(subject.blockers, ["other_named_person_in_claim"]);
+});
+
+test("a claim that names them BOTH is still his — a shared moment is not somebody else's", () => {
+  const shared = item("宝宝跟永滕小时候长得像吗");
+  const window = windowOf([shared]);
+  const subject = resolveClaimSubject(window, [spanOf(shared)], SUBJECT, V7_NAMED);
+  assert.equal(subject.resolved, true);
+  assert.equal(subject.basis, "explicit_in_span", "his own name settles it before any other check runs");
+});
+
+test("without the list nothing changes, and a subjectless span still resolves", () => {
+  const named = item("张小年今天特别开心");
+  const other = item("简简今天吃的是生菜");
+  const bare = item("放到床上就睡着了");
+  assert.equal(resolveClaimSubject(windowOf([named, other]), [spanOf(other)], SUBJECT, V7).resolved, true,
+    "this is the old behaviour the list exists to correct");
+  assert.equal(resolveClaimSubject(windowOf([named, bare]), [spanOf(bare)], SUBJECT, V7_NAMED).resolved, true,
+    "a genuinely subjectless sentence is untouched by the list");
+});

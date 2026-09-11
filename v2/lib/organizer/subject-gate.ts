@@ -279,3 +279,36 @@ export function editorActionMayBeWritten(proposedAction: unknown): { proceed: bo
   if (WRITABLE_EDITOR_ACTIONS.has(proposedAction)) return { proceed: true, reason: `proposedAction=${proposedAction}` };
   return { proceed: false, reason: `proposedAction=${proposedAction} has no implemented target here; held as pending rather than written as a story` };
 }
+
+/**
+ * Does this text name a person who is not the subject?
+ *
+ * Deliberately a list of names a human supplied (family-registry.ts OTHER_NAMED_PEOPLE) rather than
+ * a shape-matching heuristic: guessing which two characters are a name is how a nanny's remark about
+ * another child, and a father's own childhood, end up in his archive — and a heuristic that is right
+ * nine times in ten still writes the tenth onto a page nobody can un-see.
+ */
+export function namesOtherPerson(text: string, otherNames: readonly string[]): string | undefined {
+  return otherNames.find((name) => name && text.includes(name));
+}
+
+/**
+ * Whether a photograph may be attached to THIS child's story, judged on the words it arrived with.
+ *
+ * The binding says which message a picture came in. If that message names someone else and does not
+ * name him, the picture is that someone else's — 「滕小时候」 arrived with eight photographs of the
+ * father as a boy, every one of them bound correctly and none of them his.
+ */
+export function mediaMayBelongToSubject(
+  boundText: string | undefined,
+  subjectNames: readonly string[],
+  otherNames: readonly string[],
+): { allowed: boolean; reason: string } {
+  const text = boundText ?? "";
+  if (!text.trim()) return { allowed: true, reason: "no words to judge; the binding rule already decided" };
+  const namesSubjectToo = subjectNames.some((name) => name && text.includes(name));
+  if (namesSubjectToo) return { allowed: true, reason: "the message it arrived with names him" };
+  const other = namesOtherPerson(text, otherNames);
+  if (other) return { allowed: false, reason: `the message it arrived with names ${other} and not him` };
+  return { allowed: true, reason: "the message it arrived with names nobody else" };
+}

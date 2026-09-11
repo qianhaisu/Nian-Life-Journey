@@ -2,7 +2,7 @@
 // is drawn from something production actually published or nearly published.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { subjectGateFor, passesSubjectGate, isEmptyMessage, namesSubject, subjectRelevanceMayProceed, claimPassesSubjectGate, coreFactMayBeWritten, editorActionMayBeWritten } from "../lib/organizer/subject-gate.ts";
+import { subjectGateFor, passesSubjectGate, isEmptyMessage, namesSubject, subjectRelevanceMayProceed, claimPassesSubjectGate, coreFactMayBeWritten, editorActionMayBeWritten, mediaMayBelongToSubject, namesOtherPerson, SUBJECT_NAMES } from "../lib/organizer/subject-gate.ts";
 
 const NURSERY = "conversation:2109e1e89306b57b8334d349";
 const MAIN = "conversation:a673c0e0563be6ecf1867094";
@@ -230,4 +230,36 @@ test("a missing proposedAction is held, not written", () => {
   for (const value of [undefined, null, "", 7]) {
     assert.equal(editorActionMayBeWritten(value).proceed, false, `${JSON.stringify(value)} must fail closed`);
   }
+});
+
+// ---------------------------------------------------------------- somebody else's day, 2026-09-11
+//
+// Two real results. 2025-11-17: 「简简今天吃的是生菜、虾和米饭」 became his page, because another
+// message in the window named him and the claim walked to it. 2025-01-09: eight photographs sent
+// with the words 「滕小时候」 became his, every binding correct and every picture the father's.
+
+test("a photograph whose words name someone else, and not him, is not his", () => {
+  const r = mediaMayBelongToSubject("滕小时候", SUBJECT_NAMES, ["永滕", "滕小时候", "简简"]);
+  assert.equal(r.allowed, false);
+  assert.match(r.reason, /滕/);
+});
+
+test("a photograph whose words name him too is his, even with someone else in the sentence", () => {
+  // A shared moment is still his. This is the line the rule must NOT cross.
+  const r = mediaMayBelongToSubject("宝宝跟永滕小时候长得像吗", SUBJECT_NAMES, ["永滕", "简简"]);
+  assert.equal(r.allowed, true);
+  assert.match(r.reason, /names him/);
+});
+
+test("a photograph with no words to judge is left to the binding rule", () => {
+  for (const text of [undefined, "", "   ", "[media]"]) {
+    assert.equal(mediaMayBelongToSubject(text, SUBJECT_NAMES, ["永滕"]).allowed, true, JSON.stringify(text));
+  }
+  assert.equal(mediaMayBelongToSubject("进展不错", SUBJECT_NAMES, ["永滕", "简简"]).allowed, true);
+});
+
+test("namesOtherPerson finds the name it was given and invents none", () => {
+  assert.equal(namesOtherPerson("简简今天吃的是生菜、虾和米饭", ["简简"]), "简简");
+  assert.equal(namesOtherPerson("他今天吃的是生菜、虾和米饭", ["简简"]), undefined);
+  assert.equal(namesOtherPerson("雪姨说他吃了", []), undefined, "an empty list never blocks anything");
 });

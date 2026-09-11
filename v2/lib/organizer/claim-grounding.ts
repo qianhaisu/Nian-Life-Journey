@@ -125,6 +125,14 @@ export type GroundingOptions = {
    * `subjectRelevance !== "primary"`, a gate no claim-level basis can reach.
    */
   zeroAnaphoraAntecedent?: boolean;
+  /**
+   * Names of people who are not the subject (family-registry.ts OTHER_NAMED_PEOPLE). A claim whose
+   * own spans name one of them, and do not name the subject, may not take the antecedent walk to a
+   * naming somewhere else in the window — that walk is what put another child's dinner and the
+   * father's childhood photographs onto this child's page. Default empty: the frozen path is
+   * unchanged, and a caller that supplies nothing gets exactly the old behaviour.
+   */
+  otherNamedPeople?: readonly string[];
 };
 
 // Anyone whose presence makes a pronoun genuinely ambiguous. Extends the window resolver's list
@@ -205,6 +213,14 @@ export function resolveClaimSubject(
     if (FIRST_PERSON.test(normalizeSpanText(claimText))) {
       return { resolved: false, basis: "unresolved_no_reference", supportingSourceIds: [], blockers: ["no_subject_reference", "first_person_span"] };
     }
+  }
+
+  // A named person who is not him, inside the claim's OWN spans. Checked here, after the explicit
+  // check above has already let through anything that names him too: a sentence that names them both
+  // is a shared moment and stays his, a sentence that names only them never was.
+  const otherNamed = (options.otherNamedPeople ?? []).find((name) => name && claimText.includes(name));
+  if (otherNamed) {
+    return { resolved: false, basis: "unresolved_competing_person", supportingSourceIds: [], blockers: ["other_named_person_in_claim"] };
   }
 
   // Competing-person check spans the whole window plus its neighbours, deliberately wider than the

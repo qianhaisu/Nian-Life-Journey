@@ -15,6 +15,7 @@
 import type { Polarity } from "./speech-act";
 import type { AssertionStatus, GroundedClaim, GroundingResult, ObservationMode } from "./claim-grounding";
 import type { EvidenceWindow } from "./evidence/types";
+import { mediaMayBelongToSubject } from "./subject-gate";
 
 export const EVIDENCE_PACKAGE_VERSION = "verified-memory-evidence-package-v1";
 export const WRITER_V2_CONTRACT_VERSION = "writer-v2-output-contract-v1";
@@ -55,6 +56,8 @@ export type MediaEvidence = {
    * about arrival, not content, and this is the half of it the Writer could not see.
    */
   boundText?: string;
+  /** Whether the words it arrived with are his. A photograph that is not his is never offered. */
+  belongsToSubject?: { allowed: boolean; reason: string };
   /**
    * Deliberately absent: any description of what the image shows. Nothing in the pipeline has
    * looked at the pixels, so the Writer must never be handed — or invent — image content.
@@ -266,6 +269,8 @@ export type BuildPackageInput = {
   quotableLines: Array<{ text: string; evidenceRef: string; speakerRole?: string }>;
   longitudinal?: LongitudinalContextEntry[];
   lifeDate: string;
+  /** Names that are not his (family-registry.ts OTHER_NAMED_PEOPLE). Default: none. */
+  otherNamedPeople?: readonly string[];
 };
 
 export function buildEvidencePackage(input: BuildPackageInput): VerifiedMemoryEvidencePackage {
@@ -302,6 +307,10 @@ export function buildEvidencePackage(input: BuildPackageInput): VerifiedMemoryEv
     });
   });
 
+  // A photograph whose bound message names someone else and not him never reaches the Writer. The
+  // binding is honest — that picture really did arrive with those words — and the words are somebody
+  // else's. See subject-gate.mediaMayBelongToSubject.
+  const subjectNames = [input.subject.primaryName, ...input.subject.aliases].filter(Boolean);
   const media: MediaEvidence[] = window.mediaBindings.map((binding) => {
     const boundItem = binding.boundItemId ? window.items.find((i) => i.itemId === binding.boundItemId) : undefined;
     return {
@@ -311,6 +320,7 @@ export function buildEvidencePackage(input: BuildPackageInput): VerifiedMemoryEv
       boundItemId: binding.boundItemId,
       boundSourceId: boundItem?.sourceId,
       boundText: boundItem?.text,
+      belongsToSubject: mediaMayBelongToSubject(boundItem?.text, subjectNames, input.otherNamedPeople ?? []),
       contentDescribed: false,
     };
   });

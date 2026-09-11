@@ -86,7 +86,7 @@ const { SHANGHAI_LIFE_DATE_SQL, shanghaiCalendarDate } = await import("../lib/or
 const { createDeepSeekMemoryEditor } = await import("../lib/organizer/deepseek-editor.ts");
 const { groundClaims } = await import("../lib/organizer/claim-grounding.ts");
 const { validateMemoryEditorVerdict } = await import("../lib/organizer/contract.ts");
-const { FAMILY_REGISTRY } = await import("../lib/organizer/family-registry.ts");
+const { FAMILY_REGISTRY, OTHER_NAMED_PEOPLE } = await import("../lib/organizer/family-registry.ts");
 const { resolveSpeaker } = await import("../lib/organizer/identity.ts");
 const { buildEvidencePackage, packageHasAssertableMaterial, usedSourceIdsFor } = await import("../lib/organizer/writer-v2.ts");
 const { WRITER_V2_SYSTEM_PROMPT, WRITER_V2_TOOL_NAME, WRITER_V2_TOOL_SCHEMA, WRITER_V2_PROMPT_VERSION, buildWriterV2Prompt } = await import("../lib/organizer/writer-v2-prompt.ts");
@@ -151,7 +151,7 @@ const OPTS = { registry: FAMILY_REGISTRY, singleChildHousehold: true };
 // grounding option is taken on its own and nothing about promotion moves. What it buys: a claim
 // whose span drops the subject entirely ("放到床上就睡着了") takes the same bounded antecedent walk a
 // claim saying 他 already takes, behind the same competing-person check, and never past the window.
-const GROUNDING_OPTS = { ...OPTS, zeroAnaphoraAntecedent: true };
+const GROUNDING_OPTS = { ...OPTS, zeroAnaphoraAntecedent: true, otherNamedPeople: OTHER_NAMED_PEOPLE };
 // Media tiers this RUN permits, read from the environment instead of hardcoded, so the tier policy
 // and the binding code can be changed together in one process without touching production config.
 // Default stays `confirmed`: a deployment opts into strong_contextual deliberately or not at all.
@@ -420,7 +420,7 @@ async function processItem(item) {
     selectedBy: { policyId: T7_POLICY_ID, action: "life_event_candidate", worthinessScore: 0 },
     subject: { ...SUBJECT, narrativeLabel: "张年" }, identityOf: (digest) => identityOf(digest, item.w.conversationId),
     quotableLines: keptQuotes.map((q) => ({ text: q.text, evidenceRef: q.evidenceRef, speakerRole: q.speakerRole })),
-    longitudinal: [], lifeDate: item.lifeDate,
+    longitudinal: [], lifeDate: item.lifeDate, otherNamedPeople: OTHER_NAMED_PEOPLE,
   });
   // Private run evidence: every photograph this window bound, HOW it was bound and WHICH message it
   // was bound to, so an adoption (or a refusal) can be checked offline without re-deriving the
@@ -431,8 +431,9 @@ async function processItem(item) {
     mediaId: b.mediaId, rule: b.rule, tier: b.tier, confidence: b.confidence, basis: b.basis,
     boundItemId: b.boundItemId,
     boundSourceId: b.boundItemId ? item.w.items.find((i) => i.itemId === b.boundItemId)?.sourceId : undefined,
-    offeredToWriter: STORY_MEDIA_TIERS.has(b.tier),
-    attachableUnderPolicy: MEDIA_TIERS.includes(b.tier),
+    belongsToSubject: pkg.media.find((m) => m.mediaId === b.mediaId)?.belongsToSubject,
+    offeredToWriter: STORY_MEDIA_TIERS.has(b.tier) && pkg.media.find((m) => m.mediaId === b.mediaId)?.belongsToSubject?.allowed !== false,
+    attachableUnderPolicy: MEDIA_TIERS.includes(b.tier) && pkg.media.find((m) => m.mediaId === b.mediaId)?.belongsToSubject?.allowed !== false,
   }));
   if (!packageHasAssertableMaterial(pkg)) { entry.skipped = "nothing assertable after grounding"; console.log(`  ${item.lifeDate} — nothing assertable`); return entry; }
 

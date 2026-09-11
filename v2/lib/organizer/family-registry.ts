@@ -10,6 +10,28 @@
 // evidence from both spellings must count as one speaker, not two corroborating witnesses.
 import { senderDigestForDisplayName, type IdentityRegistry } from "./identity";
 
+/**
+ * People who appear by NAME in the chats and are not 张年. Teddy-supplied facts, exactly like the
+ * registry above — nothing here is inferred from chat content.
+ *
+ * What it is for: a window earns a model call because the child is named SOMEWHERE in it, and a
+ * claim may then take a bounded antecedent walk to that naming. On 2025-11-17 that walk carried
+ * 「简简今天吃的是生菜、虾和米饭」 onto 张年's page, and on 2025-01-09 eight photographs sent with the
+ * words 「滕小时候」 became his. A sentence that names one of these people, and does not name him, is
+ * not his day.
+ *
+ * What it is NOT for: it never makes a window unrelated, and it never fires on a sentence that names
+ * him too. 「宝宝跟永滕小时候长得像吗」 is about him and stays — a shared moment with another person in
+ * it is still his.
+ */
+export const OTHER_NAMED_PEOPLE: readonly string[] = Object.freeze([
+  // The father's given name, as the family writes it. 「张永滕回来了吗」, 「滕小时候」.
+  "永滕",
+  "滕小时候",
+  // Another child the nanny feeds and reports on. Teddy, 2026-09-11.
+  "简简",
+]);
+
 export const FAMILY_REGISTRY: IdentityRegistry = {
   participants: [
     {
