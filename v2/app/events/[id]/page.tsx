@@ -67,7 +67,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   // hero_media_id are not that — the column records an earlier same-day selection, not evidence.
   // Everything else keeps its place in the evidence disclosure below, where it is presented as
   // what the day left behind rather than as this story's picture. Nothing is deleted or unbound.
-  const layout = storyLayout(storyAssociatedMedia(event, shownMedia), event.heroMediaId);
+  const layout = storyLayout(storyAssociatedMedia(event, shownMedia, detail.photoConfirmations), event.heroMediaId);
   const hero = layout.hero ? toMediaRef(layout.hero, title) : undefined;
   const supporting = layout.supporting.map((item) => toMediaRef(item, title));
   const paragraphs = [event.story, ...(event.storySections ?? [])].map((text) => text?.trim()).filter((text): text is string => Boolean(text));

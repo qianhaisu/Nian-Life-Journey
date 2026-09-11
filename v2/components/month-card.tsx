@@ -8,11 +8,17 @@ import { Photo } from "@/components/photo";
 // not a summary.
 export function MonthCard({ entry, blurb }: { entry: MonthIndexEntry; blurb?: string }) {
   const { chapter, href, preview, featured } = entry;
-  // Prefer a picture off the family's own camera roll over one out of a group chat: a daycare
-  // conversation carries other people's children, screenshots and receipts. It is a source
-  // preference, not a claim that 张年 is in the frame (lib/media/representative.ts) — no
-  // family-album photo in the preview means no image area rather than a guessed one.
-  const coverPhoto = preview.find(isFromFamilyAlbum);
+  // The month's face, in order of what the archive can actually say about a picture:
+  //
+  //   1. a featured memory's own lead — the only pictures with a recorded reason to be about him
+  //      (lib/media/story-binding.ts), and therefore the only ones this card may present as such;
+  //   2. failing that, a picture off the family's own camera roll rather than out of a group chat.
+  //
+  // Step 2 is a source preference and nothing more: a daycare conversation carries other people's
+  // children, screenshots and receipts, and a camera roll mostly does not — but neither fact says
+  // who is in the frame (lib/media/representative.ts). It is a cover, not a portrait, and it is
+  // ordered after the evidence rather than in place of it. Neither → no image area, not a guess.
+  const coverPhoto = featured.find((memory) => memory.lead)?.lead ?? preview.find(isFromFamilyAlbum);
   const cardBlurb = blurb ?? featured[0]?.title;
 
   return (

@@ -9,7 +9,7 @@ import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
 import { isSnapshotPublishable } from "@/lib/organizer/quality-review";
-import { isStoryAssociated } from "@/lib/media/story-binding";
+import { isStoryAssociated, storyPhotoConfirmationsFrom, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
 import { isTrustedPhotoSource } from "@/lib/trusted-photo-sources";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
 import type { MediaPrivilege } from "@/lib/publication-moments";
@@ -60,7 +60,7 @@ export type FamilyArchive = {
 // photograph of this child, from a source the family stands behind", which is what lets a picture
 // be drawn large as the month's own photography. `confirmed` says "this picture belongs to this
 // story", which is the only thing that may put it next to that story's words.
-export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources: Pick<RawSource, "id" | "sourceType" | "sourceLabel">[]): MediaPrivilege {
+export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources: Pick<RawSource, "id" | "sourceType" | "sourceLabel">[], confirmations?: StoryPhotoConfirmations): MediaPrivilege {
   // `confirmed` used to mean "listed in the media_ids of an event whose organizerVersion we trust".
   // That trust was circular: the version was trusted because its bindings came from pickDayPhotos,
   // and pickDayPhotos picked by day, size and sort order. A picture cannot vouch for itself through
@@ -72,7 +72,7 @@ export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources
     events.flatMap((event) =>
       event.mediaIds.filter((id) => {
         const item = byId.get(id);
-        return item ? isStoryAssociated(event, item) : false;
+        return item ? isStoryAssociated(event, item, confirmations) : false;
       })),
   );
   const trustedSources = new Set(
@@ -98,10 +98,14 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   const familyMedia = store.media.filter((item) => item.visibility !== "private");
   const deliverable = deliverableMediaIds(store);
   const media = familyMedia.filter((item) => deliverable.has(item.id));
-  const chapters = buildChapters({ events, traces, media: familyMedia, deliverable, birthDay });
+  // Basis C (lib/media/story-binding.ts): the ledger rows saying somebody looked at a picture and
+  // recorded that it belongs to a story. getStore() already returns every review row for the
+  // publication gate, so reading them here costs no extra query.
+  const photoConfirmations = storyPhotoConfirmationsFrom(store.qualityReviews ?? []);
+  const chapters = buildChapters({ events, traces, media: familyMedia, deliverable, birthDay, photoConfirmations });
   const publishedMonths = new Set(events.map((event) => calendarMonthOf(event.occurredAt)).filter((value): value is string => Boolean(value)));
   const snapshots = store.monthlySnapshots.filter((item) => isSnapshotPublishable(item.month, publishedMonths));
-  const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources);
+  const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources, photoConfirmations);
   // store.events (from getStore()) is already the publishable-only set — the same fail-closed gate
   // getAllEvents() applies — so a store_only event is never in it. `allEvents` is
   // getAllEventIdentities()'s unfiltered read, the one place the app reads every life_event row

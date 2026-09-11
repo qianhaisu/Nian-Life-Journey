@@ -9,6 +9,7 @@ import { CANONICAL_PROFILE_ID } from "./config";
 import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, MonthArchiveInput, OrganizerWindowInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 import { normalizeSha256 } from "./chat-import-persistence";
 import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
+import { storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
 import { birthDayOf } from "@/lib/time-signature";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { ChatImportStateError, acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
@@ -395,7 +396,8 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       db.select().from(t.dailyTraces).where(and(eq(t.dailyTraces.profileId, CANONICAL_PROFILE_ID), gte(t.dailyTraces.occurredAt, start), lt(t.dailyTraces.occurredAt, end))),
       db.select().from(t.media).where(and(eq(t.media.profileId, CANONICAL_PROFILE_ID), gte(t.media.takenAt, start), lt(t.media.takenAt, end))),
     ]);
-    const reviews = await reviewIndex();
+    const reviewRows = await db.select().from(t.contentQualityReviews);
+    const reviews = indexReviews(reviewRows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>);
     const publishableEvents = (events as unknown as LifeEvent[]).filter((event) => isEventPublishable(event, reviews));
     // Matches composeFamilyArchive's own extra visibility filter on top of getStore()'s already-
     // publishable dailyTraces (lib/family-archive.ts) — this function stands in for that same path.
@@ -416,6 +418,8 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       mediaAssets: mediaAssets as unknown as MediaAsset[],
       mediaLocations: mediaLocations as unknown as MediaLocation[],
       rawSources: rawSources as unknown as Pick<RawSource, "id" | "sourceType" | "sourceLabel">[],
+      // Same rows the publication gate above just used — Basis C costs no extra query.
+      photoConfirmations: storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ targetKind?: string; targetId?: string; decision?: unknown }>),
     };
   }
 
@@ -580,8 +584,11 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       const [event] = await db.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, id));
       if (!event) return null;
       const e = event as unknown as LifeEvent;
-      // An unreviewed rule-derived event must 404 rather than stay reachable by direct URL.
-      if (!isEventPublishable(e, await reviewIndex())) return null;
+      // An unreviewed rule-derived event must 404 rather than stay reachable by direct URL. The
+      // rows are kept rather than discarded: Basis C (lib/media/story-binding.ts) needs the same
+      // read, and asking twice would double a whole-table query on a render path.
+      const reviewRows = await db.select().from(t.contentQualityReviews);
+      if (!isEventPublishable(e, indexReviews(reviewRows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>))) return null;
       // A-12-1 (2026-09-06, docs/INCIDENT-2026-09-06-neon-egress.md §3.2): this used to
       // `select().from(t.rawSources)` — the whole table, `text` column included, no WHERE, no
       // LIMIT — plus three more full-table reads, just to filter down to one event's own handful
@@ -640,6 +647,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         mediaAssets: guardRowCount(assetRows as unknown as MediaAsset[], "getEventDetail.mediaAssets"),
         mediaLocations: guardRowCount(locationRows as unknown as MediaLocation[], "getEventDetail.mediaLocations"),
         birthDay: birthDayOf(profileRows[0] as unknown as { birthDate?: string | null } | undefined),
+        photoConfirmations: storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ targetKind?: string; targetId?: string; decision?: unknown }>),
       };
     },
     async getMonthArchive(month: string) { return assembleMonthArchive(month); },

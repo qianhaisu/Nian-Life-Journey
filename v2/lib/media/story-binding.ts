@@ -73,20 +73,73 @@ import { mayNarrateAsDepicting, type MediaBindingTier } from "@/lib/organizer/ev
 //     removing it from media_ids, or by the NO_HERO_MEDIA_ID sentinel, stays taken back — nothing
 //     here can add a picture the event no longer lists.
 //
-// A third basis is meant to exist and does not yet: an explicit human confirmation that a picture
-// belongs to a story. `content_quality_reviews` today carries only life_event, life_event_trace,
-// daily_trace and monthly_snapshot decisions — there is no media-binding kind and nothing writes
-// one. When that record exists it joins here; it is deliberately not faked in the meantime.
+// BASIS C — somebody looked at the picture and said it belongs.
+//
+// The two bases above are both derived: they ask what the Organizer read and what it bound. Neither
+// can ever reach a story written before the binding record existed, and production is full of those
+// — all 212 published stories carry no `mediaBinding` block at all, so Basis B restores exactly none
+// of them. The only thing that can is a record of somebody having looked.
+//
+// That record is a row in `content_quality_reviews`, the ledger this archive already keeps for
+// every other "somebody decided" — `target_kind = "media_binding"`, `target_id = "<eventId>|<mediaId>"`,
+// `decision = "approved"`. It needs no schema change, and the pages that ask this question already
+// read that table for publication decisions, so it costs no extra query.
+//
+// WHAT THE ROW MUST NOT PRETEND TO BE. A row written after an agent opened the photograph says so
+// in its own columns — `provider`/`model` name the agent, `reason_codes` carries the kind of check.
+// It is NOT written into `organizer_run.mediaBinding`, which is the output record of one Organizer
+// run and would be claiming that run produced a binding it never produced; and it does not describe
+// itself as a person's confirmation. Whoever reads the ledger can tell which it was. This module
+// only asks whether an approved row exists for exactly this pair; it does not grade the reviewer.
+//
+// EXACTLY THIS PAIR. A confirmation is per (story, photograph) and matches nothing else: not the
+// same photograph under another story, not another photograph under the same story, not a target_id
+// that does not split into exactly two non-empty halves. Any decision other than `approved` is not
+// a confirmation, and neither is a row of any other kind.
 //
 // What this is NOT: a claim that the unproven bindings are wrong. Most have simply never had their
 // relationship recorded. Unproven and disproven are different things, and pictures whose
 // association cannot be shown are not deleted, not unbound and not hidden — they move to the
 // month's own photo section, where they are presented as the month's photographs rather than as
 // any story's illustration.
-type AssociationEvent = Pick<LifeEvent, "sourceIds"> & { organizerRun?: Pick<OrganizerRunMetadata, "mediaBinding"> | null };
+type AssociationEvent = Pick<LifeEvent, "id" | "sourceIds"> & { organizerRun?: Pick<OrganizerRunMetadata, "mediaBinding"> | null };
 
-export function isStoryAssociated(event: AssociationEvent, media: Pick<Media, "id" | "rawSourceId">): boolean {
+/** The review-ledger kind that records "somebody looked at this picture, for this story". */
+export const STORY_PHOTO_REVIEW_KIND = "media_binding";
+
+/** One confirmation, addressed to exactly one (story, photograph) pair. */
+export type StoryPhotoConfirmations = ReadonlySet<string>;
+
+export function storyPhotoKey(eventId: string, mediaId: string): string {
+  return `${eventId}|${mediaId}`;
+}
+
+/**
+ * Reads confirmations out of whatever slice of the review ledger a caller already has. Anything
+ * that is not an approved `media_binding` row naming exactly two non-empty halves is ignored —
+ * a malformed target_id must not become a wildcard.
+ */
+export function storyPhotoConfirmationsFrom(
+  reviews: ReadonlyArray<{ targetKind?: string | null; targetId?: string | null; decision?: unknown }>,
+): StoryPhotoConfirmations {
+  const confirmed = new Set<string>();
+  for (const review of reviews) {
+    if (review.targetKind !== STORY_PHOTO_REVIEW_KIND) continue;
+    if (review.decision !== "approved") continue;
+    const parts = (review.targetId ?? "").split("|");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
+    confirmed.add(storyPhotoKey(parts[0], parts[1]));
+  }
+  return confirmed;
+}
+
+export function isStoryAssociated(
+  event: AssociationEvent,
+  media: Pick<Media, "id" | "rawSourceId">,
+  confirmations?: StoryPhotoConfirmations,
+): boolean {
   if (media.rawSourceId && event.sourceIds.includes(media.rawSourceId)) return true;
+  if (confirmations?.has(storyPhotoKey(event.id, media.id))) return true;
   const adopted = event.organizerRun?.mediaBinding?.adopted?.find((binding) => binding.mediaId === media.id);
   if (!adopted?.boundSourceId) return false;
   if (!mayNarrateAsDepicting(adopted.tier as MediaBindingTier)) return false;
@@ -95,14 +148,23 @@ export function isStoryAssociated(event: AssociationEvent, media: Pick<Media, "i
 
 // Why a picture is shown beside a story, in the words the archive recorded at the time. Returns
 // undefined for a picture that may not be shown at all, so a caller cannot print a reason for one.
-export function storyAssociationBasis(event: AssociationEvent, media: Pick<Media, "id" | "rawSourceId">): string | undefined {
-  if (!isStoryAssociated(event, media)) return undefined;
+export function storyAssociationBasis(
+  event: AssociationEvent,
+  media: Pick<Media, "id" | "rawSourceId">,
+  confirmations?: StoryPhotoConfirmations,
+): string | undefined {
+  if (!isStoryAssociated(event, media, confirmations)) return undefined;
   if (media.rawSourceId && event.sourceIds.includes(media.rawSourceId)) return "the picture arrived in one of the messages this story was written from";
+  if (confirmations?.has(storyPhotoKey(event.id, media.id))) return "a reviewer opened this picture and recorded that it belongs to this story";
   return event.organizerRun?.mediaBinding?.adopted?.find((binding) => binding.mediaId === media.id)?.basis;
 }
 
 // The subset of an event's attached media that may be presented as part of its story. Order is
 // preserved so downstream hero/supporting selection keeps behaving the way it reads.
-export function storyAssociatedMedia<T extends Pick<Media, "id" | "rawSourceId">>(event: AssociationEvent, media: T[]): T[] {
-  return media.filter((item) => isStoryAssociated(event, item));
+export function storyAssociatedMedia<T extends Pick<Media, "id" | "rawSourceId">>(
+  event: AssociationEvent,
+  media: T[],
+  confirmations?: StoryPhotoConfirmations,
+): T[] {
+  return media.filter((item) => isStoryAssociated(event, item, confirmations));
 }

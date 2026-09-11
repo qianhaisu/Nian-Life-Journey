@@ -8,8 +8,7 @@
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { NO_HERO_MEDIA_ID, heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
-import { isFromFamilyAlbum } from "@/lib/media/representative";
-import { storyAssociatedMedia } from "@/lib/media/story-binding";
+import { storyAssociatedMedia, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
 
@@ -112,7 +111,7 @@ export function memoryTitle(event: Pick<LifeEvent, "title" | "occurredAt">): str
   return day ? `${formatDay(day)}的一天` : "一段生活";
 }
 
-export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>, birthDay?: string): EditorialMemory | undefined {
+export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>, birthDay?: string, confirmations?: StoryPhotoConfirmations): EditorialMemory | undefined {
   const signature = timeSignatureFor(event.occurredAt, birthDay);
   if (!signature) return undefined;
   const media = event.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
@@ -122,7 +121,7 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
   // Sharing a calendar day is not that, and neither is being named by heroMediaId — that column
   // records an earlier same-day selection, not evidence. Text-only is a valid memory; the event's
   // other pictures are untouched and appear as the month's photographs instead.
-  const associated = storyAssociatedMedia(event, media);
+  const associated = storyAssociatedMedia(event, media, confirmations);
   const lead = heroCandidates(event.heroMediaId, associated)[0];
   return {
     id: event.id,
@@ -147,7 +146,7 @@ const WEIGHT_RANK: Record<MemoryWeight, number> = { chapter: 0, highlight: 1, me
 // are still waiting for derivatives is a February that happened, not a February that does not
 // exist, and it must keep its chapter and its URL. Eligibility governs what is displayed and
 // counted inside a month; it never governs whether the month is in the book.
-export type ChapterInput = { events: LifeEvent[]; traces: DailyTrace[]; media: Media[]; deliverable?: ReadonlySet<string>; birthDay?: string };
+export type ChapterInput = { events: LifeEvent[]; traces: DailyTrace[]; media: Media[]; deliverable?: ReadonlySet<string>; birthDay?: string; photoConfirmations?: StoryPhotoConfirmations };
 
 // Every family-visible picture the archive holds, bucketed by the month it was taken in and
 // ordered newest first inside each month.
@@ -200,7 +199,7 @@ export function groupPhotoDays(media: Media[], context: string, birthDay?: strin
   }));
 }
 
-export function buildChapters({ events, traces, media, deliverable, birthDay }: ChapterInput): YearChapter[] {
+export function buildChapters({ events, traces, media, deliverable, birthDay, photoConfirmations }: ChapterInput): YearChapter[] {
   // Absent `deliverable`, every family-visible row is treated as showable — the shape callers that
   // build a Store by hand (tests, fixtures) already expect.
   const canShow = (item: Media) => !deliverable || deliverable.has(item.id);
@@ -236,7 +235,7 @@ export function buildChapters({ events, traces, media, deliverable, birthDay }: 
     const month = calendarMonthOf(event.occurredAt);
     if (!month) continue;
     if (isGarbageLifeEvent(event)) continue;
-    const memory = editorialMemory(event, mediaById, birthDay);
+    const memory = editorialMemory(event, mediaById, birthDay, photoConfirmations);
     if (memory) monthOf(month).memories.push(memory);
   }
 
@@ -347,29 +346,28 @@ export function latestLeadPhoto(chapters: YearChapter[]): MediaRef | undefined {
 // 2026-09-04 it was neither him nor anyone's. Vouching is the gate here as everywhere: a memory's
 // own lead, or a picture the family's photo archive or a published memory stands behind. Nothing
 // vouched → no portrait. An empty slot is honest; a stranger's picture is not.
-export function latestPortrait(chapters: YearChapter[], isVouched: (photo: MediaRef) => boolean = () => false): { photo: MediaRef; day: string; dateLabel: string } | undefined {
-  // Narrowed to the family's own album, which is a statement about where the picture came from and
-  // not about who is in it (lib/media/representative.ts). This slot is still called a portrait and
-  // still cannot prove one; what it can say is that the picture came off a family camera roll
-  // rather than out of a group chat.
+export function latestPortrait(chapters: YearChapter[]): { photo: MediaRef; day: string; dateLabel: string } | undefined {
+  // 2026-09-11: this used to accept any hero-sized, vouched picture off a photographed day, on the
+  // strength of `media-quark-sha-` in its id — which says the row was imported from the family's own
+  // album and says NOTHING about who is in the frame. A white cat on a bench satisfied every one of
+  // those conditions. Renaming the predicate did not fix that; the slot was resting on it.
+  //
+  // So the source test is gone from here entirely, and the slot now draws only from a memory's own
+  // lead photograph. That is the one picture in this archive with a recorded reason to be about him
+  // (lib/media/story-binding.ts: written from its message, bound to its sentence, or opened and
+  // confirmed by a reviewer). A vouched day photo has no such record and may no longer stand in.
+  //
+  // The cost is stated rather than hidden: while no published story has an associated photograph,
+  // this returns undefined and /about shows no portrait. An empty slot is honest; the cat was not.
+  // Nothing here identifies a person — it only refuses to guess at one.
   const isPortraitOriented = (photo: MediaRef) => Boolean(photo.width && photo.height && photo.width < photo.height);
   let fallback: { photo: MediaRef; day: string; dateLabel: string } | undefined;
 
   for (const year of chapters) for (const month of year.months) {
-    const memoryLead = month.memories.find((memory) => memory.lead && isFromFamilyAlbum(memory.lead));
-    const eligible = (photo: MediaRef) => heroSized(photo) && isVouched(photo) && isFromFamilyAlbum(photo);
-    const photoDay = month.photoDays.find((day) => day.photos.some(eligible));
-    if (photoDay && (!memoryLead || photoDay.day >= memoryLead.signature.day)) {
-      const portraitPhoto = photoDay.photos.find((p) => eligible(p) && isPortraitOriented(p));
-      if (portraitPhoto) return { photo: portraitPhoto, day: photoDay.day, dateLabel: photoDay.dateLabel };
-      if (!fallback) {
-        const anyPhoto = photoDay.photos.find(eligible);
-        if (anyPhoto) fallback = { photo: anyPhoto, day: photoDay.day, dateLabel: photoDay.dateLabel };
-      }
-    }
-    if (memoryLead?.lead) {
-      if (isPortraitOriented(memoryLead.lead)) return { photo: memoryLead.lead, day: memoryLead.signature.day, dateLabel: memoryLead.signature.dateLabel };
-      if (!fallback) fallback = { photo: memoryLead.lead, day: memoryLead.signature.day, dateLabel: memoryLead.signature.dateLabel };
+    for (const memory of month.memories) {
+      if (!memory.lead) continue;
+      if (isPortraitOriented(memory.lead)) return { photo: memory.lead, day: memory.signature.day, dateLabel: memory.signature.dateLabel };
+      if (!fallback) fallback = { photo: memory.lead, day: memory.signature.day, dateLabel: memory.signature.dateLabel };
     }
   }
   return fallback;

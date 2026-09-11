@@ -6,7 +6,6 @@ import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { latestPortrait, memoryTitle, recentTraceNotes } from "@/lib/memory-chapters";
-import { isPrivileged } from "@/lib/publication-moments";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { calendarDayOf } from "@/lib/timeline-dates";
 import { ageOn, formatDay, formatMonth, timeSignatureFor } from "@/lib/time-signature";
@@ -54,9 +53,9 @@ export default async function AboutPage() {
   // Never prerender this page from the build's mock store — see lib/render-on-demand.ts. Found in
   // the same 2026-09-10 check as / and /memory: about.html was baked from the seed fixture too.
   await renderOnDemand();
-  const { chapters, store, birthDay, time, privilege, snapshots, events } = await loadFamilyArchiveOnDemand();
+  const { chapters, store, birthDay, time, snapshots, events } = await loadFamilyArchiveOnDemand();
   const age = birthDay ? ageOn(birthDay, time.today) : undefined;
-  const portrait = latestPortrait(chapters, (photo) => isPrivileged(photo, privilege));
+  const portrait = latestPortrait(chapters);
   const portraitRecent = portrait ? isRecent(portrait.day, time) : false;
   const traceNotes = recentTraceNotes(chapters, 4);
   const currentNotes = traceNotes.filter((note) => isRecent(note.day, time));

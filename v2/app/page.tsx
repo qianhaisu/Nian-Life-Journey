@@ -6,7 +6,6 @@ import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildHomeView } from "@/lib/home-view";
-import { isFromFamilyAlbum } from "@/lib/media/representative";
 import { LAST_SHOWN_DAY_COOKIE, latestStory, pickRecentStory, recentStoryDays, RECENT_WINDOW_DAYS } from "@/lib/home-recent-pick";
 import { RememberShownDay } from "@/components/remember-shown-day";
 import { renderOnDemand } from "@/lib/render-on-demand";
@@ -42,16 +41,19 @@ export default async function HomePage() {
   const fallback = pick ? undefined : latestStory(archive.chapters);
   // Don't show "本月入口" when it repeats the month the cover story already sent them to.
   const showThisMonth = thisMonth && pick?.month.month !== thisMonth.month;
-  // B-14: 3 recent published memories whose lead photograph came from the family's own album rather
-  // than a group chat, excluding the cover. Source preference only — it does not establish that he
-  // is in the picture (lib/media/representative.ts).
+  // B-14: 3 recent published memories with a lead photograph, excluding the cover.
+  //
+  // 2026-09-11: the extra `media-quark-sha-` test that used to sit here was both redundant and
+  // wrong. Redundant, because `memory.lead` is already the association gate (lib/media/
+  // story-binding.ts) — a lead exists only for a picture with a recorded reason to belong to those
+  // words. Wrong, because it then threw away exactly the WeChat photographs that had earned their
+  // place, on the strength of an id prefix that says where a file came from and not who is in it.
   const coverPhotoId = pick?.memory.lead?.id;
   const recentCluster: { memory: EditorialMemoryType; photo: MediaRef }[] = [];
   outer: for (const year of archive.chapters) {
     for (const month of year.months) {
       for (const memory of month.memories) {
         if (!memory.lead) continue;
-        if (!isFromFamilyAlbum(memory.lead)) continue;
         if (memory.lead.id === coverPhotoId) continue;
         recentCluster.push({ memory, photo: memory.lead });
         if (recentCluster.length >= 3) break outer;

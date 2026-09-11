@@ -12,6 +12,7 @@ import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
 import { assetByChecksum, normalizeChatImportTask, persistChatImportBatchInStore, persistUploadInStore } from "./chat-import-persistence";
 import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
+import { storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
 
 const dataDir = path.join(process.cwd(), ".data");
 const storeFile = path.join(dataDir, "nian-life.json");
@@ -152,6 +153,7 @@ export function createJsonRepository(): Repository {
         mediaAssets: store.mediaAssets.filter((asset) => assetIds.has(asset.id)),
         mediaLocations: store.mediaLocations.filter((location) => assetIds.has(location.mediaAssetId)),
         birthDay: birthDayOf(store.profile),
+        photoConfirmations: storyPhotoConfirmationsFrom(store.qualityReviews ?? []),
       };
     },
     // Local dev store is small — no need for the PostgreSQL backend's scoped query, just filter the
@@ -170,6 +172,7 @@ export function createJsonRepository(): Repository {
         mediaAssets: store.mediaAssets.filter((item) => assetIds.has(item.id)),
         mediaLocations: store.mediaLocations.filter((item) => assetIds.has(item.mediaAssetId)),
         rawSources: store.rawSources.filter((item) => sourceIds.has(item.id)),
+        photoConfirmations: storyPhotoConfirmationsFrom(store.qualityReviews ?? []),
       };
     },
     async listArchiveMonths() {

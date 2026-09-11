@@ -49,6 +49,9 @@ export type EventDetail = {
   links: SourceMemoryLink[];
   mediaAssets: MediaAsset[];
   mediaLocations: MediaLocation[];
+  // Basis C confirmations for THIS event only (lib/media/story-binding.ts). Derived from the review
+  // rows this read already loads for the publication gate, so it adds no query.
+  photoConfirmations: ReadonlySet<string>;
   // Same narrowing as MonthArchiveInput.birthDay below: the page only ever reads the birth date to
   // compute an age, never the rest of the profile row.
   birthDay?: string;
@@ -66,6 +69,9 @@ export type MonthArchiveInput = {
   mediaAssets: MediaAsset[];
   mediaLocations: MediaLocation[];
   rawSources: Pick<RawSource, "id" | "sourceType" | "sourceLabel">[];
+  // Basis C confirmations for this month's events (lib/media/story-binding.ts). assembleMonthArchive
+  // already reads the review table for the publication gate; this is the same rows, read once.
+  photoConfirmations: ReadonlySet<string>;
 };
 
 // The domain contract pages, Server Actions, Route Handlers, and the Organizer depend on — never

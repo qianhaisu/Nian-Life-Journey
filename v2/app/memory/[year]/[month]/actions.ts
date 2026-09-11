@@ -16,13 +16,13 @@ import { buildMonthComposition } from "@/lib/publication-moments";
 // observed here after the P1-5 column-pruning fix on top of it, still far past any click budget).
 export async function getFullArchiveDays(year: string, month: string): Promise<PhotoDay[]> {
   const monthKey = `${year}-${month}`;
-  const { birthDay, events, dailyTraces, media, mediaAssets, mediaLocations, rawSources } = await getMonthArchive(monthKey);
+  const { birthDay, events, dailyTraces, media, mediaAssets, mediaLocations, rawSources, photoConfirmations } = await getMonthArchive(monthKey);
   const familyMedia = media.filter((item) => item.visibility !== "private");
   const deliverable = deliverableMediaIds({ media: familyMedia, mediaAssets, mediaLocations });
-  const chapters = buildChapters({ events, traces: dailyTraces, media: familyMedia, deliverable, birthDay });
+  const chapters = buildChapters({ events, traces: dailyTraces, media: familyMedia, deliverable, birthDay, photoConfirmations });
   const chapter = findMonth(chapters, monthKey);
   if (!chapter) return [];
-  const privilege = mediaPrivilegeOf(events, familyMedia, rawSources);
+  const privilege = mediaPrivilegeOf(events, familyMedia, rawSources, photoConfirmations);
   const composition = buildMonthComposition(chapter, privilege);
   return composition.archiveDays;
 }
