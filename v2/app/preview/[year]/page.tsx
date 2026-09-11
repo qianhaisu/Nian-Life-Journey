@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { dayLabel } from "@/components/month-moment";
 import { Photo } from "@/components/photo";
+import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildPreviewYear, confirmedPhotoIdsByEvent, monthlyReviewDraftsFrom, previewEventIdsFrom, type PreviewStory } from "@/lib/preview-reading";
@@ -63,6 +64,7 @@ export default async function PreviewYearPage({ params }: { params: Promise<{ ye
     photosByEvent: confirmedPhotoIdsByEvent(reviews),
     media: archive.media,
     leadById,
+    vouchedPhotoIds: new Set([...archive.privilege.confirmed, ...(archive.privilege.checked ?? [])]),
     birthDay: archive.birthDay,
   });
 
@@ -87,6 +89,10 @@ export default async function PreviewYearPage({ params }: { params: Promise<{ ye
         {month.review ? <div className="preview-review">
           <p className="section-mark">这个月的张年 · 回顾初稿</p>
           <SnapshotSummary text={month.review.join("\n")} className="chapter-summary serif" />
+          {/* 原则七 asks a review for a few meaningful pictures. These are only the ones somebody
+              recorded a reason for (lib/preview-reading.ts); a month with none reads as text, which
+              is the honest answer rather than a strip chosen for falling in the right month. */}
+          {month.reviewPhotos.length > 0 ? <PhotoGallery photos={month.reviewPhotos} dateLabel={month.label} ageLabel={month.ageLabel} stripSizes="(max-width: 700px) 45vw, 240px" /> : null}
         </div> : null}
         {month.stories.map((story) => <PreviewStoryBlock key={story.id} story={story} year={year} monthAgeLabel={month.ageLabel} />)}
       </section>;

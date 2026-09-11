@@ -85,6 +85,26 @@ test("a month with nothing readable keeps its heading — the quiet index, not a
   assert.deepEqual(year.months.map((item) => [item.month, item.stories.length, Boolean(item.review)]), [["2025-05", 0, false], ["2025-06", 1, false]]);
 });
 
+test("a month review is illustrated only by pictures with a recorded reason, and a month without any reads as text", () => {
+  const reviewDrafts = new Map([["2025-07", ["这个月他开始…"]], ["2025-08", ["八月的一句"]]]);
+  const july = photo("vouched-july");
+  july.takenAt = "2025-07-04T08:00:00.000Z";
+  const julyUnvouched = photo("unvouched-july");
+  julyUnvouched.takenAt = "2025-07-05T08:00:00.000Z";
+  const august = photo("vouched-august");
+  august.takenAt = "2025-08-02T08:00:00.000Z";
+  const year = yearOf({
+    months: [month("2025-07", "2025 年 7 月"), month("2025-08", "2025 年 8 月"), month("2025-09", "2025 年 9 月")],
+    reviewDrafts,
+    media: [july, julyUnvouched, august],
+    vouchedPhotoIds: new Set(["vouched-july"]),
+  });
+  const byMonth = new Map(year.months.map((m) => [m.month, m]));
+  assert.deepEqual(byMonth.get("2025-07").reviewPhotos.map((p) => p.id), ["vouched-july"], "same month, recorded reason, drawable");
+  assert.deepEqual(byMonth.get("2025-08").reviewPhotos, [], "a review with nothing vouched that month is text, not a strip");
+  assert.deepEqual(byMonth.get("2025-09").reviewPhotos, [], "a month with no review is never illustrated");
+});
+
 test("a draft is illustrated only by a picture a reviewer recorded for it, at a size worth drawing", () => {
   const reviews = [
     { targetKind: "media_binding", targetId: "draft|good-photo", decision: "approved" },

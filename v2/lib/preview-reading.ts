@@ -116,7 +116,14 @@ export type PreviewMonth = {
   // The private month review, when one has been written for this month. A month without one keeps
   // its heading and its stories and says nothing else — 材料不足时不伪装成回顾 (原则七).
   review?: string[];
+  // 原则七 asks a month review for 「4–8 张有意义的媒体」, and the only pictures that qualify as
+  // meaningful here are the ones somebody recorded a reason for: part of a story's own material, or
+  // opened and recorded as being of him. A month with none of those gets a text-only review rather
+  // than a strip of pictures chosen because they happened to fall in the right month.
+  reviewPhotos: MediaRef[];
 };
+
+export const REVIEW_PHOTOS_MAX = 6;
 
 export type PreviewYear = {
   year: string;
@@ -140,10 +147,13 @@ export type PreviewYearInput = {
   media: Media[];
   // A published story's own lead photograph, already decided by the family-facing layer.
   leadById: Map<string, MediaRef>;
+  // The pictures something recorded a reason for: `confirmed` (a story's own material) ∪ `checked`
+  // (opened and recorded as being of him). Only these may illustrate a month review.
+  vouchedPhotoIds?: ReadonlySet<string>;
   birthDay?: string;
 };
 
-export function buildPreviewYear({ year, months, identities, publishedIds, previewIds, reviewDrafts, photosByEvent, media, leadById, birthDay }: PreviewYearInput): PreviewYear {
+export function buildPreviewYear({ year, months, identities, publishedIds, previewIds, reviewDrafts, photosByEvent, media, leadById, vouchedPhotoIds, birthDay }: PreviewYearInput): PreviewYear {
   const mediaById = new Map(media.map((item) => [item.id, item]));
   const byMonth = new Map<string, PreviewStory[]>();
 
@@ -176,6 +186,17 @@ export function buildPreviewYear({ year, months, identities, publishedIds, previ
     stories.sort((a, b) => a.day.localeCompare(b.day) || a.id.localeCompare(b.id));
   }
 
+  // Illustration for a review, built only from pictures with a recorded reason and only for the
+  // months that actually have a review. Taken in that month, drawable, ordered as the month ran.
+  const reviewPhotosOf = (month: string): MediaRef[] => {
+    if (!reviewDrafts.has(month) || !vouchedPhotoIds?.size) return [];
+    return media
+      .filter((item) => item.type === "photo" && vouchedPhotoIds.has(item.id) && thumbnailSized(item) && calendarDayOf(item.takenAt)?.slice(0, 7) === month)
+      .sort((a, b) => (a.takenAt ?? "").localeCompare(b.takenAt ?? "") || a.id.localeCompare(b.id))
+      .slice(0, REVIEW_PHOTOS_MAX)
+      .map((item) => toMediaRef(item, `${year} 年 ${Number(month.slice(5, 7))} 月`));
+  };
+
   const monthKeys = [...new Set([...months.map((item) => item.month), ...byMonth.keys(), ...reviewDrafts.keys()])]
     .filter((month) => month.slice(0, 4) === year)
     .sort();
@@ -186,6 +207,7 @@ export function buildPreviewYear({ year, months, identities, publishedIds, previ
     ageLabel: labelled.get(month)?.ageLabel,
     stories: byMonth.get(month) ?? [],
     review: reviewDrafts.get(month),
+    reviewPhotos: reviewPhotosOf(month),
   }));
 
   return {
