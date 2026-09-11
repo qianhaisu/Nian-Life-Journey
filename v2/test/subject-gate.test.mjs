@@ -2,7 +2,7 @@
 // is drawn from something production actually published or nearly published.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { subjectGateFor, passesSubjectGate, isEmptyMessage, namesSubject, subjectRelevanceMayProceed, claimPassesSubjectGate } from "../lib/organizer/subject-gate.ts";
+import { subjectGateFor, passesSubjectGate, isEmptyMessage, namesSubject, subjectRelevanceMayProceed, claimPassesSubjectGate, coreFactMayBeWritten, editorActionMayBeWritten } from "../lib/organizer/subject-gate.ts";
 
 const NURSERY = "conversation:2109e1e89306b57b8334d349";
 const MAIN = "conversation:a673c0e0563be6ecf1867094";
@@ -186,4 +186,48 @@ test("being in the same conversation, or the same day, is never what makes a sen
 test("a claim with no sources and no resolution is refused", () => {
   assert.equal(claimPassesSubjectGate({ claimId: "c" }, new Set(["s-gated"])).passes, false);
   assert.equal(claimPassesSubjectGate({ claimId: "c" }, []).passes, false);
+});
+
+// ---------------------------------------------------------------- whose event is it, 2026-09-11
+//
+// The subject checks answer "is this sentence about him". Once his name is in the sentence they
+// cannot answer "is this his event", and a story about his first evening settling himself ended on
+// 「爸爸把客厅摄像头设成每晚自动休眠了，晚上不需要在楼下看张小年」.
+
+test("a fact the Editor calls the adults' own business may not be written", () => {
+  const r = coreFactMayBeWritten({ subjectRole: "adult" });
+  assert.equal(r.passes, false);
+  assert.match(r.reason, /adult/);
+});
+
+test("what he did, and what an adult did FOR him, both stay", () => {
+  // Dropping care would leave a page that says he fell asleep and never says who fed him.
+  assert.equal(coreFactMayBeWritten({ subjectRole: "child" }).passes, true);
+  assert.equal(coreFactMayBeWritten({ subjectRole: "care" }).passes, true);
+});
+
+test("a verdict with no role is kept and reported, never silently dropped", () => {
+  const r = coreFactMayBeWritten({});
+  assert.equal(r.passes, true, "the field is new; a non-compliant model must show as a number, not an empty month");
+  assert.match(r.reason, /no subjectRole/);
+  assert.equal(coreFactMayBeWritten({ subjectRole: "something_else" }).passes, true);
+});
+
+// ---------------------------------------------------------------- the Editor's action
+
+test("only the two story actions are written; the rest are held as pending", () => {
+  for (const action of ["life_event_candidate", "daily_trace"]) {
+    assert.equal(editorActionMayBeWritten(action).proceed, true, `${action} has an implemented mapping`);
+  }
+  for (const action of ["care_observation", "store_only", "attach_existing", "plan_marker"]) {
+    const r = editorActionMayBeWritten(action);
+    assert.equal(r.proceed, false, `${action} has no target here and must not become a story`);
+    assert.match(r.reason, /pending/);
+  }
+});
+
+test("a missing proposedAction is held, not written", () => {
+  for (const value of [undefined, null, "", 7]) {
+    assert.equal(editorActionMayBeWritten(value).proceed, false, `${JSON.stringify(value)} must fail closed`);
+  }
 });

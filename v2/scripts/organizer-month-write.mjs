@@ -91,7 +91,7 @@ const { resolveSpeaker } = await import("../lib/organizer/identity.ts");
 const { buildEvidencePackage, packageHasAssertableMaterial, usedSourceIdsFor } = await import("../lib/organizer/writer-v2.ts");
 const { WRITER_V2_SYSTEM_PROMPT, WRITER_V2_TOOL_NAME, WRITER_V2_TOOL_SCHEMA, WRITER_V2_PROMPT_VERSION, buildWriterV2Prompt } = await import("../lib/organizer/writer-v2-prompt.ts");
 const { NARRATIVE_VALIDATOR_VERSION, validateNarrative } = await import("../lib/organizer/narrative-validator.ts");
-const { subjectGateFor, passesSubjectGate, subjectRelevanceMayProceed, claimPassesSubjectGate, SUBJECT_NAMES } = await import("../lib/organizer/subject-gate.ts");
+const { subjectGateFor, passesSubjectGate, subjectRelevanceMayProceed, claimPassesSubjectGate, coreFactMayBeWritten, editorActionMayBeWritten, SUBJECT_NAMES } = await import("../lib/organizer/subject-gate.ts");
 const { STORY_MEDIA_TIERS } = await import("../lib/organizer/writer-v2.ts");
 const { planArtifacts, applyPlan } = await import("../lib/organizer/production-adapter.ts");
 const { persistDailyTrace, persistOrganizerRun, findOrganizerRun, persistOrganization, markSourcesOrganized, persistQualityReview } = await import("../lib/db/repository.ts");
@@ -371,19 +371,53 @@ async function processItem(item) {
     return entry;
   }
 
+  // The Editor's own action, respected rather than overwritten. `care_observation`,
+  // `attach_existing` and `store_only` have no target implemented here, so they are held as pending
+  // — writing them as a story is what turned a fall off the sofa into an ordinary trace-weight page.
+  const editorAction = editorActionMayBeWritten(verdict.proposedAction);
+  entry.editorAction = { proposedAction: verdict.proposedAction, sensitivityFlags: verdict.sensitivityFlags ?? [], ...editorAction };
+  if (!editorAction.proceed) {
+    entry.pending = editorAction.reason;
+    entry.skipped = `editor action: ${editorAction.reason}`;
+    console.log(`  ${item.lifeDate} — PENDING, not written (${editorAction.reason})`);
+    return entry;
+  }
+
   const kept = new Set(item.keptSourceIds);
-  const claimGate = grounding.claims.map((claim) => ({ claim, verdict: claimPassesSubjectGate(claim, kept) }));
-  const groundedInKept = claimGate.filter((c) => c.verdict.passes).map((c) => c.claim);
+  // groundClaims builds claim-N from coreFacts[N] (claim-grounding.ts), so the Editor's per-fact
+  // subjectRole travels with the claim. Two independent questions, both asked before the Writer:
+  // is this sentence about him (the subject gate), and is this HIS event (the Editor's role).
+  const claimGate = grounding.claims.map((claim, index) => {
+    const fact = verdict.coreFacts?.[index];
+    const gate = claimPassesSubjectGate(claim, kept);
+    const role = coreFactMayBeWritten(fact ?? {});
+    return { claim, gate, role, subjectRole: fact?.subjectRole, passes: gate.passes && role.passes };
+  });
+  const groundedInKept = claimGate.filter((c) => c.passes).map((c) => c.claim);
   entry.claimsFromGatedSources = groundedInKept.length;
-  entry.claimGate = claimGate.map((c) => ({ claimId: c.claim.claimId, passes: c.verdict.passes, reason: c.verdict.reason, basis: c.claim.subject?.basis, resolved: Boolean(c.claim.subject?.resolved) }));
+  entry.claimGate = claimGate.map((c) => ({
+    claimId: c.claim.claimId, passes: c.passes, subjectRole: c.subjectRole,
+    gateReason: c.gate.reason, roleReason: c.role.reason,
+    basis: c.claim.subject?.basis, resolved: Boolean(c.claim.subject?.resolved),
+  }));
+  entry.coreFactRoles = (verdict.coreFacts ?? []).reduce((acc, f) => { const k = f.subjectRole ?? "(absent)"; acc[k] = (acc[k] ?? 0) + 1; return acc; }, {});
   if (groundedInKept.length === 0) { entry.skipped = "no grounded claim traces back to a message that passed the gate"; console.log(`  ${item.lifeDate} — no claim from gated sources`); return entry; }
   grounding = { ...grounding, claims: groundedInKept };
+
+  // A quote may only come from material that survived both gates. The Editor's quotableLines are
+  // its own summary of the window, not a subset of the claims, and `quoteIsAssertable` lets a line
+  // through on the strength of naming the child — so an excluded claim could walk back into the
+  // page as a quotation. Cut here, once, on the evidence items the surviving claims rest on.
+  const survivingItemIds = new Set(groundedInKept.flatMap((claim) => (claim.evidenceRefs ?? []).map((ref) => String(ref).split("#")[0])));
+  const allQuotes = verdict.quotableLines ?? [];
+  const keptQuotes = allQuotes.filter((q) => survivingItemIds.has(String(q.evidenceRef).split("#")[0]));
+  entry.quoteGate = { offered: allQuotes.length, kept: keptQuotes.length, dropped: allQuotes.length - keptQuotes.length };
 
   const pkg = buildEvidencePackage({
     window: item.w, windowFingerprint: item.fp, grounding,
     selectedBy: { policyId: T7_POLICY_ID, action: "life_event_candidate", worthinessScore: 0 },
     subject: { ...SUBJECT, narrativeLabel: "张年" }, identityOf,
-    quotableLines: (verdict.quotableLines ?? []).map((q) => ({ text: q.text, evidenceRef: q.evidenceRef, speakerRole: q.speakerRole })),
+    quotableLines: keptQuotes.map((q) => ({ text: q.text, evidenceRef: q.evidenceRef, speakerRole: q.speakerRole })),
     longitudinal: [], lifeDate: item.lifeDate,
   });
   // Private run evidence: every photograph this window bound, HOW it was bound and WHICH message it
@@ -416,15 +450,48 @@ async function processItem(item) {
     return entry;
   }
   entry.proposed = { title: writer.output.title, story, usedMediaIds: writer.output.usedMediaIds ?? [], claims: writer.output.narrativeClaims ?? [] };
+
+  // Every offered photograph has to come back with a stance: adopted, or declined with a reason.
+  // Not adopting is a legitimate answer and is never forced — what is not allowed is silence, which
+  // is what the previous prompt produced (39 candidates offered, 1 adopted, no reason given for the
+  // other 38). A candidate the Writer says nothing about is recorded as an unanswered offer.
+  const stanceById = new Map((writer.output.mediaDecisions ?? []).map((d) => [d.mediaId, d]));
+  const offered = (entry.mediaCandidates ?? []).filter((c) => c.offeredToWriter);
+  const usedIds = new Set(writer.output.usedMediaIds ?? []);
+  entry.mediaStance = offered.map((c) => {
+    const stance = stanceById.get(c.mediaId);
+    const used = usedIds.has(c.mediaId) || stance?.used === true;
+    return {
+      mediaId: c.mediaId, tier: c.tier, rule: c.rule, basis: c.basis, boundSourceId: c.boundSourceId,
+      used,
+      // Adoption has to say WHICH sentence it belongs to; a declined photograph has to say why.
+      supportsFact: used ? (stance?.supportsFact ?? null) : undefined,
+      reason: used ? undefined : (stance?.reason ?? null),
+      answered: Boolean(stance),
+      // A contextual binding places a picture beside the page. It never licenses a claim about what
+      // the picture shows, whatever the Writer wrote next to it.
+      mayNarrateAsDepicting: c.tier === "confirmed",
+    };
+  });
+  entry.mediaStanceSummary = {
+    offered: offered.length,
+    answered: entry.mediaStance.filter((m) => m.answered).length,
+    adopted: entry.mediaStance.filter((m) => m.used).length,
+    declinedWithReason: entry.mediaStance.filter((m) => !m.used && m.reason).length,
+    unanswered: entry.mediaStance.filter((m) => !m.answered).length,
+    adoptedWithoutFact: entry.mediaStance.filter((m) => m.used && !m.supportsFact).length,
+  };
+
   // What the Writer asked to keep, and whether this run's tier policy would let it — the same test
   // planMedia applies at persistence, recorded here so a dry run carries the identical evidence.
   entry.mediaAdoption = (writer.output.usedMediaIds ?? []).map((mediaId) => {
     const candidate = entry.mediaCandidates?.find((c) => c.mediaId === mediaId);
     if (!candidate) return { mediaId, linked: false, reason: "not present in this window's evidence" };
-    return { mediaId, tier: candidate.tier, basis: candidate.basis, boundSourceId: candidate.boundSourceId, linked: candidate.attachableUnderPolicy, reason: candidate.attachableUnderPolicy ? `tier ${candidate.tier} permitted` : `tier ${candidate.tier} is not attachable under this policy` };
+    const stance = stanceById.get(mediaId);
+    return { mediaId, tier: candidate.tier, basis: candidate.basis, boundSourceId: candidate.boundSourceId, supportsFact: stance?.supportsFact ?? null, linked: candidate.attachableUnderPolicy, reason: candidate.attachableUnderPolicy ? `tier ${candidate.tier} permitted` : `tier ${candidate.tier} is not attachable under this policy` };
   });
-  if (entry.mediaCandidates?.some((c) => c.offeredToWriter) && (writer.output.usedMediaIds ?? []).length === 0) {
-    entry.mediaNote = "photographs were offered and the Writer named none; this page would be text-only";
+  if (offered.length && (writer.output.usedMediaIds ?? []).length === 0) {
+    entry.mediaNote = `${offered.length} photograph(s) offered, none adopted; declined with a reason: ${entry.mediaStanceSummary.declinedWithReason}, no stance given: ${entry.mediaStanceSummary.unanswered}`;
   }
   console.log(`  ${item.lifeDate} OK  ${story.slice(0, 60)}…`);
 
@@ -470,7 +537,7 @@ async function processItem(item) {
   const writerStory = { title: writer.output.title, story, usedMediaIds: writer.output.usedMediaIds ?? [] };
   let applied;
   try {
-    const plan = planArtifacts({ window: item.w, outcome, windowFingerprint: item.fp, policy, story: writerStory, now, newId: newIdOf });
+    const plan = planArtifacts({ window: item.w, outcome, windowFingerprint: item.fp, policy, story: writerStory, now, newId: newIdOf, editor: { proposedAction: verdict.proposedAction, sensitivityFlags: verdict.sensitivityFlags ?? [] } });
     // Publication is a separate decision from writing, and it is not this script's to make unless
     // a human has said so on this run. Default: keep ADAPTER_REVIEW_DECISION, which is fail-closed.
     plan.review.reasonCodes = [...plan.review.reasonCodes, "t7-subject-gate"];

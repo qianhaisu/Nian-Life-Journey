@@ -14,7 +14,22 @@ export type RuleDimension = "uniqueness" | "specificity" | "evidenceStrength" | 
 export type MemoryEditorProposedAction = "store_only" | "daily_trace" | "life_event_candidate" | "attach_existing" | "care_observation";
 const MEMORY_EDITOR_ACTIONS = new Set<MemoryEditorProposedAction>(["store_only", "daily_trace", "life_event_candidate", "attach_existing", "care_observation"]);
 
-export type CoreFact = { statement: string; assertionKind: "raw_fact" | "attributed_claim"; claimant?: string; claimantRole?: string; evidenceRefs: string[] };
+/**
+ * `subjectRole` answers "whose event is this" for one extracted fact, and it is the only thing that
+ * separates the child's day from the adults' admin once his NAME appears in both. Added
+ * 2026-09-11 (memory-editor-v4.1) after a story about him ended on 「爸爸把客厅摄像头设成每晚自动休眠」:
+ * that sentence names him, resolves to him, and is about a camera.
+ *
+ *   child  something he did, or that happened to him (an adult's report of it counts)
+ *   care   what an adult did FOR him — feeding, settling, preparing his food, taking him out
+ *   adult  the adults' own business: housework, devices, money, scheduling, forwarded advice,
+ *          and their discussion or evaluation OF him. He is named in it; it is not his.
+ *
+ * Optional on the type because v1-v4 verdicts do not carry it; the caller decides what a missing
+ * value means, and organizer-month-write.mjs records it rather than guessing.
+ */
+export type CoreFactSubjectRole = "child" | "care" | "adult";
+export type CoreFact = { statement: string; assertionKind: "raw_fact" | "attributed_claim"; subjectRole?: CoreFactSubjectRole; claimant?: string; claimantRole?: string; evidenceRefs: string[] };
 
 // Longitudinal support for a developmental-transition claim (Memory Editor v3).
 //
@@ -104,7 +119,10 @@ export function validateMemoryEditorVerdict(raw: unknown, window: EvidenceRefWin
     if (fact.assertionKind !== "raw_fact" && fact.assertionKind !== "attributed_claim") throw new Error(`Invalid memory editor verdict: coreFacts[${index}].assertionKind`);
     if (fact.assertionKind === "attributed_claim" && typeof fact.claimant !== "string") throw new Error(`Invalid memory editor verdict: coreFacts[${index}].claimant is required for attributed_claim`);
     if (!validSpanRefs(fact.evidenceRefs, window)) throw new Error(`Invalid memory editor verdict: coreFacts[${index}].evidenceRefs`);
-    return { statement: fact.statement, assertionKind: fact.assertionKind, claimant: fact.claimant as string | undefined, claimantRole: fact.claimantRole as string | undefined, evidenceRefs: fact.evidenceRefs as string[] };
+    // An unrecognised role is dropped rather than passed through: a caller that filters on it must
+    // see "absent", never a value it does not know how to treat.
+    const subjectRole = fact.subjectRole === "child" || fact.subjectRole === "care" || fact.subjectRole === "adult" ? fact.subjectRole : undefined;
+    return { statement: fact.statement, assertionKind: fact.assertionKind, subjectRole, claimant: fact.claimant as string | undefined, claimantRole: fact.claimantRole as string | undefined, evidenceRefs: fact.evidenceRefs as string[] };
   });
   if (!Array.isArray(value.quotableLines)) throw new Error("Invalid memory editor verdict: quotableLines");
   const quotableLines: QuotableLine[] = value.quotableLines.map((line, index) => {

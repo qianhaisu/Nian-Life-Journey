@@ -48,6 +48,14 @@ export type MediaEvidence = {
   boundItemId?: string;
   boundSourceId?: string;
   /**
+   * The WORDS the photograph arrived with — the text of the message it is bound to, not a
+   * description of the picture. Added 2026-09-11: asked which sentence a photograph belongs to
+   * while being told nobody has seen it, the Writer declined every single one, and it was right to,
+   * because the question as posed could only be answered by guessing at the image. The binding is
+   * about arrival, not content, and this is the half of it the Writer could not see.
+   */
+  boundText?: string;
+  /**
    * Deliberately absent: any description of what the image shows. Nothing in the pipeline has
    * looked at the pixels, so the Writer must never be handed — or invent — image content.
    */
@@ -302,6 +310,7 @@ export function buildEvidencePackage(input: BuildPackageInput): VerifiedMemoryEv
       confidence: binding.confidence,
       boundItemId: binding.boundItemId,
       boundSourceId: boundItem?.sourceId,
+      boundText: boundItem?.text,
       contentDescribed: false,
     };
   });

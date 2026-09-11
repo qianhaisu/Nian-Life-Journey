@@ -52,6 +52,16 @@ export interface OrganizerRunMetadata {
    * `tier` is a MediaBindingTier (lib/organizer/evidence/media-tier.ts), widened to `string` here
    * so this shared type file keeps no organizer-internal import.
    */
+  /**
+   * What the Memory Editor asked for, kept even when the pipeline routed the window somewhere else.
+   *
+   * The sofa fall was written as an ordinary trace-weight page because the driver discarded this:
+   * the Editor had called it `care_observation` and flagged it `health`, and nothing downstream
+   * could see that it had. Recorded, never acted on here — routing is the caller's decision and a
+   * review desk needs to be able to read what the Editor actually said.
+   */
+  editorProposedAction?: string;
+  sensitivityFlags?: string[];
   mediaBinding?: {
     /** Media the window offered the Writer. Input candidates, never an implicit selection. */
     candidateCount: number;

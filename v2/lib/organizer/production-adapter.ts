@@ -129,6 +129,12 @@ export type PlanInput = {
    * the artifact rather than anything the adapter re-derived.
    */
   judgment?: { reasonCodes?: string[]; gateA?: string; subjectRelevance?: string };
+  /**
+   * The Memory Editor's own verdict fields that must survive onto the run, so a stored artifact can
+   * say what the Editor asked for even when the pipeline routed it elsewhere. Recorded, never acted
+   * on: this module persists a decision, it does not make one.
+   */
+  editor?: { proposedAction?: string; sensitivityFlags?: string[] };
   now: string;
   newId: (prefix: string) => string;
   latencyMs?: number;
@@ -212,6 +218,8 @@ export function planArtifacts(input: PlanInput): PersistencePlan {
     sourceCount: sourceIds.length,
     mediaInputCount: window.mediaBindings.length,
     latencyMs: input.latencyMs ?? 0,
+    editorProposedAction: input.editor?.proposedAction,
+    sensitivityFlags: input.editor?.sensitivityFlags,
   };
 
   const base: PersistencePlan = { organizationFingerprint, action: outcome.action, profileId, sourceIds, run, mediaDecisions: [], notes };
@@ -251,7 +259,7 @@ export function planArtifacts(input: PlanInput): PersistencePlan {
       createdBy: "ai",
       organizerVersion: policy.organizerVersion,
       organizationFingerprint,
-      organizerRun: { organizerType: "ai", organizerVersion: policy.organizerVersion, provider: policy.provider, model: policy.model, promptVersion: policy.promptVersion, processedAt: now, organizationFingerprint, sourceCount: sourceIds.length, mediaInputCount: window.mediaBindings.length, latencyMs: input.latencyMs ?? 0, mediaBinding },
+      organizerRun: { organizerType: "ai", organizerVersion: policy.organizerVersion, provider: policy.provider, model: policy.model, promptVersion: policy.promptVersion, processedAt: now, organizationFingerprint, sourceCount: sourceIds.length, mediaInputCount: window.mediaBindings.length, latencyMs: input.latencyMs ?? 0, editorProposedAction: input.editor?.proposedAction, sensitivityFlags: input.editor?.sensitivityFlags, mediaBinding },
     };
     const links: SourceMemoryLink[] = sourceIds.map((sourceId, index) => ({ rawSourceId: sourceId, lifeEventId: eventId, role: index === 0 ? "primary" : "supporting", createdAt: now }));
 

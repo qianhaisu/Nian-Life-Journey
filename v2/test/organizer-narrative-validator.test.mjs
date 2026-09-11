@@ -498,3 +498,36 @@ test("家里 meaning the house is not a speaker and stays allowed", () => {
     assert.ok(!codes(r).includes("generic_family_collective"), `${story} -> ${JSON.stringify(r.issues)}`);
   }
 });
+
+// ---------------------------------------------------------------- the photograph offer, 2026-09-11
+
+test("the prompt separates a photograph that may be narrated from one that may only be placed", async () => {
+  const { buildWriterV2Prompt } = await import("../lib/organizer/writer-v2-prompt.ts");
+  const p = pkg({ media: [
+    { mediaId: "m-same-message", tier: "confirmed", boundSourceId: "src-1" },
+    { mediaId: "m-nearby", tier: "strong_contextual", boundSourceId: "src-2" },
+    { mediaId: "m-same-day", tier: "day_level", boundSourceId: "src-3" },
+  ] });
+  const text = buildWriterV2Prompt(p);
+  assert.ok(text.includes("[m-same-message]"), "a same-message photograph is offered");
+  assert.ok(text.includes("[m-nearby]"), "a contextual photograph is offered too");
+  assert.ok(!text.includes("[m-same-day]"), "same day is not a binding and must not be offered");
+  assert.match(text, /不能说它拍的就是这件事/, "the contextual tier must say what it does not license");
+  assert.match(text, /mediaDecisions/, "and every offered photograph must come back with a stance");
+  assert.match(text, /不要描述画面/);
+});
+
+test("with no photograph bound to it, the prompt asks for no stance at all", async () => {
+  const { buildWriterV2Prompt } = await import("../lib/organizer/writer-v2-prompt.ts");
+  const text = buildWriterV2Prompt(pkg({ media: [] }));
+  assert.match(text, /## 照片\n\s*（无）/);
+});
+
+test("an unknown speaker's observable fact may be written unattributed; a judgement may not", async () => {
+  // 2026-09-11: the private-chat export writes the account owner as 我, which hashes to a digest no
+  // registry entry can claim, so 「他今天早上吃了」 had no name to carry it and came out as 「家里回…」.
+  const { WRITER_V2_SYSTEM_PROMPT } = await import("../lib/organizer/writer-v2-prompt.ts");
+  assert.match(WRITER_V2_SYSTEM_PROMPT, /直接写事实，不写是谁说的/);
+  assert.match(WRITER_V2_SYSTEM_PROMPT, /判断、心思、评价/);
+  assert.match(WRITER_V2_SYSTEM_PROMPT, /家里说/, "the banned-collective list has to name this one too");
+});

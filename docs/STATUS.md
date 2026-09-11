@@ -5626,3 +5626,51 @@ image `sha256:f1eb1a4a807491000e959e9d4a288000e005f0e1b377d7102a59b2d6e6ea5fa6`�
 实际采用媒体与判定依据）。
 
 **验证命令**：`npm run typecheck`、`npm test`（801 条，791 通过 0 失败 10 跳过）、`npm run lint`、`npm run build` 全部通过。
+
+---
+
+## 2026-09-11 傍晚（Claude Code，单 session）：第四项修复 + 固定样本验收 + 2025-09 首月真实写入
+
+1. **本轮线上多了什么家人能读的东西**：**私有站上多了 7 篇 2025 年 9 月的新故事**
+   （life_events 675 → 682），全部 `needs_human_review`、权重 `trace`、**未发布**，公开面没有变化。
+   其中 4 篇合格（一点才睡睡到中午、睡了四十分钟中间没怎么动、假笑视频、雪姨要买活虾煮给他），
+   2 篇偏薄建议人工退回，1 篇建议拒绝。四张被采用的照片全部打开看过，三张与它配的那句相关，
+   一张配错了句子（他醒着玩的照片配在讲他睡觉的那一句旁边）。
+
+2. **没做到什么 / 最大的已知 blocker**：四项修复都落地了。
+   ①来源过滤贯通：编辑器摘要里的引语现在只保留落在幸存 claim 上的（每窗丢 0–1 条）；
+   coreFacts 新增编辑器逐条给的 `subjectRole`（child / care / adult，memory-editor-v4.1），
+   只有前两类进写作——2025-07-07 那一窗 10 条里 4 条判 adult 被挡，「爸爸把摄像头设成每晚休眠」
+   那句家务尾巴消失了；这是分类判断，不是禁词表，care 故意保留。
+   ②照片必须表态（writer r2.2 + `mediaDecisions`）：第一版把问题问成「它配的哪句事实」，
+   模型每张都拒绝且理由正确（没人看过图）；改成把绑定消息的原文给它看之后，表态率 100%、
+   采用 1/8、其余每张都给了具体理由。不强制采用，也不再沉默。
+   ③尊重编辑器动作：`proposedAction` 与 `sensitivityFlags` 写进 `organizer_run`；
+   `care_observation` / `store_only` / `attach_existing` 在写作前停下记为 pending，
+   不再无条件转成 `life_event_candidate`（摔下沙发就是这样被误转的）。
+   ④未识别发送人已查明：正向哈希证明 `4366d185…` = 显示名「**我**」，即导出账号本人的占位名，
+   10,047 条全部在两个私聊里、群聊零条。**需要 Teddy 一句话：这两份私聊是从谁的微信导出的。**
+   在那之前不因称谓未知否定事实——可观察事实可不点名写，判断类整句不写。
+   **仍失败的**：指代无解的窗口仍会出稿（07-03 型）；一句话的薄页仍会写出来（7 篇里 2 篇）；
+   采用的照片会配错句子（4 张里 1 张）——绑定没错，配准错了，这需要审阅台把图和句子并排给人看。
+
+3. **下一件事**：等「我」这个 digest 的归属；审阅台展示「采用的照片 + 它配的那句」；
+   然后继续按月推进（2025-09 已完成，剩 01–06、10–12）。
+
+**固定样本验收（9 窗口，dry run 零写入）**：合格 3 / 正确不生成 4（含 2 个 care_observation pending）/ 仍失败 2。
+**首月增量（预声明后逐项核对，完全吻合）**：life_events +7、source_memory_links +34、organizer_runs +7、
+content_quality_reviews +7、**organizer_jobs 13 未动**、daily_traces 0。无重复写入、无覆盖，
+既有 24 篇一个字节未动（未用 `--force`，已整理窗口零成本跳过）。
+**调用与费用**：deepseek-flash 共 67 次（验收 20 + 首月 47），输入 116,767 / 输出 80,702 token，
+按官方高峰价估算 **≈ ¥0.9**。无重试，未挑最好的一次。
+
+**私有报告**（含家庭聊天原文与实际照片，不进 Git）：
+`C:\Users\teddy\NianlifeOps\night-2026-09-11\review\round3-fixes-and-month-2026-09-11.md`、
+`month-2025-09-readable.md`（7 篇可读样本）、`adopted-photos\`（四张采用的照片本身）、
+`verify3-2025-07.json` / `verify3-2025-08.json` / `month-2025-09-batch1.json` / `month-2025-09-batch2.json`、
+`sender-4366d185.json`。
+
+**运行条件**：`AI_MODEL=deepseek-flash`、`ORGANIZER_V2_MEDIA_TIERS=confirmed,strong_contextual`（仅执行进程，
+全局生产配置未改）、`zeroAnaphoraAntecedent=true`、无 `--self-approve`、无 `--grade`、无 `--force`、
+常驻 worker 保持关闭。容器未换（`410a0005b675fa…`），18080 仍由本 session 维护（PID 54172）。
+`npm run typecheck`、`npm test`（809 条，799 通过 0 失败 10 跳过）、`npm run lint`、`npm run build` 全部通过。

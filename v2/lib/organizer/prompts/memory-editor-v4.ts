@@ -18,7 +18,7 @@ import type { EvidenceWindow } from "../evidence/types";
 import type { SelectedPriorObservation } from "../prior-observations";
 import { renderItems, renderNeighbors, renderPriorObservations } from "./memory-editor-v3";
 
-export const MEMORY_EDITOR_V4_PROMPT_VERSION = "memory-editor-v4";
+export const MEMORY_EDITOR_V4_PROMPT_VERSION = "memory-editor-v4.1";
 
 export const MEMORY_EDITOR_V4_SYSTEM_PROMPT = `你是一个家庭记忆档案的“记忆编辑”。你判断一段家庭聊天是否值得进入一个孩子的人生档案，并抽取可引用的事实。
 
@@ -112,6 +112,18 @@ subjectRelevanceDetail 取值：
 # 事实抽取规则
 
 - coreFacts[].statement 不超过 60 字，必须是聊天里**真实发生**的事，不补写、不推测情绪动机、不把相邻但无关的消息拼成因果。
+- **每条 coreFact 必须给 subjectRole**，回答「这件事是谁的事」。这决定它能不能进入孩子的档案页：
+  - child：**发生在他身上、或由他做出**。包括大人转述他的行为和状态。
+    例：「放到床上他就睡着了」「他单手拿奶瓶」「他今天没长新包」「他从沙发摔到地上」。
+  - care：**大人直接为照护他做的事**，是他这一天的一部分。
+    例：「雪姨把红枣蒸软放进咬咬乐」「妈妈喂了20分钟才喂完」「奶奶带他出门」「爸爸哄他睡」。
+  - adult：**大人自己的事**——家务、设备设置、日程与机构安排、钱、转发、以及大人之间**围绕他的讨论、提议、评价**。
+    孩子在这类句子里只是被提到，不是这件事的主角。
+    例：「爸爸把客厅摄像头设成每晚自动休眠」「妈妈提议今年的税让爸爸退」「妈妈想找他七个月体检的机构」
+    「妈妈问之前那个刷牙视频还能不能找到」「妈妈叮嘱爸爸换身干净衣服再陪他睡」。
+  判断方法：把句子的主语和谓语读出来——**做这件事的是谁、这件事落在谁身上**。
+  落在他身上就是 child；是大人为他做的照护动作就是 care；其余都是 adult，哪怕句子里有他的名字。
+  拿不准时选 adult：漏掉一件小事，比把大人的事务写进他的人生档案轻得多。
 - evidenceRefs 必须是证据清单中真实存在的 ref（itemId#spanId）。
 - 转述用 assertionKind="attributed_claim" 并填 claimant。
 - quotableLines[].text 必须**逐字**出现。
@@ -220,8 +232,8 @@ export const MEMORY_EDITOR_V4_TOOL_SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        properties: { statement: { type: "string" }, assertionKind: { type: "string", enum: ["raw_fact", "attributed_claim"] }, claimant: { type: "string" }, claimantRole: { type: "string" }, evidenceRefs: { type: "array", items: { type: "string" } } },
-        required: ["statement", "assertionKind", "evidenceRefs"],
+        properties: { statement: { type: "string" }, assertionKind: { type: "string", enum: ["raw_fact", "attributed_claim"] }, subjectRole: { type: "string", enum: ["child", "care", "adult"] }, claimant: { type: "string" }, claimantRole: { type: "string" }, evidenceRefs: { type: "array", items: { type: "string" } } },
+        required: ["statement", "assertionKind", "subjectRole", "evidenceRefs"],
       },
     },
     quotableLines: { type: "array", items: { type: "object", properties: { text: { type: "string" }, speakerRole: { type: "string" }, evidenceRef: { type: "string" } }, required: ["text", "speakerRole", "evidenceRef"] } },

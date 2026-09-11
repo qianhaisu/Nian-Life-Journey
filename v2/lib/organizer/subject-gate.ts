@@ -233,3 +233,49 @@ export function claimPassesSubjectGate(
   }
   return { passes: false, reason: claim.subject?.resolved ? `resolved only as ${claim.subject.basis}, outside this window` : "no gated source and no subject resolved in this window" };
 }
+
+/**
+ * Whether one extracted fact is the CHILD'S, and may therefore be written on his page.
+ *
+ * The subject checks above answer "is this sentence about him". They cannot answer "is this his
+ * event", and once his name is in the sentence the two look identical: 「爸爸把客厅摄像头设成每晚
+ * 自动休眠了，晚上不需要在楼下看张小年」 names him, resolves to him, and is about a camera. It
+ * closed a story about his first evening settling himself, on 2026-09-11, as the last sentence.
+ *
+ * The judgement is the Editor's (`subjectRole`, memory-editor-v4.1), not a word list here: a list
+ * of banned nouns would have to grow by one entry per example and would still miss the next one.
+ * `care` is kept deliberately — what an adult did for him is part of his day, and dropping it would
+ * leave a page that says he fell asleep and never says who fed him.
+ *
+ * A fact with NO role is kept and reported, never silently dropped: the field is new, and a model
+ * that fails to emit it must show up as a compliance number rather than as an empty month.
+ */
+export function coreFactMayBeWritten(fact: { subjectRole?: string }): { passes: boolean; reason: string } {
+  if (fact.subjectRole === "child" || fact.subjectRole === "care") return { passes: true, reason: `subjectRole=${fact.subjectRole}` };
+  if (fact.subjectRole === "adult") return { passes: false, reason: "subjectRole=adult: the adults' own business, he is only named in it" };
+  return { passes: true, reason: "no subjectRole on this verdict; kept and recorded" };
+}
+
+/**
+ * Editor actions this pipeline knows how to turn into something a family can read.
+ *
+ * `life_event_candidate` is the story path. `daily_trace` maps onto it too, at the lowest memory
+ * weight — that mapping is Teddy's, 2026-09-04 (T11): a DailyTrace has no title and renders folded,
+ * so an ordinary day written as one broke the reading format for no reason the writer's own output
+ * could not fix.
+ *
+ * Everything else has no target built here. `care_observation` is a health record, `attach_existing`
+ * edits a Memory that already exists, `store_only` is the Editor declining. Writing any of them as a
+ * story is not a mapping, it is a mislabel: the sofa fall came out as an ordinary trace-weight page
+ * because this pipeline turned a care_observation into a life_event_candidate without being asked.
+ * They are held as pending instead, with the Editor's own action recorded.
+ */
+const WRITABLE_EDITOR_ACTIONS: ReadonlySet<string> = new Set(["life_event_candidate", "daily_trace"]);
+
+export function editorActionMayBeWritten(proposedAction: unknown): { proceed: boolean; reason: string } {
+  if (typeof proposedAction !== "string" || !proposedAction) {
+    return { proceed: false, reason: "editor verdict carried no proposedAction" };
+  }
+  if (WRITABLE_EDITOR_ACTIONS.has(proposedAction)) return { proceed: true, reason: `proposedAction=${proposedAction}` };
+  return { proceed: false, reason: `proposedAction=${proposedAction} has no implemented target here; held as pending rather than written as a story` };
+}

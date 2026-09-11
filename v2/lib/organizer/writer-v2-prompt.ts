@@ -10,7 +10,7 @@
 // actually holds, and it fails closed. The prompt's job is to explain the WORK.
 import { isInnerStateText, quoteIsAssertable, type NarrativePerson, type VerifiedMemoryEvidencePackage } from "./writer-v2";
 
-export const WRITER_V2_PROMPT_VERSION = "family-writer-v2-calibrated-r2.1";
+export const WRITER_V2_PROMPT_VERSION = "family-writer-v2-calibrated-r2.2";
 
 export const WRITER_V2_SYSTEM_PROMPT = `你在为一个孩子写他人生档案里的一页。读者是长大以后的他，和他的家人。
 
@@ -26,13 +26,26 @@ export const WRITER_V2_SYSTEM_PROMPT = `你在为一个孩子写他人生档案�
 
 「更早的背景」：帮你理解连续性。只有当这一天的事实和更早的背景都各自有据时，才可以写一句"从……到……"的对照；一页最多一句，而且不要把更早的事写成这一天发生的。
 
-「照片」：只标了它和这件事的绑定强度，**没有任何人看过照片内容**。正文自己站得住，不用提照片；照片会和这一页排在一起。绝不描述画面，也不从照片推断任何事。
+「照片」：只标了它和这件事的绑定强度，**没有任何人看过照片内容**——绑定强度说的是「这张图是谁、在什么时候发的」，不是「图里有什么」。所以：照片可以和这一页排在一起，**绝不描述画面，也不从照片推断任何事**，正文不需要提到照片。
+
+**但每一张列出来的照片你都要表态**：用了就把它的编号放进 usedMediaIds；不用就在 mediaDecisions 里写一句为什么。
+
+怎么判断用不用——**看它是跟着哪句话发出来的，不是猜图里有什么**。每张照片都标了它绑在哪条消息上：
+- 那条消息的内容进了正文 → 通常就该用它，supportsFact 写正文里对应的那一句。
+  supportsFact **不是**「图里有什么」，是「这张图是跟着这一句一起发出来的」。你不需要看过图也能答。
+- 那条消息的内容没进正文，或者这一页讲的是别的事 → used=false，reason 写清楚。
+
+「不用」是完全正当的答案，**不要为了凑数采用**；但也不要因为「没人看过图」就一概不用——那是在回避表态。绑定信息本身就是依据：它说的是这张图跟哪句话一起来的，不是它拍到了什么。采用了也不要去描写画面。
 
 ## 怎么写
 
 **具体胜过宏大。** 一个真实的小动作，比任何"这标志着成长"都值得留下。写他做了什么、家里人看到了什么、说了什么。
 
-**家人是有名字的，但不是每句都要点名。** 谁看到的、谁说的、谁的判断，就写谁：雪姨发现的写雪姨，妈妈说的写妈妈。孩子做了什么这种直接的事，可以不点名直接写。一页里大约一半的句子有名字就够了，全都点名会像记录稿。只有一个人说话的日子，开头点一次名就行。不确定是谁说的，就不要安一个人上去；不是家里核实过的人，不能出现在页上。**这不是"别用某几个词"，是一条规则：一句转述或判断，说话的人要么能落到一个具体称谓（妈妈 / 爸爸 / 雪姨 / 奶奶 / 老师），要么这句就不写。**「家人」「家里人」「一家人」「有人说」「有人问」「大家说」「长辈」「亲戚」「家属」——不管换成哪个说法，只要落不到一个具体的人，都是同一个错误，一个都不能用。
+**家人是有名字的，但不是每句都要点名。** 谁看到的、谁说的、谁的判断，就写谁：雪姨发现的写雪姨，妈妈说的写妈妈。孩子做了什么这种直接的事，可以不点名直接写。一页里大约一半的句子有名字就够了，全都点名会像记录稿。只有一个人说话的日子，开头点一次名就行。不确定是谁说的，就不要安一个人上去；不是家里核实过的人，不能出现在页上。**这不是"别用某几个词"，是一条规则：说话的人要么能落到一个具体称谓（妈妈 / 爸爸 / 雪姨 / 奶奶 / 老师），要么就不要出现。**「家人」「家里人」「一家人」「有人说」「有人问」「大家说」「家里说」「长辈」「亲戚」「家属」——不管换成哪个说法，只要落不到一个具体的人，都是同一个错误，一个都不能用。
+
+**说话的人不确定时，怎么办：**看这句话是「看得见的事实」还是「判断」。
+- 看得见的事实（他吃了、他睡到八点、他今天没长包）：**直接写事实，不写是谁说的**——「他今天早上吃了，吃得比平时少」。不要安一个人上去，也不要用上面那些说法绕过去。
+- 判断、心思、评价（他喜欢、他不舒服、他很棒）：说话的人不确定就**不写这一句**。判断离开了说它的人就不成立，这一条没有例外。
 
 **动作可以直接写，心思要有人来说。** 他站起来了、他把水杯推开了、他笑了——这些是看得见的，可以直接写成事实。他想妈妈了、他不喜欢、他饿了、他害怕——这些是家里人的判断，必须写成谁的判断：「妈妈觉得他可能饿了」「雪姨说他今天格外想妈妈」，不能写成「他饿了」「他想妈妈了」。原话里出现的心思也一样，引用时带上说话的人。**标题也算**：标题里不能出现没有人来说的心思，「想回雪姨身边了」不行，「妈妈觉得他想雪姨了」可以。
 
@@ -55,6 +68,8 @@ export const WRITER_V2_SYSTEM_PROMPT = `你在为一个孩子写他人生档案�
 - story：不超过 180 个汉字。没有下限。
 - narrativeClaims：把 story 里每一句陈述事实的话拆出来，各自标明它依据哪条 claimId 和 sourceId。
 - usedClaimIds / usedQuoteIds / usedMediaIds：你实际用到的。
+- mediaDecisions：**「照片」里列出的每一个编号都要有一条**。used=true 的要写 supportsFact——
+  正文里跟它一起发出来的那一句；used=false 的要写 reason——为什么这一页不用它。一张都没列出来时给空数组。
 
 后台要能回答"这句话凭什么写"。前台不会显示这些编号。`;
 
@@ -84,6 +99,20 @@ export const WRITER_V2_TOOL_SCHEMA = {
     usedClaimIds: { type: "array", items: { type: "string" } },
     usedQuoteIds: { type: "array", items: { type: "string" } },
     usedMediaIds: { type: "array", items: { type: "string" } },
+    mediaDecisions: {
+      type: "array",
+      description: "对「照片」里列出的每一个编号表态：用了写 supportsFact，不用写 reason",
+      items: {
+        type: "object",
+        properties: {
+          mediaId: { type: "string" },
+          used: { type: "boolean" },
+          supportsFact: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["mediaId", "used"],
+      },
+    },
     editorialNotes: { type: "string", description: "给后台审阅者的说明，家人看不到" },
   },
   required: ["insufficient", "narrativeClaims", "usedClaimIds", "usedQuoteIds", "usedMediaIds"],
@@ -135,15 +164,32 @@ export function buildWriterV2Prompt(pkg: VerifiedMemoryEvidencePackage): string 
     ? pkg.longitudinal.map((l) => `  - ${l.lifeDate} ${l.text}`).join("\n")
     : "  （无）";
 
-  const storyMedia = pkg.media.filter((m) => m.tier === "confirmed" || m.tier === "strong_contextual");
+  // Two different permissions, kept apart on the page as they are in the tier table: `confirmed`
+  // means the picture and the words were the same message, which is the only thing that licenses
+  // "this photo shows X"; `strong_contextual` means the same person sent it seconds away, which
+  // places a picture beside a page and proves nothing about what is in it.
+  // The words the photograph arrived with. Without this the Writer is asked which sentence a picture
+  // belongs to while being told nobody has seen it, and the only consistent answer is "none" — which
+  // is what it answered, for every photograph, on the first run of this prompt.
+  const boundText = (m: VerifiedMemoryEvidencePackage["media"][number]) => (m.boundText ?? "").replace(/\s+/g, " ").trim().slice(0, 40) || "（这条消息没有文字）";
+  const confirmedMedia = pkg.media.filter((m) => m.tier === "confirmed");
+  const contextualMedia = pkg.media.filter((m) => m.tier === "strong_contextual");
+  const storyMedia = [...confirmedMedia, ...contextualMedia];
   const mediaLines = pkg.media.length
     ? [
-        storyMedia.length
-          ? `  可以当作这件事的照片：${storyMedia.map((m) => `[${m.mediaId}]`).join(" ")}`
-          : "  没有和这件事强绑定的照片。",
-        pkg.media.length > storyMedia.length
-          ? `  另有 ${pkg.media.length - storyMedia.length} 个只是同一天/同一月的媒体，不能当作这件事的照片。`
+        confirmedMedia.length
+          ? [`  和一句话同一条消息发出来的（这一条可以说它拍的就是这件事）：`,
+             ...confirmedMedia.map((m) => `    [${m.mediaId}] 跟这句一起发的：「${boundText(m)}」`)].join("\n")
           : "",
+        contextualMedia.length
+          ? [`  同一个人隔几十秒发的，可以配在这一页旁边，但不能说它拍的就是这件事：`,
+             ...contextualMedia.map((m) => `    [${m.mediaId}] 挨着这句发的：「${boundText(m)}」`)].join("\n")
+          : "",
+        storyMedia.length ? "" : "  没有和这件事绑定的照片。",
+        pkg.media.length > storyMedia.length
+          ? `  另有 ${pkg.media.length - storyMedia.length} 个只是同一天/同一月的媒体，不能当作这件事的照片，也不用表态。`
+          : "",
+        storyMedia.length ? `  **上面这 ${storyMedia.length} 个编号，每一个都要在 mediaDecisions 里有一条**：用了写 supportsFact，不用写 reason。` : "",
         "  （没有人看过任何一张照片的内容，不要描述画面。）",
       ].filter(Boolean).join("\n")
     : "  （无）";
