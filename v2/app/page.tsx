@@ -47,7 +47,7 @@ export default async function HomePage() {
   // Don't show "本月入口" when it repeats the month the cover story already sent them to.
   const showThisMonth = thisMonth && pick?.month.month !== thisMonth.month;
   // 忽然想起 (原则六). One relation, one story, drawn from published stories only — and absent from
-  // the page entirely when the calendar has nothing真实 to say (lib/resurface.ts).
+  // the page entirely when the calendar holds no relation worth stating (lib/resurface.ts).
   const remembered = resurface(archive.chapters, archive.time.today, new Set([pick?.memory.id, fallback?.memory.id].filter((id): id is string => Boolean(id))));
   // B-14: 3 recent published memories with a lead photograph, excluding the cover.
   //
@@ -56,13 +56,18 @@ export default async function HomePage() {
   // story-binding.ts) — a lead exists only for a picture with a recorded reason to belong to those
   // words. Wrong, because it then threw away exactly the WeChat photographs that had earned their
   // place, on the strength of an id prefix that says where a file came from and not who is in it.
-  const coverPhotoId = pick?.memory.lead?.id;
+  //
+  // The strip also skips whatever 忽然想起 just showed. As more photographs earn a recorded reason
+  // to belong to a story, the same picture would otherwise be drawn twice on one page — once as
+  // something the archive remembered, once as a recent tile — and a picture shown twice reads as
+  // two occasions rather than one.
+  const alreadyShownPhotoIds = new Set([pick?.memory.lead?.id, remembered?.memory.lead?.id].filter((id): id is string => Boolean(id)));
   const recentCluster: { memory: EditorialMemoryType; photo: MediaRef }[] = [];
   outer: for (const year of archive.chapters) {
     for (const month of year.months) {
       for (const memory of month.memories) {
         if (!memory.lead) continue;
-        if (memory.lead.id === coverPhotoId) continue;
+        if (alreadyShownPhotoIds.has(memory.lead.id)) continue;
         recentCluster.push({ memory, photo: memory.lead });
         if (recentCluster.length >= 3) break outer;
       }
