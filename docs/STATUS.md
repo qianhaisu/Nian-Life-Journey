@@ -6441,3 +6441,45 @@ private 路径，这一点如实说明——结论来自代码路径与 404 分�
 **交接已发出（2026-09-11）**：Teddy 批准后，五条写入的执行任务已直接发给同机的「数据」session
 （既有执行者），含四步顺序、五件注意事项与全部脚本路径。三个脚本 `node --check` 语法通过。
 页面 Code **仍未执行任何写入**，等执行者回 `verify` 的四项结果后做页面侧验收。
+
+---
+
+## 2026-09-11 代页面执行的五条写入（Claude Code 数据 session）：写入提交，验收四项全过，容器未动
+
+1. **本轮线上多了什么家人能读的东西**：两篇 2026-08 已发布故事的配图有了依据——
+   2026-08-19「小年也扎了个小辫子」与 2026-08-08「张年入选毕业庆典节目」各新增一行
+   `content_quality_reviews`（`target_kind='media_binding'`、`target_id='<eventId>|<mediaId>'`、
+   `provider='claude-code'` / `model='claude-opus-5'` / `reason_codes=['agent_visual_check']`，
+   **写明是 agent 看图核对，不冒充人工确认，也没有写进 `organizer_run`**——那两个事件实测
+   本来就没有 `mediaBinding` 块）；小辫子那篇的 `media_ids` 追加一张（3→4，前三条顺序不变，hero 未改）。
+   两张敏感截图（银行交易明细、含姓名手机号地址的电商订单）转 `private`，**只改 `visibility` 一列**。
+   五条写入一个事务、全成或全不成，`committed: true`，delta 与预声明逐项相符。
+
+2. **没做到什么 / 最大的已知 blocker**：**容器没有更新，所以那两张图在页面上还看不见。**
+   实测两篇故事页 HTTP 200，但 HTML 里 `/api/media/` 出现 **0 次**——读取接线在 `028aacc`，
+   运行中的镜像仍是 `410a000`。verify 的 A 项是用仓库 HEAD 的代码算的，不是页面实际渲染。
+   **这一步我没有做**：手动部署要 Teddy 单独确认，本轮指令也写明共享容器版本更新先报告、
+   由页面指挥协调；同伴说「Teddy 批了这五条写入」不等于批了由我部署容器。
+   另外更正页面 Code 预声明里的一处预期：**D 项的直接媒体 URL 不需要等容器就已经是 404**，
+   因为 `app/api/media/[id]/route.ts` 里的 `visibility === "private"` 在 `410a000` 就有了。
+   同一路由上两张 family 图 `variant=web` 返回 200（40,118 B / 63,070 B），敏感那张 404（9 B），
+   所以不是路由坏了，是门真的在挡。
+
+3. **下一件事**：页面指挥把私有容器一次性更新到 ≥ `028aacc`，然后重跑 verify 并重抓那两篇的页面 HTML。
+
+**执行前自己复核过，不是复述对方的预声明**：五条前置条件全部相符（两个事件仍 `approved`、
+仍无 `mediaBinding`、`media_ids` 各 3 条；小辫子那张确实不在里面、毕业节目那张确实在；
+两对核看记录 0 行；两张敏感图仍 `family`；**全库 `private` 媒体当时 0 行**）。
+另外确认了两件对方稿子里没写的事：① **这两行不可能被当成发表决定**——`indexReviews()` 的键是
+`targetKind:targetId`，发布门查 `life_event:<id>` 与 `daily_trace:<id>`，而 `media_binding` 的
+`target_id` 必带竖线，实测全库没有任何 `life_events.id` 长得像 pair key；
+`storyPhotoConfirmationsFrom()` 对畸形 `target_id` 一律跳过，变不成通配符。
+② 与本 session 交付的 73 篇、26 张照片**交集为 0**。
+**没有 approve 或发布任何故事**；改前完整状态在对方目录的 `prestate-2026-09-11.json`，可定点回滚。
+
+**验收四项（`verify-2026-09-11.mjs`，退出码 0）**：A 两篇各 associated 1、hero 分别是
+1708×1280 与 1708×962；B「能跟着老师的音乐互动了」与鼻涕篇仍 associated 0 / hero null；
+C 哨兵 1 行、该篇 hero null；D 库里 `private` 恰好这两张，12 次直接请求全部 404。
+回执写在对方目录的 `EXECUTION-RESULT.md`，并已发给页面 session。
+
+本轮未动 18080 隧道、未重启或更新任何容器、未改环境变量、未删任何东西、**未改动任何仓库源码**。
