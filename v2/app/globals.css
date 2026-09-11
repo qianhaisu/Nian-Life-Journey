@@ -321,6 +321,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .preview-month.is-quiet .preview-month-head { border-top-color: var(--color-border); color: var(--color-muted); font-size: clamp(1.1rem, 3vw, 1.4rem); }
 .preview-review { margin: 18px 0 8px; }
 .preview-review .chapter-summary { max-width: 34ch; font-size: clamp(1.2rem, 3vw, 1.5rem); }
+/* The review's own pictures read as one strip, not as a ragged column: three to a row, each capped
+   so a tall portrait and a wide landscape sit on the same line instead of tearing holes in it —
+   the same shape 「这个月的照片」 already uses. */
+.preview-review .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 6px; margin-top: 20px; }
+.preview-review .photo { max-height: 260px; }
 .preview-story .month-day-date { flex-wrap: wrap; }
 .preview-story h3 { margin: 0 0 10px; font-size: clamp(1.25rem, 3.2vw, 1.6rem); font-weight: 500; }
 /* Reading weight, not display weight — the same step .month-reading .moment-text takes so a
