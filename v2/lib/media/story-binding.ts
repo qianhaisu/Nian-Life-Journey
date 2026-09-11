@@ -1,5 +1,5 @@
 import type { LifeEvent, Media, OrganizerRunMetadata } from "@/lib/types";
-import { mayAttachToMemory, type MediaBindingTier } from "@/lib/organizer/evidence/media-tier";
+import { mayNarrateAsDepicting, type MediaBindingTier } from "@/lib/organizer/evidence/media-tier";
 
 // What makes a photograph part of a STORY, as opposed to part of the same day.
 //
@@ -43,16 +43,32 @@ import { mayAttachToMemory, type MediaBindingTier } from "@/lib/organizer/eviden
 // What the archive records instead is the binding itself. `organizer_run.mediaBinding.adopted`
 // carries, per photograph: the message it was bound to (`boundSourceId` — a message that actually
 // says something), the tier that binding earned, and a human-readable `basis`. So the second basis
-// is: the picture was adopted by the story's own Organizer run, at a tier that may be attached to a
-// Memory (lib/organizer/evidence/media-tier.ts — `confirmed` or `strong_contextual`, the same table
-// the Writer is held to), and the message it was bound to is one of the story's sources.
+// is: the picture was adopted by the story's own Organizer run, bound to a message this story was
+// written from, at a tier that may be narrated as depicting the Memory.
+//
+// WHICH TIER, and why not the attachable one (2026-09-11 review decision).
+//
+// The first version of this basis accepted `mayAttachToMemory` — `confirmed` OR `strong_contextual`.
+// That was wrong, and the numbers showed it: 12 of the 17 stories it restored got their LEAD
+// photograph from `strong_contextual`, a tier whose own definition (lib/organizer/evidence/
+// media-tier.ts) is "same speaker, same conversational beat, deterministic time bound. Good enough
+// to place a picture near a story; NOT enough to assert it depicts the claim."
+//
+// A picture inside a story card is that assertion. It does not stop being one by being demoted from
+// lead to supporting frame: anything printed inside the card is read as belonging to those words.
+// 2026-02-19「妈妈说张小年严重依赖奶嘴」was the case that settled it — a real photograph of him, same
+// speaker, 90 seconds, adopted by the Writer, and no pacifier anywhere in the frame.
+//
+// So the gate here is `mayNarrateAsDepicting`, the same predicate the Writer is held to, and the
+// answer for a picture related only by adjacency is: not in the story. It keeps its place in the
+// day's own photographs (「这一天的照片」), which claims only the date — the one relation it has.
 //
 // This is still per-item, still explicable, and still refuses everything Basis A refuses it for:
 //   - A photograph with NO adopted record cannot pass. That is what keeps the 2026-09-10 finding
 //     intact: all 530 (published story, photograph) pairs in production come from the same-day
 //     backfill (scripts/t18-backfill-media-binding.mjs) and carry no binding record at all, so this
 //     basis restores exactly 0 of them — measured against production 2026-09-11, not argued.
-//   - `refused` bindings never count, and neither does a tier the policy will not attach.
+//   - `refused` bindings never count, and neither does any tier below `confirmed`.
 //   - It only ever FILTERS an event's existing media_ids. A photograph a person took back by
 //     removing it from media_ids, or by the NO_HERO_MEDIA_ID sentinel, stays taken back — nothing
 //     here can add a picture the event no longer lists.
@@ -73,7 +89,7 @@ export function isStoryAssociated(event: AssociationEvent, media: Pick<Media, "i
   if (media.rawSourceId && event.sourceIds.includes(media.rawSourceId)) return true;
   const adopted = event.organizerRun?.mediaBinding?.adopted?.find((binding) => binding.mediaId === media.id);
   if (!adopted?.boundSourceId) return false;
-  if (!mayAttachToMemory(adopted.tier as MediaBindingTier)) return false;
+  if (!mayNarrateAsDepicting(adopted.tier as MediaBindingTier)) return false;
   return event.sourceIds.includes(adopted.boundSourceId);
 }
 

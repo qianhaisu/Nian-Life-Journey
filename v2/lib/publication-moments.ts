@@ -26,6 +26,7 @@ import type { EditorialMemory, MediaRef, MonthChapter, PhotoDay } from "@/lib/me
 import { isArchiveCountNote, isGarbageLifeEvent, memoryTitle } from "@/lib/memory-chapters";
 import { containsTechnicalPlaceholder } from "@/lib/organizer/quality-review";
 import { heroSized, thumbnailSized } from "@/lib/media/hero";
+import { photographsFirst } from "@/lib/media/presentation";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { formatDay, timeSignatureFor } from "@/lib/time-signature";
 import type { LifeEvent } from "@/lib/types";
@@ -275,7 +276,11 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
     // Counted among the vouched only: the sentence this feeds says these are too small to draw,
     // and an unvouched picture is not being withheld for its size.
     smallImageCount += vouched.length - drawable.length;
-    albumPhotosByDay.set(day.day, drawable);
+    // Reading order, not eligibility. Every drawable row stays in the day; the ones shaped like a
+    // phone screen rather than like a photograph simply read after the photographs, because the
+    // default preview is the first six and a reader opening 2025-11 met a full-page article capture
+    // before any picture of him. See photographsFirst() for why this may only reorder.
+    albumPhotosByDay.set(day.day, photographsFirst(drawable));
   }
 
   // CHAPTER — what is worth reading, in the order the month happened. Memories first within a day.

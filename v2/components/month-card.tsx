@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { MonthIndexEntry } from "@/lib/memory-index";
-import { isPortraitOfZhangnian } from "@/lib/media/representative";
+import { isFromFamilyAlbum } from "@/lib/media/representative";
 import { Photo } from "@/components/photo";
 
 // One month as a tappable card on /memory: a cropped cover photo, the month and age, and the first
@@ -8,9 +8,11 @@ import { Photo } from "@/components/photo";
 // not a summary.
 export function MonthCard({ entry, blurb }: { entry: MonthIndexEntry; blurb?: string }) {
   const { chapter, href, preview, featured } = entry;
-  // Only quark family-album photos are representative of 张年 — WeChat group/daycare shots
-  // may be vouched for evidence but the subject is often not him. No quark photo → no image area.
-  const coverPhoto = preview.find(isPortraitOfZhangnian);
+  // Prefer a picture off the family's own camera roll over one out of a group chat: a daycare
+  // conversation carries other people's children, screenshots and receipts. It is a source
+  // preference, not a claim that 张年 is in the frame (lib/media/representative.ts) — no
+  // family-album photo in the preview means no image area rather than a guessed one.
+  const coverPhoto = preview.find(isFromFamilyAlbum);
   const cardBlurb = blurb ?? featured[0]?.title;
 
   return (

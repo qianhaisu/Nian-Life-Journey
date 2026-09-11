@@ -48,14 +48,21 @@ test("a picture with no binding record cannot reach a story through Basis B", ()
   assert.equal(storyAssociationBasis({ sourceIds: ["msg-1"] }, photo("same-day", "msg-other")), undefined);
 });
 
-test("the tier table decides what may be attached, and refused bindings never count", () => {
+test("only a tier that may be narrated as depicting gets inside a story, and refused bindings never count", () => {
+  // 2026-09-11 review decision. `strong_contextual` means "same speaker, same beat, deterministic
+  // time bound" — near the story, not OF it. Anything printed inside the story card reads as
+  // belonging to those words, so demoting it to a supporting frame would not have helped: it is out
+  // of the card entirely and keeps its place in 「这一天的照片」.
   const sourceIds = ["msg-said-something"];
-  for (const tier of ["confirmed", "strong_contextual"]) {
-    assert.equal(isStoryAssociated({ sourceIds, ...bound("pic", "msg-said-something", tier) }, photo("pic", "ph")), true, tier);
-  }
-  for (const tier of ["day_level", "month_level", "unbound", "invented_tier"]) {
+  assert.equal(isStoryAssociated({ sourceIds, ...bound("pic", "msg-said-something", "confirmed") }, photo("pic", "ph")), true);
+  for (const tier of ["strong_contextual", "day_level", "month_level", "unbound", "invented_tier"]) {
     assert.equal(isStoryAssociated({ sourceIds, ...bound("pic", "msg-said-something", tier) }, photo("pic", "ph")), false, tier);
   }
+  // The case that settled it: a real photograph of him, same speaker, 90 seconds, adopted by the
+  // Writer — and no pacifier in the frame. It may not illustrate 「严重依赖奶嘴」.
+  const pacifier = { sourceIds, ...bound("pic", "msg-said-something", "strong_contextual") };
+  assert.deepEqual(storyAssociatedMedia(pacifier, [photo("pic", "ph")]), []);
+  assert.equal(storyAssociationBasis(pacifier, photo("pic", "ph")), undefined);
   const refusedOnly = {
     sourceIds,
     organizerRun: { mediaBinding: { candidateCount: 1, adopted: [], refused: [{ mediaId: "pic", tier: "confirmed", reason: "policy" }] } },

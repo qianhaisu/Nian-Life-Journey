@@ -20,6 +20,36 @@ export function aspectRatioOf(media: Pick<Media, "width" | "height">): string | 
   return `${media.width} / ${media.height}`;
 }
 
+// A picture much taller than any camera takes. A phone screenshot is the shape of the screen;
+// cameras are 4:3 (1.33) or 16:9 (1.78), and a portrait crop rarely passes 2:1.
+//
+// This is a WEAK ORDERING SIGNAL and nothing else. It is not a screenshot test, not a privacy
+// filter, and never a reason to withhold a picture: a day's photographs still contain every row
+// they contained, and expanding a group shows all of them. All it decides is which ones a reader
+// meets first, because the default preview was arrival order and a reader opening 2025-11 met a
+// full-page article capture before the pictures of the child.
+//
+// Deliberately not the test I tried first. Matching exact device resolutions was checked by opening
+// all eleven pictures it flagged in 2025-11: the six at 1080x1920 were ordinary photographs of him
+// (a shopping trolley, a bottle, a pram) because 1080x1920 is both a phone screen and a perfectly
+// normal photo/video frame. Only the aspect half survived — its five hits there were all captures.
+// Archive-wide that class is 1,190 of 9,808 family-visible rows, with just 4 rows between 1.9 and
+// 2.0, so the boundary is not cutting through a crowd. Five samples do not prove 1,190 are right,
+// which is exactly why this may only reorder.
+export const READING_TALL_RATIO = 2;
+
+export function isScreenShaped(media: Pick<Media, "width" | "height">): boolean {
+  if (!media.width || !media.height) return false;
+  return media.height / media.width >= READING_TALL_RATIO || media.width / media.height >= READING_TALL_RATIO;
+}
+
+/** Same pictures, same relative order within each class — screen-shaped ones simply read later. */
+export function photographsFirst<T extends Pick<Media, "width" | "height">>(photos: T[]): T[] {
+  const camera = photos.filter((item) => !isScreenShaped(item));
+  const screens = photos.filter((item) => isScreenShaped(item));
+  return screens.length === 0 ? photos : [...camera, ...screens];
+}
+
 // Two kinds of engineering label reach `alt` and neither is a caption. The importer stamps
 // "WeChat image" on every picture it cannot describe, and photos that arrived as files keep their
 // filename ("微信图片_20260828174027_6453_721.jpg"). A family reader must never be shown either —

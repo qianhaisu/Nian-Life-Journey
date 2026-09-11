@@ -521,3 +521,36 @@ test("one photograph led by two stories is drawn once per story — the page-wid
   assert.deepEqual(composition.dayPhotoGroups, [],
     "the day group still does not add a third copy");
 });
+
+// 「这一天的照片」 reading order, 2026-09-11 review decision. The default preview is the first six
+// (components/day-photos.tsx), and it was arrival order — so a reader who opened 2025-11 on a phone
+// met a full-page article capture, an e-commerce order and a parking-garage frame before any
+// picture of him. This is an ORDERING signal and may never withhold: the day keeps every row.
+test("a day's photographs read before the things shaped like a phone screen, and nothing is dropped", () => {
+  const day = "2026-08-23T03:00:00.000Z";
+  const capture = photo("screen-capture", day, { width: 1180, height: 2556 });
+  const wideCapture = photo("wide-capture", day, { width: 2556, height: 1180 });
+  const first = photo("a-photograph", day, { width: 1280, height: 1706 });
+  const second = photo("another-photograph", day, { width: 1706, height: 1280 });
+  const media = [capture, first, wideCapture, second];
+  const events = [event("has-words", "2026-08-23 00:00:00+00", [], { sourceIds: [] })];
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+
+  const group = composition.dayPhotoGroups.find((d) => d.day === "2026-08-23");
+  assert.deepEqual(group.photos.map((p) => p.id),
+    ["a-photograph", "another-photograph", "screen-capture", "wide-capture"],
+    "photographs first, captures after, each class keeping its own order");
+  assert.equal(group.photos.length, media.length, "the day still holds every drawable picture");
+});
+
+test("a day of nothing but captures is left exactly as it was — the signal only reorders", () => {
+  const day = "2026-08-24T03:00:00.000Z";
+  const media = [
+    photo("cap-1", day, { width: 1180, height: 2556 }),
+    photo("cap-2", day, { width: 1080, height: 2400 }),
+  ];
+  const events = [event("words", "2026-08-24 00:00:00+00", [], { sourceIds: [] })];
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+  const group = composition.dayPhotoGroups.find((d) => d.day === "2026-08-24");
+  assert.deepEqual(group.photos.map((p) => p.id), ["cap-1", "cap-2"]);
+});

@@ -8,7 +8,7 @@
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { NO_HERO_MEDIA_ID, heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
-import { isPortraitOfZhangnian } from "@/lib/media/representative";
+import { isFromFamilyAlbum } from "@/lib/media/representative";
 import { storyAssociatedMedia } from "@/lib/media/story-binding";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
@@ -348,13 +348,16 @@ export function latestLeadPhoto(chapters: YearChapter[]): MediaRef | undefined {
 // own lead, or a picture the family's photo archive or a published memory stands behind. Nothing
 // vouched → no portrait. An empty slot is honest; a stranger's picture is not.
 export function latestPortrait(chapters: YearChapter[], isVouched: (photo: MediaRef) => boolean = () => false): { photo: MediaRef; day: string; dateLabel: string } | undefined {
-  // Only Quark family-photo backed media are eligible as 张年's portrait — see lib/media/representative.ts.
+  // Narrowed to the family's own album, which is a statement about where the picture came from and
+  // not about who is in it (lib/media/representative.ts). This slot is still called a portrait and
+  // still cannot prove one; what it can say is that the picture came off a family camera roll
+  // rather than out of a group chat.
   const isPortraitOriented = (photo: MediaRef) => Boolean(photo.width && photo.height && photo.width < photo.height);
   let fallback: { photo: MediaRef; day: string; dateLabel: string } | undefined;
 
   for (const year of chapters) for (const month of year.months) {
-    const memoryLead = month.memories.find((memory) => memory.lead && isPortraitOfZhangnian(memory.lead));
-    const eligible = (photo: MediaRef) => heroSized(photo) && isVouched(photo) && isPortraitOfZhangnian(photo);
+    const memoryLead = month.memories.find((memory) => memory.lead && isFromFamilyAlbum(memory.lead));
+    const eligible = (photo: MediaRef) => heroSized(photo) && isVouched(photo) && isFromFamilyAlbum(photo);
     const photoDay = month.photoDays.find((day) => day.photos.some(eligible));
     if (photoDay && (!memoryLead || photoDay.day >= memoryLead.signature.day)) {
       const portraitPhoto = photoDay.photos.find((p) => eligible(p) && isPortraitOriented(p));
