@@ -197,9 +197,11 @@ for (let offset = 0; ; offset += 1000) {
 await client.end();
 console.log(`Loaded ${rows.length} wechat sources.`);
 
-const roleOf = (metadata, contributorId) => {
+// A scoped registry entry (identity.ts) resolves only inside the conversations it was confirmed
+// for, so every lookup has to say which conversation it is reading.
+const roleOf = (metadata, contributorId, conversationId) => {
   const digest = String(metadata?.senderDigest ?? contributorId ?? "");
-  const speaker = resolveSpeaker(digest, FAMILY_REGISTRY);
+  const speaker = resolveSpeaker(digest, FAMILY_REGISTRY, { conversationId });
   return speaker.known ? speaker.narrativeLabel : undefined;
 };
 
@@ -209,7 +211,7 @@ for (const row of rows) {
   byConversation.get(row.source_label).push({
     id: row.id, profileId: row.profile_id, sourceType: row.source_type, contentTypes: row.content_types,
     contributorId: String(row.metadata?.senderDigest ?? row.contributor_id),
-    contributorRole: roleOf(row.metadata, row.contributor_id),
+    contributorRole: roleOf(row.metadata, row.contributor_id, row.source_label),
     capturedAt: row.captured_at instanceof Date ? row.captured_at.toISOString() : String(row.captured_at),
     text: row.text ?? "", mediaIds: row.media_ids ?? [], visibility: row.visibility, metadata: row.metadata,
     sourceLabel: row.source_label, lifeDate: row.life_date,
@@ -271,8 +273,8 @@ async function callWriter(pkg) {
   return { output: { contractVersion: "writer-v2-output-contract-v1", ...tool.input }, usage: payload.usage };
 }
 
-const identityOf = (digest) => {
-  const s = resolveSpeaker(digest, FAMILY_REGISTRY);
+const identityOf = (digest, conversationId) => {
+  const s = resolveSpeaker(digest, FAMILY_REGISTRY, { conversationId });
   return { speakerDigest: digest, known: s.known, canonicalPersonId: s.canonicalPersonId, narrativeLabel: s.narrativeLabel, relationshipToSubject: s.relationshipToSubject };
 };
 
@@ -416,7 +418,7 @@ async function processItem(item) {
   const pkg = buildEvidencePackage({
     window: item.w, windowFingerprint: item.fp, grounding,
     selectedBy: { policyId: T7_POLICY_ID, action: "life_event_candidate", worthinessScore: 0 },
-    subject: { ...SUBJECT, narrativeLabel: "张年" }, identityOf,
+    subject: { ...SUBJECT, narrativeLabel: "张年" }, identityOf: (digest) => identityOf(digest, item.w.conversationId),
     quotableLines: keptQuotes.map((q) => ({ text: q.text, evidenceRef: q.evidenceRef, speakerRole: q.speakerRole })),
     longitudinal: [], lifeDate: item.lifeDate,
   });

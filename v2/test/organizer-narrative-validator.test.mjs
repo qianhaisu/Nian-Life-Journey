@@ -531,3 +531,31 @@ test("an unknown speaker's observable fact may be written unattributed; a judgem
   assert.match(WRITER_V2_SYSTEM_PROMPT, /判断、心思、评价/);
   assert.match(WRITER_V2_SYSTEM_PROMPT, /家里说/, "the banned-collective list has to name this one too");
 });
+
+test("an unnamed ACTOR is refused whatever verb follows, not only a speech verb", () => {
+  // 2025-02, written before this was generalised: 「有人把小年年的照片发了出来」 and
+  // 「有人发来『小年年满月快乐』」 both reached the archive. The rule was never about speech.
+  for (const story of [
+    "有人把小年年的照片发了出来，说他越来越漂亮了。",
+    "有人发来「小年年满月快乐」。",
+    "有人提醒，这边天气热，婴儿的皮肤要保养。",
+    "大家买了新的玩具给他。",
+  ]) {
+    const r = validateNarrative({ pkg: pkg(), output: out({ story }) });
+    assert.ok(codes(r).includes("generic_family_collective"), `${story} -> ${JSON.stringify(r.issues)}`);
+  }
+});
+
+test("the house, and a person's own things, are still not actors", () => {
+  for (const story of ["他在家里玩了一下午。", "家里的灯坏了，妈妈说明天换。", "家里把灯换了。"]) {
+    const r = validateNarrative({ pkg: pkg(), output: out({ story }) });
+    assert.ok(!codes(r).includes("generic_family_collective"), `${story} -> ${JSON.stringify(r.issues)}`);
+  }
+});
+
+test("没有人 is the absence of an actor, not an unnamed one", () => {
+  for (const story of ["他自己睡着了，没有人哄。", "那天没有人看过他哭。"]) {
+    const r = validateNarrative({ pkg: pkg(), output: out({ story }) });
+    assert.ok(!codes(r).includes("generic_family_collective"), `${story} -> ${JSON.stringify(r.issues)}`);
+  }
+});

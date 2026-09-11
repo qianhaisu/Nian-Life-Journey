@@ -86,7 +86,21 @@ const CLICHES = [
 // family-registry reached it too, and the Writer wrote 「家里回他今天早上吃了」 — the same
 // anonymous voice as 家人, one character shorter and straight past this pattern. Verb-gated like
 // 有人/大家 so it never fires on 家里 meaning the house (「家里的灯」, 「在家里玩」).
-const GENERIC_FAMILY_COLLECTIVE = /家人|家里人|一家人|长辈|亲戚|家属|家庭成员|有人(说|问|讲|提到|回|答|猜|觉得)|大家(说|问|讲|提到|都说|都觉得)|家里(又|也|还)?(说|问|讲|提到|回|答|猜|觉得)/;
+// The verb list grew on 2026-09-11 (again). 「有人说」 was caught and 「有人把照片发了出来」 was not,
+// so a 2025-02 page went out attributing a photograph and a birthday message to nobody. The rule
+// was never about speech verbs — it is about an ACTOR who cannot be resolved to a person — so the
+// list now covers the ordinary things an unnamed actor is written as doing. Still verb-gated, so
+// 「家里的灯」 and 「在家里玩」 stay untouched.
+const UNNAMED_ACTOR_VERB = "(说|问|讲|提到|回|答|猜|觉得|认为|表示|发|写|拍|喊|叫|提醒|叮嘱|带|买|做|送|给|抱|喂|看|听|夸|逗|哄)";
+const GENERIC_FAMILY_COLLECTIVE = new RegExp(
+  `家人|家里人|一家人|长辈|亲戚|家属|家庭成员`
+  // 有人把…发了出来: 把/被 marks an actor acting, whatever verb comes after the object.
+  // 没有人 / 无人 is the absence of an actor, not an unnamed one.
+  + `|(?<![没无])(有人|大家)(把|被)`
+  + `|(?<![没无])(有人|大家)(又|也|还|都|来|去)?${UNNAMED_ACTOR_VERB}`
+  // 家里 is verb-gated and takes no 把: 「家里把灯换了」 is the house, not a speaker.
+  + `|家里(又|也|还|都)?${UNNAMED_ACTOR_VERB}`,
+);
 
 // The pipeline's own reasoning must never reach the family. Found in the first Writer v2 shadow:
 // asked to be careful about an unresolved subject, the model wrote the CAUTION into the story —

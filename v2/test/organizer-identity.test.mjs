@@ -6,6 +6,7 @@ import {
   harvestDisplayNameCandidates, mayNameInNarrative, recoverDisplayNames, resolveSpeaker,
   senderDigestForDisplayName,
 } from "../lib/organizer/identity.ts";
+import { FAMILY_REGISTRY } from "../lib/organizer/family-registry.ts";
 import { buildEvidenceWindows } from "../lib/organizer/evidence/window.ts";
 
 const NANNY_EXPORT_NAME = "hxx" + String.fromCharCode(92) + ".";
@@ -135,4 +136,45 @@ test("三位家人各自的描述算三个见证人，同一人的两个显示�
   const digests = [senderDigestForDisplayName("Ted"), senderDigestForDisplayName("阿静"), senderDigestForDisplayName(NANNY_EXPORT_NAME)];
   assert.equal(distinctSpeakerCount(digests, FAMILY_REGISTRY), 3);
   assert.equal(distinctSpeakerCount([digests[1], digests[1]], FAMILY_REGISTRY), 1);
+});
+
+// ---------------------------------------------------------------- the export's own placeholder
+//
+// A private-chat export writes the exporting account's own messages as 我. That digest identifies
+// the FILE's owner, not a person: another household member's export puts someone else behind the
+// same hash. Teddy confirmed on 2026-09-11 that the 阿静 and 陈亚萍 private chats came from his
+// WeChat, so the mapping is his — inside those conversations and nowhere else.
+
+const MOTHER_CHAT = "conversation:0567a44e538fc41f22b57097";
+const GRANDMOTHER_CHAT = "conversation:5e89f3dacc787d226503906a";
+const MAIN_GROUP = "conversation:a673c0e0563be6ecf1867094";
+const ME_DIGEST = senderDigestForDisplayName("我");
+
+test("我 resolves to the father inside the two confirmed private chats", () => {
+  for (const conversationId of [MOTHER_CHAT, GRANDMOTHER_CHAT]) {
+    const speaker = resolveSpeaker(ME_DIGEST, FAMILY_REGISTRY, { conversationId });
+    assert.equal(speaker.known, true, conversationId);
+    assert.equal(speaker.narrativeLabel, "爸爸");
+    assert.equal(speaker.canonicalPersonId, "person-ted", "one person, however the export spelled him");
+  }
+});
+
+test("我 is unknown in any other conversation, and unknown when nobody says which", () => {
+  assert.equal(resolveSpeaker(ME_DIGEST, FAMILY_REGISTRY, { conversationId: MAIN_GROUP }).known, false);
+  assert.equal(resolveSpeaker(ME_DIGEST, FAMILY_REGISTRY, { conversationId: "conversation:some-other-export" }).known, false);
+  assert.equal(resolveSpeaker(ME_DIGEST, FAMILY_REGISTRY).known, false, "a caller that does not scope gets nothing, never the mapping by default");
+});
+
+test("an unscoped mapping still resolves everywhere", () => {
+  // Ted's own display name is Ted in every export that contains him; only 我 is file-relative.
+  const ted = senderDigestForDisplayName("Ted");
+  assert.equal(resolveSpeaker(ted, FAMILY_REGISTRY).narrativeLabel, "爸爸");
+  assert.equal(resolveSpeaker(ted, FAMILY_REGISTRY, { conversationId: MAIN_GROUP }).narrativeLabel, "爸爸");
+});
+
+test("the father's two digests count as one speaker, not two witnesses", () => {
+  const both = [senderDigestForDisplayName("Ted"), ME_DIGEST];
+  assert.equal(distinctSpeakerCount(both, FAMILY_REGISTRY), 2, "unscoped call cannot see 我, so it stays its own unknown");
+  const keys = new Set(both.map((d) => resolveSpeaker(d, FAMILY_REGISTRY, { conversationId: MOTHER_CHAT }).speakerKey));
+  assert.equal(keys.size, 1, "inside the confirmed conversation they are one canonical person");
 });

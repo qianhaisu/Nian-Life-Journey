@@ -44,6 +44,28 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       relationshipToSubject: "grandmother",
       narrativeLabel: "奶奶",
     },
+    {
+      // The exporting account's own placeholder. `senderDigestForDisplayName("我")` is
+      // 4366d185…, matched by forward hash on 2026-09-11 — 10,047 messages, all of them inside the
+      // two private chats below and none in any group, where everyone has a real display name.
+      //
+      // Teddy confirmed both of those exports came from his own WeChat, so 我 is the father in
+      // these four conversation ids and in no others. The list is the conversation the mapping was
+      // confirmed FOR, not a convenience: another household member's export would write their own
+      // messages under the same placeholder and the same digest, and a global entry would quietly
+      // put the father's name on them.
+      sourceParticipantDigest: senderDigestForDisplayName("我"),
+      displayName: "我",
+      canonicalPersonId: "person-ted",
+      relationshipToSubject: "father",
+      narrativeLabel: "爸爸",
+      conversationIds: [
+        "conversation:0567a44e538fc41f22b57097", // 阿静 (妈妈) private chat
+        "conversation:bfdcc142ba4c02f5aebec4c7", // 阿静, post-fix id
+        "conversation:5e89f3dacc787d226503906a", // 陈亚萍 (奶奶) private chat
+        "conversation:6789abd45ba255751fd4d428", // 陈亚萍, post-fix id
+      ],
+    },
     // The nursery's own accounts, one per class plus the centre and its after-hours desk. Teddy,
     // 2026-09-04: a teacher's words are to read as 老师, never as a family member's. They share one
     // canonicalPersonId on purpose — they are one institution, so two of them saying the same thing

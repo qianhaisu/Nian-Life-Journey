@@ -88,6 +88,18 @@ export type ParticipantIdentity = {
   relationshipToSubject?: string;
   /** What a story may call this person ("爸爸"). Human-supplied; absent means do not name them. */
   narrativeLabel?: string;
+  /**
+   * Conversations this mapping is valid IN. Absent means everywhere, which is right for a display
+   * name: "Ted" is Ted in every export that contains him.
+   *
+   * It is not right for 我. A private-chat export writes the exporting account's own messages under
+   * that placeholder, so the digest of 我 identifies the account that produced the file, not a
+   * person — and a different export would put a different person behind the same digest. Teddy
+   * confirmed on 2026-09-11 that the 阿静 and 陈亚萍 private chats came from his own WeChat, so 我
+   * is the father THERE and nowhere else. A scoped entry that does not match the conversation is
+   * simply not found, and an unmatched speaker stays unknown rather than borrowing a name.
+   */
+  conversationIds?: string[];
 };
 
 export type IdentityRegistry = { participants: ParticipantIdentity[] };
@@ -108,9 +120,17 @@ export type ResolvedSpeaker = {
 // unsupported claim, and it is exactly the flattening this layer exists to undo.
 export const UNKNOWN_SPEAKER_LABEL = "未知发言人";
 
-export function resolveSpeaker(senderDigest: string, registry: IdentityRegistry | undefined): ResolvedSpeaker {
+export function resolveSpeaker(
+  senderDigest: string,
+  registry: IdentityRegistry | undefined,
+  options: { conversationId?: string } = {},
+): ResolvedSpeaker {
   const speakerKey = `speaker-${senderDigest.slice(0, 8)}`;
-  const participant = registry?.participants.find((candidate) => candidate.sourceParticipantDigest === senderDigest);
+  const participant = registry?.participants.find((candidate) =>
+    candidate.sourceParticipantDigest === senderDigest
+    // A scoped entry resolves only inside the conversations it was confirmed for, and a caller that
+    // does not say which conversation it is in gets nothing — never the mapping by default.
+    && (!candidate.conversationIds || (options.conversationId !== undefined && candidate.conversationIds.includes(options.conversationId))));
   if (!participant) return { known: false, senderDigest, speakerKey };
   return {
     known: true,

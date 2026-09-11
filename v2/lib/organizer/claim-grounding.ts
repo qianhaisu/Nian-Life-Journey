@@ -162,7 +162,7 @@ function groundSpan(window: EvidenceWindow, ref: string, options: GroundingOptio
   const { item, text } = spanOf(window, ref);
   if (!item) return undefined;
   const analysis: SpanAnalysis = analyzeSpan(text);
-  const speaker = resolveSpeaker(item.senderDigest, options.registry);
+  const speaker = resolveSpeaker(item.senderDigest, options.registry, { conversationId: window.conversationId });
   return {
     ref, sourceId: item.sourceId, itemId: item.itemId, text,
     speechAct: analysis.speechAct, polarity: analysis.polarity, contentBearing: analysis.contentBearing,
