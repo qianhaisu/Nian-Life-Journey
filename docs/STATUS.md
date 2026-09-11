@@ -6310,3 +6310,74 @@ sha256 `21702096579aacb45082c1ec13f3d92f5b46806ab6ed7d32ae654abd4560d9f4`，
 等批准 → 写这 2 行 review + 1 行 `media_ids` 追加 + 2 行 visibility → 接线改动 →
 容器更新到含全部修复的版本 → 在两篇已发布故事页与月页实测配图、错配、noPhoto 与敏感截图排除。
 **只写行不接线，页面不会有任何变化。**
+
+---
+
+## 2026-09-11 接线轮（页面 Code，单 session）：`028aacc`，仍然零写入
+
+运行 SHA 仍是 `410a0005b675fa7df417442b2f70bba3c6022d5b`（未换容器、未动 18080、未改 DNS、
+未发布待审故事、**未写任何一行数据库**）。本轮代码 SHA
+**`028aaccd9881a35973e0f36b5e33f944fec023d2`**。
+**容器请一次性更新到 ≥ `028aacc` 的已检查版本，不要为中间 SHA 单独部署。**
+
+### 1. Basis C 读取接线完成，但故意还读不到任何东西
+
+`content_quality_reviews` 新增 `target_kind='media_binding'`、`target_id='<eventId>|<mediaId>'`，
+`decision='approved'` 即放行该对。**不改 schema，零新增查询**——`getStore()` 本来就整表返回
+`qualityReviews`，`assembleMonthArchive` 与 `getEventDetail` 本来就为发布门读同一张表，
+现在把行留下而不是丢掉。库里目前 0 行这种记录，所以**线上行为一个像素都没变**。
+
+**不伪装**：行的 `provider='claude-code'`、`model='claude-opus-5'`、
+`reason_codes=['agent_visual_check']` 如实写明是 agent 看图。它不写进 `organizer_run`
+（那是某次 Organizer 运行的产物记录，三个 2026-08 事件实测根本没有 `mediaBinding` 块，
+写进去就是假话），也没有任何一列声称是用户人工确认。读取层不读这三列，
+**因此既不能把 agent 核看洗成 Organizer 结果，也不能洗成人工确认**。
+
+针对性测试 13 条全过：同图换故事拒、同故事换图拒、`target_kind` 不对拒、
+`decision` 非 `approved`（含 `APPROVED`/空/null）拒、`target_id` 不是「恰好两段且都非空」
+（`a`、`a|`、`|b`、`a|b|c`、空、null）拒——**畸形 id 不能变通配符**；
+`NO_HERO_MEDIA_ID` 压过确认、移出 `media_ids` 的图不回来、`private` 行到不了这一层。
+
+### 2. 人物选片位置不再靠来源，改名确实不算完成
+
+- `latestPortrait()`：**删掉了对来源前缀的依赖**。它原先接受任何「够大 + vouched +
+  `media-quark-sha-`」的日照片，白猫满足全部条件。现在只从 memory 的 `lead` 取，
+  那是全库唯一有记录理由与他有关的图。**代价照实说：在没有已发布故事带配图之前，
+  `/about` 不出肖像。** 空位诚实，猫不诚实。不新增任何人物识别。
+- 首页 `recentCluster`：那处来源判断**既多余又有害**——`memory.lead` 本身就是关联门，
+  它再按前缀筛一次，等于把真正够格的微信照片扔掉。已删。
+- 月卡封面：改成**先取 featured memory 的 `lead`**（有记录的证据），取不到再退回相册来源偏好。
+  封面不是肖像，来源偏好排在证据之后而不是取代证据。两者都没有 → 不出图，不猜。
+
+### 3. `private` 对直接媒体请求的实际效果：挡得住，但缓存不追溯
+
+代码核对 + 实测：`app/api/media/[id]` 在解析任何存储位置**之前**就 404，
+`web`/`thumbnail`/`poster`/`preview`/`document_preview`/无参数全 404，`original` 本来就永远 404。
+加上四处页面各自过滤，**月页、日组、展开集合、故事页一次覆盖**。已加测试
+`test/media-visibility-gate.test.mjs`。库里目前**没有任何 private 行**，所以无法用现存数据实测
+private 路径，这一点如实说明——结论来自代码路径与 404 分支，不是活体样本。
+
+**残留缺口**：成功响应是 `immutable` 一年，URL 与 ETag 都不随 `visibility` 变，
+**已经取过图的浏览器不会再问服务端**。私有容器前面没有 CDN，没有共享缓存要清；
+3 个已知读者刷新即失效。**最小修正：不改缓存策略**（改了要让每张照片每次浏览都付代价，
+防的是本档案从未发生过的情况），改为**将来公开部署时把「改 visibility」和「purge 该 id 的 URL」
+写进同一步**。一条部署步骤，不是新系统。
+
+### 4. 预声明第 2 版已交，等批准
+
+`C:\Users\teddy\NianlifeOps\page-2026-09-11-closeout\PREDECLARATION.md`，含完整 event/media ID、
+每条记录的当前值与拟写值、候选 4 采用与候选 3 排除的理由、两张敏感截图的 visibility 变更、
+写入前五条校验 SQL、单事务范围与只碰这 5 条记录的精确回滚。**不含账号、地址、手机号等正文。**
+
+**候选 3 排除的理由不是「看不清」**：它同样能看到辫子和发圈。排除是因为
+①与候选 4 相隔一秒、几乎同一画面，放进同一张卡片是凑数；
+②那一帧他张着嘴像在哭，而正文说的是老师给他扎辫子这件带笑意的小事，会误导读的人。
+它不做任何处理，仍在日照片组里可展开看到。
+
+`typecheck` / `lint` / `test`（837 条，827 通过 0 失败 10 跳过）/ `build` 全部通过。
+
+### 下一件事
+
+等批准 → 执行 5 条写入（2 条核看记录 + 1 次 `media_ids` 追加 + 2 条 visibility）→
+容器一次更新到 ≥ `028aacc` → 分四项验收：两篇故事页与月页实际出图、已知错配仍不出图、
+`noPhoto` 仍生效、两张敏感截图在五处（含直接媒体 URL）都取不到。
