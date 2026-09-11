@@ -6578,3 +6578,52 @@ curl --noproxy '*' 同一地址                          -> 200, 84 B, 0.11s
 
 上一节第 4 条仍然成立：容器更新需要 Teddy 指派谁来做。**但第 3 条作废——没有停机，
 不需要排查 502 根因，那就是我的代理。**
+
+---
+
+## 2026-09-11 私有容器更新（Claude Code 数据 session，总指挥派单）：410a000 → 4f9b512
+
+1. **本轮线上多了什么家人能读的东西**：**那两张照片真的出现在页面上了。** 更新前两篇故事页
+   HTTP 200 但 HTML 里 `/api/media/` 出现 **0 次**，更新后各 **3 次**；按页面吐出的 URL 原样请求
+   返回 **200 / 40,118 字节 / image/webp**，用 sharp 解码 **webp 1280×959 正常**。
+   首页从 0 次变 4 次，2026-08 月页 537 → 539。运行 SHA 由 `410a0005b675…` 变为
+   **`4f9b5122d3dc708524816a8f8a9dd69f8e712a6f`**（取自运行中容器的镜像标签，不是推断），
+   容器 `3e4d150fc26b`，5 秒内转 healthy。
+
+2. **没做到什么 / 最大的已知 blocker**：**页面验收不是我做的，也不该由我宣布通过。**
+   我只报两件分开的事：A1 代码层两篇都会出图；A2 实际页面 HTTP 200 且 `/api/media/` 各 3 次。
+   **A1 与 A2 不得互相当证据**——A1 算的是本机工作树的 `lib/`，不是容器里的代码，本次两者一致
+   纯属工作区干净，这个前提不恒成立。新版 verify 的 A2 报 `heroPresent: false`，**那是脚本假阴性**：
+   它查 `encodeURIComponent(hero.id)`（`wechat-media%3A…`），而页面吐出的是未编码的
+   `/api/media/wechat-media:d73fd5c4…`，冒号是字面量，永远匹配不上，并把 `report.pass` 拉成 false。
+   成因、证据与修法已发给页面 Code。
+   另外：`982d08b` 是收紧型改动，和 `028aacc` 一起上的，所以月页的变化里可能既有新增也有被收紧掉的；
+   **首页从 0 变 4 要单独报告，不顺手算完成；两篇恢复不得称为 212 篇或全站恢复。**
+
+3. **下一件事**：页面 Code 在新版本上实际打开验收六项，并给出完整地址、截图与运行 SHA。
+
+**版本选定**：执行前实查 `origin/main` HEAD 即 `4f9b5122d3dc…`，包含 `028aacc`
+（`git merge-base --is-ancestor` 实测为真）；构建开始后再次核对，**main 未移动，没有追逐后续 HEAD**。
+发布前 `npm run typecheck` 干净、`npm test` **837 条 0 失败**。用 `git archive <sha>:v2` 从**提交**导出，
+不是工作树，归档做过白名单/黑名单双重核对，`node_modules`/`.data`/`.next`/真实 `.env*` 均未混入。
+**未建分支，工作区里其他 session 的 4 个改动原样保留、没有混入任何提交。**
+
+**回滚点**：旧容器 `09d039da6c44` **没有删除**，停机后改名保留为
+`nianlife-diag-web-pre-410a000-20260911141005`（Exited 0），旧镜像 `nianlife-web:410a0005b675…` 仍在宿主机。
+回滚 = `docker rm -f nianlife-diag-web && docker rename nianlife-diag-web-pre-410a000-20260911141005 nianlife-diag-web && docker start nianlife-diag-web`。
+**回滚只换镜像与配置，不恢复旧数据库、不撤销两张敏感截图的 private 状态。**
+
+**一个会踩的坑，记下来**：宿主机 `~/.env.runtime.diag` 里 **`INGESTION_TOKEN` 是空的**，
+而运行中的容器里是真值；`HOT_STORAGE_BACKEND` 与 `MEDIA_READ_PREFERENCE` 根本不在那个文件里。
+**直接 `--env-file` 起新容器会悄悄打断刷新链路。** 改成从运行中的旧容器原样 dump 32 个运行时变量
+（宿主机 0600 临时文件，用完即删，值未离开该机）。已实测：token 长度 64，带真 token 打
+`/api/internal/revalidate` 返回 200，带错的 401。`HOT_STORAGE_BACKEND` 仍为空、
+`MEDIA_READ_PREFERENCE` 仍为 `oss`，**保留原状没有顺手修**；Organizer 三个开关仍全关；库仍是 RDS。
+
+**B / C / D 三项**：已知错配与鼻涕篇仍 associated 0 / hero null；`noPhoto` 哨兵 1 行且 hero null；
+两张敏感截图 12 次直接请求全部 404，对照组 family 图同一路由 200 / 40,118 B。
+
+本轮**零数据库写入**，没有重做那五条；未改 DNS、未扩大公网入口、未发布故事、未停 18080 隧道、
+未删除任何旧容器或旧镜像。localhost 探测一律 `--noproxy '*'`。
+可复制回执：`C:\Users\teddy\NianlifeOps\page-2026-09-11-closeout\CONTAINER-UPDATE-RECEIPT.md`，
+页面 Code 已通过消息通道实际收到两条通知，不是只写文件。
