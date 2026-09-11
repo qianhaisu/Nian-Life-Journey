@@ -554,3 +554,77 @@ test("a day of nothing but captures is left exactly as it was — the signal onl
   const group = composition.dayPhotoGroups.find((d) => d.day === "2026-08-24");
   assert.deepEqual(group.photos.map((p) => p.id), ["cap-1", "cap-2"]);
 });
+
+// 「这个月的日子」的开头 (Teddy, 2026-09-11). Production 2025-11 opened that section with a
+// page-width photograph of a white cat on a bench: a real picture from the family's own album,
+// vouched exactly as the rule asked, and not a picture of him. The opening slot now asks for the
+// stronger claim — a picture a published story was written from, bound to, or that a reviewer
+// opened and recorded — and takes words instead when no picture can say that.
+const traceEvent = (id, occurredAt, title) => ({ ...event(id, occurredAt), title, story: `${title}。那天晚上就是这样过去的。` });
+
+test("an album picture nothing can vouch for as a story's own does not open 「这个月的日子」", () => {
+  const cat = photo("cat-on-a-bench", "2025-11-01T08:00:00.000Z");
+  const later = photo("a-later-day", "2025-11-07T08:00:00.000Z");
+  const media = [cat, later];
+  const composition = buildMonthComposition(
+    monthOf({ media }, "2025-11"),
+    trust(media),
+    [traceEvent("t-1107", "2025-11-07 00:00:00+00", "妈妈晚上回家陪张小年玩耍")],
+    BIRTH,
+  );
+
+  assert.equal(composition.chronicle[0].day, "2025-11-07", "the first day that says something opens the section");
+  assert.deepEqual(composition.chronicle[0].text, ["妈妈晚上回家陪张小年玩耍"], "…and it opens with its words");
+  assert.equal(composition.chronicle[0].hero, undefined, "无合适图就文字开头: the opening day draws no page-width picture either");
+  assert.ok(!composition.chronicle.some((moment) => moment.day === "2025-11-01"), "the wordless day steps out of the section");
+
+  // Nothing is deleted and nothing is hidden: both pictures are still the month's, under their own
+  // dates, and the day that stepped out is named rather than silently dropped.
+  assert.deepEqual(monthPhotoIds(composition).sort(), ["a-later-day", "cat-on-a-bench"]);
+  assert.ok(composition.archiveDays.some((day) => day.day === "2025-11-01" && day.photos.some((p) => p.id === "cat-on-a-bench")),
+    "the cat keeps its place among that day's photographs");
+  assert.ok(composition.quietDays.some((day) => day.day === "2025-11-01"), "…and the day is still named on the page");
+});
+
+test("a picture a reviewer recorded as a story's own may open the section, and nothing is demoted", () => {
+  const confirmedPhoto = photo("reviewed-and-recorded", "2025-11-01T08:00:00.000Z");
+  const later = photo("a-later-day", "2025-11-07T08:00:00.000Z");
+  const media = [confirmedPhoto, later];
+  const privilege = { confirmed: new Set(["reviewed-and-recorded"]), trusted: new Set(media.map((item) => item.id)) };
+  const composition = buildMonthComposition(
+    monthOf({ media }, "2025-11"),
+    privilege,
+    [traceEvent("t-1107", "2025-11-07 00:00:00+00", "妈妈晚上回家陪张小年玩耍")],
+    BIRTH,
+  );
+
+  assert.equal(composition.chronicle[0].day, "2025-11-01");
+  assert.equal(composition.chronicle[0].hero?.id, "reviewed-and-recorded");
+  assert.equal(composition.chronicle.length, 2, "the day below it is untouched");
+});
+
+test("a month with nothing confirmed and nothing to say keeps its days rather than losing its only face", () => {
+  const media = [photo("day-one", "2025-05-04T08:00:00.000Z"), photo("day-two", "2025-05-09T08:00:00.000Z")];
+  const composition = buildMonthComposition(monthOf({ media }, "2025-05"), trust(media));
+  assert.deepEqual(composition.chronicle.map((moment) => moment.day), ["2025-05-04", "2025-05-09"]);
+  assert.equal(composition.chronicle[0].hero?.id, "day-one");
+});
+
+test("a photograph a reviewer opened and recorded as him may open the section with no story attached", () => {
+  // The second route to the opening slot (lib/media/story-binding.ts checkedPhotoIdsFrom): most of
+  // this archive's photography belongs to no story at all, so without it a month whose days were
+  // only photographed could never open with a picture anybody has vouched for by looking.
+  const opener = photo("somebody-opened-this-one", "2025-11-01T08:00:00.000Z");
+  const later = photo("a-later-day", "2025-11-07T08:00:00.000Z");
+  const media = [opener, later];
+  const privilege = { ...trust(media), checked: new Set(["somebody-opened-this-one"]) };
+  const composition = buildMonthComposition(
+    monthOf({ media }, "2025-11"),
+    privilege,
+    [traceEvent("t-1107", "2025-11-07 00:00:00+00", "妈妈晚上回家陪张小年玩耍")],
+    BIRTH,
+  );
+  assert.equal(composition.chronicle[0].day, "2025-11-01");
+  assert.equal(composition.chronicle[0].hero?.id, "somebody-opened-this-one");
+  assert.equal(composition.chronicle.length, 2);
+});

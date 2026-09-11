@@ -9,8 +9,9 @@ import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
 import { isSnapshotPublishable } from "@/lib/organizer/quality-review";
-import { isStoryAssociated, storyPhotoConfirmationsFrom, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
+import { checkedPhotoIdsFrom, isStoryAssociated, storyPhotoConfirmationsFrom, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
 import { isTrustedPhotoSource } from "@/lib/trusted-photo-sources";
+import type { EventIdentity } from "@/lib/preview-reading";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
 import type { MediaPrivilege } from "@/lib/publication-moments";
 import type { LifeEvent, Media, MonthlySnapshot, RawSource } from "@/lib/types";
@@ -38,6 +39,15 @@ export type FamilyArchive = {
   // from this marker by A-6). "宁可没有，不要错的" — the full store_only set is not an acceptable
   // fallback; a row with no trace_eligible mark does not appear here, full stop.
   traceEvents: LifeEvent[];
+  // Every life_event row's id/title/story/occurredAt, whatever its review decision — the same
+  // unfiltered read the trace tier above already needs, kept rather than thrown away.
+  //
+  // ONLY those four fields are real: these are Pick<LifeEvent, …> rows cast to LifeEvent, so
+  // mediaIds, sourceIds, heroMediaId and organizerRun are `undefined` on them and any code reading
+  // one gets a silent wrong answer. The private preview surface (lib/preview-reading.ts) is the only
+  // reader; nothing a family page renders may be built from this, because a row here may be a draft
+  // no one has published.
+  eventIdentities: EventIdentity[];
   chapters: YearChapter[];
   birthDay?: string;
   // Only the months with real published memories standing behind them (see quality-review.ts).
@@ -60,7 +70,7 @@ export type FamilyArchive = {
 // photograph of this child, from a source the family stands behind", which is what lets a picture
 // be drawn large as the month's own photography. `confirmed` says "this picture belongs to this
 // story", which is the only thing that may put it next to that story's words.
-export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources: Pick<RawSource, "id" | "sourceType" | "sourceLabel">[], confirmations?: StoryPhotoConfirmations): MediaPrivilege {
+export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources: Pick<RawSource, "id" | "sourceType" | "sourceLabel">[], confirmations?: StoryPhotoConfirmations, checked: ReadonlySet<string> = new Set()): MediaPrivilege {
   // `confirmed` used to mean "listed in the media_ids of an event whose organizerVersion we trust".
   // That trust was circular: the version was trusted because its bindings came from pickDayPhotos,
   // and pickDayPhotos picked by day, size and sort order. A picture cannot vouch for itself through
@@ -79,7 +89,7 @@ export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources
     rawSources.filter(isTrustedPhotoSource).map((source) => source.id),
   );
   const trusted = new Set<string>(media.filter((item) => item.rawSourceId && trustedSources.has(item.rawSourceId)).map((item) => item.id));
-  return { confirmed, trusted };
+  return { confirmed, trusted, checked };
 }
 
 // `allEvents` defaults to the published-only `events` array so a 2-arg call (as before this trace
@@ -105,7 +115,10 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   const chapters = buildChapters({ events, traces, media: familyMedia, deliverable, birthDay, photoConfirmations });
   const publishedMonths = new Set(events.map((event) => calendarMonthOf(event.occurredAt)).filter((value): value is string => Boolean(value)));
   const snapshots = store.monthlySnapshots.filter((item) => isSnapshotPublishable(item.month, publishedMonths));
-  const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources, photoConfirmations);
+  // Photographs somebody opened and recorded as being of this child (no story attached). Only the
+  // opening picture of 「这个月的日子」 asks for this; everything else is unchanged by it.
+  const checkedPhotos = checkedPhotoIdsFrom(store.qualityReviews ?? []);
+  const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources, photoConfirmations, checkedPhotos);
   // store.events (from getStore()) is already the publishable-only set — the same fail-closed gate
   // getAllEvents() applies — so a store_only event is never in it. `allEvents` is
   // getAllEventIdentities()'s unfiltered read, the one place the app reads every life_event row
@@ -142,7 +155,7 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
     traceDay: latestTraceDay(traces),
     memoryDay: latestMemoryDay(events),
   };
-  return { store, media, events, traceEvents, chapters, birthDay, snapshots, privilege, time };
+  return { store, media, events, traceEvents, eventIdentities: allEvents, chapters, birthDay, snapshots, privilege, time };
 }
 
 // How long an on-demand page may reuse one archive read. Deliberately the same 300s the ISR pages

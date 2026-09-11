@@ -242,6 +242,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-change-note li { font-size: 1rem; font-weight: 500; color: var(--muted); line-height: 1.7; margin-top: 10px; }
 .home-change-meta { display: flex; gap: 14px; margin: 0; color: var(--color-muted); font-size: .8rem; }
 .home-change-meta span { color: var(--color-secondary); font-weight: 700; }
+/* 忽然想起 (原则六): one relation, one story. Set quieter than 最近的一段生活 — it is something
+   the archive remembers, not the news. The relation line carries the weight; the story below it is
+   an ordinary chapter entry, so nothing new had to be designed for it. */
+.home-resurface { padding: clamp(48px, 7vw, 80px) 0 clamp(32px, 5vw, 56px); }
+.resurface-relation { margin: 10px 0 18px; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--color-secondary); }
+.home-resurface .memory { margin-top: 0; }
+.home-same-day-mark { margin: 28px 0 4px; }
+.home-same-day .memory-line a { grid-template-columns: minmax(0, 1fr); }
+.home-lead .memory-lines { margin: 0 0 18px; }
 .home-month { padding: clamp(64px, 8vw, 96px) 0 clamp(64px, 8vw, 112px); }
 .home-month .photo-strip { margin: 24px 0 8px; }
 .home-month .chapter-summary { margin: 24px 0 8px; }
@@ -286,6 +295,27 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* The month's days: one bordered block per day, date and age as a quiet running head. */
 .month-days { margin-top: clamp(32px, 5vw, 56px); }
 .month-days > ol { margin: 0; padding: 0; list-style: none; }
+/* 试读 — the private reading surface (app/preview). Same paper, same type, no new visual language:
+   a year set as one column of months so it reads straight through. The only thing this adds is the
+   draft mark, and it is deliberately plain rather than alarming — it states what a paragraph is,
+   it is not a warning banner. */
+.preview-years { margin: 24px 0 40px; padding: 0; list-style: none; }
+.preview-year-link { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; min-height: 56px; padding: 12px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
+.preview-year-link:hover { color: var(--color-accent); }
+.preview-year-link > .serif { font-size: 1.6rem; }
+.preview-month { padding: clamp(24px, 5vw, 48px) 0 0; }
+.preview-month-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0; padding-top: 16px; border-top: 1px solid var(--color-primary); font-size: clamp(1.6rem, 4.5vw, 2.4rem); font-weight: 500; }
+.preview-month.is-quiet .preview-month-head { border-top-color: var(--color-border); color: var(--color-muted); font-size: clamp(1.1rem, 3vw, 1.4rem); }
+.preview-review { margin: 18px 0 8px; }
+.preview-review .chapter-summary { max-width: 34ch; font-size: clamp(1.2rem, 3vw, 1.5rem); }
+.preview-story .month-day-date { flex-wrap: wrap; }
+.preview-story h3 { margin: 0 0 10px; font-size: clamp(1.25rem, 3.2vw, 1.6rem); font-weight: 500; }
+/* Reading weight, not display weight — the same step .month-reading .moment-text takes so a
+   paragraph of prose does not come out heavier than the title above it. */
+.preview-paragraph { max-width: 34em; margin: 0 0 10px; font-weight: 400; font-size: clamp(1.05rem, 2.8vw, 1.15rem); line-height: 1.95; }
+.preview-photo { margin: 12px 0 16px; max-height: 76vh; border-radius: var(--r-card); }
+.preview-draft-mark { color: var(--color-accent); font-weight: 700; }
+.preview-story.is-draft { border-left: 2px solid var(--color-border); padding-left: 14px; }
 .month-day { padding: 32px 0 10px; }
 .month-day .photo-strip { margin-top: 0; }
 .month-day-date { display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px; font-size: .8rem; color: var(--color-muted); }

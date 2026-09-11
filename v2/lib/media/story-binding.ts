@@ -107,6 +107,41 @@ type AssociationEvent = Pick<LifeEvent, "id" | "sourceIds"> & { organizerRun?: P
 /** The review-ledger kind that records "somebody looked at this picture, for this story". */
 export const STORY_PHOTO_REVIEW_KIND = "media_binding";
 
+// A SECOND, NARROWER RECORD: "somebody opened this photograph and recorded that it is a photograph
+// of this child" — no story attached.
+//
+// Basis A/B/C above all answer "does this picture belong to these words". Most of the archive's
+// photography belongs to no words at all: a day that was photographed and never written about. For
+// those, the only claim anything in this archive can currently make is the source — the family's own
+// album — and a source says who took a picture, never who is in it. That is how a white cat on a
+// bench came to open 2025-11's 「这个月的日子」 as a page-width picture (lib/publication-moments.ts,
+// openChronicle).
+//
+// So this is the same shape as Basis C and nothing more: a row in `content_quality_reviews` with
+// target_kind = "media_subject_check", target_id = "<mediaId>", decision = "approved", written after
+// somebody actually opened the file. It is NOT a detector, NOT a face match, and NOT a claim about
+// any picture without a row — an unmarked photograph is unproven, not rejected, and keeps every
+// place it already has. The one thing a marked picture earns is the right to open a section.
+export const PHOTO_SUBJECT_REVIEW_KIND = "media_subject_check";
+
+/**
+ * The photographs somebody opened and recorded as being of this child. Reads the same slice of the
+ * review ledger the pages already load, and ignores anything that is not an approved row of that
+ * exact kind naming exactly one media id.
+ */
+export function checkedPhotoIdsFrom(
+  reviews: ReadonlyArray<{ targetKind?: string | null; targetId?: string | null; decision?: unknown }>,
+): ReadonlySet<string> {
+  const checked = new Set<string>();
+  for (const review of reviews) {
+    if (review.targetKind !== PHOTO_SUBJECT_REVIEW_KIND) continue;
+    if (review.decision !== "approved") continue;
+    const id = (review.targetId ?? "").trim();
+    if (id && !id.includes("|")) checked.add(id);
+  }
+  return checked;
+}
+
 /** One confirmation, addressed to exactly one (story, photograph) pair. */
 export type StoryPhotoConfirmations = ReadonlySet<string>;
 

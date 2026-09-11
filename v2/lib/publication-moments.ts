@@ -35,7 +35,10 @@ import type { LifeEvent } from "@/lib/types";
 // `trusted`: media that reached the archive from the family's own photo collection (Quark album
 // originals — RawSource.sourceType "family_photo") rather than scraped from a chat stream.
 // Built once per request in lib/family-archive.ts from rows that already exist.
-export type MediaPrivilege = { confirmed: ReadonlySet<string>; trusted: ReadonlySet<string> };
+// `checked` is the third and narrowest: a reviewer opened the file and recorded that it is a
+// photograph of this child, with no story attached (lib/media/story-binding.ts
+// checkedPhotoIdsFrom). It is optional — an archive with no such rows behaves exactly as before.
+export type MediaPrivilege = { confirmed: ReadonlySet<string>; trusted: ReadonlySet<string>; checked?: ReadonlySet<string> };
 
 export const NO_PRIVILEGE: MediaPrivilege = { confirmed: new Set(), trusted: new Set() };
 
@@ -214,6 +217,65 @@ function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMo
   };
 }
 
+// WHICH PICTURE MAY OPEN 「这个月的日子」 (Teddy's decision, 2026-09-11).
+//
+// Every day in that section carries a page-width photograph, but the first one is read differently
+// from the rest: it sits directly under the section's own heading, so a reader meets it as "this is
+// what this month looked like" before meeting any single day. On 2025-11 the picture in that slot
+// was a white cat on a bench — a real photograph from the family's own album, vouched for exactly
+// as the rule asked, and not a picture of him. Source trust is the only thing `trusted` can say
+// (see MediaPrivilege): the album is the family's, so the cat passes.
+//
+// The opening slot therefore asks for a claim source trust cannot make, and there are exactly two:
+//   - `confirmed` — the picture is part of the material a published story was written from, was
+//     bound to that story's own sentence, or a reviewer opened it and recorded that it belongs to
+//     that story (lib/media/story-binding.ts, Bases A/B/C);
+//   - `checked` — a reviewer opened the file and recorded that it is a photograph of this child,
+//     with no story attached (checkedPhotoIdsFrom). Most of this archive's photography belongs to
+//     no words at all, and without this second route a month that was only photographed could never
+//     open with a picture anybody vouched for by looking at it.
+// Both are records of somebody having looked. Neither can be produced by where a file came from.
+//
+// Nothing here looks at what is in a frame. There is no person detector, no face match, no "is this
+// him" — the cat is refused the opening slot for the same reason a perfectly good photograph of him
+// with no recorded reason is: the archive cannot say why it belongs there. And nothing is deleted or
+// hidden: a demoted day keeps every one of its photographs under its own date in 「这个月的照片」
+// (`archiveDays` below already holds them — a chronicle day's pictures were always there), and it is
+// named in the quiet-day line above that section, so the cat is still one click from where it was.
+function chronicleLeadEligible(moment: PublicationMoment, privilege: MediaPrivilege): boolean {
+  if (!moment.hero) return false;
+  return privilege.confirmed.has(moment.hero.id) || Boolean(privilege.checked?.has(moment.hero.id));
+}
+
+// Walk the section's head until something may open it: a day whose picture carries the stronger
+// claim, or a day with words (无合适图就文字开头 — a day that says something opens with what it
+// says, and its own photographs read below, in the month's photo section, rather than page-width
+// under the heading). A wordless day with no such picture cannot open the section and steps back
+// into the month's photography; the next day is asked the same question.
+//
+// Only the head. Once the section has an opening, every day below it is unchanged — those pictures
+// are the month's own photography, presented as the days they were taken on, and they keep the
+// vouching rule they have always had.
+//
+// The one case this leaves alone entirely: a month where no day has words and no picture is
+// confirmed. Emptying that section would take away the only face the month has and leave a page of
+// folded photographs behind a summary line, which is a worse answer than the one this fixes. The
+// month keeps its days; the shortfall is real and is reported rather than papered over.
+export function openChronicle(chronicle: PublicationMoment[], privilege: MediaPrivilege): PublicationMoment[] {
+  if (!chronicle.some((moment) => chronicleLeadEligible(moment, privilege) || moment.text.length > 0)) return chronicle;
+  const opened = [...chronicle];
+  while (opened.length > 0) {
+    const head = opened[0];
+    if (chronicleLeadEligible(head, privilege)) break;
+    if (head.text.length > 0) {
+      opened[0] = { ...head, hero: undefined, supporting: [], morePhotoCount: head.morePhotoCount + (head.hero ? 1 : 0) + head.supporting.length };
+      break;
+    }
+    opened.shift();
+  }
+  return opened;
+}
+
 // `pickDayPhotos` lived here until 2026-09-10. It answered "which of this day's photographs should
 // be set beside this day's words", and every story image the site ever showed came from it —
 // including the ones scripts/t18-backfill-media-binding.mjs then wrote into life_events.media_ids
@@ -383,7 +445,7 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // 的张年" fails if the month's actual sentences are the ones left out).
   const traceOnly: PublicationMoment[] = [...traceNotesByDay.entries()]
     .map(([day, notes]) => ({ kind: "trace" as const, day, dateLabel: notes[0].dateLabel, ageLabel: notes[0].ageLabel, text: notes.map((note) => note.text), supporting: [], morePhotoCount: 0 }));
-  const chronicle = [...chronicleFromPhotos, ...traceOnly].sort((a, b) => a.day.localeCompare(b.day));
+  const chronicle = openChronicle([...chronicleFromPhotos, ...traceOnly].sort((a, b) => a.day.localeCompare(b.day)), privilege);
   const chronicleDays = new Set(chronicle.map((moment) => moment.day));
   // A quiet day's line says its photographs are down in 「这个月的照片」, so it may only be printed
   // for a day that actually has some there.
