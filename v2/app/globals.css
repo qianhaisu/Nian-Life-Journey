@@ -293,16 +293,29 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .upcoming-more > summary::after { margin-left: 8px; content: "＋"; }
 .upcoming-more[open] > summary::after { content: "－"; }
 .upcoming-more .upcoming-list { margin-top: 0; border-top: none; }
+/* 完整覆盖、队列里也没有待审的一行。带上读到哪天，「没有待办」才是可核对的。 */
+.upcoming-clear { margin: 12px 0 0; color: var(--color-muted); font-size: .95rem; line-height: 1.7; }
 
-/* 上一个月的回顾: the same lines, quieter, under the name of its own month. */
-.home-prior-review { padding: clamp(16px, 2.5vw, 28px) 0 clamp(20px, 3vw, 32px); }
-.home-prior-review .home-change-note li { font-size: .98rem; color: var(--color-muted); }
+/* 上一个月的回顾. Quieter than 近况 AND visibly a block of its own: with September holding three
+   days of material and August a five-line summary, the review is the bigger thing on the page by
+   area, and the two were reading as one list of 近况 under two labels. The soft card gives it a
+   boundary a reader sees before they read a word, which is 原则五's 「一眼」 rather than a caption
+   asking them to work it out. Type stays smaller and muted; nothing is truncated. */
+.home-prior-review { padding: clamp(8px, 1.5vw, 16px) 0 clamp(20px, 3vw, 32px); }
+.home-prior-review > div { padding: clamp(16px, 3vw, 22px) clamp(16px, 3vw, 24px) clamp(10px, 2vw, 16px); background: var(--card-soft); border-radius: 18px; }
+.home-prior-review .section-mark { display: block; margin-bottom: 2px; }
+.home-prior-review .home-change-note { margin: 8px 0 0; }
+.home-prior-review .home-change-note li { font-size: .95rem; color: var(--color-muted); margin-top: 8px; }
 /* 忽然想起 (原则六): one relation, one story. Set quieter than 最近的一段生活 — it is something
    the archive remembers, not the news. The relation line carries the weight; the story below it is
    an ordinary chapter entry, so nothing new had to be designed for it. */
 .home-resurface { padding: clamp(48px, 7vw, 80px) 0 clamp(32px, 5vw, 56px); }
 .resurface-relation { margin: 10px 0 18px; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--color-secondary); }
 .home-resurface .memory { margin-top: 0; }
+/* 44px 的点击高度。首页上低于 44 的可点元素只有故事标题这一种：忽然想起那段实测 272×37，
+   抽到单行标题时代表日记那段实测 334×42（两者都随抽签变化）。标题用的是 .memory 的通用样式，
+   所以只在首页这一层加内边距，月页的同一个结构不动。 */
+.home-page .memory-copy h3 a { display: inline-block; padding-block: 5px; }
 /* A group's stages: the change read in the order it happened. The date and the age sit together on
    the left so the distance between two stages is legible at a glance, and each line is its own tap
    target back to that story. */

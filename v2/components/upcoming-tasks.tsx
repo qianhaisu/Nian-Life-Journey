@@ -78,9 +78,17 @@ function Item({ item, today, birthDay }: { item: UpcomingItem; today: string; bi
 
 export function UpcomingTasks({ feed, today, birthDay }: { feed: UpcomingFeed; today: string; birthDay?: string }) {
   // An unavailable feed renders NOTHING — not an empty state, not 「暂无待办」. See lib/upcoming.ts:
-  // "no rows" and "not connected" are the same thing from here, and the page must not tell a family
-  // their week is clear on the strength of a feed that was never wired up.
-  if (feed.status !== "ready") return null;
+  // a missing table, a failed read, a half-covered run and a queue waiting on a reviewer are all
+  // states in which the page cannot prove anything about the family's week, so it says nothing.
+  if (feed.status === "unavailable") return null;
+  // The one case it can prove: a run that read its whole window, nothing in it, nothing pending
+  // review. It says which period that was, because 「没有待办」 without a period is not checkable.
+  if (feed.status === "clear") {
+    return <section className="home-upcoming reading-wrap" aria-labelledby="upcoming-title">
+      <h2 id="upcoming-title" className="section-mark">近期待办</h2>
+      <p className="upcoming-clear">{feed.readToDay ? `${formatDay(feed.windowFrom)} 到 ${formatDay(feed.readToDay)}，没有要记着的事。` : "没有要记着的事。"}</p>
+    </section>;
+  }
   const visible = feed.items.slice(0, UPCOMING_VISIBLE);
   const rest = feed.items.slice(UPCOMING_VISIBLE);
   return <section className="home-upcoming reading-wrap" aria-labelledby="upcoming-title">

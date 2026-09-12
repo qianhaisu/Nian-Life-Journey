@@ -21,17 +21,30 @@
 //   3. 「未确定的计划明确标注待定」. `tentative` is its own status with its own label.
 //   4. 「不得把数据未接入显示成没有待办」. The feed has four ways of having no rows
 //      (lib/upcoming-contract.ts) and only ONE of them — `no_items`, a window really read with
-//      nothing in it — is a statement about the family's week. This page declines to make even
-//      that statement: `feedFromResult` maps everything except "ready with items" to
-//      `unavailable`, and an unavailable feed renders nothing at all. A page with no data says
-//      nothing; it never tells a family their week is clear.
-import { isUpcomingDay, statusNeedsEvidence, type UpcomingEvidence, type UpcomingFeedResult, type UpcomingItem, type UpcomingStatus, type UpcomingWhen } from "@/lib/upcoming-contract";
+//      nothing in it — can be a statement about the family's week. `feedFromResult` lets that one
+//      through as `clear` ONLY when the run covered its whole window with no failed unit, and only
+//      when nothing is sitting unreviewed behind it. `not_extracted`, `read_failed`, a partial run
+//      and a queue waiting on a human all render nothing at all.
+//
+//   5. 只显示人工 approved 的事项 (总指挥, 2026-09-13). The store's default read returns approved
+//      AND needs_human_review rows, with a count of the unreviewed ones; the family page takes
+//      approved only (`HOME_UPCOMING_DECISIONS`), because an extracted todo can name the wrong
+//      person — the same chat patterns that find 「小年明天带尿不湿」 also find a parent's own
+//      hospital appointment. `readHomeUpcoming` is where that decision lives, and it is also why
+//      「没有待办」 needs a second look at the review queue: with 22 unreviewed rows and no approved
+//      one, the approved-only read answers `no_items`, and saying 没有待办 on the strength of that
+//      would be reporting a backlog as a clear week.
+import { isUpcomingDay, statusNeedsEvidence, type UpcomingCoverage, type UpcomingEvidence, type UpcomingFeedResult, type UpcomingItem, type UpcomingStatus, type UpcomingWhen } from "@/lib/upcoming-contract";
 
 export type { UpcomingEvidence, UpcomingItem, UpcomingStatus, UpcomingWhen };
 
 export type UpcomingFeed =
   | { status: "unavailable"; reason: string }
-  | { status: "ready"; items: UpcomingItem[] };
+  | { status: "ready"; items: UpcomingItem[] }
+  // A window that was really read, end to end, with nothing in it and nothing waiting on a
+  // reviewer. The only case in which this page may say there is nothing to do, and it says which
+  // period it read when it does.
+  | { status: "clear"; windowFrom: string; readToDay?: string };
 
 // How many items the front page shows before the rest go behind 展开全部. Four keeps the block from
 // pushing 近况 and the day's story off a phone screen; nothing is dropped — see the component.
@@ -103,15 +116,55 @@ export function sortUpcoming(items: UpcomingItem[]): UpcomingItem[] {
     || a.id.localeCompare(b.id));
 }
 
+// Which review decisions may reach the family page. approved only — see rule 5 above.
+export const HOME_UPCOMING_DECISIONS: ReadonlyArray<"approved" | "needs_human_review" | "rejected"> = ["approved"];
+
+// A coverage block is "complete" when the run it came from read every unit it set out to read.
+// `partial` already folds in a failed unit and an unfinished run (lib/upcoming-merge.ts); the rest
+// is spelled out rather than trusted, because this is the one predicate that lets the page tell a
+// family their week is clear.
+function coveredWholeWindow(coverage: UpcomingCoverage): boolean {
+  return !coverage.partial
+    && coverage.unitsFailed === 0
+    && coverage.unitsTotal > 0
+    && coverage.unitsCovered === coverage.unitsTotal
+    && Boolean(coverage.windowToMessageAt);
+}
+
 // The data track's four-state read (lib/db/upcoming-store.ts readUpcomingFeed) → what the page
-// draws. Only "ready, with at least one item that survives normalisation" renders; `not_extracted`
-// (tonight's real state — migration 0013 is not applied), `read_failed` and even `no_items` all
-// render nothing, because a family must not be told their week is clear by a page that cannot
-// prove it.
-export function feedFromResult(result: UpcomingFeedResult | undefined): UpcomingFeed {
+// draws. `pendingReview` is how many rows are waiting on a human; with any of those, an empty
+// approved list is a backlog and not a clear week, so nothing is drawn.
+export function feedFromResult(result: UpcomingFeedResult | undefined, { pendingReview = 0 }: { pendingReview?: number } = {}): UpcomingFeed {
   if (!result) return { status: "unavailable", reason: "no feed was read" };
-  if (result.state !== "ready") return { status: "unavailable", reason: result.state === "no_items" ? "the window was read and held nothing — not rendered as 「没有待办」" : result.reason };
+  if (result.state === "not_extracted" || result.state === "read_failed") return { status: "unavailable", reason: result.reason };
+  if (result.state === "no_items") {
+    if (pendingReview > 0) return { status: "unavailable", reason: "nothing is approved yet and rows are waiting on a reviewer" };
+    if (!coveredWholeWindow(result.coverage)) return { status: "unavailable", reason: "the run did not cover its whole window, so nothing may be said about the week" };
+    return { status: "clear", windowFrom: result.coverage.windowFrom, readToDay: result.coverage.windowToMessageAt?.slice(0, 10) };
+  }
   const items = sortUpcoming(result.items.map(normalizeUpcoming).filter((item): item is UpcomingItem => Boolean(item)));
   if (items.length === 0) return { status: "unavailable", reason: "no item survived the page-side gate" };
   return { status: "ready", items };
+}
+
+export type UpcomingRead = (options?: { decisions?: Array<"approved" | "needs_human_review" | "rejected"> }) => Promise<UpcomingFeedResult>;
+
+// What the front page calls. Two reads at most, and the second one only when the first found no
+// approved row: the review queue has to be looked at before the page is allowed to say 没有待办.
+// Both reads are on family-scale, profile-scoped tables; the common path is one of them.
+export async function readHomeUpcoming(read?: UpcomingRead): Promise<UpcomingFeed> {
+  const load = read ?? (await import("@/lib/db/upcoming-store")).readUpcomingFeed;
+  let approved: UpcomingFeedResult | undefined;
+  try { approved = await load({ decisions: [...HOME_UPCOMING_DECISIONS] }); }
+  catch (error) { return { status: "unavailable", reason: `the upcoming read threw: ${String((error as Error)?.message ?? error)}` }; }
+  if (approved.state !== "no_items") return feedFromResult(approved);
+  let pendingReview = 0;
+  try {
+    const pending = await load({ decisions: ["needs_human_review"] });
+    pendingReview = pending.state === "ready" ? pending.items.length : 0;
+  } catch {
+    // The census failed, so the page cannot prove the queue is empty and does not claim it is.
+    return { status: "unavailable", reason: "could not check the review queue" };
+  }
+  return feedFromResult(approved, { pendingReview });
 }

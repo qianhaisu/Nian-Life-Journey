@@ -10,8 +10,7 @@ import { LAST_SHOWN_DAY_COOKIE, latestStory, pickRecentStory, recentStoryDays, R
 import { RememberShownDay } from "@/components/remember-shown-day";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { echoGroupsFrom, resurface } from "@/lib/resurface";
-import { readUpcomingFeed } from "@/lib/db/upcoming-store";
-import { feedFromResult } from "@/lib/upcoming";
+import { readHomeUpcoming } from "@/lib/upcoming";
 import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
 import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
@@ -80,24 +79,20 @@ export default async function HomePage() {
   const shownIds = new Set([pick?.memory.id, fallback?.memory.id, ...sameDayOthers.map((memory) => memory.id)].filter((id): id is string => Boolean(id)));
   const overviewFacts = (overview?.facts ?? []).filter((fact) => !shownIds.has(fact.id)).slice(0, OVERVIEW_FACT_LIMIT);
   const hasOverview = Boolean(overview && (overview.summary || overviewFacts.length > 0));
-  // 近期待办 (2026-09-13). The read is the data track's own four-state one
-  // (lib/db/upcoming-store.ts readUpcomingFeed, written for this one reader), and feedFromResult
-  // keeps the page's side of the contract: only "ready with items" draws anything, so
-  // `not_extracted` — tonight's real state, because migration 0013 has not been applied — shows
-  // nothing rather than 「没有待办」.
+  // 近期待办 (2026-09-13). readHomeUpcoming wraps the data track's four-state read
+  // (lib/db/upcoming-store.ts, written for this one reader) with the page's two decisions:
+  // APPROVED ROWS ONLY, and 「没有待办」 only from a run that covered its whole window with nothing
+  // waiting on a reviewer. Everything else draws nothing — `not_extracted` is the real state today,
+  // because migration 0013 has not been applied to any running database.
   //
   // On adding a database read to a render path (CLAUDE.md): this reads three new, family-scale
   // tables (upcoming_extraction_runs, upcoming_items filtered by profile and review decision, and
   // the change rows for those items) — no raw_sources, no unbounded scan of a large table, and the
   // data track sized it for exactly this caller. It is NOT inside the memoised archive read, so it
-  // costs three small queries per view of this page; with a missing table it costs one failed
-  // query and is caught (42P01 → not_extracted), never an error page.
-  //
-  // `decisions` is deliberately left at the store's default (approved + needs_human_review). Whether
-  // an unreviewed todo may reach the family is the data track's and Teddy's call, not the page's —
-  // their 2026-09-12 note records the choice and the `unreviewed` count that goes with it. To hold
-  // the page to reviewed rows only, pass `{ decisions: ["approved"] }` here.
-  const upcoming = feedFromResult(await readUpcomingFeed().catch(() => undefined));
+  // costs three small queries per view of this page, and a second set of three only when there is
+  // no approved row to show. With a missing table it costs one failed query and is caught
+  // (42P01 → not_extracted), never an error page.
+  const upcoming = await readHomeUpcoming();
   // 忽然想起 (原则六). One relation, one story, drawn from published stories only — and absent from
   // the page entirely when the calendar holds no relation worth stating (lib/resurface.ts).
   const remembered = resurface(
@@ -171,8 +166,12 @@ export default async function HomePage() {
     {/* A month's snapshot under the name of its own month, never relabelled as this one. Shown only
         when the overview's month has no summary of its own (lib/home-view.ts). */}
     {priorReview ? <section className="home-prior-review reading-wrap" aria-labelledby="prior-title">
-      <h2 id="prior-title" className="section-mark">{priorReview.label}回顾</h2>
-      <SnapshotSummary text={priorReview.summary} className="home-change-note serif" icons />
+      {/* Inside its own tinted block: last month's summary is longer than a thin September's 近况,
+          and without a boundary the two read as one list under two labels (原则五). */}
+      <div>
+        <h2 id="prior-title" className="section-mark">{priorReview.label}回顾</h2>
+        <SnapshotSummary text={priorReview.summary} className="home-change-note serif" icons />
+      </div>
     </section> : null}
 
     {/* 近期待办 — after 近况, before the day's story, in the one column every reader gets. */}
