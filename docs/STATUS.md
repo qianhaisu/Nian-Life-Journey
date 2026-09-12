@@ -7407,3 +7407,32 @@ private 仍 2 张。`approved` 211、`needs_human_review` 94 不变。
 **五项剩余事项本轮不扩查**（小雪微信群那 118 条同拼写、09-03 三条视频的身份漂移、
 `distinctSpeakerCount()` 不接会话、09-07 那段收不收、归档积压），按总指挥指示挂起；
 七天 Organizer 不再重跑，本轮也不为收尾单独重跑检查或重建容器。
+
+---
+
+## 2026-09-12 夜 · 数据 Code：169 篇审核队列 ＋ 国内访问性能实测
+
+**本轮线上多了什么家人能读的东西：没有，本轮不发布也没有部署。** 线下多了两样：
+169 篇的完整审核队列（库内 83 ＋ pack-05..08 的 86，九个交替年份的包，每篇带正文、来源时刻、
+可靠说话人、同事件判重、配图证据状态、建议与最小建议稿），在
+`C:\Users\teddy\NianlifeOps\timeline-2026-09-12\overnight-review`；以及一次
+**已提交并推送的服务端读取优化** `ea65376`——`/api/media/[id]` 每张照片原本三次串行查库，
+改成一次 join（隧道实测 47.4 ms → 20.0 ms，13 个用例逐行等价 0 处不一致，
+typecheck / lint 通过，测试 903 条 893 通过 0 失败）。**运行容器仍是 `d20bc87`，今晚未部署。**
+
+**没做到什么 / 最大的已知 blocker**：**国内公网访问本轮无法验证**——备案未通过，
+ECS 上除 22 端口没有任何公网 Web 入口，没有国内终端证据，隧道数字不能当公开域名体验。
+第二个 blocker 是**已定位但我无权修的**：`media_locations` 没有 `media_asset_id` 索引，
+每张照片的读取都是 57,573 行的顺序扫描（6.1 ms、2,593 buffer），库里累计
+`seq_tup_read = 2,390,534,974`。一行 DDL 可解，**需要 Teddy 批准，因为是迁移**：
+`create index concurrently media_locations_asset_idx on media_locations (media_asset_id);`
+另外**月页第一次打开在 ECS 本机就要 2–3 秒**（暖的时候 0.3 秒），原因未坐实，
+已排除 OSS 连接预热与并发压垮，证据在 `perf/11`–`13`。
+
+**顺带纠正两条会误导下一轮的既有结论**（原文保留不改写）：`video-conflict-report.md` 里的
+「18080 隧道全部 502」是**本机 `HTTP_PROXY=127.0.0.1:7994` 造成的假象**，加 `--noproxy '*'`
+全部 200；「SSH 连不上 ECS、RDS 不可达」是**用错了钥匙**，这台机器认
+`Downloads\nianlife-prod-ecs.pem` ＋ `ecs-user`，本轮用它只读连上了 ECS 与 RDS。
+
+**下一件事**：明早从 `overnight-review/queue-01-2025.md` 开始审 169 篇；
+性能上等 Teddy 对那一行索引拍板，月页冷启动 2–3 秒交页面 session 定位。
