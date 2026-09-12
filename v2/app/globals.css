@@ -791,3 +791,29 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .chart-pair { grid-template-columns: repeat(2, 1fr); }
   .capture-form-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── 时间标签减重：首页的日期＋当时年龄，记忆的年份选择 ──────────────────
+   Two places, nowhere else.
+
+   The date is not a button, and it was set as one: white fill, 20px radius, a drop shadow, sitting
+   directly above the story's title — so the most pressable-looking thing on the front page was a
+   label that does nothing. The shadow goes, the fill becomes a tint of the clay the text is already
+   set in, and the radius comes down, so it reads as a marker on the paper rather than a chip
+   floating above it. Both clocks keep their weight and colour: 「2026 年 9 月 5 日 当时 1 岁 8 个月」
+   is as legible as it was (原则二).
+
+   The year nav IS pressable, so it stays a capsule — a flat one. A hairline instead of a raised
+   white card; the selected year keeps its solid clay fill, because "which year am I reading" has to
+   survive the whole thing being made quieter. The target was 37px tall, under the 44 a thumb wants,
+   and is 44 now. The global :focus-visible ring (2px sage, 4px offset) is untouched and still shows
+   on both. */
+.home-lead .memory-lead .time-signature {
+  background: color-mix(in srgb, var(--clay) 12%, transparent);
+  box-shadow: none;
+  border-radius: 10px;
+  padding: 6px 12px;
+}
+.year-pill { min-height: 44px; background: transparent; box-shadow: none; border: 1px solid var(--color-border); }
+.year-pill:hover { transform: none; box-shadow: none; background: color-mix(in srgb, var(--clay) 10%, transparent); }
+.year-pill--active { background: var(--clay); color: #fff; border-color: var(--clay); }
+.year-pill--active:hover { background: var(--clay); color: #fff; }
