@@ -3,6 +3,7 @@ import { MonthCard } from "@/components/month-card";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildMemoryIndex } from "@/lib/memory-index";
 import { renderOnDemand } from "@/lib/render-on-demand";
+import { YearNavHighlight } from "@/components/year-nav-highlight";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
 // (lib/render-on-demand.ts), so there is no Next route cache for a revalidate window to
@@ -46,17 +47,21 @@ export default async function MemoryPage() {
         </section>
       ) : (
         <>
+          {/* The newest year is only the opening state: YearNavHighlight moves the mark to
+              whichever year is actually being read. */}
           <nav className="memory-year-nav reading-wrap" aria-label="按年份导航">
             {index.years.map((y) => (
               <a
                 key={y.year}
                 href={`#year-${y.year}`}
                 className={`year-pill${y.year === newestYear ? " year-pill--active" : ""}`}
+                aria-current={y.year === newestYear ? "true" : undefined}
               >
                 {y.year}
               </a>
             ))}
           </nav>
+          <YearNavHighlight />
 
           {index.years.map((year) => (
             <section key={year.year} id={`year-${year.year}`} className="memory-year-section">
