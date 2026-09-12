@@ -13,6 +13,8 @@ import { birthDayOf } from "@/lib/time-signature";
 import { assetByChecksum, normalizeChatImportTask, persistChatImportBatchInStore, persistUploadInStore } from "./chat-import-persistence";
 import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 import { storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
+import { storyNeighbours } from "@/lib/story-neighbours";
+import { indexReviews, isEventPublishable } from "@/lib/organizer/quality-review";
 
 const dataDir = path.join(process.cwd(), ".data");
 const storeFile = path.join(dataDir, "nian-life.json");
@@ -142,6 +144,12 @@ export function createJsonRepository(): Repository {
       if (!event) return null;
       const media = store.media.filter((item) => event.mediaIds.includes(item.id));
       const assetIds = new Set(media.map((item) => item.mediaAssetId).filter((v): v is string => Boolean(v)));
+      // Same reading order the PostgreSQL backend builds, under the same rule: only stories a
+      // reader could already open. The local store is small enough to filter in memory.
+      const reviews = indexReviews((store.qualityReviews ?? []) as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>);
+      const readable = store.events
+        .filter((item) => item.visibility !== "private" && isEventPublishable(item, reviews))
+        .map((item) => ({ id: item.id, title: item.title, occurredAt: item.occurredAt }));
       return {
         event,
         media,
@@ -154,6 +162,7 @@ export function createJsonRepository(): Repository {
         mediaLocations: store.mediaLocations.filter((location) => assetIds.has(location.mediaAssetId)),
         birthDay: birthDayOf(store.profile),
         photoConfirmations: storyPhotoConfirmationsFrom(store.qualityReviews ?? []),
+        neighbours: storyNeighbours({ id: event.id, title: event.title, occurredAt: event.occurredAt }, readable),
       };
     },
     // Local dev store is small — no need for the PostgreSQL backend's scoped query, just filter the

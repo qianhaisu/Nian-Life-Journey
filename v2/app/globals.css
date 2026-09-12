@@ -579,6 +579,24 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .viewer-image-zoomed { transform: scale(2.5); touch-action: pinch-zoom; cursor: zoom-out; }
 @media (prefers-reduced-motion: reduce) { .viewer-image { transition: none; } }
 .viewer-nav { flex-shrink: 0; text-align: center; padding: 10px 16px; padding-bottom: max(10px, env(safe-area-inset-bottom)); color: rgba(255,255,255,.6); font-size: .8rem; }
+/* 接着读 — the story before and the story after, at the foot of the reading. Two equal cards at
+   reading width, stacked on a phone. Each one is a whole link and therefore a whole target: on a
+   phone that is the full column, not a chevron. Deliberately NOT floating arrows at the edges of a
+   desktop window, which would sit over the photographs and compete with the picture viewer's own
+   left/right. When only one side exists the other is an empty grid cell, so a 下一篇 alone still
+   sits on the right where it belongs rather than sliding under 上一篇's place. */
+.story-steps { display: grid; gap: 12px; padding: 16px 0 0; }
+.story-step { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border-radius: var(--r-card); background: var(--card-soft); transition: transform .3s var(--ease-hover), box-shadow .3s var(--ease-hover); }
+.story-step .section-mark { color: var(--color-muted); }
+.story-step-title { font-size: 1.15rem; line-height: 1.4; color: var(--color-text); }
+.story-step-when { color: var(--color-muted); font-size: .78rem; letter-spacing: .04em; }
+.story-step-next { text-align: right; }
+@media (hover: hover) { .story-step:hover { transform: translateY(-3px); box-shadow: var(--shadow); } }
+.story-step:active { transform: scale(.99); }
+@media (min-width: 700px) {
+  .story-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .story-step-next { align-items: flex-end; }
+}
 .detail-footer { padding: 40px 0 96px; }
 
 /* 张年 */

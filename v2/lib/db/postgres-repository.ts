@@ -10,6 +10,7 @@ import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImpo
 import { normalizeSha256 } from "./chat-import-persistence";
 import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
 import { storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
+import { storyNeighbours } from "@/lib/story-neighbours";
 import { birthDayOf } from "@/lib/time-signature";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { ChatImportStateError, acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
@@ -588,7 +589,8 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       // rows are kept rather than discarded: Basis C (lib/media/story-binding.ts) needs the same
       // read, and asking twice would double a whole-table query on a render path.
       const reviewRows = await db.select().from(t.contentQualityReviews);
-      if (!isEventPublishable(e, indexReviews(reviewRows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>))) return null;
+      const reviews = indexReviews(reviewRows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>);
+      if (!isEventPublishable(e, reviews)) return null;
       // A-12-1 (2026-09-06, docs/INCIDENT-2026-09-06-neon-egress.md §3.2): this used to
       // `select().from(t.rawSources)` — the whole table, `text` column included, no WHERE, no
       // LIMIT — plus three more full-table reads, just to filter down to one event's own handful
@@ -625,6 +627,29 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         // needs an age, never the rest of the profile row.
         db.select({ birthDate: t.profiles.birthDate }).from(t.profiles).where(eq(t.profiles.id, e.profileId)).limit(1),
       ]);
+      // The reading order this story sits in (lib/story-neighbours.ts). ONE query on life_events,
+      // for one profile, selecting only what the publication gate and the link text need: no
+      // `story`, no `story_sections`, no joins, and `organizer_run` reduced to the single field
+      // requiresQualityReview() reads rather than shipped as jsonb. That shape is deliberate — the
+      // 2026-09-06 egress incident was a render path pulling whole tables for a handful of fields.
+      // `visibility` applies the same rule getHomeEvents() publishes under, so a private story is
+      // never offered as somewhere to go next.
+      const orderRows = await db.select({
+        id: t.lifeEvents.id,
+        title: t.lifeEvents.title,
+        occurredAt: t.lifeEvents.occurredAt,
+        visibility: t.lifeEvents.visibility,
+        createdBy: t.lifeEvents.createdBy,
+        organizerVersion: t.lifeEvents.organizerVersion,
+        organizerType: sql<string | null>`${t.lifeEvents.organizerRun}->>'organizerType'`,
+      }).from(t.lifeEvents).where(eq(t.lifeEvents.profileId, e.profileId));
+      const readable = orderRows
+        .filter((row) => row.visibility !== "private")
+        .filter((row) => isEventPublishable({ ...row, organizerRun: row.organizerType ? { organizerType: row.organizerType } : null } as unknown as LifeEvent, reviews))
+        // `title` is nullable in the column and optional in the domain type; memoryTitle() on the
+        // page turns an absent one into the day it happened, so null and undefined mean the same
+        // thing here and only one of them typechecks.
+        .map((row) => ({ id: row.id, title: row.title ?? undefined, occurredAt: row.occurredAt }));
       const media = guardRowCount(mediaRows as unknown as Media[], "getEventDetail.media");
       const assetIds = [...new Set(media.map((item) => item.mediaAssetId).filter((v): v is string => Boolean(v)))];
       const [assetRows, locationRows] = await Promise.all([
@@ -648,6 +673,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         mediaLocations: guardRowCount(locationRows as unknown as MediaLocation[], "getEventDetail.mediaLocations"),
         birthDay: birthDayOf(profileRows[0] as unknown as { birthDate?: string | null } | undefined),
         photoConfirmations: storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ targetKind?: string; targetId?: string; decision?: unknown }>),
+        neighbours: storyNeighbours({ id: e.id, title: e.title, occurredAt: e.occurredAt }, readable),
       };
     },
     async getMonthArchive(month: string) { return assembleMonthArchive(month); },

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { QualityReview } from "@/lib/organizer/quality-review";
+import type { StoryNeighbours } from "@/lib/story-neighbours";
 import type { CareEpisode, CareRecord, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportTaskStatus, ChatImportWarning, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, OrganizerJob, OrganizerRun, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
 
 // The full in-memory snapshot both repository implementations produce from getStore(). Every
@@ -52,6 +53,14 @@ export type EventDetail = {
   // Basis C confirmations for THIS event only (lib/media/story-binding.ts). Derived from the review
   // rows this read already loads for the publication gate, so it adds no query.
   photoConfirmations: ReadonlySet<string>;
+  // The story before this one and the story after it, in lived order (lib/story-neighbours.ts).
+  // Computed here rather than on the page because the publication gate needs the review rows, and
+  // this read already has them — asking again would repeat a whole-table query on a render path
+  // (the 2026-09-06 egress incident is the reason that matters). The extra cost is ONE query on
+  // life_events alone, selecting six small columns plus one jsonb field extracted to text, for one
+  // profile: no story text, no joins, no other table. Both ends are optional and simply absent at
+  // the first and last story.
+  neighbours: StoryNeighbours;
   // Same narrowing as MonthArchiveInput.birthDay below: the page only ever reads the birth date to
   // compute an age, never the rest of the profile row.
   birthDay?: string;

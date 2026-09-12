@@ -11,7 +11,8 @@ import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { storyLayout } from "@/lib/media/presentation";
 import { storyAssociatedMedia } from "@/lib/media/story-binding";
-import { timeSignatureFor } from "@/lib/time-signature";
+import type { NeighbourCandidate } from "@/lib/story-neighbours";
+import { formatMonth, timeSignatureFor } from "@/lib/time-signature";
 
 // 2026-09-06 incident (docs/INCIDENT-2026-09-06-neon-egress.md §3.2): generateStaticParams used
 // to prerender every publishable event (651 and growing) on every build, each pulling the full
@@ -49,7 +50,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const detail = await getCachedEventDetail(id);
   // An event that is not 张年's (a fixture profile's row reached by URL) is not a page in this book.
   if (!detail || detail.event.profileId !== CANONICAL_PROFILE_ID) notFound();
-  const { event, media: eventMedia, sources: eventSources, contributors, growth, care, links: eventLinks, mediaAssets, mediaLocations, birthDay } = detail;
+  const { event, media: eventMedia, sources: eventSources, contributors, growth, care, links: eventLinks, mediaAssets, mediaLocations, birthDay, neighbours } = detail;
   const sourceRoles: ReadonlyMap<string, "primary" | "supporting" | "context"> = new Map(
     eventLinks.map((link) => [link.rawSourceId, link.role as "primary" | "supporting" | "context"])
   );
@@ -74,10 +75,23 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const people = event.people.filter(Boolean);
   const location = event.locationLabel?.trim();
   const materialCount = eventSources.length;
+  // The month this story belongs to — a destination that exists whether or not the reader arrived
+  // from it, and one the link can name. 「回到记忆」 was true but vague, and a reader who opened
+  // this page from a month was sent to the index instead of back to what they were reading.
+  const monthHref = signature ? `/memory/${signature.day.slice(0, 4)}/${signature.day.slice(5, 7)}` : "/memory";
+  const monthLabel = signature ? formatMonth(signature.day.slice(0, 7)) : "记忆";
+  const neighbourEntry = (neighbour: NeighbourCandidate, direction: "previous" | "next") => {
+    const sig = timeSignatureFor(neighbour.occurredAt, birthDay);
+    return <Link className={`story-step story-step-${direction}`} href={`/events/${neighbour.id}`}>
+      <span className="section-mark">{direction === "previous" ? "上一篇" : "下一篇"}</span>
+      <span className="serif story-step-title">{memoryTitle(neighbour)}</span>
+      {sig ? <span className="story-step-when">{sig.dateLabel}{sig.ageLabel ? ` · 当时 ${sig.ageLabel}` : ""}</span> : null}
+    </Link>;
+  };
 
   return <article className="detail-page">
     <header className="reading-wrap detail-head">
-      <Link className="back-link" href="/memory">← 回到记忆</Link>
+      <Link className="back-link" href={monthHref}>← 回到 {monthLabel}</Link>
       {signature ? <TimeSignature signature={signature} className="detail-signature" /> : null}
       <h1 className="serif">{title}</h1>
       {people.length > 0 || location ? <p className="detail-context">{[people.join("、"), location].filter(Boolean).join(" · ")}</p> : null}
@@ -106,6 +120,16 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       <summary><span className="serif">当时留下的资料</span><small>{materialCount} 项</small></summary>
       <EvidenceList sources={eventSources} media={eventMedia} contributors={contributors} deliverableIds={deliverable} sourceRoles={sourceRoles} />
     </details> : null}
-    <footer className="detail-footer reading-wrap"><Link className="text-link" href="/memory">回到记忆</Link></footer>
+    {/* Keep reading. The archive is chronological, so the page after this one is a real thing —
+        the next day somebody wrote something down — and it is named rather than left as an arrow.
+        An end of the archive shows one side and no placeholder for the other; neither side is ever
+        a draft or a withheld story, because lib/db/repository.ts only ever puts publishable,
+        non-private stories in here. No floating arrows: these live at the foot of the reading, out
+        of the way of the photographs. */}
+    {neighbours.previous || neighbours.next ? <nav className="story-steps reading-wrap" aria-label="接着读">
+      {neighbours.previous ? neighbourEntry(neighbours.previous, "previous") : <span className="story-step-empty" aria-hidden="true" />}
+      {neighbours.next ? neighbourEntry(neighbours.next, "next") : null}
+    </nav> : null}
+    <footer className="detail-footer reading-wrap"><Link className="text-link" href={monthHref}>回到 {monthLabel}</Link></footer>
   </article>;
 }
