@@ -126,19 +126,16 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         always capped itself to (ARCHIVE_FIRST_SCREEN_MAX); the rest is behind ArchiveExpander. */}
     {archivePhotoCount > 0 ? <details className="month-archive" id="month-photos" open>
       <summary><span className="serif">{albumLabel}</span></summary>
-      <ol>
-        {composition.archiveDaysVisible.map((day) => <li className="month-day" key={day.day}>
-          <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} monthAgeLabel={chapter.ageLabel} year={year} />
-          <PhotoGallery photos={day.photos} dateLabel={day.dateLabel} ageLabel={day.ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
-        </li>)}
-      </ol>
-      {/* B-3: ArchiveExpander replaces the static "还有 N 天" text; fetches hidden days on demand. */}
+      {/* B-3: ArchiveExpander owns the whole list, not just the folded tail. The first screen's days
+          are a SELECTION (recency, and days that already carry words), so appending the rest after
+          them ran the album 12 日, 15 日, 18 日, 21 日, 2 日 — expanding has to merge into one
+          chronological list, and only the component holding both sides can do that. */}
       <ArchiveExpander
         year={year}
         month={monthSegment}
         foldedDayCount={composition.archiveFoldedDayCount}
         foldedPhotoCount={composition.archiveFoldedPhotoCount}
-        visibleDayKeys={composition.archiveDaysVisible.map((d) => d.day)}
+        visibleDays={composition.archiveDaysVisible}
         monthAgeLabel={chapter.ageLabel}
       />
       {composition.smallImageCount > 0 ? <p className="chapter-meta">还有 {composition.smallImageCount} 张过小的图片（表情、缩略图）留在档案记录里，未在此显示。</p> : null}
