@@ -817,3 +817,59 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .year-pill:hover { transform: none; box-shadow: none; background: color-mix(in srgb, var(--clay) 10%, transparent); }
 .year-pill--active { background: var(--clay); color: #fff; border-color: var(--clay); }
 .year-pill--active:hover { background: var(--clay); color: #fff; }
+
+/* ── 首页桌面画册式分栏 ───────────────────────────────────────────────────
+   The front page only. Phone widths keep the layout they were verified on.
+
+   THE MEASURE. The lead story's paragraph is capped with `ch`, which is the advance width of the
+   font's "0" — a unit with no stable relation to how many Chinese characters fit on a line. `em` is
+   the font size itself, which is what the month pages already cap this kind of prose with
+   (.month-reading .moment-memory_led .memory-copy p). Measured on the lead paragraph's own box at a
+   1448px viewport: 383px under the old cap, 571px under this one. The rule is inside a media query
+   rather than at the top level so that "desktop only" is structural rather than incidental: below
+   720px it does not apply at all and the old cap stands — measured 359px at 391 (the column is
+   narrower than either cap there) and 383px from 430 to 719, which is the phone layout that was
+   already verified.
+
+   THE COLUMNS. The page is one 760px measure with everything stacked under it, which leaves a third
+   of a wide screen doing nothing; and the lead block alone widens to 1100px, so it sticks out past
+   every other block instead of reading as a layout. The month overview and the month entry — the
+   two blocks about a span of time rather than about a day — move into a rail beside the main
+   column.
+
+   WHY 1200 AND NOT 1000. 760 + 56 + 320 plus the page's own 64px of gutter is 1200. Below that the
+   grid can only pay for the rail by taking width from the reading measure: at a 1000px viewport the
+   main column came out 560px, narrower than the 760 it has today at that width. So the two columns
+   begin exactly where they can be afforded, and every narrower screen keeps the single column it
+   already had. */
+@media (min-width: 720px) {
+  .home-lead .memory-lead .memory-copy p { max-width: 34em; }
+}
+@media (min-width: 1200px) {
+  .home-page {
+    display: grid;
+    grid-template-columns: minmax(0, 760px) 320px;
+    column-gap: 56px;
+    align-items: start;
+    width: min(1136px, calc(100% - 64px));
+    margin-inline: auto;
+  }
+  /* Inside the grid the column is the measure, so each block gives up its own width rule —
+     including .home-lead's 1100px, which is what made it stick out. */
+  .home-page > .reading-wrap { width: auto; margin-inline: 0; }
+  .home-masthead, .home-lead, .home-cluster, .home-resurface { grid-column: 1; }
+  .home-change, .home-month { grid-column: 2; }
+  /* A rail block's own top padding would push it out of line with the block it sits beside. */
+  .home-change, .home-month { padding-top: 0; }
+  /* The rail starts beside the story either way. Auto-placement only ever moves forward, so a month
+     entry with no overview above it was put in the row the main column had already reached — level
+     with 忽然想起, with the whole top of the rail empty above it. When it is the only thing in the
+     rail it takes the row the overview would have had. */
+  .home-page:not(:has(.home-change)) .home-month { grid-row: 2; }
+  /* Nothing in the rail means no rail: a reserved-but-empty 320px column pushes the whole page off
+     centre and reads as a mistake. */
+  .home-page:not(:has(.home-change)):not(:has(.home-month)) {
+    grid-template-columns: minmax(0, 760px);
+    width: min(760px, calc(100% - 64px));
+  }
+}
