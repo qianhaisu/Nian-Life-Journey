@@ -231,17 +231,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .home-lead .memory-lead .memory-photo { flex: 1.2; min-width: 0; }
   .home-lead .memory-lead .memory-copy { flex: 0.8; min-width: 0; padding-top: 20px; }
 }
-/* B-9d used to widen the 最近的一段生活 container to 1100px from 1000px up, so that the cover's
-   photo:text could be 1.2:0.8 at full size. a244981 gave the whole front page a 760px measure with a
-   rail beside it from 1200px up, and neutralised this rule there (`.home-page > .reading-wrap`
-   below) precisely because a block wider than every other block is what made the lead stick out.
-   What it left behind was a 200px-wide window where the old behaviour still stood: measured at a
-   1199px viewport the lead ran 49.5→1149.5 while the masthead, the overview, the photographs and
-   忽然想起 all ran 219.5→979.5, and at 1000px it ran 32→968 against their 120→880. One block on the
-   page starting 170px to the left of the rest is the misalignment a244981 set out to remove, only
-   in the widths that rule could not reach. The measure is now 760px at every width below the rail,
-   which is the same column the rail layout gives it above 1200. The 1.2:0.8 split it was widening
-   for is unaffected: that lives in the flex rule above, on whatever width the column has. */
+/* B-9d's 1000px rule widened the lead block alone to 1100px. The rail layout below neutralises that
+   from 1200px up, which left 1000–1199 as the one band where the lead still started 170px to the
+   left of every other block on the page. Removed, so the front page is one 760px measure at every
+   width. The cover's 1.2:0.8 photo:text split does not depend on it — that is the flex rule above,
+   on whatever width the column has. */
 .home-past { padding: clamp(64px, 8vw, 96px) 0 clamp(40px, 6vw, 64px); }
 .home-past .memory { margin-top: 20px; }
 .home-change { padding: clamp(64px, 8vw, 96px) 0 clamp(40px, 6vw, 64px); }
@@ -440,30 +434,19 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-page .month-memories { margin-top: 8px; }
 .month-page .trace-disclosure { margin-top: 8px; }
 .other-years { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--color-border); }
-.other-years p { margin: 8px 0 0; font-size: 1.4rem; }
-/* These month links are the last way out of a month page, and as bare inline text their tap target
-   was the glyph box: measured 42.1 × 31.0 at both 391 and 1448, with the two wrapped rows leaving
-   7.1px between one row's targets and the next's. Both numbers are under the 44px a thumb needs, and
-   7.1px between live targets is how a reader lands on 2 月 while reaching for 8 月.
-   inline-flex gives each anchor a real box to size, and the whole box is live: measured at 391 and
-   1448, a press 2px inside either corner resolves to that month's own href. The links stay inline
-   text and still wrap to two rows at phone width. The vertical margin separates the two rows without
-   growing either target; it is margin rather than padding for exactly that reason. No negative
-   margin pulling the first link back to the paragraph's text edge: that would put a live 44px target
-   outside the block it belongs to. Nothing else uses .other-years — the month page's footer is its
-   only site.
-   One side effect, left as it is rather than papered over: the wider boxes move where the line
-   breaks, so at 391 the second row can begin with the 「·」 that used to end the first. Measured at
-   320, 360, 430, 768 and 1448 it does not. Gluing the separator to the month before it with a
-   no-break space was tried and does not help — the break opportunity sits beside the atomic inline
-   box, not inside the text — so removing it would mean changing what the separator is. */
+/* The month links are the last way out of a month page, and as bare inline text each tap target was
+   the glyph box: 42.1 × 31.0, with 7.1px between wrapped rows. Every link now carries its own
+   44 × 44 box, and the row gap is what keeps two rows of targets apart. The gap is also the
+   separator — there is no 「·」 text between the links, so no wrapped row can begin with a stranded
+   one (see the month page's footer, the only place .other-years is used). Text links, no pill, no
+   horizontal scroll. */
+.other-years p { margin: 8px 0 0; font-size: 1.4rem; display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .other-years a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
-  margin-block: 4px;
 }
 .other-years a:hover { color: var(--color-accent); }
 
@@ -866,8 +849,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    of a wide screen doing nothing; and the lead block alone widened to 1100px, so it stuck out past
    every other block instead of reading as a layout. The month overview and the month entry — the
    two blocks about a span of time rather than about a day — move into a rail beside the main
-   column. The rule that widened the lead is gone (B-9d, above), so below this breakpoint the page
-   is one measure rather than one measure and one exception.
+   column. The rule that widened the lead is gone (B-9d, above).
 
    WHY 1200 AND NOT 1000. 760 + 56 + 320 plus the page's own 64px of gutter is 1200. Below that the
    grid can only pay for the rail by taking width from the reading measure: at a 1000px viewport the
