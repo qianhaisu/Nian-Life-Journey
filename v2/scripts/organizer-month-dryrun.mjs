@@ -43,7 +43,17 @@ const args = process.argv.slice(2);
 const argOf = (name, fallback) => { const hit = args.find((a) => a.startsWith(`--${name}=`)); return hit ? hit.slice(name.length + 3) : fallback; };
 const MONTH = argOf("month", null);
 const OUT = argOf("out", null);
-const MAX_CALLS = Number(argOf("max-calls", "60"));
+// `--max-calls=none` runs the named list to the end. It exists because a ceiling that stops halfway
+// produces a partial answer that reads like a complete one: "the model found three of the five" is
+// a different sentence depending on whether it was allowed to look at the other fifteen windows.
+// When the run is meant to measure capability, the ceiling has to be the list, not a number.
+const MAX_CALLS_ARG = argOf("max-calls", "60");
+const MAX_CALLS = /^(none|unlimited|off)$/i.test(MAX_CALLS_ARG) ? Infinity : Number(MAX_CALLS_ARG);
+if (!Number.isFinite(MAX_CALLS) && MAX_CALLS !== Infinity) { console.error("--max-calls must be a number or 'none'"); process.exit(1); }
+// A ceiling is not the only reason to stop. Repeated transport failures mean the run is not
+// measuring the organizer any more, and retrying the same broken thing is how a bounded run stops
+// being bounded. Consecutive failures only — one bad window between good ones is not an outage.
+const MAX_CONSECUTIVE_FAILURES = Number(argOf("max-consecutive-failures", "3"));
 const MAX_DAYS = Number(argOf("max-days", "31"));
 // An explicit allow-list of life dates inside --month. Without it the run covers the whole month,
 // which for a month that is partly written already means paying for days nobody asked about and
@@ -150,7 +160,7 @@ const days = [...new Set(selected.map((s) => s.lifeDate))].slice(0, MAX_DAYS);
 const work = selected.filter((s) => days.includes(s.lifeDate));
 console.log(`Gate: ${gateStats.windowsInMonth} window(s) in ${MONTH}${DAY_ALLOW ? ` limited to ${DAY_ALLOW.length} named day(s)` : ""}, ${gateStats.windowsPassed} passed, over ${days.length} day(s). Messages kept ${gateStats.messagesKept}, rejected ${gateStats.messagesRejected}.`);
 // The ceiling, printed before a single call is made, so an operator can stop here if it is wrong.
-console.log(`Ceiling: at most ${MAX_CALLS} model call(s) (--max-calls); this run has ${work.length} window(s) queued, each costing up to 2 (editor, then writer).`);
+console.log(`Ceiling: ${MAX_CALLS === Infinity ? "none — the named day list is the bound" : `at most ${MAX_CALLS} model call(s) (--max-calls)`}; this run has ${work.length} window(s) queued, each costing up to 2 (editor, then writer). Stops after ${MAX_CONSECUTIVE_FAILURES} consecutive model failures.`);
 
 // ---------------------------------------------------------------- the writer (T7 step 2)
 const editor = createDeepSeekMemoryEditor(process.env, SUBJECT, { variant: "v4", ...OPTS });
@@ -184,8 +194,15 @@ const FORBIDDEN = /家人/;
 
 const results = [];
 let calls = 0;
+let consecutiveFailures = 0;
+let abortReason = null;
 for (const item of work) {
-  if (calls >= MAX_CALLS) { console.log(`Reached --max-calls=${MAX_CALLS}; stopping.`); break; }
+  if (calls >= MAX_CALLS) { abortReason = `reached --max-calls=${MAX_CALLS}`; console.log(`Reached --max-calls=${MAX_CALLS}; stopping.`); break; }
+  if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+    abortReason = `${consecutiveFailures} consecutive model failures`;
+    console.log(`Stopping: ${consecutiveFailures} consecutive model failures. Not retrying the same fault.`);
+    break;
+  }
   const entry = { lifeDate: item.lifeDate, conversation: item.w.conversationId, gate: item.gate, fingerprint: item.fp, messages: item.w.stats.messageCount, images: item.w.stats.imageCount, keptSourceIds: item.keptSourceIds };
   results.push(entry);
   let verdict, grounding;
@@ -197,9 +214,11 @@ for (const item of work) {
     grounding = groundClaims(item.w, { ...verdict, worthinessAxis: axes?.worthinessAxis }, SUBJECT, OPTS);
   } catch (error) {
     entry.skipped = `editor: ${String(error?.message ?? error)}`;
-    console.log(`  ${item.lifeDate} EDITOR ERROR ${entry.skipped}`);
+    consecutiveFailures += 1;
+    console.log(`  ${item.lifeDate} EDITOR ERROR (${consecutiveFailures} in a row) ${entry.skipped}`);
     continue;
   }
+  consecutiveFailures = 0;
   entry.subjectRelevance = verdict.subjectRelevance;
   entry.groundedClaims = grounding.claims.length;
 
@@ -225,7 +244,13 @@ for (const item of work) {
 
   let writer;
   try { calls += 1; writer = await callWriter(pkg); }
-  catch (error) { entry.skipped = `writer: ${String(error?.message ?? error)}`; console.log(`  ${item.lifeDate} WRITER ERROR`); continue; }
+  catch (error) {
+    entry.skipped = `writer: ${String(error?.message ?? error)}`;
+    consecutiveFailures += 1;
+    console.log(`  ${item.lifeDate} WRITER ERROR (${consecutiveFailures} in a row)`);
+    continue;
+  }
+  consecutiveFailures = 0;
   const validation = validateNarrative({ pkg, output: writer.output });
   entry.validation = { ok: validation.ok, issues: validation.issues?.map((i) => i.code) ?? [] };
   entry.usage = writer.usage;
@@ -247,6 +272,9 @@ const summary = {
   editor: { name: editor.name, model: editor.model, promptVersion: editor.promptVersion },
   writerPromptVersion: WRITER_V2_PROMPT_VERSION, validatorVersion: NARRATIVE_VALIDATOR_VERSION,
   deepseekCalls: calls, gate: gateStats,
+  dayAllowList: DAY_ALLOW, maxCalls: MAX_CALLS === Infinity ? "none" : MAX_CALLS,
+  maxConsecutiveFailures: MAX_CONSECUTIVE_FAILURES, abortedBecause: abortReason,
+  windowsQueued: work.length, windowsAttempted: results.length,
   daysConsidered: days.length, windowsProcessed: results.length, daysWithText: new Set(publishable.map((r) => r.lifeDate)).size,
   refused: results.filter((r) => r.skipped).length,
 };
