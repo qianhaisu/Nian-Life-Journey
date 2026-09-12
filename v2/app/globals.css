@@ -724,8 +724,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    is still a break, without a hole in the page. */
 @media (min-width: 720px) {
   /* Continuous across 720, which the first version of this was not: a 4.6vw ceiling bottomed out
-     on its own 2.4rem floor until ~1094px, so the headline JUMPED DOWN from 50.3px at 719 to
-     38.4px at 721 and only recovered near 1100 — the title got smaller as the screen got wider.
+     on its own 2.4rem floor until ~835px (4.6vw = 38.4px there), so the headline JUMPED DOWN from
+     50.3px at 719 to 38.4px at 721 and did not climb back to where it had been at 719 until about
+     1094px — the title got smaller as the screen got wider, over a range of some 375px.
      Measured at 700 / 719 / 721 / 760 / 860 before it was caught. 7vw is the same curve the phone
      rule already follows, so 720 is not a step in it; 3.15rem is that curve's own value at 720, and
      4rem caps it from ~914px on. The padding falls with width instead of rising, which no clamp on
