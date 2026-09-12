@@ -679,19 +679,35 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .evidence-disclosure { margin-top: 28px; background: var(--card-soft); border-radius: 20px; border: 0; overflow: hidden; padding: 0 24px; }
 .evidence-disclosure > summary { padding-left: 0; padding-right: 0; }
 
-/* B-14: Home recent cluster — 1 large + 2 small photos, no text, no count */
+/* B-14: Home recent photographs — no text, no count. See components/home-cluster.tsx.
+   No shared height here on purpose. The block used to be a fixed-height row (one tile at flex:2,
+   a stack of the rest at flex:1, every tile object-fit:cover), which can only hold pictures of
+   different proportions by cutting them: with the two photographs the archive currently vouches
+   for, the second arrived as a 1:2 strip, 111×220 beside 223×220 at a 391px viewport. Each
+   picture now keeps its own aspect-ratio and the columns follow the count. */
 .home-cluster { padding: 0 0 clamp(56px, 8vw, 96px); }
-.home-cluster-grid { display: flex; gap: 10px; height: clamp(220px, 48vw, 340px); }
-.cluster-large { flex: 2; min-width: 0; }
-.cluster-stack { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-.cluster-item { display: block; overflow: hidden; border-radius: var(--r-card); box-shadow: var(--shadow); transition: transform .4s var(--ease-hover), box-shadow .4s var(--ease-hover); height: 100%; }
+.home-cluster-grid { display: grid; gap: 10px; align-items: start; }
+/* One picture, alone in a 760px column, has to be stopped or it is simply enlarged into the space.
+   The ceiling is the file's own width — components/home-cluster.tsx sets --cluster-single-max to
+   min(original, 480), 480 being what lib/media/processing.ts resizes a thumbnail to without
+   enlarging it — so a 240px file stops at 240 instead of being run up to the design maximum. */
+.home-cluster-grid[data-count="1"] { grid-template-columns: minmax(0, 1fr); max-width: var(--cluster-single-max, 480px); }
+/* Two, on a phone, one under the other. Side by side they are 175px wide, and two landscape frames
+   at 175px are a contact sheet rather than two photographs — the pair the archive has now came to
+   about half the area the cropped row gave them. Full column width each, so both are the same size
+   and both are the size of a picture. Three stay two across even on a phone: three stacked at full
+   width is most of a screen for a block that carries no words. */
+.home-cluster-grid[data-count="2"] { grid-template-columns: minmax(0, 1fr); }
+.home-cluster-grid[data-count="3"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Where there is room: two beside each other, three across. A third of a 760px column is 247px,
+   which is still a photograph; a third of a phone would be about 120px, which is a stamp. */
+@media (min-width: 700px) {
+  .home-cluster-grid[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-cluster-grid[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.cluster-item { position: relative; display: block; overflow: hidden; border-radius: var(--r-card); box-shadow: var(--shadow); transition: transform .4s var(--ease-hover), box-shadow .4s var(--ease-hover); }
 @media (hover: hover) { .cluster-item:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); } }
 .cluster-item:active { transform: scale(.98); }
-.cluster-item .photo-crop { position: absolute; inset: 0; }
-.cluster-item .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 32%; }
-/* Wrap each cluster-item in a relative container for the absolute photo */
-.cluster-item { position: relative; }
-.cluster-stack .cluster-item { flex: 1; }
 
 @media (min-width: 720px) {
   .memory-month-grid { grid-template-columns: repeat(2, 1fr); }

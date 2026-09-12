@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { EditorialMemory } from "@/components/editorial-memory";
-import { Photo } from "@/components/photo";
+import { HomeCluster } from "@/components/home-cluster";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
@@ -121,21 +121,10 @@ export default async function HomePage() {
       <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
     </section> : null}
 
-    {/* B-14: 最近的一组 — 1 large + 2 small trusted photos, no text, no count */}
-    {recentCluster.length >= 2 ? <section className="home-cluster reading-wrap" aria-label="最近的照片">
-      <div className="home-cluster-grid">
-        <Link href={`/events/${recentCluster[0].memory.id}`} className="cluster-item cluster-large">
-          <Photo media={recentCluster[0].photo} variant="thumbnail" fit="crop" sizes="(max-width: 720px) 65vw, 480px" />
-        </Link>
-        <div className="cluster-stack">
-          {recentCluster.slice(1).map(({ memory, photo }) => (
-            <Link key={memory.id} href={`/events/${memory.id}`} className="cluster-item">
-              <Photo media={photo} variant="thumbnail" fit="crop" sizes="(max-width: 720px) 30vw, 220px" />
-            </Link>
-          ))}
-        </div>
-      </div>
-    </section> : null}
+    {/* B-14: the recent photographs the archive can stand behind — no text, no count. How many
+        there are, and how they are set, is components/home-cluster.tsx; it draws one, two or three
+        at their own proportions rather than forcing them into a fixed-height row. */}
+    <HomeCluster items={recentCluster.map(({ memory, photo }) => ({ id: memory.id, photo }))} />
 
     {/* 忽然想起 (原则六, 2026-09-11). Renders only when lib/resurface.ts found a relation the
         calendar really holds — a story from exactly a year ago today, or from that month a year
