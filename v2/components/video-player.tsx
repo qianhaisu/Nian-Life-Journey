@@ -1,3 +1,6 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
 
 // The first player this archive has had. Until 2026-09-10 a video could only ever have been a
@@ -16,18 +19,103 @@ import { mediaDeliveryUrl } from "@/lib/media/paths";
 // No <track>: this archive has no captions for these clips and inventing them would be inventing
 // speech. When real ones exist they belong here as a track element with the source that produced
 // them, not before.
+//
+// Two things the native bar alone could not do, added 2026-09-12 after the clip in /memory/2025/11
+// was read at both sizes:
+//
+//  - At 117 CSS px wide — a day's photo grid on a 391px phone — Chrome drops the play button and
+//    leaves a bare scrubber and an overflow dot. A reader sees a still photograph with a slider
+//    under it, in the same grid where every neighbouring tile opens a full-screen viewer instead.
+//    Nothing said this one was a clip. The button below is ours, so it does not depend on any
+//    browser's idea of which controls fit; the native bar keeps the scrubber, the volume and the
+//    overflow menu, and this sits clear of it.
+//  - When the source could not be fetched, the frame said nothing at all: the poster stayed, the
+//    scrubber went empty, `video.error` was null, and tapping did nothing for as long as anyone
+//    cared to tap. A clip that cannot be played has to say so.
+
+// Whether the element has actually given up on its sources, as opposed to still working. Buffering
+// mid-play and a slow first fetch both leave networkState at NETWORK_LOADING and must never be
+// reported as failure — the reader is told a video is broken only when it is.
+const NETWORK_NO_SOURCE = 3;
+export function hasGivenUp(video: { error: unknown; networkState: number }): boolean {
+  return Boolean(video.error) || video.networkState === NETWORK_NO_SOURCE;
+}
+
 export function VideoPlayer({ mediaId, alt, durationSeconds }: { mediaId: string; alt: string; durationSeconds?: number | null }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  // Playback state is read back from the element's own events, never assumed from the click: a
+  // play() that the browser refuses must not leave a button claiming the clip is running.
+  const [playing, setPlaying] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const askTheElement = useCallback(() => {
+    const video = ref.current;
+    if (video) setFailed(hasGivenUp(video));
+  }, []);
+
+  useEffect(() => {
+    setFailed(false);
+    setPlaying(false);
+    const video = ref.current;
+    if (!video) return;
+    // The element is server-rendered and starts fetching before React hydrates, so a failure can
+    // have come and gone before any handler below existed. Ask the element what happened rather
+    // than waiting for an event that has already fired.
+    if (hasGivenUp(video)) setFailed(true);
+    else if (!video.paused) setPlaying(true);
+  }, [mediaId]);
+
+  // A candidate source failing is not yet the element giving up — there could be another one — so
+  // the verdict is taken once resource selection has settled rather than on the spot.
+  const handleSourceError = useCallback(() => {
+    askTheElement();
+    setTimeout(askTheElement, 0);
+  }, [askTheElement]);
+
+  const startPlaying = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    // The button sits over the picture. Chrome also plays and pauses on a click on the video
+    // itself, so without this a click could start the clip and stop it again in the same gesture.
+    event.stopPropagation();
+    const video = ref.current;
+    if (!video) return;
+    const started = video.play() as Promise<void> | undefined;
+    started?.catch(() => {
+      // A refused play() is not proof the file is broken — it is often only a policy saying no.
+      // The button goes back to offering play, and only the element's own verdict can raise the
+      // failure message.
+      setPlaying(false);
+      askTheElement();
+    });
+  }, [askTheElement]);
+
   return (
-    <video
-      className="video-player"
-      controls
-      preload="metadata"
-      playsInline
-      poster={mediaDeliveryUrl(mediaId, "poster")}
-      aria-label={alt}
-      data-duration={durationSeconds ?? undefined}
-    >
-      <source src={mediaDeliveryUrl(mediaId, "preview")} type="video/mp4" />
-    </video>
+    <div className="video-frame">
+      <video
+        ref={ref}
+        className="video-player"
+        controls
+        preload="metadata"
+        playsInline
+        poster={mediaDeliveryUrl(mediaId, "poster")}
+        aria-label={alt}
+        data-duration={durationSeconds ?? undefined}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        onError={askTheElement}
+        // Anything arriving is proof the clip is not broken, including after a stall.
+        onLoadedData={() => setFailed(false)}
+        onCanPlay={() => setFailed(false)}
+      >
+        <source src={mediaDeliveryUrl(mediaId, "preview")} type="video/mp4" onError={handleSourceError} />
+      </video>
+      {failed ? (
+        <p className="video-unavailable">这段视频暂时打不开</p>
+      ) : playing ? null : (
+        <button type="button" className="video-play" onClick={startPlaying} aria-label={`播放 ${alt}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l11-6.5z" /></svg>
+        </button>
+      )}
+    </div>
   );
 }

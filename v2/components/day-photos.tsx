@@ -6,8 +6,23 @@ import type { MediaRef } from "@/lib/memory-chapters";
 
 export const DAY_GROUP_PREVIEW_MAX = 6;
 
-// 「这一天的照片」 — the photographs a chapter day left behind, read on that day instead of at the
-// end of the month.
+// What to call this group, given what is in it. The month album already names itself this way
+// (app/memory/[year]/[month]/page.tsx), and the day group had been left saying 「照片」 over a set
+// that held the archive's one playable clip — on 2025-11-22 the word 「视频」 appeared nowhere on
+// the page at all.
+//
+// It reads the set that is on the page right now, not the day's whole list: a clip still folded
+// behind 「点此展开」 has not been shown to anyone yet, and a heading that promised it would be
+// promising something the reader cannot see.
+export function dayMediaKind(shown: { type?: string }[]): string {
+  const hasVideo = shown.some((item) => item.type === "video");
+  const hasPhoto = shown.some((item) => item.type !== "video");
+  if (hasVideo && !hasPhoto) return "视频";
+  return hasVideo ? "照片与视频" : "照片";
+}
+
+// 「这一天的照片」, or 「这一天的照片与视频」, or 「这一天的视频」 — what a chapter day left behind,
+// read on that day instead of at the end of the month. dayMediaKind above picks which.
 //
 // Deliberately not a story's illustration. It renders outside the story card, under the day's own
 // neutral heading, and says nothing about which story any picture belongs to — a story whose
@@ -35,10 +50,11 @@ export function DayPhotos({
   const preview = photos.slice(0, previewCount);
   const rest = photos.slice(previewCount);
   const shown = expanded ? photos : preview;
+  const kind = dayMediaKind(shown);
 
   return (
-    <section className="day-photos" aria-label={`${dateLabel}的照片`}>
-      <h3 className="section-mark">这一天的照片</h3>
+    <section className="day-photos" aria-label={`${dateLabel}的${kind}`}>
+      <h3 className="section-mark">这一天的{kind}</h3>
       <PhotoGallery photos={shown} dateLabel={dateLabel} ageLabel={ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
       {rest.length > 0 && !expanded ? (
         <p className="chapter-meta day-photos-expand">
