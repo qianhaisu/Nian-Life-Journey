@@ -377,3 +377,96 @@ export const contentQualityReviews = pgTable("content_quality_reviews", {
   byTarget: uniqueIndex("content_quality_reviews_target_idx").on(table.targetKind, table.targetId, table.promptVersion),
   byProfile: index("content_quality_reviews_profile_idx").on(table.profileId),
 }));
+
+// 近期待办 (2026-09-12). Three NEW tables; no existing table's meaning changes and no existing
+// column is touched. Shapes and rules live in lib/upcoming-contract.ts.
+//
+// Why its own tables rather than care_records: a todo here is any category — 带尿不湿, 约体检,
+// 国庆出游 — while care_records means health and care, with its own kinds and its own readers.
+// Widening that table to carry a trip would change what every existing care row is claimed to be.
+export const upcomingItems = pgTable("upcoming_items", {
+  id: text("id").primaryKey(),
+  profileId: text("profile_id").notNull().references(() => profiles.id),
+  title: text("title").notNull(),
+  note: text("note"),
+  category: text("category"),
+  // 确定待办 / 待定计划. Kept apart from status: a cancelled plan is still a plan.
+  kind: text("kind").notNull(),
+  status: text("status").notNull(),
+  // "day" | "window" | "unconfirmed". A date this code could not resolve is stored as unconfirmed
+  // with the original words in whenOriginalText — never as a guessed day.
+  whenKind: text("when_kind").notNull(),
+  whenFrom: text("when_from"),
+  whenTo: text("when_to"),
+  whenCertainty: text("when_certainty").notNull(),
+  whenOriginalText: text("when_original_text"),
+  whenBasis: text("when_basis"),
+  whoAsked: text("who_asked"),
+  // The message this was first recognised in. The id is derived from it, which is what makes a
+  // re-run of the same window produce the same row instead of a second copy.
+  anchorSourceId: text("anchor_source_id").notNull(),
+  sourceIds: jsonb("source_ids").$type<string[]>().notNull().default([]),
+  statusNote: text("status_note"),
+  // { eventId?, day? } — what a reader can open. Raw message ids never reach a page.
+  evidence: jsonb("evidence").$type<Record<string, string>>(),
+  statusEvidence: jsonb("status_evidence").$type<Record<string, string>>(),
+  supersedes: jsonb("supersedes").$type<string[]>().notNull().default([]),
+  extractionBatchId: text("extraction_batch_id").notNull(),
+  // Its own gate, like content_quality_reviews but separate from it: nothing the extractor writes
+  // is ever marked approved, and no row here can change a life_event's review.
+  reviewDecision: text("review_decision").notNull().default("needs_human_review"),
+  visibility: text("visibility").notNull().default("family"),
+  firstSeenAt: timestamp("first_seen_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  byProfile: index("upcoming_items_profile_idx").on(table.profileId),
+  byAnchor: uniqueIndex("upcoming_items_anchor_idx").on(table.profileId, table.anchorSourceId, table.title),
+  byStatus: index("upcoming_items_status_idx").on(table.profileId, table.status),
+}));
+
+// Every change to an item, with the message that proves it. A `done` row cannot exist without one:
+// this table is where a strikethrough gets its evidence, and 「日期过去了」 never writes here.
+export const upcomingItemChanges = pgTable("upcoming_item_changes", {
+  id: text("id").primaryKey(),
+  itemId: text("item_id").notNull().references(() => upcomingItems.id, { onDelete: "cascade" }),
+  day: text("day").notNull(),
+  change: text("change").notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status").notNull(),
+  fromWhen: jsonb("from_when").$type<Record<string, string>>(),
+  toWhen: jsonb("to_when").$type<Record<string, string>>(),
+  note: text("note"),
+  quote: text("quote"),
+  sourceIds: jsonb("source_ids").$type<string[]>().notNull().default([]),
+  batchId: text("batch_id").notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  byItem: index("upcoming_item_changes_item_idx").on(table.itemId),
+  // The same change seen twice in a re-run is one row, not two.
+  byIdentity: uniqueIndex("upcoming_item_changes_identity_idx").on(table.itemId, table.day, table.change),
+}));
+
+// What a run actually covered. windowToMessageAt is the newest MESSAGE read, never the clock time
+// the run happened — a read path that reported the latter would claim freshness the source does
+// not have. cursorLastMessageAt is where an incremental run picks up.
+export const upcomingExtractionRuns = pgTable("upcoming_extraction_runs", {
+  id: text("id").primaryKey(),
+  profileId: text("profile_id").notNull().references(() => profiles.id),
+  windowFrom: text("window_from").notNull(),
+  windowToMessageAt: timestamp("window_to_message_at", { mode: "string" }),
+  cursorLastMessageAt: timestamp("cursor_last_message_at", { mode: "string" }),
+  status: text("status").notNull(),
+  conversations: jsonb("conversations").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  unitsTotal: integer("units_total").notNull().default(0),
+  unitsCovered: integer("units_covered").notNull().default(0),
+  unitsFailed: integer("units_failed").notNull().default(0),
+  itemsCreated: integer("items_created").notNull().default(0),
+  itemsUpdated: integer("items_updated").notNull().default(0),
+  failures: jsonb("failures").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  promptVersion: text("prompt_version").notNull(),
+  model: text("model"),
+  startedAt: timestamp("started_at", { mode: "string" }).defaultNow().notNull(),
+  finishedAt: timestamp("finished_at", { mode: "string" }),
+}, (table) => ({
+  byProfile: index("upcoming_extraction_runs_profile_idx").on(table.profileId, table.startedAt),
+}));
