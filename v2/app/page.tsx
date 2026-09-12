@@ -79,11 +79,12 @@ export default async function HomePage() {
   const shownIds = new Set([pick?.memory.id, fallback?.memory.id, ...sameDayOthers.map((memory) => memory.id)].filter((id): id is string => Boolean(id)));
   const overviewFacts = (overview?.facts ?? []).filter((fact) => !shownIds.has(fact.id)).slice(0, OVERVIEW_FACT_LIMIT);
   const hasOverview = Boolean(overview && (overview.summary || overviewFacts.length > 0));
-  // 近期待办 (2026-09-13). readHomeUpcoming wraps the data track's four-state read
-  // (lib/db/upcoming-store.ts, written for this one reader) with the page's two decisions:
-  // APPROVED ROWS ONLY, and 「没有待办」 only from a run that covered its whole window with nothing
-  // waiting on a reviewer. Everything else draws nothing — `not_extracted` is the real state today,
-  // because migration 0013 has not been applied to any running database.
+  // 近期待办 (2026-09-13). readHomeUpcoming reads through the store's family gate
+  // (lib/db/upcoming-store.ts readUpcomingFeedForFamily: approved rows only, and an unreviewed
+  // queue is never reported as an empty week) and then applies the page's own: a strikethrough
+  // needs evidence, and 「没有待办」 needs a run that covered its whole window. Everything else draws
+  // nothing. That is the real state today — 21 rows are in the database and none has been reviewed,
+  // so the block is hidden.
   //
   // On adding a database read to a render path (CLAUDE.md): this reads three new, family-scale
   // tables (upcoming_extraction_runs, upcoming_items filtered by profile and review decision, and

@@ -26,14 +26,15 @@
 //      when nothing is sitting unreviewed behind it. `not_extracted`, `read_failed`, a partial run
 //      and a queue waiting on a human all render nothing at all.
 //
-//   5. 只显示人工 approved 的事项 (总指挥, 2026-09-13). The store's default read returns approved
-//      AND needs_human_review rows, with a count of the unreviewed ones; the family page takes
-//      approved only (`HOME_UPCOMING_DECISIONS`), because an extracted todo can name the wrong
+//   5. 只显示人工 approved 的事项 (总指挥, 2026-09-13). An extracted todo can name the wrong
 //      person — the same chat patterns that find 「小年明天带尿不湿」 also find a parent's own
-//      hospital appointment. `readHomeUpcoming` is where that decision lives, and it is also why
-//      「没有待办」 needs a second look at the review queue: with 22 unreviewed rows and no approved
-//      one, the approved-only read answers `no_items`, and saying 没有待办 on the strength of that
-//      would be reporting a backlog as a clear week.
+//      hospital appointment — so the family page shows reviewed rows only. That gate is the
+//      store's `readUpcomingFeedForFamily()`, which fixes `decisions` to `approved` so a caller
+//      cannot forget to, and which answers `not_extracted` rather than `no_items` when rows exist
+//      but nobody has read them: with 21 unreviewed rows and none approved, 「已检查，没有待办」
+//      would be a claim about the family's week resting on a queue nobody has looked at. This file
+//      had its own copy of that rule for a few hours on 2026-09-13; the store's is the one kept,
+//      and `feedFromResult` is the second gate rather than a second implementation.
 import { isUpcomingDay, statusNeedsEvidence, type UpcomingCoverage, type UpcomingEvidence, type UpcomingFeedResult, type UpcomingItem, type UpcomingStatus, type UpcomingWhen } from "@/lib/upcoming-contract";
 
 export type { UpcomingEvidence, UpcomingItem, UpcomingStatus, UpcomingWhen };
@@ -116,9 +117,6 @@ export function sortUpcoming(items: UpcomingItem[]): UpcomingItem[] {
     || a.id.localeCompare(b.id));
 }
 
-// Which review decisions may reach the family page. approved only — see rule 5 above.
-export const HOME_UPCOMING_DECISIONS: ReadonlyArray<"approved" | "needs_human_review" | "rejected"> = ["approved"];
-
 // A coverage block is "complete" when the run it came from read every unit it set out to read.
 // `partial` already folds in a failed unit and an unfinished run (lib/upcoming-merge.ts); the rest
 // is spelled out rather than trusted, because this is the one predicate that lets the page tell a
@@ -131,9 +129,11 @@ function coveredWholeWindow(coverage: UpcomingCoverage): boolean {
     && Boolean(coverage.windowToMessageAt);
 }
 
-// The data track's four-state read (lib/db/upcoming-store.ts readUpcomingFeed) → what the page
-// draws. `pendingReview` is how many rows are waiting on a human; with any of those, an empty
-// approved list is a backlog and not a clear week, so nothing is drawn.
+// The data track's four-state read → what the page draws. `pendingReview` is how many rows are
+// waiting on a human; with any of those, an empty approved list is a backlog and not a clear week,
+// so nothing is drawn. Through `readUpcomingFeedForFamily` that case never even reaches here (it
+// answers `not_extracted`), and the parameter stays because this function must be safe for any
+// caller and because it is how the rule is tested.
 export function feedFromResult(result: UpcomingFeedResult | undefined, { pendingReview = 0 }: { pendingReview?: number } = {}): UpcomingFeed {
   if (!result) return { status: "unavailable", reason: "no feed was read" };
   if (result.state === "not_extracted" || result.state === "read_failed") return { status: "unavailable", reason: result.reason };
@@ -147,24 +147,13 @@ export function feedFromResult(result: UpcomingFeedResult | undefined, { pending
   return { status: "ready", items };
 }
 
-export type UpcomingRead = (options?: { decisions?: Array<"approved" | "needs_human_review" | "rejected"> }) => Promise<UpcomingFeedResult>;
+export type UpcomingRead = () => Promise<UpcomingFeedResult>;
 
-// What the front page calls. Two reads at most, and the second one only when the first found no
-// approved row: the review queue has to be looked at before the page is allowed to say 没有待办.
-// Both reads are on family-scale, profile-scoped tables; the common path is one of them.
+// What the front page calls: the store's family read (approved only, and never an approved-empty
+// queue dressed up as an empty week), through the page's own gate. Injectable so the rules above
+// can be tested without a database.
 export async function readHomeUpcoming(read?: UpcomingRead): Promise<UpcomingFeed> {
-  const load = read ?? (await import("@/lib/db/upcoming-store")).readUpcomingFeed;
-  let approved: UpcomingFeedResult | undefined;
-  try { approved = await load({ decisions: [...HOME_UPCOMING_DECISIONS] }); }
+  const load = read ?? (await import("@/lib/db/upcoming-store")).readUpcomingFeedForFamily;
+  try { return feedFromResult(await load()); }
   catch (error) { return { status: "unavailable", reason: `the upcoming read threw: ${String((error as Error)?.message ?? error)}` }; }
-  if (approved.state !== "no_items") return feedFromResult(approved);
-  let pendingReview = 0;
-  try {
-    const pending = await load({ decisions: ["needs_human_review"] });
-    pendingReview = pending.state === "ready" ? pending.items.length : 0;
-  } catch {
-    // The census failed, so the page cannot prove the queue is empty and does not claim it is.
-    return { status: "unavailable", reason: "could not check the review queue" };
-  }
-  return feedFromResult(approved, { pendingReview });
 }

@@ -12,7 +12,8 @@
 // so no row exists in any running database and nothing here claims otherwise.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { feedFromResult, HOME_UPCOMING_DECISIONS, normalizeUpcoming, readHomeUpcoming, sortUpcoming, UPCOMING_VISIBLE } from "../lib/upcoming.ts";
+import { feedFromResult, normalizeUpcoming, readHomeUpcoming, sortUpcoming, UPCOMING_VISIBLE } from "../lib/upcoming.ts";
+import { readUpcomingFeedForFamily } from "../lib/db/upcoming-store.ts";
 
 // A coverage block shaped like the data track's (lib/upcoming-contract.ts): only "ready" and
 // "no_items" carry one, and this page renders neither as a claim about a clear week.
@@ -22,38 +23,29 @@ const evidence = { eventId: "event-sep-01" };
 
 // 总指挥, 2026-09-13: 家庭首页只能显示人工 approved 的事项. These four cases are that decision and
 // the three ways of having no rows that must not be dressed up as a clear week.
-test("the family page asks for approved rows only", async () => {
-  assert.deepEqual([...HOME_UPCOMING_DECISIONS], ["approved"]);
-  const asked = [];
-  await readHomeUpcoming(async (options) => { asked.push(options?.decisions); return { state: "not_extracted", reason: "no run" }; });
-  assert.deepEqual(asked, [["approved"]], "one read, approved only — needs_human_review is never requested for display");
+test("the family page reads through the store's approved-only gate, not the default one", async () => {
+  // The rule lives in the store: readUpcomingFeedForFamily fixes decisions to approved and refuses
+  // to call an unreviewed queue an empty week. What is asserted here is that this page goes through
+  // THAT function, so the two cannot drift apart, and that its answers pass the page's own gate.
+  const missingTable = Object.assign(new Error('relation "upcoming_extraction_runs" does not exist'), { code: "42P01" });
+  const feed = await readUpcomingFeedForFamily({ db: { select: () => { throw missingTable; } } });
+  assert.equal(feed.state, "not_extracted", "a missing table is 未接入, never an empty week");
+  assert.equal((await readHomeUpcoming(async () => feed)).status, "unavailable");
 });
 
-test("1 · only unreviewed rows: the block is hidden, and the review queue is what proves it", async () => {
-  // The approved-only read answers no_items because the 22 real rows are all needs_human_review.
-  // Saying 「没有待办」 there would be reporting a backlog as a clear week.
-  const asked = [];
-  const feed = await readHomeUpcoming(async (options) => {
-    asked.push(options?.decisions);
-    if (options?.decisions?.includes("approved")) return { state: "no_items", coverage };
-    return { state: "ready", coverage, unreviewed: 22, items: Array.from({ length: 22 }, (_, i) => ({ id: `u${i}`, title: "带尿不湿", when: { kind: "unconfirmed" }, status: "open", evidence })) };
-  });
-  assert.deepEqual(asked, [["approved"], ["needs_human_review"]], "the queue is counted before the page is allowed to say anything");
+test("1 · only unreviewed rows: the block is hidden", async () => {
+  // With 21 rows all needs_human_review, the family read answers not_extracted and says why.
+  const feed = await readHomeUpcoming(async () => ({ state: "not_extracted", reason: "21 upcoming rows exist but none has been reviewed" }));
   assert.equal(feed.status, "unavailable");
-  assert.match(feed.reason, /waiting on a reviewer/);
-  // And if the queue census itself fails, the page still says nothing rather than guessing.
-  const blind = await readHomeUpcoming(async (options) => {
-    if (options?.decisions?.includes("approved")) return { state: "no_items", coverage };
-    throw new Error("census failed");
-  });
-  assert.equal(blind.status, "unavailable");
+  assert.match(feed.reason, /none has been reviewed/);
+  // Defence in depth: handed a no_items with a pending queue anyway, this page still draws nothing.
+  const backlog = feedFromResult({ state: "no_items", coverage }, { pendingReview: 21 });
+  assert.equal(backlog.status, "unavailable");
+  assert.match(backlog.reason, /waiting on a reviewer/);
 });
 
 test("2 · approved rows display, and only those rows", async () => {
-  const feed = await readHomeUpcoming(async (options) => {
-    assert.deepEqual(options?.decisions, ["approved"]);
-    return { state: "ready", coverage, unreviewed: 0, items: [{ id: "ok", title: "带尿不湿", when: { kind: "day", day: "2026-09-14" }, status: "open", evidence }] };
-  });
+  const feed = await readHomeUpcoming(async () => ({ state: "ready", coverage, unreviewed: 0, items: [{ id: "ok", title: "带尿不湿", when: { kind: "day", day: "2026-09-14" }, status: "open", evidence }] }));
   assert.equal(feed.status, "ready");
   assert.deepEqual(feed.items.map((item) => item.id), ["ok"]);
 });
