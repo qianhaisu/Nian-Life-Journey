@@ -420,7 +420,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       mediaLocations: mediaLocations as unknown as MediaLocation[],
       rawSources: rawSources as unknown as Pick<RawSource, "id" | "sourceType" | "sourceLabel">[],
       // Same rows the publication gate above just used — Basis C costs no extra query.
-      photoConfirmations: storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ targetKind?: string; targetId?: string; decision?: unknown }>),
+      photoConfirmations: storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ id?: string; targetKind?: string; targetId?: string; decision?: unknown; reviewedAt?: string }>),
     };
   }
 
@@ -672,7 +672,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         mediaAssets: guardRowCount(assetRows as unknown as MediaAsset[], "getEventDetail.mediaAssets"),
         mediaLocations: guardRowCount(locationRows as unknown as MediaLocation[], "getEventDetail.mediaLocations"),
         birthDay: birthDayOf(profileRows[0] as unknown as { birthDate?: string | null } | undefined),
-        photoConfirmations: storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ targetKind?: string; targetId?: string; decision?: unknown }>),
+        photoConfirmations: storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ id?: string; targetKind?: string; targetId?: string; decision?: unknown; reviewedAt?: string }>),
         neighbours: storyNeighbours({ id: e.id, title: e.title, occurredAt: e.occurredAt }, readable),
       };
     },

@@ -149,23 +149,84 @@ export function storyPhotoKey(eventId: string, mediaId: string): string {
   return `${eventId}|${mediaId}`;
 }
 
+/** The shape of a review row these helpers need. Callers pass whole rows; nothing else is read. */
+export type StoryPhotoReviewRow = {
+  id?: string | null;
+  targetKind?: string | null;
+  targetId?: string | null;
+  decision?: unknown;
+  reviewedAt?: string | null;
+};
+
 /**
- * Reads confirmations out of whatever slice of the review ledger a caller already has. Anything
- * that is not an approved `media_binding` row naming exactly two non-empty halves is ignored —
- * a malformed target_id must not become a wildcard.
+ * The LAST decision recorded for each (story, photograph) pair, keyed by target_id.
+ *
+ * Why the latest rather than every row: a `media_binding` decision used to be one-way. Both readers
+ * below OR-ed the approved rows together, so once a row said approved nothing could take it back —
+ * a later rejected row simply did not count. That is not how this ledger reads anywhere else; the
+ * publication gate takes `distinct on (target_id) … order by reviewed_at desc`, the latest decision
+ * winning. On 2026-09-12 the mismatch surfaced: three drafts had their pictures taken out of
+ * media_ids and a rejected row written for each, and the private preview page went on drawing two
+ * of them beside the stories, because it was still reading the superseded approved rows.
+ *
+ * Nothing is rewritten or deleted to make this work — every decision stays in the ledger, which is
+ * the point of a ledger, and this picks the one that is current. A malformed target_id is dropped
+ * rather than treated as a wildcard. `reviewedAt` ties break on `id` so the answer is stable.
  */
-export function storyPhotoConfirmationsFrom(
-  reviews: ReadonlyArray<{ targetKind?: string | null; targetId?: string | null; decision?: unknown }>,
-): StoryPhotoConfirmations {
-  const confirmed = new Set<string>();
+function latestStoryPhotoDecisions(reviews: ReadonlyArray<StoryPhotoReviewRow>): Map<string, StoryPhotoReviewRow> {
+  const latest = new Map<string, StoryPhotoReviewRow>();
   for (const review of reviews) {
     if (review.targetKind !== STORY_PHOTO_REVIEW_KIND) continue;
-    if (review.decision !== "approved") continue;
     const parts = (review.targetId ?? "").split("|");
     if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
-    confirmed.add(storyPhotoKey(parts[0], parts[1]));
+    const key = storyPhotoKey(parts[0], parts[1]);
+    const held = latest.get(key);
+    if (!held) { latest.set(key, review); continue; }
+    const a = `${review.reviewedAt ?? ""}|${review.id ?? ""}`;
+    const b = `${held.reviewedAt ?? ""}|${held.id ?? ""}`;
+    if (a > b) latest.set(key, review);
+  }
+  return latest;
+}
+
+/**
+ * Reads confirmations out of whatever slice of the review ledger a caller already has. A pair is
+ * confirmed when its most recent `media_binding` row says approved — see
+ * latestStoryPhotoDecisions for why recency is what decides it.
+ */
+export function storyPhotoConfirmationsFrom(
+  reviews: ReadonlyArray<StoryPhotoReviewRow>,
+): StoryPhotoConfirmations {
+  const confirmed = new Set<string>();
+  for (const [key, review] of latestStoryPhotoDecisions(reviews)) {
+    if (review.decision === "approved") confirmed.add(key);
   }
   return confirmed;
+}
+
+/**
+ * The same answer grouped by story, for callers that need the picture ids rather than a membership
+ * test. Order follows the order the rows arrived in, so a story with two confirmed pictures keeps
+ * drawing them in the order the ledger recorded them.
+ */
+export function confirmedStoryPhotoIdsByEvent(
+  reviews: ReadonlyArray<StoryPhotoReviewRow>,
+): Map<string, string[]> {
+  const confirmed = storyPhotoConfirmationsFrom(reviews);
+  const byEvent = new Map<string, string[]>();
+  const seen = new Set<string>();
+  for (const review of reviews) {
+    if (review.targetKind !== STORY_PHOTO_REVIEW_KIND) continue;
+    const parts = (review.targetId ?? "").split("|");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
+    const key = storyPhotoKey(parts[0], parts[1]);
+    if (!confirmed.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    const existing = byEvent.get(parts[0]);
+    if (existing) existing.push(parts[1]);
+    else byEvent.set(parts[0], [parts[1]]);
+  }
+  return byEvent;
 }
 
 export function isStoryAssociated(

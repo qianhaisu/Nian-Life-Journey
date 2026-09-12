@@ -4,7 +4,7 @@
 // 523 of the archive's 524 bound stories are the "same day, nothing else" case.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isStoryAssociated, storyAssociationBasis, storyAssociatedMedia, storyPhotoConfirmationsFrom, storyPhotoKey, STORY_PHOTO_REVIEW_KIND } from "../lib/media/story-binding.ts";
+import { confirmedStoryPhotoIdsByEvent, isStoryAssociated, storyAssociationBasis, storyAssociatedMedia, storyPhotoConfirmationsFrom, storyPhotoKey, STORY_PHOTO_REVIEW_KIND } from "../lib/media/story-binding.ts";
 import { storyLayout } from "../lib/media/presentation.ts";
 import { NO_HERO_MEDIA_ID } from "../lib/media/hero.ts";
 
@@ -208,4 +208,43 @@ test("a confirmation is a ledger row, not Organizer history and not a person's w
   assert.equal(story.organizerRun, undefined);
   assert.equal(isStoryAssociated(story, photo("pic-1", "placeholder")), false, "without the ledger, nothing");
   assert.equal(isStoryAssociated(story, photo("pic-1", "placeholder"), storyPhotoConfirmationsFrom([row])), true);
+});
+
+// A media_binding decision used to be one-way: the reader OR-ed every approved row together, so a
+// later rejected row could not take a picture back. On 2026-09-12 three drafts had their pictures
+// retracted and the private preview page went on drawing two of them. The ledger keeps every row;
+// the latest one is what counts, the same rule the publication gate already uses for life_event.
+const at = (t, id, extra = {}) => ({ ...extra, reviewedAt: t, id });
+
+test("the latest media_binding row wins, so a confirmation can be taken back", () => {
+  const approved = { ...reviewRow("story-a", "pic-1"), ...at("2026-09-11T07:27:25.154Z", "r10-rev-1") };
+  const rejected = { ...reviewRow("story-a", "pic-1", { decision: "rejected" }), ...at("2026-09-12T07:40:00.000Z", "r16-unbind-1") };
+
+  assert.deepEqual([...storyPhotoConfirmationsFrom([approved])], [storyPhotoKey("story-a", "pic-1")]);
+  assert.deepEqual([...storyPhotoConfirmationsFrom([approved, rejected])], [], "the later rejection retracts it");
+  assert.deepEqual([...storyPhotoConfirmationsFrom([rejected, approved])], [],
+    "and the answer does not depend on the order the rows arrived in");
+
+  // The reverse direction has to work too: a pair rejected once may be confirmed later.
+  const reApproved = { ...reviewRow("story-a", "pic-1"), ...at("2026-09-13T00:00:00.000Z", "r17-rebind-1") };
+  assert.deepEqual([...storyPhotoConfirmationsFrom([approved, rejected, reApproved])], [storyPhotoKey("story-a", "pic-1")]);
+
+  // One retracted pair must not take its neighbours with it.
+  const other = { ...reviewRow("story-a", "pic-2"), ...at("2026-09-11T07:27:25.154Z", "r10-rev-2") };
+  assert.deepEqual([...storyPhotoConfirmationsFrom([approved, other, rejected])], [storyPhotoKey("story-a", "pic-2")]);
+});
+
+test("the by-event grouping answers exactly what the membership test does", () => {
+  const approved = { ...reviewRow("story-a", "pic-1"), ...at("2026-09-11T07:27:25.154Z", "r10-rev-1") };
+  const second = { ...reviewRow("story-a", "pic-2"), ...at("2026-09-11T07:27:25.154Z", "r10-rev-2") };
+  const otherStory = { ...reviewRow("story-b", "pic-3"), ...at("2026-09-11T07:27:25.154Z", "r10-rev-3") };
+  const rejected = { ...reviewRow("story-a", "pic-1", { decision: "rejected" }), ...at("2026-09-12T07:40:00.000Z", "r16-unbind-1") };
+
+  assert.deepEqual(confirmedStoryPhotoIdsByEvent([approved, second, otherStory]),
+    new Map([["story-a", ["pic-1", "pic-2"]], ["story-b", ["pic-3"]]]));
+  assert.deepEqual(confirmedStoryPhotoIdsByEvent([approved, second, otherStory, rejected]),
+    new Map([["story-a", ["pic-2"]], ["story-b", ["pic-3"]]]), "the retracted picture leaves its story, the other stays");
+  // A story whose every picture was retracted drops out rather than appearing with an empty list,
+  // so a caller that checks `has(id)` never draws an empty figure.
+  assert.deepEqual(confirmedStoryPhotoIdsByEvent([approved, rejected]), new Map());
 });

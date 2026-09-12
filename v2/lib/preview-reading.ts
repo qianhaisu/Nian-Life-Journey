@@ -17,7 +17,7 @@
 // (lib/family-archive.ts documents it), so this uses the same decision-column-safe key it does:
 // target_kind + provider + prompt_version, three columns reviewFromRow() leaves alone.
 import { thumbnailSized } from "@/lib/media/hero";
-import { STORY_PHOTO_REVIEW_KIND } from "@/lib/media/story-binding";
+import { confirmedStoryPhotoIdsByEvent } from "@/lib/media/story-binding";
 import { isGarbageLifeEvent, memoryTitle, toMediaRef, type MediaRef, type MonthChapter } from "@/lib/memory-chapters";
 import { eventRendersCleanly } from "@/lib/organizer/quality-review";
 import { calendarDayOf } from "@/lib/timeline-dates";
@@ -35,12 +35,16 @@ export const PREVIEW_EVENT_PROMPT_VERSION = "preview-read-v1";
 export const MONTHLY_REVIEW_DRAFT_PROMPT_VERSION = "monthly-review-draft-v1";
 
 type ReviewRow = {
+  // id and reviewedAt are read only to tell two decisions about the same target apart: the ledger
+  // keeps every one, and the latest is the one that counts (lib/media/story-binding.ts).
+  id?: string | null;
   targetKind?: string | null;
   targetId?: string | null;
   provider?: string | null;
   promptVersion?: string | null;
   reasonCodes?: string[] | null;
   decision?: unknown;
+  reviewedAt?: string | null;
 };
 
 function marks(review: ReviewRow, kind: string, promptVersion: string): boolean {
@@ -82,17 +86,10 @@ export function monthlyReviewDraftsFrom(reviews: ReadonlyArray<ReviewRow>): Map<
  * media_ids and source_ids are not part of what the identity read returns.
  */
 export function confirmedPhotoIdsByEvent(reviews: ReadonlyArray<ReviewRow>): Map<string, string[]> {
-  const byEvent = new Map<string, string[]>();
-  for (const review of reviews) {
-    if (review.targetKind !== STORY_PHOTO_REVIEW_KIND) continue;
-    if (review.decision !== "approved") continue;
-    const parts = (review.targetId ?? "").split("|");
-    if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
-    const existing = byEvent.get(parts[0]);
-    if (existing) existing.push(parts[1]);
-    else byEvent.set(parts[0], [parts[1]]);
-  }
-  return byEvent;
+  // Shares the published surface's reader rather than repeating the filter, so the private page and
+  // the family's pages can never disagree about which pictures a story is allowed to carry. They
+  // did on 2026-09-12: three drafts had a picture retracted and this page kept drawing two of them.
+  return confirmedStoryPhotoIdsByEvent(reviews);
 }
 
 export type PreviewStory = {
