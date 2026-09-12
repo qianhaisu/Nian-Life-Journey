@@ -10,6 +10,7 @@ import { LAST_SHOWN_DAY_COOKIE, latestStory, pickRecentStory, recentStoryDays, R
 import { RememberShownDay } from "@/components/remember-shown-day";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { echoGroupsFrom, resurface } from "@/lib/resurface";
+import { formatMonth } from "@/lib/time-signature";
 import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
@@ -101,7 +102,12 @@ export default async function HomePage() {
           <Link href={`/events/${memory.id}`}><span className="serif">{memory.title}</span></Link>
         </li>)}</ul>
       </> : null}
-      <p className="chapter-meta"><Link className="text-link" href={`/memory/${pick.day.slice(0, 4)}/${pick.day.slice(5, 7)}`}>翻看这个月</Link></p>
+      {/* The link names the month it opens. It used to read 「翻看这个月」, and "这个月" was two
+          different months on one page: this link follows the day that was drawn (8 月 here), while
+          the card at the foot goes to the newest month the archive has (9 月). Both labels come
+          from the same string their own href is built from — this one from `pick.day` — so neither
+          can drift from where it goes, and neither is the system's calendar month. */}
+      <p className="chapter-meta"><Link className="text-link" href={`/memory/${pick.day.slice(0, 4)}/${pick.day.slice(5, 7)}`}>翻看 {formatMonth(pick.day.slice(0, 7))}</Link></p>
       <RememberShownDay day={pick.day} />
     </section> : null}
 
@@ -114,9 +120,14 @@ export default async function HomePage() {
 
     {!pick && !fallback ? <section className="home-lead reading-wrap"><p className="serif archive-empty">{archive.chapters.length > 0 ? "还没有一段整理好的记忆可以放在这里。" : "档案还是空的。等时间再走一会儿。"}</p></section> : null}
 
-    {/* 最近的新变化：直接复用 monthly_snapshot.summary，有就显示，没有就整块消失 */}
+    {/* 最近的新变化：直接复用 monthly_snapshot.summary，有就显示，没有就整块消失。
+        The heading carries the month that snapshot was written about (`changeLabel`, which
+        lib/home-view.ts sets from the snapshot it actually chose — the current month's when there
+        is one, otherwise the newest recent one). Without it these lines sat directly under a dated
+        day and read as that day's aftermath: they are a whole month's, and on a draw that lands in
+        9 月 the month above them is not even the month they describe. */}
     {summary && changeLabel && changeHref ? <section className="home-change reading-wrap" aria-labelledby="change-title">
-      <h2 id="change-title" className="section-mark">最近的新变化</h2>
+      <h2 id="change-title" className="section-mark">最近的新变化 · {changeLabel}</h2>
       <SnapshotSummary text={summary} className="home-change-note serif" icons />
       <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
     </section> : null}

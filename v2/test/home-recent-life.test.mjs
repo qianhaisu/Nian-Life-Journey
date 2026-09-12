@@ -119,3 +119,19 @@ test("a burst cannot dominate the cover: twelve rapid frames lend one representa
   assert.equal(moment.supporting.length, 0, "one scene, one frame — the rest stay in the archive");
   assert.equal(moment.morePhotoCount, 11);
 });
+
+// 2026-09-12: 最近的新变化 now prints the month it is about, so the section has to know which
+// snapshot it quoted. On the running archive the two are different months — 九月 is the newest
+// month with anything in it, but only 八月 has a snapshot written — and the five lines sat directly
+// under a dated day with nothing saying they covered a whole other month.
+test("最近的新变化 names the month of the snapshot it actually quoted, while the entry at the foot still goes to the newest month", () => {
+  const s = store([], { events: [event("aug", "2026-08-20 00:00:00+00"), event("sep", "2026-09-01 00:00:00+00")] });
+  s.monthlySnapshots = [{ id: "snap-08", profileId: CANONICAL_PROFILE_ID, month: "2026-08", summary: "八月写下的一段概览。", highlights: [], visibility: "family" }];
+  const view = home(s);
+  assert.equal(view.thisMonth.month, "2026-09", "九月是最新有内容的月份");
+  assert.equal(view.monthHref, "/memory/2026/09", "底部入口去最新的月份");
+  // 九月还没有 snapshot，所以这一段引的是八月那条 — 标题必须说出来。
+  assert.equal(view.summary, "八月写下的一段概览。");
+  assert.equal(view.changeLabel, "2026 年 8 月");
+  assert.equal(view.changeHref, "/memory/2026/08", "标题上的年月和这一段链接去的月份是同一个");
+});
