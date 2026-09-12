@@ -36,6 +36,12 @@ export function YearNavHighlight() {
       for (const year of years) {
         if (year.section.getBoundingClientRect().top <= readingLine) current = year;
       }
+      // The oldest year is the shortest — 2024 holds one month — so the page can run out of
+      // scroll before its heading ever reaches the reading line, and it could never light up.
+      // Once the document has no more to give, the year you are looking at is the last one.
+      if (Math.round(document.documentElement.getBoundingClientRect().bottom) <= window.innerHeight + 2) {
+        current = years[years.length - 1];
+      }
       for (const { pill } of years) {
         const isCurrent = pill === current.pill;
         pill.classList.toggle('year-pill--active', isCurrent);
