@@ -690,57 +690,64 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 .detail-footer { padding: 40px 0 96px; }
 
-/* 张年 */
+/* 张年 — 成长档案 (2026-09-12 rebuild).
+   Four parts, each with one source: 基本信息 (birth, age, portrait, measured height/weight),
+   家人关注的健康问题, 学会了什么, 解锁的体验. The four modules this replaced — 最近的生活节奏,
+   最近记下来的, 家人这阵子说, 档案最近记下的 — were four presentations of the archive's recent
+   memories, which is the front page's job, so their styles (.about-notes dl, .about-timeline,
+   .about-deeper, .about-earlier, .care-notes) went with them rather than being left dead. */
 .about-age { margin: 10px 0 0; color: var(--color-muted); font-size: 1.05rem; }
-.about-portrait { margin-top: 28px; }
+.about-portrait { margin: 28px 0 0; }
 .about-portrait .photo { max-width: min(100%, 480px); border-radius: 50% 50% 32px 32px / 40% 40% 32px 32px; overflow: hidden; box-shadow: var(--shadow); }
-.about-notes { padding: clamp(40px, 6vw, 64px) 0; }
-.about-notes dl { margin: 20px 0 0; border-top: 1px solid var(--color-primary); }
-.about-notes dl > div { display: grid; gap: 8px; padding: 22px 0; border-bottom: 1px solid var(--color-border); }
-.about-notes dt { color: var(--color-secondary); font-size: .75rem; font-weight: 700; letter-spacing: .06em; }
-.about-notes dd { margin: 0; }
-.about-notes dd p { margin: 0 0 6px; font-size: clamp(1.25rem, 3.2vw, 1.7rem); line-height: 1.4; }
-.about-notes dd time { color: var(--color-muted); font-size: .78rem; }
+.about-portrait-date { margin: 10px 0 0; color: var(--color-muted); font-size: .78rem; }
 .note-meta { display: flex; align-items: baseline; gap: 12px; margin: 0; color: var(--color-muted); font-size: .78rem; }
 .note-meta time { color: inherit; font-size: inherit; }
-.about-portrait-date { margin: 10px 0 0; color: var(--color-muted); font-size: .78rem; }
-/* 更早的时候 — visibly a different era: quieter type, clearly dated. */
-.about-earlier dd p { font-size: 1.05rem; color: var(--color-muted); }
-.about-deeper { margin-bottom: 96px; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
-.about-deeper > summary { display: flex; align-items: baseline; gap: 14px; min-height: 64px; padding: 12px 0; cursor: pointer; list-style: none; }
-.about-deeper > summary::-webkit-details-marker { display: none; }
-.about-deeper > summary span { font-size: 1.3rem; }
-.about-deeper > summary small { color: var(--color-muted); font-size: .8rem; }
-.about-deeper > summary::after { margin-left: auto; color: var(--color-accent); content: "＋"; }
-.about-deeper[open] > summary::after { content: "－"; }
-.about-deeper .chart-pair { margin: 8px 0 24px; }
+/* One part of the record. Every part is a heading, then its rows; nothing is behind a disclosure
+   any more — height and weight and what the family is watching are the page, not an appendix. */
+.about-block { padding: clamp(36px, 5vw, 56px) 0 0; }
+.about-block > .section-mark { display: block; margin-bottom: 18px; }
 
-/* B-9b: About page timeline — scrolling line + arch portrait node cards */
-.about-timeline { position: relative; padding-left: 32px; }
-/* Vertical trunk line — visible by default; scroll-drives growth when supported */
-.about-timeline::before { content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px; background: var(--sage); opacity: .35; transform-origin: top; transform: scaleY(1); }
-@supports (animation-timeline: scroll()) {
-  .about-timeline::before { transform: scaleY(0); animation: b9b-line-grow linear both; animation-timeline: scroll(root); }
-  @keyframes b9b-line-grow { to { transform: scaleY(1); } }
+/* 量过的身高体重: the newest of each, each with the day IT was measured. */
+.measure-latest { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
+.measure-latest li { display: grid; grid-template-columns: 4.5rem auto; align-items: baseline; gap: 4px 16px; padding: 18px 0; border-bottom: 1px solid var(--color-border); }
+.measure-kind { color: var(--color-secondary); font-size: .78rem; font-weight: 700; letter-spacing: .06em; }
+.measure-value { font-family: var(--font-heading); font-size: 2rem; font-weight: 400; }
+.measure-when { grid-column: 2; color: var(--color-muted); font-size: .78rem; }
+
+/* 家人关注的健康问题: one group per issue, and inside it dated records only. There is deliberately
+   no current-status line anywhere in here — see lib/about-view.ts. */
+.health-group { padding: 22px 0 0; }
+.health-group + .health-group { margin-top: 6px; border-top: 1px solid var(--color-border); }
+.health-title { margin: 0 0 10px; font-size: 1.35rem; line-height: 1.4; }
+.health-lines { margin: 0; padding: 0; list-style: none; }
+.health-lines > li { padding: 12px 0; }
+.health-lines > li + li { border-top: 1px dashed var(--color-border); }
+.health-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; margin: 0 0 6px; color: var(--color-muted); font-size: .78rem; }
+.health-when time { color: var(--color-secondary); font-weight: 700; }
+.health-status { color: var(--clay); }
+.health-note { margin: 0; font-size: 1.05rem; line-height: 1.7; }
+.health-next { margin: 6px 0 0; color: var(--color-muted); font-size: .9rem; }
+
+/* 学会了什么: grouped by what kind of change it is, each note carrying its own day. */
+.learned-group { padding: 6px 0 18px; }
+.learned-group + .learned-group { border-top: 1px solid var(--color-border); padding-top: 18px; }
+.learned-kind { margin: 0 0 10px; color: var(--color-secondary); font-size: .78rem; font-weight: 700; letter-spacing: .06em; }
+.learned-notes { margin: 0; padding: 0; list-style: none; }
+.learned-notes > li + li { margin-top: 16px; }
+.learned-notes p.serif { margin: 0 0 4px; font-size: clamp(1.15rem, 2.8vw, 1.45rem); line-height: 1.5; }
+
+/* 解锁的体验: oldest first, one tap target per first, the story's own words as the claim. */
+.unlocked-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
+.unlocked-list a { display: grid; grid-template-columns: minmax(0, 1fr); align-items: baseline; gap: 2px 16px; min-height: 56px; padding: 13px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
+.unlocked-list a:hover { color: var(--color-accent); }
+.unlocked-list time { color: var(--color-secondary); font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.unlocked-age { color: var(--color-muted); font-size: .78rem; white-space: nowrap; }
+.unlocked-title { font-size: 1.15rem; line-height: 1.5; }
+@media (min-width: 700px) {
+  .unlocked-list a { grid-template-columns: 9.5em 7em minmax(0, 1fr); }
+  .unlocked-title { grid-column: auto; }
 }
-@media (prefers-reduced-motion: reduce) { .about-timeline::before { animation: none !important; transform: scaleY(1); } }
-/* Node cards */
-.about-timeline .about-notes { position: relative; padding: clamp(18px, 3.5vw, 28px); background: var(--card-soft); border-radius: 20px; margin-bottom: 16px; }
-/* Suppress old padding/borders inherited from .about-notes inside timeline */
-.about-timeline .about-notes dl { border-top: none; margin-top: 12px; }
-.about-timeline .about-notes dl > div { border-bottom: none; padding: 12px 0 0; }
-/* Sage dot on the trunk */
-.about-timeline .about-notes::before { content: ''; position: absolute; left: -24px; top: 26px; width: 10px; height: 10px; background: var(--sage); border-radius: 50%; border: 2px solid var(--color-bg); }
-.single-measure { display: grid; gap: 4px; margin: 0; padding: 24px 0; border-top: 1px solid var(--color-primary); }
-.single-measure span { color: var(--color-secondary); font-size: .75rem; font-weight: 700; }
-.single-measure strong { font-family: var(--font-heading); font-size: 2rem; font-weight: 400; }
-.single-measure time { color: var(--color-muted); font-size: .78rem; }
-.care-notes { margin: 0 0 24px; padding: 0; list-style: none; }
-.care-notes li { display: grid; gap: 4px; padding: 18px 0; border-top: 1px solid var(--color-border); }
-.care-notes time { color: var(--color-accent); font-size: .76rem; font-weight: 700; }
-.care-notes strong { font-size: 1.1rem; }
-.care-notes p { margin: 4px 0; color: var(--color-muted); font-size: .92rem; }
-.care-notes a { border-bottom: 1px solid currentColor; font-size: .8rem; font-weight: 700; }
+.about-entries { padding: clamp(40px, 6vw, 64px) 0 96px; }
 
 /* 404 */
 .not-found { padding: clamp(64px, 12vw, 160px) 0; }

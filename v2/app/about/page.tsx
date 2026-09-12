@@ -2,15 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { GrowthChart } from "@/components/growth-chart";
 import { Photo } from "@/components/photo";
+import { buildAboutView } from "@/lib/about-view";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
-import { measurements, recentGrowthNotes } from "@/lib/growth-notes";
-import { SnapshotSummary } from "@/components/snapshot-summary";
-import { latestPortrait, memoryTitle, recentTraceNotes } from "@/lib/memory-chapters";
 import { renderOnDemand } from "@/lib/render-on-demand";
-import { calendarDayOf } from "@/lib/timeline-dates";
-import { ageOn, formatDay, formatMonth, timeSignatureFor } from "@/lib/time-signature";
-import type { LifeEvent } from "@/lib/types";
-import { isRecent } from "@/lib/time-truth";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
 // (lib/render-on-demand.ts), so there is no Next route cache for a revalidate window to
@@ -19,161 +13,111 @@ import { isRecent } from "@/lib/time-truth";
 // (ON_DEMAND_ARCHIVE_TTL_MS in lib/family-archive.ts).
 export const metadata: Metadata = { title: "张年" };
 
-// Who 张年 is right now — and only then, who he was earlier. The page is split in two eras with
-// the same recency contract as every "最近" (lib/time-truth.ts): CURRENT holds what recent
-// evidence actually supports (his age, the newest deliverable photo of him, stamped with the day
-// it was taken, and any recent notes), and everything older sits under an explicit 更早的时候
-// heading with its real dates — a year-old note may be read, but never mistaken for now. When a
-// section has no real record behind it, it is not rendered — never filled in.
-// Deterministic regex to lift family-member quotes from a life_event story.
-// Matches: 妈妈/爸爸/奶奶/雪姨/老师 (+ optional 说/转述) + 「…」 (2–40 chars)
-const FAMILY_QUOTE_RE = /(妈妈|爸爸|奶奶|雪姨|老师)(说|转述)?[：:]?「([^」]{2,40})」/g;
-
-type FamilyQuote = { caller: string; quote: string; day: string; dateLabel: string; ageLabel?: string; eventId: string };
-
-function extractFamilyQuotes(events: LifeEvent[], birthDay?: string, max = 3): FamilyQuote[] {
-  const results: FamilyQuote[] = [];
-  for (const event of events) {
-    if (!event.story || results.length >= max) break;
-    const day = calendarDayOf(event.occurredAt);
-    if (!day) continue;
-    const sig = timeSignatureFor(event.occurredAt, birthDay);
-    if (!sig) continue;
-    FAMILY_QUOTE_RE.lastIndex = 0;
-    let match;
-    while ((match = FAMILY_QUOTE_RE.exec(event.story)) !== null) {
-      results.push({ caller: match[1], quote: match[3], day, dateLabel: sig.dateLabel, ageLabel: sig.ageLabel, eventId: event.id });
-      if (results.length >= max) break;
-    }
-  }
-  return results;
-}
-
+// 张年 as a growth record, in the four parts Teddy set out on 2026-09-12: 基本信息,
+// 家人关注的健康问题, 学会了什么, 解锁的体验. Which rows each part may be built from, and the two
+// rules about not overstating (no recovery inferred from silence; no 「第一次」 the archive did not
+// itself write), are lib/about-view.ts — this file only lays them out.
+//
+// The four modules that used to be here are gone: 最近的生活节奏, 最近记下来的, 家人这阵子说 and
+// 档案最近记下的 were four presentations of the same thing — the archive's recent memories, which
+// is already the whole front page and the whole of /memory — on the one page that should answer
+// 这孩子长成什么样了 instead.
+//
+// A part with nothing behind it does not render. As of tonight that is 身高体重, 健康问题 and
+// 学会了什么: growth_records and care_records are both empty, so this page is his age, his
+// portrait and the experiences the archive's own stories call firsts. An empty card would not add
+// a single true thing to it.
 export default async function AboutPage() {
   // Never prerender this page from the build's mock store — see lib/render-on-demand.ts. Found in
   // the same 2026-09-10 check as / and /memory: about.html was baked from the seed fixture too.
   await renderOnDemand();
-  const { chapters, store, birthDay, time, snapshots, events } = await loadFamilyArchiveOnDemand();
-  const age = birthDay ? ageOn(birthDay, time.today) : undefined;
-  const portrait = latestPortrait(chapters);
-  const portraitRecent = portrait ? isRecent(portrait.day, time) : false;
-  const traceNotes = recentTraceNotes(chapters, 4);
-  const currentNotes = traceNotes.filter((note) => isRecent(note.day, time));
-  const earlierNotes = traceNotes.filter((note) => !isRecent(note.day, time));
-  const earlierSpan = earlierNotes.length > 0 ? formatMonth(earlierNotes[0].day.slice(0, 7)) : undefined;
-  const notes = recentGrowthNotes(store.growthRecords, birthDay, 4, time);
-  const notesHeading = notes.some((note) => note.recent) ? "最近的变化" : "记下来的变化";
-  // B-5: link growth notes to their originating life_event where one exists.
-  const growthEventMap = new Map(
-    store.growthRecords.filter((r) => r.lifeEventId).map((r) => [r.id, r.lifeEventId!])
-  );
-  // B-5: latest published snapshot summary for "生活节奏" block.
-  const latestSnapshot = [...snapshots].sort((a, b) => b.month.localeCompare(a.month)).find((s) => s.summary?.trim());
-  // B-10: recent published life_events (last 60 days, max 6) for "最近记下来的".
-  const cutoffDay60 = new Date(time.today);
-  cutoffDay60.setDate(cutoffDay60.getDate() - 60);
-  const cutoff60 = cutoffDay60.toISOString().slice(0, 10);
-  const recentEvents = events
-    .filter((e) => { const d = calendarDayOf(e.occurredAt); return d && d >= cutoff60; })
-    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
-    .slice(0, 6);
-  // B-10: family quotes from all published events (sorted newest-first, take first 3 matches).
-  const sortedEvents = [...events].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
-  const familyQuotes = extractFamilyQuotes(sortedEvents, birthDay);
-
-  const heights = measurements(store.growthRecords, "height", birthDay);
-  const weights = measurements(store.growthRecords, "weight", birthDay);
-  const care = store.careRecords.filter((record) => record.visibility !== "private").sort((a, b) => b.observedAt.localeCompare(a.observedAt));
-  const hasDeeper = heights.length > 0 || weights.length > 0 || care.length > 0;
+  const archive = await loadFamilyArchiveOnDemand();
+  const { basics, measures, health, learned, unlocked } = buildAboutView(archive);
+  const { portrait } = basics;
 
   return <div className="about-page reading-wrap">
     <header className="page-masthead">
       <span className="section-mark">现在</span>
       <h1 className="serif">张年</h1>
-      {age ? <p className="about-age">现在 {age}{birthDay ? `，${formatDay(birthDay)}出生` : ""}。</p> : null}
+      {basics.age ? <p className="about-age">现在 {basics.age}{basics.birthLabel ? `，${basics.birthLabel}出生` : ""}。</p> : null}
     </header>
 
-    {portrait ? <div className="about-portrait">
+    {portrait ? <figure className="about-portrait">
       <Photo media={portrait.photo} priority sizes="(max-width: 700px) 100vw, 760px" />
-      <p className="about-portrait-date"><time dateTime={portrait.day}>摄于 {portrait.dateLabel}</time>{portraitRecent ? null : <span> · 档案里最新的一张</span>}</p>
-    </div> : null}
+      {/* The day it was taken, always — and when that day is not recent, the page says so rather
+          than letting an undated portrait stand for what he looks like now. */}
+      <figcaption className="about-portrait-date"><time dateTime={portrait.day}>摄于 {portrait.dateLabel}</time>{portrait.recent ? null : <span> · 档案里最新的一张</span>}</figcaption>
+    </figure> : null}
 
-    <div className="about-timeline">
-    {notes.length > 0 ? <section className="about-notes" aria-labelledby="notes-title">
-      <h2 id="notes-title" className="section-mark">{notesHeading}</h2>
-      <dl>{notes.map((note) => {
-        const eventId = growthEventMap.get(note.id);
-        return <div key={note.id}>
-          <dt>{note.label}</dt>
-          <dd>
-            <p className="serif">{note.note}</p>
-            <p className="note-meta">
-              <time dateTime={note.signature.day}>{note.signature.dateLabel}</time>
-              {eventId ? <Link className="text-link" href={`/events/${eventId}`}>查看那天</Link> : null}
-            </p>
-          </dd>
-        </div>;
-      })}</dl>
-    </section> : null}
-
-    {latestSnapshot ? <section className="about-notes" aria-labelledby="snapshot-title">
-      <h2 id="snapshot-title" className="section-mark">最近的生活节奏</h2>
-      <dl><div>
-        <dt><Link className="text-link" href={`/memory/${latestSnapshot.month.slice(0, 4)}/${latestSnapshot.month.slice(5, 7)}`}>{formatMonth(latestSnapshot.month)}</Link></dt>
-        <dd><SnapshotSummary text={latestSnapshot.summary!} className="serif" /></dd>
-      </div></dl>
-    </section> : null}
-
-    {recentEvents.length > 0 ? <section className="about-notes" aria-labelledby="recent-events-title">
-      <h2 id="recent-events-title" className="section-mark">最近记下来的</h2>
-      <dl>{recentEvents.map((event) => {
-        const sig = timeSignatureFor(event.occurredAt, birthDay);
-        if (!sig) return null;
-        return <div key={event.id}>
-          <dt><time dateTime={sig.day}>{sig.dateLabel}</time></dt>
-          <dd><p className="serif"><Link className="text-link" href={`/events/${event.id}`}>{memoryTitle(event)}</Link></p></dd>
-        </div>;
-      })}</dl>
-    </section> : null}
-
-    {familyQuotes.length > 0 ? <section className="about-notes" aria-labelledby="family-quotes-title">
-      <h2 id="family-quotes-title" className="section-mark">家人这阵子说</h2>
-      <dl>{familyQuotes.map((q, i) => <div key={i}>
-        <dt>{q.caller} · <time dateTime={q.day}>{q.dateLabel}</time>{q.ageLabel ? <> · {q.ageLabel}</> : null}</dt>
-        <dd><p className="serif">「{q.quote}」</p><p className="note-meta"><Link className="text-link" href={`/events/${q.eventId}`}>查看那天</Link></p></dd>
-      </div>)}</dl>
-    </section> : null}
-
-    {currentNotes.length > 0 ? <section className="about-notes about-traces" aria-labelledby="traces-title">
-      <h2 id="traces-title" className="section-mark">档案最近记下的</h2>
-      <dl>{currentNotes.map((note, index) => {
-        const monthHref = `/memory/${note.day.slice(0, 4)}/${note.day.slice(5, 7)}`;
-        return <div key={`${note.day}-${index}`}>
-          <dt><time dateTime={note.day}><Link className="text-link" href={monthHref}>{note.dateLabel}</Link></time></dt>
-          <dd><p className="serif">{note.entry}</p></dd>
-        </div>;
-      })}</dl>
-    </section> : null}
-
-    {earlierNotes.length > 0 ? <section className="about-notes about-traces about-earlier" aria-labelledby="earlier-title">
-      <h2 id="earlier-title" className="section-mark">更早的时候{earlierSpan ? ` · ${earlierSpan}` : ""}</h2>
-      <dl>{earlierNotes.map((note, index) => {
-        const monthHref = `/memory/${note.day.slice(0, 4)}/${note.day.slice(5, 7)}`;
-        return <div key={`${note.day}-${index}`}>
-          <dt><time dateTime={note.day}><Link className="text-link" href={monthHref}>{note.dateLabel}</Link></time></dt>
-          <dd><p className="serif">{note.entry}</p></dd>
-        </div>;
-      })}</dl>
-    </section> : null}
-    </div>
-
-    {hasDeeper ? <details className="about-deeper">
-      <summary><span className="serif">更深的资料</span><small>{[heights.length > 0 ? "身高" : "", weights.length > 0 ? "体重" : "", care.length > 0 ? "照护" : ""].filter(Boolean).join(" · ")}</small></summary>
-      {heights.length > 0 || weights.length > 0 ? <div className="chart-pair">
-        {heights.length > 1 ? <GrowthChart records={store.growthRecords} kind="height" title="身高" /> : heights[0] ? <p className="single-measure"><span>身高</span><strong>{heights[0].value} {heights[0].unit}</strong><time dateTime={heights[0].signature.day}>{heights[0].signature.dateLabel}</time></p> : null}
-        {weights.length > 1 ? <GrowthChart records={store.growthRecords} kind="weight" title="体重" /> : weights[0] ? <p className="single-measure"><span>体重</span><strong>{weights[0].value} {weights[0].unit}</strong><time dateTime={weights[0].signature.day}>{weights[0].signature.dateLabel}</time></p> : null}
+    {measures.length > 0 ? <section className="about-block" aria-labelledby="measures-title">
+      <h2 id="measures-title" className="section-mark">量过的身高体重</h2>
+      {/* The newest number of each kind, each with the day IT was measured — the two are taken on
+          different days and a shared date line would be wrong for one of them. */}
+      <ul className="measure-latest">{measures.map((track) => <li key={track.kind}>
+        <span className="measure-kind">{track.title}</span>
+        <strong className="measure-value">{track.latest.value} {track.latest.unit}</strong>
+        <span className="measure-when">
+          <time dateTime={track.latest.signature.day}>{track.latest.signature.dateLabel}</time>
+          {track.latest.signature.ageLabel ? <span> · 当时 {track.latest.signature.ageLabel}</span> : null}
+        </span>
+      </li>)}</ul>
+      {/* The curve, not just the latest point: a growth record is the shape over time. */}
+      {measures.some((track) => track.history.length > 1) ? <div className="chart-pair">
+        {measures.filter((track) => track.history.length > 1).map((track) => <GrowthChart key={track.kind} records={archive.store.growthRecords} kind={track.kind} title={track.title} />)}
       </div> : null}
-      {care.length > 0 ? <ol className="care-notes">{care.map((record) => <li key={record.id}><time dateTime={record.observedAt.slice(0, 10)}>{formatDay(record.observedAt.slice(0, 10))}</time><div><strong className="serif">{record.title}</strong><p>{record.note}</p>{record.lifeEventId ? <Link href={`/events/${record.lifeEventId}`}>回到那一天</Link> : null}</div></li>)}</ol> : null}
-    </details> : null}
+    </section> : null}
+
+    {health.length > 0 ? <section className="about-block" aria-labelledby="health-title">
+      <h2 id="health-title" className="section-mark">家人关注的健康问题</h2>
+      {/* One group per issue as it was recorded, and inside it every record with its own date and
+          the status IT carried that day. The page states no current status and no recovery: a
+          record that stopped arriving is not a problem that ended (lib/about-view.ts). */}
+      {health.map((group) => <article className="health-group" key={group.key}>
+        <h3 className="serif health-title">{group.title}</h3>
+        <ol className="health-lines">{group.lines.map((line) => <li key={line.id}>
+          <p className="health-when">
+            <time dateTime={line.day}>{line.dateLabel}</time>
+            {line.ageLabel ? <span className="health-age">当时 {line.ageLabel}</span> : null}
+            <span className="health-status">当时记为「{line.status}」</span>
+          </p>
+          <p className="serif health-note">{line.note}</p>
+          {line.nextStep ? <p className="health-next">当时写下的下一步：{line.nextStep}</p> : null}
+          {line.eventHref ? <p className="note-meta"><Link className="text-link" href={line.eventHref}>看那一天</Link></p> : null}
+        </li>)}</ol>
+      </article>)}
+    </section> : null}
+
+    {learned.length > 0 ? <section className="about-block" aria-labelledby="learned-title">
+      <h2 id="learned-title" className="section-mark">学会了什么</h2>
+      {learned.map((group) => <article className="learned-group" key={group.kind}>
+        <h3 className="learned-kind">{group.title}</h3>
+        <ul className="learned-notes">{group.notes.map((note) => <li key={note.id}>
+          <p className="serif">{note.note}</p>
+          <p className="note-meta">
+            <time dateTime={note.day}>{note.dateLabel}</time>
+            {note.ageLabel ? <span> · 当时 {note.ageLabel}</span> : null}
+            {note.eventHref ? <Link className="text-link" href={note.eventHref}>看那一天</Link> : null}
+          </p>
+        </li>)}</ul>
+      </article>)}
+    </section> : null}
+
+    {unlocked.length > 0 ? <section className="about-block" aria-labelledby="unlocked-title">
+      <h2 id="unlocked-title" className="section-mark">解锁的体验</h2>
+      {/* Oldest first, because a list of firsts is only a growth record in the order they happened.
+          Every line is a published story whose own approved title says it was a first, and it links
+          to that story — the evidence for the claim is the sentence being read (原则八). */}
+      <ol className="unlocked-list">{unlocked.map((item) => <li key={item.id}>
+        <Link href={`/events/${item.id}`}>
+          <time dateTime={item.day}>{item.dateLabel}</time>
+          {item.ageLabel ? <span className="unlocked-age">当时 {item.ageLabel}</span> : null}
+          <span className="serif unlocked-title">{item.title}</span>
+        </Link>
+      </li>)}</ol>
+    </section> : null}
+
+    <nav className="about-entries" aria-label="进入档案">
+      <Link className="text-link" href="/memory">全部记忆</Link>
+    </nav>
   </div>;
 }
