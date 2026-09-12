@@ -697,7 +697,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .not-found-links a { border-bottom: 1px solid currentColor; font-size: .85rem; font-weight: 700; }
 
 /* B-11: Memory index page — directory of month cards */
-.memory-year-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 32px 0 0; }
+/* margin-block, not the `margin` shorthand: this nav also carries .reading-wrap, whose
+   `margin-inline: auto` is what centres it in the story column. A shorthand here resets
+   margin-inline to 0 and the year pills slide to the viewport's left edge. */
+.memory-year-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 32px 0; }
 .year-pill { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 20px; border-radius: var(--r-badge); background: #fff; color: var(--clay); font-size: .92rem; font-weight: 600; box-shadow: var(--shadow-badge); transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out); }
 .year-pill:hover { transform: translateY(-2px); box-shadow: var(--shadow); color: var(--clay); }
 .year-pill--active { background: var(--clay); color: #fff; }
