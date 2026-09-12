@@ -36,6 +36,7 @@ import {
 } from "@/lib/upcoming-contract";
 // The rules themselves live next door, with no database in them, so each one is a test.
 import {
+  familyFeedFrom,
   mergeKeyOf,
   resolveUpcomingStatus,
   upcomingFeedFrom,
@@ -386,6 +387,23 @@ export async function readUpcomingFeed(options: ReadUpcomingOptions = {}): Promi
     records: itemRows.map((row) => recordOf(row, changesByItem.get(row.id) ?? [])),
     includePrivate: options.includePrivate,
   });
+}
+
+/**
+ * The read a family page must use. It fixes `decisions` to `approved` so a caller cannot forget to
+ * filter, and it never reports an approved-empty archive as `no_items`.
+ *
+ * That second part is the point. If rows exist but none has been read by a person, "no items" would
+ * license the page to say 「已检查，没有待办」 — a claim about the family's week resting on a queue
+ * nobody has looked at. So this returns `not_extracted`, whose contract is "render nothing", with a
+ * reason that says plainly what is really going on. The count is still available to a reviewer
+ * through readUpcomingFeed() / readUpcomingRecords(), which see every status.
+ */
+export async function readUpcomingFeedForFamily(options: Omit<ReadUpcomingOptions, "decisions" | "includePrivate"> = {}): Promise<UpcomingFeedResult> {
+  const approved = await readUpcomingFeed({ ...options, decisions: ["approved"] });
+  if (approved.state !== "no_items") return approved;
+  const everything = await readUpcomingFeed({ ...options, decisions: ["needs_human_review", "approved"] });
+  return familyFeedFrom(approved, everything.state === "ready" ? everything.items.length : 0);
 }
 
 /** The same read with provenance attached, for a reviewer or a script — never for a page. */

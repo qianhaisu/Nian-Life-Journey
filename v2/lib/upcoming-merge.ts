@@ -116,6 +116,15 @@ export function resolveUpcomingStatus(candidate: UpcomingCandidate): ResolvedCan
       changes.push({ day: change.day, change: "restated", fromStatus, toStatus: fromStatus, fromWhen, toWhen: when, note: change.note, quote: change.quote, sourceIds: change.sourceIds });
       continue;
     }
+    // Once a commitment is PROVEN finished or cancelled, a later message about the same subject is
+    // a new request, not a change to the settled one. The daycare asked for nappies on 2026-08-04,
+    // the father confirmed 「纸尿裤拿了」 on 08-05, and the teacher asked again on 08-18 — the third
+    // message is 08-19's commitment, and the first version of this loop let it walk the finished
+    // item back to open. A settled item never reopens here; the later reminder stands on its own.
+    if (statusEvidenceDay && (status === "done" || status === "cancelled") && change.day > statusEvidenceDay) {
+      refusals.push({ reason: `a "${change.change}" on ${change.day} arrived after this item was settled on ${statusEvidenceDay} — it belongs to a later commitment, not this one` });
+      continue;
+    }
     if (change.change === "rescheduled" && change.newWhen) when = change.newWhen;
     status = change.change === "restated" ? (fromStatus === "tentative" ? "tentative" : "open") : next;
     if (change.change !== "restated") { statusNote = change.note; statusEvidenceDay = change.day; }
@@ -200,4 +209,24 @@ export function upcomingFeedFrom({ runs, records, includePrivate = false }: Feed
     coverage,
     unreviewed: visible.filter((record) => record.reviewDecision === "needs_human_review").length,
   };
+}
+
+/**
+ * The family page's answer, given the approved-only feed and how many rows are still waiting to be
+ * read by a person.
+ *
+ * The rule it encodes: an archive where rows exist but none is approved must NOT come back as
+ * `no_items`, because `no_items` licenses the page to say 「已检查，没有待办」 — a claim about the
+ * family's week resting entirely on a queue nobody has looked at. It comes back as `not_extracted`,
+ * whose contract is "render nothing", with a reason that says what is really going on.
+ */
+export function familyFeedFrom(approved: UpcomingFeedResult, waitingForReview: number): UpcomingFeedResult {
+  if (approved.state !== "no_items") return approved;
+  if (waitingForReview > 0) {
+    return {
+      state: "not_extracted",
+      reason: `${waitingForReview} item(s) exist but none has been approved for the family page yet — render nothing rather than claiming the week is clear`,
+    };
+  }
+  return approved;
 }

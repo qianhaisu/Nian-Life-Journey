@@ -17,6 +17,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  familyFeedFrom,
   mergeKeyOf,
   resolveUpcomingStatus,
   sortUpcoming,
@@ -134,6 +135,44 @@ test("[synthetic] a cancellation and a completion are different endings", () => 
   }));
   assert.equal(done.status, "done");
   assert.notEqual(cancelled.status, done.status);
+});
+
+test("a later reminder never walks a finished commitment back to open", () => {
+  // Real shape, 2026-08: the daycare asked for nappies for the 5th, the father confirmed he had
+  // brought them on the 5th, and the teacher asked again on the 18th. The third message is the
+  // 19th's commitment; it must not reopen the finished one.
+  const resolved = resolveUpcomingStatus(candidate({
+    changes: [
+      { day: "2026-08-04", change: "restated", sourceIds: [msg(2)] },
+      { day: "2026-08-05", change: "done", note: "拿了", sourceIds: [msg(3)] },
+      { day: "2026-08-18", change: "restated", sourceIds: [msg(4)] },
+    ],
+  }));
+  assert.equal(resolved.status, "done");
+  assert.equal(resolved.statusEvidenceDay, "2026-08-05");
+  assert.deepEqual(resolved.changes.map((c) => c.day), ["2026-08-04", "2026-08-05"]);
+  assert.match(resolved.refusals[0].reason, /after this item was settled/);
+});
+
+test("a cancellation is equally final — a later restatement does not revive it", () => {
+  const resolved = resolveUpcomingStatus(candidate({
+    changes: [
+      { day: "2026-08-05", change: "cancelled", note: "不去了", sourceIds: [msg(3)] },
+      { day: "2026-08-09", change: "restated", sourceIds: [msg(4)] },
+    ],
+  }));
+  assert.equal(resolved.status, "cancelled");
+  assert.equal(resolved.changes.length, 1);
+});
+
+test("a change on the settlement day itself is still applied — only later ones are refused", () => {
+  const resolved = resolveUpcomingStatus(candidate({
+    changes: [
+      { day: "2026-08-05", change: "done", note: "拿了", sourceIds: [msg(3)] },
+      { day: "2026-08-05", change: "restated", sourceIds: [msg(4)] },
+    ],
+  }));
+  assert.equal(resolved.changes.length, 2);
 });
 
 test("a restatement is proof the thing is still live, not a change of state", () => {
@@ -288,4 +327,33 @@ test("an undated open item sorts after every dated open one, not at the top", ()
     { id: "dated", title: "有日期", when: { kind: "day", day: "2026-12-31" }, status: "open" },
   ]);
   assert.deepEqual(sorted.map((i) => i.id), ["dated", "undated"]);
+});
+
+// ---------------------------------------------------------------------------------------------
+// 首页只读 approved，而且 approved 为空时必须隐藏，不能说「已检查但没有待办」
+// ---------------------------------------------------------------------------------------------
+test("approved is empty but rows are waiting: hide the block, never claim the week is clear", () => {
+  const approvedEmpty = upcomingFeedFrom({ runs: [run()], records: [] });
+  assert.equal(approvedEmpty.state, "no_items");
+  const family = familyFeedFrom(approvedEmpty, 21);
+  assert.equal(family.state, "not_extracted");
+  assert.match(family.reason, /none has been approved/);
+});
+
+test("nothing waiting either: no_items stands, and it still carries the window it covered", () => {
+  const family = familyFeedFrom(upcomingFeedFrom({ runs: [run()], records: [] }), 0);
+  assert.equal(family.state, "no_items");
+  assert.equal(family.coverage.windowFrom, "2026-08-01");
+});
+
+test("approved rows exist: the family feed passes them through untouched", () => {
+  const ready = upcomingFeedFrom({ runs: [run()], records: [record({ reviewDecision: "approved" })] });
+  const family = familyFeedFrom(ready, 0);
+  assert.equal(family.state, "ready");
+  assert.equal(family.items.length, 1);
+});
+
+test("a read failure is never converted into a statement about the week", () => {
+  const failed = { state: "read_failed", reason: "x", error: "y" };
+  assert.deepEqual(familyFeedFrom(failed, 21), failed);
 });
