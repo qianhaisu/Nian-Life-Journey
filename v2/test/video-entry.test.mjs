@@ -76,6 +76,14 @@ test("the clip offers a real button with a name, and the native controls are sti
   assert.match(html, /<source src="\/api\/media\/wechat-media:d3d2d2df\?variant=preview" type="video\/mp4"/);
 });
 
+test("the target and the mark are separate, so the hit area can be bigger than the disc", () => {
+  // A 34px circle is the right size on a tile in a six-up grid and the wrong size to ask a thumb to
+  // find. The button is the target and the span inside it is the picture; globals.css gives the
+  // first a 44px floor and lets the second stay small. One element could not do both.
+  const html = renderToStaticMarkup(React.createElement(VideoPlayer, { mediaId: "x", alt: "一段视频" }));
+  assert.match(html, /<span class="video-play-layer"><button type="button" class="video-play"[^>]*><span class="video-play-mark">/);
+});
+
 test("no caption track is invented", () => {
   const html = renderToStaticMarkup(React.createElement(VideoPlayer, { mediaId: "x", alt: "一段视频" }));
   assert.doesNotMatch(html, /<track/);

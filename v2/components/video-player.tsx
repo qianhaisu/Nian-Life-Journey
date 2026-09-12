@@ -41,7 +41,16 @@ export function hasGivenUp(video: { error: unknown; networkState: number }): boo
   return Boolean(video.error) || video.networkState === NETWORK_NO_SOURCE;
 }
 
-export function VideoPlayer({ mediaId, alt, durationSeconds }: { mediaId: string; alt: string; durationSeconds?: number | null }) {
+// Keyed on the clip's id, so a frame that is handed a different clip gets a different element
+// rather than a reused one. The alternative — keeping the element and calling load() — leaves the
+// old resource's in-flight callbacks alive to land on the new clip, and 「这段视频暂时打不开」 from
+// a clip that is no longer on screen would be a lie about the one that is. Remounting throws both
+// the element and the state away together, which is the version with nothing left to get wrong.
+export function VideoPlayer(props: { mediaId: string; alt: string; durationSeconds?: number | null }) {
+  return <PlayableClip key={props.mediaId} {...props} />;
+}
+
+function PlayableClip({ mediaId, alt, durationSeconds }: { mediaId: string; alt: string; durationSeconds?: number | null }) {
   const ref = useRef<HTMLVideoElement>(null);
   // Playback state is read back from the element's own events, never assumed from the click: a
   // play() that the browser refuses must not leave a button claiming the clip is running.
@@ -112,9 +121,20 @@ export function VideoPlayer({ mediaId, alt, durationSeconds }: { mediaId: string
       {failed ? (
         <p className="video-unavailable">这段视频暂时打不开</p>
       ) : playing ? null : (
-        <button type="button" className="video-play" onClick={startPlaying} aria-label={`播放 ${alt}`}>
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l11-6.5z" /></svg>
-        </button>
+        // The layer reserves the strip along the bottom for the browser's own bar and centres the
+        // button in what is left, so the hit area can be a comfortable size without ever landing on
+        // the scrubber. It passes the pointer through everywhere except the button itself, which
+        // leaves Chrome's own click-on-the-picture behaviour intact.
+        <span className="video-play-layer">
+          <button type="button" className="video-play" onClick={startPlaying} aria-label={`播放 ${alt}`}>
+            {/* The disc is the mark; the button around it is the target, and is the larger of the
+                two. On a tile in a six-up grid that comes out 32px against 44px: the first is the
+                right size to sit on a photograph, the second is the right size to ask a thumb for. */}
+            <span className="video-play-mark">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l11-6.5z" /></svg>
+            </span>
+          </button>
+        </span>
       )}
     </div>
   );
