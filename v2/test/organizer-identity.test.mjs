@@ -208,3 +208,62 @@ test("the father's two digests count as one speaker, not two witnesses", () => {
   const keys = new Set(both.map((d) => resolveSpeaker(d, FAMILY_REGISTRY, { conversationId: MOTHER_CHAT }).speakerKey));
   assert.equal(keys.size, 1, "inside the confirmed conversation they are one canonical person");
 });
+
+// Teddy confirmed both of these on 2026-09-12. The point of the test is not that they resolve — it
+// is that the recorded fact and the spoken word stay apart, and that the mapping does not escape the
+// two daycare groups it was confirmed in. A digest is a hash of a display name, so an unscoped entry
+// would name any 大兵 in any export the family ever adds.
+test("大兵 is recorded as the daycare's director but is only ever called 大兵老师", async () => {
+  const { FAMILY_REGISTRY, relationshipForSender } = await import("../lib/organizer/family-registry.ts");
+  const { DAYCARE_CONVERSATION } = await import("../lib/organizer/subject-gate.ts");
+  const digest = senderDigestForDisplayName("大兵");
+
+  const inClass = resolveSpeaker(digest, FAMILY_REGISTRY, { conversationId: DAYCARE_CONVERSATION });
+  assert.equal(inClass.known, true);
+  assert.equal(displayLabelFor(inClass), "大兵老师");
+  assert.equal(inClass.relationshipToSubject, "teacher", "his reports from the daycare are firsthand observation");
+  assert.equal(relationshipForSender(digest), "teacher");
+
+  // The title is a fact about him, not a word any story may use.
+  const everyLabel = FAMILY_REGISTRY.participants.map((p) => p.narrativeLabel ?? "");
+  assert.ok(!everyLabel.some((l) => l.includes("园长")), "园长 must never be a narrative label");
+
+  // He is himself, not the institution: a class account and 大兵 are two witnesses, not one.
+  const nursery = resolveSpeaker(senderDigestForDisplayName("好奇星辰星班"), FAMILY_REGISTRY, { conversationId: DAYCARE_CONVERSATION });
+  assert.equal(nursery.canonicalPersonId, "person-nursery");
+  assert.equal(inClass.canonicalPersonId, "person-dabing");
+  assert.notEqual(inClass.canonicalPersonId, nursery.canonicalPersonId);
+
+  // Scoped: the same digest outside the two daycare groups is nobody.
+  const elsewhere = resolveSpeaker(digest, FAMILY_REGISTRY, { conversationId: "conversation:0567a44e538fc41f22b57097" });
+  assert.equal(elsewhere.known, false, "the parents' private chat is not where this was confirmed");
+  assert.equal(displayLabelFor(elsewhere), UNKNOWN_SPEAKER_LABEL);
+  assert.equal(resolveSpeaker(digest, FAMILY_REGISTRY).known, false, "a caller that does not say where it is gets nothing");
+
+  // The JSON conversation this round's import creates must already be in scope, or its rows arrive unnamed.
+  const inSmallGroupJson = resolveSpeaker(digest, FAMILY_REGISTRY, { conversationId: "conversation:87c42fdc94895ff6b94222da" });
+  assert.equal(displayLabelFor(inSmallGroupJson), "大兵老师");
+});
+
+test("吴艳 is a caregiver, never a medical role, and only in 张小年小群", async () => {
+  const { FAMILY_REGISTRY, relationshipForSender } = await import("../lib/organizer/family-registry.ts");
+  const { DAYCARE_CONVERSATION } = await import("../lib/organizer/subject-gate.ts");
+  const digest = senderDigestForDisplayName("吴艳");
+
+  const inSmallGroup = resolveSpeaker(digest, FAMILY_REGISTRY, { conversationId: "conversation:87c42fdc94895ff6b94222da" });
+  assert.equal(inSmallGroup.known, true);
+  assert.equal(displayLabelFor(inSmallGroup), "吴艳");
+  assert.equal(inSmallGroup.relationshipToSubject, "caregiver");
+  assert.equal(relationshipForSender(digest), "caregiver");
+  for (const banned of ["nurse", "doctor", "clinician", "medical", "hospital"]) {
+    assert.notEqual(inSmallGroup.relationshipToSubject, banned);
+  }
+
+  // She does not speak in the class group, so she is not mapped there.
+  assert.equal(resolveSpeaker(digest, FAMILY_REGISTRY, { conversationId: DAYCARE_CONVERSATION }).known, false);
+  assert.equal(resolveSpeaker(digest, FAMILY_REGISTRY).known, false);
+
+  // The @-mention spelling is text inside someone else's message, never a sender, so it maps to nobody.
+  assert.equal(resolveSpeaker(senderDigestForDisplayName("好奇星·安小苗｜吴艳"), FAMILY_REGISTRY,
+    { conversationId: "conversation:87c42fdc94895ff6b94222da" }).known, false);
+});
