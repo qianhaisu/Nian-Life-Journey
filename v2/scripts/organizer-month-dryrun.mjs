@@ -54,6 +54,25 @@ if (!Number.isFinite(MAX_CALLS) && MAX_CALLS !== Infinity) { console.error("--ma
 // measuring the organizer any more, and retrying the same broken thing is how a bounded run stops
 // being bounded. Consecutive failures only — one bad window between good ones is not an outage.
 const MAX_CONSECUTIVE_FAILURES = Number(argOf("max-consecutive-failures", "3"));
+// Try a different gate policy for named conversations, in THIS read-only run only.
+//
+// subject-gate.ts's POLICIES table is the production decision and stays untouched: the worker, the
+// write driver and every other caller keep the behaviour they have. This flag exists so the question
+// "what would this conversation yield under policy X" can be answered with evidence before anyone
+// proposes editing that table. It is off unless passed, it is printed when used, and it lands in the
+// report, so a run that used an override can never be mistaken for a run that did not.
+//   --gate-override=conversation:abc=group,conversation:def=all
+const GATE_OVERRIDE = new Map((argOf("gate-override", "") || "").split(",").filter(Boolean).map((pair) => {
+  const [conv, policy] = pair.split("=");
+  if (!conv || !["all", "group", "private", "excluded"].includes(policy)) {
+    console.error(`--gate-override entries must look like conversation:id=group|all|private|excluded; bad: ${pair}`);
+    process.exit(1);
+  }
+  return [conv.trim(), policy.trim()];
+}));
+// Restrict the run to named conversations, so an experiment can add the windows that were excluded
+// without paying for the ones a previous run already handled.
+const ONLY_CONVERSATIONS = (argOf("only-conversations", "") || "").split(",").map((c) => c.trim()).filter(Boolean);
 const MAX_DAYS = Number(argOf("max-days", "31"));
 // An explicit allow-list of life dates inside --month. Without it the run covers the whole month,
 // which for a month that is partly written already means paying for days nobody asked about and
@@ -134,9 +153,12 @@ const lifeDateOf = (w) => shanghaiCalendarDate(w.timeRange.from);
 const selected = [];
 const gateStats = { conversations: 0, windowsBuilt: 0, windowsInMonth: 0, windowsPassed: 0, messagesKept: 0, messagesRejected: 0, byConversation: {} };
 for (const [conversation, sources] of byConversation) {
+  if (ONLY_CONVERSATIONS.length && !ONLY_CONVERSATIONS.includes(conversation)) continue;
   gateStats.conversations += 1;
-  const gate = subjectGateFor(conversation);
-  const stat = gateStats.byConversation[conversation] ??= { policy: gate.policy, windows: 0, passed: 0, kept: 0, rejected: 0 };
+  const override = GATE_OVERRIDE.get(conversation);
+  const gate = override ? { policy: override, conversation } : subjectGateFor(conversation);
+  if (override) console.log(`gate override: ${conversation} ${subjectGateFor(conversation).policy} -> ${override} (this run only)`);
+  const stat = gateStats.byConversation[conversation] ??= { policy: gate.policy, windows: 0, passed: 0, kept: 0, rejected: 0, overriddenFrom: override ? subjectGateFor(conversation).policy : undefined };
   for (const w of buildEvidenceWindows(conversation, PROFILE_ID, sources, { dailyTraces: [], lifeEvents: [] })) {
     gateStats.windowsBuilt += 1;
     const lifeDate = lifeDateOf(w);
@@ -273,6 +295,7 @@ const summary = {
   writerPromptVersion: WRITER_V2_PROMPT_VERSION, validatorVersion: NARRATIVE_VALIDATOR_VERSION,
   deepseekCalls: calls, gate: gateStats,
   dayAllowList: DAY_ALLOW, maxCalls: MAX_CALLS === Infinity ? "none" : MAX_CALLS,
+  gateOverrides: Object.fromEntries(GATE_OVERRIDE), onlyConversations: ONLY_CONVERSATIONS.length ? ONLY_CONVERSATIONS : null,
   maxConsecutiveFailures: MAX_CONSECUTIVE_FAILURES, abortedBecause: abortReason,
   windowsQueued: work.length, windowsAttempted: results.length,
   daysConsidered: days.length, windowsProcessed: results.length, daysWithText: new Set(publishable.map((r) => r.lifeDate)).size,
