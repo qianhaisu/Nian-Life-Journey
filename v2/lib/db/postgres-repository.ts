@@ -698,13 +698,35 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       return (row as unknown as MediaAsset) ?? null;
     },
     async getMediaForDelivery(id) {
-      const [mediaRow] = await db.select().from(t.media).where(eq(t.media.id, id));
-      if (!mediaRow) return null;
-      const media = mediaRow as unknown as Media;
-      if (!media.mediaAssetId) return { media, asset: null, locations: [] };
-      const [assetRow] = await db.select().from(t.mediaAssets).where(eq(t.mediaAssets.id, media.mediaAssetId));
-      const asset = (assetRow as unknown as MediaAsset) ?? null;
-      const locations = asset ? (await db.select().from(t.mediaLocations).where(eq(t.mediaLocations.mediaAssetId, asset.id))) as unknown as MediaLocation[] : [];
+      // One round trip, not three. This used to read media, then media_assets, then
+      // media_locations, each waiting for the one before it — and a month page asks for this once
+      // per photograph (2026-08 references 259 distinct media), so the round trips are paid per
+      // image, not per page. Measured on 2026-09-12 against the live RDS instance through the ECS
+      // tunnel: 47.4 ms average for the three serial queries, 20.0 ms for a single query returning
+      // the same three answers.
+      //
+      // The join fixes the round trips. It does NOT fix the reason the locations read is the
+      // slowest of the three: media_locations has no index on media_asset_id, so this lookup is a
+      // sequential scan over 57,573 rows that keeps 6 — 6.1 ms and 2,593 shared buffers per photo,
+      // measured. See docs/STATUS.md (2026-09-12) for the one-line index that ends that, which
+      // needs Teddy's go-ahead because it is a migration.
+      const rows = await db
+        .select({ media: t.media, asset: t.mediaAssets, location: t.mediaLocations })
+        .from(t.media)
+        .leftJoin(t.mediaAssets, eq(t.mediaAssets.id, t.media.mediaAssetId))
+        .leftJoin(t.mediaLocations, eq(t.mediaLocations.mediaAssetId, t.media.mediaAssetId))
+        .where(eq(t.media.id, id));
+      if (!rows.length) return null;
+      const media = rows[0].media as unknown as Media;
+      const asset = (rows[0].asset as unknown as MediaAsset | null) ?? null;
+      // Deliberately identical to the old behaviour on the broken-reference case: when the asset
+      // row is absent, no locations are returned even if rows carrying that asset id exist. A
+      // derivative with no asset behind it is not serveable, and the route's checksum-based ETag
+      // has nothing to hash.
+      if (!asset) return { media, asset: null, locations: [] };
+      const locations = rows
+        .map((row) => row.location)
+        .filter((location): location is NonNullable<typeof location> => location !== null) as unknown as MediaLocation[];
       return { media, asset, locations };
     },
     async persistChatImportMessage(input) { return persistUpload(input); },
