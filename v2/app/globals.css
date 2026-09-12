@@ -69,6 +69,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-masthead.reveal { animation: none; }
 .home-masthead .section-mark { animation: fadeInUp 1.2s var(--ease) .4s both; }
 .home-title-line { display: block; white-space: nowrap; }
+/* 问候之后的当前年龄 — the only date on this page that is not in the past. */
+.home-age { margin: 16px 0 0; color: var(--color-secondary); font-size: 1.05rem; font-weight: 600; letter-spacing: .01em; }
 .home-masthead em, .page-masthead em { color: var(--color-accent); font-style: normal; }
 .section-heading { display: grid; gap: 12px; }
 .section-heading h2 { max-width: 18ch; margin: 0; font-size: clamp(2.1rem, 5vw, 4.2rem); line-height: 1.08; }
@@ -238,11 +240,63 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    on whatever width the column has. */
 .home-past { padding: clamp(64px, 8vw, 96px) 0 clamp(40px, 6vw, 64px); }
 .home-past .memory { margin-top: 20px; }
-.home-change { padding: clamp(64px, 8vw, 96px) 0 clamp(40px, 6vw, 64px); }
+/* 近况概览 (2026-09-12). The block that answers 「他最近怎么样」 reads second, directly under the
+   greeting, in the page's one column — on a desktop screen it used to be moved into a 320px rail
+   and set at .8rem, which made the most important text on the page the smallest (that grid is
+   deleted below). Its own lines are set above the prior month's review so that 一眼 tells 近况 from
+   回顾 (原则五). */
+.home-overview { padding: clamp(28px, 4vw, 44px) 0 clamp(20px, 3vw, 32px); }
+/* The period the lines actually cover, always printed, both clocks (原则二). */
+.home-overview-span { margin: 8px 0 18px; color: var(--color-muted); font-size: .82rem; letter-spacing: .02em; }
 .home-change-note { margin: 18px 0 14px; list-style: none; padding: 0; }
 .home-change-note li { font-size: 1rem; font-weight: 500; color: var(--muted); line-height: 1.7; margin-top: 10px; }
+.home-overview .home-change-note li { font-size: 1.08rem; color: var(--color-primary); }
 .home-change-meta { display: flex; gap: 14px; margin: 0; color: var(--color-muted); font-size: .8rem; }
 .home-change-meta span { color: var(--color-secondary); font-weight: 700; }
+/* A month with no snapshot of its own: its published days as dated lines. Each line is one tap
+   target to that day, 52px tall, and carries no age — the span line above read both clocks once. */
+.home-facts { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
+.home-fact a { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; min-height: 52px; padding: 11px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
+.home-fact a:hover { color: var(--color-accent); }
+.home-fact time { color: var(--color-secondary); font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.home-fact-title { font-size: 1.12rem; line-height: 1.5; }
+@media (min-width: 700px) {
+  .home-fact a { grid-template-columns: 9.5em minmax(0, 1fr); align-items: baseline; gap: 4px 18px; }
+}
+/* 近期待办 (2026-09-12). Sits between 近况 and the day's story, and is deliberately set as a list
+   of actions rather than as another piece of reading: a tighter line, the date first, the status as
+   a small badge. It must be findable at a glance on a phone and never push 近况 off the screen, so
+   only four items show and the rest sit behind 展开全部 — nothing is dropped to fit.
+   The line through a finished item is `<del>`, used for 完成 only; 取消 keeps its text (a trip
+   nobody took is not a thing that got done) and 改期 carries where it moved to. */
+.home-upcoming { padding: clamp(8px, 1.5vw, 16px) 0 clamp(24px, 3.5vw, 40px); }
+.upcoming-list { margin: 14px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
+.upcoming-item { padding: 14px 0 12px; border-bottom: 1px solid var(--color-border); }
+.upcoming-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; color: var(--color-muted); font-size: .78rem; letter-spacing: .03em; }
+.upcoming-when time { color: var(--color-secondary); font-weight: 700; }
+.upcoming-near { color: var(--color-accent); font-size: .82rem; font-weight: 700; }
+.upcoming-when--unset { color: var(--color-muted); font-style: normal; }
+.upcoming-age { color: var(--color-muted); }
+.upcoming-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 10px; margin: 6px 0 0; font-size: 1.12rem; line-height: 1.5; }
+.upcoming-item--done .upcoming-title, .upcoming-item--cancelled .upcoming-title { color: var(--color-muted); }
+.upcoming-title del { text-decoration-thickness: 1px; text-decoration-color: var(--color-muted); }
+.upcoming-badge { padding: 2px 8px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--clay) 12%, transparent); color: var(--clay); font-size: .72rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+.upcoming-badge--tentative { background: color-mix(in srgb, var(--sage) 16%, transparent); color: color-mix(in srgb, var(--sage) 70%, #000); }
+.upcoming-badge--done { background: transparent; border: 1px solid var(--color-border); color: var(--color-muted); }
+.upcoming-note { margin: 4px 0 0; color: var(--color-muted); font-size: .9rem; line-height: 1.6; }
+.upcoming-status-note { margin: 4px 0 0; color: var(--color-secondary); font-size: .85rem; }
+.upcoming-meta { display: flex; flex-wrap: wrap; gap: 0 18px; margin: 2px 0 0; }
+.upcoming-meta .upcoming-source { display: inline-flex; min-height: 40px; align-items: center; font-size: .8rem; }
+.upcoming-more { margin-top: 4px; }
+.upcoming-more > summary { display: inline-flex; min-height: 44px; align-items: center; color: var(--color-accent); cursor: pointer; font-size: .85rem; font-weight: 600; list-style: none; }
+.upcoming-more > summary::-webkit-details-marker { display: none; }
+.upcoming-more > summary::after { margin-left: 8px; content: "＋"; }
+.upcoming-more[open] > summary::after { content: "－"; }
+.upcoming-more .upcoming-list { margin-top: 0; border-top: none; }
+
+/* 上一个月的回顾: the same lines, quieter, under the name of its own month. */
+.home-prior-review { padding: clamp(16px, 2.5vw, 28px) 0 clamp(20px, 3vw, 32px); }
+.home-prior-review .home-change-note li { font-size: .98rem; color: var(--color-muted); }
 /* 忽然想起 (原则六): one relation, one story. Set quieter than 最近的一段生活 — it is something
    the archive remembers, not the news. The relation line carries the weight; the story below it is
    an ordinary chapter entry, so nothing new had to be designed for it. */
@@ -265,12 +319,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-same-day-mark { margin: 28px 0 4px; }
 .home-same-day .memory-line a { grid-template-columns: minmax(0, 1fr); }
 .home-lead .memory-lines { margin: 0 0 18px; }
-.home-month { padding: clamp(64px, 8vw, 96px) 0 clamp(64px, 8vw, 112px); }
-.home-month .photo-strip { margin: 24px 0 8px; }
-.home-month .chapter-summary { margin: 24px 0 8px; }
-.home-month .memory-lines { margin-top: 20px; }
-.home-month .chapter-meta { margin: 14px 0 6px; }
-.home-month .text-link { display: inline-block; margin-top: 16px; }
+/* 月份与全部记忆的入口，集中收尾. The newest month keeps the card; the other months the page
+   mentioned, and 全部记忆, are plain links under it. */
+.home-entries { padding: clamp(36px, 5vw, 64px) 0 clamp(56px, 7vw, 96px); }
+.home-entry-links { display: flex; flex-wrap: wrap; gap: 0 26px; margin: 14px 0 0; padding: 0; list-style: none; }
+.home-entry-links a { display: inline-flex; min-height: 44px; align-items: center; font-size: .9rem; }
 /* B-9d: 本月入口 card — clickable card with badge + soft rounded shell */
 .home-month-card { display: block; padding: clamp(24px, 4vw, 40px); background: var(--card-soft); border-radius: var(--r-card); text-decoration: none; transition: transform .3s var(--ease-hover), box-shadow .3s var(--ease-hover); }
 @media (hover: hover) { .home-month-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); } }
@@ -792,11 +845,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
      vw can express, so it is written as the line it is: 64px at the breakpoint, 48px at 1448. */
   .home-masthead { padding-top: clamp(32px, calc(64px - (100vw - 720px) * 0.022), 64px); padding-bottom: 40px; }
   .home-masthead h1 { font-size: clamp(3.15rem, 7vw, 4rem); }
+  .home-overview { padding-top: 20px; padding-bottom: 20px; }
+  .home-prior-review { padding-top: 8px; padding-bottom: 24px; }
   .home-lead { padding-bottom: 16px; }
-  .home-change { padding-top: 16px; padding-bottom: 44px; }
   .home-cluster { padding-bottom: 26px; }
   .home-resurface { padding-top: 26px; padding-bottom: 28px; }
-  .home-month { padding-top: 28px; }
+  .home-entries { padding-top: 28px; }
 }
 
 @media (min-width: 720px) {
@@ -859,8 +913,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .year-pill--active { background: var(--clay); color: #fff; border-color: var(--clay); }
 .year-pill--active:hover { background: var(--clay); color: #fff; }
 
-/* ── 首页桌面画册式分栏 ───────────────────────────────────────────────────
-   The front page only. Phone widths keep the layout they were verified on.
+/* ── 首页的阅读宽度 ───────────────────────────────────────────────────────
+   The front page only. One column at every width.
 
    THE MEASURE. The lead story's paragraph is capped with `ch`, which is the advance width of the
    font's "0" — a unit with no stable relation to how many Chinese characters fit on a line. `em` is
@@ -868,48 +922,22 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    (.month-reading .moment-memory_led .memory-copy p). Measured on the lead paragraph's own box at a
    1448px viewport: 383px under the old cap, 571px under this one. The rule is inside a media query
    rather than at the top level so that "desktop only" is structural rather than incidental: below
-   720px it does not apply at all and the old cap stands — measured 359px at 391 (the column is
-   narrower than either cap there) and 383px from 430 to 719, which is the phone layout that was
-   already verified.
+   720px it does not apply at all and the old cap stands.
 
-   THE COLUMNS. The page is one 760px measure with everything stacked under it, which leaves a third
-   of a wide screen doing nothing; and the lead block alone widened to 1100px, so it stuck out past
-   every other block instead of reading as a layout. The month overview and the month entry — the
-   two blocks about a span of time rather than about a day — move into a rail beside the main
-   column. The rule that widened the lead is gone (B-9d, above).
+   THE RAIL IS GONE (2026-09-12). From 1200px up, .home-change (the month's overview) and
+   .home-month (the month entry) used to move into a 320px right-hand rail beside the 760px story
+   column. Two things were wrong with it and both were reader-facing, not aesthetic:
 
-   WHY 1200 AND NOT 1000. 760 + 56 + 320 plus the page's own 64px of gutter is 1200. Below that the
-   grid can only pay for the rail by taking width from the reading measure: at a 1000px viewport the
-   main column came out 560px, narrower than the 760 it has today at that width. So the two columns
-   begin exactly where they can be afforded, and every narrower screen keeps the single column it
-   already had. */
+     1. The desktop reading ORDER stopped being the phone's. Grid placement, not document order,
+        decided what a desktop reader met after the greeting — and what they met was one ordinary
+        drawn day, with the answer to 「他最近怎么样」 parked to the right of it.
+     2. A 320px column at this page's type scale is small text. The block that summarises a whole
+        month of a child's life was the least prominent thing on the page, which is a judgement
+        about importance made by a layout rather than by anyone.
+
+   So the page is one column and the order in app/page.tsx is the order every reader gets:
+   greeting → 近况 → 上个月回顾 → 一段生活 → 照片 → 忽然想起 → 入口. The width a wide screen has
+   spare is spent on air and on pictures at their own proportions, not on a sidebar. */
 @media (min-width: 720px) {
   .home-lead .memory-lead .memory-copy p { max-width: 34em; }
-}
-@media (min-width: 1200px) {
-  .home-page {
-    display: grid;
-    grid-template-columns: minmax(0, 760px) 320px;
-    column-gap: 56px;
-    align-items: start;
-    width: min(1136px, calc(100% - 64px));
-    margin-inline: auto;
-  }
-  /* Inside the grid the column is the measure, so each block gives up its own width rule. */
-  .home-page > .reading-wrap { width: auto; margin-inline: 0; }
-  .home-masthead, .home-lead, .home-cluster, .home-resurface { grid-column: 1; }
-  .home-change, .home-month { grid-column: 2; }
-  /* A rail block's own top padding would push it out of line with the block it sits beside. */
-  .home-change, .home-month { padding-top: 0; }
-  /* The rail starts beside the story either way. Auto-placement only ever moves forward, so a month
-     entry with no overview above it was put in the row the main column had already reached — level
-     with 忽然想起, with the whole top of the rail empty above it. When it is the only thing in the
-     rail it takes the row the overview would have had. */
-  .home-page:not(:has(.home-change)) .home-month { grid-row: 2; }
-  /* Nothing in the rail means no rail: a reserved-but-empty 320px column pushes the whole page off
-     centre and reads as a mistake. */
-  .home-page:not(:has(.home-change)):not(:has(.home-month)) {
-    grid-template-columns: minmax(0, 760px);
-    width: min(760px, calc(100% - 64px));
-  }
 }

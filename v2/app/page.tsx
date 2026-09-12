@@ -2,15 +2,17 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { EditorialMemory } from "@/components/editorial-memory";
 import { HomeCluster } from "@/components/home-cluster";
-import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
+import { UpcomingTasks } from "@/components/upcoming-tasks";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
-import { buildHomeView } from "@/lib/home-view";
+import { buildHomeView, monthHrefOf, DATED_LEAD_HEADING, OVERVIEW_FACT_LIMIT, RECENT_LEAD_HEADING } from "@/lib/home-view";
 import { LAST_SHOWN_DAY_COOKIE, latestStory, pickRecentStory, recentStoryDays, RECENT_WINDOW_DAYS } from "@/lib/home-recent-pick";
 import { RememberShownDay } from "@/components/remember-shown-day";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { echoGroupsFrom, resurface } from "@/lib/resurface";
-import { formatMonth } from "@/lib/time-signature";
+import { readUpcomingFeed } from "@/lib/db/upcoming-store";
+import { feedFromResult } from "@/lib/upcoming";
+import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
 import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
@@ -19,40 +21,89 @@ import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/mem
 // same 300s lives one layer down, on the archive read itself
 // (ON_DEMAND_ARCHIVE_TTL_MS in lib/family-archive.ts).
 
-// The front page answers one question — 最近怎么样，张年 — with one story from the last thirty
-// days, drawn fresh on each visit (lib/home-recent-pick.ts). Before 2026-09-10 it answered with the
-// newest story the archive had, which is a pure function of the archive and so never changed: the
-// page had shown 8 月 28 日 for as long as that was the newest. An ordinary Tuesday now has the
-// same claim on the front page as the most recent one.
+// The front page answers one question — 最近怎么样，张年 — and 2026-09-12 rebuilt the ORDER in which
+// it answers: a greeting with his age today, then how he has been lately, then what is coming up,
+// then one story read in full, then a real relation the calendar holds, and every way into the
+// archive collected at the foot. The same order on a phone and on a desktop screen.
 //
-// Everything else on the page still comes from lib/home-view.ts. Nothing counts at the reader and
-// nothing asks them to upload.
+// What that replaced, and why (the three faults Teddy named):
+//
+// 1. THE PAGE'S OWN CLOCK FOLLOWED A DICE ROLL. The masthead printed the month of the story that
+//    had just been drawn from the last thirty days (lib/home-recent-pick.ts), so on 2026-09-12 it
+//    said 「2026 年 8 月 · 最近」 — and would have said 9 月 on the next refresh, for a page whose
+//    today had not moved. Now it prints the archive's one real today (archive.time.today,
+//    lib/time-truth.ts) and his age on that day; the drawn story carries its own date and age
+//    underneath, where a date belongs to the thing it dates.
+//
+// 2. THREE BLOCKS, THREE DIFFERENT MONTHS. The drawn story, the summary and the month card each
+//    chose a month independently, and the summary's fallback let AUGUST sit on top of a September
+//    that has published stories and photographs of its own. The overview is now one object about
+//    ONE month that always states the period it covers (lib/home-view.ts), and a month's snapshot
+//    is quoted only for its own month — August's lines appear under 「2026 年 8 月回顾」 or not at
+//    all. Where September has no snapshot yet, its own published stories are listed as dated
+//    one-liners: approved text already readable elsewhere on the site, nothing generated here and
+//    no claim about what changed.
+//
+// 3. THE KEY SUMMARY WAS THE SMALLEST TEXT ON A DESKTOP SCREEN. A 1200px grid moved it into a
+//    320px rail, so the desktop reading order was not the phone's and the one block that answers
+//    「他最近怎么样」 was set as a sidebar note. That grid is gone from globals.css; the page is one
+//    column at every width.
+//
+// Nothing here counts at the reader and nothing asks them to upload (原则三, 原则四).
 export default async function HomePage() {
   // Never prerender this page from the build's mock store — see lib/render-on-demand.ts.
   await renderOnDemand();
   const archive = await loadFamilyArchiveOnDemand();
-  const { mark, thisMonth, summary, changeLabel, changeHref, monthHref } = buildHomeView(archive);
+  const { thisMonth, overview, priorReview, monthHref } = buildHomeView(archive);
+  // The page's own clock: the family's calendar today and how old he is today — not the date of
+  // whatever was drawn below (lib/time-truth.ts productToday).
+  const today = archive.time.today;
+  const ageToday = ageOn(archive.birthDay, today);
   // 最近的一段生活 — one of the last thirty days, drawn fresh on every request
   // (lib/home-recent-pick.ts). The archive read above is memoised for 300s; this draw is not, and
   // must not be: it is computed per request from that one cached read, so a refresh costs a new
   // random number rather than a new pass over the store. The route has no Next cache of its own
   // (lib/render-on-demand.ts), so nothing downstream can freeze one day in front of the family.
-  const recentDays = recentStoryDays(archive.chapters, archive.time.today, RECENT_WINDOW_DAYS);
+  const recentDays = recentStoryDays(archive.chapters, today, RECENT_WINDOW_DAYS);
   const lastShownDay = (await cookies()).get(LAST_SHOWN_DAY_COOKIE)?.value;
   const pick = pickRecentStory(recentDays, Math.random, lastShownDay);
   const fallback = pick ? undefined : latestStory(archive.chapters);
+  const reading = pick ?? fallback;
   // The rest of the day the cover was drawn from. A day is what the family actually lived; showing
   // one of its stories and leaving the others behind a month link made the front page thinner than
   // the archive already is. Titles only, so the cover stays the thing being read.
   const sameDayOthers = pick ? (recentDays.find((day) => day.day === pick.day)?.memories ?? []).filter((memory) => memory.id !== pick.memory.id) : [];
-  // Don't show "本月入口" when it repeats the month the cover story already sent them to.
-  const showThisMonth = thisMonth && pick?.month.month !== thisMonth.month;
+  // 近况概览's lines. The story being read in full below is dropped from them: it is the same
+  // title, and a family reading it twice on one screen reads two occasions rather than one. The
+  // period in `spanLabel` is computed from the month's whole set upstream, so it does not move when
+  // one line is dropped from the display.
+  const shownIds = new Set([pick?.memory.id, fallback?.memory.id, ...sameDayOthers.map((memory) => memory.id)].filter((id): id is string => Boolean(id)));
+  const overviewFacts = (overview?.facts ?? []).filter((fact) => !shownIds.has(fact.id)).slice(0, OVERVIEW_FACT_LIMIT);
+  const hasOverview = Boolean(overview && (overview.summary || overviewFacts.length > 0));
+  // 近期待办 (2026-09-13). The read is the data track's own four-state one
+  // (lib/db/upcoming-store.ts readUpcomingFeed, written for this one reader), and feedFromResult
+  // keeps the page's side of the contract: only "ready with items" draws anything, so
+  // `not_extracted` — tonight's real state, because migration 0013 has not been applied — shows
+  // nothing rather than 「没有待办」.
+  //
+  // On adding a database read to a render path (CLAUDE.md): this reads three new, family-scale
+  // tables (upcoming_extraction_runs, upcoming_items filtered by profile and review decision, and
+  // the change rows for those items) — no raw_sources, no unbounded scan of a large table, and the
+  // data track sized it for exactly this caller. It is NOT inside the memoised archive read, so it
+  // costs three small queries per view of this page; with a missing table it costs one failed
+  // query and is caught (42P01 → not_extracted), never an error page.
+  //
+  // `decisions` is deliberately left at the store's default (approved + needs_human_review). Whether
+  // an unreviewed todo may reach the family is the data track's and Teddy's call, not the page's —
+  // their 2026-09-12 note records the choice and the `unreviewed` count that goes with it. To hold
+  // the page to reviewed rows only, pass `{ decisions: ["approved"] }` here.
+  const upcoming = feedFromResult(await readUpcomingFeed().catch(() => undefined));
   // 忽然想起 (原则六). One relation, one story, drawn from published stories only — and absent from
   // the page entirely when the calendar holds no relation worth stating (lib/resurface.ts).
   const remembered = resurface(
     archive.chapters,
-    archive.time.today,
-    new Set([pick?.memory.id, fallback?.memory.id].filter((id): id is string => Boolean(id))),
+    today,
+    shownIds,
     echoGroupsFrom(archive.store.qualityReviews ?? []),
   );
   // B-14: 3 recent published memories with a lead photograph, excluding the cover.
@@ -68,7 +119,7 @@ export default async function HomePage() {
   // something the archive remembered, once as a recent tile — and a picture shown twice reads as
   // two occasions rather than one.
   const rememberedPhotoIds = remembered ? (remembered.kind === "echo" ? remembered.stages.map((stage) => stage.lead?.id) : [remembered.memory.lead?.id]) : [];
-  const alreadyShownPhotoIds = new Set([pick?.memory.lead?.id, ...rememberedPhotoIds].filter((id): id is string => Boolean(id)));
+  const alreadyShownPhotoIds = new Set([reading?.memory.lead?.id, ...rememberedPhotoIds].filter((id): id is string => Boolean(id)));
   const recentCluster: { memory: EditorialMemoryType; photo: MediaRef }[] = [];
   outer: for (const year of archive.chapters) {
     for (const month of year.months) {
@@ -80,18 +131,60 @@ export default async function HomePage() {
       }
     }
   }
+  // Every way into the archive, collected at the foot of the page instead of scattered through it —
+  // and each one named for the month it actually opens. The old page had 「翻看这个月」 in two
+  // places pointing at two different months, and a link that says 这个月 next to a story from
+  // another month is a link that lies about where it goes. Deduplicated by href and ordered newest
+  // month first; a month is listed only if it is in the archive.
+  const entryMonths = [thisMonth?.month, overview?.month, priorReview?.month, reading?.day.slice(0, 7)]
+    .filter((month): month is string => Boolean(month));
+  const monthEntries = [...new Set(entryMonths)]
+    .sort((a, b) => b.localeCompare(a))
+    .map((month) => ({ month, href: monthHrefOf(month), label: `翻看 ${formatMonth(month)}` }));
 
   return <div className="home-page">
     <header className="home-masthead reading-wrap reveal">
-      <span className="section-mark">{pick ? `${pick.month.label} · 最近` : mark}</span>
+      <span className="section-mark"><time dateTime={today}>{formatDay(today)}</time></span>
       <h1 className="serif"><span className="home-title-line">最近怎么样，</span><span className="home-title-line"><em>张年。</em></span></h1>
+      {/* 原则二's second clock for the one date that is not in the past: he is this old today. */}
+      {ageToday ? <p className="home-age">现在 {ageToday}</p> : null}
     </header>
 
+    {/* 近况概览 — read before any single day. The heading says 近况 only while the period it covers
+        is recent under lib/time-truth.ts; when the newest readable month is older than that, the
+        same lines are shown as what they are. Either way the period itself is on the page. */}
+    {hasOverview && overview ? <section className="home-overview reading-wrap" aria-labelledby="overview-title">
+      <h2 id="overview-title" className="section-mark">{overview.recent ? "近况" : "上一次记下来的"}</h2>
+      <p className="home-overview-span">{overview.spanLabel}</p>
+      {overview.summary
+        ? <SnapshotSummary text={overview.summary} className="home-change-note serif" icons />
+        : <ul className="home-facts">{overviewFacts.map((fact) => <li className="home-fact" key={fact.id}>
+          <Link href={`/events/${fact.id}`}>
+            {/* Date only: the age for this whole block is read once, in the span line above
+                (T20-A1 — two clocks are read once per block, not once per line). */}
+            <time dateTime={fact.day}>{fact.dateLabel}</time>
+            <span className="serif home-fact-title">{fact.title}</span>
+          </Link>
+        </li>)}</ul>}
+    </section> : null}
+
+    {/* A month's snapshot under the name of its own month, never relabelled as this one. Shown only
+        when the overview's month has no summary of its own (lib/home-view.ts). */}
+    {priorReview ? <section className="home-prior-review reading-wrap" aria-labelledby="prior-title">
+      <h2 id="prior-title" className="section-mark">{priorReview.label}回顾</h2>
+      <SnapshotSummary text={priorReview.summary} className="home-change-note serif" icons />
+    </section> : null}
+
+    {/* 近期待办 — after 近况, before the day's story, in the one column every reader gets. */}
+    <UpcomingTasks feed={upcoming} today={today} birthDay={archive.birthDay} />
+
     {pick ? <section className="home-lead reading-wrap" aria-labelledby="lead-title">
-      <h2 id="lead-title" className="section-mark">最近的一段生活</h2>
+      <h2 id="lead-title" className="section-mark">{RECENT_LEAD_HEADING}</h2>
       {/* No photo slot is reserved. EditorialMemory draws its picture only when the story has one
           it can stand behind (lib/media/story-binding.ts); with none, this is a dated title and a
-          paragraph, which is a complete thing to look at rather than a gap where a photo failed. */}
+          paragraph, which is a complete thing to look at rather than a gap where a photo failed.
+          Its own TimeSignature is what keeps this story's date its own: the page's clock is in the
+          masthead and does not move with the draw. */}
       <EditorialMemory memory={pick.memory} size="lead" priority />
       {sameDayOthers.length > 0 ? <>
         <p className="section-mark home-same-day-mark">这一天还记下了</p>
@@ -102,35 +195,15 @@ export default async function HomePage() {
           <Link href={`/events/${memory.id}`}><span className="serif">{memory.title}</span></Link>
         </li>)}</ul>
       </> : null}
-      {/* The link names the month it opens. It used to read 「翻看这个月」, and "这个月" was two
-          different months on one page: this link follows the day that was drawn (8 月 here), while
-          the card at the foot goes to the newest month the archive has (9 月). Both labels come
-          from the same string their own href is built from — this one from `pick.day` — so neither
-          can drift from where it goes, and neither is the system's calendar month. */}
-      <p className="chapter-meta"><Link className="text-link" href={`/memory/${pick.day.slice(0, 4)}/${pick.day.slice(5, 7)}`}>翻看 {formatMonth(pick.day.slice(0, 7))}</Link></p>
       <RememberShownDay day={pick.day} />
     </section> : null}
 
     {!pick && fallback ? <section className="home-lead reading-wrap" aria-labelledby="lead-title">
-      <h2 id="lead-title" className="section-mark">还没有最近的记录</h2>
-      <p className="serif archive-empty">最近三十天还没有整理出来的记忆。</p>
+      <h2 id="lead-title" className="section-mark">{DATED_LEAD_HEADING}</h2>
       <EditorialMemory memory={fallback.memory} size="lead" />
-      <p className="chapter-meta"><Link className="text-link" href="/memory">往回翻翻</Link></p>
     </section> : null}
 
-    {!pick && !fallback ? <section className="home-lead reading-wrap"><p className="serif archive-empty">{archive.chapters.length > 0 ? "还没有一段整理好的记忆可以放在这里。" : "档案还是空的。等时间再走一会儿。"}</p></section> : null}
-
-    {/* 最近的新变化：直接复用 monthly_snapshot.summary，有就显示，没有就整块消失。
-        The heading carries the month that snapshot was written about (`changeLabel`, which
-        lib/home-view.ts sets from the snapshot it actually chose — the current month's when there
-        is one, otherwise the newest recent one). Without it these lines sat directly under a dated
-        day and read as that day's aftermath: they are a whole month's, and on a draw that lands in
-        9 月 the month above them is not even the month they describe. */}
-    {summary && changeLabel && changeHref ? <section className="home-change reading-wrap" aria-labelledby="change-title">
-      <h2 id="change-title" className="section-mark">最近的新变化 · {changeLabel}</h2>
-      <SnapshotSummary text={summary} className="home-change-note serif" icons />
-      <p className="chapter-meta"><Link className="text-link" href={changeHref}>{changeLabel}</Link></p>
-    </section> : null}
+    {!pick && !fallback && !hasOverview ? <section className="home-lead reading-wrap"><p className="serif archive-empty">{archive.chapters.length > 0 ? "还没有一段整理好的记忆可以放在这里。" : "档案还是空的。等时间再走一会儿。"}</p></section> : null}
 
     {/* B-14: the recent photographs the archive can stand behind — no text, no count. How many
         there are, and how they are set, is components/home-cluster.tsx; it draws one, two or three
@@ -166,15 +239,23 @@ export default async function HomePage() {
         : <EditorialMemory memory={remembered.memory} />}
     </section> : null}
 
-    {/* 本月入口：整块可点的圆角卡片 */}
-    {showThisMonth ? <section className="home-month reading-wrap">
-      <Link className="home-month-card" href={monthHref} aria-label={`翻看${thisMonth.label}`}>
+    {/* 月份与全部记忆的入口，集中在这里收尾。The first month — the newest one the archive has — keeps
+        the card it had; the others are plain links under it. Every label is built from the same
+        month string as its own href, so a label cannot drift from where it goes. */}
+    {monthEntries.length > 0 ? <nav className="home-entries reading-wrap" aria-label="进入档案">
+      <Link className="home-month-card" href={monthEntries[0].href} aria-label={monthEntries[0].label}>
         <span className="month-card-badge">
-          <span>{thisMonth.label}</span>
-          {thisMonth.ageLabel ? <span>{` · 当时 ${thisMonth.ageLabel}`}</span> : null}
+          <span>{formatMonth(monthEntries[0].month)}</span>
+          {thisMonth?.month === monthEntries[0].month && thisMonth.ageLabel ? <span>{` · 当时 ${thisMonth.ageLabel}`}</span> : null}
         </span>
-        <p className="month-card-cta">翻看这个月 →</p>
+        <p className="month-card-cta">{monthEntries[0].label} →</p>
       </Link>
-    </section> : null}
+      <ul className="home-entry-links">
+        {monthEntries.slice(1).map((entry) => <li key={entry.href}><Link className="text-link" href={entry.href}>{entry.label}</Link></li>)}
+        <li><Link className="text-link" href="/memory">全部记忆</Link></li>
+      </ul>
+    </nav> : <nav className="home-entries reading-wrap" aria-label="进入档案">
+      <ul className="home-entry-links"><li><Link className="text-link" href={monthHref}>全部记忆</Link></li></ul>
+    </nav>}
   </div>;
 }
