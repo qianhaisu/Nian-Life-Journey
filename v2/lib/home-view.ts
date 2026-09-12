@@ -14,7 +14,7 @@ import type { FamilyArchive } from "@/lib/family-archive";
 import { latestGrowthNote, type GrowthNote } from "@/lib/growth-notes";
 import type { MediaRef, MonthChapter, YearChapter } from "@/lib/memory-chapters";
 import { buildMonthComposition, type MediaPrivilege, type PublicationMoment } from "@/lib/publication-moments";
-import { formatDay, formatMonth } from "@/lib/time-signature";
+import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
 import { isRecent, monthsBetween, RECENT_ACTIVITY_MONTH_GAP, selectHomeLead, type HomeLead, type RecencyReference } from "@/lib/time-truth";
 
 export type MomentCover = {
@@ -206,7 +206,7 @@ export function buildHomeView({ chapters, store, birthDay, snapshots, privilege,
   // lines is what keeps an empty heading, or a 「暂无」, off the front page; the month it lands on is
   // named in `spanLabel` either way, so stepping back can never read as a claim about this month.
   const overviewMonth = months.find((month) => Boolean(snapshotOf(month.month)?.summary?.trim()) || month.memories.length > 0);
-  const overview = overviewMonth ? buildOverview(overviewMonth, snapshotOf(overviewMonth.month)?.summary?.trim(), time) : undefined;
+  const overview = overviewMonth ? buildOverview(overviewMonth, snapshotOf(overviewMonth.month)?.summary?.trim(), time, birthDay) : undefined;
   // The month before it, read as its own review — only when the overview's month has no summary of
   // its own, and only one month back (RECENT_ACTIVITY_MONTH_GAP, the same bound the legacy fallback
   // above uses). 「8 月回顾」 over August's snapshot is true; the same lines under a September
@@ -238,17 +238,28 @@ export function monthHrefOf(month: string): string {
 
 // The overview for one month: its own summary when it has one, otherwise its published stories as
 // dated one-liners, plus the period those lines actually cover.
-function buildOverview(month: MonthChapter, summary: string | undefined, reference: RecencyReference): HomeOverview {
-  const age = month.ageLabel ? ` · 当时 ${month.ageLabel}` : "";
+function buildOverview(month: MonthChapter, summary: string | undefined, reference: RecencyReference, birthDay?: string): HomeOverview {
   const days = month.memories.map((memory) => memory.signature.day).sort();
   const first = days[0];
   const last = days[days.length - 1];
-  // A snapshot is written about a whole month, so the month is the period it covers. Stories cover
-  // the days they happened on and nothing wider: 「9 月 1 日 — 9 月 3 日」 is the honest answer for a
-  // September that is twelve days old and has three published days in it.
+  // A snapshot is written about a whole month, so the month is the period it covers, and the age a
+  // month chapter carries (ageAtMonth, day-of-month ignored) is the right clock for it. Stories
+  // cover the days they happened on and nothing wider: 「9 月 1 日 — 3 日」 for a September that is
+  // twelve days old and has three published days in it.
+  //
+  // THE AGE ON A DAY RANGE IS COMPUTED FROM THE DAYS. It used to be the month's age, and on the
+  // deployed page that printed 「2026 年 9 月 1 日 — 3 日 · 当时 1 岁 8 个月」 directly above a story
+  // dated 9 月 1 日 that said 当时 1 岁 7 个月 — both from the same birth date, contradicting each
+  // other on one screen. He turns a month older on the 3rd (born on the 3rd), so 9 月 1 日 really is
+  // 1 岁 7 个月 and the range really does cross a birthday. The range now says so, and collapses to
+  // one age when both ends agree (原则二).
+  const firstAge = first ? ageOn(birthDay, first) : undefined;
+  const lastAge = last ? ageOn(birthDay, last) : undefined;
+  const rangeAge = firstAge && lastAge ? (firstAge === lastAge ? ` · 当时 ${firstAge}` : ` · 当时 ${firstAge} 到 ${lastAge}`) : "";
+  const monthAge = month.ageLabel ? ` · 当时 ${month.ageLabel}` : "";
   const spanLabel = summary || !first
-    ? `${month.label}${age}`
-    : first === last ? `${formatDay(first)}${age}` : `${daySpan(first, last)}${age}`;
+    ? `${month.label}${monthAge}`
+    : first === last ? `${formatDay(first)}${rangeAge}` : `${daySpan(first, last)}${rangeAge}`;
   // Recency is judged on the newest thing the month holds, however it arrived, not on the month
   // number: a September that has not been organised yet is not "最近" just because it is September.
   const newestDay = [month.memories[0]?.signature.day, month.photoDays[0]?.day, month.traceDays[0]?.day].filter(Boolean).sort().at(-1);

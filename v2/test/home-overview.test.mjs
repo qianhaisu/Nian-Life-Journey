@@ -50,7 +50,10 @@ test("the overview is September's own published days, and August's snapshot is n
   assert.equal(view.overview.month, "2026-09", "the overview is about the newest month that has lines to print");
   assert.equal(view.overview.summary, undefined, "September has no snapshot of its own, so none is quoted for it");
   assert.deepEqual(view.overview.facts.map((fact) => fact.id), ["sep-03", "sep-02", "sep-01"], "its own published days, newest first");
-  assert.equal(view.overview.spanLabel, "2026 年 9 月 1 日 — 3 日 · 当时 1 岁 8 个月", "the period the lines really cover, both clocks");
+  // He was born on the 3rd, so 9 月 1 日 is still 1 岁 7 个月 and the range crosses a birthday. The
+  // label says both ages rather than stamping the month's age over a day it is wrong for — the
+  // contradiction that shipped on 2026-09-13 and was caught on the deployed page.
+  assert.equal(view.overview.spanLabel, "2026 年 9 月 1 日 — 3 日 · 当时 1 岁 7 个月 到 1 岁 8 个月", "the period the lines really cover, both clocks");
   assert.equal(view.overview.recent, true);
   // August may only speak for August.
   assert.equal(view.priorReview.month, "2026-08");
@@ -63,6 +66,18 @@ test("a fact line carries no age of its own: two clocks are read once per block"
   const [fact] = home(productionShape()).overview.facts;
   assert.deepEqual(Object.keys(fact).sort(), ["dateLabel", "day", "id", "title"]);
   assert.equal(fact.dateLabel, "2026 年 9 月 3 日");
+});
+
+test("a range that does not cross a birthday collapses to one age, and a single day carries that day's", () => {
+  const s = store({
+    events: [
+      event("sep-10", "2026-09-10", { memoryWeight: "trace", title: "十号" }),
+      event("sep-08", "2026-09-08", { memoryWeight: "trace", title: "八号" }),
+    ],
+  });
+  assert.equal(home(s).overview.spanLabel, "2026 年 9 月 8 日 — 10 日 · 当时 1 岁 8 个月", "8th to 10th is one age, so it is said once");
+  const one = store({ events: [event("sep-10", "2026-09-10", { memoryWeight: "trace", title: "十号" })] });
+  assert.equal(home(one).overview.spanLabel, "2026 年 9 月 10 日 · 当时 1 岁 8 个月");
 });
 
 test("when the month has its own snapshot it is quoted, the span is the whole month, and no prior review appears", () => {
