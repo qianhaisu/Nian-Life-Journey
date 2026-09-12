@@ -122,6 +122,36 @@ test("the verified registry resolves all three confirmed speakers and nobody els
   assert.equal(relationshipForSender("c".repeat(64)), undefined);
 });
 
+// The Markdown export escapes the nanny's trailing dot and the JSON export does not, so the same
+// person arrives under two digests. The plain spelling is mapped only inside the conversation the
+// equivalence was demonstrated in (2026-09-12, the nursery class group, where both exports cover
+// the same day); everywhere else it stays unknown.
+test("育儿嫂未转义的显示名只在被证实的那个会话里解析，别处仍是未知", async () => {
+  const { FAMILY_REGISTRY } = await import("../lib/organizer/family-registry.ts");
+  const { DAYCARE_CONVERSATION } = await import("../lib/organizer/subject-gate.ts");
+  const plain = senderDigestForDisplayName("hxx.");
+  const escaped = senderDigestForDisplayName(NANNY_EXPORT_NAME);
+  assert.notEqual(plain, escaped, "the two spellings must hash apart — that is the whole problem");
+
+  const inDaycare = resolveSpeaker(plain, FAMILY_REGISTRY, { conversationId: DAYCARE_CONVERSATION });
+  assert.equal(displayLabelFor(inDaycare), "雪姨");
+  assert.equal(inDaycare.canonicalPersonId, "person-xueyi");
+
+  const elsewhere = resolveSpeaker(plain, FAMILY_REGISTRY, { conversationId: "conversation:e6adbcafc3c6e32be0494251" });
+  assert.equal(elsewhere.known, false, "小雪微信群 carries the same digest and is NOT part of this mapping");
+  assert.equal(displayLabelFor(elsewhere), UNKNOWN_SPEAKER_LABEL);
+  assert.equal(resolveSpeaker(plain, FAMILY_REGISTRY).known, false, "a caller that does not say where it is gets nothing");
+
+  // Resolved inside that conversation, the two spellings are one person: same canonical id, so the
+  // same speakerKey, which is what corroboration counting groups on.
+  assert.equal(inDaycare.speakerKey, resolveSpeaker(escaped, FAMILY_REGISTRY).speakerKey);
+  // distinctSpeakerCount() takes no conversation, so it cannot see a scoped entry and would count
+  // the two spellings as two speakers. That is not reachable today — an evidence window is built
+  // from one conversation, and each export writes only one of the two spellings — but it is the
+  // reason this assertion states the limit instead of pretending it away.
+  assert.equal(distinctSpeakerCount([plain, escaped], FAMILY_REGISTRY), 2);
+});
+
 test("父母与育儿嫂的转述都算亲历观察，未知发言人不算", async () => {
   const { classifyTier } = await import("../lib/organizer/evidence/tier.ts");
   const base = { id: "s", profileId: "p", sourceType: "wechat", contentTypes: ["family"], contributorId: "c", capturedAt: "2026-08-20T10:00:00+08:00", mediaIds: [], visibility: "family", sourceLabel: "conv" };

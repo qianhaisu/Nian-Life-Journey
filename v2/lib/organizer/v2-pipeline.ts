@@ -75,8 +75,13 @@ export type PipelineOptions = {
   now?: () => string;
 };
 
-const identityOfWith = (registry: IdentityRegistry | undefined) => (digest: string): NarrativePerson => {
-  const speaker = resolveSpeaker(digest, registry);
+// The conversation has to travel with the digest. A registry entry can be scoped to the
+// conversations it was confirmed for (identity.ts, ParticipantIdentity.conversationIds), and
+// resolveSpeaker deliberately refuses a scoped entry when the caller does not say where it is —
+// so a curried lookup that forgot the conversation would silently leave those speakers unnamed in
+// the one place naming matters, the Writer's evidence package. claim-grounding.ts already passes it.
+const identityOfWith = (registry: IdentityRegistry | undefined, conversationId?: string) => (digest: string): NarrativePerson => {
+  const speaker = resolveSpeaker(digest, registry, { conversationId });
   return { speakerDigest: digest, known: speaker.known, canonicalPersonId: speaker.canonicalPersonId, narrativeLabel: speaker.narrativeLabel, relationshipToSubject: speaker.relationshipToSubject };
 };
 
@@ -90,7 +95,6 @@ export function createDeepSeekV2Pipeline(env: NodeJS.ProcessEnv, options: Pipeli
   const subject = options.subject ?? { primaryName: PRODUCTION_SUBJECT.primaryName, aliases: [...PRODUCTION_SUBJECT.aliases] };
   const registry = options.registry ?? FAMILY_REGISTRY;
   const baseOptions = { registry, singleChildHousehold: true };
-  const identityOf = identityOfWith(registry);
   const now = options.now ?? (() => new Date().toISOString());
   // The worker is the async path — a generous ceiling here is not the "raise AI_TIMEOUT_MS until it
   // stops failing" anti-pattern the sync capture route suffered from, because nobody is waiting on
@@ -138,7 +142,7 @@ export function createDeepSeekV2Pipeline(env: NodeJS.ProcessEnv, options: Pipeli
         grounding: judgment.grounding,
         selectedBy: { policyId: judgment.routingPolicyId, action: judgment.outcome.action, worthinessScore: judgment.outcome.worthinessScore ?? 0 },
         subject: { ...subject, narrativeLabel: subject.primaryName, birthDate },
-        identityOf,
+        identityOf: identityOfWith(registry, window.conversationId),
         quotableLines: (judgment.verdict.quotableLines ?? []).map((line) => ({ text: line.text, evidenceRef: line.evidenceRef, speakerRole: line.speakerRole })),
         longitudinal: [],
         lifeDate: shanghaiCalendarDate(window.timeRange.from),

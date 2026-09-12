@@ -127,9 +127,12 @@ console.log(`Loaded ${rows.length} wechat sources.`);
 // literally "family", which is why every sentence it wrote began 家人 — the model was repeating what
 // it had been handed. An unresolved speaker keeps its per-speaker pseudonym, so the writer can tell
 // two unknown people apart without being able to name either.
-const roleOf = (metadata, contributorId) => {
+// The conversation travels with the digest: a registry entry can be scoped to the conversations it
+// was confirmed for, and resolveSpeaker refuses a scoped entry when the caller does not say where
+// it is — so without this a scoped speaker reads as unknown here while the write path names them.
+const roleOf = (metadata, contributorId, conversationId) => {
   const digest = String(metadata?.senderDigest ?? contributorId ?? "");
-  const speaker = resolveSpeaker(digest, FAMILY_REGISTRY);
+  const speaker = resolveSpeaker(digest, FAMILY_REGISTRY, { conversationId });
   return speaker.known ? speaker.narrativeLabel : undefined;
 };
 
@@ -139,7 +142,7 @@ for (const row of rows) {
   byConversation.get(row.source_label).push({
     id: row.id, profileId: row.profile_id, sourceType: row.source_type, contentTypes: row.content_types,
     contributorId: String(row.metadata?.senderDigest ?? row.contributor_id),
-    contributorRole: roleOf(row.metadata, row.contributor_id),
+    contributorRole: roleOf(row.metadata, row.contributor_id, row.source_label),
     capturedAt: row.captured_at instanceof Date ? row.captured_at.toISOString() : String(row.captured_at),
     text: row.text ?? "", mediaIds: row.media_ids ?? [], visibility: row.visibility, metadata: row.metadata,
     sourceLabel: row.source_label, lifeDate: row.life_date,
@@ -204,8 +207,8 @@ async function callWriter(pkg) {
   return { output: { contractVersion: "writer-v2-output-contract-v1", ...tool.input }, usage: payload.usage };
 }
 
-const identityOf = (digest) => {
-  const s = resolveSpeaker(digest, FAMILY_REGISTRY);
+const identityOfIn = (conversationId) => (digest) => {
+  const s = resolveSpeaker(digest, FAMILY_REGISTRY, { conversationId });
   return { speakerDigest: digest, known: s.known, canonicalPersonId: s.canonicalPersonId, narrativeLabel: s.narrativeLabel, relationshipToSubject: s.relationshipToSubject };
 };
 
@@ -258,7 +261,7 @@ for (const item of work) {
   const pkg = buildEvidencePackage({
     window: item.w, windowFingerprint: item.fp, grounding,
     selectedBy: { policyId: "t7-subject-gate", action: "daily_trace", worthinessScore: 0 },
-    subject: { ...SUBJECT, narrativeLabel: "张年" }, identityOf,
+    subject: { ...SUBJECT, narrativeLabel: "张年" }, identityOf: identityOfIn(item.w.conversationId),
     quotableLines: (verdict.quotableLines ?? []).map((q) => ({ text: q.text, evidenceRef: q.evidenceRef, speakerRole: q.speakerRole })),
     longitudinal: [], lifeDate: item.lifeDate,
   });

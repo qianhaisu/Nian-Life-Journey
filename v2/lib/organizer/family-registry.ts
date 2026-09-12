@@ -9,6 +9,10 @@
 // @-mentions her as 苏静. Those are one person, which is exactly why canonicalPersonId exists —
 // evidence from both spellings must count as one speaker, not two corroborating witnesses.
 import { senderDigestForDisplayName, type IdentityRegistry } from "./identity";
+// One conversation id is named below by a scoped entry. Taken from the gate's own constant rather
+// than copied, so the two files cannot drift; subject-gate imports nothing at runtime, so this adds
+// no cycle.
+import { DAYCARE_CONVERSATION } from "./subject-gate";
 
 /**
  * People who appear by NAME in the chats and are not 张年. Teddy-supplied facts, exactly like the
@@ -56,6 +60,35 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       canonicalPersonId: "person-xueyi",
       relationshipToSubject: "nanny",
       narrativeLabel: "雪姨",
+    },
+    {
+      // The same display name, unescaped — which is the ONLY difference between the two entries.
+      // WeFlow's Markdown transcript escapes the trailing dot in the message header ("hxx\.") and
+      // its JSON writes the name plain ("hxx."); the two spellings hash to two digests
+      // (11661f9a… and 10db6101…), so the same person arrives under two join keys depending on
+      // which file an import read. identity.ts's displayNameVariants() has always known about this
+      // pair; what it could not do is decide that the person behind them is the same one, which is
+      // a claim about a real family and belongs here.
+      //
+      // The evidence, taken on 2026-09-12 over the one window where both exports cover the same
+      // conversation (2026-09-04, the only day 雪姨 speaks in it): all 8 of her Markdown messages
+      // have exactly one JSON message at the same second and its sender is "hxx." — no other
+      // candidate at any of those seconds; 5 of the 8 agree character for character after undoing
+      // the Markdown punctuation escaping, including 「下次换一种说话方式试试，"小年和妈妈比赛看看
+      // 谁先走到学校好吗？"」; a 6th is the same quoted reply serialised two ways (`> 小年妈妈: …`
+      // against `…[引用 小年妈妈：…]`, JSON kind 引用消息). The remaining 2 are sticker placeholders
+      // and are NOT counted — a placeholder matching a placeholder proves nothing. The mapping is a
+      // bijection in both directions across every overlapping message.
+      //
+      // Scoped to the nursery class group's JSON conversation, the one it was proven in. The same
+      // plain digest also sits on 118 messages in 小雪微信群 (conversation:e6adbcaf…); whether that
+      // is the same person is not something this file may infer, so those stay unnamed.
+      sourceParticipantDigest: senderDigestForDisplayName("hxx."),
+      displayName: "hxx.",
+      canonicalPersonId: "person-xueyi",
+      relationshipToSubject: "nanny",
+      narrativeLabel: "雪姨",
+      conversationIds: [DAYCARE_CONVERSATION],
     },
     {
       // Teddy, 2026-09-04: 陈亚萍 is 张年's grandmother. This supersedes the earlier "low value"
