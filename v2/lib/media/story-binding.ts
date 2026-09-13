@@ -126,20 +126,67 @@ export const PHOTO_SUBJECT_REVIEW_KIND = "media_subject_check";
 
 /**
  * The photographs somebody opened and recorded as being of this child. Reads the same slice of the
- * review ledger the pages already load, and ignores anything that is not an approved row of that
- * exact kind naming exactly one media id.
+ * review ledger the pages already load, and ignores anything that is not a row of that exact kind
+ * naming exactly one media id.
+ *
+ * THE LATEST DECISION WINS, and 2026-09-13 is when that started being true. This function used to
+ * be `for (…) if (approved) checked.add(id)` — every approved row counted forever, so a later
+ * `rejected` for the same picture could not take it back, while `storyPhotoConfirmationsFrom()` two
+ * screens down had always taken the latest. Two readers of one ledger disagreeing about what a
+ * withdrawal means is the same class of fault as the publication gate's (commit c8de1ea), and this
+ * side of it mattered more from the moment this set began deciding what is shown by default rather
+ * than only what may open a section.
+ *
+ * It changes nothing today: production holds 2 approved rows of this kind and no rejections
+ * (exposure-evidence.json, 601 photographs). It decides whether a withdrawal written tomorrow is
+ * honoured.
  */
 export function checkedPhotoIdsFrom(
-  reviews: ReadonlyArray<{ targetKind?: string | null; targetId?: string | null; decision?: unknown }>,
+  reviews: ReadonlyArray<{ id?: string | null; targetKind?: string | null; targetId?: string | null; decision?: unknown; reviewedAt?: string | null }>,
 ): ReadonlySet<string> {
-  const checked = new Set<string>();
+  const latest = new Map<string, { decision: unknown; rank: string }>();
   for (const review of reviews) {
     if (review.targetKind !== PHOTO_SUBJECT_REVIEW_KIND) continue;
-    if (review.decision !== "approved") continue;
     const id = (review.targetId ?? "").trim();
-    if (id && !id.includes("|")) checked.add(id);
+    // A subject check names one picture. A `|` means it is a (story, photograph) pair — a
+    // media_binding row filed under the wrong kind — and it is not evidence about the picture.
+    if (!id || id.includes("|")) continue;
+    const rank = `${review.reviewedAt ?? ""}|${review.id ?? ""}`;
+    const held = latest.get(id);
+    if (!held || rank > held.rank) latest.set(id, { decision: review.decision, rank });
   }
+  const checked = new Set<string>();
+  for (const [id, held] of latest) if (held.decision === "approved") checked.add(id);
   return checked;
+}
+
+/**
+ * May this picture be drawn as part of THIS story — as its illustration or its hero?
+ *
+ * Deliberately narrower than `isStoryAssociated()`, and the difference is the whole point. That
+ * function answers "is there a recorded relation between these words and this picture", and its
+ * Basis A says yes whenever the file arrived in one of the messages the story was written from —
+ * true, useful, and produced by nobody looking at anything. Basis B is the Organizer's own adoption
+ * of a binding, which is likewise not a person.
+ *
+ * The question a display gate has to answer is different: did a PERSON decide this picture belongs
+ * beside these words. Only Basis C is that, so only Basis C is accepted here (总指挥 2026-09-13:
+ * 「Basis A 和 confirmed 集合不能独立充当人工审核证明」).
+ *
+ * `storyPhotoConfirmationsFrom()` already resolves withdrawals by taking each pair's latest
+ * decision, so a binding taken back stops being displayable here without anything else changing.
+ *
+ * What this is NOT: a claim about the content of the picture. A binding says "these two belong
+ * together", not "this is a photograph of this child" — that is `media_subject_check`, read by
+ * `checkedPhotoIdsFrom()`. Neither stands in for the other, which is why the two are separate
+ * functions rather than one merged privilege.
+ */
+export function isReviewedForStoryDisplay(
+  event: Pick<LifeEvent, "id">,
+  media: Pick<Media, "id">,
+  confirmations?: StoryPhotoConfirmations,
+): boolean {
+  return Boolean(confirmations?.has(storyPhotoKey(event.id, media.id)));
 }
 
 /** One confirmation, addressed to exactly one (story, photograph) pair. */
@@ -271,4 +318,23 @@ export function storyAssociatedMedia<T extends Pick<Media, "id" | "rawSourceId">
   confirmations?: StoryPhotoConfirmations,
 ): T[] {
   return media.filter((item) => isStoryAssociated(event, item, confirmations));
+}
+
+/**
+ * The subset that may actually be DRAWN beside this story — reviewed bindings only.
+ *
+ * Kept separate from `storyAssociatedMedia()` on purpose. That one answers the archive's question
+ * ("is there a recorded relation"), which Basis A can satisfy by arrival position alone; this one
+ * answers the page's ("did a person put this picture beside these words"), which only Basis C can.
+ * Two questions, two functions, so a future caller cannot reach for the loose one by accident and
+ * put an unreviewed picture in front of the family.
+ *
+ * 总指挥 2026-09-13: 「Basis A 和 confirmed 集合不能独立充当人工审核证明」.
+ */
+export function storyDisplayMedia<T extends Pick<Media, "id" | "rawSourceId">>(
+  event: AssociationEvent,
+  media: T[],
+  confirmations?: StoryPhotoConfirmations,
+): T[] {
+  return media.filter((item) => isReviewedForStoryDisplay(event, item, confirmations));
 }

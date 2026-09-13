@@ -25,13 +25,26 @@ const trust = (media) => ({ confirmed: new Set(), trusted: new Set(media.map((m)
 const monthOf = (input, month) => findMonth(buildChapters({ events: [], traces: [], media: [], birthDay: BIRTH, ...input }), month);
 const review = (id, decision) => ({ id: `r-${id}`, profileId: "p", targetKind: "life_event", targetId: id, decision });
 
-test("gate 1 — a published story whose picture is part of its own material does show it", () => {
+test("gate 1 — arrival position alone no longer earns the story slot; a reviewed binding does", () => {
+  // 2026-09-13, 照片展示隔离. Until today this gate accepted Basis A: the file arrived in one of the
+  // messages the story was written from, so it could be drawn as that story's picture. That is a
+  // real relation and it is not a review — nobody had looked at the frame. Publishing 133 approved
+  // paragraphs would have carried pictures onto story cards on that basis alone.
+  //
+  // Both halves are asserted here, because the gate is only meaningful if the second one holds too.
   const own = photo("its-own", "2026-08-19T08:00:00.000Z");
-  const composition = buildMonthComposition(
-    monthOf({ media: [own], events: [event("published", "2026-08-19 00:00:00+00", ["its-own"], { heroMediaId: "its-own" })] }, "2026-08"),
+  const story = event("published", "2026-08-19 00:00:00+00", ["its-own"], { heroMediaId: "its-own" });
+
+  const unreviewed = buildMonthComposition(monthOf({ media: [own], events: [story] }, "2026-08"), trust([own]));
+  const withoutReview = unreviewed.chapter.find((m) => m.memory?.id === "published");
+  assert.equal(withoutReview.memory.lead, undefined, "Basis A on its own draws nothing");
+  assert.equal(withoutReview.hero, undefined, "and it cannot come back as a moment hero either");
+
+  const reviewedComposition = buildMonthComposition(
+    monthOf({ media: [own], events: [story], photoConfirmations: new Set(["published|its-own"]) }, "2026-08"),
     trust([own]));
-  const moment = composition.chapter.find((m) => m.memory?.id === "published");
-  assert.equal(moment.memory.lead.id, "its-own", "association is what earns the slot, and it does earn it");
+  const moment = reviewedComposition.chapter.find((m) => m.memory?.id === "published");
+  assert.equal(moment.memory.lead.id, "its-own", "a person recorded that this picture belongs to these words");
   assert.equal(moment.memory.noPhoto, false);
 });
 
@@ -71,6 +84,10 @@ test("gate 4 — a story with no association borrows nothing, and the day's phot
     [...composition.dayPhotoGroups, ...composition.archiveDays].flatMap((d) => d.photos.map((p) => p.id)),
     ["of-that-day"],
     "it is still one of the month's photographs, just not this story's");
-  assert.deepEqual(composition.dayPhotoGroups.map((d) => d.day), ["2026-08-20"],
-    "…and it is read under the day it belongs to, outside the story's card");
+  // 2026-09-13: it stays in 「这个月的照片」 rather than being lifted into 「这一天的照片」. Nobody has
+  // opened it, and publishing the day's words is not a review of the day's pictures — so the story
+  // appearing changes where its day's photographs are read exactly not at all.
+  assert.deepEqual(composition.dayPhotoGroups, [], "an unchecked photograph is not promoted by a story");
+  assert.deepEqual(composition.archiveDays.map((d) => d.day), ["2026-08-20"],
+    "…it is still read under its own day, in the album it was already in");
 });

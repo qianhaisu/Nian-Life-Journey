@@ -29,12 +29,28 @@ function trace(id, occurredAt, entries) {
 function event(id, occurredAt, mediaIds = [], extra = {}) {
   return { id, profileId: "p", title: `记忆 ${id}`, story: "一段真实的故事。", occurredAt, people: [], tags: [], contentTypes: ["family"], mediaIds, sourceIds: mediaIds.map(sourceOf), growthRecordIds: [], careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"], visibility: "family", keptInYearbook: false, ...extra };
 }
+// SOURCE TRUST ONLY — the file came from the family's own album or a confirmed group, and nobody
+// has opened it. Since 2026-09-13 this is deliberately NOT enough for any default-reading surface:
+// it keeps a picture in 「这个月的照片」 and keeps it out of day groups, covers and story cards.
 const trust = (media) => ({ confirmed: new Set(), trusted: new Set(media.map((item) => item.id)) });
+// Source-trusted AND subject-checked: somebody opened each file and recorded what is in it
+// (media_subject_check). This is what a test should use when the thing under test is ordering,
+// de-duplication or counting rather than the review gate itself — otherwise the gate silently
+// empties the fixture and the assertion stops testing what it names.
+const reviewed = (media, looked = media) => ({
+  confirmed: new Set(),
+  trusted: new Set(media.map((item) => item.id)),
+  checked: new Set(looked.map((item) => item.id)),
+});
 // The month's photographs wherever they are read: a chapter day's pictures travel with the day
 // (「这一天的照片」), the rest stay in 「这个月的照片」. A picture is in exactly one of the two.
 const monthPhotoIds = (composition) =>
   [...composition.dayPhotoGroups, ...composition.archiveDays].flatMap((day) => day.photos.map((item) => item.id));
 const monthOf = (input, month) => findMonth(buildChapters({ events: [], traces: [], media: [], birthDay: BIRTH, ...input }), month);
+// An approved `media_binding` row: a person opened this picture and recorded that it belongs to
+// this story. Since 2026-09-13 this — Basis C — is the ONLY thing that puts a photograph on a
+// story card; arrival position (Basis A) is a real relation but nobody looked at it.
+const bound = (...pairs) => new Set(pairs.map(([eventId, mediaId]) => `${eventId}|${mediaId}`));
 
 test("tiny production sizes never gain publication privilege anywhere, and stay counted in the archive", () => {
   // Real rows: 20x20 icons (2026-08), 67x120 stickers (2025-10), 21x16 / 45x81 fragments.
@@ -190,7 +206,7 @@ test("a trusted photo does NOT bind beside same-day trace text (T11 Part C, reve
   // what the sentence says — and set directly under the words, that is what a reader takes it for.
   const media = [photo("m", "2026-08-05T08:00:00.000Z")];
   const traces = [trace("t", "2026-08-05 00:00:00", ["第一次自己扶着栏杆站了一会儿"])];
-  const composition = buildMonthComposition(monthOf({ media, traces }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media, traces }, "2026-08"), reviewed(media));
   const textMoment = composition.chapter[0];
   assert.equal(textMoment.kind, "text_led");
   assert.equal(textMoment.hero, undefined, "the day's words read on their own");
@@ -219,7 +235,7 @@ test("a published memory's own lead is the month's face, above loose photography
   const loose = photo("loose", "2026-08-20T08:00:00.000Z");
   const media = [lead, loose];
   const events = [event("e", "2026-08-14 00:00:00+00", ["lead"], { heroMediaId: "lead" })];
-  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media, events, photoConfirmations: bound(["e", "lead"]) }, "2026-08"), reviewed(media));
   assert.equal(composition.mode, "memory");
   assert.equal(composition.cover.id, "lead");
   assert.equal(composition.chapter[0].kind, "memory_led");
@@ -258,7 +274,7 @@ test("/memory previews come from the composition: vouched pictures or none — n
   const trusted = [photo("tp-1", "2026-08-27T08:00:00.000Z"), photo("tp-2", "2026-08-20T08:00:00.000Z")];
   const untrusted = [photo("wx-1", "2026-07-10T08:00:00.000Z")];
   const chapters = buildChapters({ events: [], traces: [], media: [...trusted, ...untrusted], birthDay: BIRTH });
-  const index = buildMemoryIndex(chapters, DEFAULT_MEMORY_IA_POLICY, trust(trusted));
+  const index = buildMemoryIndex(chapters, DEFAULT_MEMORY_IA_POLICY, reviewed(trusted));
   const aug = index.years[0].months.find((month) => month.chapter.month === "2026-08");
   assert.deepEqual(aug.preview.map((item) => item.id), ["tp-1", "tp-2"], "newest vouched pictures");
   const jul = index.years[0].months.find((month) => month.chapter.month === "2026-07");
@@ -280,13 +296,13 @@ test("no story on the month page carries a borrowed photo, and an associated lea
     event("reviewed-text-only", "2026-08-19 00:00:00+00", ["meal-board"], { heroMediaId: NO_HERO_MEDIA_ID }),
     event("normal-same-day", "2026-08-19 00:00:00+00", ["other-story"], { heroMediaId: "other-story" }),
   ];
-  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media, events, photoConfirmations: bound(["normal-same-day", "other-story"]) }, "2026-08"), reviewed(media));
 
-  const reviewed = composition.chapter.find((moment) => moment.memory?.id === "reviewed-text-only");
-  assert.equal(reviewed.memory.noPhoto, true, "the sentinel is carried into the composition layer");
-  assert.equal(reviewed.memory.lead, undefined);
-  assert.equal(reviewed.hero, undefined, "no borrowed hero on a story reviewed as text-only");
-  assert.deepEqual(reviewed.supporting, [], "…and no borrowed thumbnails beside it either");
+  const textOnly = composition.chapter.find((moment) => moment.memory?.id === "reviewed-text-only");
+  assert.equal(textOnly.memory.noPhoto, true, "the sentinel is carried into the composition layer");
+  assert.equal(textOnly.memory.lead, undefined);
+  assert.equal(textOnly.hero, undefined, "no borrowed hero on a story reviewed as text-only");
+  assert.deepEqual(textOnly.supporting, [], "…and no borrowed thumbnails beside it either");
   // Belt and braces: no memory moment anywhere carries moment-level photography any more.
   for (const moment of composition.chapter) {
     assert.equal(moment.hero, undefined, `${moment.kind} moment must not borrow a hero`);
@@ -313,7 +329,7 @@ test("a story with no associated photo is text-only, even when the day is full o
   // month's own photography, both as their own day and in the archive layer.
   const dayPhoto = photo("day-photo", "2026-08-20T03:00:00.000Z");
   const events = [event("no-associated-media", "2026-08-20 00:00:00+00", ["day-photo"], { sourceIds: ["chat-text-only"], heroMediaId: "day-photo" })];
-  const composition = buildMonthComposition(monthOf({ media: [dayPhoto], events }, "2026-08"), trust([dayPhoto]));
+  const composition = buildMonthComposition(monthOf({ media: [dayPhoto], events }, "2026-08"), reviewed([dayPhoto]));
   const moment = composition.chapter.find((item) => item.memory?.id === "no-associated-media");
   assert.equal(moment.memory.noPhoto, false, "no review decision was made here — evidence is simply missing");
   assert.equal(moment.memory.lead, undefined, "heroMediaId alone does not make a picture this story's");
@@ -402,7 +418,7 @@ test("a chapter day's photographs are read on that day, and are not also left in
   ];
   // The archive's ordinary shape: written from chat text, pictures arrived separately.
   const events = [event("story", "2026-08-19 00:00:00+00", [], { sourceIds: ["chat-text"] })];
-  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), reviewed(media));
 
   assert.deepEqual(composition.dayPhotoGroups.map((day) => [day.day, day.photos.map((p) => p.id)]),
     [["2026-08-19", ["story-day-1", "story-day-2"]]],
@@ -430,7 +446,7 @@ test("a story that says it has no photograph still shows none, and the day group
   // month's photographs and is read under the date, which is the only relation it actually has.
   const dayPhoto = photo("the-day", "2026-08-21T06:00:00.000Z");
   const events = [event("withdrawn", "2026-08-21 00:00:00+00", ["the-day"], { sourceIds: [sourceOf("the-day")], heroMediaId: NO_HERO_MEDIA_ID })];
-  const composition = buildMonthComposition(monthOf({ media: [dayPhoto], events }, "2026-08"), trust([dayPhoto]));
+  const composition = buildMonthComposition(monthOf({ media: [dayPhoto], events }, "2026-08"), reviewed([dayPhoto]));
 
   const moment = composition.chapter.find((item) => item.memory?.id === "withdrawn");
   assert.equal(moment.memory.noPhoto, true);
@@ -456,18 +472,17 @@ test("a photograph the month's photo section would withhold is not admitted by a
 });
 
 test("a story's own lead photograph is not repeated in that day's group", () => {
-  // Basis A: the picture arrived in one of the very sources the story was written from, so it reads
-  // inside the story as its lead. It is also one of the day's vouched photographs, which is how it
+  // A reviewed binding (Basis C) puts the picture inside the story as its lead. It is also one of the day's vouched photographs, which is how it
   // ended up rendered twice on one screen — once in the card, once again a few centimetres below
   // under 「这一天的照片」. The day group is the day's OTHER pictures; the lead has already been read.
   const lead = photo("written-from-this", "2026-08-21T03:00:00.000Z");
   const alsoThatDay = photo("just-the-same-day", "2026-08-21T07:00:00.000Z");
   const media = [lead, alsoThatDay];
   const events = [event("story", "2026-08-21 00:00:00+00", ["written-from-this"], { heroMediaId: "written-from-this" })];
-  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media, events, photoConfirmations: bound(["story", "written-from-this"]) }, "2026-08"), reviewed(media));
 
   const moment = composition.chapter.find((item) => item.memory?.id === "story");
-  assert.equal(moment.memory.lead?.id, "written-from-this", "Basis A still puts it inside the story");
+  assert.equal(moment.memory.lead?.id, "written-from-this", "the reviewed binding puts it inside the story");
   assert.deepEqual(composition.dayPhotoGroups.map((d) => d.photos.map((p) => p.id)), [["just-the-same-day"]],
     "the day group shows the rest of the day, not the picture already read above");
   // Still nothing lost: both are read, and the group does not repeat what the card drew. (Not the
@@ -492,7 +507,7 @@ test("only the picture the card actually shows is held back — the rest of the 
     sourceIds: [sourceOf("shown-as-lead"), sourceOf("associated-but-not-shown")],
     heroMediaId: "shown-as-lead",
   })];
-  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media, events, photoConfirmations: bound(["story", "shown-as-lead"], ["story", "associated-but-not-shown"]) }, "2026-08"), reviewed(media));
 
   const moment = composition.chapter.find((item) => item.memory?.id === "story");
   assert.equal(moment.memory.lead?.id, "shown-as-lead", "one picture is drawn in the card");
@@ -513,7 +528,7 @@ test("one photograph led by two stories is drawn once per story — the page-wid
     event("first", "2026-08-23 00:00:00+00", ["written-from-by-both"], { heroMediaId: "written-from-by-both" }),
     event("second", "2026-08-23 00:00:00+00", ["written-from-by-both"], { heroMediaId: "written-from-by-both" }),
   ];
-  const composition = buildMonthComposition(monthOf({ media: [shared], events }, "2026-08"), trust([shared]));
+  const composition = buildMonthComposition(monthOf({ media: [shared], events, photoConfirmations: bound(["first", "written-from-by-both"], ["second", "written-from-by-both"]) }, "2026-08"), reviewed([shared]));
 
   const leads = composition.chapter.filter((m) => m.memory).map((m) => m.memory.lead?.id);
   assert.deepEqual(leads, ["written-from-by-both", "written-from-by-both"],
@@ -534,7 +549,7 @@ test("a day's photographs read before the things shaped like a phone screen, and
   const second = photo("another-photograph", day, { width: 1706, height: 1280 });
   const media = [capture, first, wideCapture, second];
   const events = [event("has-words", "2026-08-23 00:00:00+00", [], { sourceIds: [] })];
-  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), reviewed(media));
 
   const group = composition.dayPhotoGroups.find((d) => d.day === "2026-08-23");
   assert.deepEqual(group.photos.map((p) => p.id),
@@ -550,7 +565,7 @@ test("a day of nothing but captures is left exactly as it was — the signal onl
     photo("cap-2", day, { width: 1080, height: 2400 }),
   ];
   const events = [event("words", "2026-08-24 00:00:00+00", [], { sourceIds: [] })];
-  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-08"), reviewed(media));
   const group = composition.dayPhotoGroups.find((d) => d.day === "2026-08-24");
   assert.deepEqual(group.photos.map((p) => p.id), ["cap-1", "cap-2"]);
 });
@@ -586,11 +601,16 @@ test("an album picture nothing can vouch for as a story's own does not open 「�
   assert.ok(composition.quietDays.some((day) => day.day === "2025-11-01"), "…and the day is still named on the page");
 });
 
-test("a picture a reviewer recorded as a story's own may open the section, and nothing is demoted", () => {
-  const confirmedPhoto = photo("reviewed-and-recorded", "2025-11-01T08:00:00.000Z");
+test("a picture somebody opened and recorded may open the section; a story binding does not qualify", () => {
+  // 2026-09-13. This test used to accept `confirmed` here — Bases A/B/C — on the reading that all
+  // three are somebody vouching. They are not the same claim: A is arrival position, B is the
+  // Organizer's own adoption, and even C says only that a picture belongs to some WORDS. The
+  // page-width opening slot asserts what the picture IS, and the one record that says so is
+  // media_subject_check (总指挥: 故事绑定不能替代主体/内容审核).
+  const checkedPhoto = photo("reviewed-and-recorded", "2025-11-01T08:00:00.000Z");
   const later = photo("a-later-day", "2025-11-07T08:00:00.000Z");
-  const media = [confirmedPhoto, later];
-  const privilege = { confirmed: new Set(["reviewed-and-recorded"]), trusted: new Set(media.map((item) => item.id)) };
+  const media = [checkedPhoto, later];
+  const privilege = { confirmed: new Set(), trusted: new Set(media.map((item) => item.id)), checked: new Set(["reviewed-and-recorded"]) };
   const composition = buildMonthComposition(
     monthOf({ media }, "2025-11"),
     privilege,

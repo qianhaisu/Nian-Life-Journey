@@ -8,7 +8,7 @@
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { NO_HERO_MEDIA_ID, heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
-import { storyAssociatedMedia, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
+import { storyDisplayMedia, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
 
@@ -121,7 +121,10 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
   // Sharing a calendar day is not that, and neither is being named by heroMediaId — that column
   // records an earlier same-day selection, not evidence. Text-only is a valid memory; the event's
   // other pictures are untouched and appear as the month's photographs instead.
-  const associated = storyAssociatedMedia(event, media, confirmations);
+  // 2026-09-13: reviewed bindings only (storyDisplayMedia). Arrival position — a picture that came
+  // in one of the messages the story was written from — is a real relation but nobody looked at it,
+  // and a lead photograph is the strongest claim this page makes about a picture.
+  const associated = storyDisplayMedia(event, media, confirmations);
   const lead = heroCandidates(event.heroMediaId, associated)[0];
   return {
     id: event.id,

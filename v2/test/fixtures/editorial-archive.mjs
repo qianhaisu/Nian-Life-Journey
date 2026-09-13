@@ -65,3 +65,11 @@ export function buildFixture() {
 
   return { media, events, traces };
 }
+
+// Every (story, photograph) pair in the fixture, as an approved `media_binding` — the shape of an
+// archive whose story pictures have been through review. Since 2026-09-13 a lead photo needs one
+// (lib/media/story-binding.ts isReviewedForStoryDisplay); without it these fixtures would silently
+// render text-only and the tests above would stop testing what they name.
+export function reviewedBindings(events) {
+  return new Set(events.flatMap((item) => item.mediaIds.map((mediaId) => `${item.id}|${mediaId}`)));
+}

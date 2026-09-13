@@ -46,6 +46,31 @@ export function isPrivileged(ref: Pick<MediaRef, "id">, privilege: MediaPrivileg
   return privilege.confirmed.has(ref.id) || privilege.trusted.has(ref.id);
 }
 
+/**
+ * Did a person open THIS picture and record what is in it (`media_subject_check`, approved, latest
+ * decision winning — lib/media/story-binding.ts checkedPhotoIdsFrom).
+ *
+ * 2026-09-13. Why this became a gate rather than a tiebreak. `isPrivileged` answers "may this
+ * picture be part of the month's photography", and its `trusted` half is a statement about the
+ * SOURCE: `isTrustedPhotoSource()` looks at which album or which confirmed group a file arrived
+ * from and, in its own words, "never what is in it". That was a sound rule while it only decided
+ * what sat inside 「这个月的照片」, an album the family opens on purpose.
+ *
+ * It stopped being sound when publishing a story started moving photographs OUT of that album and
+ * into the day's own group, which is default reading. Approving a paragraph of text then promoted
+ * pictures nobody had looked at: measured across R1–R4, 85 photographs entered the initial HTML
+ * and 211 became reachable, of which exactly 2 in the whole 601-photograph set carry a subject
+ * check (exposure-evidence.json). Publishing words is not a review of pictures, and no amount of
+ * source trust makes it one.
+ *
+ * So the surfaces that publication can move a picture INTO now ask for this, and only this. A
+ * picture without it is not hidden, not rejected and not deleted — it stays in the album it was
+ * already in, which is where it was before the story was published.
+ */
+export function isSubjectChecked(ref: Pick<MediaRef, "id">, privilege: MediaPrivilege): boolean {
+  return Boolean(privilege.checked?.has(ref.id));
+}
+
 // A hero is a page-width image: it must be big enough AND vouched for.
 export function heroEligibleRef(ref: MediaRef, privilege: MediaPrivilege): boolean {
   return heroSized(ref) && isPrivileged(ref, privilege);
@@ -242,9 +267,14 @@ function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMo
 // hidden: a demoted day keeps every one of its photographs under its own date in 「这个月的照片」
 // (`archiveDays` below already holds them — a chronicle day's pictures were always there), and it is
 // named in the quiet-day line above that section, so the cat is still one click from where it was.
+// 2026-09-13: `confirmed` no longer opens this section either. It used to, on the reading that
+// Bases A/B/C are all "somebody vouched" — but A is arrival position and B is the Organizer's own
+// adoption, neither of which is a person looking at a frame, and even C says only that a picture
+// belongs to some words. The page-width opening slot is a claim about what the picture IS, and
+// `media_subject_check` is the one record that makes it (总指挥: 故事绑定不能替代主体/内容审核).
 function chronicleLeadEligible(moment: PublicationMoment, privilege: MediaPrivilege): boolean {
   if (!moment.hero) return false;
-  return privilege.confirmed.has(moment.hero.id) || Boolean(privilege.checked?.has(moment.hero.id));
+  return isSubjectChecked(moment.hero, privilege);
 }
 
 // Walk the section's head until something may open it: a day whose picture carries the stronger
@@ -474,22 +504,52 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // Scope of the guarantee: the group never repeats what a card drew, and the group and the photo
   // section never overlap. It is not a page-wide uniqueness claim — one photograph written from by
   // two stories is drawn by both cards, which is correct, since it really is each story's picture.
+  // 照片展示隔离 (总指挥, 2026-09-13). The group is now built from the day's SUBJECT-CHECKED
+  // photographs only, and it is the whole reason this function changed.
+  //
+  // What was wrong: membership of this group was decided by `chapterDays` — by whether the day had
+  // acquired published words. Everything else about the picture was `isPrivileged`, i.e. source
+  // trust. So approving a paragraph promoted that day's photographs from the album into default
+  // reading, without anybody having looked at a single one of them.
+  //
+  // The fix is not a list and not a date rule: a photograph enters the day group when a person has
+  // opened it and recorded what is in it, and at no other time. Publishing text can no longer move
+  // any picture anywhere.
+  //
+  // Where the rest go: back into `archiveDays` — 「这个月的照片」, the album they were already in
+  // before the story was published, at the same day, under the same source authorisation, reachable
+  // by the same expander. Nothing is hidden, nothing is rejected, nothing is deleted, no visibility
+  // changes. A day may now appear in BOTH places — its checked pictures beside its words, the rest
+  // in the album — so the split below is per photograph rather than per day.
   const chapterLeadIds = new Set(chapter.memories.map((memory) => memory.lead?.id).filter(Boolean) as string[]);
   const dayPhotoGroups: PhotoDay[] = [];
+  const groupedPhotoIds = new Set<string>();
   for (const day of photoDaysAsc) {
     if (!chapterDays.has(day.day)) continue;
-    const photos = (albumPhotosByDay.get(day.day) ?? []).filter((item) => !chapterLeadIds.has(item.id));
-    if (photos.length > 0) dayPhotoGroups.push({ ...day, photos });
+    const photos = (albumPhotosByDay.get(day.day) ?? [])
+      .filter((item) => !chapterLeadIds.has(item.id))
+      .filter((item) => isSubjectChecked(item, privilege));
+    if (photos.length > 0) {
+      dayPhotoGroups.push({ ...day, photos });
+      for (const item of photos) groupedPhotoIds.add(item.id);
+    }
   }
-  const groupedDays = new Set(dayPhotoGroups.map((day) => day.day));
 
   // ARCHIVE — the month's remaining photographs, ascending; days read morning to evening already.
-  // Built from the one album set above minus the days already grouped, so nothing here can disagree
-  // with the first screen or the expander, and no picture is reachable from two places at once.
+  // Built from the one album set above minus the photographs already read elsewhere on the page, so
+  // nothing here can disagree with the first screen or the expander, and no picture is reachable
+  // from two places at once. Subtracting PHOTOGRAPHS rather than whole days is what lets an
+  // unchecked picture stay in the album on a day whose checked pictures were lifted out of it.
+  //
+  // `chapterLeadIds` has to be subtracted explicitly now, and that is a real trap this replaced.
+  // While a chapter day was excluded from the album WHOLESALE, a story's own lead was kept out of
+  // here as a side effect of its day being kept out. Subtracting per photograph removed that side
+  // effect, and the picture the story card draws came straight back into 「这个月的照片」 — the same
+  // photograph twice on one screen, which is exactly what the day group was built to stop.
+  const readInChapter = new Set([...groupedPhotoIds, ...chapterLeadIds]);
   const archiveDays: PhotoDay[] = [];
   for (const day of photoDaysAsc) {
-    if (groupedDays.has(day.day)) continue;
-    const photos = albumPhotosByDay.get(day.day) ?? [];
+    const photos = (albumPhotosByDay.get(day.day) ?? []).filter((item) => !readInChapter.has(item.id));
     if (photos.length > 0) archiveDays.push({ ...day, photos });
   }
 
@@ -526,6 +586,14 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
 
   // COVER / PREVIEW — vouched pictures only, newest first so the index face matches the month's
   // latest life; a memory's own lead outranks loose photography.
+  // 2026-09-13: the index face asks for a subject check, and a story binding does NOT substitute
+  // for one. `memoryLead` reaches here having passed the story gate — a person decided that
+  // picture belongs beside those words — and that is a different claim from "this is a photograph
+  // of this child, fit to be the month's face on the front page and the year index". R8's
+  // `event-r10-20260907-coldhot` is exactly the case: its two photographs carry an approved
+  // `media_binding` and no `media_subject_check`, so they may illustrate that story and may not
+  // become 2026-09's cover. A month with nothing checked shows its type instead, which
+  // `mode: "typography"` already does — it does not fall back to a guessed picture.
   const memoryLead = chapter.memories.find((memory) => memory.lead)?.lead;
   const vouched: MediaRef[] = [];
   for (const day of [...photoDaysAsc].reverse()) {
@@ -533,11 +601,15 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
       if (heroEligibleRef(item, privilege) || (isPrivileged(item, privilege) && thumbnailSized(item))) vouched.push(item);
     }
   }
-  const cover = memoryLead ?? vouched.find((item) => heroEligibleRef(item, privilege));
+  const coverCandidate = memoryLead && isSubjectChecked(memoryLead, privilege) ? memoryLead : undefined;
+  const cover = coverCandidate ?? vouched.find((item) => heroEligibleRef(item, privilege) && isSubjectChecked(item, privilege));
+  // The preview strip is the cover's own shortlist — the same index surfaces, the same claim — so
+  // it asks the same question of every picture in it, not only of the first.
   const preview: MediaRef[] = [];
   const seen = new Set<string>();
   for (const item of [cover, ...vouched]) {
     if (!item || seen.has(item.id)) continue;
+    if (!isSubjectChecked(item, privilege)) continue;
     seen.add(item.id);
     preview.push(item);
     if (preview.length >= PREVIEW_PHOTOS_MAX) break;

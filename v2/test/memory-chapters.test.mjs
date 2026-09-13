@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { buildChapters, splitOpenMonths, latestMemory, findMonth, excerptOf, memoryTitle, editorialMemory } from "../lib/memory-chapters.ts";
 import { storyLayout, STORY_SUPPORTING_MAX, presentableAlt, orientationOf, aspectRatioOf } from "../lib/media/presentation.ts";
 import { NO_HERO_MEDIA_ID } from "../lib/media/hero.ts";
-import { BIRTH, buildFixture, photo, event } from "./fixtures/editorial-archive.mjs";
+import { BIRTH, buildFixture, photo, event, reviewedBindings } from "./fixtures/editorial-archive.mjs";
 
 const fixture = buildFixture();
-const chapters = buildChapters({ ...fixture, birthDay: BIRTH });
+const chapters = buildChapters({ ...fixture, birthDay: BIRTH, photoConfirmations: reviewedBindings(fixture.events) });
 
 test("fixture is at the scale the site must survive", () => {
   assert.ok(fixture.traces.length > 300, `traces=${fixture.traces.length}`);
@@ -133,7 +133,7 @@ test("noPhoto separates a reviewed text-only story from one that merely found no
   assert.equal(reviewed.noPhoto, true);
   assert.equal(reviewed.lead, undefined);
 
-  const unset = editorialMemory(event("unset", "2026-08-19 00:00:00+00", ["p"]), media, BIRTH);
+  const unset = editorialMemory(event("unset", "2026-08-19 00:00:00+00", ["p"]), media, BIRTH, new Set(["unset|p"]));
   assert.equal(unset.noPhoto, false, "no decision was made about this one");
   assert.equal(unset.lead.id, "p");
 

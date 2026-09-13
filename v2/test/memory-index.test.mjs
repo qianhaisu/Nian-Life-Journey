@@ -8,7 +8,7 @@ import { buildChapters } from "../lib/memory-chapters.ts";
 import { buildMemoryIndex, buildYearView, curateMemories, foldTraces, monthRuns } from "../lib/memory-index.ts";
 import { buildMonthComposition } from "../lib/publication-moments.ts";
 import { DEFAULT_MEMORY_IA_POLICY } from "../lib/memory-ia-policy.ts";
-import { BIRTH, buildFixture, event, photo, trace } from "./fixtures/editorial-archive.mjs";
+import { BIRTH, buildFixture, event, photo, trace, reviewedBindings } from "./fixtures/editorial-archive.mjs";
 
 // 36 months (2025-01 → 2027-12): ~12 memories a month, a trace every day with 8 entries, one photo
 // per second memory; a 2023 backfill month; ~20k raw sources are not part of chapters at all.
@@ -35,7 +35,7 @@ function buildLargeFixture() {
 
 const large = buildLargeFixture();
 const started = performance.now();
-const chapters = buildChapters({ events: large.events, traces: large.traces, media: large.media, birthDay: BIRTH });
+const chapters = buildChapters({ events: large.events, traces: large.traces, media: large.media, birthDay: BIRTH, photoConfirmations: reviewedBindings(large.events) });
 const buildMs = performance.now() - started;
 
 test("the large fixture is at the scale the site must survive and builds in bounded time", () => {
