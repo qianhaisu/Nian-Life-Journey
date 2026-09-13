@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArchiveExpander } from "@/components/archive-expander";
+import { DayAlbumLink } from "@/components/day-album";
 import { DayPhotos } from "@/components/day-photos";
-import { PhotoGallery } from "@/components/photo-viewer";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
@@ -12,7 +12,7 @@ import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { findMonth } from "@/lib/memory-chapters";
-import { buildMonthComposition, monthStandfirst } from "@/lib/publication-moments";
+import { buildMonthComposition, dayAlbumDays, monthStandfirst } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
 import { formatMonth } from "@/lib/time-signature";
 
@@ -64,6 +64,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const siblings = yearChapter?.months.filter((item) => item.month !== month) ?? [];
   const archivePhotoCount = composition.archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
   const dayGroups = new Map(composition.dayPhotoGroups.map((day) => [day.day, day]));
+  const albumDays = dayAlbumDays(composition);
   // The section is named for what is actually in it. A month with a playable clip says so; a month
   // without one is not promised a video it does not have.
   const albumHasVideo = composition.archiveDays.some((day) => day.photos.some((item) => item.type === "video"));
@@ -98,9 +99,14 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       {composition.chapter.map((moment, index) => {
         const dayEnds = composition.chapter[index + 1]?.day !== moment.day;
         const group = dayEnds ? dayGroups.get(moment.day) : undefined;
+        // Once per day, after the day's last story and its reviewed group: a way into the month's
+        // album at this date — only when the album really has photographs of this exact day
+        // (dayAlbumFrom). Never a neighbouring day's, and never presented as a story's picture.
+        const albumEntry = dayEnds && albumDays.has(moment.day);
         return <Fragment key={`${moment.day}-${moment.kind}-${moment.memory?.id ?? ""}`}>
           <MonthMoment moment={moment} year={year} monthAgeLabel={chapter.ageLabel} priority={index === 0} continued={composition.chapter[index - 1]?.day === moment.day} />
           {group ? <DayPhotos photos={group.photos} dateLabel={group.dateLabel} ageLabel={group.ageLabel} /> : null}
+          {albumEntry ? <DayAlbumLink year={year} month={monthSegment} day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} afterDayPhotos={Boolean(group)} /> : null}
         </Fragment>;
       })}
     </section> : null}

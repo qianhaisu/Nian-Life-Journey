@@ -11,7 +11,7 @@ import { NO_HERO_MEDIA_ID } from "../lib/media/hero.ts";
 import { mediaPrivilegeOf } from "../lib/family-archive.ts";
 import {
   BURST_GAP_SECONDS, MOMENT_SUPPORTING_MAX,
-  buildMonthComposition, burstGroups, burstRepresentatives, readableEntries,
+  buildMonthComposition, burstGroups, burstRepresentatives, dayAlbumDays, dayAlbumFrom, readableEntries,
 } from "../lib/publication-moments.ts";
 
 const BIRTH = "2025-01-03";
@@ -492,12 +492,12 @@ test("a story's own lead photograph is not repeated in that day's group", () => 
     ["just-the-same-day", "written-from-this"]);
 });
 
-test("only the picture the card actually shows is held back — the rest of the day stays findable", () => {
-  // The exclusion is the rendered lead, not "everything bound" and not "everything Basis A".
-  // A month-page story card draws exactly one photograph (components/editorial-memory.tsx renders
-  // memory.lead; moment.hero/supporting are empty for chapter moments since 2026-09-10), so a
-  // second associated picture, and anything merely bound, are still the day's — and a reader must
-  // be able to find them under 「这一天的照片」 rather than nowhere at all.
+test("only the pictures the card actually shows are held back — the rest of the day stays findable", () => {
+  // The exclusion is what the card renders, not "everything in media_ids" and not "everything
+  // Basis A". Since 图文衔接 (2026-09-13) a month-page story card reads every photograph approved
+  // for it (memory.storyPhotos), so both approved pictures are held back from the day group; the
+  // merely-bound one has no approval, is not drawn in the card, and a reader must still be able to
+  // find it under 「这一天的照片」 rather than nowhere at all.
   const shownLead = photo("shown-as-lead", "2026-08-22T02:00:00.000Z");
   const alsoAssociated = photo("associated-but-not-shown", "2026-08-22T04:00:00.000Z");
   const merelyBound = photo("bound-by-the-old-backfill", "2026-08-22T06:00:00.000Z");
@@ -510,10 +510,12 @@ test("only the picture the card actually shows is held back — the rest of the 
   const composition = buildMonthComposition(monthOf({ media, events, photoConfirmations: bound(["story", "shown-as-lead"], ["story", "associated-but-not-shown"]) }, "2026-08"), reviewed(media));
 
   const moment = composition.chapter.find((item) => item.memory?.id === "story");
-  assert.equal(moment.memory.lead?.id, "shown-as-lead", "one picture is drawn in the card");
+  assert.equal(moment.memory.lead?.id, "shown-as-lead", "the lead is still the story's face");
+  assert.deepEqual(moment.memory.storyPhotos.map((p) => p.id), ["shown-as-lead", "associated-but-not-shown"],
+    "the card reads both approved pictures, lead first");
   assert.deepEqual(composition.dayPhotoGroups.map((d) => d.photos.map((p) => p.id)),
-    [["associated-but-not-shown", "bound-by-the-old-backfill"]],
-    "the associated picture the card did not draw, and the merely-bound one, are both still findable");
+    [["bound-by-the-old-backfill"]],
+    "the merely-bound picture, which the card does not draw, is still findable under the day");
   assert.equal(composition.totalPhotoCount, 3, "and the month counts all three");
 });
 
@@ -647,4 +649,67 @@ test("a photograph a reviewer opened and recorded as him may open the section wi
   assert.equal(composition.chronicle[0].day, "2025-11-01");
   assert.equal(composition.chronicle[0].hero?.id, "somebody-opened-this-one");
   assert.equal(composition.chronicle.length, 2);
+});
+
+// 图文衔接 (2026-09-13). Two jobs, kept apart on purpose: a story reads the photographs a person
+// approved FOR IT, inside the story; a story's day offers a way into the month's album at that date,
+// which shows the album's own photographs and never calls them the story's.
+
+test("a story reads every photograph approved for it, and approval for a story grants no other use", () => {
+  // R8's shape: `event-r10-20260907-coldhot` — two approved media_binding rows, neither picture
+  // source-trusted nor subject-checked. Both belong in the story; neither may become the album, a
+  // day group, the month's cover or its preview strip.
+  const first = photo("coldhot-1", "2026-09-07T02:00:00.000Z", { width: 1280, height: 1707 });
+  const second = photo("coldhot-2", "2026-09-07T02:01:00.000Z", { width: 3120, height: 4160 });
+  const events = [event("coldhot", "2026-09-07 00:00:00+00", ["coldhot-1", "coldhot-2"], { sourceIds: ["chat-text"] })];
+  const composition = buildMonthComposition(
+    monthOf({ media: [first, second], events, photoConfirmations: bound(["coldhot", "coldhot-1"], ["coldhot", "coldhot-2"]) }, "2026-09"),
+    { confirmed: new Set(), trusted: new Set() });
+  const story = composition.chapter.find((m) => m.memory?.id === "coldhot");
+  assert.deepEqual(story.memory.storyPhotos.map((p) => p.id), ["coldhot-1", "coldhot-2"]);
+  assert.deepEqual(composition.dayPhotoGroups, [], "no day group");
+  assert.deepEqual(composition.archiveDays, [], "not in the album");
+  assert.equal(dayAlbumFrom(composition, "2026-09-07"), undefined, "so no album entry for the day either");
+  assert.equal(composition.cover, undefined, "not the month's face");
+  assert.deepEqual(composition.preview, [], "not in the index strip");
+});
+
+test("a story reviewed as text-only reads no photograph, even with approved bindings on record", () => {
+  const pic = photo("withdrawn", "2026-09-08T02:00:00.000Z");
+  const events = [event("text-only", "2026-09-08 00:00:00+00", ["withdrawn"], { heroMediaId: NO_HERO_MEDIA_ID })];
+  const composition = buildMonthComposition(monthOf({ media: [pic], events, photoConfirmations: bound(["text-only", "withdrawn"]) }, "2026-09"), reviewed([pic]));
+  assert.deepEqual(composition.chapter[0].memory.storyPhotos, []);
+});
+
+test("the day album is exactly the album's photographs of that day: no neighbour, no group, no story picture", () => {
+  const onStoryDay = photo("album-0820", "2026-08-20T03:00:00.000Z");      // trusted, nobody opened it
+  const checkedSameDay = photo("checked-0820", "2026-08-20T05:00:00.000Z"); // subject-checked → day group
+  const approvedForStory = photo("story-0820", "2026-08-20T06:00:00.000Z"); // approved for the story
+  const neighbour = photo("album-0822", "2026-08-22T03:00:00.000Z");        // a day with no story
+  const media = [onStoryDay, checkedSameDay, approvedForStory, neighbour];
+  const events = [
+    event("story-a", "2026-08-20 00:00:00+00", ["story-0820"], { sourceIds: ["chat-text"] }),
+    event("story-b", "2026-08-21 00:00:00+00", [], { sourceIds: ["chat-text"] }),
+  ];
+  const privilege = { confirmed: new Set(), trusted: new Set(media.map((m) => m.id)), checked: new Set(["checked-0820"]) };
+  const composition = buildMonthComposition(monthOf({ media, events, photoConfirmations: bound(["story-a", "story-0820"]) }, "2026-08"), privilege);
+
+  assert.deepEqual(composition.chapter.find((m) => m.memory?.id === "story-a").memory.storyPhotos.map((p) => p.id), ["story-0820"]);
+  assert.deepEqual(composition.dayPhotoGroups.map((d) => [d.day, d.photos.map((p) => p.id)]), [["2026-08-20", ["checked-0820"]]]);
+  assert.deepEqual(dayAlbumFrom(composition, "2026-08-20")?.photos.map((p) => p.id), ["album-0820"],
+    "the album day holds what the page does not already read elsewhere");
+  assert.equal(dayAlbumFrom(composition, "2026-08-21"), undefined, "a story day without photographs gets no entry — not 8/22's");
+  assert.deepEqual([...dayAlbumDays(composition)].sort(), ["2026-08-20", "2026-08-22"]);
+  // Partition still holds across the three surfaces: nothing twice, nothing lost.
+  const everywhere = [...composition.dayPhotoGroups, ...composition.archiveDays].flatMap((d) => d.photos.map((p) => p.id)).concat(["story-0820"]);
+  assert.equal(new Set(everywhere).size, everywhere.length);
+  assert.deepEqual([...everywhere].sort(), ["album-0820", "album-0822", "checked-0820", "story-0820"]);
+});
+
+test("an unvouched picture on a story's day opens no album entry — the entry never widens the album", () => {
+  const chat = photo("chat-only", "2026-08-24T03:00:00.000Z");
+  const events = [event("story", "2026-08-24 00:00:00+00", [], { sourceIds: ["chat-text"] })];
+  const composition = buildMonthComposition(monthOf({ media: [chat], events }, "2026-08"), { confirmed: new Set(), trusted: new Set() });
+  assert.equal(dayAlbumFrom(composition, "2026-08-24"), undefined);
+  assert.equal(dayAlbumDays(composition).size, 0);
 });

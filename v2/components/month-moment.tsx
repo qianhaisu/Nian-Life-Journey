@@ -45,7 +45,7 @@ export function MonthMoment({ moment, year, monthAgeLabel, priority = false, con
     {continued ? null : <DayHead day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} monthAgeLabel={monthAgeLabel} year={year} />}
     <div className="moment-body">
       {/* T20-A1: DayHead just stated this day's date and age — a memory here does not restate them. */}
-      {moment.kind === "memory_led" && moment.memory ? <EditorialMemory memory={moment.memory} priority={priority} showSignature={false} /> : null}
+      {moment.kind === "memory_led" && moment.memory ? <EditorialMemory memory={moment.memory} priority={priority} showSignature={false} photos="story" /> : null}
       {/* One entry, one paragraph: each is a separate record of the archive and keeps its own line.
           The day still reads through in one go because they are set as consecutive paragraphs of
           prose, not because any two of them were joined. */}

@@ -491,6 +491,46 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-reading .moment-memory_led .memory .time-signature { display: none; }
 .month-reading .moment-memory_led .memory-copy h3 { margin-top: 0; }
 .month-reading .moment-memory_led .memory-copy p { max-width: 34em; }
+/* 图文衔接 (2026-09-13): a story's approved photographs read after its words, sized by what each
+   picture is — not one cover slot stamped on every story. One landscape runs the text measure; one
+   portrait stands narrow (and beside the words on a wide screen); two or more sit as a pair. */
+.memory-story-photos { max-width: 34em; }
+.memory-story-photo { margin: 0; max-height: 76vh; border-radius: var(--r-card); cursor: zoom-in; }
+.memory-story-photo.photo-portrait { max-width: min(100%, 340px); }
+.memory-story-photo.photo-square { max-width: min(100%, 420px); }
+.memory-story-photos .photo-strip { margin-top: 0; gap: 6px; }
+.memory-story-photos .photo-strip .photo { max-height: 420px; border-radius: 10px; cursor: zoom-in; }
+@media (min-width: 900px) {
+  .month-reading .memory-story.memory-photo-portrait { grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); column-gap: 36px; align-items: start; }
+  .month-reading .memory-story.memory-photo-portrait .memory-story-photo.photo-portrait { max-width: 100%; }
+}
+/* 「翻开这一天的相册」 — once per day, after the day's last story (and its reviewed group, if any).
+   A quiet pill, not a heading: it is a way into the month's album at this date, not a section of
+   the story. */
+.day-album-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 18px 0 0; }
+.day-album-open { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-secondary); font: inherit; font-size: .92rem; cursor: pointer; transition: border-color 180ms var(--ease-out), color 180ms var(--ease-out); }
+.day-album-open::after { color: var(--color-accent); content: "→"; }
+.day-album-open:hover { border-color: var(--color-accent); color: var(--color-text); }
+.day-album-open[aria-busy="true"] { cursor: wait; opacity: .75; }
+.day-album-failed { color: var(--color-muted); font-size: .85rem; }
+@media (min-width: 760px) {
+  .month-reading .day-album-entry { margin-left: calc(6.5rem + 32px); }
+}
+.day-album-sheet { position: fixed; inset: 0; z-index: 250; display: flex; flex-direction: column; background: var(--color-bg); outline: none; }
+.day-album-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: max(14px, env(safe-area-inset-top)) 20px 12px; border-bottom: 1px solid var(--color-border); }
+.day-album-head .section-mark { display: block; }
+.day-album-head h2 { margin: 4px 0 0; font-size: clamp(1.3rem, 4vw, 1.7rem); line-height: 1.25; }
+.day-album-head p { margin: 4px 0 0; color: var(--color-muted); font-size: .85rem; }
+.day-album-close { flex: none; width: 44px; height: 44px; border: 0; background: none; color: var(--color-text); font-size: 1.2rem; cursor: pointer; }
+.day-album-body { flex: 1; overflow-y: auto; padding: 12px 20px 24px; overscroll-behavior: contain; }
+.day-album-body .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 0; }
+.day-album-body .photo { max-height: 260px; cursor: zoom-in; }
+.day-album-foot { padding: 6px 20px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); }
+.day-album-back { min-height: 44px; padding: 8px 4px; border: 0; background: none; color: var(--color-accent); font: inherit; cursor: pointer; }
+@media (min-width: 900px) {
+  .day-album-head, .day-album-body, .day-album-foot { padding-inline: max(24px, calc((100vw - 1040px) / 2)); }
+  .day-album-body .photo-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+}
 @media (min-width: 760px) {
   .month-reading .month-moment { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0 32px; }
   /* Column 2 is named, not inferred, so a continued day — whose head is deliberately absent —

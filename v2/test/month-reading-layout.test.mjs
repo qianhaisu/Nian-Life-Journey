@@ -120,3 +120,38 @@ test("DayHead is honest about a day with no known age", () => {
   assert.ok(!html.includes("<span>"), "no age is invented when the archive has none");
   assert.match(html, /<time datetime="2025-06-20">6 月 20 日<\/time>/i);
 });
+
+// 图文衔接 (2026-09-13): inside a month a story reads its words first, then every photograph a person
+// approved for it; a story without one is words only. The day-album entry ships as a button and
+// nothing else — no photograph of the album is in the page until the reader asks.
+const { EditorialMemory } = await import("../components/editorial-memory.tsx");
+const { DayAlbumLink } = await import("../components/day-album.tsx");
+const ref = (id, width, height) => ({ id, src: `/api/media/${id}?variant=web`, thumbnailSrc: `/api/media/${id}?variant=thumbnail`, width, height, type: "photo", alt: "那天的照片" });
+const storyMemory = (storyPhotos) => ({ id: "event-s", title: "他会说 cold", excerpt: "一段话。", weight: "memory", signature: { day: "2026-09-07", dateLabel: "2026 年 9 月 7 日", ageLabel: "1 岁 8 个月" }, lead: storyPhotos[0], storyPhotos, noPhoto: false, photoCount: storyPhotos.length, videoCount: 0 });
+
+test("a month story reads its words, then all of its approved photographs, sized by shape", () => {
+  const two = render(EditorialMemory, { memory: storyMemory([ref("a", 1280, 1707), ref("b", 3120, 4160)]), showSignature: false, photos: "story" });
+  assert.ok(two.indexOf("memory-copy") < two.indexOf("memory-story-photos"), "words come before the photographs");
+  assert.equal((two.match(/<img /g) ?? []).length, 2, "both approved photographs are read");
+  assert.match(two, /memory-photo-set/);
+  const portrait = render(EditorialMemory, { memory: storyMemory([ref("a", 1280, 1707)]), showSignature: false, photos: "story" });
+  assert.match(portrait, /memory-photo-portrait/);
+  assert.match(portrait, /memory-story-photo/);
+  const none = render(EditorialMemory, { memory: storyMemory([]), showSignature: false, photos: "story" });
+  assert.equal((none.match(/<img /g) ?? []).length, 0, "no approved photograph, no picture — nothing is borrowed");
+  assert.doesNotMatch(none, /memory-story-photos/);
+});
+
+test("the month moment asks the story for its story photographs", () => {
+  const html = render(MonthMoment, { moment: { kind: "memory_led", day: "2026-09-07", dateLabel: "2026 年 9 月 7 日", ageLabel: "1 岁 8 个月", memory: storyMemory([ref("a", 1708, 1280)]), text: [], supporting: [], morePhotoCount: 0 }, year: "2026" });
+  assert.match(html, /memory-story memory-photo-landscape/);
+});
+
+test("the day-album entry ships as one button and no photograph", () => {
+  const html = render(DayAlbumLink, { year: "2026", month: "08", day: "2026-08-19", dateLabel: "2026 年 8 月 19 日", ageLabel: "1 岁 7 个月" });
+  assert.match(html, /<button[^>]*class="day-album-open"[^>]*>翻开这一天的相册<\/button>/);
+  assert.doesNotMatch(html, /<img |<figure/);
+  const after = render(DayAlbumLink, { year: "2026", month: "08", day: "2026-08-19", dateLabel: "2026 年 8 月 19 日", afterDayPhotos: true });
+  assert.match(after, /这一天相册里的其他照片/);
+  assert.doesNotMatch(html + after, /配图/, "the album is never called a story's picture");
+});

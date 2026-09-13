@@ -365,6 +365,39 @@ export function openChronicle(chronicle: PublicationMoment[], privilege: MediaPr
 // photoLedMoment (a day that was only photographed, standing as itself) and through the month's
 // own photo section.
 
+// The photographs a story card reads: the approved list when the memory carries one, else its lead.
+export function storyPhotosOf(memory: Pick<EditorialMemory, "lead" | "storyPhotos">): MediaRef[] {
+  return memory.storyPhotos ?? (memory.lead ? [memory.lead] : []);
+}
+
+/**
+ * 「这一天的相册」 — the month's own album, opened at one date.
+ *
+ * 图文衔接 (2026-09-13). Measured on the private site before this: of 344 stories on month pages, 242
+ * had photographs of their exact day sitting in 「这个月的照片」, and a phone reader had to scroll a
+ * median 13,484px (after expanding the album) to reach them, with no way back to the story they were
+ * reading. The pictures were never the problem — they already have the album's authorisation. The
+ * distance was.
+ *
+ * So a story's day may offer a way INTO the album at that date, and this is the whole of what that
+ * way may show: exactly the album's photographs for exactly that day, i.e. the day's entry in
+ * `archiveDays` — vouched, deliverable, drawable, and already minus whatever the page reads elsewhere
+ * (the day's subject-checked group, a story card's approved photographs). Three things it is not:
+ *   - not the story's picture: it opens as the album, under the date, never inside or captioned by
+ *     a story, and a story without an approved binding still draws none;
+ *   - not a neighbouring day: no photographs on the day means no entry, not the nearest day's;
+ *   - not a new admission: nothing here widens `isPrivileged`, reads a subject check it did not
+ *     already read, or changes a visibility, a binding or a review.
+ */
+export function dayAlbumFrom(composition: Pick<MonthComposition, "archiveDays">, day: string): PhotoDay | undefined {
+  const found = composition.archiveDays.find((item) => item.day === day);
+  return found && found.photos.length > 0 ? found : undefined;
+}
+
+export function dayAlbumDays(composition: Pick<MonthComposition, "archiveDays">): Set<string> {
+  return new Set(composition.archiveDays.filter((item) => item.photos.length > 0).map((item) => item.day));
+}
+
 export type TraceNote = { day: string; dateLabel: string; ageLabel?: string; text: string };
 
 // The trace tier's data source, isolated in one function per the P2 dispatch note ("数据源抽成一个
@@ -569,7 +602,9 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // by the same expander. Nothing is hidden, nothing is rejected, nothing is deleted, no visibility
   // changes. A day may now appear in BOTH places — its checked pictures beside its words, the rest
   // in the album — so the split below is per photograph rather than per day.
-  const chapterLeadIds = new Set(chapter.memories.map((memory) => memory.lead?.id).filter(Boolean) as string[]);
+  // 2026-09-13 (图文衔接): a story card now reads every photograph approved for it, not only its
+  // lead, so every one of those is what "the card already drew" means here.
+  const chapterLeadIds = new Set(chapter.memories.flatMap((memory) => storyPhotosOf(memory).map((item) => item.id)));
   const dayPhotoGroups: PhotoDay[] = [];
   const groupedPhotoIds = new Set<string>();
   for (const day of photoDaysAsc) {

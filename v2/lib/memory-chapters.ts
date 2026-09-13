@@ -35,6 +35,12 @@ export type EditorialMemory = {
   weight: MemoryWeight;
   signature: TimeSignature;
   lead?: MediaRef;
+  // Every photograph a person approved for THIS story (media_binding, latest decision — the same
+  // storyDisplayMedia gate `lead` comes from), lead first. The month page reads them inside the
+  // story, where a reviewed binding is the licence to be; `lead` stays the single face other
+  // surfaces use. Optional so hand-built memories (tests, fixtures) keep working: absent means
+  // "just the lead, if any".
+  storyPhotos?: MediaRef[];
   // Reviewed: no photo belongs on this story (the event's heroMediaId is NO_HERO_MEDIA_ID). Kept
   // distinct from `lead === undefined`, which now means only "nothing here can show it belongs to
   // this story" (lib/media/story-binding.ts). The two answer different questions — one is a
@@ -84,6 +90,9 @@ export type YearChapter = { year: string; ageSpan?: string; months: MonthChapter
 
 export const EXCERPT_LIMIT = 80;
 export const MONTH_PHOTO_LIMIT = 5;
+// How many approved photographs one story reads inside a month page. A bound, not a quota: today no
+// story has more than two approved bindings.
+export const STORY_PHOTOS_MAX = 4;
 
 export function toMediaRef(media: Media, context?: string): MediaRef {
   return { id: media.id, src: media.src, thumbnailSrc: media.thumbnailSrc, width: media.width, height: media.height, type: media.type, posterSrc: media.posterSrc, takenAt: media.takenAt, alt: presentableAlt(media, context) };
@@ -125,7 +134,10 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
   // in one of the messages the story was written from — is a real relation but nobody looked at it,
   // and a lead photograph is the strongest claim this page makes about a picture.
   const associated = storyDisplayMedia(event, media, confirmations);
-  const lead = heroCandidates(event.heroMediaId, associated)[0];
+  // The same ordered, size-checked list the lead has always been the head of. NO_HERO_MEDIA_ID
+  // empties it, so a story reviewed as text-only draws nothing here either.
+  const approved = heroCandidates(event.heroMediaId, associated).slice(0, STORY_PHOTOS_MAX);
+  const lead = approved[0];
   return {
     id: event.id,
     title,
@@ -133,6 +145,7 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
     weight: event.memoryWeight,
     signature,
     lead: lead ? toMediaRef(lead, title) : undefined,
+    storyPhotos: approved.map((item) => toMediaRef(item, title)),
     // A review decision about this story, independent of whether any of its pictures could have
     // been associated with it in the first place.
     noPhoto: event.heroMediaId === NO_HERO_MEDIA_ID,
