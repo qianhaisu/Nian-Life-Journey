@@ -61,7 +61,7 @@ const PROFILE_ID = "profile-zhangnian";
 const CONTRIBUTOR_ID = "contributor-system";
 const CONVERSATION_LIMIT = 64;
 
-const WORKER_STATE_PATH = path.resolve(process.cwd(), ".data/worker-state.json");
+let WORKER_STATE_PATH = path.resolve(process.cwd(), ".data/worker-state.json");
 const IMPORT_STATE_PATH = path.resolve(process.cwd(), ".data/wechat-import-all-state.json");
 const SITE_URL = "https://nianlife.cn";
 
@@ -105,6 +105,39 @@ function readWorkerState() {
 function writeWorkerState(state) {
   mkdirSync(path.dirname(WORKER_STATE_PATH), { recursive: true });
   writeFileSync(WORKER_STATE_PATH, JSON.stringify(state, null, 2), "utf8");
+}
+
+// ── Run ledger (2026-09-13) ───────────────────────────────────────────────────
+//
+// Appended one line at a time (never buffered) so a killed process still leaves every completed
+// step on disk — that is what makes a resume verifiable rather than assumed.
+let LEDGER_PATH = null;
+function ledger(entry) {
+  if (!LEDGER_PATH) return;
+  try {
+    mkdirSync(path.dirname(LEDGER_PATH), { recursive: true });
+    appendFileSync(LEDGER_PATH, JSON.stringify({ runId: RUN_ID, at: new Date().toISOString(), ...entry }) + "\n", "utf8");
+  } catch (error) {
+    log("[ledger] write failed: " + safeErrorInfo(error).message);
+  }
+}
+
+// Failure classification. Not a prettier log line: a resumable pipeline has to know which failures
+// mean "try again later" and which mean "stop, a human has to look" — retrying the second kind is
+// the空转 this run is explicitly forbidden to do.
+function classifyFailure({ error, report }) {
+  const raw = report?.safeErrorCode ?? (error && (error.code || (error instanceof Error ? error.message : null))) ?? "UNKNOWN";
+  const text = String(raw);
+  if (report && (report.status === "rejected" || report.status === "busy")) return { class: "TASK_LEASE_BUSY", code: text, retryable: true };
+  if (text === "WECHAT_NO_VALID_SESSION") return { class: "SOURCE_END_OF_LIST", code: text, retryable: false };
+  if (["ENOENT", "EPERM", "EBUSY", "EACCES"].includes(text)) return { class: "SOURCE_UNAVAILABLE", code: text, retryable: true };
+  if (text.startsWith("WECHAT_SNAPSHOT")) return { class: "SOURCE_CHANGED_MIDRUN", code: text, retryable: true };
+  if (text.startsWith("WECHAT_MEDIA_HASH_CHANGED")) return { class: "SOURCE_MEDIA_CONFLICT", code: text, retryable: false };
+  if (text.includes("UPLOAD") || text.includes("STORAGE") || text.includes("NoSuchBucket")) return { class: "STORAGE_ERROR", code: text, retryable: true };
+  if (text === "PROGRESS_NOT_MONOTONIC") return { class: "TASK_STATE_CONFLICT", code: text, retryable: false };
+  if (text === "MAX_ATTEMPTS_EXCEEDED") return { class: "TASK_EXHAUSTED", code: text, retryable: false };
+  if (["ECONNREFUSED", "ETIMEDOUT", "ECONNRESET", "57P01", "53300", "08006", "08003"].includes(text)) return { class: "DB_UNAVAILABLE", code: text, retryable: true };
+  return { class: "UNKNOWN", code: text.slice(0, 120), retryable: true };
 }
 
 function readImportExcluded() {
@@ -224,6 +257,49 @@ const CLI_MAX_MESSAGES = argValue("max-messages") ? Number(argValue("max-message
 const CLI_LIMIT = argValue("limit") ? Number(argValue("limit")) : null;
 const CLI_NO_STATE_UPDATE = process.argv.includes("--no-state-update");
 
+// Added 2026-09-13 (通宵持续更新链路). Each flag below opts OUT of a side effect this run would
+// otherwise have, or points the cursor/record somewhere else — no new default behaviour.
+//
+//   --state=<abs path>   use this cursor file instead of .data/worker-state.json
+//   --ledger=<abs path>  append a machine-readable JSONL record here: one line per conversation
+//                          and one per run, so a later run (or another session) can answer "what
+//                          did the last run do, and where did it stop" without parsing prose.
+//   --no-review          skip Phase 4 (month-review --commit). Phase 4 rewrites a month's
+//                          monthly_snapshot, which is live reading material — a publication-shaped
+//                          side effect an unattended run is not authorised to take.
+//   --no-revalidate      skip Phase 5 (ISR poke).
+//   --no-organizer       skip Phase 3 (import-only run).
+//   --max-organizer-months=N  process at most N affected months in Phase 3/4.
+//   --organizer-args=a,b forwarded verbatim to organizer-month-write.mjs (e.g.
+//                          --organizer-args=--max-calls=40,--concurrency=6). --self-approve and
+//                          --grade are refused here on purpose: an unattended run does not make a
+//                          publication decision.
+const CLI_STATE_PATH = argValue("state");
+const CLI_LEDGER_PATH = argValue("ledger");
+const CLI_NO_REVIEW = process.argv.includes("--no-review");
+const CLI_NO_REVALIDATE = process.argv.includes("--no-revalidate");
+const CLI_NO_ORGANIZER = process.argv.includes("--no-organizer");
+const CLI_FORCE = process.argv.includes("--force-all");
+// --exclude=<digest,...>  skip these conversation digests for this run, on top of the persistent
+// excluded list in .data/wechat-import-all-state.json. Why a flag and not an edit to that file:
+// the exclusions this needs are a property of the CURRENT export layout (one chat exported as both
+// .md and .json is two "conversations" to this importer, and importing both stores the same
+// messages twice under two document identities, which canonicalMessageId cannot dedupe because the
+// document path is part of it). That layout can change with the next export, so the choice belongs
+// to the run that can see it, written into the ledger, not baked into shared state.
+const CLI_EXCLUDE = (argValue("exclude") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+const CLI_MAX_ORG_MONTHS = argValue("max-organizer-months") ? Number(argValue("max-organizer-months")) : null;
+const CLI_ORGANIZER_ARGS = (argValue("organizer-args") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+for (const forbidden of ["--self-approve", "--grade"]) {
+  if (CLI_ORGANIZER_ARGS.includes(forbidden)) {
+    process.stderr.write("[worker] refusing --organizer-args=" + forbidden + ": an unattended run does not make publication decisions\n");
+    process.exit(2);
+  }
+}
+const RUN_ID = "run-" + runTimestamp;
+if (CLI_STATE_PATH) WORKER_STATE_PATH = path.resolve(CLI_STATE_PATH);
+if (CLI_LEDGER_PATH) LEDGER_PATH = path.resolve(CLI_LEDGER_PATH);
+
 async function main() {
   const runStartedAt = new Date();
   log(`nianlife-worker v1 starting · log: ${logPath}`);
@@ -246,7 +322,8 @@ async function main() {
   log(`import since: ${importSince}${workerState.lastRunAt ? " (last successful run)" : " (first run — full import)"}`);
 
   const excluded = readImportExcluded();
-  log(`excluded conversation digests: ${excluded.size}`);
+  for (const digest of CLI_EXCLUDE) excluded.add(digest);
+  log(`excluded conversation digests: ${excluded.size}` + (CLI_EXCLUDE.length ? ` (${CLI_EXCLUDE.length} from --exclude)` : ""));
 
   // ── Phase 1: Incremental WeChat import ────────────────────────────────────
 
@@ -258,7 +335,16 @@ async function main() {
     mediaCreated: 0,
     mediaReused: 0,
     failed: 0,
+    skipped: 0,
+    failureClasses: {},
   };
+  // Carried into worker-state.json at the end of the run: one entry per conversation, keyed by
+  // conversation digest, holding the resume key that made this run's work a no-op or not.
+  const conversationState = { ...(workerState.conversations ?? {}) };
+  ledger({ phase: "run", event: "started", since: importSince, stateFile: WORKER_STATE_PATH, flags: {
+    organizer: !CLI_NO_ORGANIZER, review: !CLI_NO_REVIEW, revalidate: !CLI_NO_REVALIDATE,
+    maxOrganizerMonths: CLI_MAX_ORG_MONTHS, organizerArgs: CLI_ORGANIZER_ARGS, force: CLI_FORCE,
+    noStateUpdate: CLI_NO_STATE_UPDATE, limit: CLI_LIMIT, maxMessages: CLI_MAX_MESSAGES } });
 
   for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
     let probe;
@@ -272,6 +358,7 @@ async function main() {
     } catch (error) {
       if (error instanceof Error && error.message === "WECHAT_NO_VALID_SESSION") {
         log(`conversation ${index}: no more sessions — ${index} conversation(s) scanned`);
+        ledger({ phase: "import", event: "end_of_list", conversationIndex: index, scanned: index });
         break;
       }
       throw error;
@@ -279,9 +366,33 @@ async function main() {
 
     totals.conversations += 1;
     const digest = probe.bundle.exportSnapshot.conversationDigest;
+    // The resume key: THIS conversation's own transcript content, this conversation, this window.
+    //
+    // It deliberately does not use rootFingerprint. That hash covers every file under the export
+    // root — path, size, mtime and content of all of them — so one chat receiving one new message
+    // (or the exporter touching any file at all) changes it for every conversation at once, and a
+    // rerun re-walks all thirteen instead of the one that actually moved. Observed on 2026-09-13:
+    // the fingerprint changed between two runs ten minutes apart and every cursor entry went stale.
+    //
+    // contentDigest is the sha256 of this transcript file itself, so the key changes when and only
+    // when this conversation's own source changed. The DB's import_batch_id still keys on
+    // rootFingerprint (task identity is not this run's to redefine) — that is a coarser key, and
+    // being coarser it can only create an extra task row, never skip work that still needs doing.
+    const selectedEntry = probe.snapshot.files.find((f) => f.relativePath === probe.selectedDocument);
+    const documentDigest = selectedEntry?.contentDigest ?? probe.bundle.exportSnapshot.rootFingerprint;
+    const resumeKey = `${documentDigest}|${digest}|${importSince}`;
+    const priorOk = (workerState.conversations ?? {})[digest];
 
     if (excluded.has(digest)) {
       log(`conversation ${index}: excluded — skipped`);
+      ledger({ phase: "import", event: "excluded", conversationIndex: index, digest });
+      continue;
+    }
+
+    if (!CLI_FORCE && priorOk && priorOk.resumeKey === resumeKey && priorOk.status === "ok") {
+      log(`conversation ${index}: unchanged since ${priorOk.at} (same export fingerprint + since) — skipped`);
+      totals.skipped += 1;
+      ledger({ phase: "import", event: "skipped_unchanged", conversationIndex: index, digest, resumeKey, priorAt: priorOk.at });
       continue;
     }
 
@@ -294,6 +405,8 @@ async function main() {
 
     if (messages === 0) {
       log(`conversation ${index}: 0 messages since ${importSince} — nothing to import`);
+      conversationState[digest] = { resumeKey, status: "ok", at: new Date().toISOString(), created: 0, reused: 0, note: "no messages in window" };
+      ledger({ phase: "import", event: "empty_window", conversationIndex: index, digest, resumeKey });
       continue;
     }
 
@@ -313,8 +426,12 @@ async function main() {
       });
     } catch (error) {
       const info = safeErrorInfo(error);
+      const failure = classifyFailure({ error });
       totals.failed += 1;
-      log(`conversation ${index}: threw ${info.code} (${info.message}) — will retry next run`);
+      totals.failureClasses[failure.class] = (totals.failureClasses[failure.class] ?? 0) + 1;
+      log(`conversation ${index}: threw ${info.code} (${info.message}) — class ${failure.class}, ${failure.retryable ? "retryable" : "NOT retryable, needs a look"}`);
+      conversationState[digest] = { resumeKey, status: "failed", at: new Date().toISOString(), failure };
+      ledger({ phase: "import", event: "failed", conversationIndex: index, digest, resumeKey, failure, message: info.message.slice(0, 200) });
       continue;
     }
 
@@ -331,10 +448,22 @@ async function main() {
     totals.reused += report.reusedMessages;
     totals.mediaCreated += report.createdMediaAssets;
     totals.mediaReused += report.reusedMediaAssets;
-    if (!ok) {
+    if (ok) {
+      conversationState[digest] = { resumeKey, status: "ok", at: new Date().toISOString(), created: report.createdMessages, reused: report.reusedMessages, taskId: report.taskId };
+    } else {
+      const failure = classifyFailure({ report });
       totals.failed += 1;
-      log(`conversation ${index}: not fully completed — will retry next run`);
+      totals.failureClasses[failure.class] = (totals.failureClasses[failure.class] ?? 0) + 1;
+      log(`conversation ${index}: not fully completed (${failure.class}) — ${failure.retryable ? "will retry next run" : "NOT retryable, needs a look"}`);
+      conversationState[digest] = { resumeKey, status: "failed", at: new Date().toISOString(), failure };
     }
+    ledger({
+      phase: "import", event: ok ? "imported" : "incomplete", conversationIndex: index, digest, resumeKey,
+      taskId: report.taskId, status: report.status, safeErrorCode: report.safeErrorCode ?? null,
+      createdMessages: report.createdMessages, reusedMessages: report.reusedMessages,
+      createdMediaAssets: report.createdMediaAssets, reusedMediaAssets: report.reusedMediaAssets,
+      warningCounts: report.warningCounts ?? [],
+    });
 
     if (CLI_LIMIT && totals.created + totals.reused >= CLI_LIMIT) {
       log(`[bounded test run] reached --limit=${CLI_LIMIT} (created+reused) — stopping import phase early`);
@@ -342,6 +471,9 @@ async function main() {
     }
   }
 
+  ledger({ phase: "import", event: "phase_done", conversations: totals.conversations, created: totals.created,
+    reused: totals.reused, mediaCreated: totals.mediaCreated, mediaReused: totals.mediaReused,
+    skipped: totals.skipped, failed: totals.failed, failureClasses: totals.failureClasses });
   log(
     `import phase done` +
       ` · msgs +${totals.created} / reused ${totals.reused}` +
@@ -382,17 +514,28 @@ async function main() {
 
   // ── Phase 3: Organizer ────────────────────────────────────────────────────
 
-  if (affectedMonths.length > 0) {
+  if (CLI_NO_ORGANIZER && affectedMonths.length > 0) {
+    log("=== Phase 3: skipped (--no-organizer) ===");
+    ledger({ phase: "organizer", event: "skipped_by_flag", months: affectedMonths });
+  } else if (affectedMonths.length > 0) {
     log("=== Phase 3: Organizer ===");
-    for (const month of affectedMonths) {
+    const organizerMonths = CLI_MAX_ORG_MONTHS ? affectedMonths.slice(0, CLI_MAX_ORG_MONTHS) : affectedMonths;
+    if (organizerMonths.length < affectedMonths.length) {
+      log(`[bounded] --max-organizer-months=${CLI_MAX_ORG_MONTHS} — ${affectedMonths.length - organizerMonths.length} month(s) left for the next run`);
+      ledger({ phase: "organizer", event: "bounded", processing: organizerMonths, deferred: affectedMonths.slice(organizerMonths.length) });
+    }
+    for (const month of organizerMonths) {
       // organizer-month-write.mjs refuses to write --out inside the repo. Use OS temp dir.
       const outPath = path.join(tmpdir(), `nianlife-organizer-${month}-${Date.now()}.json`);
-      await spawnChild(`organizer:${month}`, [
+      const startedAt = Date.now();
+      const okOrganizer = await spawnChild(`organizer:${month}`, [
         "scripts/organizer-month-write.mjs",
         `--month=${month}`,
         "--commit",
         `--out=${outPath}`,
+        ...CLI_ORGANIZER_ARGS,
       ]);
+      ledger({ phase: "organizer", event: okOrganizer ? "month_done" : "month_failed", month, durationMs: Date.now() - startedAt });
       // The out file contains private chat content — delete it immediately.
       try {
         unlinkSync(outPath);
@@ -404,14 +547,20 @@ async function main() {
 
   // ── Phase 4: Month review ─────────────────────────────────────────────────
 
-  if (affectedMonths.length > 0) {
+  if (CLI_NO_REVIEW && affectedMonths.length > 0) {
+    log("=== Phase 4: skipped (--no-review) — monthly_snapshot is live reading material, not this run's call ===");
+    ledger({ phase: "review", event: "skipped_by_flag", months: affectedMonths });
+  } else if (affectedMonths.length > 0) {
     log("=== Phase 4: Month review ===");
-    for (const month of affectedMonths) {
-      await spawnChild(`review:${month}`, [
+    const reviewMonths = CLI_MAX_ORG_MONTHS ? affectedMonths.slice(0, CLI_MAX_ORG_MONTHS) : affectedMonths;
+    for (const month of reviewMonths) {
+      const startedAt = Date.now();
+      const okReview = await spawnChild(`review:${month}`, [
         "scripts/month-review.mjs",
         `--month=${month}`,
         "--commit",
       ]);
+      ledger({ phase: "review", event: okReview ? "month_done" : "month_failed", month, durationMs: Date.now() - startedAt });
     }
   }
 
@@ -421,7 +570,9 @@ async function main() {
   // could wait up to 5 minutes after this run to see new content. Best-effort: a failure
   // here must never fail the run — the import/organizer/review work already landed in the DB.
 
-  if (affectedMonths.length > 0) {
+  if (CLI_NO_REVALIDATE && affectedMonths.length > 0) {
+    log("=== Phase 5: skipped (--no-revalidate) ===");
+  } else if (affectedMonths.length > 0) {
     log("=== Phase 5: Revalidate ===");
     await revalidateAffectedMonths(affectedMonths);
   }
@@ -443,15 +594,20 @@ async function main() {
   if (CLI_NO_STATE_UPDATE) {
     log("[bounded test run] --no-state-update set — worker-state.json left untouched");
   } else {
-    writeWorkerState({ lastRunAt: runStartedAt.toISOString() });
-    log(`worker-state.json → lastRunAt: ${runStartedAt.toISOString()}`);
+    writeWorkerState({ version: 2, lastRunAt: runStartedAt.toISOString(), lastRunId: RUN_ID, conversations: conversationState });
+    log(`${path.basename(WORKER_STATE_PATH)} → lastRunAt: ${runStartedAt.toISOString()}, ${Object.keys(conversationState).length} conversation cursor(s)`);
   }
   log(`log file: ${logPath}`);
+  ledger({ phase: "run", event: "completed", durationSec, created: totals.created, mediaCreated: totals.mediaCreated,
+    skipped: totals.skipped, failed: totals.failed, failureClasses: totals.failureClasses,
+    affectedMonths, stateAdvanced: !CLI_NO_STATE_UPDATE });
 }
 
 main().catch((error) => {
   const info = safeErrorInfo(error);
-  const msg = `[FATAL] ${info.code}: ${info.message}`;
+  const failure = classifyFailure({ error });
+  try { ledger({ phase: "run", event: "fatal", failure, message: info.message.slice(0, 200) }); } catch {}
+  const msg = `[FATAL] ${info.code}: ${info.message} — class ${failure.class}`;
   process.stderr.write(msg + "\n");
   try {
     appendFileSync(logPath, msg + "\n", "utf8");

@@ -233,8 +233,25 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, orig
 // once per worker run by the SAME activeMediaProvider() call that chose derivativeStorage itself
 // (see runWechatImportWorker below), so the tag and the physical backend can never disagree.
 function hotLocation(assetId: string, object: StoredMediaObject, now: string, derivativeProvider: MediaProvider): MediaLocation {
-  const id = `hot-location:${digest(`${object.variant} ${object.key}`)}`;
   const provider = object.variant === "original" ? "hot" : derivativeProvider;
+  // The id has to carry the provider, because the table's two unique keys disagree without it.
+  //
+  // media_locations has a PRIMARY KEY on id AND a unique index on (provider, provider_ref). This
+  // insert's ON CONFLICT names the second one, so the first is the one that can still fail — and it
+  // did: the id used to be digest(variant + key), which is the same for a derivative recorded under
+  // "oss" and the same derivative recorded under "hot". After the 2026-09-12 OSS derivative
+  // migration, every photo whose thumbnail/web copy exists ONLY as an "oss" row made this insert
+  // compute that identical id with provider "hot" (activeMediaProvider() is "hot" wherever
+  // MEDIA_STORAGE_PROVIDER=r2), the (provider, provider_ref) arbiter did not match the "oss" row,
+  // and PostgreSQL raised 23505 on media_locations_pkey. The whole batch — and therefore the whole
+  // conversation — failed, which is how two of 2026-09-13's thirteen conversations imported zero
+  // messages while the rest went through.
+  //
+  // With the provider in the digest, one derivative under two providers is two ids, which is what
+  // the archive already holds for 8,971 derivatives migrated before this path was exercised again.
+  // Re-importing something that already has a row of the SAME provider is unaffected: the
+  // (provider, provider_ref) arbiter still matches and the insert still does nothing.
+  const id = `hot-location:${digest(`${provider} ${object.variant} ${object.key}`)}`;
   return { id, mediaAssetId: assetId, provider, variant: object.variant, providerRef: object.key, status: object.variant === "original" ? "awaiting_archive" : "ready", mimeType: object.mimeType, fileSize: object.size, width: object.width, height: object.height, createdAt: now, updatedAt: now };
 }
 
@@ -463,6 +480,20 @@ export async function runWechatImportWorker(options: WechatWorkerOptions): Promi
     return reportFrom(completed ?? current, { createdMessages, reusedMessages, createdMediaAssets, reusedMediaAssets, createdMediaLocations, reusedMediaLocations, uploadedObjects: uploadedObjectsTotal, reusedObjects: reusedObjectsTotal, uploadedBytes: uploadedBytesTotal, warningCounts });
   } catch (error) {
     const safeErrorCode = error instanceof Error && /^[A-Z][A-Z0-9_:-]{0,63}$/.test(error.message) ? error.message : "CHAT_IMPORT_WORKER_FAILED";
+    // Opt-in diagnostics (2026-09-13). The ledger only ever gets a safe code, which is right for a
+    // running system and useless when a run fails at 0 messages and nobody can say why. With
+    // WECHAT_WORKER_DEBUG=1 the swallowed error name/message and the top frames go to stderr of the
+    // process that asked for them — never to the database, never to a log the site can read.
+    if (process.env.WECHAT_WORKER_DEBUG === "1") {
+      const name = error instanceof Error ? error.name : typeof error;
+      const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+      const frames = error instanceof Error && error.stack ? error.stack.split("\n").slice(1, 6).join("\n") : "";
+      // Drizzle wraps the driver error; the part that says WHY (SQLSTATE, constraint, detail) is on
+      // .cause, so print that too or the trace stops one layer short of the answer.
+      const cause = (error as { cause?: { code?: string; constraint?: string; detail?: string; table?: string } })?.cause;
+      const causeLine = cause ? ` cause=${cause.code ?? "?"} constraint=${cause.constraint ?? "-"} table=${cause.table ?? "-"} detail=${String(cause.detail ?? "-").slice(0, 200)}` : "";
+      process.stderr.write(`[wechat-worker:debug] ${name}: ${message}${causeLine}\n${frames}\n`);
+    }
     const failed = await repository.failChatImportTask({ taskId: task.id, leaseOwner, safeErrorCode, now: new Date().toISOString() }).catch(() => null);
     return reportFrom(failed ?? current, { safeErrorCode, createdMessages, reusedMessages, createdMediaAssets, reusedMediaAssets, createdMediaLocations, reusedMediaLocations, uploadedObjects: uploadedObjectsTotal, reusedObjects: reusedObjectsTotal, uploadedBytes: uploadedBytesTotal, warningCounts });
   }
