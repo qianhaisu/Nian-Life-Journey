@@ -129,6 +129,98 @@ function coveredWholeWindow(coverage: UpcomingCoverage): boolean {
     && Boolean(coverage.windowToMessageAt);
 }
 
+// 分组与排序 (总指挥, 2026-09-13). 一条条按日期排下来，最前面的是八月十一号那双忘在学校的鞋子——
+// 它确实还没人标完成，但家人打开首页最先要看的不是一个月前的旧账。所以分成五组，按下面的次序读：
+//
+//   1 今天和之后      还没完成、有明确日子、日子还没过的 —— 越近越前
+//   2 时间待确认      还没完成、明确要做，但没人能说出哪一天
+//   3 待定的计划      还没定下来的，保留「待定」标签；有日子的按日子排，没日子的随后
+//   4 过了日子还没完成 日子过了、仍然没有人说完成 —— 离今天越近越前
+//   5 已经完成        保留删除线、日期、来源与上下文
+//   6 已经取消        单独一组，永远不和「已经完成」混在一起
+//
+// 三条规则写在代码里而不是留给排序去碰运气：
+//
+//   · 区间看的是结束那天。「下周出游」写的是 9 月 7 日到 9 月 13 日，今天是 13 号，它还盖着今天，
+//     不算过期。用开始日判断会把它错判成旧账。
+//   · 改期的事项按它**现在**的时间归组（契约里 rescheduled 仍是「还没完成」），改期标记照旧显示。
+//   · 过期不是一种状态。这里只决定它排在哪一组，库里的行一个字都不动 —— 不会因为日子过了就被
+//     标成完成、取消或删掉。
+export type UpcomingGroupKey = "upcoming" | "undated" | "tentative" | "overdue" | "done" | "cancelled";
+export type UpcomingGroup = { key: UpcomingGroupKey; label: string; items: UpcomingItem[] };
+
+export const UPCOMING_GROUP_LABEL: Record<UpcomingGroupKey, string> = {
+  upcoming: "今天和之后",
+  undated: "时间待确认",
+  tentative: "待定的计划",
+  overdue: "过了日子，还没完成",
+  done: "已经完成",
+  cancelled: "已经取消",
+};
+
+// 一件事「什么时候结束」。区间用结束日，单日就是那天，说不清的没有。
+function endDayOf(when: UpcomingWhen): string | undefined {
+  return when.kind === "day" ? when.day : when.kind === "window" ? when.toDay : undefined;
+}
+// 排序用的那一天：区间用开始日，这样同一组里先看到先开始的。
+function startDayOf(when: UpcomingWhen): string | undefined {
+  return when.kind === "day" ? when.day : when.kind === "window" ? when.fromDay : undefined;
+}
+// 「还没完成的明确待办」：open 与 rescheduled。契约的 isStillOpen 也把 tentative 算进去，
+// 那是「行还活着」的意思；这里要分的是「是不是一件定下来的事」，所以另算。
+const isCommitment = (status: UpcomingStatus) => status === "open" || status === "rescheduled";
+
+export function groupUpcoming(items: UpcomingItem[], today: string): UpcomingGroup[] {
+  const buckets: Record<UpcomingGroupKey, UpcomingItem[]> = { upcoming: [], undated: [], tentative: [], overdue: [], done: [], cancelled: [] };
+  for (const item of items) {
+    const end = endDayOf(item.when);
+    if (item.status === "done") buckets.done.push(item);
+    else if (item.status === "cancelled") buckets.cancelled.push(item);
+    else if (item.status === "tentative") buckets.tentative.push(item);
+    else if (!isCommitment(item.status)) buckets.tentative.push(item);
+    else if (!end) buckets.undated.push(item);
+    else if (end < today) buckets.overdue.push(item);
+    else buckets.upcoming.push(item);
+  }
+  const byDay = (direction: 1 | -1) => (a: UpcomingItem, b: UpcomingItem) => {
+    const da = startDayOf(a.when) ?? "";
+    const db = startDayOf(b.when) ?? "";
+    if (da !== db) return direction * da.localeCompare(db);
+    return a.id.localeCompare(b.id);
+  };
+  buckets.upcoming.sort(byDay(1));
+  buckets.undated.sort((a, b) => a.id.localeCompare(b.id));
+  // 待定：有日子的按日子排在前，没日子的随后。
+  buckets.tentative.sort((a, b) => {
+    const da = startDayOf(a.when);
+    const db = startDayOf(b.when);
+    if (Boolean(da) !== Boolean(db)) return da ? -1 : 1;
+    return da && db ? byDay(1)(a, b) : a.id.localeCompare(b.id);
+  });
+  buckets.overdue.sort(byDay(-1));
+  buckets.done.sort(byDay(-1));
+  buckets.cancelled.sort(byDay(-1));
+  const order: UpcomingGroupKey[] = ["upcoming", "undated", "tentative", "overdue", "done", "cancelled"];
+  return order
+    .filter((key) => buckets[key].length > 0)
+    .map((key) => ({ key, label: UPCOMING_GROUP_LABEL[key], items: buckets[key] }));
+}
+
+// 默认露出几条，按上面的组序取。其余全部在「展开全部」里，一条都不会丢 —— 组名在两边都写出来，
+// 所以一组被折叠线切成两半时，读者两边都知道自己在看什么。
+export function splitUpcomingGroups(groups: UpcomingGroup[], visible = UPCOMING_VISIBLE): { head: UpcomingGroup[]; rest: UpcomingGroup[] } {
+  const head: UpcomingGroup[] = [];
+  const rest: UpcomingGroup[] = [];
+  let left = visible;
+  for (const group of groups) {
+    const take = Math.max(0, Math.min(left, group.items.length));
+    if (take > 0) head.push({ ...group, items: group.items.slice(0, take) });
+    if (take < group.items.length) rest.push({ ...group, items: group.items.slice(take) });
+    left -= take;
+  }
+  return { head, rest };
+}
+
 // The data track's four-state read → what the page draws. `pendingReview` is how many rows are
 // waiting on a human; with any of those, an empty approved list is a backlog and not a clear week,
 // so nothing is drawn. Through `readUpcomingFeedForFamily` that case never even reaches here (it

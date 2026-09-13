@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
-import { UPCOMING_VISIBLE, type UpcomingEvidence, type UpcomingFeed, type UpcomingItem, type UpcomingWhen } from "@/lib/upcoming";
+import { groupUpcoming, splitUpcomingGroups, type UpcomingEvidence, type UpcomingFeed, type UpcomingGroup, type UpcomingItem, type UpcomingWhen } from "@/lib/upcoming";
 
 // 近期待办 on the front page: what the family has to do next, under how he has been lately and
 // above the day's story. The contract, and the reasons the states are what they are, live in
@@ -19,8 +19,10 @@ import { UPCOMING_VISIBLE, type UpcomingEvidence, type UpcomingFeed, type Upcomi
 //   当时 for one already past. An item whose day nobody could pin says 时间待确认 and nothing else —
 //   never a guessed date (Teddy, 2026-09-12).
 //
-//   NOTHING IS DROPPED TO FIT. Four items show; the rest sit behind 展开全部 in the same list
-//   markup, so a long week is complete on the page rather than truncated by a design number.
+//   NOTHING IS DROPPED TO FIT. Four items show, chosen by the group order in lib/upcoming.ts
+//   (今天和之后 → 时间待确认 → 待定的计划 → 过了日子还没完成 → 已经完成 → 已经取消); the rest sit
+//   behind 展开全部 in the same markup, each part carrying its own group headings, so a group split
+//   by the fold is named on both sides and all seventeen stay reachable.
 function WhenLabel({ when, today, birthDay }: { when: UpcomingWhen; today: string; birthDay?: string }) {
   if (when.kind === "unconfirmed") return <span className="upcoming-when upcoming-when--unset">时间待确认</span>;
   if (when.kind === "window") {
@@ -104,14 +106,18 @@ export function UpcomingTasks({ feed, today, birthDay }: { feed: UpcomingFeed; t
       <p className="upcoming-clear">{feed.readToDay ? `${formatDay(feed.windowFrom)} 到 ${formatDay(feed.readToDay)}，没有要记着的事。` : "没有要记着的事。"}</p>
     </section>;
   }
-  const visible = feed.items.slice(0, UPCOMING_VISIBLE);
-  const rest = feed.items.slice(UPCOMING_VISIBLE);
+  const { head, rest } = splitUpcomingGroups(groupUpcoming(feed.items, today));
+  const restCount = rest.reduce((total, group) => total + group.items.length, 0);
+  const Groups = ({ groups }: { groups: UpcomingGroup[] }) => <>{groups.map((group) => <section className={`upcoming-group upcoming-group--${group.key}`} key={group.key}>
+    <h3 className="upcoming-group-title">{group.label}</h3>
+    <ul className="upcoming-list">{group.items.map((item) => <Item key={item.id} item={item} today={today} birthDay={birthDay} />)}</ul>
+  </section>)}</>;
   return <section className="home-upcoming reading-wrap" aria-labelledby="upcoming-title">
     <h2 id="upcoming-title" className="section-mark">近期待办</h2>
-    <ul className="upcoming-list">{visible.map((item) => <Item key={item.id} item={item} today={today} birthDay={birthDay} />)}</ul>
-    {rest.length > 0 ? <details className="upcoming-more">
+    <Groups groups={head} />
+    {restCount > 0 ? <details className="upcoming-more">
       <summary>展开全部</summary>
-      <ul className="upcoming-list">{rest.map((item) => <Item key={item.id} item={item} today={today} birthDay={birthDay} />)}</ul>
+      <Groups groups={rest} />
     </details> : null}
   </section>;
 }

@@ -270,7 +270,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    The line through a finished item is `<del>`, used for 完成 only; 取消 keeps its text (a trip
    nobody took is not a thing that got done) and 改期 carries where it moved to. */
 .home-upcoming { padding: clamp(8px, 1.5vw, 16px) 0 clamp(24px, 3.5vw, 40px); }
-.upcoming-list { margin: 14px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
+/* 分组：组名是小字，规矩和页面其他 section-mark 一样；组与组之间靠间距分开，不再加线，
+   因为每条事项本来就带下划线，再加一条会读成表格。 */
+.upcoming-group + .upcoming-group { margin-top: 18px; }
+.upcoming-group-title { margin: 0; color: var(--color-secondary); font-size: .75rem; font-weight: 700; letter-spacing: .06em; }
+.upcoming-group--overdue .upcoming-group-title, .upcoming-group--done .upcoming-group-title, .upcoming-group--cancelled .upcoming-group-title { color: var(--color-muted); }
+.upcoming-list { margin: 10px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
 .upcoming-item { padding: 14px 0 12px; border-bottom: 1px solid var(--color-border); }
 .upcoming-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; color: var(--color-muted); font-size: .78rem; letter-spacing: .03em; }
 .upcoming-when time { color: var(--color-secondary); font-weight: 700; }
@@ -294,11 +299,13 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .upcoming-basis time { color: var(--color-secondary); font-weight: 700; }
 .upcoming-meta .upcoming-source { display: inline-flex; min-height: 44px; min-width: 44px; align-items: center; justify-content: center; padding: 0 6px; font-size: .8rem; }
 .upcoming-more { margin-top: 4px; }
-.upcoming-more > summary { display: inline-flex; min-height: 44px; align-items: center; color: var(--color-accent); cursor: pointer; font-size: .85rem; font-weight: 600; list-style: none; }
+.upcoming-more { margin-top: 14px; }
+.upcoming-more > summary { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; padding-right: 4px; color: var(--color-accent); cursor: pointer; font-size: .85rem; font-weight: 600; list-style: none; }
 .upcoming-more > summary::-webkit-details-marker { display: none; }
 .upcoming-more > summary::after { margin-left: 8px; content: "＋"; }
 .upcoming-more[open] > summary::after { content: "－"; }
-.upcoming-more .upcoming-list { margin-top: 0; border-top: none; }
+.upcoming-more .upcoming-group:first-child .upcoming-list { border-top: none; }
+.upcoming-more .upcoming-group:first-child { margin-top: 0; }
 /* 完整覆盖、队列里也没有待审的一行。带上读到哪天，「没有待办」才是可核对的。 */
 .upcoming-clear { margin: 12px 0 0; color: var(--color-muted); font-size: .95rem; line-height: 1.7; }
 

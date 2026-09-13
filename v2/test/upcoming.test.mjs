@@ -12,7 +12,7 @@
 // so no row exists in any running database and nothing here claims otherwise.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { feedFromResult, normalizeUpcoming, readHomeUpcoming, sortUpcoming, UPCOMING_VISIBLE } from "../lib/upcoming.ts";
+import { feedFromResult, groupUpcoming, normalizeUpcoming, readHomeUpcoming, sortUpcoming, splitUpcomingGroups, UPCOMING_VISIBLE } from "../lib/upcoming.ts";
 import { readUpcomingFeedForFamily } from "../lib/db/upcoming-store.ts";
 
 // A coverage block shaped like the data track's (lib/upcoming-contract.ts): only "ready" and
@@ -162,4 +162,86 @@ test("repeat reminders arrive folded into one item, and the page keeps the recor
   const item = normalizeUpcoming({ id: "u9", title: "带尿不湿", when: { kind: "day", day: "2026-09-13" }, status: "open", evidence, supersedes: ["msg-1", "msg-2"] });
   assert.deepEqual(item.supersedes, ["msg-1", "msg-2"], "one commitment is one line however many times it was asked for");
   assert.equal(normalizeUpcoming({ id: "u10", title: "带尿不湿", when: { kind: "unconfirmed" }, status: "open", evidence, supersedes: [] }).supersedes, undefined);
+});
+
+// ── 分组与排序 (总指挥, 2026-09-13) ──────────────────────────────────────────
+// 下面用的是 2026-09-13 线上真实的那 17 条 approved（9 open / 5 tentative / 3 done）的形状：
+// 日期、状态、时间形态都照抄，只把标题缩短。今天固定为 2026-09-13。
+const TODAY = "2026-09-13";
+const ev = { day: "2026-08-01" };
+const item = (id, status, when, extra = {}) => ({ id, title: id, status, when, evidence: ev, ...extra });
+const day = (d) => ({ kind: "day", day: d });
+const win = (from, to) => ({ kind: "window", fromDay: from, toDay: to });
+const unset = { kind: "unconfirmed" };
+const proven = { statusEvidence: { day: "2026-09-10" } };
+
+const LIVE = [
+  item("done-0805", "done", day("2026-08-05"), proven),
+  item("done-0808", "done", day("2026-08-08"), proven),
+  item("done-0909", "done", day("2026-09-09"), proven),
+  item("open-0811", "open", day("2026-08-11")),
+  item("open-0812", "open", day("2026-08-12")),
+  item("open-0816", "open", day("2026-08-16")),
+  item("open-0819", "open", day("2026-08-19")),
+  item("open-0821", "open", day("2026-08-21")),
+  item("open-0909a", "open", day("2026-09-09")),
+  item("open-0909b", "open", day("2026-09-09")),
+  item("open-unset-a", "open", unset),
+  item("open-unset-b", "open", unset),
+  item("tent-0822", "tentative", win("2026-08-22", "2026-08-23")),
+  item("tent-0907", "tentative", win("2026-09-07", "2026-09-13")),
+  item("tent-unset-a", "tentative", unset),
+  item("tent-unset-b", "tentative", unset),
+  item("tent-unset-c", "tentative", unset),
+];
+
+test("分组：五组的次序、组内排序，以及区间按结束日判断过期", () => {
+  const groups = groupUpcoming(LIVE, TODAY);
+  assert.deepEqual(groups.map((g) => g.key), ["undated", "tentative", "overdue", "done"], "线上这 17 条里没有今天及之后的明确待办，空组不渲染");
+  assert.deepEqual(groups.find((g) => g.key === "undated").items.map((i) => i.id), ["open-unset-a", "open-unset-b"]);
+  // 待定：有日子的按日子排在前，没日子的随后。09-07 → 09-13 那条**盖着今天**，仍在待定组里。
+  assert.deepEqual(groups.find((g) => g.key === "tentative").items.map((i) => i.id), ["tent-0822", "tent-0907", "tent-unset-a", "tent-unset-b", "tent-unset-c"]);
+  // 过期组：离今天越近越前。
+  assert.deepEqual(groups.find((g) => g.key === "overdue").items.map((i) => i.id), ["open-0909a", "open-0909b", "open-0821", "open-0819", "open-0816", "open-0812", "open-0811"]);
+  assert.deepEqual(groups.find((g) => g.key === "done").items.map((i) => i.id), ["done-0909", "done-0808", "done-0805"]);
+  // 一条都不能丢，也不能被算两次。
+  assert.equal(groups.reduce((n, g) => n + g.items.length, 0), LIVE.length);
+  assert.equal(new Set(groups.flatMap((g) => g.items.map((i) => i.id))).size, LIVE.length);
+});
+
+test("区间只看结束日：今天还在区间里就不算过期，昨天结束的才算", () => {
+  const covering = groupUpcoming([item("covers-today", "open", win("2026-09-07", "2026-09-13"))], TODAY);
+  assert.equal(covering[0].key, "upcoming", "9 月 7 日开始、13 日结束，今天是 13 日 —— 还盖着今天");
+  const ended = groupUpcoming([item("ended", "open", win("2026-09-05", "2026-09-12"))], TODAY);
+  assert.equal(ended[0].key, "overdue");
+  const todayOnly = groupUpcoming([item("today", "open", day(TODAY))], TODAY);
+  assert.equal(todayOnly[0].key, "upcoming", "今天当天不是过期");
+});
+
+test("改期按现在的时间归组并保留标记；取消永远不和完成混在一起", () => {
+  const moved = item("moved", "rescheduled", day("2026-09-20"), { statusNote: "改到 9 月 20 日", statusEvidence: { day: "2026-09-11" } });
+  const movedPast = item("moved-past", "rescheduled", day("2026-09-01"), { statusNote: "改到 9 月 1 日", statusEvidence: { day: "2026-08-30" } });
+  const cancelled = item("cancelled", "cancelled", day("2026-09-07"), { statusEvidence: { day: "2026-09-06" } });
+  const groups = groupUpcoming([moved, movedPast, cancelled, LIVE[0]], TODAY);
+  assert.equal(groups.find((g) => g.key === "upcoming").items[0].id, "moved", "改到将来的，按将来的日子归组");
+  assert.equal(groups.find((g) => g.key === "overdue").items[0].id, "moved-past", "改到已经过去的，归到过期组，不是完成");
+  assert.equal(groups.find((g) => g.key === "cancelled").items[0].id, "cancelled");
+  assert.ok(!groups.find((g) => g.key === "done").items.some((i) => i.id === "cancelled"), "取消不能进已完成");
+  // 组序里取消永远排在完成之后，两个组名不同。
+  assert.deepEqual(groups.map((g) => g.key).slice(-2), ["done", "cancelled"]);
+});
+
+test("默认四条按组序取，其余都在展开里，两边都带组名", () => {
+  const groups = groupUpcoming(LIVE, TODAY);
+  const { head, rest } = splitUpcomingGroups(groups, UPCOMING_VISIBLE);
+  assert.equal(head.reduce((n, g) => n + g.items.length, 0), 4);
+  assert.deepEqual(head.map((g) => [g.label, g.items.map((i) => i.id)]), [
+    ["时间待确认", ["open-unset-a", "open-unset-b"]],
+    ["待定的计划", ["tent-0822", "tent-0907"]],
+  ], "第一组为空，就从第二组开始取");
+  // 被折叠线切开的那一组，两边都写出组名。
+  assert.ok(rest.some((g) => g.label === "待定的计划"));
+  const all = [...head, ...rest].flatMap((g) => g.items.map((i) => i.id));
+  assert.equal(all.length, LIVE.length, "十七条一条不少");
+  assert.equal(new Set(all).size, LIVE.length, "也没有一条被显示两次");
 });
