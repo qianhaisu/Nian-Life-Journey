@@ -68,7 +68,14 @@ export default async function PreviewYearPage({ params }: { params: Promise<{ ye
     photosByEvent: confirmedPhotoIdsByEvent(reviews),
     media: archive.media,
     leadById,
-    vouchedPhotoIds: new Set([...archive.privilege.confirmed, ...(archive.privilege.checked ?? [])]),
+    // 照片展示隔离 (总指挥, 2026-09-13), 补上的第三条展示路径. This used to be `confirmed ∪ checked`.
+    // `confirmed` cannot carry this slot for two independent reasons: Basis A puts a picture in it
+    // by arrival position with nobody having looked, and the set is a FLAT mediaId set rather than
+    // (story, photograph) pairs — so a binding approved for one story admits the same picture
+    // everywhere (data track, 2026-09-13: `844a4868…` is approved on `event-v2-afcea68e…` and
+    // unreviewed on `event-v2-e72ff7aa…`). A month review's illustration is a claim about the
+    // picture, so it asks the one record that makes that claim.
+    vouchedPhotoIds: archive.privilege.checked ?? new Set(),
     birthDay: archive.birthDay,
   });
 

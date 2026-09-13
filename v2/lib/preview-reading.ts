@@ -144,8 +144,14 @@ export type PreviewYearInput = {
   media: Media[];
   // A published story's own lead photograph, already decided by the family-facing layer.
   leadById: Map<string, MediaRef>;
-  // The pictures something recorded a reason for: `confirmed` (a story's own material) ∪ `checked`
-  // (opened and recorded as being of him). Only these may illustrate a month review.
+  // The photographs somebody opened and recorded the contents of — an approved `media_subject_check`
+  // under the latest decision (lib/media/story-binding.ts checkedPhotoIdsFrom). Only these may
+  // illustrate a month review.
+  //
+  // 2026-09-13: this was `confirmed ∪ checked` and the `confirmed` half is gone. A month review's
+  // picture is presented as being of him, which a story binding does not say and Basis A does not
+  // say at all. A DRAFT STORY's own photograph is a different question with a different answer and
+  // is unchanged — it comes from `photosByEvent`, keyed by (story, photograph) pair.
   vouchedPhotoIds?: ReadonlySet<string>;
   birthDay?: string;
 };

@@ -81,6 +81,40 @@ test("publishing a story moves no photograph — same pictures, same slots, befo
   assert.equal(after.chapter.some((moment) => moment.memory?.id === "published"), true, "and the words themselves are published");
 });
 
+// 纯照片日的版面头图 (`photo_led`) is deliberately NOT gated by this change — it is not created by
+// publishing, and gating it would strip the photography from months that have no words at all
+// (总指挥 第七条: 避免误伤原有相册入口与授权). That decision is only safe if publishing cannot ADD
+// one, so this asserts the invariant directly rather than resting on a batch count: the hero set
+// after publishing is always a SUBSET of the hero set before.
+//
+// The mechanism, in composeMonth: a chronicle candidate is `photoDaysAsc.filter(day =>
+// !chapterDays.has(day.day))`. Publishing only ever adds to `chapterDays`, so it can only remove
+// candidates. Asserted over several days at once, including days that gain words and days that do
+// not, so a future change that starts minting heroes on published days fails here.
+test("publishing can retire a photo-led hero but can never mint one", () => {
+  const days = ["2026-08-04", "2026-08-11", "2026-08-18", "2026-08-25"];
+  const media = days.flatMap((day, i) => [
+    photo(`${day}-a`, `${day}T02:00:00.000Z`),
+    photo(`${day}-b`, `${day}T0${i + 3}:00:00.000Z`),
+  ]);
+  const heroesOf = (events) => new Set(buildMonthComposition(monthOf({ media, events }, "2026-08"), privilegeOf(media))
+    .chronicle.map((moment) => moment.hero?.id).filter(Boolean));
+
+  const before = heroesOf([]);
+  assert.ok(before.size > 0, "the unpublished month really does carry photo-led heroes");
+
+  // Publish one day, then two, then all four: the set only ever shrinks.
+  let previous = before;
+  for (let n = 1; n <= days.length; n += 1) {
+    const events = days.slice(0, n).map((day, i) => event(`story-${i}`, `${day} 00:00:00+00`, []));
+    const now = heroesOf(events);
+    assert.ok([...now].every((id) => before.has(id)), `publishing ${n} day(s) minted a hero that did not exist before`);
+    assert.ok(now.size <= previous.size, `publishing ${n} day(s) grew the hero set`);
+    previous = now;
+  }
+  assert.ok(previous.size < before.size, "…and publishing every photographed day really did retire some");
+});
+
 test("a day group carries the photographs somebody opened, and only those", () => {
   const looked = photo("opened-and-recorded", "2026-08-19T02:00:00.000Z");
   const unlooked = photo("nobody-opened-this", "2026-08-19T05:00:00.000Z");
