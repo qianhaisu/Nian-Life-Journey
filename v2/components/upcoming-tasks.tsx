@@ -74,10 +74,13 @@ const STATUS_LABEL: Record<UpcomingItem["status"], string | undefined> = {
   open: undefined, tentative: "待定", done: "已完成", rescheduled: "改期", cancelled: "已取消",
 };
 
-function Item({ item, today, birthDay }: { item: UpcomingItem; today: string; birthDay?: string }) {
+// `hideWhen` 只在「时间待确认」那一组为真：那一组的组名已经把这句说了一遍，每条再写一次
+// 「时间待确认」，读起来就是同一句话连着出现四遍（2026-09-13 部署后在 390px 上读出来的）。
+// 其余每一组的日期都各不相同，照常显示。
+function Item({ item, today, birthDay, hideWhen = false }: { item: UpcomingItem; today: string; birthDay?: string; hideWhen?: boolean }) {
   const label = STATUS_LABEL[item.status];
   return <li className={`upcoming-item upcoming-item--${item.status}`}>
-    <WhenLabel when={item.when} today={today} birthDay={birthDay} />
+    {hideWhen ? null : <WhenLabel when={item.when} today={today} birthDay={birthDay} />}
     <p className="upcoming-title serif">
       {item.status === "done" ? <del>{item.title}</del> : item.title}
       {label ? <span className={`upcoming-badge upcoming-badge--${item.status}`}>{label}</span> : null}
@@ -110,7 +113,7 @@ export function UpcomingTasks({ feed, today, birthDay }: { feed: UpcomingFeed; t
   const restCount = rest.reduce((total, group) => total + group.items.length, 0);
   const Groups = ({ groups }: { groups: UpcomingGroup[] }) => <>{groups.map((group) => <section className={`upcoming-group upcoming-group--${group.key}`} key={group.key}>
     <h3 className="upcoming-group-title">{group.label}</h3>
-    <ul className="upcoming-list">{group.items.map((item) => <Item key={item.id} item={item} today={today} birthDay={birthDay} />)}</ul>
+    <ul className="upcoming-list">{group.items.map((item) => <Item key={item.id} item={item} today={today} birthDay={birthDay} hideWhen={group.key === "undated"} />)}</ul>
   </section>)}</>;
   return <section className="home-upcoming reading-wrap" aria-labelledby="upcoming-title">
     <h2 id="upcoming-title" className="section-mark">近期待办</h2>
