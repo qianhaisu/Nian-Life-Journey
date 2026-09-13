@@ -37,21 +37,27 @@ export function YearNavHighlight() {
     // One year is not a choice, so there is nothing to keep in sync.
     if (years.length < 2) return;
 
-    // The year named in the address, while it still stands. Cleared the moment the reader scrolls
-    // under their own power, so that scrolling away from 2024 stops claiming they are still on it.
-    let asked: string | null = null;
-    const readAsked = () => {
+    // Whether the reader has taken the page over by scrolling it themselves. Until they do, the
+    // year named in the address decides.
+    //
+    // The address is read at the moment it is needed rather than cached: history.replaceState and
+    // pushState change it without firing hashchange or popstate, and the App Router uses both, so
+    // a cached answer can outlive the address it came from. It did — with the hash cleared and the
+    // page at the top, 2024 was still lit.
+    let readerTookOver = false;
+    const askedYear = () => {
+      if (readerTookOver) return undefined;
       const id = window.location.hash.replace(/^#/, '');
-      asked = years.some((y) => y.id === id) ? id : null;
+      return years.find((y) => y.id === id);
     };
 
     let frame = 0;
     const sync = () => {
       frame = 0;
       let current = years[0];
-      const askedYear = asked ? years.find((y) => y.id === asked) : undefined;
-      if (askedYear) {
-        current = askedYear;
+      const asked = askedYear();
+      if (asked) {
+        current = asked;
       } else {
         const readingLine = window.innerHeight * 0.3;
         for (const year of years) {
@@ -73,23 +79,21 @@ export function YearNavHighlight() {
     const schedule = () => {
       if (frame === 0) frame = requestAnimationFrame(sync);
     };
+    // Naming a year again hands the page back to the address.
     const onAddressChange = () => {
-      readAsked();
+      readerTookOver = false;
       schedule();
     };
-    // Clicking the pill already showing in the address changes nothing about the address, so the
-    // click itself has to be heard too.
     const onNavClick = (event: Event) => {
       const pill = (event.target as Element | null)?.closest?.('.year-pill');
-      const hit = pill ? years.find((y) => y.pill === pill) : undefined;
-      if (!hit) return;
-      asked = hit.id;
+      if (!pill || !years.some((y) => y.pill === pill)) return;
+      readerTookOver = false;
       schedule();
     };
     // Anything the reader does to move the page themselves retires the address.
     const onReaderScroll = () => {
-      if (asked === null) return;
-      asked = null;
+      if (readerTookOver) return;
+      readerTookOver = true;
       schedule();
     };
     const SCROLLING_KEYS = new Set([
@@ -99,7 +103,7 @@ export function YearNavHighlight() {
       if (SCROLLING_KEYS.has(event.key)) onReaderScroll();
     };
 
-    readAsked();
+
     sync();
     document.addEventListener('scroll', schedule, { passive: true, capture: true });
     window.addEventListener('resize', schedule);
