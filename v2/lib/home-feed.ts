@@ -642,7 +642,7 @@ export function reminderStateOf(item: UpcomingItem, today: string, supersededIds
   const verdict = freshnessOf(item, today);
   if (verdict.stale) return { state: "expired", reason: verdict.reason };
   // 状态是领域事实，保鲜只决定「还新不新鲜」。一条**待定**的计划即使写了日子也还是待定：
-  // 「下周出游（莫干山或四明山）」有 9 月 7 日到 13 日的窗口，但没人定下来去哪、去不去。
+  // 生产里有一条计划带着 9 月 7 日到 13 日的窗口，但没人定下来去哪、去不去。
   // 把它显示成「要做的」，就是把一次商量说成一件已定的事（§6 的「未确定的计划明确标注待定」）。
   if (item.status === "tentative") {
     return { state: "tentative", reason: verdict.klass === "dated" ? `还没定下来（${verdict.reason}）` : "还没定下来" };

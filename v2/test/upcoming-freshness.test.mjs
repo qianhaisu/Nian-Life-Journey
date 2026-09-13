@@ -1,6 +1,13 @@
-// 待办保鲜 (lib/upcoming-freshness.ts). 这里的用例大半是**生产上真实存在的那几条**——
-// 2026-09-13 线上首页最上面就是 8 月 16 日的「买鸡蛋」。断言写的是那些标题本身，所以哪天规则
-// 改坏了，失败信息直接说出是哪一条会重新爬回首页。
+// 待办保鲜 (lib/upcoming-freshness.ts).
+//
+// **这里每一条 fixture 都是合成的。** 真实的家庭聊天、标题与健康细节不进 Git
+// （test/upcoming-feed.test.mjs 立的同一条规矩），针对生产那 18 条真实待办的核验在仓库外：
+// NianlifeOps/home-2026-09-13/data/home-feed-verification.json 的「逐条保鲜判定」，
+// 以及同目录的 live-upcoming.json（采自线上私有站首页 DOM）。
+//
+// 合成 fixture 照抄的是生产那 18 条的**形状**，不是它们的内容——每个 test 名字里写的是形状：
+// 28 天前提出的无期限采购、23 天前提出的无期限小事、今天提出的关键健康事项、窗口盖住今天的待定
+// 计划、窗口已过的待定计划、无日期的待定计划、日子已过的一次性琐事。这七种在生产里都真的存在。
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -30,11 +37,11 @@ test("起算点是消息日（evidence.day），不是入库时刻，也不是�
 
 // ── 生产上真实的那几条 ───────────────────────────────────────────────────────
 
-test("生产真实案例：8 月 16 日的「买鸡蛋」按 48 小时退场，但库里仍然是 open", () => {
-  const eggs = item({ id: "eggs", title: "买鸡蛋", note: "妈妈说先给他买鸡蛋。", evidence: { day: "2026-08-16" } });
+test("形状一：28 天前提出的无期限采购，按 48 小时退场，但库里仍然是 open", () => {
+  const eggs = item({ id: "errand-1", title: "买一样日用品", evidence: { day: "2026-08-16" } });
   const verdict = freshnessOf(eggs, TODAY);
   assert.equal(verdict.klass, "errand");
-  assert.equal(verdict.freshThrough, "2026-08-18", "8 月 16 日 + 48 小时");
+  assert.equal(verdict.freshThrough, "2026-08-18", "提出日 + 48 小时");
   assert.equal(verdict.stale, true);
   assert.match(verdict.reason, /临时事项/);
   const state = reminderStateOf(eggs, TODAY, new Set());
@@ -44,18 +51,15 @@ test("生产真实案例：8 月 16 日的「买鸡蛋」按 48 小时退场，�
   assert.equal(freshnessOf({ ...eggs, evidence: { day: "2026-09-12" } }, TODAY).stale, false);
 });
 
-test("生产真实案例：8 月 21 日老师说的「给宝贝涂药膏」也按临时事项退场", () => {
-  const cream = item({ id: "cream", title: "给宝贝涂药膏", note: "老师说他小腿被蚊子叮了一口，请回家涂药膏。", evidence: { day: "2026-08-21" } });
+test("形状二：23 天前提出的无期限小事（不是采购）也按临时事项退场", () => {
+  const cream = item({ id: "errand-2", title: "回家做一件当天的小事", evidence: { day: "2026-08-21" } });
   assert.equal(classifyFreshness(cream), "errand", "一次性、没有期限的临时事项，不只是采购才算");
   assert.equal(freshnessOf(cream, TODAY).stale, true);
 });
 
-test("生产真实案例：接种记录核对是关键事项，永不按时钟过期，也不生成医疗期限", () => {
-  const vax = item({
-    id: "vax", title: "核对张年的接种记录，确认是否需要补种",
-    note: "核对国内接种证及美国接种记录；重点核实麻腮风延期后的接种情况",
-    evidence: { day: "2026-09-13" },
-  });
+test("形状三：关键健康事项（接种类）永不按时钟过期，也不生成医疗期限", () => {
+  // 词表命中即为关键事项。具体是哪一次核对、核对什么，属于健康记录，不进仓库。
+  const vax = item({ id: "health-1", title: "去门诊核对一次接种记录", evidence: { day: "2026-09-13" } });
   assert.ok(isImportantItem(vax));
   assert.equal(classifyFreshness(vax), "important");
   const verdict = freshnessOf(vax, TODAY);
@@ -66,8 +70,8 @@ test("生产真实案例：接种记录核对是关键事项，永不按时钟�
   assert.equal(reminderStateOf(vax, TODAY, new Set()).state, "needs_confirmation");
 });
 
-test("生产真实案例：已预约/有日子的关键事项过期也不默默丢失", () => {
-  const checkup = item({ id: "checkup", title: "带他去门诊复查", when: { kind: "day", day: "2026-09-01" }, evidence: { day: "2026-08-28" } });
+test("形状三之二：有日子的关键事项过期也不默默丢失", () => {
+  const checkup = item({ id: "health-2", title: "去门诊复查一次", when: { kind: "day", day: "2026-09-01" }, evidence: { day: "2026-08-28" } });
   const reminders = buildReminders({ status: "ready", items: [checkup] }, TODAY, undefined);
   assert.equal(reminders.retired.length, 1, "它从默认位退下来");
   assert.equal(reminders.retired[0].status, "open", "没有被写成完成");
@@ -75,9 +79,9 @@ test("生产真实案例：已预约/有日子的关键事项过期也不默默�
   assert.equal(reminders.more[0].important, true, "而且标着关键事项");
 });
 
-test("生产真实案例：「下周出游」的窗口还盖着今天，所以既不过期、也不显示成「要做的」", () => {
+test("形状四：窗口还盖着今天的待定计划，既不过期、也不显示成「要做的」", () => {
   const trip = item({
-    id: "trip", title: "下周出游（莫干山或四明山）", status: "tentative",
+    id: "plan-1", title: "下周出门一次", status: "tentative",
     when: { kind: "window", fromDay: "2026-09-07", toDay: "2026-09-13" }, evidence: { day: "2026-08-31" },
   });
   assert.equal(freshnessOf(trip, TODAY).stale, false, "结束日就是今天，还盖着今天");
@@ -86,9 +90,9 @@ test("生产真实案例：「下周出游」的窗口还盖着今天，所以�
   assert.match(state.reason, /还没定下来/);
 });
 
-test("生产真实案例：8 月 22–23 日那次「周末出游」窗口已过，退场时说的是「没有后续消息」", () => {
+test("形状五：窗口已过的待定计划，退场时说的是「没有后续消息」", () => {
   const old = item({
-    id: "trip-old", title: "周末安排一次宁波或舟山出游", status: "tentative",
+    id: "plan-2", title: "上个周末出门一次", status: "tentative",
     when: { kind: "window", fromDay: "2026-08-22", toDay: "2026-08-23" }, evidence: { day: "2026-08-17" },
   });
   const verdict = freshnessOf(old, TODAY);
@@ -97,8 +101,8 @@ test("生产真实案例：8 月 22–23 日那次「周末出游」窗口已过
   assert.equal(reminderStateOf(old, TODAY, new Set()).state, "expired");
 });
 
-test("生产真实案例：没有日期的待定计划不按时钟过期（10 月的国庆打算不是 8 月的旧账）", () => {
-  const holiday = item({ id: "holiday", title: "国庆去大湾区旅游", status: "tentative", evidence: { day: "2026-08-25" } });
+test("形状六：没有日期的待定计划不按时钟过期（一件还没到的未来的事不是旧账）", () => {
+  const holiday = item({ id: "plan-3", title: "下个假期出去玩一次", status: "tentative", evidence: { day: "2026-08-25" } });
   assert.equal(classifyFreshness(holiday), "undecided_plan");
   const verdict = freshnessOf(holiday, TODAY);
   assert.equal(verdict.stale, false);
@@ -111,10 +115,10 @@ test("生产真实案例：没有日期的待定计划不按时钟过期（10 �
 test("临时事项 48 小时 / 库存预测 72 小时 / 习惯提醒 7 天", () => {
   assert.deepEqual(FRESHNESS_HOURS, { errand: 48, stock_forecast: 72, habit: 7 * 24 });
   const raised = "2026-09-09";
-  const errand = freshnessOf(item({ title: "买尿不湿", evidence: { day: raised } }), TODAY);
+  const errand = freshnessOf(item({ title: "买一件消耗品", evidence: { day: raised } }), TODAY);
   assert.equal(errand.klass, "errand");
   assert.equal(errand.freshThrough, "2026-09-11");
-  const stock = freshnessOf(item({ title: "尿不湿快没了", evidence: { day: raised } }), TODAY);
+  const stock = freshnessOf(item({ title: "有件东西快没了", evidence: { day: raised } }), TODAY);
   assert.equal(stock.klass, "stock_forecast");
   assert.equal(stock.freshThrough, "2026-09-12");
   const habit = freshnessOf(item({ title: "每天记一次作息", evidence: { day: raised } }), TODAY);
@@ -124,20 +128,20 @@ test("临时事项 48 小时 / 库存预测 72 小时 / 习惯提醒 7 天", () 
 });
 
 test("新鲜期最后一天当天不算过期，第二天才算（边界含当天）", () => {
-  const at = (day) => freshnessOf(item({ title: "买鸡蛋", evidence: { day } }), TODAY).stale;
+  const at = (day) => freshnessOf(item({ title: "买一样日用品", evidence: { day } }), TODAY).stale;
   assert.equal(at("2026-09-11"), false, "9-11 + 2 天 = 9-13，就是今天，还新鲜");
   assert.equal(at("2026-09-10"), true, "9-10 + 2 天 = 9-12，昨天就过了");
 });
 
 test("起算点跨月跨年按日历算，不是按 30 天", () => {
-  assert.equal(freshnessOf(item({ title: "买鸡蛋", evidence: { day: "2026-08-30" } }), "2026-09-01").stale, false);
-  assert.equal(freshnessOf(item({ title: "买鸡蛋", evidence: { day: "2025-12-31" } }), "2026-01-02").stale, false);
-  assert.equal(freshnessOf(item({ title: "买鸡蛋", evidence: { day: "2025-12-30" } }), "2026-01-02").stale, true);
+  assert.equal(freshnessOf(item({ title: "买一样日用品", evidence: { day: "2026-08-30" } }), "2026-09-01").stale, false);
+  assert.equal(freshnessOf(item({ title: "买一样日用品", evidence: { day: "2025-12-31" } }), "2026-01-02").stale, false);
+  assert.equal(freshnessOf(item({ title: "买一样日用品", evidence: { day: "2025-12-30" } }), "2026-01-02").stale, true);
 });
 
 test("历史消息今天导入，仍然是过期的（起算点是消息日，不是导入日）", () => {
   // 这一条是整个文件存在的理由：五万条微信记录是 2026 年导进来的，消息本身是 2025 年说的。
-  const oldMessage = item({ title: "买鸡蛋", evidence: { day: "2025-07-04" } });
+  const oldMessage = item({ title: "买一样日用品", evidence: { day: "2025-07-04" } });
   const verdict = freshnessOf(oldMessage, TODAY);
   assert.equal(verdict.stale, true);
   assert.equal(verdict.raisedOn, "2025-07-04", "起算点是 2025 年那天，不是今天导入的这一刻");
@@ -145,8 +149,8 @@ test("历史消息今天导入，仍然是过期的（起算点是消息日，�
 });
 
 test("同一条事项重复判定是幂等的：同样输入逐字同样输出", () => {
-  const one = freshnessOf(item({ title: "买鸡蛋" }), TODAY);
-  const two = freshnessOf(item({ title: "买鸡蛋" }), TODAY);
+  const one = freshnessOf(item({ title: "买一样日用品" }), TODAY);
+  const two = freshnessOf(item({ title: "买一样日用品" }), TODAY);
   assert.deepEqual(one, two);
 });
 
@@ -157,7 +161,7 @@ test("同一条习惯提醒最多露出两个不同日期，更早的收起来�
     { id: "h1", title: "每天量体温", raisedOn: "2026-09-12", klass: "habit" },
     { id: "h2", title: "每天量体温", raisedOn: "2026-09-10", klass: "habit" },
     { id: "h3", title: "每天量体温", raisedOn: "2026-09-08", klass: "habit" },
-    { id: "e1", title: "买鸡蛋", raisedOn: "2026-09-01", klass: "errand" },
+    { id: "e1", title: "买一样日用品", raisedOn: "2026-09-01", klass: "errand" },
   ];
   const { kept, dropped } = limitHabitDates(entries);
   assert.equal(dropped.length, 1);
@@ -181,10 +185,10 @@ test("同一天的两条习惯提醒只算一个日期", () => {
 
 test("每次首页读取都重跑有效性过滤：后台没动过库，过期琐事也不会再爬回默认位", () => {
   const items = [
-    item({ id: "eggs", title: "买鸡蛋", evidence: { day: "2026-08-16" } }),
-    item({ id: "cream", title: "给宝贝涂药膏", evidence: { day: "2026-08-21" } }),
-    item({ id: "shoes", title: "取回落在学校的鞋子", when: { kind: "day", day: "2026-08-11" }, evidence: { day: "2026-08-10" } }),
-    item({ id: "vax", title: "核对张年的接种记录，确认是否需要补种", evidence: { day: TODAY } }),
+    item({ id: "eggs", title: "买一样日用品", evidence: { day: "2026-08-16" } }),
+    item({ id: "cream", title: "回家做一件当天的小事", evidence: { day: "2026-08-21" } }),
+    item({ id: "shoes", title: "取回一件落在外面的东西", when: { kind: "day", day: "2026-08-11" }, evidence: { day: "2026-08-10" } }),
+    item({ id: "vax", title: "去门诊核对一次接种记录", evidence: { day: TODAY } }),
   ];
   // 连读三次，每次都是同一个答案，而且每次都真的重算过（没有缓存，没有后台任务参与）。
   for (let round = 0; round < 3; round += 1) {
@@ -201,7 +205,7 @@ test("每次首页读取都重跑有效性过滤：后台没动过库，过期�
 });
 
 test("往后推一天，昨天刚好新鲜的那条自己退场，不需要任何后台任务", () => {
-  const fresh = item({ id: "milk", title: "买牛奶", evidence: { day: "2026-09-11" } });
+  const fresh = item({ id: "milk", title: "买一样吃的", evidence: { day: "2026-09-11" } });
   assert.equal(buildReminders({ status: "ready", items: [fresh] }, "2026-09-13").retired.length, 0);
   assert.equal(buildReminders({ status: "ready", items: [fresh] }, "2026-09-14").retired.length, 1);
 });
@@ -209,7 +213,7 @@ test("往后推一天，昨天刚好新鲜的那条自己退场，不需要任�
 // ── 重放不续期（lib/db/upcoming-store.ts 合并分支调的那条规则） ──────────────────
 
 test("同一件事被更晚的消息再说一次，提出日不会被推后（来源重放不续期）", () => {
-  // 8 月 16 日提出的「买鸡蛋」，9 月 10 日又被提了一次。如果提出日跟着走到 9 月 10 日，
+  // 8 月 16 日提出的一件无期限小事，9 月 10 日又被提了一次。如果提出日跟着走到 9 月 10 日，
   // 48 小时新鲜期就重新开始，一条一个月前的旧账会凭一次重放爬回首页。
   assert.equal(pinnedRaisedOn("2026-08-16", "2026-09-10"), "2026-08-16");
   assert.equal(pinnedRaisedOn("2026-09-10", "2026-08-16"), "2026-08-16", "哪一边更早都取更早的");

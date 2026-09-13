@@ -1,4 +1,7 @@
-// 首页数据契约 (lib/home-feed.ts). 这里守的是几条会直接在苏静眼前出错的规则：
+// 首页数据契约 (lib/home-feed.ts). **每一条 fixture 都是合成的**——真实的家庭标题与健康细节不进
+// Git（test/upcoming-feed.test.mjs 立的同一条规矩），对生产真实数据的核验在仓库外：
+// NianlifeOps/home-2026-09-13/data/home-feed-verification.json。
+// 这里守的是几条会直接在苏静眼前出错的规则：
 // 六小时内刷新不换、跨期会换、图和故事不串、撤销立刻生效、候选不足时降级说实话、
 // 陈旧待办不默认露出但也不被写成完成、关键健康事项不因过期消失、时区边界。
 import test from "node:test";
@@ -313,7 +316,7 @@ const item = (id, overrides = {}) => ({
 });
 
 test("过了日子又没有完成记录的事项不默认露出，但也不写成完成", () => {
-  const stale = item("shoes", { title: "取回落在学校的鞋子", when: { kind: "day", day: "2026-08-11" } });
+  const stale = item("shoes", { title: "取回一件落在外面的东西", when: { kind: "day", day: "2026-08-11" } });
   const reminders = buildReminders({ status: "ready", items: [stale] }, TODAY, undefined);
   assert.equal(reminders.status, "ready");
   assert.equal(reminders.shown.length, 0, "一个月前的旧账不占首页");
@@ -324,15 +327,15 @@ test("过了日子又没有完成记录的事项不默认露出，但也不写�
 });
 
 test("区间看的是结束日：还盖着今天的计划不算过期", () => {
-  const covering = item("trip", { title: "下周出游", status: "tentative", when: { kind: "window", fromDay: "2026-09-07", toDay: TODAY } });
-  const past = item("trip-old", { title: "周末出游", status: "tentative", when: { kind: "window", fromDay: "2026-08-22", toDay: "2026-08-23" } });
+  const covering = item("trip", { title: "下周出门一次", status: "tentative", when: { kind: "window", fromDay: "2026-09-07", toDay: TODAY } });
+  const past = item("trip-old", { title: "上个周末出门一次", status: "tentative", when: { kind: "window", fromDay: "2026-08-22", toDay: "2026-08-23" } });
   const supers = new Set();
   assert.equal(reminderStateOf(covering, TODAY, supers).state, "tentative");
   assert.equal(reminderStateOf(past, TODAY, supers).state, "expired");
 });
 
 test("关键健康事项即使时间待确认也保留待核实摘要，不生成医疗期限", () => {
-  const shot = item("vax", { title: "核对张年的接种记录，确认是否需要补种", note: "把国内接种证和美国的记录一起带去门诊核对" });
+  const shot = item("vax", { title: "去门诊核对一次接种记录" });
   const state = reminderStateOf(shot, TODAY, new Set());
   assert.equal(state.state, "needs_confirmation");
   assert.ok(isImportantReminder(shot));
@@ -341,9 +344,9 @@ test("关键健康事项即使时间待确认也保留待核实摘要，不生�
 
 test("关键事项排在最前，默认最多两条，其余保持可达", () => {
   const items = [
-    item("eggs", { title: "买鸡蛋" }),
-    item("cream", { title: "给宝贝涂药膏" }),
-    item("vax", { title: "核对张年的接种记录，确认是否需要补种" }),
+    item("eggs", { title: "买一样日用品" }),
+    item("cream", { title: "回家做一件当天的小事" }),
+    item("vax", { title: "去门诊核对一次接种记录" }),
     item("today", { title: "今天要带的东西", when: { kind: "day", day: TODAY } }),
   ];
   const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
@@ -387,7 +390,7 @@ test("读不到 / 没跑完 / 读失败，三种都不说成「没有待办」",
 });
 
 test("同一份待办重放两次，结果逐字相同（同源幂等）", () => {
-  const items = [item("eggs", { title: "买鸡蛋" }), item("vax", { title: "体检" })];
+  const items = [item("eggs", { title: "买一样日用品" }), item("vax", { title: "去体检" })];
   const first = buildReminders({ status: "ready", items }, TODAY, undefined);
   const again = buildReminders({ status: "ready", items: [...items] }, TODAY, undefined);
   assert.deepEqual(
