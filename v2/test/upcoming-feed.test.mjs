@@ -25,6 +25,12 @@ import {
   upcomingItemId,
 } from "../lib/upcoming-merge.ts";
 import { isOverdue, isStillOpen, statusNeedsEvidence, toUpcomingItem } from "../lib/upcoming-contract.ts";
+import {
+  assertFamilySafeProvenance,
+  buildUpcomingProvenance,
+  findLeaks,
+  noteProblems,
+} from "../lib/upcoming-provenance.ts";
 
 const PROFILE = "profile-zhangnian";
 const msg = (n) => `src-${n}`;
@@ -372,4 +378,98 @@ test("the reviewer path refuses a decision it does not recognise, before touchin
 test("an empty id list is a no-op, not a table-wide update", async () => {
   const { setUpcomingReviewDecision } = await import("../lib/db/upcoming-store.ts");
   assert.deepEqual(await setUpcomingReviewDecision([], "approved"), { updated: 0, ids: [] });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 来源投影：角色只认成员表、语气不丢、提出与完成分开、缺字段不伪装成「无来源」
+// ---------------------------------------------------------------------------------------------
+const note = (overrides = {}) => ({
+  role: { kind: "family_member", role: "妈妈" },
+  modality: "plan", summary: "妈妈说第二天带他去。", onDay: "2026-08-10", approved: true, ...overrides,
+});
+const withChanges = (changes) => ({ id: "upcoming-a", status: "open", changes });
+const doneChange = { day: "2026-08-05", change: "done", toStatus: "done", sourceIds: ["src-1"], at: "x", batchId: "b" };
+
+test("摘要没审时返回 pending_review，而不是一个空的「无来源」", () => {
+  const p = buildUpcomingProvenance(withChanges([]), undefined);
+  assert.equal(p.reviewState, "pending_review");
+  assert.equal(p.raised, undefined);
+  // 关键：真的没有变更证据，和摘要没审，是两件事，都要能读出来
+  assert.equal(p.noChangeEvidence, true);
+});
+
+test("只要有一条摘要没审，整条就是 pending_review——不露半截", () => {
+  const p = buildUpcomingProvenance(withChanges([doneChange]), {
+    itemId: "upcoming-a", raised: note(), completed: note({ approved: false }),
+  });
+  assert.equal(p.reviewState, "pending_review");
+  assert.equal(p.raised, undefined);
+});
+
+test("提出与完成分开：没有 done 变更就不给完成摘要", () => {
+  const p = buildUpcomingProvenance(withChanges([]), {
+    itemId: "upcoming-a", raised: note(), completed: note({ summary: "已经带到了。" }),
+  });
+  assert.equal(p.reviewState, "approved");
+  assert.ok(p.raised);
+  assert.equal(p.completed, undefined, "「准备带去」不能证明「已经完成」");
+  assert.equal(p.noChangeEvidence, true);
+});
+
+test("有 done 变更时完成摘要才出现，并带自己的依据日期", () => {
+  const p = buildUpcomingProvenance(withChanges([doneChange]), {
+    itemId: "upcoming-a", raised: note(),
+    completed: note({ role: { kind: "family_member", role: "爸爸" }, modality: "statement", summary: "爸爸说纸尿裤拿了。", onDay: "2026-08-05", happenedOn: "2026-08-05" }),
+  });
+  assert.equal(p.completed.onDay, "2026-08-05");
+  assert.equal(p.completed.happenedOn, "2026-08-05");
+  assert.notEqual(p.raised.onDay, p.completed.onDay);
+});
+
+test("重复提醒不算改期或取消——不编造变更样本", () => {
+  const p = buildUpcomingProvenance(
+    withChanges([{ day: "2026-09-03", change: "restated", toStatus: "open", sourceIds: ["s"], at: "x", batchId: "b" }]),
+    { itemId: "upcoming-a", raised: note() },
+  );
+  assert.equal(p.noChangeEvidence, true);
+  assert.equal(p.rescheduled, undefined);
+  assert.equal(p.cancelled, undefined);
+});
+
+test("角色有三种，没有第四种「大概是」", () => {
+  const unconfirmed = buildUpcomingProvenance(withChanges([]), {
+    itemId: "upcoming-a", raised: note({ role: { kind: "unconfirmed" } }),
+  });
+  assert.equal(unconfirmed.raised.role.kind, "unconfirmed");
+  const record = buildUpcomingProvenance(withChanges([]), {
+    itemId: "upcoming-a", raised: note({ role: { kind: "record_check", label: "档案核对提醒" } }),
+  });
+  assert.equal(record.raised.role.label, "档案核对提醒", "总指挥创建的事项写真实来源性质，不虚构聊天提出者");
+});
+
+test("摘要里混进原始 id、媒体 id 或本机路径，会被查出来", () => {
+  assert.deepEqual(findLeaks("妈妈说要带他去。"), []);
+  assert.ok(findLeaks("见 wechat-message:canonical:deadbeef").length);
+  assert.ok(findLeaks("见 C:/Users/teddy/x.json").length);
+  assert.ok(findLeaks(String.raw`见 C:\\Users\\teddy`).length);
+  assert.ok(findLeaks("见 /lib/upcoming-store.ts").length);
+});
+
+test("出库前的总闸：payload 里有内部标识就抛，不是悄悄放过去", () => {
+  const good = [{ itemId: "upcoming-a", reviewState: "approved", noChangeEvidence: true, raised: note() }];
+  assert.doesNotThrow(() => assertFamilySafeProvenance(good));
+  const bad = [{ itemId: "upcoming-a", reviewState: "approved", noChangeEvidence: true, raised: note({ summary: "原话见 wechat-message:canonical:abc" }) }];
+  assert.throws(() => assertFamilySafeProvenance(bad), /leaks/);
+});
+
+test("摘要与来源原话逐字相同会被拒——那是把聊天原文搬上首页", () => {
+  const raw = "宝贝明天带尿不湿来哈";
+  assert.ok(noteProblems(note({ summary: raw }), [raw]).some((p) => p.includes("逐字相同")));
+  assert.equal(noteProblems(note({ summary: "老师说第二天要带尿不湿来。" }), [raw]).length, 0);
+});
+
+test("缺依据日期、空摘要、没写来源性质，都拒", () => {
+  assert.ok(noteProblems(note({ onDay: "" }), []).some((p) => p.includes("依据日期")));
+  assert.ok(noteProblems(note({ summary: "  " }), []).some((p) => p.includes("为空")));
+  assert.ok(noteProblems(note({ role: { kind: "record_check", label: "" } }), []).some((p) => p.includes("来源性质")));
 });

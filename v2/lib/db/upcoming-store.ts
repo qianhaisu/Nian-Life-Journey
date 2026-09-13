@@ -36,6 +36,12 @@ import {
 } from "@/lib/upcoming-contract";
 // The rules themselves live next door, with no database in them, so each one is a test.
 import {
+  assertFamilySafeProvenance,
+  buildUpcomingProvenance,
+  type CuratedProvenance,
+  type UpcomingProvenance,
+} from "@/lib/upcoming-provenance";
+import {
   familyFeedFrom,
   mergeKeyOf,
   resolveUpcomingStatus,
@@ -432,6 +438,27 @@ export async function setUpcomingReviewDecision(
     ))
     .returning({ id: t.upcomingItems.id });
   return { updated: rows.length, ids: rows.map((row) => row.id) };
+}
+
+/**
+ * The family-facing source projection: who raised each approved item, and what became of it.
+ *
+ * Curated summaries are passed in rather than read from a table, because there is no table for
+ * them yet and there deliberately is not one until the commander has reviewed each line. With none
+ * supplied every item comes back `pending_review`, which the page must render as 「来源摘要待审核」
+ * — NOT as "this item has no source". Those are different sentences and only one of them is true.
+ *
+ * It reads only `approved` items, so an unreviewed todo cannot leak a summary either.
+ */
+export async function readUpcomingProvenanceForFamily(
+  options: ReadUpcomingOptions & { curated?: CuratedProvenance[] } = {},
+): Promise<UpcomingProvenance[]> {
+  const records = (await readUpcomingRecords(options)).filter((record) => record.reviewDecision === "approved");
+  const curatedById = new Map((options.curated ?? []).map((entry) => [entry.itemId, entry]));
+  const items = records.map((record) => buildUpcomingProvenance(record, curatedById.get(record.id)));
+  // Last gate before it leaves: no internal identifier of any kind in the payload.
+  assertFamilySafeProvenance(items);
+  return items;
 }
 
 /** The same read with provenance attached, for a reviewer or a script — never for a page. */
