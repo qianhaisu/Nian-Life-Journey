@@ -24,7 +24,7 @@
 这是验收原则八时真的去点那三个链接才发现的，grep 查不出来（字段在、类型对、测试过）。
 其余字段全部兼容，含义未改。
 
-## 交付（九个提交，全部已 push）
+## 交付（十个提交，全部已 push）
 
 | SHA | 内容 |
 |---|---|
@@ -34,6 +34,7 @@
 | `931d0da` | **1.1.0**：证据链修正 + `editionAt` 遇坏时间值不再打掉整页 + 删掉自己写的一段死代码 |
 | `714b090` | **1.2.0**：照片冷却量化 + 轮换次序不再依赖质量分 + 习惯日期上限作用位置与状态保真 + 离线质量缓存接线 |
 | `fdc7f02` | `HOME_FEED_VERSION` 跟上 1.2.0 |
+| （本轮） | **1.5.0**：撤回页面直调示例，上报口改为服务端校验事项与日期 |
 | `c0191d5` | **1.4.0**：资格过滤移到连拍去重之前 + `habit_display_days` 表/迁移/store + 露出上报口 |
 | `2798593` | **1.3.0**：轮换池与页面上限分开 + 期内选片固定（新候选/新评分下一期生效）+ 习惯上限改按实际展示日计数 |
 
@@ -196,7 +197,7 @@
 | 唯一键 | `(profile_id, item_id, shown_day)`，`shown_day` 是**上海自然日**；插入 `on conflict do nothing` |
 | 只增不删 | 一条露出记录是发生过的事 |
 | 读 | `readHabitDisplayDays(itemIds)` —— 只问本次要判的那几个 id，`where profile_id = ? and item_id in (…)`，无整表扫描 |
-| 写 | `recordHabitShown(itemIds, day)`；对外只暴露 `reportHabitShown(feed)` |
+| 写 | `recordHabitShown(itemIds, day)`；对外只暴露 `reportHabitDisplay()`（见下一节，服务端校验） |
 
 **我先手写了一份 0016.sql，然后发现它不在 `meta/_journal.json` 里——`drizzle-kit migrate` 会直接
 跳过它，发布会「成功」而表根本不存在。** 已改为用 `drizzle-kit generate` 生成，journal 与 snapshot
@@ -238,6 +239,56 @@
 `round4/home-feed-rds-runtime.json`：生产 feed 与上一轮**逐字相同**（3 组候选、冷却 3 期 /
 0.75 天、默认露出 2、退场 10、折叠 16）——过滤顺序的修正在今天的生产数据上**没有可观察差异**
 （生产没有同组连拍的获批对，也没有期内新批准的候选），所以那条修正**只有单测＋变异验证覆盖**。
+
+## 2026-09-13 上报口收口：撤回页面直调示例，改为服务端校验（1.5.0）
+
+**保留不动**：`habit_display_days` 表、迁移 0016（含 journal/snapshot）、唯一键去重、
+`readHabitDisplayDays` / `recordHabitShown` 的读写逻辑——`git status` 对这几个文件为空，逐字未改。
+
+**撤回**：上一版接线文档给的「在 `app/page.tsx` 里直接 `await reportHabitShown(feed)`」那个服务端
+页面直调示例，以及那个直接采信入参的 `reportHabitShown(feed)` 函数。它把两件事都交给了调用方：
+
+- 日期（调用方自己算一次 `new Date()`，或拿一份跨了日界的旧 feed，就会往错误的自然日插一行，
+  而唯一键正是那一天）；
+- 事项（折叠项、非习惯类、或一份陈旧/被改过的 `habitShownIds`，会让一条家人从没看见的提醒
+  白占一个自然日）。
+
+**配额只有两个自然日，写错一次就少一天**，所以这两件事不该取决于调用点写得对不对。
+
+**新接口** `reportHabitDisplay({ claimedItemIds?, feed? })`，服务端校验：
+
+| | 谁说了算 |
+|---|---|
+| 算哪一天 | **只有服务端产品时钟**（`productToday()`）。签名里**没有** `day`，传不进去 |
+| 哪几条可计数 | 服务端**现算**：此刻真的在 `reminders.shown` 里，且 `classifyFreshness` 判为习惯类。**不采信 `habitShownIds` 预存数组** |
+| `claimedItemIds` | **只能收窄**。不够格的逐条拒，并区分三种原因：不在本次 feed 里／在默认位但非习惯类／只折叠着没真的露出 |
+| 跨日界的旧 feed | `feed.clock.today !== productToday()` → 整次拒掉 |
+
+返回 `{ day, recorded, rejected, skipped }`——**错误接线看得见，不是静默的**。从不抛。
+
+### 这件事现在为什么更要紧
+
+页面轨同时在做 `app/api/internal/habit-shown` route handler + 浏览器进视口后上报。
+**那条路由的请求体来自浏览器，不可信**，所以「服务端自己校验」从一条设计偏好变成了必需。
+他们的判断和我一致（SSR 跑完 ≠ 有人看到），方向没有冲突。
+
+**一条要给页面轨的话**（已写进接线文档）：他们 handler 里现在有一句
+`const allowed = new Set(feed.reminders.habitShownIds)` 自己再判一次——**不需要了**，
+`reportHabitDisplay({ claimedItemIds })` 已经做了，而且做得更严（现算而非读预存数组）。
+两处各判一次迟早分叉，分叉那天就是一条没人看见的提醒开始占配额。整个 handler 可以是三行。
+他们那几个文件仍在未提交状态，我一个都没碰。
+
+### 仍然由调用方负责的一件事（服务端兜不住）
+
+**「这次呈现有没有真的被人看到」。** 服务端能判「这几条此刻够不够格」，但预取、预热、健康检查、
+截图与核验脚本都能构造出一份完全合格的 feed。所以接入点必须对应一次真的被看到的呈现——
+本轮**不替页面轨选这个点**，数据轨也没有新增任何路由或入口。
+
+### 检查
+
+typecheck ✅　lint ✅　build ✅　测试 **1104 条 1094 通过 0 失败 10 跳过**（上报口新增 6 条：
+日期传不进去、跨日界拒、不采信 `habitShownIds`、claimed 只能收窄且分三种拒因、非 ready 不写、
+默认位无习惯类不写）。未改生产库、未跑迁移、未部署。
 
 ## 已知未交付 / 剩余未验证（照实列，不藏在「已实现」里）
 

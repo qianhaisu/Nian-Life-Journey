@@ -32,7 +32,7 @@ import { capHabitByShownDays, classifyFreshness, freshnessOf, isImportantItem, N
 import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 /** 契约版本。页面轨按这个字符串确认自己接的是哪一版；只做兼容新增时递增小版本号。 */
-export const HOME_FEED_VERSION = "home-feed/1.4.0";
+export const HOME_FEED_VERSION = "home-feed/1.5.0";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 时钟
@@ -411,7 +411,7 @@ export type HomeFeedReminders =
     retired: HomeRetiredReminder[];
     /**
      * `shown` 里属于习惯类的那几条的 id——**页面真的把它们画出来之后**，回报这一组来记露出日
-     * （§6.3）。见 `reportHabitShown()`。
+     * （§6.3）。**上报口会自己重算一遍这个集合**，不直接信这个数组——见 `reportHabitDisplay()`。
      *
      * 为什么只给这一组、而不是让调用方自己从 `shown` 里筛：筛的规则（哪一类算习惯）属于数据轨，
      * 让页面去重新判一次，两边迟早会分叉；而分叉的后果是把不该计数的条目记进配额。
@@ -1103,28 +1103,99 @@ async function loadHomePhotoQuality(): Promise<HomePhotoQualityLookup | undefine
 }
 
 /**
- * 把「这几条习惯提醒今天真的露在默认位上了」记下来（§6.3）。
+ * 习惯露出上报的**最小接口**（§6.3）。
  *
- * **必须由真正呈现了这个 feed 的那一次渲染调用，而且只调一次。** 不要在预取、预热、验证脚本或
- * 任何只是「读一下看看」的地方调它：那些地方没有人看到任何东西，记上去就是白占配额——一次预热
- * 就能把一条习惯提醒的两个自然日用掉，家人一次都没看见它就再也看不到它了。
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 服务端自己校验「哪几条可计数」和「算哪一天」，**不信调用方给的任何一项**
+ * ─────────────────────────────────────────────────────────────────────────────
  *
- * 幂等由数据库的唯一键保证（profile, item, 上海自然日），所以同一天被调多次也只有一行；
- * 这条「只调一次」是为了不白跑一次写入，不是为了正确性。
+ * 上一版是 `reportHabitShown(feed)`：直接把 `feed.reminders.habitShownIds` 和 `feed.clock.today`
+ * 写进库。那等于把两件事都交给调用方——**而配额是有限的，写错一次就少一天**：
  *
- * 日期用 `feed.clock.today`——那是 Asia/Shanghai 的自然日。不在这里取 `new Date()`：
- * 那会在 UTC 日界附近记错一天，而唯一键就是那一天。
+ *   · 日期给错（比如调用方自己算了一次 `new Date()`，或者拿了一份跨过日界的旧 feed），
+ *     就会往错误的自然日插一行，而唯一键正是那一天；
+ *   · 事项给错（折叠项、非习惯类、或者一份陈旧/被改过的 `habitShownIds`），
+ *     就会让一条家人从没看见的提醒白占一个自然日。
  *
- * 失败从不上抛：记不上一行露出日志，不该让家人看不到首页。
+ * 所以这里：
+ *
+ *   1. **日期只用服务端自己的产品时钟**（`productToday()`，Asia/Shanghai 自然日）。
+ *      调用方无法传日期——参数里没有这一项。
+ *   2. **可计数的事项由服务端重新算一遍**：必须此刻真的在默认位（`shown`）里，
+ *      **且**本身是习惯类（`classifyFreshness` 现算，不读 `habitShownIds` 那个预存数组）。
+ *   3. `claimedItemIds` **只能收窄，不能放宽**：不在服务端算出的集合里的，一律拒，并写明原因。
+ *   4. 传进来的 feed 如果跨过了日界（`feed.clock.today !== productToday()`），整次拒掉——
+ *      那是一份陈旧的 feed，它说的「露出」属于昨天。
+ *
+ * 返回值把**记了什么**和**拒了什么、为什么**分开列出来，所以一次错误接线是看得见的，不是静默的。
+ * 它从不抛：记不上一行露出日志，不该让家人看不到首页。
+ *
+ * **这个函数不决定自己在哪里被调用。** 本轮只提供接口与校验；接在哪个时机上（渲染后、
+ * 单独的上报入口、还是别的）由总指挥定，数据轨不替页面轨决定接线位置。
  */
-export async function reportHabitShown(feed: HomeFeed): Promise<{ attempted: number; skipped?: string }> {
-  if (feed.reminders.status !== "ready") return { attempted: 0 };
-  const ids = feed.reminders.habitShownIds;
-  if (ids.length === 0) return { attempted: 0 };
+export type HabitDisplayReport = {
+  /** 服务端自己的上海自然日。 */
+  day: string;
+  /** 真的写进去的事项 id。 */
+  recorded: string[];
+  /** 被拒的，带原因——错误接线在这里看得见。 */
+  rejected: { id: string; reason: string }[];
+  /** 整次没写的原因（没有连接、表还不存在、feed 跨了日界……）。 */
+  skipped?: string;
+};
+
+export async function reportHabitDisplay(input: {
+  /** 调用方声称露出了哪几条。**只能收窄**；不传就用服务端算出来的全部。 */
+  claimedItemIds?: readonly string[];
+  /** 已经读好的 feed。不传则服务端自己读一次；无论传不传，下面都会重算可计数集合。 */
+  feed?: HomeFeed;
+} = {}): Promise<HabitDisplayReport> {
+  const { productToday } = await import("@/lib/time-truth");
+  // 日期只来自服务端自己的时钟。参数里没有 day，调用方给不了。
+  const day = productToday();
+  const empty = (skipped?: string): HabitDisplayReport => ({ day, recorded: [], rejected: [], skipped });
+
+  let feed: HomeFeed;
+  try { feed = input.feed ?? await readHomeFeed(); }
+  catch (error) { return empty(`读不到 feed：${String((error as Error)?.message ?? error)}`); }
+
+  // 一份跨过日界的 feed，它说的「露出」属于昨天。整次拒掉，不往今天记。
+  if (feed.clock.today !== day) {
+    return empty(`feed 的产品日是 ${feed.clock.today}，服务端今天是 ${day}——这是一份跨日界的旧 feed，不计数`);
+  }
+  if (feed.reminders.status !== "ready") return empty(`提醒不是 ready（${feed.reminders.status}），没有任何露出可记`);
+
+  // 可计数集合由服务端现算：此刻真的在默认位上，且本身是习惯类。
+  const countable = new Set(
+    feed.reminders.shown
+      .filter((reminder) => classifyFreshness(reminder.item) === "habit")
+      .map((reminder) => reminder.id),
+  );
+  const rejected: { id: string; reason: string }[] = [];
+  let ids = [...countable];
+  if (input.claimedItemIds) {
+    const claimed = [...new Set(input.claimedItemIds)];
+    for (const id of claimed) {
+      if (countable.has(id)) continue;
+      const inFeed = [...feed.reminders.shown, ...feed.reminders.more].find((reminder) => reminder.id === id);
+      rejected.push({
+        id,
+        reason: !inFeed
+          ? "这条事项不在本次 feed 里"
+          : feed.reminders.shown.some((reminder) => reminder.id === id)
+            ? "在默认位上，但不是习惯类——不占习惯配额"
+            : "只折叠在展开里，没有真的露出",
+      });
+    }
+    ids = claimed.filter((id) => countable.has(id));
+  }
+  if (ids.length === 0) return { day, recorded: [], rejected, skipped: rejected.length ? undefined : "没有可计数的习惯露出" };
+
   try {
     const { recordHabitShown } = await import("@/lib/db/habit-display-store");
-    return await recordHabitShown(ids, feed.clock.today);
+    const result = await recordHabitShown(ids, day);
+    return { day, recorded: result.skipped ? [] : ids, rejected, skipped: result.skipped };
   } catch (error) {
-    return { attempted: 0, skipped: `记录露出日失败：${String((error as Error)?.message ?? error)}` };
+    return { day, recorded: [], rejected, skipped: `记录露出日失败：${String((error as Error)?.message ?? error)}` };
   }
 }

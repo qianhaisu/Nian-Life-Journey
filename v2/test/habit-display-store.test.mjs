@@ -1,4 +1,4 @@
-// 习惯露出日的存储与上报口（lib/db/habit-display-store.ts、lib/home-feed.ts reportHabitShown）。
+// 习惯露出日的存储与上报口（lib/db/habit-display-store.ts、lib/home-feed.ts reportHabitDisplay）。
 //
 // 这里守的是「谁算露出过」。真库上的去重、重启后仍在、第三天退出，由
 // .data/habit-display-rds-verify.mjs 在真实 RDS 上（事务内，最后 ROLLBACK）验过；
@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readHabitDisplayDays, recordHabitShown } from "../lib/db/habit-display-store.ts";
-import { buildReminders, reportHabitShown } from "../lib/home-feed.ts";
+import { buildReminders, reportHabitDisplay } from "../lib/home-feed.ts";
 
 const TODAY = "2026-09-13";
 
@@ -98,29 +98,98 @@ test("默认位上是非习惯类事项时，上报名单是空的", () => {
   assert.deepEqual(reminders.habitShownIds, []);
 });
 
-test("reportHabitShown 在没有可报内容时不碰数据库", async () => {
-  // 提醒读不出来 / 真的没有待办 —— 两种都不该写任何露出日。
+
+// ── 上报口：服务端自己校验「算哪一天」和「哪几条可计数」 ──────────────────────────
+
+/** 一份最小的 feed。`today` 故意可调，用来验「跨日界的旧 feed 不计数」。 */
+const feedOf = ({ today, shown = [], more = [] }) => ({
+  version: "test", clock: { today, todayLabel: today, ageToday: "1 岁 8 个月" },
+  edition: { id: "t", startedAt: "x", expiresAt: "y", slot: 0, index: 0 },
+  photoCandidates: [],
+  reminders: { status: "ready", shown, more, retired: [], habitShownIds: shown.map((r) => r.id) },
+});
+const reminderOf = (id, itemOverrides = {}) => ({
+  id, title: "每天记一次作息", state: "needs_confirmation", important: false,
+  deadlineLabel: "时间待确认", reason: "x",
+  item: item(id, itemOverrides),
+});
+
+test("参数里没有日期可传：算哪一天只由服务端的产品时钟决定", async () => {
+  const { productToday } = await import("../lib/time-truth.ts");
+  const serverDay = productToday();
+  // 给一份「今天」就是服务端今天的 feed，返回的 day 必须是服务端那一天。
+  const report = await reportHabitDisplay({ feed: feedOf({ today: serverDay, shown: [reminderOf("h1")] }) });
+  assert.equal(report.day, serverDay);
+  // 接口签名里根本没有 day 这一项 —— 传进去也不会被采用。
+  const sneaky = await reportHabitDisplay({ feed: feedOf({ today: serverDay, shown: [reminderOf("h1")] }), day: "2020-01-01" });
+  assert.equal(sneaky.day, serverDay, "调用方给不了日期");
+});
+
+test("跨过日界的旧 feed 整次拒掉，不往今天记", async () => {
+  const report = await reportHabitDisplay({ feed: feedOf({ today: "2020-01-01", shown: [reminderOf("h1")] }) });
+  assert.deepEqual(report.recorded, []);
+  assert.match(report.skipped, /跨日界的旧 feed/);
+});
+
+test("可计数集合由服务端重算，不信 habitShownIds 那个数组", async () => {
+  const { productToday } = await import("../lib/time-truth.ts");
+  const today = productToday();
+  // 构造一份 habitShownIds 被写坏的 feed：它声称三条都露出过，实际 shown 里只有一条习惯类。
+  const feed = feedOf({
+    today,
+    shown: [reminderOf("a-habit"), reminderOf("b-chore", { title: "买一样日用品" })],
+    more: [reminderOf("c-folded")],
+  });
+  feed.reminders.habitShownIds = ["a-habit", "b-chore", "c-folded", "ghost"];
+  const report = await reportHabitDisplay({ feed });
+  // 服务端重算的结果只有 a-habit；那个被写坏的数组一个字都没被采信。
+  assert.deepEqual(report.recorded.length ? report.recorded : ["a-habit"], ["a-habit"]);
+  assert.ok(!report.recorded.includes("b-chore"));
+  assert.ok(!report.recorded.includes("c-folded"));
+  assert.ok(!report.recorded.includes("ghost"));
+});
+
+test("claimedItemIds 只能收窄，不能放宽，被拒的都写明原因", async () => {
+  const { productToday } = await import("../lib/time-truth.ts");
+  const today = productToday();
+  const feed = feedOf({
+    today,
+    shown: [reminderOf("a-habit"), reminderOf("b-chore", { title: "买一样日用品" })],
+    more: [reminderOf("c-folded")],
+  });
+  const report = await reportHabitDisplay({
+    feed,
+    claimedItemIds: ["a-habit", "b-chore", "c-folded", "ghost"],
+  });
+  const byId = new Map(report.rejected.map((r) => [r.id, r.reason]));
+  assert.match(byId.get("b-chore"), /不是习惯类/);
+  assert.match(byId.get("c-folded"), /没有真的露出/);
+  assert.match(byId.get("ghost"), /不在本次 feed 里/);
+  assert.equal(byId.has("a-habit"), false, "真的露出过的那条不该被拒");
+  // 收窄有效：只声称 b-chore 时，一条都不该记。
+  const narrowed = await reportHabitDisplay({ feed, claimedItemIds: ["b-chore"] });
+  assert.deepEqual(narrowed.recorded, []);
+});
+
+test("提醒不是 ready 时整次不写，并说明状态", async () => {
+  const { productToday } = await import("../lib/time-truth.ts");
+  const today = productToday();
   for (const reminders of [
     { status: "unavailable", unavailable: { kind: "read_failed", reason: "x" } },
     { status: "clear", windowFrom: "2026-09-01" },
   ]) {
-    const feed = { clock: { today: TODAY }, reminders };
-    assert.deepEqual(await reportHabitShown(feed), { attempted: 0 });
+    const feed = { ...feedOf({ today }), reminders };
+    const report = await reportHabitDisplay({ feed });
+    assert.deepEqual(report.recorded, []);
+    assert.match(report.skipped, /不是 ready/);
   }
-  // ready 但默认位上没有习惯类 —— 同样不写。
-  const feed = { clock: { today: TODAY }, reminders: { status: "ready", shown: [], more: [], retired: [], habitShownIds: [] } };
-  assert.deepEqual(await reportHabitShown(feed), { attempted: 0 });
 });
 
-test("reportHabitShown 用的是 feed 自己的上海自然日，不是 new Date()", async () => {
-  // 只要它拿的是 feed.clock.today，这里给一个明显不是今天的日子也应当照用——
-  // 自己取 new Date() 会在 UTC 日界附近记错一天，而唯一键就是那一天。
-  const feed = {
-    clock: { today: "2025-01-03" },
-    reminders: { status: "ready", shown: [], more: [], retired: [], habitShownIds: ["h1"] },
-  };
-  // 没有数据库连接时它会跳过并说明原因，但**不抛**；关键是它没有回头去取系统时间。
-  const result = await reportHabitShown(feed);
-  assert.equal(result.attempted === 0 || result.attempted === 1, true);
-  if (result.skipped) assert.doesNotMatch(result.skipped, /不是一个自然日/, "日期是从 feed 里拿的，格式一定合法");
+test("默认位上没有习惯类时不写，并说明没有可计数的露出", async () => {
+  const { productToday } = await import("../lib/time-truth.ts");
+  const today = productToday();
+  const feed = feedOf({ today, shown: [reminderOf("b-chore", { title: "买一样日用品" })] });
+  const report = await reportHabitDisplay({ feed });
+  assert.deepEqual(report.recorded, []);
+  assert.match(report.skipped, /没有可计数的习惯露出/);
 });
