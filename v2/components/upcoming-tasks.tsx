@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ageOn, formatDay } from "@/lib/time-signature";
+import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
 import { UPCOMING_VISIBLE, type UpcomingEvidence, type UpcomingFeed, type UpcomingItem, type UpcomingWhen } from "@/lib/upcoming";
 
 // 近期待办 on the front page: what the family has to do next, under how he has been lately and
@@ -46,11 +46,26 @@ function nextDay(day: string): string {
   return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
 }
 
-function EvidenceLink({ evidence, label }: { evidence?: UpcomingEvidence; label: string }) {
+// 依据：说了这件事的那一天，写出来，并且链接的名字就是它要去的地方。
+//
+// 2026-09-13 验收记的两条：那个链接是 38×40，够不到一个拇指；而它写着「看来源」，去的却是整张
+// 月页，读的人没办法核对到这一条。现在日期直接印在页面上（`evidence.day` 本来就到得了页面，
+// 只是从没被显示过），链接改叫它真正打开的那个月，并且撑到 44×44。
+//
+// 还差什么、差在哪一层：`upcoming_items` 里每一行都有 `who_asked`（老师／爸爸／妈妈）和
+// `when_basis`（「消息发于 X，说了『明天』」），但 `toUpcomingItem()` 的页面投影把它们丢掉了，
+// 而那个投影是数据轨的文件。要让家人看到「谁说的、凭哪句」，需要数据轨在投影里加两样：
+// `evidence.who`（角色词，不是姓名）和一句**经人工审过的**来源摘要。页面这边不自己去读原始
+// 聊天，也不改任何审核状态。
+function EvidenceLine({ evidence, label }: { evidence?: UpcomingEvidence; label: string }) {
   if (!evidence) return null;
   const href = evidence.eventId ? `/events/${evidence.eventId}` : evidence.day ? `/memory/${evidence.day.slice(0, 4)}/${evidence.day.slice(5, 7)}` : undefined;
   if (!href) return null;
-  return <Link className="text-link upcoming-source" href={href}>{label}</Link>;
+  const linkLabel = evidence.eventId ? "看那一天" : evidence.day ? `翻到 ${formatMonth(evidence.day.slice(0, 7))}` : "";
+  return <span className="upcoming-evidence">
+    <span className="upcoming-basis">{label}{evidence.day ? <> <time dateTime={evidence.day}>{formatDay(evidence.day)}</time></> : null}</span>
+    <Link className="text-link upcoming-source" href={href}>{linkLabel}</Link>
+  </span>;
 }
 
 const STATUS_LABEL: Record<UpcomingItem["status"], string | undefined> = {
@@ -68,10 +83,10 @@ function Item({ item, today, birthDay }: { item: UpcomingItem; today: string; bi
     {item.note ? <p className="upcoming-note">{item.note}</p> : null}
     {item.statusNote ? <p className="upcoming-status-note">{item.statusNote}</p> : null}
     <p className="upcoming-meta">
-      <EvidenceLink evidence={item.evidence} label="看来源" />
-      {/* The evidence for the CHANGE is a second, separate link: the message that proves a thing
+      <EvidenceLine evidence={item.evidence} label="来源" />
+      {/* The evidence for the CHANGE is a second, separate line: the message that proves a thing
           was done is not the message that asked for it. */}
-      {item.statusEvidence ? <EvidenceLink evidence={item.statusEvidence} label={item.status === "done" ? "看完成的那天" : "看后续"} /> : null}
+      {item.statusEvidence ? <EvidenceLine evidence={item.statusEvidence} label={item.status === "done" ? "完成于" : "后续"} /> : null}
     </p>
   </li>;
 }

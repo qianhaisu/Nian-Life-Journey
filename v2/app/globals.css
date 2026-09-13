@@ -285,8 +285,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .upcoming-badge--done { background: transparent; border: 1px solid var(--color-border); color: var(--color-muted); }
 .upcoming-note { margin: 4px 0 0; color: var(--color-muted); font-size: .9rem; line-height: 1.6; }
 .upcoming-status-note { margin: 4px 0 0; color: var(--color-secondary); font-size: .85rem; }
-.upcoming-meta { display: flex; flex-wrap: wrap; gap: 0 18px; margin: 2px 0 0; }
-.upcoming-meta .upcoming-source { display: inline-flex; min-height: 40px; align-items: center; font-size: .8rem; }
+/* 依据行：先是「来源 · 8 月 4 日」这句可读的字，再是一个名字与去处一致的链接。
+   链接在 2026-09-13 验收时实测 38×40，拇指够不着，现在按 44×44 的下限撑开：高度用 min-height，
+   宽度用 min-width 加左右内边距（「翻到 2026 年 8 月」本来就宽，短标签才需要这条）。 */
+.upcoming-meta { display: flex; flex-wrap: wrap; gap: 2px 18px; margin: 4px 0 0; }
+.upcoming-evidence { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 10px; }
+.upcoming-basis { color: var(--color-muted); font-size: .78rem; }
+.upcoming-basis time { color: var(--color-secondary); font-weight: 700; }
+.upcoming-meta .upcoming-source { display: inline-flex; min-height: 44px; min-width: 44px; align-items: center; justify-content: center; padding: 0 6px; font-size: .8rem; }
 .upcoming-more { margin-top: 4px; }
 .upcoming-more > summary { display: inline-flex; min-height: 44px; align-items: center; color: var(--color-accent); cursor: pointer; font-size: .85rem; font-weight: 600; list-style: none; }
 .upcoming-more > summary::-webkit-details-marker { display: none; }

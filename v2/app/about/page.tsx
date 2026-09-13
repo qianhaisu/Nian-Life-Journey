@@ -23,10 +23,11 @@ export const metadata: Metadata = { title: "张年" };
 // is already the whole front page and the whole of /memory — on the one page that should answer
 // 这孩子长成什么样了 instead.
 //
-// A part with nothing behind it does not render. As of tonight that is 身高体重, 健康问题 and
-// 学会了什么: growth_records and care_records are both empty, so this page is his age, his
-// portrait and the experiences the archive's own stories call firsts. An empty card would not add
-// a single true thing to it.
+// A part with nothing behind it does not render, and never as an empty card. On 2026-09-13 the
+// data track filled two of the four: 量过的身高体重 (2 heights, 4 precise weights across five
+// measurement days) and 学会了什么 (7 rows, each hanging off an approved story). 家人关注的健康问题
+// is still empty — care_records and care_episodes hold no rows — so that part is simply absent, and
+// its absence is NOT a statement that there is nothing to watch or that anything recovered.
 export default async function AboutPage() {
   // Never prerender this page from the build's mock store — see lib/render-on-demand.ts. Found in
   // the same 2026-09-10 check as / and /memory: about.html was baked from the seed fixture too.
@@ -61,9 +62,12 @@ export default async function AboutPage() {
           {track.latest.signature.ageLabel ? <span> · 当时 {track.latest.signature.ageLabel}</span> : null}
         </span>
       </li>)}</ul>
-      {/* The curve, not just the latest point: a growth record is the shape over time. */}
+      {/* The curve, not just the latest point: a growth record is the shape over time. The chart is
+          handed `track.history` — the same measurements the number above it came from — so a row
+          the reading layer refused (an approximate figure with no value, since 2026-09-13) cannot
+          reach the axis through a second, looser filter. */}
       {measures.some((track) => track.history.length > 1) ? <div className="chart-pair">
-        {measures.filter((track) => track.history.length > 1).map((track) => <GrowthChart key={track.kind} records={archive.store.growthRecords} kind={track.kind} title={track.title} />)}
+        {measures.filter((track) => track.history.length > 1).map((track) => <GrowthChart key={track.kind} points={track.history} title={track.title} />)}
       </div> : null}
     </section> : null}
 
