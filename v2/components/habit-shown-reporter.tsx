@@ -59,12 +59,18 @@ export function HabitShownReporter({ ids }: { ids: string[] }) {
         const id = (entry.target as HTMLElement).dataset.habitId;
         if (!id || !eligible.has(id) || reported.has(id)) continue;
         if (entry.isIntersecting && entry.intersectionRatio >= 0.5) waiting.add(id);
+        // 又滚出视口、还没来得及报的，取消它的待报资格：家人没读到就划掉，
+        // 那两天的配额不该被一次路过用掉（版式卡：离开视口要移除待报资格）。
+        else waiting.delete(id);
       }
       flush();
     }, { threshold: [0.5] });
 
-    // 只观察默认位上的那几块：折叠层里的元素不带这个属性，这里也不去找它。
-    document.querySelectorAll<HTMLElement>(".home-reminders > .home-reminder [data-habit-id]").forEach((node) => observer.observe(node));
+    // 只观察默认位上的那几条便签。2026-09-13 版式修复把提醒从 .home-reminder 色条换成了
+    // .home-notes 里的 <details>，所以这里按**属性**找，不按外层容器的类名——布局再改一次，
+    // 这个选择器也不会静默失效（失效的后果是上报悄悄停掉，看不出来）。
+    // 折叠层里的那几条本来就不带 data-habit-id，`<details>` 关着时又是 display:none，两道都挡。
+    document.querySelectorAll<HTMLElement>("[data-habit-id]").forEach((node) => observer.observe(node));
     document.addEventListener("visibilitychange", flush);
     return () => {
       observer.disconnect();

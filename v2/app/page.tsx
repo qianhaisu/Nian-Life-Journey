@@ -45,7 +45,7 @@ export default async function HomePage() {
   // 读取笔数和今天的首页完全一样：一次记忆化的档案读 + 待办的三次小查询（+ 来源摘要的两次），
   // 没有新增整表查询、没有 getStore()/getOrganizerStore()（CLAUDE.md 渲染路径那条）。
   const feed = await readHomeFeed();
-  const { clock, lead, photoCandidates, recentFact } = feed;
+  const { clock, lead, photoCandidates } = feed;
 
   // 「换张照片」的切换单位是 (故事, 照片) 对：候选自带自己的故事，所以换图必然连带换标题、
   // 日期、当时年龄和「读读这一天」的去处，页面不可能只换 img（契约 HomePhotoCandidate）。
@@ -70,33 +70,27 @@ export default async function HomePage() {
       ? [{ key: lead.story.eventId, story: { eventId: lead.story.eventId, href: lead.story.href, title: lead.story.title, excerpt: lead.story.excerpt, emphasis: TITLE_EMPHASIS[lead.story.eventId] } }]
       : [];
 
+  // 今天和今天几岁收成左栏的一行小字（版式卡一·4）：这一页只留一个主标题，就是题签。
+  // 出生日期未知时不猜年龄，那一半直接不出现。
+  const clockLine = clock.ageToday ? `${clock.todayLabel} · 现在 ${clock.ageToday}` : clock.todayLabel;
+
   return <div className="home-v2">
     <div className="home-sheet">
-      {/* 现在的张年：档案自己的今天，和他今天几岁。这两个时钟都不随下面抽到哪一天而变（原则二）。 */}
-      <section className="home-intro" aria-label="现在的张年">
-        <div>
-          <p className="home-today"><time dateTime={clock.today}>{clock.todayLabel}</time></p>
-          <h1>最近怎么样，<span className="home-name">张年。</span></h1>
-        </div>
-        {/* 出生日期未知时不猜年龄，这一行直接不出现。 */}
-        {clock.ageToday ? <p className="home-current-age">现在 <strong>{clock.ageToday}</strong></p> : null}
-      </section>
-
-      {slides.length > 0
-        ? <HomeLead
-          slides={slides}
-          recent={recentFact ? {
-            eventId: recentFact.eventId,
-            href: recentFact.href,
-            title: recentFact.title,
-            day: recentFact.day,
-            dayLabel: recentFact.dateLabel,
-            ageLabel: recentFact.ageLabel,
-          } : undefined}
-        />
-        : <p className="home-nothing">{feed.leadAbsence?.kind === "empty_material" ? "还没有一段整理好的记忆可以放在这里。" : "档案还是空的。等时间再走一会儿。"}</p>}
-
-      <Reminders feed={feed} />
+      {/* 一张大照片在右，题签和便签在左。DOM 顺序就是窄屏的阅读顺序：照片 → 日期 → 题签 → 便签。 */}
+      <div className="home-spread">
+        {/* 这一版首页不再露出第二条「近况」入口（版式卡一·5）：recentFact 仍在契约里，
+            对应记录在记忆页和事件页照常可达，只是不占首页这块地方。
+            便签作为左栏的一部分传给 HomeLead：左栏必须是一个 grid 单元，否则高照片会把它撑散。 */}
+        {slides.length > 0
+          ? <HomeLead slides={slides} clockLine={clockLine} today={clock.today} notes={<Reminders feed={feed} />} />
+          : <div className="home-aside">
+            <div className="home-headline">
+              <p className="home-today"><time dateTime={clock.today}>{clockLine}</time></p>
+              <p className="home-nothing">{feed.leadAbsence?.kind === "empty_material" ? "还没有一段整理好的记忆可以放在这里。" : "档案还是空的。等时间再走一会儿。"}</p>
+            </div>
+            <Reminders feed={feed} />
+          </div>}
+      </div>
     </div>
   </div>;
 }

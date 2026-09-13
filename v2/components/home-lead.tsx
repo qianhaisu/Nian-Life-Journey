@@ -13,9 +13,9 @@ import { ViewerModal, type GalleryPhoto } from "@/components/photo-viewer";
 //   生活，那时标题、摘录、日期、当时年龄和「读读这一天」的去处必须一起换（共同规格 5.6）。
 //   所以这个组件收的是一串 slide，每个 slide 自带它的故事，而不是「一段故事 + 一串图」。
 //
-//   框里是裁切，点开是原比例。封面是固定比例的圆角框，照片 object-fit: cover 填满它；点开走
-//   的是站点已有的查看器（components/photo-viewer.tsx 的 ViewerModal），reel + 双击放大 +
-//   返回键关闭，和月页、详情页里点开照片是同一件事，不是首页自己造的第二个查看器。
+//   一张都不裁。尺寸裁决（e66c4dd）：宽度优先、按原图比例自然高度——照片铺满右栏宽度，高度由
+//   它自己决定，竖照就让页面往下长。点开走的仍是站点已有的查看器（components/photo-viewer.tsx
+//   的 ViewerModal），reel + 双击放大 + 返回键关闭，和月页、详情页点开照片是同一件事。
 //
 //   没有合格照片就只留文字。没有 photo 的 slide 渲染成纯文字的一段，不画空照片框、不借别的
 //   故事的照片（共同规格 5.7）。
@@ -64,21 +64,12 @@ export type HomeRecentFact = {
 // 不是一整段话；超过上限的引语保留原本的「」，颜色不动——括号本来就已经把它标出来了。
 const QUOTE_ACCENT_MAX = 10;
 
-// 封面框的比例跟着照片自己的方向走。
-//
-// 定稿里那张是竖幅，框是 1 : 1.08；照同一个框去裁横幅，会从两边各切掉四分之一——2026-08-19
-// 那张「小年也扎了个小辫子」实测就是这样，人整个被推到框的左边。框跟着方向变，圆角、阴影、
-// object-fit: cover 都不变，动作和主体留在框里（任务卡：照片主体与动作保留）。
-// 尺寸缺失时按定稿的竖幅走，因为手机照片绝大多数是竖的。
-function frameRatio(media: { width?: number; height?: number }): string {
-  const { width, height } = media;
-  if (!width || !height) return "1 / 1.08";
-  if (width > height * 1.05) return "4 / 3";
-  if (height > width * 1.05) return "1 / 1.08";
-  return "1 / 1";
-}
+// 主视觉不再按方向裁切：尺寸裁决（版式卡 e66c4dd）是**宽度优先、按原图比例自然高度**，
+// 所以这里没有形状分支了——`<img>` 铺满右栏宽度，高度由它自己的比例决定，竖照就让页面往下长。
+// 之前那个 shapeOf/frameRatio 已经删掉：留着一个不再被 CSS 使用的 data-shape，只会让下一个人
+// 以为首页还在按方向裁图。
 
-// 标题里的强调片段（2026-09-13，替掉上一版按 cold/hot/冷/热 关键词自动匹配的做法）。
+// 标题里的强调片段（2026-09-13，替掉更早那版按 cold/hot/冷/热 关键词自动匹配的做法）。
 //
 // 为什么换掉：关键词表是一张会自己长大的表。今天是冷热，明天就会有人往里加「第一次」「走路」，
 // 于是每个标题都开始自动变色——那就是把每段生活套成同一个彩色模板，正是要避免的事。
@@ -119,7 +110,7 @@ export function withQuotes(text: string, keyPrefix: string) {
   });
 }
 
-export function HomeLead({ slides, recent }: { slides: HomeLeadSlide[]; recent?: HomeRecentFact }) {
+export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLeadSlide[]; clockLine?: string; today: string; notes?: React.ReactNode }) {
   const [index, setIndex] = useState(0);
   const [viewerAt, setViewerAt] = useState<number | null>(null);
   const closeViewer = useCallback(() => setViewerAt(null), []);
@@ -130,13 +121,14 @@ export function HomeLead({ slides, recent }: { slides: HomeLeadSlide[]; recent?:
   const reel = photo ? (photo.siblings?.length ? photo.siblings : [photo.media]) : [];
   const reelIndex = photo ? Math.max(0, reel.findIndex((item) => item.id === photo.media.id)) : 0;
 
-  return <section className="home-hero" aria-label="最近的一段生活">
+  // 2026-09-13 改版：照片是第一眼的东西，占右侧约三分之二；左边只留题签。
+  // DOM 顺序就是手机上的阅读顺序（照片 → 日期 → 题签/入口 → 便签）；桌面靠 grid 把照片放到右栏。
+  return <>
     {photo ? <figure className="home-figure">
       <button
         className="home-photo"
         type="button"
         aria-label="打开这一天的完整照片"
-        style={{ aspectRatio: frameRatio(photo.media) }}
         onClick={() => setViewerAt(reelIndex)}
       >
         {/* unoptimized：这些派生图在入库时已经是定宽 webp，Next 的优化器只会重编码一遍，
@@ -146,7 +138,7 @@ export function HomeLead({ slides, recent }: { slides: HomeLeadSlide[]; recent?:
           alt={photo.media.alt}
           width={photo.media.width || 4}
           height={photo.media.height || 3}
-          sizes="(max-width: 710px) 92vw, 444px"
+          sizes="(max-width: 760px) 96vw, 816px"
           priority
           unoptimized
         />
@@ -165,18 +157,18 @@ export function HomeLead({ slides, recent }: { slides: HomeLeadSlide[]; recent?:
       </figcaption>
     </figure> : null}
 
-    <div className="home-story">
-      <p className="home-label"><span className="home-dot" aria-hidden="true" />最近的一段生活</p>
-      <h2 className="home-story-title">{withEmphasis(slide.story.title, slide.story.emphasis, `title-${slide.key}`)}</h2>
-      {slide.story.excerpt ? <p className="home-story-summary">{withQuotes(slide.story.excerpt, `excerpt-${slide.key}`)}</p> : null}
-      <Link className="home-read" href={slide.story.href}>读读这一天 <span aria-hidden="true">↗</span></Link>
-      {recent ? <div className="home-latest">
-        <p className="home-latest-date">
-          <time dateTime={recent.day}>{recent.dayLabel}</time>
-          {recent.ageLabel ? <span> · 当时 {recent.ageLabel}</span> : null}
-        </p>
-        <Link href={recent.href}>{recent.title} <span aria-hidden="true">↗</span></Link>
-      </div> : null}
+    {/* 左栏是**一个** grid 单元。分成两个单元试过：右边那张 1088px 高的竖照跨两行时，会把
+        题签那一行也撑开，便签被推到 y=682，「便签首屏可见」只剩半截（实测 1440×900）。
+        便签由服务端组件渲染，作为 notes 传进来——它不需要变成客户端组件。 */}
+    <div className="home-aside">
+      <div className="home-headline">
+        {/* 今天和今天几岁收成一行小字：这一页只留一个主标题，就是下面那句题签。 */}
+        {clockLine ? <p className="home-today"><time dateTime={today}>{clockLine}</time></p> : null}
+        {/* 题签 = 那段真实生活自己的标题，最多两行；这一版首页不再渲染正文摘录。 */}
+        <h1 className="home-title">{withEmphasis(slide.story.title, slide.story.emphasis, `title-${slide.key}`)}</h1>
+        <Link className="home-read" href={slide.story.href}>读读这一天 <span aria-hidden="true">↗</span></Link>
+      </div>
+      {notes}
     </div>
 
     {viewerAt !== null && reel.length > 0 ? <ViewerModal
@@ -186,5 +178,5 @@ export function HomeLead({ slides, recent }: { slides: HomeLeadSlide[]; recent?:
       ageLabel={photo?.ageLabel ? `当时 ${photo.ageLabel}` : undefined}
       onClose={closeViewer}
     /> : null}
-  </section>;
+  </>;
 }
