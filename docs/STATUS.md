@@ -9233,3 +9233,7 @@ inert 移除之前，被浏览器忽略，键盘/读屏关闭后焦点落空（�
 > 00:07 更正上一段的一句：「r2.2 行的 `reviewed_at` 另比真实写入早约 8 小时」是推断，未证实——`content_quality_reviews` 没有 `created_at`，
 > 无法证明每行的真实写入时刻。已证实的只有：页面 23:28 为 133/133、23:59 为 82/133；审核行 22:31 为 1,636、00:04 为 1,856；
 > 这 51 条行的 `reviewed_at≈2026-09-13T07:29Z` 且晚于各自的 release 批准行。两次采样（16:03Z/16:04Z）损伤一致，暂未扩大。
+
+> 00:10 再更正：上面两处关于「`reviewed_at` 与真实写入差约 8 小时」的说法**都撤回**——是页面轨查询时的显示问题：`reviewed_at` 为
+> `timestamp without time zone`，原始值 `2026-09-13 15:29:04.099`（UTC 墙钟）与 `organizer_runs.processed_at = 2026-09-13 23:29:04.099+08` 是同一时刻，写入方没有回填旧时间。
+> 机制已查实：`persistOrganization` 按 `organization_fingerprint` 命中已发布事件后原地更新并返回已有 id，随后为它写入 r2.2 `needs_human_review`，发布门按最新决定撤下。
