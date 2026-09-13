@@ -26,7 +26,12 @@ export type GalleryPhoto = {
 const isVideo = (item: GalleryPhoto) => item.type === "video";
 
 // Full-screen viewer: scroll-snap reel + double-tap zoom + keyboard nav + back-button close.
-function ViewerModal({
+//
+// Exported (2026-09-13) so the front page's cover can open the SAME viewer rather than growing a
+// second one of its own. The cover is a fixed, cropped frame with its own caption and 换张照片
+// button, so it cannot use PhotoGallery's hero — but 「打开原比例」 has to mean exactly what it
+// means everywhere else on the site: this reel, this zoom, this back-button behaviour.
+export function ViewerModal({
   photos,
   startIndex,
   dateLabel,

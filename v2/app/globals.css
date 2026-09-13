@@ -17,8 +17,11 @@
   --color-text: #433E38;
   --color-muted: #7A7267;
   --color-border: #E4DDD4;
-  --font-heading: var(--font-nunito, 'Nunito'), 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-body: var(--font-nunito, 'Nunito'), 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  /* 中文是 NianRound（自托管圆体，app/fonts.css），英文和数字仍然是 Nunito——Nunito 排在前面，
+     拉丁字符先被它接住，汉字才落到圆体上。PingFang / 雅黑只是最后的系统兜底，正常情况下
+     看不到它们；这一条 2026-09-13 起才成立，之前中文一直是系统字体。 */
+  --font-heading: var(--font-nunito, 'Nunito'), 'NianRound', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-body: var(--font-nunito, 'Nunito'), 'NianRound', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --radius-sm: 2px; --radius-md: 6px; --radius-lg: 10px; --radius-xl: 16px;
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px;
   --shadow-style: 0 8px 18px rgba(67,62,56,.08);

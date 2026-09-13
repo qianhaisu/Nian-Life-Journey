@@ -1,0 +1,331 @@
+/* 首页（2026-09-13 定稿实现）。作用域只在 .home-v2 里，其他页面的版式不受影响。
+
+   基准是本机那份唯一已确认稿 nianlife-home-v2.html（SHA-256 9a046b3b…f755cc），以及用户在它之上
+   追加的一条：删掉最底部的月份与「全部记忆」链接——它们和顶部的「记忆」是同一个入口。
+   稿子里的「首页设计预览」字样、假页面切换、写死的日期年龄和 data URL 照片都不进产品。
+
+   与稿子的差别，都是为了接上真站而不是为了好看：
+   - 顶部导航用站点已有的 SiteHeader（真路由 首页/记忆/张年），不在首页另做一套。
+   - 版心左右边距跟 header-inner 对齐（min(1400px, 100% - 64px)，窄屏 16px），否则品牌和正文
+     会差出四十几个像素；hero 自己再收到 1180px，稿子里照片与文字的比例才保持得住。
+   - 尺寸用视口媒体查询而不是容器查询：这一块本来就铺满视口，断点仍然是稿子的 1180 / 710 / 430。 */
+
+.home-v2 {
+  --home-sage: #74866a;
+  --home-sage-soft: #edf0e7;
+  --home-clay: #c2a88a;
+  --home-blue: #537b95;
+  --home-red: #b26450;
+  --home-peach: #f3e9df;
+  --home-ink: #433e38;
+  --home-muted: #7a7267;
+  color: var(--home-ink);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.home-sheet {
+  width: min(1400px, calc(100% - 32px));
+  margin-inline: auto;
+  padding: 22px 0 40px;
+}
+
+/* ── 现在的张年：今天的日期、问候、今天几岁 ── */
+/* 窄屏一列：问候和「现在几岁」上下排。并排是宽屏才成立的，390px 上并排会把标题挤成
+   「最近怎么 / 样，张年。」——一句问候被折在词中间（实测 390×844）。 */
+.home-intro {
+  max-width: 1180px;
+  margin: 25px 0 23px;
+}
+.home-today {
+  margin: 0 0 7px;
+  color: var(--home-muted);
+  font-size: 12px;
+  letter-spacing: .03em;
+}
+.home-v2 h1 {
+  margin: 0;
+  font-size: clamp(26px, 6.8vw, 38px);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: -.015em;
+}
+.home-name { color: var(--home-sage); }
+.home-current-age {
+  margin: 11px 0 0;
+  color: var(--home-muted);
+  font-size: 12px;
+}
+.home-current-age strong {
+  color: var(--home-sage);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* ── 一张照片 + 它所属的那一段生活 ── */
+.home-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  max-width: 1180px;
+}
+.home-figure { margin: 0; min-width: 0; }
+.home-photo {
+  position: relative;
+  display: block;
+  width: 100%;
+  /* 定稿的竖幅比例是这里的兜底；实际比例由 home-lead.tsx 按照片自己的方向写在 style 上。 */
+  aspect-ratio: 1 / 1.08;
+  padding: 0;
+  border: 0;
+  border-radius: 27px;
+  background: var(--paper-dark);
+  box-shadow: 0 16px 36px rgba(138, 121, 102, .1);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.home-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* 竖幅手机照片的主体通常在上半部；偏上取景，动作和脸都还在框里。 */
+  object-position: 50% 38%;
+}
+.home-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 8px 4px 0;
+  color: var(--home-muted);
+  font-size: 11px;
+}
+.home-caption time { color: inherit; font-weight: 400; }
+.home-swap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--home-sage);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.home-story { min-width: 0; }
+.home-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--home-sage);
+  font-size: 12px;
+}
+.home-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a6b298;
+}
+.home-story-title {
+  margin: 0 0 15px;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: -.025em;
+}
+.home-story-summary {
+  margin: 0 0 21px;
+  max-width: 23em;
+  color: var(--home-muted);
+  font-size: 15px;
+  line-height: 1.95;
+}
+/* 引语。颜色跟着内容走：有「」才有颜色，没有引语的一段生活就一个色块都不出现。 */
+.home-quote { color: var(--home-red); quotes: "「" "」"; }
+.home-story-title .home-quote { color: var(--home-blue); font-weight: 500; }
+.home-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 21px;
+  min-height: 44px;
+  padding: 10px 17px;
+  border-radius: 16px;
+  background: var(--home-sage-soft);
+  color: #566749;
+  font-size: 13px;
+}
+.home-read:hover { filter: brightness(.96); }
+.home-latest { margin-top: 25px; }
+.home-latest-date {
+  margin: 0 0 5px;
+  color: #977651;
+  font-size: 11px;
+}
+.home-latest-date time { color: inherit; font-weight: 400; }
+.home-latest a {
+  display: block;
+  min-height: 44px;
+  color: var(--home-blue);
+  font-size: 15px;
+  line-height: 1.8;
+}
+.home-latest a:hover { color: #45657b; }
+
+/* ── 紧凑提醒。默认一条，最多两条，展开才看依据。 ── */
+.home-reminders { max-width: 1180px; margin-top: 20px; }
+.home-reminder + .home-reminder { margin-top: 10px; }
+.home-reminder-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 15px 18px;
+  border-radius: 23px;
+  background: var(--home-peach);
+  cursor: pointer;
+  list-style: none;
+}
+.home-reminder-bar::-webkit-details-marker { display: none; }
+.home-reminder-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.home-reminder-label { color: #977051; font-size: 12px; }
+.home-reminder-title { color: #805b48; font-size: 14px; }
+.home-reminder-when, .home-reminder-status { color: #896d56; font-size: 11px; }
+.home-reminder-when time { color: inherit; font-weight: 400; }
+.home-reminder-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 44px;
+  color: #805b48;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.home-reminder-toggle::after { margin-left: 8px; content: "＋"; }
+.home-reminder[open] .home-reminder-toggle::after { content: "－"; }
+.home-reminder-detail {
+  max-width: 780px;
+  padding: 15px 23px 0;
+  color: var(--home-muted);
+  font-size: 13px;
+  line-height: 1.95;
+}
+.home-reminder-detail > p { margin: 0 0 8px; }
+.home-reminder-sources { margin: 0; padding: 0; list-style: none; }
+.home-reminder-source {
+  padding-left: 10px;
+  border-left: 2px solid var(--color-border);
+}
+.home-reminder-source + .home-reminder-source { margin-top: 12px; }
+.home-reminder-source-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  margin: 0;
+  color: var(--home-muted);
+  font-size: 12px;
+}
+.home-reminder-source-head > * + *::before { margin-right: 8px; color: var(--color-border); content: "·"; }
+.home-reminder-kind {
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--home-sage) 10%, transparent);
+  color: var(--home-sage);
+}
+.home-reminder-role { color: var(--home-sage); }
+.home-reminder-role--unconfirmed { color: var(--home-muted); font-style: italic; }
+.home-reminder-source-summary {
+  margin: 3px 0 0;
+  color: var(--home-ink);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.home-reminder-source-link { margin: 2px 0 0; }
+.home-reminder-source-link a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--home-sage);
+  font-size: 12px;
+}
+
+/* 材料不足时的真话：不画空照片框，也不说「暂无」。 */
+.home-nothing {
+  max-width: 34em;
+  margin: 28px 0 0;
+  color: var(--home-muted);
+  font-size: 15px;
+  line-height: 1.95;
+}
+
+@media (min-width: 431px) {
+  .home-intro { margin-top: 25px; }
+}
+
+/* 版心跟着 .header-inner 的左右留白走（globals.css 在 700px 换成 64px），品牌和正文才在
+   同一条竖线上；不接上这一条，桌面端品牌在 x=32、照片在 x=16，差 16px 一眼看得出来。 */
+@media (min-width: 700px) {
+  .home-sheet { width: min(1400px, calc(100% - 64px)); }
+}
+
+@media (min-width: 711px) {
+  .home-sheet { padding: 28px 0 22px; }
+  .home-intro {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin: 28px 0 23px;
+  }
+  .home-v2 h1 { font-size: clamp(30px, 4vw, 43px); }
+  .home-current-age {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0;
+    padding-bottom: 7px;
+  }
+  .home-current-age strong { font-size: 18px; }
+  .home-hero {
+    grid-template-columns: 1.18fr .82fr;
+    align-items: center;
+    column-gap: 6.5%;
+  }
+  .home-figure { max-width: 420px; width: 100%; }
+  .home-photo { border-radius: 32px; }
+  .home-caption { flex-wrap: nowrap; gap: 10px; }
+  .home-story { padding: 0 0 35px; }
+  .home-label { margin-bottom: 19px; }
+  .home-story-title {
+    margin-bottom: 23px;
+    font-size: clamp(28px, 3.5vw, 43px);
+    line-height: 1.58;
+  }
+  .home-latest { margin-top: 39px; }
+  .home-reminder-bar { align-items: center; padding: 10px 23px; }
+  .home-reminder-copy {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px 22px;
+  }
+  .home-reminder-title { font-size: 15px; }
+  .home-reminder-toggle { font-size: 13px; }
+}
+
+@media (min-width: 1181px) {
+  .home-hero { grid-template-columns: 1fr 1fr; column-gap: 9%; }
+  .home-figure { max-width: 444px; }
+  .home-story { padding-right: 18px; }
+}

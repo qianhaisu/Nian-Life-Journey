@@ -91,17 +91,19 @@ function EvidenceLine({ evidence, label }: { evidence?: UpcomingEvidence; label:
 //
 //   提出与完成分开. 「准备带去」 does not prove 「已经带到了」, so each kind of note is its own row
 //   with its own label, its own day and its own link.
-const MODALITY_LABEL: Record<UpcomingModality, string> = {
+// 导出（2026-09-13）：新版首页把这张清单收成一条紧凑提醒，展开后要读出同样的「谁提的、什么语气」。
+// 同一句话在两个地方各写一遍，迟早会在一个地方被改成另一种说法，所以标签只有这一份。
+export const MODALITY_LABEL: Record<UpcomingModality, string> = {
   statement: "说起", question: "问起", plan: "打算", condition: "有条件", relayed: "转述",
 };
 
-type SourceKind = "raised" | "completed" | "rescheduled" | "cancelled";
-const SOURCE_KIND_LABEL: Record<SourceKind, string> = { raised: "提出", completed: "完成", rescheduled: "改期", cancelled: "取消" };
+export type SourceKind = "raised" | "completed" | "rescheduled" | "cancelled";
+export const SOURCE_KIND_LABEL: Record<SourceKind, string> = { raised: "提出", completed: "完成", rescheduled: "改期", cancelled: "取消" };
 // Only printed when `happenedOn` is actually there. Each kind names what that day IS, so the date
 // is attached to the event it dates rather than to the sentence that mentioned it.
 const HAPPENED_LABEL: Record<SourceKind, string> = { raised: "实际发生于", completed: "实际完成于", rescheduled: "实际改到", cancelled: "实际取消于" };
 
-function roleText(role: UpcomingSourceRole): string {
+export function roleText(role: UpcomingSourceRole): string {
   if (role.kind === "family_member") return role.role;
   if (role.kind === "record_check") return role.label;
   return "来源人物未确认";

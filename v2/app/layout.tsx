@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito } from "next/font/google";
+// 中文圆体 NianRound：本地静态 woff2 分片，同源加载，不请求 Google Fonts。
+// 分片与许可见 app/fonts.css 顶部注释与 public/fonts/nian-round/LICENSE.txt。
+// 写在 globals 之前，@font-face 先于用到它的规则声明。
+import "./fonts.css";
 import "./globals.css";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SiteHeader } from "@/components/site-header";
