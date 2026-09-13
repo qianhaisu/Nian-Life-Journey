@@ -11,7 +11,7 @@ import { storyPhotoConfirmationsFrom } from "../lib/media/story-binding.ts";
 import {
   buildHomeFeed, buildPhotoCandidates, buildReminders, candidateMemories, deadlineLabelOf,
   deterministicQuality, editionAt, EDITION_HOURS, HOME_FEED_VERSION, isImportantReminder,
-  QUALITY_NOT_ASSESSED, reminderStateOf, REMINDERS_MAX_SHOWN, cooldownOf,
+  QUALITY_NOT_ASSESSED, reminderStateOf, REMINDERS_MAX_SHOWN, cooldownOf, HOME_PHOTO_CANDIDATES_MAX,
 } from "../lib/home-feed.ts";
 
 const BIRTH = "2025-01-03";
@@ -406,7 +406,7 @@ test("同一份待办重放两次，结果逐字相同（同源幂等）", () =>
 
 test("直接喂 buildPhotoCandidates：没有候选时返回空数组而不是抛错", () => {
   const edition = editionAt(new Date("2026-09-13T09:00:00+08:00"));
-  assert.deepEqual(buildPhotoCandidates([], BIRTH, TODAY, edition, undefined), []);
+  assert.deepEqual(buildPhotoCandidates({ memories: [], birthDay: BIRTH, today: TODAY, edition }), []);
 });
 
 test("提醒的证据链：能落到具体记忆就落，落不到就退到那个月，并说清是哪一种（原则八）", () => {
@@ -489,27 +489,6 @@ test("质量缓存落地不会在同一期里换掉照片：轮换次序只看 m
   assert.equal(chosenWith(lookup({ "m-aaa": 90, "m-bbb": 50, "m-ccc": 10 })), before, "分数整个反过来也不该换");
 });
 
-test("质量分决定谁进轮换 band 以及 qualityRank，但不决定轮到谁", () => {
-  const photos = ["m-a", "m-b", "m-c", "m-d", "m-e", "m-f", "m-g"].map((id, i) =>
-    photo(id, "2026-09-01", { takenAt: `2026-09-0${i + 1}T10:00:00+08:00` }));
-  const events = photos.map((p, i) => event(`e-${i}`, "2026-09-01", { mediaIds: [p.id] }));
-  const archive = archiveOf({ events, media: photos, reviews: photos.map((p, i) => binding(`e-${i}`, p.id)) });
-  const scores = { "m-a": 10, "m-b": 20, "m-c": 30, "m-d": 40, "m-e": 50, "m-f": 60, "m-g": 70 };
-  const feed = buildHomeFeed(archive, {
-    edition: editionAt(new Date("2026-09-13T09:00:00+08:00")),
-    quality: (mediaId) => ({ score: scores[mediaId], interaction: 0, readability: 0, context: 0, distinction: 0, source: "ai_vision", model: "m", assessedAt: "t" }),
-  });
-  const rotating = feed.photoCandidates.filter((candidate) => candidate.cooldown);
-  const benched = feed.photoCandidates.filter((candidate) => !candidate.cooldown);
-  assert.equal(rotating.length, 6, "band 上限 6 组参与轮换");
-  assert.equal(benched.length, 1);
-  assert.equal(benched[0].photo.media.id, "m-a", "分最低的那一张被挤出 band");
-  assert.match(benched[0].reason, /质量分排在第 7 位/);
-  assert.equal(benched[0].qualityRank, 7);
-  assert.deepEqual(rotating.map((candidate) => candidate.photo.media.id), ["m-b", "m-c", "m-d", "m-e", "m-f", "m-g"]);
-  assert.equal(rotating.find((candidate) => candidate.photo.media.id === "m-g").qualityRank, 1);
-});
-
 test("冷却报的是量出来的数：做到几期、折算几天、离 14 天差多少", () => {
   const p1 = photo("m-1", "2026-09-07");
   const p2 = photo("m-2", "2026-08-20", { takenAt: "2026-08-20T11:00:00+08:00" });
@@ -540,4 +519,136 @@ test("纯轮转：走满一整轮才会再出现同一张，且相邻期次必�
   assert.equal(new Set(seq.slice(0, 3)).size, 3, "头三期把三张都走过一遍");
   assert.deepEqual(seq.slice(3), seq.slice(0, 3), "第四期开始重复同一轮");
   for (let i = 1; i < seq.length; i += 1) assert.notEqual(seq[i], seq[i - 1], "相邻期次不该是同一张");
+});
+
+// ── 轮换池 vs 页面上限：两个数必须分开 ──────────────────────────────────────────
+
+/** n 组合格候选，各自独立事件、独立时刻（不成连拍）。 */
+function poolOf(n, scores = {}) {
+  const photos = Array.from({ length: n }, (_, i) =>
+    photo(`m-${String(i).padStart(2, "0")}`, "2026-09-01", { takenAt: `2026-09-01T${String(i % 24).padStart(2, "0")}:${String(i % 60).padStart(2, "0")}:00+08:00` }));
+  const events = photos.map((p, i) => event(`e-${String(i).padStart(2, "0")}`, "2026-09-01", { mediaIds: [p.id] }));
+  const archive = archiveOf({ events, media: photos, reviews: photos.map((p, i) => binding(`e-${String(i).padStart(2, "0")}`, p.id)) });
+  const quality = Object.keys(scores).length
+    ? (mediaId) => scores[mediaId] === undefined ? undefined : ({
+      score: scores[mediaId], interaction: 0, readability: 0, context: 0, distinction: 0,
+      source: "ai_vision", model: "m", assessedAt: "2026-09-01T00:00:00Z",
+    })
+    : undefined;
+  return { archive, quality, photos };
+}
+
+test("超过 6 个候选：轮换池是全部 20 组，返回给页面的只有 6 条，冷却按 20 算", () => {
+  const { archive } = poolOf(20);
+  const feed = buildHomeFeed(archive, { edition: editionAt(new Date("2026-09-13T09:00:00+08:00")) });
+  assert.equal(feed.photoCandidates.length, HOME_PHOTO_CANDIDATES_MAX, "页面最多拿 6 条");
+  // 冷却是池子大小，不是清单长度 —— 这正是上一版把两者混用而丢掉的东西。
+  const cooldown = feed.photoCandidates[0].cooldown;
+  assert.equal(cooldown.editions, 20, "20 组候选 → 同一张照片隔 20 期再出现");
+  assert.equal(cooldown.days, 5, "20 期 × 6 小时 = 5 天（按 6 截的话只有 1.5 天）");
+  assert.equal(feed.photoCandidates.filter((c) => c.chosen).length, 1);
+  assert.equal(feed.photoCandidates[0].chosen, true, "当期选中的那条永远在返回的清单里，排第一");
+});
+
+test("实际冷却就是整轮：20 组候选走 20 期才回到同一张，期间无一重复", () => {
+  const { archive } = poolOf(20);
+  const at = (index) => buildHomeFeed(archive, { edition: { id: `t${index}`, startedAt: "2026-09-13T00:00:00+08:00", expiresAt: "y", slot: 0, index } }).lead.photo.media.id;
+  const seq = Array.from({ length: 20 }, (_, i) => at(i));
+  assert.equal(new Set(seq).size, 20, "一整轮里 20 张各出现恰好一次");
+  assert.equal(at(20), seq[0], "第 21 期才回到第一张");
+  for (let i = 1; i < seq.length; i += 1) assert.notEqual(seq[i], seq[i - 1]);
+});
+
+test("评分跨越第 6/7 名：清单成员会换，但当期选中的那一张不变", () => {
+  // 20 组候选，全部给分：score = 100 - i，所以 m-00 是第 1 名 … m-19 是第 20 名。
+  // 然后把第 6 名（m-05）和第 7 名（m-06）的分**对调**，让排名正好跨过页面上限那条线。
+  const ranked = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`m-${String(i).padStart(2, "0")}`, 100 - i]));
+  const swapped = { ...ranked, "m-05": ranked["m-06"], "m-06": ranked["m-05"] };
+  const before = poolOf(20, ranked);
+  const after = poolOf(20, swapped);
+  // 固定期次序号，好让「当期选中谁」是可预期的：池按 mediaId 排序，index 0 → m-00。
+  const edition = { id: "2026-09-13#0", startedAt: "2026-09-13T00:00:00+08:00", expiresAt: "2026-09-13T06:00:00+08:00", slot: 0, index: 0 };
+  const feedBefore = buildHomeFeed(before.archive, { edition, quality: before.quality });
+  const feedAfter = buildHomeFeed(after.archive, { edition, quality: after.quality });
+
+  assert.equal(feedBefore.lead.photo.media.id, "m-00", "轮换按 mediaId，index 0 落在 m-00");
+  assert.equal(
+    feedAfter.lead.photo.media.id, feedBefore.lead.photo.media.id,
+    "分数跨过第 6/7 名的边界，也不许在期内换掉当期那张照片（§5.5）",
+  );
+
+  // 清单成员确实换了 —— 这正是质量分该管的事，所以这不是「什么都没变」。
+  const listed = (feed) => feed.photoCandidates.map((c) => c.photo.media.id);
+  assert.ok(listed(feedBefore).includes("m-05"), "对调前第 6 名在清单里");
+  assert.ok(!listed(feedBefore).includes("m-06"), "对调前第 7 名不在清单里");
+  assert.ok(listed(feedAfter).includes("m-06"), "对调后升到第 6 名的那张进了清单");
+  assert.ok(!listed(feedAfter).includes("m-05"), "对调后掉到第 7 名的那张出了清单");
+
+  // 池子没变，所以冷却一个数都不动 —— 清单长度和池子大小是两件事。
+  assert.equal(feedBefore.photoCandidates[0].cooldown.editions, 20);
+  assert.equal(feedAfter.photoCandidates[0].cooldown.editions, 20);
+});
+
+test("期内新增候选：本期不参与轮换，从下一期起才算进池子", () => {
+  const p1 = photo("m-1", "2026-09-07");
+  const p2 = photo("m-2", "2026-08-20", { takenAt: "2026-08-20T11:00:00+08:00" });
+  const fresh = photo("m-3", "2026-08-10", { takenAt: "2026-08-10T11:00:00+08:00" });
+  const events = [
+    event("e-1", "2026-09-07", { mediaIds: [p1.id] }),
+    event("e-2", "2026-08-20", { mediaIds: [p2.id] }),
+    event("e-3", "2026-08-10", { mediaIds: [fresh.id] }),
+  ];
+  const edition = editionAt(new Date("2026-09-13T14:00:00+08:00"));
+  assert.equal(edition.startedAt, "2026-09-13T12:00:00+08:00", "本期从 12:00 开始");
+  const reviews = [
+    binding("e-1", p1.id, "approved", { reviewedAt: "2026-09-01T00:00:00Z" }),
+    binding("e-2", p2.id, "approved", { reviewedAt: "2026-09-01T00:00:00Z" }),
+    binding("e-3", fresh.id, "approved", { reviewedAt: "2026-09-13T13:00:00+08:00" }),
+  ];
+  const archive = archiveOf({ events, media: [p1, p2, fresh], reviews });
+  const feed = buildHomeFeed(archive, { edition });
+  const rotating = feed.photoCandidates.filter((c) => c.cooldown);
+  assert.equal(rotating.length, 2, "本期的池子只有两组：新获批的那组不算");
+  assert.equal(rotating[0].cooldown.editions, 2);
+  const pendingOne = feed.photoCandidates.find((c) => c.photo.media.id === "m-3");
+  assert.equal(pendingOne.chosen, false);
+  assert.equal(pendingOne.cooldown, undefined, "不参与轮换就不该带冷却数");
+  assert.match(pendingOne.reason, /开始后才通过审核，从下一期起参与/);
+  const next = buildHomeFeed(archive, { edition: editionAt(new Date("2026-09-13T18:30:00+08:00")) });
+  assert.equal(next.photoCandidates.filter((c) => c.cooldown).length, 3, "下一期池子变成三组");
+  assert.equal(next.photoCandidates[0].cooldown.editions, 3);
+});
+
+test("期内落地的视觉评分本期先不生效，下一期起生效（并写明为什么降级）", () => {
+  const { archive } = poolOf(3);
+  const edition = editionAt(new Date("2026-09-13T14:00:00+08:00"));
+  const midEdition = () => ({
+    score: 99, interaction: 0, readability: 0, context: 0, distinction: 0,
+    source: "ai_vision", model: "m", assessedAt: "2026-09-13T13:00:00+08:00",
+  });
+  const feed = buildHomeFeed(archive, { edition, quality: midEdition });
+  assert.equal(feed.lead.photo.quality.source, "deterministic", "本期开始后才写下的评分，本期不用");
+  assert.match(feed.lead.photo.quality.degraded, /开始后才写下的/);
+  const earlier = () => ({
+    score: 99, interaction: 0, readability: 0, context: 0, distinction: 0,
+    source: "ai_vision", model: "m", assessedAt: "2026-09-13T11:00:00+08:00",
+  });
+  assert.equal(buildHomeFeed(archive, { edition, quality: earlier }).lead.photo.quality.source, "ai_vision");
+});
+
+test("撤销仍然立刻生效，不等下一期", () => {
+  const { archive: full } = poolOf(3);
+  const edition = editionAt(new Date("2026-09-13T14:00:00+08:00"));
+  const chosen = buildHomeFeed(full, { edition }).lead.photo.media.id;
+  const ids = ["m-00", "m-01", "m-02"];
+  const media = ids.map((id, i) => photo(id, "2026-09-01", { takenAt: `2026-09-01T0${i}:0${i}:00+08:00` }));
+  const events = media.map((p, i) => event(`e-0${i}`, "2026-09-01", { mediaIds: [p.id] }));
+  const revokedEvent = `e-0${ids.indexOf(chosen)}`;
+  const reviews = [
+    ...media.map((p, i) => binding(`e-0${i}`, p.id, "approved", { reviewedAt: "2026-09-01T00:00:00Z" })),
+    binding(revokedEvent, chosen, "rejected", { id: "rev-late", reviewedAt: "2026-09-13T13:30:00+08:00" }),
+  ];
+  const after = buildHomeFeed(archiveOf({ events, media, reviews }), { edition });
+  assert.notEqual(after.lead.photo.media.id, chosen, "撤销是唯一立刻生效的那一类（§5.7）");
+  assert.equal(after.photoCandidates[0].cooldown.editions, 2, "池子少一组，冷却跟着变");
 });

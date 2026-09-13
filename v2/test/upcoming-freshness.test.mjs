@@ -12,7 +12,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   classifyFreshness, freshnessOf, FRESHNESS_HOURS, HABIT_MAX_DATES, isImportantItem,
-  limitHabitDates, pinnedRaisedOn, raisedOnOf,
+  capHabitByShownDays, habitDisplayLogFrom, pinnedRaisedOn, raisedOnOf,
 } from "../lib/upcoming-freshness.ts";
 import { buildReminders, reminderStateOf } from "../lib/home-feed.ts";
 
@@ -156,31 +156,6 @@ test("同一条事项重复判定是幂等的：同样输入逐字同样输出",
 
 // ── 习惯提醒最多两个日期 ─────────────────────────────────────────────────────
 
-test("同一条习惯提醒最多露出两个不同日期，更早的收起来但不丢", () => {
-  const entries = [
-    { id: "h1", title: "每天量体温", raisedOn: "2026-09-12", klass: "habit" },
-    { id: "h2", title: "每天量体温", raisedOn: "2026-09-10", klass: "habit" },
-    { id: "h3", title: "每天量体温", raisedOn: "2026-09-08", klass: "habit" },
-    { id: "e1", title: "买一样日用品", raisedOn: "2026-09-01", klass: "errand" },
-  ];
-  const { kept, dropped } = limitHabitDates(entries);
-  assert.equal(dropped.length, 1);
-  assert.equal(dropped[0].entry.id, "h3", "留下的是最近两个日期");
-  assert.match(dropped[0].reason, new RegExp(`${HABIT_MAX_DATES} 个不同日期`));
-  assert.ok(kept.some((entry) => entry.id === "e1"), "非习惯类一条都不受影响");
-  assert.equal(kept.length + dropped.length, entries.length);
-});
-
-test("同一天的两条习惯提醒只算一个日期", () => {
-  const entries = [
-    { id: "a", title: "每天量体温", raisedOn: "2026-09-12", klass: "habit" },
-    { id: "b", title: "每天量体温", raisedOn: "2026-09-12", klass: "habit" },
-    { id: "c", title: "每天量体温", raisedOn: "2026-09-10", klass: "habit" },
-  ];
-  const { dropped } = limitHabitDates(entries);
-  assert.equal(dropped.length, 0, "两个不同日期都还没用完");
-});
-
 // ── 每次读取都过滤 ───────────────────────────────────────────────────────────
 
 test("每次首页读取都重跑有效性过滤：后台没动过库，过期琐事也不会再爬回默认位", () => {
@@ -227,63 +202,78 @@ test("同一件事被更晚的消息再说一次，提出日不会被推后（�
   assert.equal(day, "2026-08-16");
 });
 
-// ── 修 2：习惯提醒的日期上限作用在「实际展示」上，且退场记录照抄库里的真实状态 ──────
+// ── 习惯上限：按**实际展示过的自然日**计数（不能用 raisedOn 代替） ──────────────────
 
-const habit = (id, raisedOn, overrides = {}) => item({
-  id, title: "每天记一次作息", evidence: { day: raisedOn }, ...overrides,
+// 习惯提醒默认「今天被观察到」：7 天新鲜期（§6.3 的另一条规则）因此不干扰这里要测的日期上限。
+// 两条规则是独立的，混在一个 fixture 里就会分不清是谁把它拦下的。
+const habitOf = (id, overrides = {}) => item({ id, title: "每天记一次作息", evidence: { day: TODAY }, ...overrides });
+const logOf = (pairs) => habitDisplayLogFrom(new Map(pairs));
+
+test("同一天内反复刷新只占一个自然日，不会把自己数出去", () => {
+  // 今天已经露过 → 放行。刷十次还是放行：占的是「日」，不是「次」。
+  const log = logOf([["h", ["2026-09-11", TODAY]]]);
+  for (let refresh = 0; refresh < 10; refresh += 1) {
+    const { kept, dropped } = capHabitByShownDays([{ id: "h", title: "每天记一次作息", klass: "habit" }], TODAY, log);
+    assert.equal(dropped.length, 0, `第 ${refresh + 1} 次刷新不该把它拦下`);
+    assert.equal(kept.length, 1);
+  }
+  // 走完整条链也一样：同一天多次 buildReminders，退场清单始终为空。
+  for (let refresh = 0; refresh < 3; refresh += 1) {
+    const reminders = buildReminders({ status: "ready", items: [habitOf("h")] }, TODAY, undefined, log);
+    assert.equal(reminders.retired.filter((r) => r.kind === "habit_capped").length, 0);
+    assert.equal(reminders.shown.length, 1);
+  }
 });
 
-test("同一件习惯关注只占两个展示日期，第三个日期退场但**不是过期**", () => {
-  const items = [habit("h1", "2026-09-12"), habit("h2", "2026-09-10"), habit("h3", "2026-09-08")];
-  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
+test("露出过两个不同日期后，第三个自然日退出默认位", () => {
+  const log = logOf([["h", ["2026-09-11", "2026-09-12"]]]);
+  // 第三天（今天没露过，已经用掉两个日子）→ 拦下。
+  const reminders = buildReminders({ status: "ready", items: [habitOf("h")] }, TODAY, undefined, log);
   const capped = reminders.retired.filter((r) => r.kind === "habit_capped");
   assert.equal(capped.length, 1);
-  assert.equal(capped[0].id, "h3", "留下最近两个日期");
-  assert.match(capped[0].reason, /2 个不同日期/);
-  assert.equal(reminders.retired.some((r) => r.kind === "expired"), false, "这三条都还在 7 天周期内，没有一条是过期");
-  // 一条都没丢：露出的 + 折叠的 = 全部。
-  assert.equal(reminders.shown.length + reminders.more.length, items.length);
+  assert.equal(capped[0].id, "h");
+  assert.match(capped[0].reason, /2 个不同的日子/);
+  assert.equal(reminders.shown.length, 0, "第三天它不再占默认位");
+  assert.equal(reminders.more.length, 1, "但仍然可达，一条都没丢");
+  // 同一天里它只用掉一个日子：如果今天也算露过，它应当放行。
+  const alsoToday = logOf([["h", ["2026-09-11", "2026-09-12", TODAY]]]);
+  assert.equal(buildReminders({ status: "ready", items: [habitOf("h")] }, TODAY, undefined, alsoToday).shown.length, 1);
 });
 
-test("退场记录照抄库里的真实状态，不把 tentative 报成 open", () => {
-  // 这条是真 bug 的回归测试：原来 habit_capped 那一支把 status 硬写成 "open"，
-  // 于是一条 tentative 的习惯提醒会被报成 open —— 拿一个编出来的状态盖掉库里真实那一行。
-  const items = [
-    habit("h1", "2026-09-12", { status: "tentative" }),
-    habit("h2", "2026-09-10", { status: "tentative" }),
-    habit("h3", "2026-09-08", { status: "tentative" }),
-  ];
-  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
+test("从没露出过就一天都不算：空日志下习惯提醒照常露出", () => {
+  const reminders = buildReminders({ status: "ready", items: [habitOf("h")] }, TODAY, undefined);
+  assert.equal(reminders.retired.filter((r) => r.kind === "habit_capped").length, 0);
+  assert.equal(reminders.shown.length, 1, "没记过露出 → 没用掉任何日期 → 放行");
+  // 只记了别的事项也不算到它头上。
+  const otherLog = logOf([["someone-else", ["2026-09-01", "2026-09-02", "2026-09-03"]]]);
+  assert.equal(buildReminders({ status: "ready", items: [habitOf("h")] }, TODAY, undefined, otherLog).shown.length, 1);
+});
+
+test("raisedOn 不参与计数 —— 数的是露出过的日子，不是被说起的那天", () => {
+  // 上一版用 raisedOn 计数。这里两条事项的 7 天新鲜期都还在（所以不是新鲜度把谁拦下的），
+  // 唯一的差别是露出日志：结论必须只跟日志走。
+  const raisedToday = habitOf("h", { evidence: { day: TODAY } });
+  const raisedThreeDaysAgo = habitOf("h", { evidence: { day: "2026-09-10" } });
+  // 都没露出过 → 都放行，尽管 raisedOn 差了三天。
+  assert.equal(buildReminders({ status: "ready", items: [raisedToday] }, TODAY, undefined).shown.length, 1);
+  assert.equal(buildReminders({ status: "ready", items: [raisedThreeDaysAgo] }, TODAY, undefined).shown.length, 1);
+  // 都露出过两个别的日子 → 都拦下，同样与 raisedOn 无关。
+  const log = logOf([["h", ["2026-09-11", "2026-09-12"]]]);
+  assert.equal(buildReminders({ status: "ready", items: [raisedToday] }, TODAY, undefined, log).shown.length, 0);
+  assert.equal(buildReminders({ status: "ready", items: [raisedThreeDaysAgo] }, TODAY, undefined, log).shown.length, 0);
+});
+
+test("被上限拦下时照抄库里的真实状态，不写成 open", () => {
+  const log = logOf([["h", ["2026-09-11", "2026-09-12"]]]);
+  const reminders = buildReminders({ status: "ready", items: [habitOf("h", { status: "tentative" })] }, TODAY, undefined, log);
   const capped = reminders.retired.find((r) => r.kind === "habit_capped");
-  assert.equal(capped.id, "h3");
   assert.equal(capped.status, "tentative", "库里是 tentative，退场记录就得写 tentative");
 });
 
-test("过期与日期上限是两种退场原因，分开记不混成一句", () => {
-  const items = [
-    habit("h1", "2026-09-12"), habit("h2", "2026-09-10"), habit("h3", "2026-09-08"),
-    item({ id: "stale", title: "买一样日用品", evidence: { day: "2026-08-16" } }),
-  ];
-  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
-  const kinds = new Map(reminders.retired.map((r) => [r.id, r.kind]));
-  assert.equal(kinds.get("stale"), "expired");
-  assert.equal(kinds.get("h3"), "habit_capped");
-  assert.equal(reminders.retired.length, 2);
-});
-
-test("同一天的多条习惯提醒只算一个日期，不会误判成超限", () => {
-  const items = [habit("a", "2026-09-12"), habit("b", "2026-09-12"), habit("c", "2026-09-10")];
-  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
-  assert.equal(reminders.retired.filter((r) => r.kind === "habit_capped").length, 0);
-});
-
-test("日期上限只管习惯类：别的事项再多也不受它影响", () => {
-  const items = [
-    item({ id: "e1", title: "买一样日用品", evidence: { day: TODAY } }),
-    item({ id: "e2", title: "买另一样日用品", evidence: { day: TODAY } }),
-    item({ id: "e3", title: "买第三样日用品", evidence: { day: TODAY } }),
-  ];
-  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
-  assert.equal(reminders.retired.length, 0, "都在新鲜期内，也都不是习惯类");
-  assert.equal(reminders.shown.length + reminders.more.length, 3);
+test("上限只管习惯类，别的事项的露出日一天都不数", () => {
+  const log = logOf([["e1", ["2026-09-01", "2026-09-02", "2026-09-03", TODAY]]]);
+  const items = [item({ id: "e1", title: "买一样日用品", evidence: { day: TODAY } })];
+  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined, log);
+  assert.equal(reminders.retired.length, 0);
+  assert.equal(reminders.shown.length, 1);
 });

@@ -183,34 +183,56 @@ export function freshnessOf(item: Pick<UpcomingItem, "title" | "note" | "when" |
 }
 
 /**
- * 习惯提醒「最多两个不同日期露出」（§6.3）。
+ * 一条事项**实际被展示过**的自然日。由调用方提供，因为这是历史，算不出来。
  *
- * 同一件习惯关注被反复提起时，首页不该把每一次都列出来。按标题分组，每组按提出日去重后只留最近
- * 两个日期；被压下去的返回在 `dropped` 里，带原因，**一条都没丢**。
- *
- * 「无新观察不得由旧消息续期」在这里是构造保证的：分组用的日期是 `evidence.day`（第一次说的那天，
- * 且已在 upcoming-store 里钉住不会被重放推前），而不是任何一次重跑的时间。
+ * 为什么不能拿 `raisedOn` 代替（上一版就是这么错的）：`raisedOn` 是这件事**被说起**的那天，
+ * 和它**在首页露过脸**的那些天毫无关系。一条 9 月 8 日提起的习惯提醒，可能一次都没露出过，
+ * 也可能连着露了五天——按 raisedOn 数，前者会被算成「已经用掉一个日期」，后者会被算成「才用掉一个」。
+ * §6.3 数的是露出，所以只能记露出。
  */
-export function limitHabitDates<T extends { id: string; title: string; raisedOn?: string; klass: FreshnessClass }>(
-  entries: T[],
+export type HabitDisplayLog = {
+  /** 这条事项露出过的自然日（"YYYY-MM-DD"），顺序不重要，重复会被去重。 */
+  daysShown: (itemId: string) => readonly string[];
+};
+
+/** 什么都没记过的日志。没有接上持久化时就是这个——上限因此不会误伤任何人。 */
+export const NO_HABIT_DISPLAY_LOG: HabitDisplayLog = { daysShown: () => [] };
+
+/** 用一个 Map 记住露出日，测试与本地验证用。 */
+export function habitDisplayLogFrom(days: ReadonlyMap<string, readonly string[]>): HabitDisplayLog {
+  return { daysShown: (itemId) => days.get(itemId) ?? [] };
+}
+
+export type HabitCapEntry = { id: string; title: string; klass: FreshnessClass };
+
+/**
+ * 习惯提醒「最多两个不同**自然日**露出」（§6.3），按**实际展示过的日子**算。
+ *
+ * 判定只有三种情况：
+ *
+ *   · 今天已经露过 → 放行。**同一天内刷新多少次都不会多占一个日期**，因为占的是「日」不是「次」。
+ *   · 今天没露过，但已经露过 `max` 个不同的日子 → 拦下。第三个自然日起它不再占默认位。
+ *   · 今天没露过，露过的日子还不够 `max` 个 → 放行（真的露出之后，调用方把今天记进日志）。
+ *
+ * **没露出过就一天都不算**：日志里没有它，`daysShown` 就是空的，它当然放行。
+ *
+ * 拦下 ≠ 过期、≠ 完成。它只是不再占默认位，仍然在「展开全部」里，库里那一行一个字不动。
+ */
+export function capHabitByShownDays(
+  entries: readonly HabitCapEntry[],
+  today: string,
+  log: HabitDisplayLog = NO_HABIT_DISPLAY_LOG,
   max = HABIT_MAX_DATES,
-): { kept: T[]; dropped: { entry: T; reason: string }[] } {
-  const kept: T[] = [];
-  const dropped: { entry: T; reason: string }[] = [];
-  const datesByTitle = new Map<string, string[]>();
-  // 新的在前，这样留下的是最近的两个日期。
-  const ordered = [...entries].sort((a, b) => (b.raisedOn ?? "").localeCompare(a.raisedOn ?? "") || a.id.localeCompare(b.id));
-  for (const entry of ordered) {
+): { kept: HabitCapEntry[]; dropped: { entry: HabitCapEntry; reason: string }[] } {
+  const kept: HabitCapEntry[] = [];
+  const dropped: { entry: HabitCapEntry; reason: string }[] = [];
+  for (const entry of entries) {
     if (entry.klass !== "habit") { kept.push(entry); continue; }
-    const seen = datesByTitle.get(entry.title) ?? [];
-    const day = entry.raisedOn ?? "";
-    if (!seen.includes(day)) {
-      if (seen.length >= max) {
-        dropped.push({ entry, reason: `同一条习惯提醒已经露出 ${max} 个不同日期，更早的按 §6.3 收在展开里` });
-        continue;
-      }
-      seen.push(day);
-      datesByTitle.set(entry.title, seen);
+    const days = new Set(log.daysShown(entry.id));
+    if (days.has(today)) { kept.push(entry); continue; }
+    if (days.size >= max) {
+      dropped.push({ entry, reason: `这条习惯提醒已经在 ${days.size} 个不同的日子露出过（上限 ${max} 个自然日），今天起不占默认位` });
+      continue;
     }
     kept.push(entry);
   }

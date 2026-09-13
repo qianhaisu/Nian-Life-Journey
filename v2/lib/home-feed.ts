@@ -24,14 +24,15 @@ import type { FamilyArchive } from "@/lib/family-archive";
 import type { EditorialMemory, MediaRef, YearChapter } from "@/lib/memory-chapters";
 import { ageOn, formatDay } from "@/lib/time-signature";
 import { monthHrefOf } from "@/lib/home-view";
+import { STORY_PHOTO_REVIEW_KIND, storyPhotoKey } from "@/lib/media/story-binding";
 import { recentWindowStart } from "@/lib/home-recent-pick";
 import type { UpcomingFeed, UpcomingSources } from "@/lib/upcoming";
 import type { UpcomingItem, UpcomingWhen } from "@/lib/upcoming-contract";
-import { classifyFreshness, freshnessOf, isImportantItem, limitHabitDates, raisedOnOf } from "@/lib/upcoming-freshness";
+import { capHabitByShownDays, classifyFreshness, freshnessOf, isImportantItem, NO_HABIT_DISPLAY_LOG, type HabitDisplayLog } from "@/lib/upcoming-freshness";
 import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 /** 契约版本。页面轨按这个字符串确认自己接的是哪一版；只做兼容新增时递增小版本号。 */
-export const HOME_FEED_VERSION = "home-feed/1.2.0";
+export const HOME_FEED_VERSION = "home-feed/1.3.0";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 时钟
@@ -466,6 +467,11 @@ export type BuildHomeFeedOptions = {
   archive?: FamilyArchive;
   /** 显式切换：页面「换张照片」时把候选的 key 传回来，只在合格候选里换（§5.6）。 */
   photoKey?: string;
+  /**
+   * 习惯提醒「实际展示过哪些自然日」的日志（§6.3）。不传就是空日志——上限因此不会误伤任何人，
+   * 但也**不会生效**。它是历史，算不出来，只能记；接上哪个存储是另一件事。
+   */
+  habitLog?: HabitDisplayLog;
 };
 
 // 一段记忆 → 页面可读的故事引用。
@@ -548,6 +554,28 @@ function qualityFor(lookup: HomePhotoQualityLookup | undefined, photo: HomeFeedP
 }
 
 /**
+ * 本期该用哪个分数。
+ *
+ * 一个 `ai_vision` 分数要 `assessedAt < edition.startedAt` 才在本期生效——**质量更新从下一期起算**。
+ * 不这样做的话，一份离线缓存在期中落地就会改变「返回哪几条、怎么排」，而那份清单就是家人点
+ * 「换张照片」时看到的东西；期次说好了六小时不变，那它整块都不该在期中变。
+ *
+ * 没有 `assessedAt` 的分数不受这条约束：确定性降级分是此刻算出来的默认值，不是一次「更新」。
+ */
+function effectiveQuality(
+  lookup: HomePhotoQualityLookup | undefined,
+  photo: HomeFeedPhoto,
+  today: string,
+  edition: HomeFeedEdition,
+): HomePhotoQuality {
+  const found = qualityFor(lookup, photo, today);
+  if (found.source === "ai_vision" && found.assessedAt && found.assessedAt >= edition.startedAt) {
+    return deterministicQuality(photo, today, `这张照片的视觉评估是本期（${edition.id}）开始后才写下的，本期先用确定性降级分，下一期起生效`);
+  }
+  return found;
+}
+
+/**
  * 一段记忆的合格配图。memory.lead 已经是逐 (eventId, mediaId) 人工审核后的结果
  * （lib/memory-chapters.ts → storyDisplayMedia，只认 Basis C），所以这里**不再放宽一格**：
  * 不看 trusted、不看同日、不看 confirmed 扁平集合。
@@ -602,32 +630,85 @@ function burstKeyOf(photo: HomeFeedPhoto): string {
  * 先把不合格的全部滤掉，再分连拍组、再选。反过来做，只要某个连拍组里排在前面的那张不合格，
  * 组里合格的那张就永远选不中——那是假阴性，不是「这组没有合格照片」。
  */
-export function buildPhotoCandidates(
-  memories: EditorialMemory[],
-  birthDay: string | undefined,
-  today: string,
-  edition: HomeFeedEdition,
-  quality: HomePhotoQualityLookup | undefined,
-  photoKey?: string,
-): HomePhotoCandidate[] {
-  type Pair = { photo: HomeFeedPhoto; story: HomeStoryRef; burst: string };
+/**
+ * 每一对 (故事, 照片) 最近一次 `approved` 的时间戳，从档案已经带着的审核账本里现算。
+ *
+ * 为什么不去改 `lib/media/story-binding.ts`：那里是**全站**媒体判据，本轮的规矩是复用它、不借首页
+ * 任务重构它。而且这里要的不是「能不能展示」——那个已经由 `memory.lead` 判过了——只是「什么时候
+ * 批的」。键的格式借 `storyPhotoKey`，免得两边对 `"<eventId>|<mediaId>"` 的写法各写一遍。
+ *
+ * 「最近一次」的判法和账本那边一致：`reviewedAt` 大者胜，同刻用 `id` 兜底。只有最近一次是
+ * `approved` 时才记时间戳；最近一次是 `rejected` 的对根本到不了这里（`memory.lead` 已经滤掉）。
+ */
+export function approvedBindingTimes(
+  reviews: ReadonlyArray<{ id?: string | null; targetKind?: string | null; targetId?: string | null; decision?: unknown; reviewedAt?: string | null }>,
+): ReadonlyMap<string, string> {
+  const latest = new Map<string, { decision: unknown; at: string; rank: string }>();
+  for (const review of reviews) {
+    if (review.targetKind !== STORY_PHOTO_REVIEW_KIND) continue;
+    const parts = (review.targetId ?? "").split("|");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
+    const key = storyPhotoKey(parts[0], parts[1]);
+    const rank = `${review.reviewedAt ?? ""}|${review.id ?? ""}`;
+    const held = latest.get(key);
+    if (!held || rank > held.rank) latest.set(key, { decision: review.decision, at: review.reviewedAt ?? "", rank });
+  }
+  const approved = new Map<string, string>();
+  for (const [key, held] of latest) if (held.decision === "approved" && held.at) approved.set(key, held.at);
+  return approved;
+}
+
+/** 一次候选构建要的东西。做成对象是因为参数已经到六个，位置参数记错一个就是静默错选。 */
+export type BuildPhotoCandidatesInput = {
+  memories: EditorialMemory[];
+  birthDay?: string;
+  today: string;
+  edition: HomeFeedEdition;
+  quality?: HomePhotoQualityLookup;
+  photoKey?: string;
+  /**
+   * `"<eventId>|<mediaId>"` → 这一对最近一次 `approved` 的 `reviewedAt`。
+   *
+   * 用来兑现「**期内新增候选应在后续期次生效**」：一对在本期开始之后才获批的候选，本期不参与轮换。
+   * 拿不到这张表（或表里没有这一对）时按**可参与**处理——宁可让一张新获批的图早半期出现，
+   * 也不要因为缺一张辅助表就让首页空掉。
+   */
+  approvedAt?: ReadonlyMap<string, string>;
+};
+
+/**
+ * 当期的 (故事, 照片) 候选，并挑出这一期用哪一对。
+ *
+ * 三件事分得很清，混在一起就是上一版的那些 bug：
+ *
+ * 1. **轮换池 = 全部合格候选，不设上限。** 冷却长度等于池子大小，所以池子绝不能被页面的呈现上限
+ *    截断。上一版把「进轮换」和「返回给页面」用同一个 6 去截，于是就算档案里有 20 组合格候选，
+ *    同一张照片也每 6 期（1.5 天）就回来一次——冷却被一个**呈现**参数按住了。
+ * 2. **返回给页面的最多 HOME_PHOTO_CANDIDATES_MAX 条**（当期选中的那条一定在里面）。
+ *    这是「不向浏览器搬全库媒体」那条。池子有多大，看 `cooldown.editions`。
+ * 3. **轮换次序只看 mediaId。** 质量分只决定「返回的那几条怎么排」，不决定轮到谁——
+ *    否则一份离线质量缓存落地就会在六小时之内换掉照片（§5.5）。
+ *
+ * 期内不变的两条，都用**真实时间戳**兑现，不是靠约定：
+ *   · 新获批的候选要 `reviewedAt < edition.startedAt` 才参与本期；
+ *   · 一个 `ai_vision` 分数要 `assessedAt < edition.startedAt` 才在本期生效。
+ * 撤销是唯一的例外，它立刻生效（§5.7）——候选每次从当前档案现算，撤掉的根本不在里面。
+ *
+ * 过滤顺序照 2026-09-13 `photoLedMoment` 的教训：先滤掉不合格的，再分连拍组，再选。
+ */
+export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhotoCandidate[] {
+  const { memories, birthDay, today, edition, quality, photoKey, approvedAt } = input;
+  type Pair = { photo: HomeFeedPhoto; story: HomeStoryRef; burst: string; key: string };
   const paired: Pair[] = [];
   for (const memory of memories) {
     const photo = leadPhotoOf(memory, birthDay);
     if (!photo) continue;
-    const scored: HomeFeedPhoto = { ...photo, quality: qualityFor(quality, photo, today) };
-    paired.push({ photo: scored, story: storyRefOf(memory), burst: burstKeyOf(scored) });
+    const scored: HomeFeedPhoto = { ...photo, quality: effectiveQuality(quality, photo, today, edition) };
+    paired.push({
+      photo: scored, story: storyRefOf(memory), burst: burstKeyOf(scored),
+      key: `${memory.id}|${photo.media.id}`,
+    });
   }
-  // 质量分决定**谁进候选band**（下面的 slice），mediaId 决定**轮换次序**——两件事分开，这是
-  // 2026-09-13 修掉的一个真 bug。
-  //
-  // 原本次序是「质量分降序 → 日期降序 → mediaId」。那让期次的选择依赖质量分，而质量分来自一个
-  // **离线缓存**：那份缓存落地的那一刻（或者某一张的分被重评），排序就变了，于是同一个
-  // `edition.id` 在六小时之内会选出另一张照片——正好违反 §5.5「同一期至少稳定 6 小时」。
-  // 家人刷一下页面，照片换了，而那一期并没有过去。
-  //
-  // 现在轮换只看 mediaId（一个永不变的稳定键），所以质量缓存什么时候落地都不影响当期选择；
-  // 缓存影响的是下一次谁有资格进 band，以及 band 里的展示顺序由 `qualityRank` 单独给出。
   paired.sort((a, b) => a.photo.media.id.localeCompare(b.photo.media.id));
   const seenBursts = new Set<string>();
   const deduped: Pair[] = [];
@@ -637,64 +718,65 @@ export function buildPhotoCandidates(
     seenBursts.add(entry.burst);
     deduped.push(entry);
   }
-  // 同事件冷却（§5.5）在这条链路上是**构造保证的**，不需要额外一步排列。
-  //
-  // 一段记忆只贡献一个候选：`memory.lead` 是 heroCandidates(...)[0]，单数
-  // （lib/memory-chapters.ts）。`candidateMemories` 又把每段记忆只列一次。所以任意两个候选的
-  // eventId 必不相同，取模轮换也就永远不会连着两期推同一段故事。有测试钉住这个不变量——
-  // 哪天 memory.lead 变成可以给一段记忆返回多张图，那条测试会失败，而不是悄悄开始重复。
-  //
-  // 「3 天」这个数字在候选只有三组时仍然满足不了（整轮 18 小时），那部分由下面的 shortened 说出来。
-  // band = 真正参与轮换的那几组。谁进 band 由质量分决定（取分最高的前 HOME_PHOTO_CANDIDATES_MAX
-  // 组），band 内的**次序**由 mediaId 决定（见上面那段：次序不能依赖会变的质量分）。
-  const byQuality = [...deduped].sort((a, b) =>
-    (b.photo.quality?.score ?? 0) - (a.photo.quality?.score ?? 0)
-    || b.photo.day.localeCompare(a.photo.day)
-    || a.photo.media.id.localeCompare(b.photo.media.id));
-  const inBand = new Set(byQuality.slice(0, HOME_PHOTO_CANDIDATES_MAX).map((entry) => entry.photo.media.id));
-  const qualityRank = new Map(byQuality.map((entry, index) => [entry.photo.media.id, index + 1]));
-  const kept = deduped.filter((entry) => inBand.has(entry.photo.media.id));
-  const benched = deduped.filter((entry) => !inBand.has(entry.photo.media.id));
-  const rotation = kept.length;
+  // 本期开始之后才获批的，本期不参与轮换——「期内新增候选下一期生效」。
+  const pool: Pair[] = [];
+  const pending: { entry: Pair; reason: string }[] = [];
+  for (const entry of deduped) {
+    const at = approvedAt?.get(entry.key);
+    if (at && at >= edition.startedAt) {
+      pending.push({ entry, reason: `本期（${edition.id}）开始后才通过审核，从下一期起参与轮换` });
+      continue;
+    }
+    pool.push(entry);
+  }
+  // 同事件冷却在这条链路上是构造保证的：一段记忆只贡献一个候选（`memory.lead` 是单数），
+  // 所以任意两个候选的 eventId 必不相同，纯轮转永远不会连着两期推同一段故事。有测试钉住它。
+  const rotation = pool.length;
   const rotationIndex = rotation > 0 ? edition.index % rotation : 0;
-  // 实际做到的同图冷却，是一个**量出来的数**，不是一句话：整轮 rotation 期 × 6 小时。
-  // 纯轮转（位次每期 +1）意味着同一张照片正好隔 rotation 期再出现，这在候选只有 rotation 组时
-  // 是**可达的上限**——所以下面报的是「做到了多少」，以及离 §5.5 的目标差多少。
   const cooldown = cooldownOf(rotation);
   const shortened = cooldown.shortfall;
-  const explicit = photoKey ? kept.findIndex((entry) => `${entry.story.eventId}|${entry.photo.media.id}` === photoKey) : -1;
+  // 质量分只排「返回哪几条、怎么排」。它排在 mediaId 序之上，所以页面拿到的第一批是分最高的几条，
+  // 但**轮到谁**已经由上面的 rotationIndex 定死了。
+  const rankOf = new Map<string, number>();
+  [...deduped]
+    .sort((a, b) =>
+      (b.photo.quality?.score ?? 0) - (a.photo.quality?.score ?? 0)
+      || b.photo.day.localeCompare(a.photo.day)
+      || a.photo.media.id.localeCompare(b.photo.media.id))
+    .forEach((entry, index) => rankOf.set(entry.key, index + 1));
+
+  const explicit = photoKey ? pool.findIndex((entry) => entry.key === photoKey) : -1;
   const chosenIndex = explicit >= 0 ? explicit : rotationIndex;
-  const candidates: HomePhotoCandidate[] = kept.map((entry, index) => ({
-    key: `${entry.story.eventId}|${entry.photo.media.id}`,
-    photo: entry.photo,
-    story: entry.story,
-    qualityRank: qualityRank.get(entry.photo.media.id),
-    cooldown,
-    chosen: index === chosenIndex,
-    reason: index === chosenIndex
-      ? (explicit >= 0
+  const chosen = pool[chosenIndex];
+
+  const candidates: HomePhotoCandidate[] = [];
+  const push = (entry: Pair, extra: { chosen: boolean; reason: string; cooldown?: HomePhotoCooldown }) => {
+    if (candidates.length >= HOME_PHOTO_CANDIDATES_MAX) return;
+    candidates.push({
+      key: entry.key, photo: entry.photo, story: entry.story,
+      qualityRank: rankOf.get(entry.key), ...extra,
+    });
+  };
+  // 当期选中的那一条永远排第一，也永远在返回的清单里——池子再大也不会把它挤掉。
+  if (chosen) {
+    push(chosen, {
+      chosen: true, cooldown,
+      reason: explicit >= 0
         ? "页面显式切换到这一对"
-        : `第 ${edition.index} 期轮换到这一对（第 ${rotationIndex + 1}/${rotation} 位）${shortened ? `；${shortened}` : ""}`)
-      : `本期未选中${shortened ? `；${shortened}` : `；等轮换到第 ${index + 1}/${rotation} 位`}`,
-  }));
-  // 没进 band 的（质量分排在 HOME_PHOTO_CANDIDATES_MAX 之后）和被连拍分组挡下的，都列出来带原因。
-  // 它们不参与轮换，所以不带 cooldown——那个数只对真正在轮的候选有意义。
-  for (const entry of benched) {
-    candidates.push({
-      key: `${entry.story.eventId}|${entry.photo.media.id}`,
-      photo: entry.photo, story: entry.story, chosen: false,
-      qualityRank: qualityRank.get(entry.photo.media.id),
-      reason: `质量分排在第 ${qualityRank.get(entry.photo.media.id)} 位，没进本期轮换的前 ${HOME_PHOTO_CANDIDATES_MAX} 组`,
+        : `第 ${edition.index} 期轮换到这一对（池内第 ${rotationIndex + 1}/${rotation} 位）${shortened ? `；${shortened}` : ""}`,
     });
   }
-  for (const { entry, reason } of dropped) {
-    candidates.push({
-      key: `${entry.story.eventId}|${entry.photo.media.id}`,
-      photo: entry.photo, story: entry.story, chosen: false,
-      qualityRank: qualityRank.get(entry.photo.media.id),
-      reason,
+  // 其余池内候选按质量排序跟在后面，供「换张照片」用。
+  for (const entry of [...pool].sort((a, b) => (rankOf.get(a.key) ?? 0) - (rankOf.get(b.key) ?? 0))) {
+    if (entry === chosen) continue;
+    push(entry, {
+      chosen: false, cooldown,
+      reason: `本期未选中（池内第 ${pool.indexOf(entry) + 1}/${rotation} 位）${shortened ? `；${shortened}` : ""}`,
     });
   }
+  // 本期还不参与的、以及被连拍分组挡下的，都带原因列出来——没轮到和不合格是两件事。
+  // 它们不参与轮换，所以不带 cooldown。
+  for (const { entry, reason } of [...pending, ...dropped]) push(entry, { chosen: false, reason });
   return candidates;
 }
 
@@ -818,7 +900,12 @@ export function reminderStateOf(item: UpcomingItem, today: string, supersededIds
  * 露出次序：关键待核实 → 今天/之后 → 待核实 → 待定。**过期的一条都不默认露出**——那正是
  * 「把陈旧采购从首页移出」要解决的事——但它们仍然在 more 和 retired 里，一条都没丢。
  */
-export function buildReminders(feed: UpcomingFeed | undefined, today: string, sources: UpcomingSources | undefined): HomeFeedReminders {
+export function buildReminders(
+  feed: UpcomingFeed | undefined,
+  today: string,
+  sources: UpcomingSources | undefined,
+  habitLog: HabitDisplayLog = NO_HABIT_DISPLAY_LOG,
+): HomeFeedReminders {
   if (!feed) return { status: "unavailable", unavailable: { kind: "not_extracted", reason: "本次渲染没有读到待办" } };
   if (feed.status === "clear") return { status: "clear", windowFrom: feed.windowFrom, readToDay: feed.readToDay };
   if (feed.status === "unavailable") {
@@ -847,30 +934,26 @@ export function buildReminders(feed: UpcomingFeed | undefined, today: string, so
     rank(a) - rank(b)
     || (endDayOf(a.item.when) ?? "9999-99-99").localeCompare(endDayOf(b.item.when) ?? "9999-99-99")
     || a.id.localeCompare(b.id));
-  // 习惯提醒「最多两个不同日期**露出**」（§6.3）——限制的是**实际展示的那几条**，所以它作用在
-  // 已经排好序的 `ordered` 上，而不是先把整份清单筛一遍。
+  // 习惯提醒「最多两个不同自然日露出」（§6.3）——数的是**实际展示过的日子**，由 habitLog 提供。
   //
-  // 2026-09-13 修：原来是拿 `all`（未排序的全部）去跑 limitHabitDates，再把被压下去的塞进
-  // `retired`，而且 **status 硬写成 "open"**——那会把一条 tentative 或 rescheduled 的习惯提醒
-  // 报成 open，也就是拿一个编出来的状态去覆盖库里真实的那一行。退场记录的全部意义就是「首页不显示
-  // 它了，但库里一个字没动」，那条硬编码把这句话变成了假话。
+  // 2026-09-13 第二次修这里。第一次改对了「作用在待展示序列上」和「退场记录照抄真实 status」，
+  // 但计数仍然用 `raisedOn`——那是这件事**被说起**的那天，和它**在首页露过脸**的日子毫无关系。
+  // 一条 9 月 8 日提起的习惯提醒可能一次都没露出过，也可能连着露了五天；按 raisedOn 数，前者会被
+  // 算成「已经用掉一个日期」，后者会被算成「才用掉一个」。两种都错，而且错得反方向。
   //
-  // 另外它和「过期」是两件事，现在分开记：`expired` 是日子过了/新鲜期过了，
-  // `habit_capped` 是同一件习惯已经露出过两个日期了。后者不是过期，只是不再占位。
-  const { kept: habitKept, dropped: habitDropped } = limitHabitDates(ordered.map((reminder) => ({
-    id: reminder.id,
-    title: reminder.title,
-    raisedOn: raisedOnOf(reminder.item),
-    klass: classifyFreshness(reminder.item),
-    rank: rank(reminder),
-  })));
+  // 现在：今天露过 → 放行（同一天刷新多少次都只占一个自然日）；今天没露过且已经露过两个不同的
+  // 日子 → 拦下（第三个自然日起不占默认位）；没露出过 → 一天都不算，当然放行。
+  const { dropped: habitDropped } = capHabitByShownDays(
+    ordered.map((reminder) => ({ id: reminder.id, title: reminder.title, klass: classifyFreshness(reminder.item) })),
+    today,
+    habitLog,
+  );
+  const cappedIds = new Set(habitDropped.map(({ entry }) => entry.id));
   for (const { entry, reason } of habitDropped) {
     const source = all.find((reminder) => reminder.id === entry.id);
     retired.push({ id: entry.id, title: entry.title, reason, status: source?.item.status ?? "open", kind: "habit_capped" });
   }
-  // limitHabitDates 为了「留最近两个日期」按日期倒序走了一遍，所以这里把展示次序排回来。
-  const keptIds = new Set(habitKept.map((entry) => entry.id));
-  const displayable = ordered.filter((reminder) => keptIds.has(reminder.id));
+  const displayable = ordered.filter((reminder) => !cappedIds.has(reminder.id));
   const limit = displayable.some((reminder) => reminder.important) ? REMINDERS_MAX_SHOWN : REMINDERS_DEFAULT_SHOWN;
   const shown = displayable.slice(0, limit);
   const shownIds = new Set(shown.map((reminder) => reminder.id));
@@ -903,7 +986,13 @@ export function buildHomeFeed(archive: FamilyArchive, options: BuildHomeFeedOpti
   const today = archive.time.today;
   const birthDay = archive.birthDay;
   const memories = candidateMemories(archive.chapters, today);
-  const photoCandidates = buildPhotoCandidates(memories, birthDay, today, edition, options.quality, options.photoKey);
+  const photoCandidates = buildPhotoCandidates({
+    memories, birthDay, today, edition,
+    quality: options.quality,
+    photoKey: options.photoKey,
+    // 审核时间戳从档案已经带着的账本里现算，不额外读库。
+    approvedAt: approvedBindingTimes(archive.store.qualityReviews ?? []),
+  });
   const { lead, leadAbsence } = selectLead(memories, photoCandidates, edition);
   const recentFact = selectRecentFact(memories, lead?.story.eventId, edition);
   return {
@@ -914,7 +1003,7 @@ export function buildHomeFeed(archive: FamilyArchive, options: BuildHomeFeedOpti
     leadAbsence,
     photoCandidates,
     recentFact,
-    reminders: buildReminders(options.upcoming, today, options.upcomingSources),
+    reminders: buildReminders(options.upcoming, today, options.upcomingSources, options.habitLog),
   };
 }
 
