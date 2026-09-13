@@ -9229,3 +9229,7 @@ inert 移除之前，被浏览器忽略，键盘/读屏关闭后焦点落空（�
 证据：`NianlifeOps/timeline-2026-09-13-overnight/data/lost-51.json`、`data/purpose/purpose-live-ca266f2-*.json`、`PAGE-STATUS.md` 🔴 00:01–00:05。
 
 **下一件事**：数据轨停循环并给出恢复方案；恢复写入后发 `scope: archive`，页面轨复跑 133/R8 可达性确认回到 133/133。
+
+> 00:07 更正上一段的一句：「r2.2 行的 `reviewed_at` 另比真实写入早约 8 小时」是推断，未证实——`content_quality_reviews` 没有 `created_at`，
+> 无法证明每行的真实写入时刻。已证实的只有：页面 23:28 为 133/133、23:59 为 82/133；审核行 22:31 为 1,636、00:04 为 1,856；
+> 这 51 条行的 `reviewed_at≈2026-09-13T07:29Z` 且晚于各自的 release 批准行。两次采样（16:03Z/16:04Z）损伤一致，暂未扩大。
