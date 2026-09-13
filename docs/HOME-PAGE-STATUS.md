@@ -1,10 +1,34 @@
 # HOME-20260913-PAGE · 页面 Claude Code 状态
 
+## 已部署 · 2026-09-13 22:36 +0800（本轮完结）
+
+| | |
+|---|---|
+| 部署代码 SHA | **`00099a167266b8bc72f91c9c5bfc36134a4ac1d3`（00099a1）** —— 不是 713d550 |
+| 镜像 | `nianlife-web:00099a1`（image id `a9e9cd59c85f`），容器 `nianlife-diag-web`，healthy |
+| 回滚点 | 容器 `nianlife-diag-web-pre-055e919-20260913-223634`（镜像 `nianlife-web:055e919`，id `3b1c82e46181`）；回滚命令记在 ECS 的 `~/swap-00099a1.sh` 输出里 |
+| 私有入口 | `http://127.0.0.1:18080/`（→ ECS `47.99.243.155:3000`，回环，未开公网、未动 DNS） |
+| 运行配置 | 原样取自被替换的容器（43 个变量，未读取也未打印内容）；`ORGANIZER_WORKER_ENABLED=false`、`AI_ORGANIZER_ENABLED=false`、`MEDIA_STORAGE_PROVIDER=oss` 保持不变 |
+| 迁移 | **未跑**。0016 早已应用（journal 16 → 17），本轮未重跑、未建表、未写合成数据 |
+
+### 线上复验（`http://127.0.0.1:18080/?habitReport=off`）
+
+- 实际部署版本：首页是新版式（`home-spread` / `home-notes` 各就位，旧 `home-hero` 0 处，正文摘录 0 处），题签「他会说 cold，也会说 hot」两段强调在位。
+- 首页照片真的加载：`/api/media/...?variant=web` → **200，314,502 字节，image/webp，0.44s**。
+- 一个故事链接：`/events/event-r10-20260907-coldhot` → **200**，事件页标题「他会说 cold，也会说 hot」。
+- 发布前 320 宽加载补证：真实 320 视口下 `complete=true`、`naturalWidth=1280`、`naturalHeight=1707`、渲染 265×353 —— 之前那张空框是截图拍早了，**不是加载失败**，因此未改代码、未重跑全套检查。
+- 证据：`C:\Users\teddy\NianlifeOps\home-2026-09-13\relayout\`（含线上首页 HTML `live-18080-home-00099a1.html`）。
+
+### 唯一剩余能力限制
+
+真实 AI 视觉评分仍未交付，当前是确定性降级分（外部条件：缺可用的视觉模型端点）。其余首页功能与版式已上线。
+
+
 ## 🔴 HOME-RELAYOUT-PAGE · ACK（2026-09-13 22:0x +0800）
 
 - 已读：`docs/HOME-RELAYOUT-2026-09-13.md` 全文。**它覆盖旧稿与旧任务卡里冲突的版式要求**，本轮按它做。
 - 基线：派单基线 `1514f86`；执行时读当前 main，不 checkout 回旧版本。功能基线 `713d550` + `home-feed/1.5.0`。
-- 状态：**旧版功能完成（`713d550` 已 push），新版版式进行中。**
+- 状态：**已完成并部署（`00099a1`）。** 旧文中的「版式进行中」「发布 713d550」均已作废，以顶部为准。
 - 我独占：`v2/app/page.tsx`、`v2/app/home.css`、首页组件、上报组件/API 的必要接线、针对性页面测试、本文件。
   不改字体分片、全局主题、其他页面设计、存储/迁移/轮换规则；无必要不动全局 Header。
 - `713d550` 的发布安排**已暂停**，等这轮版式验收 + Codex 终审后统一私有发布。
