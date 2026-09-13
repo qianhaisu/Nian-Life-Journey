@@ -9267,3 +9267,32 @@ inert 移除之前，被浏览器忽略，键盘/读屏关闭后焦点落空（�
 > 页面轨不代跑。今晚线上固定为：有效 approved 285、本轮 133 篇里 59 篇下线，loop 已停未重启，被覆盖的文字没有上线。
 > 放行后命令：`cd v2 && node .data/night-run.mjs .data/n38-restore.mjs --apply`，随后发 `scope: archive` 刷新，页面轨独立验证。
 > 根因缺口：`findOrganizerRun` 查 `organizer_runs`，而 `persistOrganization` 按 `life_events.organization_fingerprint` 命中即 update；人工路线发布的事件没有 organizer_run 行，短路查不到、update 命中。修好前 organizer 对人工发布过的月份不安全。
+
+---
+
+## 2026-09-14 01:55 · 数据轨通宵队列回执（A/B/C/D）
+
+**本轮线上多了什么家人能读的东西**：**121 段视频从「一张都放不出」变成全部能放**——
+120 个视频资产此前只有一条 `wechat/original` 的元数据引用，字节从没进过对象存储，每个变体都 404，
+而 `components/video-player.tsx` 早写好在等 poster/preview。本机 671 个原始 mp4 用
+`provider_ref` 的 path 段对上、再用 **SHA-256 与 `media_assets.checksum` 逐个核对身份**，
+抽帧做 `poster.webp`、原流 `-c copy` 封装成 `preview.mp4`，走既有 `attach-video-derivatives.mjs`
+写 OSS：**118 成功 0 失败**，在私有站逐个取过 **121/121** 的 poster 与 preview 都是 200/206，
+`/memory/2025/10` 上真的出现了 5 个播放器。另外修好一个会让**整个会话导入归零**的真 bug
+（`media_locations` 主键不含 provider，OSS 迁移后撞 `23505`，已 commit `0478698`），
+导入链路补上游标／JSONL 运行账本／失败分类，并**证明了幂等**（`--force-all` 强制重走，+0 条 0 失败）。
+
+**没做到什么 / 最大的已知 blocker**：**我把 133 篇里的 59 篇弄下线了**——我自己跑的 Organizer 逐月循环
+命中 `persistOrganization` 的 fingerprint-update 分支，原地重写了正文/标题/memoryWeight 并追加待审行，
+有效 approved **344 → 285**。我的停止条件数的是 `decision='approved'` 的**行数**（永远不降），
+该数的是**每个对象的最新有效决定**——这个函数我在 D 的核对脚本里用了，却没用在循环守卫上。
+恢复脚本已写好并逐篇拿 `release-ready/index.json` 的 `storyLen` 验过（41/59 可验证恢复，18 篇不动），
+但**连 dry-run 都被本会话的 auto mode 权限分类器拒绝（`Modify Shared Resources`），等 Teddy 放行**，
+没有绕过。另两项如实记账：`organizer-month-write` **只看 `source_type='wechat'`**，
+1,789 条相册素材 0 条进过管线（缺管线，不是缺算力）；先按 `conversationId` 得出的
+「硬盘上还有 35,960 条没入库」是**假阴性**，按内容比对后真实覆盖率 94.8%–100%、估计未入库约 575 条。
+
+**下一件事**：Teddy 放行后跑 `node .data/night-run.mjs .data/n38-restore.mjs --apply` 并发刷新，
+由页面轨用 22:49 的快照独立验证；在「守卫改成最新有效决定」＋「补上 `organizer_runs` 缺口」之前，
+**Organizer 对任何有人工发布历史的月份都不许再跑**。产物全部在仓库外
+`NianlifeOps/timeline-2026-09-13-overnight/`（`reports/A|B|C`、`data/INCIDENT-*`、`CHECKPOINT.md`）。
