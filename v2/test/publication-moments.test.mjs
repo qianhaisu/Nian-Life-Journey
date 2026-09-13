@@ -61,7 +61,7 @@ test("tiny production sizes never gain publication privilege anywhere, and stay 
     photo("sticker", "2026-08-27T11:00:00.000Z", { width: 67, height: 120 }),
     photo("real", "2026-08-27T12:00:00.000Z"),
   ];
-  const composition = buildMonthComposition(monthOf({ media }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media }, "2026-08"), reviewed(media));
   const shown = [...composition.chronicle.flatMap((m) => [m.hero, ...m.supporting].filter(Boolean)), ...composition.preview, composition.cover].filter(Boolean);
   assert.ok(shown.length > 0);
   assert.ok(shown.every((item) => item.id === "real"), "only the real photograph is drawn in the reading layer");
@@ -153,7 +153,7 @@ test("a photo-only month becomes a weighted chronicle, not a wall: every vouched
     const count = day <= 10 ? 4 : 1; // ten strong days, four one-photo days
     for (let n = 0; n < count; n += 1) media.push(photo(`d${day}-${n}`, `2026-08-${String(day).padStart(2, "0")}T${String(8 + n * 2).padStart(2, "0")}:00:00.000Z`));
   }
-  const composition = buildMonthComposition(monthOf({ media }, "2026-08"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media }, "2026-08"), reviewed(media));
   assert.equal(composition.chapter.length, 0, "no words exist; none are invented — UNKNOWN > INVENTED COPY");
   // B-17 (2026-09-06): a vouched, deliverable photo day is content — it is never capped out of the
   // chronicle and folded to a bare quiet-day line just because more than a handful exist in a month.
@@ -625,7 +625,7 @@ test("a picture somebody opened and recorded may open the section; a story bindi
 
 test("a month with nothing confirmed and nothing to say keeps its days rather than losing its only face", () => {
   const media = [photo("day-one", "2025-05-04T08:00:00.000Z"), photo("day-two", "2025-05-09T08:00:00.000Z")];
-  const composition = buildMonthComposition(monthOf({ media }, "2025-05"), trust(media));
+  const composition = buildMonthComposition(monthOf({ media }, "2025-05"), reviewed(media));
   assert.deepEqual(composition.chronicle.map((moment) => moment.day), ["2025-05-04", "2025-05-09"]);
   assert.equal(composition.chronicle[0].hero?.id, "day-one");
 });

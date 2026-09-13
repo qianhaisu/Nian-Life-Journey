@@ -241,8 +241,31 @@ export function readableEntries(entries: string[]): string[] {
 // scene — folds to a quiet line and stays whole in the archive layer, rather than becoming the
 // month's main matter by default.
 function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMoment | undefined {
-  const representatives = burstRepresentatives(day.photos);
-  const hero = representatives.find((item) => heroEligibleRef(item, privilege));
+  // 照片展示隔离第二轮 (总指挥, 2026-09-13): every default-reading picture of a photographed day —
+  // the page-width hero AND every thumbnail beside it — needs an approved `media_subject_check`
+  // under the latest decision. Source trust is not enough here, as it is not enough anywhere a
+  // picture is put in front of the family without somebody having opened it.
+  //
+  // Why this recount happened: the first pass gated day groups, covers, previews and the section
+  // opening, and left the photo-day moments alone as "not created by publishing". That was true and
+  // it was also measured wrong — the residual was reported as 265 pictures because the count looked
+  // only at heroes. The thumbnails beside them are 327 more, none with a subject check, all
+  // default-visible, and they had never been counted at all. 242 + 327, zero overlap, 556 of the
+  // 569 unreviewed (verified twice: data track's composition pass and this track's live DOM).
+  //
+  // THE FILTER COMES FIRST, AND THAT ORDER IS THE POINT. `burstRepresentatives` keeps one picture
+  // per burst out of the whole day; filtering its OUTPUT would throw away a checked photograph
+  // whenever an unchecked one happened to represent its burst. Filtering the candidates first lets
+  // the checked picture represent the burst and be chosen, which is the difference between "this
+  // day has no approved photograph" and "this day's approved photograph was standing behind another
+  // one" (总指挥: 先过滤完整候选，再选头图、缩略图及截取).
+  //
+  // No qualifying picture → no moment: the day keeps its date, its words and its way into
+  // 「这个月的照片」, and NOTHING is promoted to stand in (不以其他 trusted 图片补位). Every picture
+  // that drops out keeps its row, its associations and its place in the album, which is unchanged.
+  const candidates = day.photos.filter((item) => isSubjectChecked(item, privilege));
+  const representatives = burstRepresentatives(candidates);
+  const hero = representatives.find((item) => heroSized(item));
   // Vouching is the whole gate. A wordless month used to be allowed to read its days as strips of
   // unvouched pictures, on the reasoning that photographs were the only record it kept — but
   // 2025-01 published three Facebook Marketplace listings and a feeding-volume infographic under
@@ -251,7 +274,10 @@ function photoLedMoment(day: PhotoDay, privilege: MediaPrivilege): PublicationMo
   // a phone screenshot is large and near-portrait, exactly like a photo. An empty month is honest;
   // a month of advertisements is not. Teddy, 2026-09-04: 宁可没有照片，不要错的东西.
   if (!hero) return undefined;
-  const supporting = representatives.filter((item) => item !== hero && isPrivileged(item, privilege) && thumbnailSized(item)).slice(0, MOMENT_SUPPORTING_MAX);
+  // Drawn from the same already-filtered candidates, so a thumbnail carries the same approval the
+  // hero does. `isPrivileged` is not re-asked: every candidate is subject-checked, which is the
+  // stronger claim of the two.
+  const supporting = representatives.filter((item) => item !== hero && thumbnailSized(item)).slice(0, MOMENT_SUPPORTING_MAX);
   return {
     kind: "photo_led",
     day: day.day,

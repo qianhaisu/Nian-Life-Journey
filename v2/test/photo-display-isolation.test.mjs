@@ -58,34 +58,44 @@ test("publishing a story moves no photograph — same pictures, same slots, befo
     photo("noon", "2026-08-19T05:00:00.000Z"),
     photo("another-day", "2026-08-24T05:00:00.000Z"),
   ];
+  // Nobody has opened any of these — the shape 556 of the archive's 569 default-visible pictures
+  // are in. This is the case the guarantee is about: approving a paragraph of text must not move a
+  // picture nobody has reviewed.
   const before = buildMonthComposition(monthOf({ media }, "2026-08"), privilegeOf(media));
   const after = buildMonthComposition(
     monthOf({ media, events: [event("published", "2026-08-19 00:00:00+00", [])] }, "2026-08"),
     privilegeOf(media));
 
   const a = slotsOf(after), b = slotsOf(before);
-  for (const slot of ["story", "dayGroup", "album", "cover", "preview"]) {
+  for (const slot of ["story", "dayGroup", "album", "cover", "preview", "chronicleHeroes"]) {
     assert.deepEqual(a[slot], b[slot], `the words arrived; the ${slot} slot did not change`);
   }
-  // The chronicle is the one slot publishing does touch, and only ever downwards: a day whose words
-  // are now in the chapter is no longer also a photo moment further down the page (that rule
-  // predates this change — see composeMonth's `candidates`). Asserted as a subset rather than as
-  // equality so it cannot silently start ADDING a picture, which is the direction that would matter.
-  assert.ok(a.chronicleHeroes.every((id) => b.chronicleHeroes.includes(id)),
-    "publishing may retire a photo moment, never create one");
-  assert.deepEqual(b.chronicleHeroes.filter((id) => !a.chronicleHeroes.includes(id)), ["morning"],
-    "…and what it retired is the day that now reads as a story instead");
+
+  // The other half, stated rather than left implicit: a picture somebody HAS opened does move — out
+  // of the album and up beside the words of its own day. That is the day group's whole purpose, and
+  // it is a move a person authorised by looking at the picture, not one the text bought.
+  const checkedBefore = buildMonthComposition(monthOf({ media }, "2026-08"), privilegeOf(media, media));
+  const checkedAfter = buildMonthComposition(
+    monthOf({ media, events: [event("published", "2026-08-19 00:00:00+00", [])] }, "2026-08"),
+    privilegeOf(media, media));
+  assert.deepEqual(slotsOf(checkedBefore).dayGroup, [], "before the words there is no day group at all");
+  assert.deepEqual(slotsOf(checkedAfter).dayGroup, ["morning", "noon"], "after them, that day's reviewed pictures read beside them");
+  assert.ok(!slotsOf(checkedAfter).album.includes("morning"), "and they are not also left in the album");
   assert.deepEqual(after.dayPhotoGroups, [], "nothing was lifted into default reading");
   assert.deepEqual(after.archiveDays.flatMap((day) => day.photos.map((item) => item.id)).sort(),
     ["another-day", "morning", "noon"], "every photograph is still in the album, on its own day");
   assert.equal(after.chapter.some((moment) => moment.memory?.id === "published"), true, "and the words themselves are published");
 });
 
-// 纯照片日的版面头图 (`photo_led`) is deliberately NOT gated by this change — it is not created by
-// publishing, and gating it would strip the photography from months that have no words at all
-// (总指挥 第七条: 避免误伤原有相册入口与授权). That decision is only safe if publishing cannot ADD
-// one, so this asserts the invariant directly rather than resting on a batch count: the hero set
-// after publishing is always a SUBSET of the hero set before.
+// 纯照片日的版面头图 (`photo_led`) WAS left ungated in the first pass, on the reasoning that it is
+// not created by publishing. The reasoning held; the measurement behind it did not. The residual was
+// reported as 265 pictures because it counted heroes only — the thumbnails beside them are 327 more,
+// none subject-checked, all default-visible, never counted. 242 + 327 with zero overlap, so 556 of
+// 569 unreviewed. 总指挥 revised the decision on the corrected number and both are now gated
+// (photoLedMoment filters candidates before selection).
+//
+// This invariant is kept anyway, because it is what makes the gating safe to reason about: the hero
+// set after publishing is always a SUBSET of the hero set before.
 //
 // The mechanism, in composeMonth: a chronicle candidate is `photoDaysAsc.filter(day =>
 // !chapterDays.has(day.day))`. Publishing only ever adds to `chapterDays`, so it can only remove
@@ -97,7 +107,7 @@ test("publishing can retire a photo-led hero but can never mint one", () => {
     photo(`${day}-a`, `${day}T02:00:00.000Z`),
     photo(`${day}-b`, `${day}T0${i + 3}:00:00.000Z`),
   ]);
-  const heroesOf = (events) => new Set(buildMonthComposition(monthOf({ media, events }, "2026-08"), privilegeOf(media))
+  const heroesOf = (events) => new Set(buildMonthComposition(monthOf({ media, events }, "2026-08"), privilegeOf(media, media))
     .chronicle.map((moment) => moment.hero?.id).filter(Boolean));
 
   const before = heroesOf([]);
@@ -113,6 +123,56 @@ test("publishing can retire a photo-led hero but can never mint one", () => {
     previous = now;
   }
   assert.ok(previous.size < before.size, "…and publishing every photographed day really did retire some");
+});
+
+test("a photo-led day draws only subject-checked pictures — hero and every thumbnail beside it", () => {
+  const day = "2026-08-19";
+  const looked = photo("opened-hero", `${day}T02:00:00.000Z`);
+  const lookedThumb = photo("opened-thumb", `${day}T06:00:00.000Z`);
+  const unlooked = [photo("unopened-a", `${day}T09:00:00.000Z`), photo("unopened-b", `${day}T12:00:00.000Z`)];
+  const media = [looked, lookedThumb, ...unlooked];
+  const c = buildMonthComposition(monthOf({ media }, "2026-08"), privilegeOf(media, [looked, lookedThumb]));
+
+  const moment = c.chronicle.find((m) => m.kind === "photo_led");
+  assert.equal(moment.hero.id, "opened-hero");
+  assert.deepEqual(moment.supporting.map((s) => s.id), ["opened-thumb"], "thumbnails carry the same approval the hero does");
+  // The unchecked ones are not hidden — they are in the album, on their own day, as before.
+  assert.deepEqual(c.archiveDays.flatMap((d) => d.photos.map((p) => p.id)).sort(),
+    ["opened-thumb", "unopened-a", "unopened-b", "opened-hero"].sort());
+});
+
+// The order the filter runs in, which is the difference between "this day has no approved
+// photograph" and "its approved photograph was standing behind another one".
+test("a checked photograph behind an unchecked one in the same burst still becomes the hero", () => {
+  const day = "2026-08-19";
+  // Same burst: seconds apart, both hero-sized. The unchecked one is FIRST, so it is what
+  // burstRepresentatives would have picked out of the unfiltered day.
+  const unchecked = photo("first-in-burst-unchecked", `${day}T02:00:00.000Z`);
+  const checked = photo("second-in-burst-checked", `${day}T02:00:10.000Z`);
+  const media = [unchecked, checked];
+  const c = buildMonthComposition(monthOf({ media }, "2026-08"), privilegeOf(media, [checked]));
+
+  const moment = c.chronicle.find((m) => m.kind === "photo_led");
+  assert.ok(moment, "the day is not lost just because an unchecked frame led its burst");
+  assert.equal(moment.hero.id, "second-in-burst-checked");
+  assert.ok(!moment.supporting.some((s) => s.id === "first-in-burst-unchecked"));
+});
+
+test("no qualifying picture: the day keeps its date and its album, and nothing stands in", () => {
+  const day = "2026-08-19";
+  const media = [photo("a", `${day}T02:00:00.000Z`), photo("b", `${day}T09:00:00.000Z`)];
+  // Source-trusted, none opened — the 556-picture shape.
+  const c = buildMonthComposition(monthOf({ media }, "2026-08"), privilegeOf(media));
+
+  assert.deepEqual(c.chronicle.filter((m) => m.kind === "photo_led"), [], "no hero, and no thumbnails either");
+  assert.equal(c.cover, undefined, "and no trusted picture is promoted to stand in for one");
+  assert.deepEqual(c.preview, []);
+  // 独立相册可达性不变：the day is still there, whole, with its own date.
+  assert.deepEqual(c.archiveDays.map((d) => d.day), [day]);
+  assert.deepEqual(c.archiveDays[0].photos.map((p) => p.id).sort(), ["a", "b"]);
+  assert.equal(c.totalPhotoCount, 2, "the month still counts them as its photographs");
+  // The day is named in the quiet-day line so a reader is told where its pictures are.
+  assert.deepEqual(c.quietDays.map((q) => q.day), [day]);
 });
 
 test("a day group carries the photographs somebody opened, and only those", () => {

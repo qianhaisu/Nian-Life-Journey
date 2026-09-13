@@ -28,10 +28,19 @@ function shot(id, takenAt, { deliverable = true, width = 1600, height = 1200, tr
   };
 }
 
-function store(shots, { events = [], rawSources = [], dailyTraces = [] } = {}) {
+// `subjectChecked` writes an approved `media_subject_check` row per photograph — the record that a
+// person opened the file and put down what is in it. Since 2026-09-13 that is what a photo-led day
+// needs for its hero and its thumbnails (lib/publication-moments.ts photoLedMoment), so a fixture
+// about cover SHAPE has to carry it or the review gate empties the fixture and the assertion below
+// stops testing what it names. Default on: these tests are about layout, not about the gate. The
+// one test that IS about the gate passes `subjectChecked: false` explicitly.
+function store(shots, { events = [], rawSources = [], dailyTraces = [], subjectChecked = true } = {}) {
   return {
     profile: { id: CANONICAL_PROFILE_ID, displayName: "张年", birthDate: BIRTH, timezone: "Asia/Shanghai", visibility: "family" },
-    contributors: [], connectorStates: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [], qualityReviews: [],
+    contributors: [], connectorStates: [], careRecords: [], careEpisodes: [], monthlyFocusGoals: [], organizerRuns: [], organizerJobs: [], chatImportTasks: [], links: [],
+    qualityReviews: subjectChecked
+      ? shots.map((item, i) => ({ id: `subject-${i}`, profileId: CANONICAL_PROFILE_ID, targetKind: "media_subject_check", targetId: item.media.id, decision: "approved", reviewedAt: "2026-09-12 10:00:00", promptVersion: "test" }))
+      : [],
     dailyTraces, growthRecords: [], monthlySnapshots: [],
     media: shots.map((item) => item.media), mediaAssets: shots.map((item) => item.asset), mediaLocations: shots.map((item) => item.location),
     events, rawSources: [...rawSources, ...shots.map((item) => item.rawSource).filter(Boolean)],
@@ -100,10 +109,14 @@ test("sticker-sized images never make the cover", () => {
   assert.equal(home(s).cover.kind, "empty");
 });
 
-test("untrusted, unbound chat images cannot be the cover's hero — the cover falls back rather than guess", () => {
+test("unreviewed chat images cannot be the cover's hero — the cover falls back rather than guess", () => {
+  // Neither source-trusted nor subject-checked: nobody vouched for where it came from and nobody
+  // opened it. `subjectChecked: false` is what makes this a test of the gate rather than of layout —
+  // with the fixture's default it would carry an approved subject check and legitimately qualify,
+  // which is the correct behaviour for a picture somebody HAS looked at, and not what this asserts.
   const s = store(
     [shot("wx-1", "2026-08-28T08:00:00.000Z", { trusted: false }), shot("wx-2", "2026-08-27T09:00:00.000Z", { trusted: false })],
-    { events: [event("stand", "2025-08-11 00:00:00+00")] },
+    { events: [event("stand", "2025-08-11 00:00:00+00")], subjectChecked: false },
   );
   const view = home(s);
   assert.equal(view.cover.kind, "dated", "big but unvouched pictures do not become the face of 最近");
