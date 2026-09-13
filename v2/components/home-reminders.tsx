@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HabitShownReporter } from "@/components/habit-shown-reporter";
 
 // 首页的紧凑提醒。2026-09-13 的新版首页把原来那张完整的「近期待办」清单收成一条——默认一条，
 // 最多两条，展开才看到依据。原清单没有删：它仍然是 components/upcoming-tasks.tsx，在别处照常用。
@@ -54,9 +55,11 @@ function SourceRow({ source }: { source: HomeReminderSource }) {
   </li>;
 }
 
-function Reminder({ reminder, label }: { reminder: HomeReminder; label?: string }) {
+function Reminder({ reminder, label, habitId }: { reminder: HomeReminder; label?: string; habitId?: string }) {
   return <details className="home-reminder">
-    <summary className="home-reminder-bar">
+    {/* data-habit-id 只出现在默认位上、且只出现在习惯类事项上（id 由数据轨的 habitShownIds 给定）。
+        折叠层里的那几条不带这个属性——「露出」数的是家人真的看见的那几天（§6.3）。 */}
+    <summary className="home-reminder-bar" data-habit-id={habitId}>
       <span className="home-reminder-copy">
         {label ? <span className="home-reminder-label">{label}</span> : null}
         <span className="home-reminder-title">{reminder.title}</span>
@@ -77,13 +80,18 @@ function Reminder({ reminder, label }: { reminder: HomeReminder; label?: string 
   </details>;
 }
 
-export function HomeReminders({ reminders, more = [] }: { reminders: HomeReminder[]; more?: HomeReminder[] }) {
+export function HomeReminders({ reminders, more = [], habitIds = [] }: { reminders: HomeReminder[]; more?: HomeReminder[]; habitIds?: string[] }) {
   // 一条都没有 → 整块收起。这是「没有有效提醒」的呈现，不是「全部完成」的说法。
   if (reminders.length === 0 && more.length === 0) return null;
   // 默认重点一条，最多两条（共同规格 §6.6）。第二条起同样带自己的展开详情。
   const shown = reminders.slice(0, 2);
+  const habits = new Set(habitIds);
+  // 实际画在默认位上的习惯类事项，才是可能被上报的那几条。
+  const reportable = shown.map((reminder) => reminder.id).filter((id) => habits.has(id));
   return <section className="home-reminders" aria-label="近期提醒">
-    {shown.map((reminder, index) => <Reminder key={reminder.id} reminder={reminder} label={index === 0 ? "近期提醒" : undefined} />)}
+    {shown.map((reminder, index) => <Reminder key={reminder.id} reminder={reminder} label={index === 0 ? "近期提醒" : undefined} habitId={habits.has(reminder.id) ? reminder.id : undefined} />)}
+    {/* 上报由浏览器在「真的进了视口 + 页面在前台」之后发起，不在服务端渲染时记。 */}
+    {reportable.length > 0 ? <HabitShownReporter ids={reportable} /> : null}
     {/* 超出两条的**有效**事项收在这里，默认布局不膨胀，但一条都不会因为放不下而消失（§6.6）。
         标题不写数字：家人读的页面上不出现计数式描述（原则三）。过期的不在这里——它们已经退场，
         不从折叠层再回到首页（页面侧的过滤在 app/page.tsx）。 */}

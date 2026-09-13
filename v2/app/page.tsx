@@ -118,7 +118,19 @@ function Reminders({ feed }: { feed: HomeFeed }) {
   // 「近期提醒」的折叠层，等于让刚退场的陈旧采购从另一个门回到首页。
   const more = reminders.more.filter((reminder) => LIVE_REMINDER_STATES.has(reminder.state));
   if (reminders.shown.length === 0 && more.length === 0) return null;
-  return <HomeReminders reminders={reminders.shown.map(toReminderView)} more={more.map(toReminderView)} />;
+  // 露出上报（§6.3 的「最多两个不同自然日」数的是**真被看见的那几天**）：这里只把数据轨算好的
+  // `habitShownIds` 传下去，**不在这次请求里记账**。记账的时机是浏览器里那块提醒进了视口、
+  // 且页面在前台（components/habit-shown-reporter.tsx）。
+  //
+  // 数据轨的接线文档给的是在 SSR 里调 `reportHabitShown(feed)`，这里**故意没有那么做**：
+  // 一次 GET 不等于一次露出。预热、健康检查、截图脚本都会发 GET，而配额只有两天——
+  // 记错一次，这条提醒家人一次都没看见就再也看不到它了。判断哪几条是习惯类仍然是数据轨的事，
+  // 页面一条都不自己筛。
+  return <HomeReminders
+    reminders={reminders.shown.map(toReminderView)}
+    more={more.map(toReminderView)}
+    habitIds={reminders.habitShownIds}
+  />;
 }
 
 // 契约项 → 展示用的几行字。状态文案取 HOME_REMINDER_LABEL，页面不自拟；「要做的」是默认含义，
