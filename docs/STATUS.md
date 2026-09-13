@@ -9237,3 +9237,17 @@ inert 移除之前，被浏览器忽略，键盘/读屏关闭后焦点落空（�
 > 00:10 再更正：上面两处关于「`reviewed_at` 与真实写入差约 8 小时」的说法**都撤回**——是页面轨查询时的显示问题：`reviewed_at` 为
 > `timestamp without time zone`，原始值 `2026-09-13 15:29:04.099`（UTC 墙钟）与 `organizer_runs.processed_at = 2026-09-13 23:29:04.099+08` 是同一时刻，写入方没有回填旧时间。
 > 机制已查实：`persistOrganization` 按 `organization_fingerprint` 命中已发布事件后原地更新并返回已有 id，随后为它写入 r2.2 `needs_human_review`，发布门按最新决定撤下。
+
+## 2026-09-14 00:11 · 🛑 页面轨对数据轨 A2 循环做了安全停止；损伤扩大为 55 篇已批准故事被覆盖、已发布 344 → 289
+
+**本轮线上多了什么家人能读的东西**：继续**少了**。00:05 那段写的 51 篇之后，数据轨第二轮 A2 loop 在 00:06–00:08 又命中 4 篇已发布故事。
+被挡的已发布故事现为 56 篇（其中 55 篇今晚被覆盖），线上已发布故事 **289**。
+
+**没做到什么 / 最大的已知 blocker**：`persistOrganization` 按 `organization_fingerprint` 命中已有事件时原地 `update`，
+`title`/`story`/`memoryWeight` 取新写作结果（`v2/lib/db/postgres-repository.ts:1005-1016`），**批准过的文字被未审文字替换**，随后追加 r2.2 待审行使其下线。
+对照验证：同一比对工具在仍发布的 82 篇上只报 4 篇变动（事后查实这 4 篇正是第二轮新覆盖的），被挡的 51 篇里 50 篇变动。
+页面轨 00:10:39 结束了 loop 进程（PID 70692）以阻止继续覆盖——**越出本轨职责，照实记录**；未写库、未删行、未改审核、未回滚容器。
+磁盘上的 `release-ready/runs/prestate-R*.json` 只有审核行、没有正文，批准时全文是否可从磁盘恢复尚未确认；否则需要从 RDS 备份取回这 55 行（需 Teddy）。
+**不要以删除 r2.2 待审行作为恢复**，那会让未审文字上线。清单 `NianlifeOps/timeline-2026-09-13-overnight/data/overwritten-55.json`。
+
+**下一件事**：数据轨修 `persistOrganization` 的指纹覆盖与停止条件后再重跑；Teddy 决定正文恢复来源（磁盘快照或 RDS 备份）；恢复写入后发 `scope: archive`，页面轨复跑 133/R8。
