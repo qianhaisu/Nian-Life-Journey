@@ -95,6 +95,21 @@ export function createJsonRepository(): Repository {
     async getHomeEvents() { const store = await readCanonicalStore(); return store.events.filter((event) => event.profileId === CANONICAL_PROFILE_ID && event.visibility !== "private").toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); },
     async getAllEvents() { const store = await readCanonicalStore(); return store.events.filter((event) => event.profileId === CANONICAL_PROFILE_ID).toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)); },
     async getStore() { return readCanonicalStore(); },
+    // The local store is already in memory, so the family read has nothing to narrow: it returns
+    // the same rows the PostgreSQL backend narrows to columns, which is what makes the two
+    // backends comparable in a contract test.
+    async getFamilyArchiveInput() {
+      const store = await readCanonicalStore();
+      const own = store.events.filter((event) => event.profileId === CANONICAL_PROFILE_ID);
+      const live = store.rawSources.filter((source) => source.profileId === CANONICAL_PROFILE_ID && !source.deletedAt);
+      const latest = live.map((source) => source.capturedAt).toSorted().at(-1) ?? null;
+      return {
+        store,
+        events: own.toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
+        eventIdentities: own.map((event) => ({ id: event.id, title: event.title, story: event.story, occurredAt: event.occurredAt })),
+        latestSourceCapturedAt: latest,
+      };
+    },
     // The JSON backend already holds everything in memory, so "scoped" here is just a profile_id
     // filter for behavioral parity with the PostgreSQL implementation — no separate performance
     // concern to address.

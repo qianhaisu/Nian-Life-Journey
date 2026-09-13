@@ -7,7 +7,7 @@ import { createJsonRepository } from "./json-repository";
 import { createPostgresRepository } from "./postgres-repository";
 import type { Repository } from "./repository-interface";
 
-export type { EventDetail, MonthArchiveInput, OrganizerWindowInput, Store } from "./repository-interface";
+export type { EventDetail, FamilyArchiveInput, MonthArchiveInput, OrganizerWindowInput, Store } from "./repository-interface";
 export { newId } from "./repository-interface";
 
 function createRepository(): Repository {
@@ -20,6 +20,7 @@ const repository = createRepository();
 export const getHomeEvents = repository.getHomeEvents.bind(repository);
 export const getAllEvents = repository.getAllEvents.bind(repository);
 export const getStore = repository.getStore.bind(repository);
+export const getFamilyArchiveInput = repository.getFamilyArchiveInput.bind(repository);
 export const getOrganizerStore = repository.getOrganizerStore.bind(repository);
 export const getAllEventIdentities = repository.getAllEventIdentities.bind(repository);
 export const getOrganizerWindowInput = repository.getOrganizerWindowInput.bind(repository);

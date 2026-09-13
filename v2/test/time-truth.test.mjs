@@ -219,3 +219,32 @@ test("growth notes: 最近 wording only while the note is recent; the front page
   const view = home(store({ events: [event("m", "2026-08-20")], growthRecords: [records[0]] }));
   assert.equal(view.change, undefined);
 });
+
+// 家庭读取不再把 raw_sources 整表拉回来（只拉背后有照片的那些），所以档案时钟必须由读取层
+// 单独给出。这三条守的是同一件事：**时钟不许因为这次收窄而往回走**。
+// 2026-09-13 收窄 loadFamilyArchive 时加的。
+test("档案时钟由读取层单独传入时，用传进来的那天，不是 store 里剩下的那几行", () => {
+  const s = store({
+    events: [event("e1", "2026-08-01")],
+    // 收窄后的 store 里只剩下一条「背后有照片」的来源，停在 08-05。
+    rawSources: [source("s-photo", "2026-08-05T09:00:00.000Z")],
+  });
+  // 真实的最后一条消息其实是 08-31。库里的 captured_at 是不带时区的本地时间字符串
+  // （drizzle timestamp mode:"string"），这里照它的真实形状写。
+  const archive = composeFamilyArchive(s, s.events, TODAY, s.events, "2026-08-31 16:22:17");
+  assert.equal(archive.time.activityDay, "2026-08-31", "时钟应当用读取层给的真实最后一天");
+});
+
+test("不传时钟的老调用方，行为一个字都没变", () => {
+  const s = store({
+    events: [event("e1", "2026-08-01")],
+    rawSources: [source("s1", "2026-08-05T09:00:00.000Z"), source("s2", "2026-08-20T09:00:00.000Z")],
+  });
+  assert.equal(composeFamilyArchive(s, s.events, TODAY).time.activityDay, "2026-08-20");
+});
+
+test("传进来的那天比 events 还旧时，仍取三者里最新的一天——不是直接采信它", () => {
+  const s = store({ events: [event("e1", "2026-09-01")], rawSources: [] });
+  const archive = composeFamilyArchive(s, s.events, TODAY, s.events, "2026-07-01T00:00:00.000Z");
+  assert.equal(archive.time.activityDay, "2026-09-01");
+});

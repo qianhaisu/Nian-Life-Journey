@@ -36,6 +36,38 @@ export type Store = {
   monthlySnapshots: MonthlySnapshot[];
 };
 
+/**
+ * Everything `composeFamilyArchive()` reads, and nothing else. The family render path's own read.
+ *
+ * WHY IT EXISTS, measured on ECS against the live RDS on 2026-09-13 (perf/21, perf/23):
+ * `loadFamilyArchive()` used to be `getStore()` + `getAllEvents()` + `getAllEventIdentities()`,
+ * which ships 72.6 MB to render pages that read a fraction of it. Server-side execution for the
+ * whole set is 34 ms — **no query is slow**; the cost is 1.8 s of pure transfer, and it is paid on
+ * every cold render and every ISR revalidation.
+ *
+ * Three quarters of those bytes are columns nobody on the path reads: `media_locations` is consulted
+ * ONLY through `selectLocation()` (provider/variant/status, keyed by asset), `media_assets` ONLY for
+ * `mediaType`/`mimeType`, and `raw_sources` ONLY for `mediaPrivilegeOf()` — which looks at sources
+ * that back a media row — plus one `max(capturedAt)` for the activity clock. The same three tables
+ * were also being read twice over (`life_events` three times, `content_quality_reviews` twice).
+ *
+ * THE ROWS HERE ARE PARTIAL, and that is the hazard to keep in mind: `store.mediaAssets`,
+ * `store.mediaLocations` and `store.rawSources` carry only the columns named above. Reading any
+ * other field off them gets `undefined` silently, exactly as with `getStore()`'s existing 10-column
+ * `rawSources` read. Anything needing the full rows must call `getStore()` — which is unchanged.
+ */
+export type FamilyArchiveInput = {
+  /** Partial by design — see above. */
+  store: Store;
+  /** The publishable set, newest first: identical to what getAllEvents() returns. */
+  events: LifeEvent[];
+  /** Every life_event's id/title/story/occurredAt, any decision — as getAllEventIdentities(). */
+  eventIdentities: Array<Pick<LifeEvent, "id" | "title" | "story" | "occurredAt">>;
+  /** max(captured_at) over this profile's live raw_sources, because `store.rawSources` no longer
+   *  holds every row and the archive clock must not quietly move backwards. */
+  latestSourceCapturedAt: string | null;
+};
+
 export type EventDetail = {
   event: LifeEvent;
   media: Media[];
@@ -154,6 +186,8 @@ export interface Repository extends ChatImportRepository {
   // `profile` is always the canonical one (lib/db/config.ts), never "whichever row comes first";
   // the collections are the whole backend view — pages narrow them with lib/db/profile-scope.ts.
   getStore(): Promise<Store>;
+  /** The family render path's own read. See FamilyArchiveInput — its rows are partial. */
+  getFamilyArchiveInput(): Promise<FamilyArchiveInput>;
   // A Store scoped to one profile and only the fields the Organizer actually reads (rawSources,
   // media, mediaAssets, contributors, events — everything else comes back empty). getStore()'s
   // unfiltered select() across all 18 tables takes ~10 minutes at real WeChat-import data volume

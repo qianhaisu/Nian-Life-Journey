@@ -424,6 +424,89 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     };
   }
 
+  /**
+   * The family render path's read. Same answers as getStore() + getAllEvents() +
+   * getAllEventIdentities() gave it, at a quarter of the bytes. See FamilyArchiveInput's doc
+   * comment for the measurements and for the partial-row hazard.
+   *
+   * Each narrowing below is equivalence-checked against the live database, not assumed
+   * (perf/24-equivalence.json, 2026-09-13). What was verified, and why each one holds:
+   *
+   *   media_locations → 4 columns. `deliverableMediaIds()` indexes them by `mediaAssetId` and asks
+   *     `selectLocation()`, which reads `provider`, `variant` and `status`. Nothing else ever looks
+   *     at a location on this path. Rows are NOT filtered: scopeStoreToProfile still drops the ones
+   *     whose asset belongs to another profile, exactly as before.
+   *   media_assets → 4 columns. Only `mediaType` (isDeliverable) and `mimeType` (derivativePlan /
+   *     preferredVariant) are read; `profileId` stays for the scoping, `id` for the index.
+   *   raw_sources → the rows that back a media row, 5 columns. `mediaPrivilegeOf()` intersects
+   *     trusted sources with `media.rawSourceId`, so a source no media row points at cannot change
+   *     any answer. The archive clock is the one thing that WOULD change, so it comes back
+   *     separately as `latestSourceCapturedAt` — computed over every live row, as before.
+   *   life_events → read ONCE, scoped to the profile, and used for both `store.events` and the
+   *     publishable `events` list. It used to be read three times: unfiltered here, profile-scoped
+   *     in getAllEvents(), and four-column in getAllEventIdentities(). Verified: no life_event row
+   *     belongs to another profile, and scopeStoreToProfile would have dropped it anyway.
+   *   content_quality_reviews → read ONCE and shared by the store and the publication gate.
+   *
+   * `getStore()` below is deliberately untouched: the Organizer, Quark archiving and ingest read
+   * whole rows from it, and narrowing it would break paths that have nothing to do with rendering.
+   */
+  async function assembleFamilyArchiveInput() {
+    const [profileRows, contributors, media, mediaAssets, mediaLocations, mediaBackedSources, activityRows, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, links, qualityReviewRows, snapshotRows] = await Promise.all([
+      db.select().from(t.profiles).where(eq(t.profiles.id, CANONICAL_PROFILE_ID)).limit(1),
+      db.select().from(t.contributors),
+      db.select().from(t.media).where(eq(t.media.profileId, CANONICAL_PROFILE_ID)),
+      db.select({ id: t.mediaAssets.id, profileId: t.mediaAssets.profileId, mediaType: t.mediaAssets.mediaType, mimeType: t.mediaAssets.mimeType }).from(t.mediaAssets),
+      db.select({ mediaAssetId: t.mediaLocations.mediaAssetId, provider: t.mediaLocations.provider, variant: t.mediaLocations.variant, status: t.mediaLocations.status }).from(t.mediaLocations),
+      db.select({ id: t.rawSources.id, profileId: t.rawSources.profileId, sourceType: t.rawSources.sourceType, sourceLabel: t.rawSources.sourceLabel, deletedAt: t.rawSources.deletedAt })
+        .from(t.rawSources)
+        .where(sql`${t.rawSources.id} in (select ${t.media.rawSourceId} from ${t.media} where ${t.media.rawSourceId} is not null)`),
+      db.select({ day: sql<string | null>`max(${t.rawSources.capturedAt})` }).from(t.rawSources)
+        .where(and(eq(t.rawSources.profileId, CANONICAL_PROFILE_ID), sql`${t.rawSources.deletedAt} is null`)),
+      canonicalEvents(),
+      db.select().from(t.dailyTraces),
+      db.select().from(t.growthRecords),
+      db.select().from(t.careRecords),
+      db.select().from(t.careEpisodes),
+      db.select().from(t.monthlyFocusGoals),
+      db.select().from(t.sourceMemoryLinks),
+      db.select().from(t.contentQualityReviews),
+      db.select().from(t.monthlySnapshot).where(eq(t.monthlySnapshot.profileId, CANONICAL_PROFILE_ID)),
+    ]);
+    if (!profileRows[0]) throw new Error(`PostgreSQL repository: no profile row "${CANONICAL_PROFILE_ID}" found. Run the JSON→Postgres migration first.`);
+    const reviews = indexReviews(qualityReviewRows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>);
+    const allEvents = events as unknown as LifeEvent[];
+    const publishableEvents = allEvents.filter((event) => isEventPublishable(event, reviews));
+    const store: Store = {
+      profile: profileRows[0] as Store["profile"],
+      contributors: contributors as Store["contributors"],
+      media: media as unknown as Store["media"],
+      mediaAssets: mediaAssets as unknown as Store["mediaAssets"],
+      mediaLocations: mediaLocations as unknown as Store["mediaLocations"],
+      connectorStates: [],
+      rawSources: mediaBackedSources as unknown as Store["rawSources"],
+      events: publishableEvents as unknown as Store["events"],
+      dailyTraces: (dailyTraces as unknown as DailyTrace[]).filter((trace) => isTracePublishable(trace, reviews)) as unknown as Store["dailyTraces"],
+      growthRecords: growthRecords as unknown as Store["growthRecords"],
+      careRecords: careRecords as unknown as Store["careRecords"],
+      careEpisodes: careEpisodes as unknown as Store["careEpisodes"],
+      monthlyFocusGoals: monthlyFocusGoals as unknown as Store["monthlyFocusGoals"],
+      organizerRuns: [],
+      organizerJobs: [],
+      chatImportTasks: [],
+      links: links as Store["links"],
+      qualityReviews: qualityReviewRows.map((row) => reviewFromRow(row as unknown as Record<string, unknown>)),
+      monthlySnapshots: snapshotRows as unknown as Store["monthlySnapshots"],
+    };
+    return {
+      store,
+      // Newest first, the order getAllEvents() has always returned.
+      events: publishableEvents.toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
+      eventIdentities: allEvents.map((event) => ({ id: event.id, title: event.title, story: event.story, occurredAt: event.occurredAt })),
+      latestSourceCapturedAt: (activityRows[0]?.day as string | null) ?? null,
+    };
+  }
+
   // The profile row is pinned by id — never `profiles limit 1`, which once handed a stranded
   // contract-test profile (born 2020) to the whole site as 张年. The collections stay the full
   // backend view (Organizer, archive and ingest pipelines read them by source/asset id); pages
@@ -578,6 +661,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         .toSorted((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     },
     async getStore() { return assembleStore(); },
+    async getFamilyArchiveInput() { return assembleFamilyArchiveInput(); },
     async getOrganizerStore(profileId: string) { return assembleOrganizerStore(profileId); },
     async getAllEventIdentities(profileId: string) { return assembleEventIdentities(profileId); },
     async getOrganizerWindowInput(sourceIds: string[]) { return assembleOrganizerWindowInput(sourceIds); },

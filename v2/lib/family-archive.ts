@@ -3,7 +3,7 @@
 // shown, using the same publication rules the pages already applied individually.
 import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { scopeStoreToProfile } from "@/lib/db/profile-scope";
-import { getAllEventIdentities, getAllEvents, getStore, type Store } from "@/lib/db/repository";
+import { getFamilyArchiveInput, type Store } from "@/lib/db/repository";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
@@ -95,7 +95,18 @@ export function mediaPrivilegeOf(events: LifeEvent[], media: Media[], rawSources
 // `allEvents` defaults to the published-only `events` array so a 2-arg call (as before this trace
 // tier existed) still computes an empty `traceEvents` — a published event can never carry a
 // store_only decision, so nothing regresses for a caller that hasn't been told about the wider set.
-export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: Date = new Date(), allEvents: LifeEvent[] = events): FamilyArchive {
+export function composeFamilyArchive(
+  rawStore: Store,
+  events: LifeEvent[],
+  now: Date = new Date(),
+  allEvents: LifeEvent[] = events,
+  // The newest day life reached the archive, when the caller read it separately. The family read
+  // (getFamilyArchiveInput) no longer ships every raw_source row — only the ones backing a picture
+  // — so computing this from `store.rawSources` there would quietly move the archive clock
+  // BACKWARDS to the last day a photo arrived. A caller that still passes a whole store passes
+  // nothing here and the clock is computed from it exactly as before.
+  latestSourceCapturedAt?: string | null,
+): FamilyArchive {
   // Pages read the book about 张年 only: rows another profile id owns (contract-test fixtures,
   // debugging profiles) stay in the backend but never reach a chapter or a home page.
   const store = scopeStoreToProfile(rawStore, CANONICAL_PROFILE_ID);
@@ -151,7 +162,13 @@ export function composeFamilyArchive(rawStore: Store, events: LifeEvent[], now: 
   const traceEvents = allEvents.filter((event) => traceEligibleIds.has(event.id));
   const time: ArchiveTime = {
     today: productToday(now),
-    activityDay: latestActivityDay({ rawSources: store.rawSources, dailyTraces: traces, events }),
+    activityDay: latestActivityDay({
+      rawSources: latestSourceCapturedAt
+        ? [{ capturedAt: latestSourceCapturedAt, deletedAt: undefined } as unknown as RawSource]
+        : store.rawSources,
+      dailyTraces: traces,
+      events,
+    }),
     traceDay: latestTraceDay(traces),
     memoryDay: latestMemoryDay(events),
   };
@@ -204,10 +221,21 @@ export function loadFamilyArchiveOnDemand(
 }
 
 export async function loadFamilyArchive(): Promise<FamilyArchive> {
-  // 2026-09-06 (Neon egress incident): this used to call getOrganizerStore(), which also pulls
-  // every raw_source's `text` column — the largest table in the database — for a call that only
-  // ever reads `.events`. getAllEventIdentities() is the same underlying need (every life_event's
-  // id/title/story/occurredAt, any decision) without touching raw_sources at all.
-  const [events, rawStore, traceEventFields] = await Promise.all([getAllEvents(), getStore(), getAllEventIdentities(CANONICAL_PROFILE_ID)]);
-  return composeFamilyArchive(rawStore, events, new Date(), traceEventFields as unknown as LifeEvent[]);
+  // 2026-09-13: this used to be getAllEvents() + getStore() + getAllEventIdentities(), three reads
+  // that between them shipped 72.6 MB — measured on ECS against the live database — to render pages
+  // that read a quarter of it, and read life_events three times and the quality ledger twice along
+  // the way. Server-side execution for all of it was 34 ms: nothing here was ever a slow query, it
+  // was bytes on a wire, paid again on every cold render and every revalidation.
+  //
+  // getFamilyArchiveInput() answers the same three questions in one read, with the columns this
+  // path actually consults. Its rows are PARTIAL by design — see the type's doc comment before
+  // reading a new field off store.mediaAssets, store.mediaLocations or store.rawSources here.
+  const input = await getFamilyArchiveInput();
+  return composeFamilyArchive(
+    input.store,
+    input.events,
+    new Date(),
+    input.eventIdentities as unknown as LifeEvent[],
+    input.latestSourceCapturedAt,
+  );
 }
