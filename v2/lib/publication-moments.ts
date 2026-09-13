@@ -42,8 +42,30 @@ export type MediaPrivilege = { confirmed: ReadonlySet<string>; trusted: Readonly
 
 export const NO_PRIVILEGE: MediaPrivilege = { confirmed: new Set(), trusted: new Set() };
 
+/**
+ * May this picture be one of the month's photographs at all — 「这个月的照片」 and the day-level
+ * photography built from it.
+ *
+ * `confirmed` was the first half of this until 2026-09-13 and has been removed. The reason is not
+ * that a story binding is weak evidence; it is that it is evidence about something else, and the
+ * set is the wrong SHAPE to carry it. `privilege.confirmed` is a flat set of mediaIds, not of
+ * (story, photograph) pairs, so a binding approved for ONE story admitted the picture everywhere —
+ * to the album as a standalone photograph, and to any other story's surfaces (data track: `844a4868…`
+ * is approved on `event-v2-afcea68e…` and unreviewed on `event-v2-e72ff7aa…`).
+ *
+ * R8 is the case that made this urgent. `event-r10-20260907-coldhot` has approved `media_binding`
+ * rows for two photographs, and BOTH are 「非 trusted」 with no subject check — the story binding is
+ * their only warrant. Publishing R8 under the old rule would have given them independent album
+ * entry, including `wechat-media:9968e23c…` (3120×4160), which the story does not even draw. An
+ * approval given for one use does not extend itself to another (总指挥, 2026-09-13).
+ *
+ * Where each thing now comes from: a story's own picture from the approved pair
+ * (`storyDisplayMedia`), the album from source trust or a subject check, and every default-reading
+ * surface from a subject check (`isSubjectChecked`). Nothing is unbound, hidden or deleted — the
+ * coldhot photographs keep their rows, their story link and their approved story display.
+ */
 export function isPrivileged(ref: Pick<MediaRef, "id">, privilege: MediaPrivilege): boolean {
-  return privilege.confirmed.has(ref.id) || privilege.trusted.has(ref.id);
+  return privilege.trusted.has(ref.id) || Boolean(privilege.checked?.has(ref.id));
 }
 
 /**

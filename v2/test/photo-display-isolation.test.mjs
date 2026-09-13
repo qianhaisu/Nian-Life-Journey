@@ -173,6 +173,33 @@ test("a reviewed story binding illustrates its story and still may not become th
   assert.equal(composition.mode, "memory", "the month is carried by its words, not by a guessed picture");
 });
 
+// R8, the second coldhot photograph. Both of that story's pictures are 「非 trusted」 with no subject
+// check: an approved `media_binding` is their only warrant, and `privilege.confirmed` is a flat set
+// of mediaIds rather than of pairs. So the binding used to admit them to the month's album as
+// standalone photographs — including the 3120×4160 one the story does not draw at all.
+test("a story binding does not become independent album entry for the pictures it approved", () => {
+  const drawn = photo("coldhot-drawn", "2026-09-07T05:00:00.000Z", { width: 1280, height: 1707 });
+  const notDrawn = photo("coldhot-not-drawn", "2026-09-07T06:00:00.000Z", { width: 3120, height: 4160 });
+  const media = [drawn, notDrawn];
+  // Neither is source-trusted and neither has been opened — exactly production's shape for these two.
+  const privilege = { confirmed: new Set([drawn.id, notDrawn.id]), trusted: new Set(), checked: new Set() };
+  const composition = buildMonthComposition(
+    monthOf({
+      media,
+      events: [event("coldhot-story", "2026-09-07 00:00:00+00", [drawn.id, notDrawn.id], { heroMediaId: drawn.id })],
+      photoConfirmations: new Set([`coldhot-story|${drawn.id}`, `coldhot-story|${notDrawn.id}`]),
+    }, "2026-09"),
+    privilege);
+
+  const moment = composition.chapter.find((item) => item.memory?.id === "coldhot-story");
+  assert.equal(moment.memory.lead?.id, "coldhot-drawn", "the approved story display is kept");
+  assert.deepEqual(composition.archiveDays, [], "the binding does not put either picture in 这个月的照片");
+  assert.deepEqual(composition.dayPhotoGroups, [], "nor in 这一天的照片");
+  assert.equal(composition.cover, undefined, "nor make one the month's face");
+  assert.deepEqual(composition.preview, []);
+  assert.equal(composition.totalPhotoCount, 0, "the album counts neither, because neither is one of its photographs");
+});
+
 test("a subject check earns the cover; source trust never does", () => {
   const looked = photo("opened-and-recorded", "2026-08-19T02:00:00.000Z");
   const merelyTrusted = photo("from-the-family-album", "2026-08-24T02:00:00.000Z");
