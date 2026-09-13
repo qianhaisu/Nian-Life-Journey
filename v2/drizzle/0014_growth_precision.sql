@@ -1,0 +1,1 @@
+ALTER TABLE "growth_records" ADD COLUMN "precision" text;

@@ -252,6 +252,17 @@ export const growthRecords = pgTable("growth_records", {
   observedAt: timestamp("observed_at", { mode: "string" }).notNull(),
   value: real("value"),
   unit: text("unit"),
+  // 2026-09-13. How certain the figure is: "stated" when the source gave a number, "approximate"
+  // when it hedged (「快到 14 斤」、「接近 23 斤」、「5.3 左右」). NULL means nobody has judged it —
+  // deliberately NOT defaulted to "stated", because silently promoting every existing row to a
+  // precise reading is exactly the error this column exists to prevent.
+  //
+  // Why a column and not a word in `note`: an approximate row carries no `value`, and so does a
+  // capability row, and so would a measurement somebody simply failed to record. Without this,
+  // those three are the same row and a reader cannot tell a deliberate approximation from a gap.
+  // An approximate row keeps its words in `note` and stays out of the curve and the latest figure,
+  // because lib/growth-notes.ts's measurements() filters on `typeof value === "number"`.
+  precision: text("precision"),
   note: text("note").notNull(),
   source: text("source").notNull(),
   visibility: text("visibility").notNull(),
