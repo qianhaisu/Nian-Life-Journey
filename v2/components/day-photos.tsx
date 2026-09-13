@@ -59,7 +59,7 @@ export function DayPhotos({
       {rest.length > 0 && !expanded ? (
         <p className="chapter-meta day-photos-expand">
           <button className="text-link" onClick={() => setExpanded(true)}>
-            这一天还有 {rest.length} 张——点此展开
+            展开这一天的其他照片
           </button>
         </p>
       ) : null}

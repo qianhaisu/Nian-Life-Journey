@@ -12,7 +12,7 @@ import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { findMonth } from "@/lib/memory-chapters";
-import { buildMonthComposition, dayAlbumDays, monthStandfirst } from "@/lib/publication-moments";
+import { buildMonthComposition, dayAlbumDays } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
 import { formatMonth } from "@/lib/time-signature";
 
@@ -57,7 +57,6 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   if (!chapter) notFound();
 
   const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay);
-  const standfirst = monthStandfirst(composition.daysWithWords);
   const summary = snapshots.find((item) => item.month === month);
   const focusGoals = summary ? focusGoalsForSnapshot(store.monthlyFocusGoals, month) : [];
   const yearChapter = chapters.find((item) => item.year === year);
@@ -81,7 +80,8 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       {chapter.ageLabel ? <p className="chapter-age">当时 {chapter.ageLabel}</p> : null}
       {summary?.summary ? <SnapshotSummary text={summary.summary} className="chapter-summary serif" /> : null}
       {!summary && composition.narration ? <p className="chapter-narration serif">{composition.narration}</p> : null}
-      {!summary && !composition.narration && standfirst ? <p className="chapter-standfirst serif">{standfirst}</p> : null}
+      {/* No standfirst any more: 「这个月记下 N 天。」 was a count standing in for the month (原则三,
+          2026-09-13 acceptance). A month without a summary opens with its own first day. */}
       {/* A jump to 「这个月的照片」, which now holds the days that told no story of their own —
           the rest travel with their day, above. Kept at the top because those remaining days are
           still the longest thing on the page on a phone. */}
@@ -122,7 +122,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
 
     {composition.quietDays.length > 0 && (composition.chapter.length > 0 || composition.chronicle.length > 0) ? <p className="month-quiet-days serif">
       {composition.quietDays.length > 8
-        ? `这个月还有 ${composition.quietDays.length} 天留下了零散的照片，收在下面「${albumLabel}」里。`
+        ? `这个月其余日子留下的零散照片，收在下面「${albumLabel}」里。`
         : `${composition.quietDays.map((day) => dayLabel(day.dateLabel, year)).join("、")}也留下了零散的照片，收在下面「${albumLabel}」里。`}
     </p> : null}
 
@@ -144,7 +144,6 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         visibleDays={composition.archiveDaysVisible}
         monthAgeLabel={chapter.ageLabel}
       />
-      {composition.smallImageCount > 0 ? <p className="chapter-meta">还有 {composition.smallImageCount} 张过小的图片（表情、缩略图）留在档案记录里，未在此显示。</p> : null}
     </details> : null}
 
     {empty ? <p className="serif archive-empty">这个月的生活还在档案里，等整理好就能翻看。</p> : null}

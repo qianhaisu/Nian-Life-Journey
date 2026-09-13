@@ -41,14 +41,15 @@ export function ArchiveExpander({
   year,
   month,
   foldedDayCount,
-  foldedPhotoCount,
   visibleDays,
   monthAgeLabel,
 }: {
   year: string;
   month: string;
   foldedDayCount: number;
-  foldedPhotoCount: number;
+  // Still passed by the page; no longer printed (原则三, 2026-09-13: the button said 「还有 28 天、521 张
+  // 照片」 — the archive describing its own size to the family).
+  foldedPhotoCount?: number;
   visibleDays: PhotoDay[];
   monthAgeLabel?: string;
 }) {
@@ -84,7 +85,7 @@ export function ArchiveExpander({
       {foldedDayCount > 0 && state !== "open" ? (
         <p className="chapter-meta archive-expand">
           <button className="text-link" onClick={handleExpand} disabled={state === "loading"} aria-busy={state === "loading"}>
-            {state === "loading" ? "加载中…" : `还有 ${foldedDayCount} 天、${foldedPhotoCount} 张照片——点此展开全部`}
+            {state === "loading" ? "加载中…" : "展开这个月其余的照片"}
           </button>
         </p>
       ) : null}

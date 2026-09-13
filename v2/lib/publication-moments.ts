@@ -704,7 +704,8 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // was left looking for pictures that were folded away.
   const archivePhotoCount = archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
   const narration = chapterMoments.length === 0 && chronicle.length === 0 && archivePhotoCount > 0
-    ? `这个月还没有整理出来的文字。${photoDaysAsc.length} 天留下了 ${archivePhotoCount} 张照片，都收在月末的档案里，还没有人确认过它们拍的是什么。`
+    // 2026-09-13 (原则三): no day or photo counts in the sentence — it says where the pictures are.
+    ? "这个月还没有整理出来的文字，这个月的照片都收在下面的相册里。"
     : undefined;
   // B-17 acceptance (2026-09-06): this used to count only chapterMoments (memory_led/text_led) —
   // once the chronicle stopped folding vouched photo days and trace days to quiet lines, that made

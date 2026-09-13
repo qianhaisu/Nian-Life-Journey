@@ -155,3 +155,20 @@ test("the day-album entry ships as one button and no photograph", () => {
   assert.match(after, /这一天相册里的其他照片/);
   assert.doesNotMatch(html + after, /配图/, "the album is never called a story's picture");
 });
+
+// 原则三 (2026-09-13 acceptance): the month's own controls say what they do, never how big the archive
+// is. 「还有 28 天、521 张照片——点此展开全部」 and 「这一天还有 12 张——点此展开」 were the archive
+// describing itself to the family.
+const { ArchiveExpander } = await import("../components/archive-expander.tsx");
+const { DayPhotos } = await import("../components/day-photos.tsx");
+
+test("expand controls carry no counts", () => {
+  const day = (d, n) => ({ day: d, dateLabel: `2026 年 8 月 ${Number(d.slice(8))} 日`, photos: Array.from({ length: n }, (_, i) => ref(`${d}-${i}`, 1600, 1200)) });
+  const album = render(ArchiveExpander, { year: "2026", month: "08", foldedDayCount: 28, foldedPhotoCount: 521, visibleDays: [day("2026-08-30", 3)] });
+  const button = album.match(/<button[^>]*>(.*?)<\/button>/s)?.[1] ?? "";
+  assert.equal(button, "展开这个月其余的照片");
+  const group = render(DayPhotos, { photos: day("2026-08-19", 12).photos, dateLabel: "2026 年 8 月 19 日" });
+  const more = group.match(/<button[^>]*>(.*?)<\/button>/s)?.[1] ?? "";
+  assert.equal(more.trim(), "展开这一天的其他照片");
+  assert.doesNotMatch(button + more, /\d/);
+});
