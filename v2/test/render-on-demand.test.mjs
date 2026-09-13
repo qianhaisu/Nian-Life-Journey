@@ -34,7 +34,12 @@ test("every paramless page that reads the archive is rendered on demand, never p
     // build time. Only paramless routes are prerendered unconditionally.
     if (route.some((segment) => segment.startsWith("["))) continue;
     const source = readFileSync(file, "utf8");
-    if (!/loadFamilyArchive(OnDemand)?\s*\(/.test(source)) continue;
+    // `readHomeFeed()` counts as reading the archive: it is lib/home-feed.ts's SSR entry point and
+    // it awaits loadFamilyArchiveOnDemand() internally (HOME-20260913, 2026-09-13). Without it in
+    // this pattern the front page — the one page this scan exists for — silently stopped being
+    // scanned the moment it started reading through that wrapper, so a page that read the archive
+    // and forgot renderOnDemand() would have shipped build-time mock HTML with nothing failing.
+    if (!/(loadFamilyArchive(OnDemand)?|readHomeFeed)\s*\(/.test(source)) continue;
     if (source.includes("renderOnDemand()")) continue;
     if (/export const dynamic\s*=\s*"force-dynamic"/.test(source)) continue;
     offenders.push("/" + route.join("/"));
@@ -48,9 +53,23 @@ test("the three known on-demand pages are actually wired to it", () => {
   for (const route of ["page.tsx", path.join("memory", "page.tsx"), path.join("about", "page.tsx")]) {
     const source = readFileSync(path.join(appDir, route), "utf8");
     assert.ok(source.includes("renderOnDemand()"), `${route} must opt out of build-time prerendering`);
-    assert.ok(source.includes("loadFamilyArchiveOnDemand()"), `${route} must use the memoised archive read`);
+    // Either the memoised read itself, or lib/home-feed.ts's readHomeFeed() — which is a wrapper
+    // around exactly that read, asserted below rather than taken on trust. The front page moved to
+    // the wrapper on 2026-09-13 (HOME-20260913); what must not be allowed is the RAW
+    // loadFamilyArchive(), which is a whole-store read with no memo in front of it.
+    assert.ok(
+      /loadFamilyArchiveOnDemand\(\)|readHomeFeed\(/.test(source),
+      `${route} must use the memoised archive read`,
+    );
     assert.ok(!/^export const revalidate/m.test(source), `${route} has no route cache, so it must not claim a revalidate window`);
   }
+  // The indirection allowed above is only safe while it really is an indirection to the memoised
+  // read. Named here so that replacing it with loadFamilyArchive() inside home-feed.ts — a whole
+  // store read on every single request — fails at this guard rather than on the egress bill
+  // (CLAUDE.md, the 2026-09-06 $87 incident).
+  const homeFeed = readFileSync(path.join(appDir, "..", "lib", "home-feed.ts"), "utf8");
+  assert.ok(homeFeed.includes("loadFamilyArchiveOnDemand"), "readHomeFeed must reach the archive through the memoised read");
+  assert.ok(!/await\s+loadFamilyArchive\(\)/.test(homeFeed), "readHomeFeed must never call the un-memoised whole-store read");
 });
 
 test("the on-demand archive read is shared within its window and re-read after it", async () => {

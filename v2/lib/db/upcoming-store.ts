@@ -41,6 +41,7 @@ import {
   type CuratedProvenance,
   type UpcomingProvenance,
 } from "@/lib/upcoming-provenance";
+import { pinnedRaisedOn } from "@/lib/upcoming-freshness";
 import {
   familyFeedFrom,
   mergeKeyOf,
@@ -245,12 +246,26 @@ export async function mergeUpcomingCandidates(
       const mergedSources = [...new Set([...(existing.sourceIds ?? []), ...sourceIds])];
       // A row already read and approved by a human keeps its decision; the extractor never
       // upgrades or downgrades a review.
+      // 提出日只能往早走，不能往晚走 (HOME-20260913, 2026-09-13).
+      //
+      // `row.evidence.day` 是这一批候选的 `firstSeenDay`。同一件事被另一条消息再说一次时，这个
+      // 值会是那条**更晚**的消息的日子；直接写下去，一条 8 月 16 日提出的事项就会因为 9 月的一次
+      // 重放变成「9 月才提出的」。首页的保鲜把 evidence.day 当起算点用
+      // （lib/upcoming-freshness.ts raisedOnOf），所以那就是「来源重放给事项续期」——
+      // 共同规格 §6.5 明确禁止的那一条，也是「重放同一来源是幂等的」的前提。
+      //
+      // 取两者里更早的那天：`evidence.day` 记的是这件事**第一次**被说出来的日子，重放不动它。
+      // 更晚的那次沉在 `sourceIds` 与 changes 里，没有丢。规则本身在 lib/upcoming-freshness.ts
+      // 的 pinnedRaisedOn 里，那里有直接的测试。
+      // `?? row.evidence.day` 只在两边都不是合法日期时兜底，保持列的形状与合并前一致。
+      const raisedOn = pinnedRaisedOn((existing.evidence as { day?: string } | null)?.day, row.evidence.day) ?? row.evidence.day;
       await db.update(t.upcomingItems).set({
         ...row,
         id: existing.id,
         anchorSourceId: existing.anchorSourceId,
         sourceIds: mergedSources,
         supersedes,
+        evidence: { day: raisedOn },
         // Never regress a status that already has evidence back to open just because this batch
         // re-saw the original request.
         status: statusNeedsEvidence(existing.status as UpcomingStatus) && !statusEvidenceDay ? existing.status : row.status,

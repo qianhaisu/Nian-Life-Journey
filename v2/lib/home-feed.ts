@@ -27,6 +27,7 @@ import { monthHrefOf } from "@/lib/home-view";
 import { recentWindowStart } from "@/lib/home-recent-pick";
 import type { UpcomingFeed, UpcomingSources } from "@/lib/upcoming";
 import type { UpcomingItem, UpcomingWhen } from "@/lib/upcoming-contract";
+import { freshnessOf, isImportantItem, limitHabitDates } from "@/lib/upcoming-freshness";
 import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 /** 契约版本。页面轨按这个字符串确认自己接的是哪一版；只做兼容新增时递增小版本号。 */
@@ -601,12 +602,12 @@ const endDayOf = (when: UpcomingWhen) => when.kind === "day" ? when.day : when.k
  *
  * 判据是标题/备注里的实词，而不是 AI 分类：这一层不调模型，而 UpcomingItem 的页面投影里没有
  * category 列（lib/upcoming-contract.ts toUpcomingItem 故意只投影页面要用的字段）。
- * 词表刻意短而具体，宁可漏判成普通事项，也不把一件普通琐事抬成「关键健康事项」而永不退场。
+ * 词表与保鲜那边共用一份（lib/upcoming-freshness.ts），不在两个文件里各写一遍——
+ * 两份词表迟早会分叉，而分叉的那一天，一件关键事项会在一个文件里永不过期、在另一个文件里按
+ * 48 小时退场。
  */
-const IMPORTANT_WORDS = ["接种", "疫苗", "补种", "就诊", "看医生", "体检", "门诊", "住院", "复查", "打针"];
 export function isImportantReminder(item: Pick<UpcomingItem, "title" | "note">): boolean {
-  const text = `${item.title}${item.note ?? ""}`;
-  return IMPORTANT_WORDS.some((word) => text.includes(word));
+  return isImportantItem(item);
 }
 
 function reminderOf(item: UpcomingItem, state: HomeReminderState, reason: string, sources: UpcomingSources | undefined): HomeReminder {
@@ -629,24 +630,31 @@ function reminderOf(item: UpcomingItem, state: HomeReminderState, reason: string
  *
  * 过期不是一种库状态（lib/upcoming-contract.ts isOverdue 的原话），所以这里算出来的 expired
  * 只是「不该再占首页」，不是完成、不是取消、不是删除。
+ *
+ * 「还新鲜吗」整件事交给 lib/upcoming-freshness.ts 判：有期限的沿用原意、无期限的临时事项 48 小时、
+ * 库存预测 72 小时、习惯提醒 7 天、接种就诊永不按时钟过期、待定计划不设过期。起算点是原始事项被
+ * 提出的那天，不是导入日，也不是打开页面的那天。
  */
 export function reminderStateOf(item: UpcomingItem, today: string, supersededIds: ReadonlySet<string>): { state: HomeReminderState; reason: string } {
   if (supersededIds.has(item.id)) return { state: "superseded", reason: "另一条事项明确取代了它" };
   if (item.status === "done") return { state: "done", reason: "有明确的完成证据" };
   if (item.status === "cancelled") return { state: "cancelled", reason: "有明确的取消证据" };
-  const end = endDayOf(item.when);
+  const verdict = freshnessOf(item, today);
+  if (verdict.stale) return { state: "expired", reason: verdict.reason };
+  // 状态是领域事实，保鲜只决定「还新不新鲜」。一条**待定**的计划即使写了日子也还是待定：
+  // 「下周出游（莫干山或四明山）」有 9 月 7 日到 13 日的窗口，但没人定下来去哪、去不去。
+  // 把它显示成「要做的」，就是把一次商量说成一件已定的事（§6 的「未确定的计划明确标注待定」）。
   if (item.status === "tentative") {
-    return end && end < today
-      ? { state: "expired", reason: `待定的计划，${formatDay(end)}已经过去，没有后续消息` }
-      : { state: "tentative", reason: "还没定下来" };
+    return { state: "tentative", reason: verdict.klass === "dated" ? `还没定下来（${verdict.reason}）` : "还没定下来" };
   }
-  if (!end) {
-    return isImportantReminder(item)
-      ? { state: "needs_confirmation", reason: "关键事项，时间待确认，还没有结果" }
-      : { state: "needs_confirmation", reason: "时间待确认" };
-  }
-  if (end < today) return { state: "expired", reason: `${formatDay(end)}已经过去，没有完成记录` };
-  return { state: "active", reason: end === today ? "就在今天" : `${formatDay(end)}之前` };
+  if (verdict.klass === "dated") return { state: "active", reason: verdict.reason };
+  if (verdict.klass === "undecided_plan") return { state: "tentative", reason: "还没定下来" };
+  // 剩下的都是「没有期限、还在新鲜期内」：时间待确认。关键事项在这里永远落到这一档，
+  // 因为 freshnessOf 对它从不判过期——没有结果就一直是待核实，不生成医疗期限（§6.4）。
+  return {
+    state: "needs_confirmation",
+    reason: verdict.klass === "important" ? "关键事项，时间待确认，还没有结果" : `时间待确认（${verdict.reason}）`,
+  };
 }
 
 /**
@@ -675,7 +683,17 @@ export function buildReminders(feed: UpcomingFeed | undefined, today: string, so
   const retired: HomeRetiredReminder[] = all
     .filter((reminder) => reminder.state === "expired")
     .map((reminder) => ({ id: reminder.id, title: reminder.title, reason: reminder.reason, status: reminder.item.status }));
-  const showable = all.filter((reminder) => reminder.state === "active" || reminder.state === "needs_confirmation" || reminder.state === "tentative");
+  // 习惯提醒最多露出两个不同日期（§6.3）。被压下去的进 retired（带原因）而不是消失，
+  // 也仍然在 more 里可达——它不是过期，是「同一件事已经说过两次了」。
+  const { dropped: habitDropped } = limitHabitDates(all.map((reminder) => {
+    const verdict = freshnessOf(reminder.item, today);
+    return { id: reminder.id, title: reminder.title, raisedOn: verdict.raisedOn, klass: verdict.klass };
+  }));
+  const habitDroppedIds = new Set(habitDropped.map(({ entry }) => entry.id));
+  for (const { entry, reason } of habitDropped) retired.push({ id: entry.id, title: entry.title, reason, status: "open" });
+  const showable = all.filter((reminder) =>
+    !habitDroppedIds.has(reminder.id)
+    && (reminder.state === "active" || reminder.state === "needs_confirmation" || reminder.state === "tentative"));
   const rank = (reminder: HomeReminder) => {
     if (reminder.important && reminder.state === "needs_confirmation") return 0;
     if (reminder.state === "active") return 1;
