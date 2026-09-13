@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { getDayAlbum } from "@/app/memory/[year]/[month]/actions";
@@ -43,10 +43,10 @@ export function DayAlbumLink({ year, month, day, dateLabel, ageLabel, afterDayPh
       setState("failed");
     }
   };
-  const close = useCallback(() => {
-    setState("closed");
-    trigger.current?.focus({ preventScroll: true });
-  }, []);
+  // Focus goes back to the entry from the sheet's own cleanup, not from here: while the sheet is still
+  // mounted the page behind it is inert, and focusing an inert button is silently ignored (measured on
+  // cbfdb60: focus came back as null after Escape).
+  const close = useCallback(() => setState("closed"), []);
 
   const label = afterDayPhotos ? "这一天相册里的其他照片" : "翻开这一天的相册";
   return <>
@@ -56,11 +56,11 @@ export function DayAlbumLink({ year, month, day, dateLabel, ageLabel, afterDayPh
       </button>
       {state === "failed" ? <span className="day-album-failed" role="status">相册暂时没有打开，稍后再试。</span> : null}
     </p>
-    {state === "open" && album ? <DayAlbumSheet album={album} dateLabel={dateLabel} ageLabel={ageLabel} onClose={close} /> : null}
+    {state === "open" && album ? <DayAlbumSheet album={album} dateLabel={dateLabel} ageLabel={ageLabel} onClose={close} returnFocusTo={trigger} /> : null}
   </>;
 }
 
-function DayAlbumSheet({ album, dateLabel, ageLabel, onClose }: { album: PhotoDay; dateLabel: string; ageLabel?: string; onClose: () => void }) {
+function DayAlbumSheet({ album, dateLabel, ageLabel, onClose, returnFocusTo }: { album: PhotoDay; dateLabel: string; ageLabel?: string; onClose: () => void; returnFocusTo: RefObject<HTMLButtonElement | null> }) {
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,12 +83,15 @@ function DayAlbumSheet({ album, dateLabel, ageLabel, onClose }: { album: PhotoDa
       madeInert.push(child);
     }
     sheet?.focus({ preventScroll: true });
+    const focusBack = returnFocusTo.current;
     return () => {
       for (const child of madeInert) child.removeAttribute("inert");
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("popstate", onPop);
+      // Only now is the entry focusable again.
+      focusBack?.focus({ preventScroll: true });
     };
-  }, [album.day, onClose]);
+  }, [album.day, onClose, returnFocusTo]);
 
   const closeViaUI = useCallback(() => history.back(), []);
 
