@@ -4,14 +4,17 @@
 // content_quality_reviews rows.
 //
 // targetKind is deliberately 'life_event_trace', NOT 'life_event': lib/organizer/quality-review.ts's
-// indexReviews() builds a Map keyed by `${targetKind}:${targetId}` from an UNORDERED
-// `select().from(contentQualityReviews)` (no ORDER BY in postgres-repository.ts) and the last row
-// read wins on that key. A second row keyed 'life_event:<id>' for an already-reviewed life_event
-// would race the real T20-C decision for that same map key — decision='trace_eligible' doesn't
-// normalize to a QualityDecision, so if it happened to win the race the event would flip to
-// 'needs_human_review' and silently vanish from B-17's `traceEvents` filter (`=== "store_only"`),
-// which is the opposite of this task's goal. 'life_event_trace' is an entirely separate map key,
-// so this can never collide with or overwrite any real review regardless of row order.
+// indexReviews() builds a Map keyed by `${targetKind}:${targetId}`, so a second row keyed
+// 'life_event:<id>' for an already-reviewed life_event would compete with the real T20-C decision
+// for that same map key. decision='trace_eligible' doesn't normalize to a QualityDecision, so if it
+// won it would flip the event to 'needs_human_review' and silently vanish from B-17's `traceEvents`
+// filter (`=== "store_only"`), which is the opposite of this task's goal. 'life_event_trace' is an
+// entirely separate map key, so this can never collide with or overwrite any real review.
+//
+// Updated 2026-09-13: the race this paragraph described is gone — indexReviews() no longer lets the
+// last row read win, it takes the most recent `reviewed_at` and refuses to break a tie in favour of
+// publishing. The reason to keep target_kind separate is unchanged and does not depend on that fix:
+// a trace-layer marker is not a publication decision and must never be readable as one.
 // promptVersion is still 'a6-trace-layer-v1' for its own sake (readable audit trail, keeps the
 // (targetKind, targetId, promptVersion) unique index meaningful) but no longer needs to avoid a
 // real prompt version, since targetKind already guarantees isolation.

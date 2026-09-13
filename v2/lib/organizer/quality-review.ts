@@ -93,10 +93,124 @@ export function requiresQualityReview(artifact: { createdBy?: string; organizerV
 
 export type ReviewIndex = Map<string, QualityDecision>;
 
-export function indexReviews(reviews: Array<Omit<QualityReview, "decision"> & { decision: unknown }>): ReviewIndex {
+/** One (targetKind, targetId) whose most recent decision is not single-valued. */
+export type ReviewConflict = {
+  /** `${targetKind}:${targetId}` — the same key the index uses. */
+  key: string;
+  /** The tied recency the conflicting rows share, verbatim; "" when none of them recorded one. */
+  reviewedAt: string;
+  /** The distinct decisions tied at that recency, normalized and sorted. Always 2 or more. */
+  decisions: QualityDecision[];
+  /** What the index holds instead. Always `needs_human_review` — a conflict never publishes. */
+  resolved: QualityDecision;
+};
+
+export type IndexedReviews = { index: ReviewIndex; conflicts: ReviewConflict[] };
+
+type IndexableReview = Omit<QualityReview, "decision"> & { decision: unknown };
+
+// Recency as a comparable number. `reviewed_at` is a `timestamp({ mode: "string" })` column, so it
+// arrives as text ("2026-09-05 16:49:54.123"); every row in a given read comes from the same column
+// in the same format, so parsing them all the same way orders them consistently.
+//
+// A row with no usable `reviewedAt` ranks BELOW every row that has one: a decision that recorded
+// when it was made is the better authority on what is current than one that did not. Callers that
+// pass bare `{ targetKind, targetId, decision }` (most tests, several audit scripts) therefore keep
+// working unchanged — with one row per key the ranking never matters, and with several it is the
+// timestamped one that wins.
+function recencyOf(review: IndexableReview): number {
+  const raw = (review as { reviewedAt?: unknown }).reviewedAt;
+  if (typeof raw !== "string" || raw === "") return Number.NEGATIVE_INFINITY;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+
+/**
+ * The CURRENT decision for each (targetKind, targetId): the one with the most recent `reviewedAt`.
+ *
+ * Why this is not "the last row we happened to read". Until 2026-09-13 this function was a bare
+ * `for (…) index.set(key, decision)` over the rows in the order they arrived, and every caller on a
+ * render path feeds it `db.select().from(contentQualityReviews)` with no ORDER BY. The unique index
+ * is (target_kind, target_id, prompt_version), so a single artifact may legitimately carry several
+ * `life_event` rows, and which one won was whatever order Postgres returned that time — not stable
+ * across query plans, and not necessarily the decision anyone made last. Production held exactly one
+ * such artifact, event-v2-eccbfb1e9acff375d66a9f230e74c402: approved 2026-09-05, then store_only
+ * 2026-09-11 by r11-downgrade-v1. The intent was plainly to take it back down; the old reader could
+ * have published it on any given render. That is also the whole of the "212 approved rows / 211
+ * approved artifacts" discrepancy.
+ *
+ * Ties are NOT broken arbitrarily. Two rows sharing the newest `reviewedAt` and disagreeing about
+ * what to do cannot be resolved by picking one — an `id` or insertion-order tiebreak would be a coin
+ * flip wearing a rule's clothes, and half its outcomes publish something nobody decided to publish.
+ * A conflict therefore resolves to `needs_human_review`: it withholds, it asks for a person, and it
+ * is the same direction every other rule in this file fails. The conflict is reported rather than
+ * swallowed, so the ledger can be repaired instead of silently tolerated.
+ *
+ * Decisions are compared AFTER normalization, because normalization is what the publication answer
+ * is computed from: two rows reading `trace_eligible` and `needs_human_review` both mean "not
+ * published" here and are not a conflict worth reporting. Rows are never rewritten or dropped —
+ * every decision stays in the ledger; this only chooses which one is current.
+ *
+ * `targetKind` stays part of the key, so a `daily_trace`, a `life_event_trace`, a `media_binding` or
+ * a `life_event_queue169` row can never stand in for a `life_event` publication decision.
+ */
+export function indexReviewsWithConflicts(reviews: Array<IndexableReview>): IndexedReviews {
+  const newest = new Map<string, { recency: number; reviewedAt: string; decisions: Set<QualityDecision> }>();
+  for (const review of reviews) {
+    const key = `${review.targetKind}:${review.targetId}`;
+    const recency = recencyOf(review);
+    const decision = normalizeQualityDecision(review.decision);
+    const held = newest.get(key);
+    if (!held || recency > held.recency) {
+      const reviewedAt = typeof (review as { reviewedAt?: unknown }).reviewedAt === "string" ? (review as { reviewedAt: string }).reviewedAt : "";
+      newest.set(key, { recency, reviewedAt, decisions: new Set([decision]) });
+      continue;
+    }
+    if (recency === held.recency) held.decisions.add(decision);
+    // Anything older than what we hold is superseded and contributes nothing.
+  }
+
   const index: ReviewIndex = new Map();
-  for (const review of reviews) index.set(`${review.targetKind}:${review.targetId}`, normalizeQualityDecision(review.decision));
+  const conflicts: ReviewConflict[] = [];
+  for (const [key, held] of newest) {
+    if (held.decisions.size === 1) {
+      index.set(key, [...held.decisions][0]);
+      continue;
+    }
+    index.set(key, "needs_human_review");
+    conflicts.push({ key, reviewedAt: held.reviewedAt, decisions: [...held.decisions].sort(), resolved: "needs_human_review" });
+  }
+  return { index, conflicts };
+}
+
+/**
+ * The index alone, with any conflict reported to the server log rather than swallowed.
+ *
+ * Every publication read in the app funnels through here, so this is the one place that can notice a
+ * contradictory ledger at all. Withholding the artifact is already handled above; staying silent
+ * about WHY would leave a row nobody can find and nobody can fix. Each distinct conflict is logged
+ * once per process, so a render path cannot turn a standing ledger problem into per-request noise.
+ * Callers that want to act on conflicts rather than read about them use indexReviewsWithConflicts().
+ */
+export function indexReviews(reviews: Array<IndexableReview>): ReviewIndex {
+  const { index, conflicts } = indexReviewsWithConflicts(reviews);
+  if (conflicts.length > 0) reportReviewConflicts(conflicts);
   return index;
+}
+
+const reportedConflicts = new Set<string>();
+
+export function reportReviewConflicts(conflicts: readonly ReviewConflict[]): void {
+  for (const line of describeReviewConflicts(conflicts)) {
+    if (reportedConflicts.has(line)) continue;
+    reportedConflicts.add(line);
+    console.warn(`quality-review: ${line}`);
+  }
+}
+
+/** One line per conflicting artifact, for a log or a report. Empty array in, empty array out. */
+export function describeReviewConflicts(conflicts: readonly ReviewConflict[]): string[] {
+  return conflicts.map((c) => `${c.key} has ${c.decisions.length} conflicting decisions at the same reviewed_at (${c.reviewedAt || "no timestamp"}): ${c.decisions.join(", ")} — withheld as ${c.resolved}`);
 }
 
 // An explicit ledger decision binds whoever created the artifact. AI-derived content is not fail

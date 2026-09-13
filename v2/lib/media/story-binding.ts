@@ -163,11 +163,19 @@ export type StoryPhotoReviewRow = {
  *
  * Why the latest rather than every row: a `media_binding` decision used to be one-way. Both readers
  * below OR-ed the approved rows together, so once a row said approved nothing could take it back —
- * a later rejected row simply did not count. That is not how this ledger reads anywhere else; the
- * publication gate takes `distinct on (target_id) … order by reviewed_at desc`, the latest decision
- * winning. On 2026-09-12 the mismatch surfaced: three drafts had their pictures taken out of
- * media_ids and a rejected row written for each, and the private preview page went on drawing two
- * of them beside the stories, because it was still reading the superseded approved rows.
+ * a later rejected row simply did not count. On 2026-09-12 the mismatch surfaced: three drafts had
+ * their pictures taken out of media_ids and a rejected row written for each, and the private preview
+ * page went on drawing two of them beside the stories, because it was still reading the superseded
+ * approved rows.
+ *
+ * Corrected 2026-09-13: this comment used to claim the publication gate already read the ledger this
+ * way, via `distinct on (target_id) … order by reviewed_at desc`. It did not. That SQL exists only
+ * in one-off scripts (scripts/a7-export-approved-2025.mjs and friends); the gate itself was a bare
+ * last-row-wins loop over an unordered whole-table read, which is a different thing and was the
+ * weaker of the two readers, not the model for this one. It now genuinely does take the latest —
+ * see indexReviewsWithConflicts() in lib/organizer/quality-review.ts, which also declines to break a
+ * same-timestamp tie in favour of publishing. The two readers agree on recency; they differ on ties,
+ * because only one of them can put a picture in front of the family by guessing wrong.
  *
  * Nothing is rewritten or deleted to make this work — every decision stays in the ledger, which is
  * the point of a ledger, and this picks the one that is current. A malformed target_id is dropped
