@@ -32,6 +32,8 @@ export type HomeLeadStory = {
   title: string;
   // 已审核的摘录原文；页面不生成、不改写，只负责把其中的引语标出来。
   excerpt?: string;
+  // 这一篇标题里要强调的 0–2 段真实文字；不给就是默认文字色。见 withEmphasis。
+  emphasis?: HomeEmphasis[];
 };
 
 export type HomeLeadPhoto = {
@@ -76,20 +78,34 @@ function frameRatio(media: { width?: number; height?: number }): string {
   return "1 / 1";
 }
 
-// 冷和热是两个颜色，不是同一个红。定稿里标题上的 cold 是蓝色、hot 是桃红——那天妈妈报的就是
-// 这两个词，颜色跟着词义走（Teddy 2026-09-13 指出两个词不能都用同一个红）。
+// 标题里的强调片段（2026-09-13，替掉上一版按 cold/hot/冷/热 关键词自动匹配的做法）。
 //
-// 只认真实内容里出现的这几个字。一段没有冷热的生活，标题上一个色块都不会多出来——这不是把每段
-// 故事都套成 cold/hot 的彩色模板，而且颜色之外词本身还在，不靠颜色表达意思。
-const ACCENT_PATTERN = /(cold|冷|凉|hot|热|烫)/gi;
-const COLD_WORD = /^(cold|冷|凉)$/i;
-const HOT_WORD = /^(hot|热|烫)$/i;
+// 为什么换掉：关键词表是一张会自己长大的表。今天是冷热，明天就会有人往里加「第一次」「走路」，
+// 于是每个标题都开始自动变色——那就是把每段生活套成同一个彩色模板，正是要避免的事。
+//
+// 现在的规矩：**一篇故事自己说要标哪里**。每个标题最多两段强调，片段必须是标题里**真有的**那几个字
+// （对不上就什么都不做，不猜、不硬上色），颜色从站点已有的三支里挑：蓝、桃红、鼠尾草绿。
+// 没有配置就是默认文字色——绝大多数标题都不配，页面上一个色块都不会多出来。
+export type HomeEmphasisAccent = "blue" | "rose" | "sage";
+export type HomeEmphasis = { text: string; accent: HomeEmphasisAccent };
 
-export function withAccents(text: string, keyPrefix: string) {
-  return text.split(ACCENT_PATTERN).filter((part) => part.length > 0).map((part, index) => {
-    const accent = COLD_WORD.test(part) ? "home-accent-cold" : HOT_WORD.test(part) ? "home-accent-hot" : undefined;
+// 最多两段。两段以上就不再是「强调」，而是把一句话涂成三种颜色。
+const EMPHASIS_MAX = 2;
+
+function escapeForRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function withEmphasis(text: string, spans: HomeEmphasis[] | undefined, keyPrefix: string) {
+  // 只留下标题里真的能找到的片段；配错字、改了标题、片段为空，都退回纯文字。
+  const usable = (spans ?? []).filter((span) => span.text.length > 0 && text.includes(span.text)).slice(0, EMPHASIS_MAX);
+  if (usable.length === 0) return text;
+  const accentOf = new Map(usable.map((span) => [span.text, span.accent]));
+  const pattern = new RegExp(`(${usable.map((span) => escapeForRegExp(span.text)).join("|")})`, "g");
+  return text.split(pattern).filter((part) => part.length > 0).map((part, index) => {
+    const accent = accentOf.get(part);
     if (!accent) return <span key={`${keyPrefix}-${index}`}>{part}</span>;
-    return <span className={accent} key={`${keyPrefix}-${index}`}>{part}</span>;
+    return <span className={`home-emphasis home-emphasis--${accent}`} key={`${keyPrefix}-${index}`}>{part}</span>;
   });
 }
 
@@ -151,7 +167,7 @@ export function HomeLead({ slides, recent }: { slides: HomeLeadSlide[]; recent?:
 
     <div className="home-story">
       <p className="home-label"><span className="home-dot" aria-hidden="true" />最近的一段生活</p>
-      <h2 className="home-story-title">{withAccents(slide.story.title, `title-${slide.key}`)}</h2>
+      <h2 className="home-story-title">{withEmphasis(slide.story.title, slide.story.emphasis, `title-${slide.key}`)}</h2>
       {slide.story.excerpt ? <p className="home-story-summary">{withQuotes(slide.story.excerpt, `excerpt-${slide.key}`)}</p> : null}
       <Link className="home-read" href={slide.story.href}>读读这一天 <span aria-hidden="true">↗</span></Link>
       {recent ? <div className="home-latest">

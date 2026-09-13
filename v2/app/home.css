@@ -148,10 +148,13 @@
 }
 /* 引语。颜色跟着内容走：有「」才有颜色，没有引语的一段生活就一个色块都不出现。 */
 .home-quote { color: var(--home-red); quotes: "「" "」"; }
-/* 冷和热是两个颜色，定稿里就是这样：cold 蓝、hot 桃红。词本身还在，意思不靠颜色传达。
+/* 标题里的强调片段。三支颜色都是站点已有的；哪一篇标哪几个字、用哪一支，由那一篇自己指定
+   （app/page.tsx 的 TITLE_EMPHASIS），不按关键词自动上色。没指定的标题就是默认文字色。
    加粗对拉丁词是 Nunito 真正的 800；汉字不会被合成粗体（见 app/fonts.css 顶部）。 */
-.home-accent-cold { color: var(--home-blue); font-weight: 800; }
-.home-accent-hot { color: var(--home-red); font-weight: 800; }
+.home-emphasis { font-weight: 800; }
+.home-emphasis--blue { color: var(--home-blue); }
+.home-emphasis--rose { color: var(--home-red); }
+.home-emphasis--sage { color: var(--home-sage); }
 .home-read {
   display: inline-flex;
   align-items: center;
