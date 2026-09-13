@@ -31,7 +31,7 @@ import { freshnessOf, isImportantItem, limitHabitDates } from "@/lib/upcoming-fr
 import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 /** 契约版本。页面轨按这个字符串确认自己接的是哪一版；只做兼容新增时递增小版本号。 */
-export const HOME_FEED_VERSION = "home-feed/1.0.0";
+export const HOME_FEED_VERSION = "home-feed/1.1.0";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 时钟
@@ -85,8 +85,19 @@ export type HomeFeedEdition = {
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
-/** Asia/Shanghai 的日历日与 0..23 小时。用 Intl 而不是「UTC+8」硬算，规则由时区库说，不由我们说。 */
+/**
+ * Asia/Shanghai 的日历日与 0..23 小时。用 Intl 而不是「UTC+8」硬算，规则由时区库说，不由我们说。
+ *
+ * 一个 Invalid Date 传进来时 `formatToParts` 会**抛 RangeError**，不是返回空数组——所以下面那个
+ * 「拿不到 parts 就退回 ISO」的兜底原本永远走不到，而这条路径在 SSR 上：一个坏时间值会把整张首页
+ * 变成错误页，只为了算它在哪个六小时档。所以先判有效性，再进 Intl。
+ */
 function shanghaiNow(now: Date): { day: string; hour: number } {
+  if (Number.isNaN(now.getTime())) {
+    // 时间本身是坏的，连 ISO 都取不出来。退到纪元日的第 0 档：期次会是一个明显不对的日子，
+    // 但页面照样渲染真实内容，而且这个日子一眼看得出是兜底，不会被误读成「今天」。
+    return { day: "1970-01-01", hour: 0 };
+  }
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: SHANGHAI, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
   }).formatToParts(now);
@@ -128,7 +139,17 @@ export function editionAt(now: Date = new Date()): HomeFeedEdition {
 // 照片
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 这张照片被放在首页的哪个用途上。一次批准只对一个用途有效（总指挥 2026-09-13）。 */
+/**
+ * 这张照片被放在首页的哪个用途上。一次批准只对一个用途有效（总指挥 2026-09-13）。
+ *
+ * **本轮只产出 `story_lead`。** `standalone_cover` 在类型里留着，因为 §5.1 给它定了门槛
+ * （独立封面必须满足 `media_subject_check`），但**没有任何代码路径产出它**——新版首页的照片永远
+ * 属于它旁边那段故事。
+ *
+ * 将来真要加独立封面：它的门是 `isSubjectChecked`（lib/publication-moments.ts），**不是**
+ * `story_binding`，也不是 trusted。生产里这两组几乎不重叠，拿 `story_binding` 去放独立封面等于
+ * 用「这张图属于这段文字」的批准去主张「这张图里是这个孩子」——那是两句不同的话。
+ */
 export type HomePhotoUse = "story_lead" | "standalone_cover";
 
 /**
@@ -292,8 +313,22 @@ export type HomeReminder = {
   important: boolean;
   /** 可展开详情：事项自己的 note，或状态变更的说明。 */
   detail?: string;
-  /** 证据链入口 "/events/<id>"（原则八）。 */
+  /**
+   * 证据链入口（原则八）。**读它之前先看 `evidenceKind`**——两种去处读起来完全不同，
+   * 标签不能共用一句话。
+   *
+   * 1.0.0 只认 `evidence.eventId`，于是这个字段对**生产上全部 18 条待办都是 undefined**：
+   * lib/db/upcoming-store.ts 写进 `evidence` 的只有 `{ day }`（它自己的注释写着「What a reader
+   * can open: the month the commitment was made in」），从来没有 eventId。一条追不回来源的待办
+   * 违反原则八，而这个洞是在验收原则八时才发现的——不是 grep 出来的，是真的去点那个链接。
+   */
   evidenceHref?: string;
+  /**
+   * `event` = 能落到某一段具体的记忆上（"/events/<id>"），页面可以说「看那一天」。
+   * `month` = 只能落到这件事被提起的那个月（"/memory/YYYY/MM"），页面**必须**说成「翻到 X 月」
+   * 之类的月份说法——把一个月份链接标成「看那一天」，是对读者说了一句假话。
+   */
+  evidenceKind?: "event" | "month";
   provenance?: UpcomingProvenance;
 };
 
@@ -349,7 +384,17 @@ export type HomeFeed = {
 export const HOME_CANDIDATE_WINDOW_DAYS = 60;
 /** 交给浏览器的候选上限。 */
 export const HOME_PHOTO_CANDIDATES_MAX = 6;
-/** 同一张照片的冷却天数 / 同一事件的冷却天数（§5.5）。候选不足时缩短，并记录理由。 */
+/**
+ * §5.5 的两个冷却天数。**它们是规格给的目标值，不是这段代码里的开关**——写在这里是为了让实际做到了
+ * 多少能被对着一个数字讲清楚：
+ *
+ * - `PHOTO_COOLDOWN_DAYS`：同一张照片 14 天。整轮走完需要「候选数 × 6 小时」，候选不足 56 组就
+ *   满足不了，此时缩短为整轮轮换，理由逐条写进 `candidate.reason`（生产今天是 3 组 = 18 小时）。
+ * - `EVENT_COOLDOWN_DAYS`：同一事件 3 天。它的**相邻期次部分是构造保证的**（一段记忆只贡献一个
+ *   候选，见 buildPhotoCandidates），满 3 天同样受候选数限制，一并由那条 reason 说明。
+ *
+ * 两个值都没有被当成过滤条件使用：**门槛一格没放，也没有一个候选因为冷却被悄悄丢掉**。
+ */
 export const PHOTO_COOLDOWN_DAYS = 14;
 export const EVENT_COOLDOWN_DAYS = 3;
 
@@ -521,13 +566,22 @@ export function buildPhotoCandidates(
     || b.photo.day.localeCompare(a.photo.day)
     || a.photo.media.id.localeCompare(b.photo.media.id));
   const seenBursts = new Set<string>();
-  const kept: Pair[] = [];
+  const deduped: Pair[] = [];
   const dropped: { entry: Pair; reason: string }[] = [];
   for (const entry of paired) {
     if (seenBursts.has(entry.burst)) { dropped.push({ entry, reason: "同一时刻的连拍里已经取了一张" }); continue; }
     seenBursts.add(entry.burst);
-    kept.push(entry);
+    deduped.push(entry);
   }
+  // 同事件冷却（§5.5）在这条链路上是**构造保证的**，不需要额外一步排列。
+  //
+  // 一段记忆只贡献一个候选：`memory.lead` 是 heroCandidates(...)[0]，单数
+  // （lib/memory-chapters.ts）。`candidateMemories` 又把每段记忆只列一次。所以任意两个候选的
+  // eventId 必不相同，取模轮换也就永远不会连着两期推同一段故事。有测试钉住这个不变量——
+  // 哪天 memory.lead 变成可以给一段记忆返回多张图，那条测试会失败，而不是悄悄开始重复。
+  //
+  // 「3 天」这个数字在候选只有三组时仍然满足不了（整轮 18 小时），那部分由下面的 shortened 说出来。
+  const kept = deduped;
   const rotation = Math.min(kept.length, HOME_PHOTO_CANDIDATES_MAX);
   const rotationIndex = rotation > 0 ? edition.index % rotation : 0;
   // 冷却是否被缩短：一轮走完需要 rotation 期 × 6 小时。不足 PHOTO_COOLDOWN_DAYS 就是缩短了，说出来。
@@ -610,6 +664,18 @@ export function isImportantReminder(item: Pick<UpcomingItem, "title" | "note">):
   return isImportantItem(item);
 }
 
+/**
+ * 一条事项的证据链去处。先找具体那段记忆，找不到就退到它被提起的那个月——但**说清楚是哪一种**，
+ * 让页面能给出对得上的标签（原则八）。两者都没有时返回空，页面就不画一个去不了的链接。
+ */
+function evidenceLinkOf(item: UpcomingItem): { evidenceHref?: string; evidenceKind?: "event" | "month" } {
+  const eventId = item.evidence?.eventId;
+  if (eventId) return { evidenceHref: `/events/${eventId}`, evidenceKind: "event" };
+  const day = item.evidence?.day;
+  if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) return { evidenceHref: monthHrefOf(day.slice(0, 7)), evidenceKind: "month" };
+  return {};
+}
+
 function reminderOf(item: UpcomingItem, state: HomeReminderState, reason: string, sources: UpcomingSources | undefined): HomeReminder {
   return {
     id: item.id,
@@ -620,7 +686,7 @@ function reminderOf(item: UpcomingItem, state: HomeReminderState, reason: string
     reason,
     important: isImportantReminder(item),
     detail: item.note ?? item.statusNote,
-    evidenceHref: item.evidence?.eventId ? `/events/${item.evidence.eventId}` : undefined,
+    ...evidenceLinkOf(item),
     provenance: sources?.status === "ready" ? sources.byItem.get(item.id) : undefined,
   };
 }

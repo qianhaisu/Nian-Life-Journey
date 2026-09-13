@@ -403,3 +403,57 @@ test("直接喂 buildPhotoCandidates：没有候选时返回空数组而不是�
   const edition = editionAt(new Date("2026-09-13T09:00:00+08:00"));
   assert.deepEqual(buildPhotoCandidates([], BIRTH, TODAY, edition, undefined), []);
 });
+
+test("提醒的证据链：能落到具体记忆就落，落不到就退到那个月，并说清是哪一种（原则八）", () => {
+  // 生产上 18 条待办**没有一条**带 evidence.eventId —— upcoming-store 写进 evidence 的只有
+  // { day }。1.0.0 只认 eventId，于是这个链接对每一条真实待办都是空的：一条追不回来源的待办
+  // 违反原则八。这条用例守的就是那个洞。
+  const monthOnly = item("m", { evidence: { day: "2026-08-16" } });
+  const withEvent = item("e", { evidence: { eventId: "ev-1", day: "2026-08-16" } });
+  const none = item("n", { evidence: { eventId: "", day: "去年夏天" } });
+  const feed = buildReminders({ status: "ready", items: [monthOnly, withEvent, none] }, TODAY, undefined);
+  const all = [...feed.shown, ...feed.more];
+  const byId = new Map(all.map((reminder) => [reminder.id, reminder]));
+  assert.equal(byId.get("m").evidenceHref, "/memory/2026/08");
+  assert.equal(byId.get("m").evidenceKind, "month", "页面得据此说「翻到 8 月」，不能说「看那一天」");
+  assert.equal(byId.get("e").evidenceHref, "/events/ev-1");
+  assert.equal(byId.get("e").evidenceKind, "event");
+  // 两者都拿不到时不画一个去不了的链接。
+  assert.equal(byId.get("n").evidenceHref, undefined);
+  assert.equal(byId.get("n").evidenceKind, undefined);
+});
+
+test("同事件冷却是构造保证的：任意两个候选的事件必不相同，所以相邻期次不会重复同一段故事", () => {
+  // 一段记忆只贡献一个候选（memory.lead 是单数）。这条测试钉住那个不变量：哪天 memory.lead 变成
+  // 能给一段记忆返回多张图，这里会失败，而不是首页悄悄开始连着两期推同一段故事。
+  const a1 = photo("m-a1", "2026-09-07", { takenAt: "2026-09-07T09:00:00+08:00" });
+  const a2 = photo("m-a2", "2026-09-07", { takenAt: "2026-09-07T15:00:00+08:00" });
+  const b1 = photo("m-b1", "2026-08-20", { takenAt: "2026-08-20T11:00:00+08:00" });
+  const events = [
+    event("e-a", "2026-09-07", { mediaIds: [a1.id, a2.id] }),
+    event("e-b", "2026-08-20", { mediaIds: [b1.id] }),
+  ];
+  const archive = archiveOf({
+    events, media: [a1, a2, b1],
+    // e-a 的两张都获批了 —— 但它只能贡献一个候选。
+    reviews: [binding("e-a", a1.id), binding("e-a", a2.id), binding("e-b", b1.id)],
+  });
+  const candidates = buildHomeFeed(archive, { edition: { id: "t", startedAt: "x", expiresAt: "y", slot: 0, index: 0 } }).photoCandidates;
+  const eventIds = candidates.map((candidate) => candidate.story.eventId);
+  assert.equal(new Set(eventIds).size, eventIds.length, "候选之间不许共用同一个事件");
+  const chosen = [0, 1, 2, 3].map((index) =>
+    buildHomeFeed(archive, { edition: { id: `t${index}`, startedAt: "x", expiresAt: "y", slot: 0, index } }).lead.story.eventId);
+  for (let i = 1; i < chosen.length; i += 1) {
+    assert.notEqual(chosen[i], chosen[i - 1], "相邻期次不该是同一段故事");
+  }
+});
+
+test("整个档案只有一段带获批配图的记忆时，冷却满足不了就说出来，不装作满足", () => {
+  const a1 = photo("m-a1", "2026-09-07");
+  const events = [event("e-a", "2026-09-07", { mediaIds: [a1.id] })];
+  const archive = archiveOf({ events, media: [a1], reviews: [binding("e-a", a1.id)] });
+  const candidates = buildHomeFeed(archive, { edition: { id: "t", startedAt: "x", expiresAt: "y", slot: 0, index: 0 } }).photoCandidates;
+  assert.equal(candidates.length, 1);
+  assert.match(candidates[0].reason, /候选不足/);
+  assert.match(candidates[0].reason, /门槛未放宽/);
+});
