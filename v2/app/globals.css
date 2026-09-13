@@ -299,7 +299,27 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .upcoming-evidence { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 10px; }
 .upcoming-basis { color: var(--color-muted); font-size: .78rem; }
 .upcoming-basis time { color: var(--color-secondary); font-weight: 700; }
-.upcoming-meta .upcoming-source { display: inline-flex; min-height: 44px; min-width: 44px; align-items: center; justify-content: center; padding: 0 6px; font-size: .8rem; }
+.upcoming-meta .upcoming-source, .upcoming-source-check .upcoming-source { display: inline-flex; min-height: 44px; min-width: 44px; align-items: center; justify-content: center; padding: 0 6px; font-size: .8rem; }
+/* 来源摘要 (2026-09-13). 每一条依据是一行：谁提的、什么语气、哪天记下的，然后是那句经审核的话。
+   语气词和角色是并排的两个小字，中间的「·」由 CSS 生成，所以标记里不会留下重复的分隔符；
+   「提出／完成／改期／取消」做成一个小标签，四种依据在视觉上一眼分得开，不会读成同一件事。 */
+.upcoming-sources { margin: 8px 0 0; padding: 0; list-style: none; }
+.upcoming-source-row { padding-left: 10px; border-left: 2px solid var(--color-border); }
+.upcoming-source-row + .upcoming-source-row { margin-top: 10px; }
+.upcoming-source-row--completed { border-left-color: color-mix(in srgb, var(--sage) 55%, transparent); }
+.upcoming-source-row--cancelled, .upcoming-source-row--rescheduled { border-left-color: color-mix(in srgb, var(--clay) 40%, transparent); }
+.upcoming-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; margin: 0; color: var(--color-muted); font-size: .76rem; letter-spacing: .02em; }
+.upcoming-source-head > * + *::before { margin-right: 8px; color: var(--color-border); content: "·"; }
+.upcoming-source-kind { padding: 1px 7px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--color-secondary) 9%, transparent); color: var(--color-secondary); font-weight: 700; }
+.upcoming-source-role { color: var(--color-secondary); font-weight: 700; }
+/* 未确认的来源人物照实写出来，并且不做成人名的样子——它不是一个名字。 */
+.upcoming-source-role--unconfirmed { color: var(--color-muted); font-weight: 400; font-style: italic; }
+.upcoming-source-day time, .upcoming-source-happened time { color: var(--color-secondary); }
+.upcoming-source-summary { margin: 3px 0 0; color: var(--color-primary); font-size: .92rem; line-height: 1.65; }
+.upcoming-source-check { margin: 0; }
+.upcoming-source-pending { margin: 8px 0 0; color: var(--color-muted); font-size: .8rem; }
+/* 读取失败自己说自己，不借用「待审核」，也不借用「没有来源」。 */
+.upcoming-sources-unreadable { margin: 10px 0 0; color: var(--color-muted); font-size: .82rem; line-height: 1.6; }
 .upcoming-more { margin-top: 4px; }
 .upcoming-more { margin-top: 14px; }
 .upcoming-more > summary { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; padding-right: 4px; color: var(--color-accent); cursor: pointer; font-size: .85rem; font-weight: 600; list-style: none; }
@@ -752,7 +772,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .health-lines > li + li { border-top: 1px dashed var(--color-border); }
 .health-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; margin: 0 0 6px; color: var(--color-muted); font-size: .78rem; }
 .health-when time { color: var(--color-secondary); font-weight: 700; }
-.health-status { color: var(--clay); }
 .health-note { margin: 0; font-size: 1.05rem; line-height: 1.7; }
 .health-next { margin: 6px 0 0; color: var(--color-muted); font-size: .9rem; }
 

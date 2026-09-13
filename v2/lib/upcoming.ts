@@ -36,6 +36,7 @@
 //      had its own copy of that rule for a few hours on 2026-09-13; the store's is the one kept,
 //      and `feedFromResult` is the second gate rather than a second implementation.
 import { isUpcomingDay, statusNeedsEvidence, type UpcomingCoverage, type UpcomingEvidence, type UpcomingFeedResult, type UpcomingItem, type UpcomingStatus, type UpcomingWhen } from "@/lib/upcoming-contract";
+import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 export type { UpcomingEvidence, UpcomingItem, UpcomingStatus, UpcomingWhen };
 
@@ -248,4 +249,38 @@ export async function readHomeUpcoming(read?: UpcomingRead): Promise<UpcomingFee
   const load = read ?? (await import("@/lib/db/upcoming-store")).readUpcomingFeedForFamily;
   try { return feedFromResult(await load()); }
   catch (error) { return { status: "unavailable", reason: `the upcoming read threw: ${String((error as Error)?.message ?? error)}` }; }
+}
+
+// 来源摘要 (2026-09-13). 「谁提的、后来怎么样了」—— the two questions a family asks about a todo, in a
+// sentence a person has read and approved, so the answer never comes from the chat log itself. The
+// summaries, the roles and the modality are the data track's (lib/upcoming-provenance.ts, and the
+// rows' own `provenance` column since 0015); this page reads them through the default family read
+// and renders them. It passes NO `curated` argument — that parameter is a test and migration seam —
+// and it keeps no copy of the text.
+//
+// THE THIRD STATE IS THE POINT. A page that can only say 「有来源」 and 「没有来源」 will eventually
+// say 「没有来源」 about a read that failed, and that is a lie about the archive rather than about
+// one todo. So there are three:
+//
+//   ready + approved         — the reviewed summary, rendered with its role, its tone and its date;
+//   ready + pending_review   — 「来源摘要待审核」, which is NOT 「没有来源」;
+//   unreadable               — the read itself failed. The page says so in its own words and shows
+//                              no source line at all, because neither 待审核 nor 没有来源 is true.
+//
+// An unreadable source read never hides the todos: the feed is a separate read and it is what
+// proves the week. Losing the summaries costs the family the provenance, not the list.
+export type UpcomingSources =
+  | { status: "ready"; byItem: Map<string, UpcomingProvenance> }
+  | { status: "unreadable"; reason: string };
+
+export type UpcomingProvenanceRead = () => Promise<UpcomingProvenance[]>;
+
+export async function readHomeUpcomingSources(read?: UpcomingProvenanceRead): Promise<UpcomingSources> {
+  const load = read ?? (await import("@/lib/db/upcoming-store")).readUpcomingProvenanceForFamily;
+  try {
+    const items = await load();
+    return { status: "ready", byItem: new Map(items.map((item) => [item.itemId, item])) };
+  } catch (error) {
+    return { status: "unreadable", reason: `the source read threw: ${String((error as Error)?.message ?? error)}` };
+  }
 }

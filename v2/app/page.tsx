@@ -10,7 +10,7 @@ import { LAST_SHOWN_DAY_COOKIE, latestStory, pickRecentStory, recentStoryDays, R
 import { RememberShownDay } from "@/components/remember-shown-day";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { echoGroupsFrom, resurface } from "@/lib/resurface";
-import { readHomeUpcoming } from "@/lib/upcoming";
+import { readHomeUpcoming, readHomeUpcomingSources } from "@/lib/upcoming";
 import { ageOn, formatDay, formatMonth } from "@/lib/time-signature";
 import type { EditorialMemory as EditorialMemoryType, MediaRef } from "@/lib/memory-chapters";
 
@@ -83,8 +83,8 @@ export default async function HomePage() {
   // (lib/db/upcoming-store.ts readUpcomingFeedForFamily: approved rows only, and an unreviewed
   // queue is never reported as an empty week) and then applies the page's own: a strikethrough
   // needs evidence, and 「没有待办」 needs a run that covered its whole window. Everything else draws
-  // nothing. That is the real state today — 21 rows are in the database and none has been reviewed,
-  // so the block is hidden.
+  // nothing. That is the real state today — 18 rows are approved and readable, and 4 unreviewed
+  // rows never reach this page.
   //
   // On adding a database read to a render path (CLAUDE.md): this reads three new, family-scale
   // tables (upcoming_extraction_runs, upcoming_items filtered by profile and review decision, and
@@ -94,6 +94,16 @@ export default async function HomePage() {
   // no approved row to show. With a missing table it costs one failed query and is caught
   // (42P01 → not_extracted), never an error page.
   const upcoming = await readHomeUpcoming();
+  // 来源摘要 — 谁提的、后来怎么样了 (2026-09-13, migration 0015). The DEFAULT family read, with no
+  // `curated` argument: the approved sentences live on `upcoming_items.provenance` and this page
+  // neither supplies nor restates them. Read only when there is something to attach them to.
+  //
+  // Same CLAUDE.md question, same answer: two more small queries against the same two family-scale
+  // tables (22 `upcoming_items` rows for this profile and their change rows, plus the one jsonb
+  // column) — no raw_sources, no unbounded scan, and both are joined in memory by `itemId`. A read
+  // that throws is caught one layer down and becomes `unreadable`, which the block states as
+  // itself rather than as 「待审核」 or 「没有来源」.
+  const upcomingSources = upcoming.status === "ready" ? await readHomeUpcomingSources() : undefined;
   // 忽然想起 (原则六). One relation, one story, drawn from published stories only — and absent from
   // the page entirely when the calendar holds no relation worth stating (lib/resurface.ts).
   const remembered = resurface(
@@ -176,7 +186,7 @@ export default async function HomePage() {
     </section> : null}
 
     {/* 近期待办 — after 近况, before the day's story, in the one column every reader gets. */}
-    <UpcomingTasks feed={upcoming} today={today} birthDay={archive.birthDay} />
+    <UpcomingTasks feed={upcoming} today={today} birthDay={archive.birthDay} sources={upcomingSources} />
 
     {pick ? <section className="home-lead reading-wrap" aria-labelledby="lead-title">
       <h2 id="lead-title" className="section-mark">{RECENT_LEAD_HEADING}</h2>

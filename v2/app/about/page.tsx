@@ -23,11 +23,12 @@ export const metadata: Metadata = { title: "张年" };
 // is already the whole front page and the whole of /memory — on the one page that should answer
 // 这孩子长成什么样了 instead.
 //
-// A part with nothing behind it does not render, and never as an empty card. On 2026-09-13 the
-// data track filled two of the four: 量过的身高体重 (2 heights, 4 precise weights across five
-// measurement days) and 学会了什么 (7 rows, each hanging off an approved story). 家人关注的健康问题
-// is still empty — care_records and care_episodes hold no rows — so that part is simply absent, and
-// its absence is NOT a statement that there is nothing to watch or that anything recovered.
+// A part with nothing behind it does not render, and never as an empty card. On 2026-09-13 the data
+// track filled the last of them: 量过的身高体重 (2 heights and 4 precise weights; the 4 approximate
+// figures carry no number and reach neither the curve nor the latest value), 学会了什么 (7 rows,
+// each hanging off an approved story) and 健康记录 (12 rows in 7 groups). The `care_episodes` rows
+// that hold three of those groups together are `private` by type and are not read here at all —
+// grouping is all they are used for, and 「这件事过去了」 is exactly the claim they must not make.
 export default async function AboutPage() {
   // Never prerender this page from the build's mock store — see lib/render-on-demand.ts. Found in
   // the same 2026-09-10 check as / and /memory: about.html was baked from the seed fixture too.
@@ -53,12 +54,15 @@ export default async function AboutPage() {
     {measures.length > 0 ? <section className="about-block" aria-labelledby="measures-title">
       <h2 id="measures-title" className="section-mark">量过的身高体重</h2>
       {/* The newest number of each kind, each with the day IT was measured — the two are taken on
-          different days and a shared date line would be wrong for one of them. */}
+          different days and a shared date line would be wrong for one of them. 量于 is written out
+          rather than left as a bare date: the newest height was measured on 2025-06-03 and sits
+          under the word 现在 at the top of this page, so an undated-looking number beside it would
+          read as how tall he is today. */}
       <ul className="measure-latest">{measures.map((track) => <li key={track.kind}>
         <span className="measure-kind">{track.title}</span>
         <strong className="measure-value">{track.latest.value} {track.latest.unit}</strong>
         <span className="measure-when">
-          <time dateTime={track.latest.signature.day}>{track.latest.signature.dateLabel}</time>
+          <span>量于 <time dateTime={track.latest.signature.day}>{track.latest.signature.dateLabel}</time></span>
           {track.latest.signature.ageLabel ? <span> · 当时 {track.latest.signature.ageLabel}</span> : null}
         </span>
       </li>)}</ul>
@@ -72,17 +76,31 @@ export default async function AboutPage() {
     </section> : null}
 
     {health.length > 0 ? <section className="about-block" aria-labelledby="health-title">
-      <h2 id="health-title" className="section-mark">家人关注的健康问题</h2>
-      {/* One group per issue as it was recorded, and inside it every record with its own date and
-          the status IT carried that day. The page states no current status and no recovery: a
-          record that stopped arriving is not a problem that ended (lib/about-view.ts). */}
+      {/* 健康记录, not 家人关注的健康问题: twelve of these rows are a vaccination, a checkup and a
+          few days of a runny nose. Calling the whole block 问题 makes an ordinary record read as a
+          worry, and the heading is the one line on this page nobody can skip. */}
+      <h2 id="health-title" className="section-mark">健康记录</h2>
+      {/* One group per issue as it was recorded, and inside it every record with its own day. The
+          page states no current status and no recovery: a record that stopped arriving is not a
+          problem that ended (lib/about-view.ts).
+
+          THE STORED STATUS IS NOT PRINTED. `care_records.status` holds 观察中 / 记录中 — two words
+          chosen so a row could be written at all, out of a vocabulary with no neutral 「就是一条
+          记录」 in it (data track, 2026-09-13). Printed as 「当时记为「观察中」」 it reads to a family
+          as a condition still being watched, which is a claim about NOW that none of these rows
+          makes. The date and the sentence say everything the source actually said.
+
+          记录于, never 发生于. `observedAt` is the day the record was written. Three of these twelve
+          rows are somebody recounting an earlier day — the fever on the night of 8-26 written down
+          on 8-27, a follow-up visit on no stated date written down on 6-18, 「已经就诊」 written down
+          on 9-10 — and for all three the approved sentence itself says so. The date line must not
+          contradict it by presenting the writing day as the day it happened. */}
       {health.map((group) => <article className="health-group" key={group.key}>
         <h3 className="serif health-title">{group.title}</h3>
         <ol className="health-lines">{group.lines.map((line) => <li key={line.id}>
           <p className="health-when">
-            <time dateTime={line.day}>{line.dateLabel}</time>
-            {line.ageLabel ? <span className="health-age">当时 {line.ageLabel}</span> : null}
-            <span className="health-status">当时记为「{line.status}」</span>
+            <span>记录于 <time dateTime={line.day}>{line.dateLabel}</time></span>
+            {line.ageLabel ? <span className="health-age">记录时 {line.ageLabel}</span> : null}
           </p>
           <p className="serif health-note">{line.note}</p>
           {line.nextStep ? <p className="health-next">当时写下的下一步：{line.nextStep}</p> : null}
