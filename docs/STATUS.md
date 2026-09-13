@@ -9251,3 +9251,7 @@ inert 移除之前，被浏览器忽略，键盘/读屏关闭后焦点落空（�
 **不要以删除 r2.2 待审行作为恢复**，那会让未审文字上线。清单 `NianlifeOps/timeline-2026-09-13-overnight/data/overwritten-55.json`。
 
 **下一件事**：数据轨修 `persistOrganization` 的指纹覆盖与停止条件后再重跑；Teddy 决定正文恢复来源（磁盘快照或 RDS 备份）；恢复写入后发 `scope: archive`，页面轨复跑 133/R8。
+
+> 00:14 恢复来源（只读，不含正文）：今晚被覆盖的 55 篇里，**22 篇**的建故事正文在 `NianlifeOps/timeline-2026-09-12/apply-r21-pack01.json`、`apply-r22-pack02.json`、`apply-r23-pack0304.json` 中能找到；
+> **33 篇在磁盘 JSON 中没有全文**（全部 q169 队列故事及部分 r21/r22/r23）；另有 2 篇发布时落实过修订正文，批准版本不等于建故事载荷。
+> 找不全的部分只能从阿里云 RDS 备份取回，需 Teddy 决定。明细 `NianlifeOps/timeline-2026-09-13-overnight/data/restore-coverage-55.json`。
