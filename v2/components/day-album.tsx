@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { dayMediaKind } from "@/components/day-photos";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { getDayAlbum } from "@/app/memory/[year]/[month]/actions";
 import type { PhotoDay } from "@/lib/memory-chapters";
@@ -107,6 +108,9 @@ function DayAlbumSheet({ album, dateLabel, ageLabel, onClose, returnFocusTo }: {
   }, [closeViaUI]);
 
   const titleId = `day-album-${album.day}`;
+  // Named for what is in it, the same way 「这一天的照片」 and the month album name themselves: once the
+  // archive's videos are deliverable (data track A3, 2026-09-13), a day can hold clips too.
+  const kind = dayMediaKind(album.photos);
   // Portalled to <body>: month moments animate with transforms, and a fixed element inside a
   // transformed ancestor is positioned against that ancestor instead of the screen.
   return createPortal(
@@ -115,7 +119,7 @@ function DayAlbumSheet({ album, dateLabel, ageLabel, onClose, returnFocusTo }: {
         <div>
           <span className="section-mark">这个月的相册</span>
           <h2 id={titleId} className="serif">{dateLabel}</h2>
-          {ageLabel ? <p>当时 {ageLabel} · 这一天拍下的照片</p> : <p>这一天拍下的照片</p>}
+          {ageLabel ? <p>当时 {ageLabel} · 这一天拍下的{kind}</p> : <p>这一天拍下的{kind}</p>}
         </div>
         <button type="button" className="day-album-close" onClick={closeViaUI} aria-label="关闭相册，回到日记">✕</button>
       </header>
