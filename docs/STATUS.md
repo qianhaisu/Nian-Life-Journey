@@ -7841,3 +7841,51 @@ media 级审核行仍是 59 行（全部来自 09-11／09-12），既有配图�
 新版包：`C:\Users\teddy\NianlifeOps\timeline-2026-09-12\zhangnian-page\08-health-review-pack-v2.md`
 
 **下一件事**：等总指挥逐段审这 7 段，审过再谈 `care_records`／`care_episodes` 落库。
+
+## 2026-09-13 · 记忆页年份导航：定向返修与全部验收项通过（镜像 `yearnav-38039e1-onto-d975c32`）
+
+**本轮线上多了什么家人能读的东西**：私有站 18080 上「记忆」页的年份导航现在**点哪一年就到哪一年，
+亮的也是那一年**。桌面与 391px 两种宽度下，点击 2025 / 2024、直接打开 `/memory#year-2024`、
+刷新、浏览器前进/后退，**目标位置、高亮、`aria-current` 三者全部一致**，每次都逐项实测。
+
+**根因（推翻上一轮结论）**：上一轮报「整页锚点导航失效」是**错的**。那些测量是在一个
+**最小化窗口里的后台标签页**中做的——`document.visibilityState` 为 `hidden`，Chrome 在隐藏标签页里
+不跑动画帧，因此**一切平滑滚动（`scroll-behavior: smooth`，锚点跳转正是走它）都不推进**，
+而 instant 滚动照常工作。这正是当时证据的形状，我当时读错了。把窗口恢复、标签页切到前台后，
+`visibilityState` 变 `visible`，同一个 `window.scrollTo({behavior:'smooth'})` 立刻到位，
+点击年份也照常滚动。**`overflow-x: clip` 与此无关**：把 body 的 `overflow-x` 临时改成 `visible`
+后平滑滚动依旧不动；一个只有 `scroll-behavior:smooth` 的裸 iframe 对照组则一切正常。
+**所以没有动任何全局 overflow，首页/张年页/手机横向溢出都未被触碰。**
+
+**真正的缺陷只有一个，已修**：地址说 2024、亮的却是 2025。2024 只有一个月，文档在它的标题
+到达判定线之前就结束了——点击停在距底 56px，2024 标题在屏幕下方 1084px 处，可见但够不到判定线，
+纯按滚动位置判断就会答 2025。改为**地址优先**：地址里点名的年份说了算，直到读者自己滚动
+（滚轮 / 触摸 / 翻页键）才交还给滚动判定。
+返修中又自查出一个：选中年份被缓存，而 `replaceState` / `pushState` 不触发 `hashchange`
+或 `popstate`（App Router 两者都用），缓存会比地址活得久——实测出现过「hash 已清空、
+页面在顶部、2024 仍亮着」。改为**每次判定时现读地址**，只保留「读者是否已接管」这一个布尔量。
+
+**部署记录**
+- **基础提交完整 SHA**：`d975c32fde7730762abdc4792e7013615cd532c3`
+- **叠加文件**：`v2/components/year-nav-highlight.tsx`
+- **叠加来源完整 SHA**：`38039e145783f38619cfdda0d6b46b88c7cf7f9a`（文件 sha256 `b1a198ded4fc0736…`）
+- **镜像标签**：`nianlife-web:yearnav-38039e1-onto-d975c32`
+- **镜像 ID**：`sha256:e7efc6f045890c5659d226c56d8c4f1d0ae920c9dce9ca463d6315fa8455886d`
+- **回滚容器**：`nianlife-diag-web-pre-yearnav3-20260913-093423`，
+  回滚镜像 `nianlife-web:yearnav-3e7fa7f-onto-d975c32`，
+  **恢复命令原文在 `/home/ecs-user/swap-yearnav4.log` 的 `ROLLBACK_CMD=` 行**
+- **这是组合构建，不等于任何一个提交的完整运行版本。** 基础之外只换了上面那一个文件；
+  main 上在基础之后出现的 `upcoming` 审阅路径（`ec31d8c`）与 growth 改动（`890b094`，
+  含**未审核迁移 `0014_growth_precision.sql`**）**都不在镜像里**，已逐个 sha256 核对：
+  `schema.ts`、`types.ts`、`upcoming-store.ts`、`drizzle/meta/_journal.json` 全部等于基础提交，
+  `0014_growth_precision.sql` 在构建上下文中不存在。**没有应用任何迁移。**
+
+**未验证 / 保留**
+- `ea65376`：本轮仍只有**功能抽样通过**（`/`、`/about`、`/memory/2025`、`/memory/2025/12`、
+  `/inbox` 全 200），**性能审核仍未完成**，不宣称性能已验收。
+- `.archive-empty` 的同类简写偏左问题**继续保留为待办**，本轮未扩展。
+- 年份跳转到最旧一年时不会停在它的标题顶端，因为文档到底了——浏览器已尽其所能，2024 在屏内。
+  这是文档长度决定的，未用加长页面之类的手段去掩盖。
+
+**下一件事**：`ea65376` 的性能审核仍挂在性能 session；运行版与 main 的差距等首页/待办/growth
+那几条链自己的验收与迁移审核。
