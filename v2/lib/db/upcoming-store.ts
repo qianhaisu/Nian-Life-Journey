@@ -66,6 +66,46 @@ const dbFor = (options: { db?: UpcomingDb; env?: NodeJS.ProcessEnv }) => options
  *  It walks the cause chain because the query builder wraps the driver's error: checking only the
  *  top-level `code` reported a missing table as `read_failed`, which is exactly the confusion this
  *  whole feed exists to prevent. Caught by the validation harness on 2026-09-12. */
+/** 42703 = column does not exist. Adding `provenance` to the schema made every read of this table
+ *  select it, which THROWS on any database where 0015 has not been applied yet — including the live
+ *  one right now. The read must keep working before the migration as well as after, so a query that
+ *  hits this falls back to the column list without it and reports no summary, which is the truth.
+ *  Caught by the migration rehearsal on 2026-09-13, before the code could reach a running site. */
+const isMissingColumn = (error: unknown): boolean => {
+  let current: unknown = error;
+  for (let depth = 0; current && depth < 5; depth += 1) {
+    if (typeof current === "object" && (current as { code?: string }).code === "42703") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+};
+
+/** Every column except `provenance`, for the pre-0015 fallback. */
+const ITEM_COLUMNS_WITHOUT_PROVENANCE = {
+  id: t.upcomingItems.id, profileId: t.upcomingItems.profileId, title: t.upcomingItems.title,
+  note: t.upcomingItems.note, category: t.upcomingItems.category, kind: t.upcomingItems.kind,
+  status: t.upcomingItems.status, whenKind: t.upcomingItems.whenKind, whenFrom: t.upcomingItems.whenFrom,
+  whenTo: t.upcomingItems.whenTo, whenCertainty: t.upcomingItems.whenCertainty,
+  whenOriginalText: t.upcomingItems.whenOriginalText, whenBasis: t.upcomingItems.whenBasis,
+  whoAsked: t.upcomingItems.whoAsked, anchorSourceId: t.upcomingItems.anchorSourceId,
+  sourceIds: t.upcomingItems.sourceIds, statusNote: t.upcomingItems.statusNote,
+  evidence: t.upcomingItems.evidence, statusEvidence: t.upcomingItems.statusEvidence,
+  supersedes: t.upcomingItems.supersedes, extractionBatchId: t.upcomingItems.extractionBatchId,
+  reviewDecision: t.upcomingItems.reviewDecision, visibility: t.upcomingItems.visibility,
+  firstSeenAt: t.upcomingItems.firstSeenAt, updatedAt: t.upcomingItems.updatedAt,
+} as const;
+
+/** Reads the item rows, with or without the provenance column, whichever this database has. */
+async function selectUpcomingItems(db: UpcomingDb, where: Parameters<typeof eq>[0] extends never ? never : ReturnType<typeof eq>) {
+  try {
+    return await db.select().from(t.upcomingItems).where(where) as Array<typeof t.upcomingItems.$inferSelect>;
+  } catch (error) {
+    if (!isMissingColumn(error)) throw error;
+    const rows = await db.select(ITEM_COLUMNS_WITHOUT_PROVENANCE).from(t.upcomingItems).where(where);
+    return rows.map((row) => ({ ...row, provenance: null })) as Array<typeof t.upcomingItems.$inferSelect>;
+  }
+}
+
 const isMissingTable = (error: unknown): boolean => {
   let current: unknown = error;
   for (let depth = 0; current && depth < 5; depth += 1) {
@@ -119,7 +159,7 @@ export async function mergeUpcomingCandidates(
 
   // One read of everything this profile already has. The table holds tens of rows, not tens of
   // thousands, so this is a small query and not a getStore()-shaped one.
-  const existingRows = await db.select().from(t.upcomingItems).where(eq(t.upcomingItems.profileId, profileId));
+  const existingRows = await selectUpcomingItems(db, eq(t.upcomingItems.profileId, profileId));
   const byId = new Map(existingRows.map((row) => [row.id, row]));
   const byMergeKey = new Map<string, typeof existingRows[number]>();
   for (const row of existingRows) {
@@ -315,6 +355,7 @@ function recordOf(row: typeof t.upcomingItems.$inferSelect, changes: UpcomingCha
     updatedAt: row.updatedAt,
     reviewDecision: row.reviewDecision as UpcomingItemRecord["reviewDecision"],
     visibility: row.visibility as UpcomingItemRecord["visibility"],
+    provenance: (row as { provenance?: unknown }).provenance as UpcomingItemRecord["provenance"],
   };
 }
 
@@ -350,8 +391,7 @@ export async function readUpcomingFeed(options: ReadUpcomingOptions = {}): Promi
   let itemRows: Array<typeof t.upcomingItems.$inferSelect>;
   try {
     const decisions = options.decisions ?? ["needs_human_review", "approved"];
-    itemRows = await db.select().from(t.upcomingItems)
-      .where(and(eq(t.upcomingItems.profileId, profileId), inArray(t.upcomingItems.reviewDecision, decisions)));
+    itemRows = await selectUpcomingItems(db, and(eq(t.upcomingItems.profileId, profileId), inArray(t.upcomingItems.reviewDecision, decisions))!);
   } catch (error) {
     if (isMissingTable(error)) return { state: "not_extracted", reason: "the upcoming tables do not exist in this database yet" };
     return { state: "read_failed", reason: "could not read the upcoming items", error: String((error as Error)?.message ?? error) };
@@ -454,7 +494,14 @@ export async function readUpcomingProvenanceForFamily(
   options: ReadUpcomingOptions & { curated?: CuratedProvenance[] } = {},
 ): Promise<UpcomingProvenance[]> {
   const records = (await readUpcomingRecords(options)).filter((record) => record.reviewDecision === "approved");
-  const curatedById = new Map((options.curated ?? []).map((entry) => [entry.itemId, entry]));
+  // Summaries come from the row's own `provenance` column BY DEFAULT. The page never supplies them
+  // and never restates the copy: passing `curated` is a test and migration-rehearsal seam only.
+  // Before 0015 is applied the column does not exist, `readUpcomingRecords` returns no provenance,
+  // and every item reports `pending_review` — which is the truth, not a failure.
+  const stored = records
+    .map((record) => record.provenance)
+    .filter((entry): entry is CuratedProvenance => Boolean(entry));
+  const curatedById = new Map([...stored, ...(options.curated ?? [])].map((entry) => [entry.itemId, entry]));
   const items = records.map((record) => buildUpcomingProvenance(record, curatedById.get(record.id)));
   // Last gate before it leaves: no internal identifier of any kind in the payload.
   assertFamilySafeProvenance(items);
@@ -465,7 +512,7 @@ export async function readUpcomingProvenanceForFamily(
 export async function readUpcomingRecords(options: ReadUpcomingOptions = {}): Promise<UpcomingItemRecord[]> {
   const db = dbFor(options);
   const profileId = options.profileId ?? CANONICAL_PROFILE_ID;
-  const itemRows = await db.select().from(t.upcomingItems).where(eq(t.upcomingItems.profileId, profileId));
+  const itemRows = await selectUpcomingItems(db, eq(t.upcomingItems.profileId, profileId));
   if (!itemRows.length) return [];
   const changeRows = await db.select().from(t.upcomingItemChanges)
     .where(inArray(t.upcomingItemChanges.itemId, itemRows.map((row) => row.id)))

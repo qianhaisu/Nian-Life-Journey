@@ -90,6 +90,9 @@ export type UpcomingItemRecord = UpcomingItem & {
   updatedAt: string;
   /** Its own gate, separate from content_quality_reviews and never written by the extractor. */
   reviewDecision: "needs_human_review" | "approved" | "rejected";
+  /** The reviewed family-safe source summary, when one has been approved for this row. Shape is
+   *  CuratedProvenance (lib/upcoming-provenance.ts); undefined means no summary reviewed yet. */
+  provenance?: { itemId: string } & Record<string, unknown>;
   visibility: "family" | "private";
 };
 

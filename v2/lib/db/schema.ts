@@ -423,6 +423,14 @@ export const upcomingItems = pgTable("upcoming_items", {
   statusEvidence: jsonb("status_evidence").$type<Record<string, string>>(),
   supersedes: jsonb("supersedes").$type<string[]>().notNull().default([]),
   extractionBatchId: text("extraction_batch_id").notNull(),
+  // 2026-09-13. The reviewed, family-safe source summary: who raised this and what became of it,
+  // as one approved sentence each, never as chat. Shape is CuratedProvenance in
+  // lib/upcoming-provenance.ts. NULL means no summary has been reviewed yet, which the read layer
+  // reports as `pending_review` — deliberately distinct from "this item has no source".
+  //
+  // It lives on the item rather than in its own table because it is one small reviewed object per
+  // row, written and read only with that row, and a join would buy nothing.
+  provenance: jsonb("provenance").$type<Record<string, unknown>>(),
   // Its own gate, like content_quality_reviews but separate from it: nothing the extractor writes
   // is ever marked approved, and no row here can change a life_event's review.
   reviewDecision: text("review_decision").notNull().default("needs_human_review"),

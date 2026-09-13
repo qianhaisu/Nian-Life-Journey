@@ -1,0 +1,1 @@
+ALTER TABLE "upcoming_items" ADD COLUMN "provenance" jsonb;
