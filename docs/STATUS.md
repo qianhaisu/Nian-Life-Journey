@@ -9262,3 +9262,8 @@ inert 移除之前，被浏览器忽略，键盘/读屏关闭后焦点落空（�
 > 00:21 更新恢复来源：今晚被覆盖的曾批准故事现为 **59** 篇，磁盘上能找到批准时全文的 **23** 篇（新增 `event-r22-20260415-bottle`，来源 `apply-r22-pack02.json`），
 > **36** 篇只能靠 RDS 备份（需 Teddy）。loop 第二次停止后未再重启（00:19 只读：organizer 进程 0、`organizer_runs` 994、已发布 285）。
 > 明细 `NianlifeOps/timeline-2026-09-13-overnight/data/restore-coverage-59.json`。
+
+> 00:28 恢复状态：数据会话的恢复脚本（`v2/.data/n38-restore.mjs`，41 篇正文+标题+memoryWeight 写回并追加恢复决定行，18 篇不动）被其 auto mode 权限分类器拒绝，**需 Teddy 放行**；
+> 页面轨不代跑。今晚线上固定为：有效 approved 285、本轮 133 篇里 59 篇下线，loop 已停未重启，被覆盖的文字没有上线。
+> 放行后命令：`cd v2 && node .data/night-run.mjs .data/n38-restore.mjs --apply`，随后发 `scope: archive` 刷新，页面轨独立验证。
+> 根因缺口：`findOrganizerRun` 查 `organizer_runs`，而 `persistOrganization` 按 `life_events.organization_fingerprint` 命中即 update；人工路线发布的事件没有 organizer_run 行，短路查不到、update 命中。修好前 organizer 对人工发布过的月份不安全。
