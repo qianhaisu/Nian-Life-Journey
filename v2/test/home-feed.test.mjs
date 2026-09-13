@@ -652,3 +652,45 @@ test("撤销仍然立刻生效，不等下一期", () => {
   assert.notEqual(after.lead.photo.media.id, chosen, "撤销是唯一立刻生效的那一类（§5.7）");
   assert.equal(after.photoCandidates[0].cooldown.editions, 2, "池子少一组，冷却跟着变");
 });
+
+test("期内新批准的同组照片不挤掉本期那张旧照片（先过资格，再分连拍组）", () => {
+  // 一组连拍两张，同一时刻：旧的那张早就获批（本期可用），新的那张本期才获批。
+  // mediaId 上让**新**的那张排在前面（"m-a" < "m-z"），所以「先去重再过滤」会先把 m-a 取为
+  // 组代表、再把它按资格拿掉，于是这一组在本期一张都不剩 —— 那就是假阴性。
+  const fresh = photo("m-a-new", "2026-09-07", { takenAt: "2026-09-07T10:00:00+08:00" });
+  const old = photo("m-z-old", "2026-09-07", { takenAt: "2026-09-07T10:00:20+08:00" });
+  const other = photo("m-other", "2026-08-20", { takenAt: "2026-08-20T11:00:00+08:00" });
+  const events = [
+    event("e-fresh", "2026-09-07", { mediaIds: [fresh.id] }),
+    event("e-old", "2026-09-07", { mediaIds: [old.id] }),
+    event("e-other", "2026-08-20", { mediaIds: [other.id] }),
+  ];
+  const edition = editionAt(new Date("2026-09-13T14:00:00+08:00"));
+  assert.equal(edition.startedAt, "2026-09-13T12:00:00+08:00");
+  const reviews = [
+    binding("e-old", old.id, "approved", { reviewedAt: "2026-09-01T00:00:00Z" }),
+    binding("e-other", other.id, "approved", { reviewedAt: "2026-09-01T00:00:00Z" }),
+    // 本期开始之后才批的那一张，而且它在 mediaId 上排在旧的前面。
+    binding("e-fresh", fresh.id, "approved", { reviewedAt: "2026-09-13T13:00:00+08:00" }),
+  ];
+  const archive = archiveOf({ events, media: [fresh, old, other], reviews });
+  const feed = buildHomeFeed(archive, { edition });
+
+  const pool = feed.photoCandidates.filter((c) => c.cooldown).map((c) => c.photo.media.id);
+  assert.ok(pool.includes("m-z-old"), "本期合格的那张旧照片必须还在池子里，不能被一张本期用不了的图挤掉");
+  assert.ok(!pool.includes("m-a-new"), "本期才获批的那张不参与本期轮换");
+  assert.equal(pool.length, 2, "池子是两组：旧的那张 + 另一个事件");
+  assert.equal(feed.photoCandidates[0].cooldown.editions, 2);
+  // 新的那张仍然列出来，原因是「资格」而不是「连拍重复」——两件事不能混。
+  const freshOne = feed.photoCandidates.find((c) => c.photo.media.id === "m-a-new");
+  assert.match(freshOne.reason, /开始后才通过审核/);
+  assert.ok(!/连拍/.test(freshOne.reason), "它不是被连拍去重挡下的");
+
+  // 下一期它就有资格了，这时才轮到连拍去重管它：同组只留一张。
+  const next = buildHomeFeed(archive, { edition: editionAt(new Date("2026-09-13T18:30:00+08:00")) });
+  const nextPool = next.photoCandidates.filter((c) => c.cooldown).map((c) => c.photo.media.id);
+  assert.equal(nextPool.length, 2, "同一时刻的两张下一期只占一个名额，所以池子还是两组");
+  assert.ok(nextPool.includes("m-a-new"), "下一期由 mediaId 序取组代表，轮到新的那张");
+  const bumped = next.photoCandidates.find((c) => c.photo.media.id === "m-z-old");
+  assert.match(bumped.reason, /连拍/, "这一期它才是被连拍去重挡下的那张");
+});

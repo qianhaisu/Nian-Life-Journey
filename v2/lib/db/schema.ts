@@ -489,3 +489,27 @@ export const upcomingExtractionRuns = pgTable("upcoming_extraction_runs", {
 }, (table) => ({
   byProfile: index("upcoming_extraction_runs_profile_idx").on(table.profileId, table.startedAt),
 }));
+
+// 习惯提醒「最多两个不同自然日露出」（§6.3）数的是**实际露出过的日子**，而那是历史——算不出来，
+// 只能记。这张表就是那本记录，独立于 upcoming_items：
+//
+//   · 它是**呈现事实**，不是事项本身的属性。往 upcoming_items 上加一列会让「这条事项是什么」和
+//     「它在首页露过几次脸」挤在一行里，而后者每天都在变、且只跟首页有关。
+//   · 唯一键是 (profile_id, item_id, shown_day)，`shown_day` 是**上海自然日**。所以同一天刷新
+//     一百次也只有一行——占的是「日」，不是「次」。插入走 on conflict do nothing。
+//   · 只记**真正呈现在默认提醒位上的那几条**。预取、验证脚本、以及折叠在「展开全部」里没露脸的
+//     事项，一条都不记（见 lib/db/habit-display-store.ts 的 recordHabitShown）。
+//
+// 它只会增长，不做删除：一条露出记录是发生过的事。行很小（三个短文本 + 一个时间戳），
+// 一条习惯提醒一天最多一行。
+export const habitDisplayDays = pgTable("habit_display_days", {
+  profileId: text("profile_id").notNull().references(() => profiles.id),
+  itemId: text("item_id").notNull(),
+  /** 上海自然日 "YYYY-MM-DD"。不是 UTC 日，也不是入库时刻。 */
+  shownDay: text("shown_day").notNull(),
+  /** 第一次在这一天露出的时刻，纯审计用；去重不看它。 */
+  firstShownAt: timestamp("first_shown_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  byIdentity: uniqueIndex("habit_display_days_identity_idx").on(table.profileId, table.itemId, table.shownDay),
+  byProfileItem: index("habit_display_days_item_idx").on(table.profileId, table.itemId),
+}));

@@ -32,7 +32,7 @@ import { capHabitByShownDays, classifyFreshness, freshnessOf, isImportantItem, N
 import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 /** 契约版本。页面轨按这个字符串确认自己接的是哪一版；只做兼容新增时递增小版本号。 */
-export const HOME_FEED_VERSION = "home-feed/1.3.0";
+export const HOME_FEED_VERSION = "home-feed/1.4.0";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 时钟
@@ -404,7 +404,21 @@ export type HomeUnavailable = { kind: HomeUnavailableKind; reason: string };
 
 export type HomeFeedReminders =
   /** 默认露出 shown（1 条，有关键事项时最多 2 条），其余在 more 里保持可达，retired 记退场原因。 */
-  | { status: "ready"; shown: HomeReminder[]; more: HomeReminder[]; retired: HomeRetiredReminder[] }
+  | {
+    status: "ready";
+    shown: HomeReminder[];
+    more: HomeReminder[];
+    retired: HomeRetiredReminder[];
+    /**
+     * `shown` 里属于习惯类的那几条的 id——**页面真的把它们画出来之后**，回报这一组来记露出日
+     * （§6.3）。见 `reportHabitShown()`。
+     *
+     * 为什么只给这一组、而不是让调用方自己从 `shown` 里筛：筛的规则（哪一类算习惯）属于数据轨，
+     * 让页面去重新判一次，两边迟早会分叉；而分叉的后果是把不该计数的条目记进配额。
+     * `more` 里的东西一条都不在这里——折叠着没露脸不算露出。
+     */
+    habitShownIds: string[];
+  }
   /** 真的读完了整个窗口、真的什么都没有。只有这一种可以说「已检查，没有待办」。 */
   | { status: "clear"; windowFrom: string; readToDay?: string }
   | { status: "unavailable"; unavailable: HomeUnavailable };
@@ -710,23 +724,33 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
     });
   }
   paired.sort((a, b) => a.photo.media.id.localeCompare(b.photo.media.id));
-  const seenBursts = new Set<string>();
-  const deduped: Pair[] = [];
-  const dropped: { entry: Pair; reason: string }[] = [];
-  for (const entry of paired) {
-    if (seenBursts.has(entry.burst)) { dropped.push({ entry, reason: "同一时刻的连拍里已经取了一张" }); continue; }
-    seenBursts.add(entry.burst);
-    deduped.push(entry);
-  }
-  // 本期开始之后才获批的，本期不参与轮换——「期内新增候选下一期生效」。
-  const pool: Pair[] = [];
+
+  // **先按本期资格过滤，再分连拍组。这个顺序是要害，不是实现细节。**
+  //
+  // 反过来做会怎样：一组连拍里有一张旧的（本期就能用）和一张本期刚获批的。连拍去重按 mediaId
+  // 取组里的第一张——如果被取中的恰好是那张**新**的，随后资格过滤又把它拿掉，于是这一组在本期
+  // 一张都不剩：那张本来合格的旧照片已经作为「同组重复」被丢掉了。家人看到的是「这组没有照片」，
+  // 而真相是「合格的那张被一张本期还不能用的照片挤掉了」——假阴性。
+  //
+  // 这正是 2026-09-13 `photoLedMoment` 那次教训的同一个形状（先过滤完整候选，再选头图与缩略图）。
+  // 上一版我把资格过滤写在了去重之后，等于把那条教训又踩了一遍。
+  const eligible: Pair[] = [];
   const pending: { entry: Pair; reason: string }[] = [];
-  for (const entry of deduped) {
+  for (const entry of paired) {
     const at = approvedAt?.get(entry.key);
     if (at && at >= edition.startedAt) {
       pending.push({ entry, reason: `本期（${edition.id}）开始后才通过审核，从下一期起参与轮换` });
       continue;
     }
+    eligible.push(entry);
+  }
+  // 连拍去重只在**本期有资格**的候选里做，所以一张本期还不能用的照片不可能占掉组里的名额。
+  const seenBursts = new Set<string>();
+  const pool: Pair[] = [];
+  const dropped: { entry: Pair; reason: string }[] = [];
+  for (const entry of eligible) {
+    if (seenBursts.has(entry.burst)) { dropped.push({ entry, reason: "同一时刻的连拍里已经取了一张" }); continue; }
+    seenBursts.add(entry.burst);
     pool.push(entry);
   }
   // 同事件冷却在这条链路上是构造保证的：一段记忆只贡献一个候选（`memory.lead` 是单数），
@@ -738,7 +762,7 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
   // 质量分只排「返回哪几条、怎么排」。它排在 mediaId 序之上，所以页面拿到的第一批是分最高的几条，
   // 但**轮到谁**已经由上面的 rotationIndex 定死了。
   const rankOf = new Map<string, number>();
-  [...deduped]
+  [...paired]
     .sort((a, b) =>
       (b.photo.quality?.score ?? 0) - (a.photo.quality?.score ?? 0)
       || b.photo.day.localeCompare(a.photo.day)
@@ -958,7 +982,11 @@ export function buildReminders(
   const shown = displayable.slice(0, limit);
   const shownIds = new Set(shown.map((reminder) => reminder.id));
   const more = all.filter((reminder) => !shownIds.has(reminder.id));
-  return { status: "ready", shown, more, retired };
+  // 只有真的进了默认位、且本身是习惯类的，才进这一组。
+  const habitShownIds = shown
+    .filter((reminder) => classifyFreshness(reminder.item) === "habit")
+    .map((reminder) => reminder.id);
+  return { status: "ready", shown, more, retired, habitShownIds };
 }
 
 /**
@@ -1031,7 +1059,26 @@ export async function readHomeFeed(options: BuildHomeFeedOptions = {}): Promise<
   // 于是就算批次跑成功了，首页也永远看不到它，每张照片都停在确定性降级分上。
   // 三个部件都对，中间没人接线，而每一段单独看都是「已实现」。
   const quality = options.quality ?? await loadHomePhotoQuality();
-  return buildHomeFeed(archive, { ...options, quality, upcoming, upcomingSources });
+  // 习惯上限要的「露出过哪些自然日」。只按本次要判的那几条 id 去查，不整表扫；
+  // 表还不存在（迁移随统一发布执行）时返回空日志，上限因此不生效——不生效的后果是不误伤任何人。
+  const habitLog = options.habitLog ?? await loadHabitDisplayLog(upcoming);
+  return buildHomeFeed(archive, { ...options, quality, upcoming, upcomingSources, habitLog });
+}
+
+/**
+ * 读这几条待办的露出日日志。只问 feed 里真的有的那些 id，读不到就是空日志（上限不生效）。
+ * 它是一次小查询：`where profile_id = ? and item_id in (…)`，家庭量级表，没有整表扫描。
+ */
+async function loadHabitDisplayLog(upcoming: UpcomingFeed | undefined): Promise<HabitDisplayLog | undefined> {
+  if (!upcoming || upcoming.status !== "ready") return undefined;
+  const ids = upcoming.items.map((item) => item.id);
+  if (ids.length === 0) return undefined;
+  try {
+    const { habitDisplayLog } = await import("@/lib/db/habit-display-store");
+    return await habitDisplayLog(ids);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -1052,5 +1099,32 @@ async function loadHomePhotoQuality(): Promise<HomePhotoQualityLookup | undefine
   } catch {
     // 连模块都加载不了也不能打掉首页：没有分数就是没有分数。
     return undefined;
+  }
+}
+
+/**
+ * 把「这几条习惯提醒今天真的露在默认位上了」记下来（§6.3）。
+ *
+ * **必须由真正呈现了这个 feed 的那一次渲染调用，而且只调一次。** 不要在预取、预热、验证脚本或
+ * 任何只是「读一下看看」的地方调它：那些地方没有人看到任何东西，记上去就是白占配额——一次预热
+ * 就能把一条习惯提醒的两个自然日用掉，家人一次都没看见它就再也看不到它了。
+ *
+ * 幂等由数据库的唯一键保证（profile, item, 上海自然日），所以同一天被调多次也只有一行；
+ * 这条「只调一次」是为了不白跑一次写入，不是为了正确性。
+ *
+ * 日期用 `feed.clock.today`——那是 Asia/Shanghai 的自然日。不在这里取 `new Date()`：
+ * 那会在 UTC 日界附近记错一天，而唯一键就是那一天。
+ *
+ * 失败从不上抛：记不上一行露出日志，不该让家人看不到首页。
+ */
+export async function reportHabitShown(feed: HomeFeed): Promise<{ attempted: number; skipped?: string }> {
+  if (feed.reminders.status !== "ready") return { attempted: 0 };
+  const ids = feed.reminders.habitShownIds;
+  if (ids.length === 0) return { attempted: 0 };
+  try {
+    const { recordHabitShown } = await import("@/lib/db/habit-display-store");
+    return await recordHabitShown(ids, feed.clock.today);
+  } catch (error) {
+    return { attempted: 0, skipped: `记录露出日失败：${String((error as Error)?.message ?? error)}` };
   }
 }
