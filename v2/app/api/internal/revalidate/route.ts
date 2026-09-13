@@ -1,8 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { parseRefreshRequest } from "@/lib/archive-refresh";
 import { invalidateOnDemandArchive } from "@/lib/family-archive";
-import { ON_DEMAND_ARCHIVE_PATHS } from "@/lib/render-on-demand";
 
 function authorized(request: Request) {
   const expected = process.env.INGESTION_TOKEN;
@@ -12,20 +12,27 @@ function authorized(request: Request) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-// Called by the local worker / Organizer after a write that should be visible before the next
-// 300s revalidate window elapses on its own. Body: { paths: string[] } — each is revalidated
-// individually so one bad path never blocks the rest.
+// Called after a write that should be visible on the next request rather than after the 300s ISR
+// window (plus one more request, because of stale-while-revalidate) elapses on its own.
+// Body: { scope: "archive" } — every page the archive renders (lib/archive-refresh.ts says why that
+// is the default for any publish) — or { paths: string[] } for exactly those paths. Each target is
+// revalidated individually so one bad path never blocks the rest.
 export async function POST(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const body = await request.json().catch(() => null);
-  const paths = Array.isArray(body?.paths) ? body.paths.filter((p: unknown): p is string => typeof p === "string" && p.startsWith("/") && p.length <= 200) : null;
-  if (!paths || paths.length === 0 || paths.length > 50) return NextResponse.json({ error: "paths must be a non-empty array of up to 50 absolute paths" }, { status: 400 });
-  for (const path of paths) revalidatePath(path);
+  const parsed = parseRefreshRequest(await request.json().catch(() => null));
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  for (const target of parsed.targets) {
+    if (target.type) revalidatePath(target.path, target.type);
+    else revalidatePath(target.path);
+  }
   // revalidatePath cannot reach the pages that are rendered on demand — they have no route cache,
-  // and the 300s archive memo they read through is module state Next knows nothing about. Clearing
-  // it here is what makes a worker push visible on the front page immediately rather than whenever
-  // the window happens to lapse. One flag for all three: they share one read.
-  const clearedArchiveMemo = paths.some((path: string) => ON_DEMAND_ARCHIVE_PATHS.includes(path));
-  if (clearedArchiveMemo) invalidateOnDemandArchive();
-  return NextResponse.json({ revalidated: paths, clearedArchiveMemo });
+  // and the 300s archive memo they read through is module state Next knows nothing about. Any path
+  // the archive renders clears it: a month path alone used to leave the /memory index behind.
+  if (parsed.clearsArchiveMemo) invalidateOnDemandArchive();
+  return NextResponse.json({
+    scope: parsed.scope,
+    revalidated: parsed.targets.map((target) => target.type ? `${target.path} (${target.type})` : target.path),
+    clearedArchiveMemo: parsed.clearsArchiveMemo,
+    at: new Date().toISOString(),
+  });
 }

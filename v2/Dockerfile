@@ -36,6 +36,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# The commit this image was built from, reported by /api/health so a measurement can prove which
+# code it is looking at. Declared in the runner stage only, so changing it never invalidates the
+# cached dependency install or the build. Pass --build-arg NIANLIFE_BUILD_SHA=$(git rev-parse HEAD).
+ARG NIANLIFE_BUILD_SHA=
+ENV NIANLIFE_BUILD_SHA=$NIANLIFE_BUILD_SHA
 
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs
