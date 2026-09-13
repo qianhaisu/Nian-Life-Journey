@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { MonthIndexEntry } from "@/lib/memory-index";
-import { isFromFamilyAlbum } from "@/lib/media/representative";
 import { Photo } from "@/components/photo";
 
 // One month as a tappable card on /memory: a cropped cover photo, the month and age, and the first
@@ -8,17 +7,23 @@ import { Photo } from "@/components/photo";
 // not a summary.
 export function MonthCard({ entry, blurb }: { entry: MonthIndexEntry; blurb?: string }) {
   const { chapter, href, preview, featured } = entry;
-  // The month's face, in order of what the archive can actually say about a picture:
+  // The month's face comes from `preview`, and only from `preview`.
   //
-  //   1. a featured memory's own lead — the only pictures with a recorded reason to be about him
-  //      (lib/media/story-binding.ts), and therefore the only ones this card may present as such;
-  //   2. failing that, a picture off the family's own camera roll rather than out of a group chat.
+  // 2026-09-13, 照片展示隔离. This used to reach for `featured.find(m => m.lead)?.lead` FIRST, on the
+  // reasoning that a story's own lead is "the only picture with a recorded reason to be about him".
+  // That reasoning was wrong in a way that only became visible when R8 published: a `media_binding`
+  // says the picture belongs to those WORDS, not that it is a photograph of this child. So the card
+  // was reading a claim off a record that does not make it — and it went around the gated cover
+  // entirely (lib/publication-moments.ts builds `cover`/`preview` behind `isSubjectChecked`).
   //
-  // Step 2 is a source preference and nothing more: a daycare conversation carries other people's
-  // children, screenshots and receipts, and a camera roll mostly does not — but neither fact says
-  // who is in the frame (lib/media/representative.ts). It is a cover, not a portrait, and it is
-  // ordered after the evidence rather than in place of it. Neither → no image area, not a guess.
-  const coverPhoto = featured.find((memory) => memory.lead)?.lead ?? preview.find(isFromFamilyAlbum);
+  // Caught in acceptance, not by a test: `wechat-media:02b3ff49…` has an approved binding for
+  // `event-r10-20260907-coldhot` and no subject check, and on publication it became 2026-09's card
+  // cover on /memory — a cover slot, which is exactly what the isolation says a binding may not buy.
+  //
+  // `preview` is already ordered cover-first and every entry in it is subject-checked, so taking its
+  // head keeps the old preference (a checked story lead still sorts first, because `cover` prefers
+  // it) while losing the bypass. No checked picture → no image area, not a guess.
+  const coverPhoto = preview[0];
   const cardBlurb = blurb ?? featured[0]?.title;
 
   return (
