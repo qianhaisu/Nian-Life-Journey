@@ -72,8 +72,19 @@ function DayAlbumSheet({ album, dateLabel, ageLabel, onClose }: { album: PhotoDa
     history.pushState({ nianDayAlbum: album.day }, "");
     const onPop = () => { if (history.state?.nianDayAlbum !== album.day) onClose(); };
     window.addEventListener("popstate", onPop);
-    panel.current?.focus({ preventScroll: true });
+    // Keyboard and screen readers stay inside the album while it covers the page: everything else on
+    // <body> (skip link, header, bottom nav, the month itself) goes inert until it closes. Elements
+    // that were already inert are left as they were.
+    const sheet = panel.current;
+    const madeInert: Element[] = [];
+    for (const child of Array.from(document.body.children)) {
+      if (child === sheet || child.hasAttribute("inert")) continue;
+      child.setAttribute("inert", "");
+      madeInert.push(child);
+    }
+    sheet?.focus({ preventScroll: true });
     return () => {
+      for (const child of madeInert) child.removeAttribute("inert");
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("popstate", onPop);
     };
