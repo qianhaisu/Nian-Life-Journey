@@ -148,7 +148,10 @@
 }
 /* 引语。颜色跟着内容走：有「」才有颜色，没有引语的一段生活就一个色块都不出现。 */
 .home-quote { color: var(--home-red); quotes: "「" "」"; }
-.home-story-title .home-quote { color: var(--home-blue); font-weight: 500; }
+/* 冷和热是两个颜色，定稿里就是这样：cold 蓝、hot 桃红。词本身还在，意思不靠颜色传达。
+   加粗对拉丁词是 Nunito 真正的 800；汉字不会被合成粗体（见 app/fonts.css 顶部）。 */
+.home-accent-cold { color: var(--home-blue); font-weight: 800; }
+.home-accent-hot { color: var(--home-red); font-weight: 800; }
 .home-read {
   display: inline-flex;
   align-items: center;
@@ -258,6 +261,23 @@
   color: var(--home-sage);
   font-size: 12px;
 }
+
+/* 超出两条的有效事项：一个安静的折叠入口，展开后是同样的提醒条。 */
+.home-reminder-more { margin-top: 8px; }
+.home-reminder-more > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--home-sage);
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.home-reminder-more > summary::-webkit-details-marker { display: none; }
+.home-reminder-more > summary::after { margin-left: 8px; content: "＋"; }
+.home-reminder-more[open] > summary::after { content: "－"; }
+.home-reminder-more .home-reminder + .home-reminder { margin-top: 10px; }
 
 /* 材料不足时的真话：不画空照片框，也不说「暂无」。 */
 .home-nothing {

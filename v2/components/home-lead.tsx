@@ -76,6 +76,23 @@ function frameRatio(media: { width?: number; height?: number }): string {
   return "1 / 1";
 }
 
+// 冷和热是两个颜色，不是同一个红。定稿里标题上的 cold 是蓝色、hot 是桃红——那天妈妈报的就是
+// 这两个词，颜色跟着词义走（Teddy 2026-09-13 指出两个词不能都用同一个红）。
+//
+// 只认真实内容里出现的这几个字。一段没有冷热的生活，标题上一个色块都不会多出来——这不是把每段
+// 故事都套成 cold/hot 的彩色模板，而且颜色之外词本身还在，不靠颜色表达意思。
+const ACCENT_PATTERN = /(cold|冷|凉|hot|热|烫)/gi;
+const COLD_WORD = /^(cold|冷|凉)$/i;
+const HOT_WORD = /^(hot|热|烫)$/i;
+
+export function withAccents(text: string, keyPrefix: string) {
+  return text.split(ACCENT_PATTERN).filter((part) => part.length > 0).map((part, index) => {
+    const accent = COLD_WORD.test(part) ? "home-accent-cold" : HOT_WORD.test(part) ? "home-accent-hot" : undefined;
+    if (!accent) return <span key={`${keyPrefix}-${index}`}>{part}</span>;
+    return <span className={accent} key={`${keyPrefix}-${index}`}>{part}</span>;
+  });
+}
+
 export function withQuotes(text: string, keyPrefix: string) {
   const parts = text.split(/(「[^」]*」|“[^”]*”)/g);
   return parts.filter((part) => part.length > 0).map((part, index) => {
@@ -134,7 +151,7 @@ export function HomeLead({ slides, recent }: { slides: HomeLeadSlide[]; recent?:
 
     <div className="home-story">
       <p className="home-label"><span className="home-dot" aria-hidden="true" />最近的一段生活</p>
-      <h2 className="home-story-title">{withQuotes(slide.story.title, `title-${slide.key}`)}</h2>
+      <h2 className="home-story-title">{withAccents(slide.story.title, `title-${slide.key}`)}</h2>
       {slide.story.excerpt ? <p className="home-story-summary">{withQuotes(slide.story.excerpt, `excerpt-${slide.key}`)}</p> : null}
       <Link className="home-read" href={slide.story.href}>读读这一天 <span aria-hidden="true">↗</span></Link>
       {recent ? <div className="home-latest">

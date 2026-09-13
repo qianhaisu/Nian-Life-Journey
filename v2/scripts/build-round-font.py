@@ -134,7 +134,10 @@ def face(name: str, codes: list[int]) -> str:
         "@font-face {\n"
         f"  font-family: '{FAMILY}';\n"
         "  font-style: normal;\n"
-        "  font-weight: 400;\n"
+        # 400 900 是故意的。字体只有 Regular 一个字重；把区间声明出来，浏览器就会拿这一份字形去
+        # 匹配任何字重，而不是**合成**粗体。合成粗体对圆头笔画是灾难：80px 的「往回翻翻，张年。」
+        # 实测糊成一团，「翻」字的笔画直接粘在一起（2026-09-13 /memory 页实测）。
+        "  font-weight: 400 900;\n"
         "  font-display: swap;\n"
         f"  src: url('/fonts/nian-round/{name}') format('woff2');\n"
         f"  unicode-range: {unicode_range(codes)};\n"
@@ -176,7 +179,7 @@ def main() -> None:
             "@font-face {\n"
             f"  font-family: '{FAMILY}';\n"
             "  font-style: normal;\n"
-            "  font-weight: 400;\n"
+            "  font-weight: 400 900;\n"  # 同上：声明区间以免浏览器合成粗体
             "  font-display: swap;\n"
             f"  src: url('/fonts/nian-round/{name}') format('woff2');\n"
             f"  unicode-range: U+{chunk[0]:X}-{chunk[-1]:X};\n"

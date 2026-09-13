@@ -54,31 +54,42 @@ function SourceRow({ source }: { source: HomeReminderSource }) {
   </li>;
 }
 
-export function HomeReminders({ reminders }: { reminders: HomeReminder[] }) {
+function Reminder({ reminder, label }: { reminder: HomeReminder; label?: string }) {
+  return <details className="home-reminder">
+    <summary className="home-reminder-bar">
+      <span className="home-reminder-copy">
+        {label ? <span className="home-reminder-label">{label}</span> : null}
+        <span className="home-reminder-title">{reminder.title}</span>
+        <span className="home-reminder-when">
+          {reminder.whenDay ? <time dateTime={reminder.whenDay}>{reminder.whenText}</time> : reminder.whenText}
+          {reminder.ageText ? <span> · {reminder.ageText}</span> : null}
+        </span>
+        {reminder.statusLabel ? <span className="home-reminder-status">{reminder.statusLabel}</span> : null}
+      </span>
+      <span className="home-reminder-toggle">查看详情</span>
+    </summary>
+    <div className="home-reminder-detail">
+      {reminder.note ? <p>{reminder.note}</p> : null}
+      {reminder.sources.length > 0 ? <ul className="home-reminder-sources">
+        {reminder.sources.map((source) => <SourceRow key={`${reminder.id}-${source.kindLabel}-${source.recordedOn}`} source={source} />)}
+      </ul> : null}
+    </div>
+  </details>;
+}
+
+export function HomeReminders({ reminders, more = [] }: { reminders: HomeReminder[]; more?: HomeReminder[] }) {
   // 一条都没有 → 整块收起。这是「没有有效提醒」的呈现，不是「全部完成」的说法。
-  if (reminders.length === 0) return null;
-  // 默认重点一条，最多两条（共同规格 6.6）。第二条起同样带自己的展开详情。
+  if (reminders.length === 0 && more.length === 0) return null;
+  // 默认重点一条，最多两条（共同规格 §6.6）。第二条起同样带自己的展开详情。
   const shown = reminders.slice(0, 2);
   return <section className="home-reminders" aria-label="近期提醒">
-    {shown.map((reminder, index) => <details className="home-reminder" key={reminder.id}>
-      <summary className="home-reminder-bar">
-        <span className="home-reminder-copy">
-          {index === 0 ? <span className="home-reminder-label">近期提醒</span> : null}
-          <span className="home-reminder-title">{reminder.title}</span>
-          <span className="home-reminder-when">
-            {reminder.whenDay ? <time dateTime={reminder.whenDay}>{reminder.whenText}</time> : reminder.whenText}
-            {reminder.ageText ? <span> · {reminder.ageText}</span> : null}
-          </span>
-          {reminder.statusLabel ? <span className="home-reminder-status">{reminder.statusLabel}</span> : null}
-        </span>
-        <span className="home-reminder-toggle">查看详情</span>
-      </summary>
-      <div className="home-reminder-detail">
-        {reminder.note ? <p>{reminder.note}</p> : null}
-        {reminder.sources.length > 0 ? <ul className="home-reminder-sources">
-          {reminder.sources.map((source) => <SourceRow key={`${reminder.id}-${source.kindLabel}-${source.recordedOn}`} source={source} />)}
-        </ul> : null}
-      </div>
-    </details>)}
+    {shown.map((reminder, index) => <Reminder key={reminder.id} reminder={reminder} label={index === 0 ? "近期提醒" : undefined} />)}
+    {/* 超出两条的**有效**事项收在这里，默认布局不膨胀，但一条都不会因为放不下而消失（§6.6）。
+        标题不写数字：家人读的页面上不出现计数式描述（原则三）。过期的不在这里——它们已经退场，
+        不从折叠层再回到首页（页面侧的过滤在 app/page.tsx）。 */}
+    {more.length > 0 ? <details className="home-reminder-more">
+      <summary>还记着的其他事</summary>
+      <div>{more.map((reminder) => <Reminder key={reminder.id} reminder={reminder} />)}</div>
+    </details> : null}
   </section>;
 }

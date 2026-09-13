@@ -1,9 +1,9 @@
 import { HomeLead, type HomeLeadSlide } from "@/components/home-lead";
 import { HomeReminders, type HomeReminder as HomeReminderView, type HomeReminderSource } from "@/components/home-reminders";
 import { MODALITY_LABEL, SOURCE_KIND_LABEL, roleText, type SourceKind } from "@/components/upcoming-tasks";
-import { readHomeFeed, HOME_REMINDER_LABEL, type HomeFeed, type HomeReminder } from "@/lib/home-feed";
+import { readHomeFeed, HOME_REMINDER_LABEL, type HomeFeed, type HomeReminder, type HomeReminderState } from "@/lib/home-feed";
 import { renderOnDemand } from "@/lib/render-on-demand";
-import { formatDay } from "@/lib/time-signature";
+import { formatDay, formatMonth } from "@/lib/time-signature";
 import "./home.css";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
@@ -89,20 +89,24 @@ export default async function HomePage() {
   </div>;
 }
 
-// 三种状态，三种不同的样子。把它们写成同一句话，就是 CLAUDE.md 里反复点名的那种假话。
+// 还算「近期提醒」的三种状态。过期、已完成、已取消、已被替代都不属于这里——它们没有被删，
+// 库里那一行一个字没动，只是不再占住首页这块地方（共同规格 §6.1「退场不等于完成」）。
+const LIVE_REMINDER_STATES = new Set<HomeReminderState>(["active", "needs_confirmation", "tentative"]);
+
+// 没有有效提醒就整块不画。三种「没有」都走到这里，但理由各不相同，一句都不许混着说：
+//   unavailable —— 读不出来 / 没提取完 / 材料为空。**绝不是**「没有待办」，更不是「全部完成」。
+//   clear —— 真的读完了整个窗口、真的一条都没有。这是真话，但它是一句给不出任何东西的话，
+//            首页不留这块（Teddy 2026-09-13：无有效提醒时隐藏整个模块）。要核对读到哪天，
+//            完整清单仍然是 components/upcoming-tasks.tsx。
+//   ready 但 shown 为空 —— 有事项，但没有一条还有效。同样不画，不画成「全部完成」。
 function Reminders({ feed }: { feed: HomeFeed }) {
   const { reminders } = feed;
-  // 读不出来 / 没提取完 / 材料为空：整块不画。不是「没有待办」，更不是「全部完成」。
-  if (reminders.status === "unavailable") return null;
-  // 真的读完了整个窗口、真的什么都没有——把读到哪天印出来，这句话才是可核对的。
-  if (reminders.status === "clear") {
-    return <p className="home-nothing">
-      {reminders.readToDay
-        ? `${formatDay(reminders.windowFrom)} 到 ${formatDay(reminders.readToDay)}，没有要记着的事。`
-        : "没有要记着的事。"}
-    </p>;
-  }
-  return <HomeReminders reminders={reminders.shown.map(toReminderView)} />;
+  if (reminders.status !== "ready") return null;
+  // 折叠里放的是**还有效**的那些，不是 more 的全部：more 里也装着过期和已完成的，把它们放进
+  // 「近期提醒」的折叠层，等于让刚退场的陈旧采购从另一个门回到首页。
+  const more = reminders.more.filter((reminder) => LIVE_REMINDER_STATES.has(reminder.state));
+  if (reminders.shown.length === 0 && more.length === 0) return null;
+  return <HomeReminders reminders={reminders.shown.map(toReminderView)} more={more.map(toReminderView)} />;
 }
 
 // 契约项 → 展示用的几行字。状态文案取 HOME_REMINDER_LABEL，页面不自拟；「要做的」是默认含义，
@@ -132,6 +136,7 @@ function provenanceRows(reminder: HomeReminder): HomeReminderSource[] {
     { kind: "rescheduled", note: provenance.rescheduled },
     { kind: "cancelled", note: provenance.cancelled },
   ];
+  const link = evidenceLink(reminder);
   return notes.flatMap(({ kind, note }) => note ? [{
     kindLabel: SOURCE_KIND_LABEL[kind],
     roleText: roleText(note.role),
@@ -140,7 +145,21 @@ function provenanceRows(reminder: HomeReminder): HomeReminderSource[] {
     recordedOn: note.onDay,
     recordedOnLabel: formatDay(note.onDay),
     summary: note.summary,
-    // 证据链入口：回到说这件事的那一天（原则八）。没有可指的事件时不画一个去不了的链接。
-    link: reminder.evidenceHref ? { href: reminder.evidenceHref, label: "看那一天" } : undefined,
+    link,
   }] : []);
+}
+
+// 证据链入口（原则八）。**标签必须跟着 `evidenceKind` 走**：1.1.0 之前这里一律写「看那一天」，
+// 而生产上 18 条待办的证据其实只有一个日期、没有 eventId，链接落到的是整张月页——一个写着
+// 「看那一天」的月份链接，读的人点进去核对不到这一条。数据轨 2026-09-13 验收原则八时点了那三个
+// 链接才发现（grep 查不出来：字段在、类型对、测试也过）。
+function evidenceLink(reminder: HomeReminder): { href: string; label: string } | undefined {
+  if (!reminder.evidenceHref) return undefined;
+  if (reminder.evidenceKind === "event") return { href: reminder.evidenceHref, label: "看那一天" };
+  if (reminder.evidenceKind === "month") {
+    // "/memory/2026/08" → 「翻到 2026 年 8 月」，和 upcoming-tasks.tsx 里的说法一致。
+    const [, , year, month] = reminder.evidenceHref.split("/");
+    return { href: reminder.evidenceHref, label: year && month ? `翻到 ${formatMonth(`${year}-${month}`)}` : "翻到那个月" };
+  }
+  return undefined;
 }
