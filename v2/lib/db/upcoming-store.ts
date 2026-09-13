@@ -406,6 +406,34 @@ export async function readUpcomingFeedForFamily(options: Omit<ReadUpcomingOption
   return familyFeedFrom(approved, everything.state === "ready" ? everything.items.length : 0);
 }
 
+/**
+ * Record a human's review decision. THE REVIEWER'S PATH, and the only way a row becomes `approved`.
+ *
+ * Deliberately separate from mergeUpcomingCandidates, which never writes this column at all: an
+ * extraction re-run must not be able to approve anything, and must not be able to undo an approval
+ * either. It touches nothing else — not the status, not the evidence, not the dates. Approving a
+ * finished item leaves it finished, with the message that proved it still attached.
+ */
+export async function setUpcomingReviewDecision(
+  itemIds: string[],
+  decision: UpcomingItemRecord["reviewDecision"],
+  options: { profileId?: string; env?: NodeJS.ProcessEnv; db?: UpcomingDb; now?: string } = {},
+): Promise<{ updated: number; ids: string[] }> {
+  if (!itemIds.length) return { updated: 0, ids: [] };
+  if (decision !== "approved" && decision !== "rejected" && decision !== "needs_human_review") {
+    throw new Error(`setUpcomingReviewDecision: refusing unknown decision "${decision}"`);
+  }
+  const db = dbFor(options);
+  const rows = await db.update(t.upcomingItems)
+    .set({ reviewDecision: decision, updatedAt: options.now ?? new Date().toISOString() })
+    .where(and(
+      eq(t.upcomingItems.profileId, options.profileId ?? CANONICAL_PROFILE_ID),
+      inArray(t.upcomingItems.id, itemIds),
+    ))
+    .returning({ id: t.upcomingItems.id });
+  return { updated: rows.length, ids: rows.map((row) => row.id) };
+}
+
 /** The same read with provenance attached, for a reviewer or a script — never for a page. */
 export async function readUpcomingRecords(options: ReadUpcomingOptions = {}): Promise<UpcomingItemRecord[]> {
   const db = dbFor(options);

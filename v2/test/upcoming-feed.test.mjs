@@ -357,3 +357,19 @@ test("a read failure is never converted into a statement about the week", () => 
   const failed = { state: "read_failed", reason: "x", error: "y" };
   assert.deepEqual(familyFeedFrom(failed, 21), failed);
 });
+
+// ---------------------------------------------------------------------------------------------
+// 审核写入：只有这条路能把一条标成 approved，而且它只碰这一列
+// ---------------------------------------------------------------------------------------------
+test("the reviewer path refuses a decision it does not recognise, before touching a database", async () => {
+  const { setUpcomingReviewDecision } = await import("../lib/db/upcoming-store.ts");
+  await assert.rejects(
+    () => setUpcomingReviewDecision(["upcoming-a"], "published"),
+    /refusing unknown decision/,
+  );
+});
+
+test("an empty id list is a no-op, not a table-wide update", async () => {
+  const { setUpcomingReviewDecision } = await import("../lib/db/upcoming-store.ts");
+  assert.deepEqual(await setUpcomingReviewDecision([], "approved"), { updated: 0, ids: [] });
+});
