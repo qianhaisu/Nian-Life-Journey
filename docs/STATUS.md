@@ -8234,3 +8234,38 @@ ROLLBACK 后列消失、读取回到全部 pending。
 回执：`RECEIPT-2026-09-13-E.md`　交接：`upcoming/HANDOFF-TO-PAGE-2026-09-13-PROVENANCE.md`
 
 **下一件事**：等页面 session 基于 `1ccf17b` 重新构建并验收；等第 1、4 段健康记录的处置指示。
+
+## 2026-09-13 · 数据轨 · about 读取链 124 秒：定位与修复
+
+**本轮线上多了什么家人能读的东西**：没有新内容，少了 49 MB 的等待。
+家庭渲染链（`/`、`/memory`、`/about` 共用的 `loadFamilyArchive()`）每次要 **72.6 MB**，
+现在是 **23.6 MB**；同环境同方法，ECS 上串行合计 **1,840 ms → 502 ms**，一次并发 437 ms。
+
+**先纠正我自己上一条**：那个 124 秒是**我的测量环境**，不是产品。
+分段测下来，整条链的**服务端执行合计 34 毫秒**，123.7 秒全是经 SSH 隧道传 72.6 MB。
+同一份查询在 ECS（与 RDS 同 VPC）是 1.84 秒。**没有慢查询。**
+也与本轮写入无关：新增的 12 行 care ＋ 3 行 episode ＋ 17 行 growth 合计 0.02 MB。
+
+**真正的问题是载荷与重复读取**，两样都修了。四分之三的字节是这条链从不读的列：
+`media_locations` 只被 `selectLocation()` 看 provider／variant／status，
+`media_assets` 只用 mediaType／mimeType，`raw_sources` 只用背后有照片的那些行。
+`life_events` 原先读三遍、审核账本读两遍，现在各一遍。
+新增 `getFamilyArchiveInput()`；**`getStore()` 原样不动**，Organizer／Quark／ingest 还要整行。
+
+**差点悄悄坏掉的一处**：只留下有照片的来源后，档案时钟会倒退到「最后一张照片到达的那天」。
+它现在走自己的 `max(captured_at)` 聚合，三条测试守着。
+
+**等价性对着真库逐字比过，22/22 通过**：chapters、media、events、traceEvents、snapshots、
+privilege 三个集合、`time`（含 activityDay）、以及整份 about 视图模型，全部逐字相同；
+健康仍是 7 组 12 行；首页待办仍是 18 条事项 18 条 approved 摘要。
+
+**没做到什么 / 最大的已知 blocker**：**页面运行验收没做，归页面轨**；
+私有站镜像早于 `76c769e`，**不要用旧组合镜像部署**。
+剩下最大的两块是 `media` 8.3 MB 与收窄后的 `media_locations` 8.5 MB（占修复后载荷 71%），
+下一步是把可交付判定推进 SQL，本轮没做——`selectLocation()` 的 provider 偏好来自环境变量，
+照搬进 SQL 有走样风险，而语义一致是硬要求。
+`media_locations(media_asset_id)` 索引仍待批准，且本轮证明它与 about 慢**无关**，不拿它顶账。
+
+报告：`perf/REPORT-ABOUT-READ-2026-09-13.md`　数据：`perf/20`–`24`
+
+**下一件事**：等页面轨基于 `76c769e` 重建并回归 `/`、`/memory`、`/about`、`/preview`。
