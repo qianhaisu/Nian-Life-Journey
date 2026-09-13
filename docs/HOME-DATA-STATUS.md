@@ -34,7 +34,7 @@
 | `931d0da` | **1.1.0**：证据链修正 + `editionAt` 遇坏时间值不再打掉整页 + 删掉自己写的一段死代码 |
 | `714b090` | **1.2.0**：照片冷却量化 + 轮换次序不再依赖质量分 + 习惯日期上限作用位置与状态保真 + 离线质量缓存接线 |
 | `fdc7f02` | `HOME_FEED_VERSION` 跟上 1.2.0 |
-| （本轮） | **1.3.0**：轮换池与页面上限分开 + 期内选片固定（新候选/新评分下一期生效）+ 习惯上限改按实际展示日计数 |
+| `2798593` | **1.3.0**：轮换池与页面上限分开 + 期内选片固定（新候选/新评分下一期生效）+ 习惯上限改按实际展示日计数 |
 
 改的文件：`lib/home-feed.ts`、`lib/upcoming-freshness.ts`、`lib/home-photo-quality.ts`（三个新）、
 `lib/db/upcoming-store.ts`（合并分支钉住提出日）、`test/{home-feed,upcoming-freshness,home-photo-quality}.test.mjs`（新）、
@@ -194,7 +194,7 @@
 `.next/types` 为证）跑完四项检查并 push `931d0da`，随后同样方式 push `714b090` / `fdc7f02`。
 **现在不持有锁。** 续轮期间它的 `app/**`、`components/**` 又有未提交改动，我一个都没碰、也没有拿它们当回归。
 第三轮：在它没有 Git 写入在进行、且其半成品能编译通过（typecheck/lint/test/build 全过）之后，
-我取用 Git 时段推送本轨四个文件，推完即释放。全程只动 `lib/home-feed.ts`、`lib/upcoming-freshness.ts`
+我取用 Git 时段推送本轨四个文件（`2798593`），**推完即释放，现在不持有**。全程只动 `lib/home-feed.ts`、`lib/upcoming-freshness.ts`
 与两个测试文件。
 
 ## 下一步
