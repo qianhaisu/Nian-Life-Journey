@@ -11,7 +11,7 @@ import { storyPhotoConfirmationsFrom } from "../lib/media/story-binding.ts";
 import {
   buildHomeFeed, buildPhotoCandidates, buildReminders, candidateMemories, deadlineLabelOf,
   deterministicQuality, editionAt, EDITION_HOURS, HOME_FEED_VERSION, isImportantReminder,
-  QUALITY_NOT_ASSESSED, reminderStateOf, REMINDERS_MAX_SHOWN,
+  QUALITY_NOT_ASSESSED, reminderStateOf, REMINDERS_MAX_SHOWN, cooldownOf,
 } from "../lib/home-feed.ts";
 
 const BIRTH = "2025-01-03";
@@ -171,8 +171,13 @@ test("候选不足时冷却被缩短，理由写在候选上，门槛不放宽",
   const archive = archiveOf({ events, media: [p1], reviews: [binding("e-1", p1.id)] });
   const feed = buildHomeFeed(archive, { edition: editionAt(new Date("2026-09-13T09:00:00+08:00")) });
   assert.equal(feed.photoCandidates.length, 1);
-  assert.match(feed.photoCandidates[0].reason, /候选不足/);
-  assert.match(feed.photoCandidates[0].reason, /门槛未放宽/);
+  // 缩短了多少现在是量出来的数，不是一句话：一组候选 → 一期一轮 → 0.25 天，离 14 天差得远。
+  const cooldown = feed.photoCandidates[0].cooldown;
+  assert.equal(cooldown.editions, 1);
+  assert.equal(cooldown.days, 0.25);
+  assert.equal(cooldown.meetsTarget, false);
+  assert.match(cooldown.shortfall, /可达上限/);
+  assert.match(cooldown.shortfall, /门槛未放宽/);
   // 唯一一组候选反复出现是诚实的；拒绝展示它不是。
   const later = buildHomeFeed(archive, { edition: editionAt(new Date("2026-09-13T21:00:00+08:00")) });
   assert.equal(later.lead.photo.media.id, p1.id);
@@ -454,6 +459,85 @@ test("整个档案只有一段带获批配图的记忆时，冷却满足不了�
   const archive = archiveOf({ events, media: [a1], reviews: [binding("e-a", a1.id)] });
   const candidates = buildHomeFeed(archive, { edition: { id: "t", startedAt: "x", expiresAt: "y", slot: 0, index: 0 } }).photoCandidates;
   assert.equal(candidates.length, 1);
-  assert.match(candidates[0].reason, /候选不足/);
-  assert.match(candidates[0].reason, /门槛未放宽/);
+  assert.equal(candidates[0].cooldown.meetsTarget, false, "满足不了就说满足不了");
+  assert.match(candidates[0].cooldown.shortfall, /门槛未放宽/);
+});
+
+// ── 修 1：轮换次序不能依赖质量分（否则质量缓存一落地就在期中换图） ────────────────
+
+test("质量缓存落地不会在同一期里换掉照片：轮换次序只看 mediaId，不看质量分", () => {
+  const p1 = photo("m-aaa", "2026-09-07");
+  const p2 = photo("m-bbb", "2026-08-20", { takenAt: "2026-08-20T11:00:00+08:00" });
+  const p3 = photo("m-ccc", "2026-08-10", { takenAt: "2026-08-10T11:00:00+08:00" });
+  const events = [
+    event("e-1", "2026-09-07", { mediaIds: [p1.id] }),
+    event("e-2", "2026-08-20", { mediaIds: [p2.id] }),
+    event("e-3", "2026-08-10", { mediaIds: [p3.id] }),
+  ];
+  const archive = archiveOf({
+    events, media: [p1, p2, p3],
+    reviews: [binding("e-1", p1.id), binding("e-2", p2.id), binding("e-3", p3.id)],
+  });
+  const edition = editionAt(new Date("2026-09-13T09:00:00+08:00"));
+  const chosenWith = (quality) => buildHomeFeed(archive, { edition, quality }).lead.photo.media.id;
+  const before = chosenWith(undefined);
+  const lookup = (scores) => (mediaId) => ({
+    score: scores[mediaId], interaction: 0, readability: 0, context: 0, distinction: 0,
+    source: "ai_vision", model: "test-vision", assessedAt: "2026-09-13T00:00:00Z",
+  });
+  assert.equal(chosenWith(lookup({ "m-aaa": 10, "m-bbb": 50, "m-ccc": 90 })), before, "缓存落地不该在六小时之内换掉照片（§5.5）");
+  assert.equal(chosenWith(lookup({ "m-aaa": 90, "m-bbb": 50, "m-ccc": 10 })), before, "分数整个反过来也不该换");
+});
+
+test("质量分决定谁进轮换 band 以及 qualityRank，但不决定轮到谁", () => {
+  const photos = ["m-a", "m-b", "m-c", "m-d", "m-e", "m-f", "m-g"].map((id, i) =>
+    photo(id, "2026-09-01", { takenAt: `2026-09-0${i + 1}T10:00:00+08:00` }));
+  const events = photos.map((p, i) => event(`e-${i}`, "2026-09-01", { mediaIds: [p.id] }));
+  const archive = archiveOf({ events, media: photos, reviews: photos.map((p, i) => binding(`e-${i}`, p.id)) });
+  const scores = { "m-a": 10, "m-b": 20, "m-c": 30, "m-d": 40, "m-e": 50, "m-f": 60, "m-g": 70 };
+  const feed = buildHomeFeed(archive, {
+    edition: editionAt(new Date("2026-09-13T09:00:00+08:00")),
+    quality: (mediaId) => ({ score: scores[mediaId], interaction: 0, readability: 0, context: 0, distinction: 0, source: "ai_vision", model: "m", assessedAt: "t" }),
+  });
+  const rotating = feed.photoCandidates.filter((candidate) => candidate.cooldown);
+  const benched = feed.photoCandidates.filter((candidate) => !candidate.cooldown);
+  assert.equal(rotating.length, 6, "band 上限 6 组参与轮换");
+  assert.equal(benched.length, 1);
+  assert.equal(benched[0].photo.media.id, "m-a", "分最低的那一张被挤出 band");
+  assert.match(benched[0].reason, /质量分排在第 7 位/);
+  assert.equal(benched[0].qualityRank, 7);
+  assert.deepEqual(rotating.map((candidate) => candidate.photo.media.id), ["m-b", "m-c", "m-d", "m-e", "m-f", "m-g"]);
+  assert.equal(rotating.find((candidate) => candidate.photo.media.id === "m-g").qualityRank, 1);
+});
+
+test("冷却报的是量出来的数：做到几期、折算几天、离 14 天差多少", () => {
+  const p1 = photo("m-1", "2026-09-07");
+  const p2 = photo("m-2", "2026-08-20", { takenAt: "2026-08-20T11:00:00+08:00" });
+  const events = [event("e-1", "2026-09-07", { mediaIds: [p1.id] }), event("e-2", "2026-08-20", { mediaIds: [p2.id] })];
+  const archive = archiveOf({ events, media: [p1, p2], reviews: [binding("e-1", p1.id), binding("e-2", p2.id)] });
+  const feed = buildHomeFeed(archive, { edition: editionAt(new Date("2026-09-13T09:00:00+08:00")) });
+  const cooldown = feed.photoCandidates[0].cooldown;
+  assert.equal(cooldown.editions, 2, "两组候选 → 同一张照片隔两期再出现");
+  assert.equal(cooldown.days, 0.5, "两期 × 6 小时 = 半天");
+  assert.equal(cooldown.targetDays, 14);
+  assert.equal(cooldown.meetsTarget, false);
+  assert.match(cooldown.shortfall, /可达上限/, "差多少要说清，并说明这已是候选数下的上限");
+  assert.match(cooldown.shortfall, /门槛未放宽/);
+  assert.equal(cooldownOf(56).meetsTarget, true);
+  assert.equal(cooldownOf(56).days, 14);
+  assert.equal(cooldownOf(56).shortfall, undefined);
+  assert.equal(cooldownOf(55).meetsTarget, false);
+  assert.equal(cooldownOf(0).editions, 0);
+  assert.equal(cooldownOf(0).shortfall, undefined, "一组候选都没有时不必谈冷却");
+});
+
+test("纯轮转：走满一整轮才会再出现同一张，且相邻期次必不相同", () => {
+  const photos = ["m-a", "m-b", "m-c"].map((id, i) => photo(id, "2026-09-01", { takenAt: `2026-09-0${i + 1}T10:00:00+08:00` }));
+  const events = photos.map((p, i) => event(`e-${i}`, "2026-09-01", { mediaIds: [p.id] }));
+  const archive = archiveOf({ events, media: photos, reviews: photos.map((p, i) => binding(`e-${i}`, p.id)) });
+  const seq = [0, 1, 2, 3, 4, 5].map((index) =>
+    buildHomeFeed(archive, { edition: { id: `t${index}`, startedAt: "x", expiresAt: "y", slot: 0, index } }).lead.photo.media.id);
+  assert.equal(new Set(seq.slice(0, 3)).size, 3, "头三期把三张都走过一遍");
+  assert.deepEqual(seq.slice(3), seq.slice(0, 3), "第四期开始重复同一轮");
+  for (let i = 1; i < seq.length; i += 1) assert.notEqual(seq[i], seq[i - 1], "相邻期次不该是同一张");
 });

@@ -226,3 +226,64 @@ test("同一件事被更晚的消息再说一次，提出日不会被推后（�
   for (let i = 0; i < 5; i += 1) day = pinnedRaisedOn(day, "2026-09-10");
   assert.equal(day, "2026-08-16");
 });
+
+// ── 修 2：习惯提醒的日期上限作用在「实际展示」上，且退场记录照抄库里的真实状态 ──────
+
+const habit = (id, raisedOn, overrides = {}) => item({
+  id, title: "每天记一次作息", evidence: { day: raisedOn }, ...overrides,
+});
+
+test("同一件习惯关注只占两个展示日期，第三个日期退场但**不是过期**", () => {
+  const items = [habit("h1", "2026-09-12"), habit("h2", "2026-09-10"), habit("h3", "2026-09-08")];
+  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
+  const capped = reminders.retired.filter((r) => r.kind === "habit_capped");
+  assert.equal(capped.length, 1);
+  assert.equal(capped[0].id, "h3", "留下最近两个日期");
+  assert.match(capped[0].reason, /2 个不同日期/);
+  assert.equal(reminders.retired.some((r) => r.kind === "expired"), false, "这三条都还在 7 天周期内，没有一条是过期");
+  // 一条都没丢：露出的 + 折叠的 = 全部。
+  assert.equal(reminders.shown.length + reminders.more.length, items.length);
+});
+
+test("退场记录照抄库里的真实状态，不把 tentative 报成 open", () => {
+  // 这条是真 bug 的回归测试：原来 habit_capped 那一支把 status 硬写成 "open"，
+  // 于是一条 tentative 的习惯提醒会被报成 open —— 拿一个编出来的状态盖掉库里真实那一行。
+  const items = [
+    habit("h1", "2026-09-12", { status: "tentative" }),
+    habit("h2", "2026-09-10", { status: "tentative" }),
+    habit("h3", "2026-09-08", { status: "tentative" }),
+  ];
+  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
+  const capped = reminders.retired.find((r) => r.kind === "habit_capped");
+  assert.equal(capped.id, "h3");
+  assert.equal(capped.status, "tentative", "库里是 tentative，退场记录就得写 tentative");
+});
+
+test("过期与日期上限是两种退场原因，分开记不混成一句", () => {
+  const items = [
+    habit("h1", "2026-09-12"), habit("h2", "2026-09-10"), habit("h3", "2026-09-08"),
+    item({ id: "stale", title: "买一样日用品", evidence: { day: "2026-08-16" } }),
+  ];
+  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
+  const kinds = new Map(reminders.retired.map((r) => [r.id, r.kind]));
+  assert.equal(kinds.get("stale"), "expired");
+  assert.equal(kinds.get("h3"), "habit_capped");
+  assert.equal(reminders.retired.length, 2);
+});
+
+test("同一天的多条习惯提醒只算一个日期，不会误判成超限", () => {
+  const items = [habit("a", "2026-09-12"), habit("b", "2026-09-12"), habit("c", "2026-09-10")];
+  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
+  assert.equal(reminders.retired.filter((r) => r.kind === "habit_capped").length, 0);
+});
+
+test("日期上限只管习惯类：别的事项再多也不受它影响", () => {
+  const items = [
+    item({ id: "e1", title: "买一样日用品", evidence: { day: TODAY } }),
+    item({ id: "e2", title: "买另一样日用品", evidence: { day: TODAY } }),
+    item({ id: "e3", title: "买第三样日用品", evidence: { day: TODAY } }),
+  ];
+  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
+  assert.equal(reminders.retired.length, 0, "都在新鲜期内，也都不是习惯类");
+  assert.equal(reminders.shown.length + reminders.more.length, 3);
+});

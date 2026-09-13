@@ -90,3 +90,92 @@ test("缓存文件缺失、坏了、或缺关键字段，一律当没有评估�
   await writeFile(good, JSON.stringify({ model: "m", assessedAt: "t", scope: "s", scores: {} }), "utf8");
   assert.equal((await loadQualityCache(good, {})).model, "m");
 });
+
+// ── 修 3：readHomeFeed 真的去读那份离线缓存（原来这一段是断的） ──────────────────
+
+const MEDIA = "media-x";
+const BIRTH = "2025-01-03";
+const TODAY = "2026-09-13";
+
+/** 一份最小的真档案：一段记忆 + 一张逐对获批的配图。两条用例共用。 */
+async function archiveFixture() {
+  const { buildChapters } = await import("../lib/memory-chapters.ts");
+  const { storyPhotoConfirmationsFrom } = await import("../lib/media/story-binding.ts");
+  const media = [{
+    id: MEDIA, profileId: "p", type: "photo", src: "/api/media/x", thumbnailSrc: "/api/media/x?t",
+    width: 2000, height: 1500, takenAt: "2026-09-07T10:00:00+08:00", visibility: "family", rawSourceId: "r",
+  }];
+  const events = [{
+    id: "e-1", profileId: "p", title: "一段记忆", story: "正文", occurredAt: "2026-09-07 00:00:00+00",
+    people: [], tags: [], contentTypes: ["family"], mediaIds: [MEDIA], sourceIds: [], growthRecordIds: [],
+    careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"],
+    visibility: "family", keptInYearbook: false,
+  }];
+  const reviews = [{ id: "rev", targetKind: "media_binding", targetId: `e-1|${MEDIA}`, decision: "approved", reviewedAt: "2026-09-13T00:00:00Z" }];
+  return {
+    store: { qualityReviews: reviews }, media, events, traceEvents: [], eventIdentities: events,
+    chapters: buildChapters({ events, traces: [], media, deliverable: new Set([MEDIA]), birthDay: BIRTH, photoConfirmations: storyPhotoConfirmationsFrom(reviews) }),
+    birthDay: BIRTH, snapshots: [], privilege: { confirmed: new Set(), trusted: new Set(), checked: new Set() },
+    time: { today: TODAY, activityDay: TODAY },
+  };
+}
+
+const EDITION = { id: "t", startedAt: "x", expiresAt: "y", slot: 0, index: 0 };
+
+test("readHomeFeed 会读 HOME_PHOTO_QUALITY_PATH 指向的缓存，并把 ai_vision 分数带上首页", async () => {
+  // 原来的洞：批次脚本写出缓存、buildHomeFeed 会用传进来的 quality，但 readHomeFeed 从不去读那个文件
+  // —— 三个部件都对，中间没人接线，于是批次跑成功了首页也永远停在确定性降级分上。
+  const { mkdtemp, writeFile } = await import("node:fs/promises");
+  const path = await import("node:path");
+  const os = await import("node:os");
+  const { readHomeFeed, HOME_PHOTO_QUALITY_PATH_ENV } = await import("../lib/home-feed.ts")
+    .then(async (feed) => ({ ...feed, ...(await import("../lib/home-photo-quality.ts")) }));
+
+  const dir = await mkdtemp(path.join(os.tmpdir(), "nl-feed-cache-"));
+  const file = path.join(dir, "quality.json");
+  await writeFile(file, JSON.stringify({
+    model: "cache-model", assessedAt: "2026-09-13T10:00:00Z", scope: "测试",
+    scores: { [MEDIA]: { interaction: 80, readability: 90, context: 100, distinction: 70 } },
+  }), "utf8");
+
+  const archive = await archiveFixture();
+
+  // **真的调 readHomeFeed**，不照抄它的接线：删掉它里面那一行，这条测试必须失败。
+  const previous = process.env[HOME_PHOTO_QUALITY_PATH_ENV];
+  process.env[HOME_PHOTO_QUALITY_PATH_ENV] = file;
+  try {
+    const feed = await readHomeFeed({ archive, upcoming: { status: "ready", items: [] }, edition: EDITION });
+    assert.equal(feed.lead.photo.quality.source, "ai_vision", "readHomeFeed 必须自己把缓存读进来，否则这里还是降级分");
+    assert.equal(feed.lead.photo.quality.model, "cache-model");
+    assert.equal(feed.lead.photo.quality.degraded, undefined);
+    assert.equal(feed.lead.photo.quality.interaction, 80);
+    // 调用方显式传了 quality 时，以调用方为准（注入优先于文件）。
+    const injected = await readHomeFeed({
+      archive, upcoming: { status: "ready", items: [] }, edition: EDITION,
+      quality: () => undefined,
+    });
+    assert.equal(injected.lead.photo.quality.source, "deterministic");
+  } finally {
+    if (previous === undefined) delete process.env[HOME_PHOTO_QUALITY_PATH_ENV];
+    else process.env[HOME_PHOTO_QUALITY_PATH_ENV] = previous;
+  }
+});
+
+test("环境变量没设时 readHomeFeed 退回确定性降级分，不报错", async () => {
+  const { readHomeFeed } = await import("../lib/home-feed.ts");
+  const previous = process.env.HOME_PHOTO_QUALITY_PATH;
+  delete process.env.HOME_PHOTO_QUALITY_PATH;
+  try {
+    const feed = await readHomeFeed({ archive: await archiveFixture(), upcoming: { status: "ready", items: [] }, edition: EDITION });
+    assert.equal(feed.lead.photo.quality.source, "deterministic");
+    assert.ok(feed.lead.photo.quality.degraded, "降级要写原因");
+  } finally {
+    if (previous !== undefined) process.env.HOME_PHOTO_QUALITY_PATH = previous;
+  }
+});
+
+test("环境变量没设 / 文件不在时，readHomeFeed 的接线返回 undefined，首页退回降级分而不是报错", async () => {
+  const { loadQualityCache, qualityLookupFrom } = await import("../lib/home-photo-quality.ts");
+  assert.equal(await loadQualityCache(undefined, {}), undefined);
+  assert.equal(qualityLookupFrom(undefined)("any"), undefined, "lookup 返回 undefined → buildHomeFeed 走确定性降级");
+});

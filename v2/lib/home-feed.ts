@@ -27,7 +27,7 @@ import { monthHrefOf } from "@/lib/home-view";
 import { recentWindowStart } from "@/lib/home-recent-pick";
 import type { UpcomingFeed, UpcomingSources } from "@/lib/upcoming";
 import type { UpcomingItem, UpcomingWhen } from "@/lib/upcoming-contract";
-import { freshnessOf, isImportantItem, limitHabitDates } from "@/lib/upcoming-freshness";
+import { classifyFreshness, freshnessOf, isImportantItem, limitHabitDates, raisedOnOf } from "@/lib/upcoming-freshness";
 import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 /** 契约版本。页面轨按这个字符串确认自己接的是哪一版；只做兼容新增时递增小版本号。 */
@@ -252,11 +252,51 @@ export type HomeFeedLead = {
  * 同事件内切换才允许文案不变。」把切换单位定成 (故事, 照片) 对，这条规则就是构造保证的，
  * 页面不可能只换图不换标题。
  */
+/**
+ * 实际做到的冷却，**量出来的数，不是一句话**（§5.5）。
+ *
+ * 首页是纯轮转：位次每期 +1，所以同一张照片正好隔「候选数」期再出现。候选只有 n 组时，
+ * n 期就是**可达的上限**——不可能更久了。所以这里报的是三件事：做到了几期、折算几天、
+ * 以及离 14 天的目标差多少。差多少也照实写，不用一句「冷却已按规则处理」蒙过去。
+ */
+export type HomePhotoCooldown = {
+  /** 同一张照片下一次出现要等几期。 */
+  editions: number;
+  /** 折算成天（一期 6 小时）。 */
+  days: number;
+  /** §5.5 的目标值，14 天。 */
+  targetDays: number;
+  /** 达到目标了吗。 */
+  meetsTarget: boolean;
+  /** 没达到时：差在哪，以及实际做到了多少。达到时为 undefined。 */
+  shortfall?: string;
+};
+
+/** 给定参与轮换的候选数，算出实际做到的冷却。候选数就是唯一的自变量。 */
+export function cooldownOf(rotation: number): HomePhotoCooldown {
+  const days = (rotation * EDITION_HOURS) / 24;
+  const meetsTarget = rotation > 0 && days >= PHOTO_COOLDOWN_DAYS;
+  return {
+    editions: rotation,
+    days,
+    targetDays: PHOTO_COOLDOWN_DAYS,
+    meetsTarget,
+    shortfall: rotation === 0 || meetsTarget
+      ? undefined
+      : `合格 (故事, 照片) 对只有 ${rotation} 组，整轮 ${days} 天 < 目标 ${PHOTO_COOLDOWN_DAYS} 天；`
+        + `${rotation} 组时 ${days} 天已是可达上限，冷却缩短为整轮轮换，展示门槛未放宽`,
+  };
+}
+
 export type HomePhotoCandidate = {
   /** 切换用的稳定键 "<eventId>|<mediaId>"。 */
   key: string;
   photo: HomeFeedPhoto;
   story: HomeStoryRef;
+  /** 质量分在全部合格候选里排第几（1 = 最高）。决定谁进轮换 band，**不决定轮换次序**。 */
+  qualityRank?: number;
+  /** 实际做到的同图冷却。只有真正参与轮换的候选才有。 */
+  cooldown?: HomePhotoCooldown;
   chosen: boolean;
   /** 排在这个位置、或没被选中的原因（连拍同组、质量降级、冷却缩短……），供审计和 STATUS 取证。 */
   reason: string;
@@ -332,14 +372,23 @@ export type HomeReminder = {
   provenance?: UpcomingProvenance;
 };
 
-/** 退场的事项：为什么退。它仍然可达，仍然不是完成。 */
+/** 退场的事项：为什么退。它仍然可达（在 `more` 里），仍然不是完成。 */
 export type HomeRetiredReminder = {
   id: string;
   title: string;
   /** 退场原因，人能读的一句话。 */
   reason: string;
-  /** 退场时它在库里的状态——原封不动。 */
+  /**
+   * 退场时它在库里的状态——**原封不动照抄那一行**，不是这里推断的。
+   * 一条 tentative 的习惯提醒被日期上限压下去时，这里就是 `tentative`，不是 `open`。
+   */
   status: UpcomingItem["status"];
+  /**
+   * 为什么退场，两种，别混：
+   * - `expired`：日子过了，或无期限事项过了新鲜期。
+   * - `habit_capped`：同一件习惯关注已经露出过两个不同日期了（§6.3）。**它没有过期。**
+   */
+  kind: "expired" | "habit_capped";
 };
 
 /**
@@ -407,6 +456,14 @@ export type BuildHomeFeedOptions = {
   quality?: HomePhotoQualityLookup;
   upcoming?: UpcomingFeed;
   upcomingSources?: UpcomingSources;
+  /**
+   * 已读好的档案。`readHomeFeed` 默认自己走 `loadFamilyArchiveOnDemand()`；传了就用传的。
+   *
+   * 它和 `upcoming`/`upcomingSources` 是同一类注入点，补上它是为了**能端到端测 readHomeFeed 本身**
+   * ——包括「它有没有真的去读那份离线质量缓存」。少了这个口，那条测试只能把接线逻辑照抄一遍，
+   * 于是删掉 readHomeFeed 里那一行，测试照样绿。
+   */
+  archive?: FamilyArchive;
   /** 显式切换：页面「换张照片」时把候选的 key 传回来，只在合格候选里换（§5.6）。 */
   photoKey?: string;
 };
@@ -561,10 +618,17 @@ export function buildPhotoCandidates(
     const scored: HomeFeedPhoto = { ...photo, quality: qualityFor(quality, photo, today) };
     paired.push({ photo: scored, story: storyRefOf(memory), burst: burstKeyOf(scored) });
   }
-  paired.sort((a, b) =>
-    (b.photo.quality?.score ?? 0) - (a.photo.quality?.score ?? 0)
-    || b.photo.day.localeCompare(a.photo.day)
-    || a.photo.media.id.localeCompare(b.photo.media.id));
+  // 质量分决定**谁进候选band**（下面的 slice），mediaId 决定**轮换次序**——两件事分开，这是
+  // 2026-09-13 修掉的一个真 bug。
+  //
+  // 原本次序是「质量分降序 → 日期降序 → mediaId」。那让期次的选择依赖质量分，而质量分来自一个
+  // **离线缓存**：那份缓存落地的那一刻（或者某一张的分被重评），排序就变了，于是同一个
+  // `edition.id` 在六小时之内会选出另一张照片——正好违反 §5.5「同一期至少稳定 6 小时」。
+  // 家人刷一下页面，照片换了，而那一期并没有过去。
+  //
+  // 现在轮换只看 mediaId（一个永不变的稳定键），所以质量缓存什么时候落地都不影响当期选择；
+  // 缓存影响的是下一次谁有资格进 band，以及 band 里的展示顺序由 `qualityRank` 单独给出。
+  paired.sort((a, b) => a.photo.media.id.localeCompare(b.photo.media.id));
   const seenBursts = new Set<string>();
   const deduped: Pair[] = [];
   const dropped: { entry: Pair; reason: string }[] = [];
@@ -581,20 +645,31 @@ export function buildPhotoCandidates(
   // 哪天 memory.lead 变成可以给一段记忆返回多张图，那条测试会失败，而不是悄悄开始重复。
   //
   // 「3 天」这个数字在候选只有三组时仍然满足不了（整轮 18 小时），那部分由下面的 shortened 说出来。
-  const kept = deduped;
-  const rotation = Math.min(kept.length, HOME_PHOTO_CANDIDATES_MAX);
+  // band = 真正参与轮换的那几组。谁进 band 由质量分决定（取分最高的前 HOME_PHOTO_CANDIDATES_MAX
+  // 组），band 内的**次序**由 mediaId 决定（见上面那段：次序不能依赖会变的质量分）。
+  const byQuality = [...deduped].sort((a, b) =>
+    (b.photo.quality?.score ?? 0) - (a.photo.quality?.score ?? 0)
+    || b.photo.day.localeCompare(a.photo.day)
+    || a.photo.media.id.localeCompare(b.photo.media.id));
+  const inBand = new Set(byQuality.slice(0, HOME_PHOTO_CANDIDATES_MAX).map((entry) => entry.photo.media.id));
+  const qualityRank = new Map(byQuality.map((entry, index) => [entry.photo.media.id, index + 1]));
+  const kept = deduped.filter((entry) => inBand.has(entry.photo.media.id));
+  const benched = deduped.filter((entry) => !inBand.has(entry.photo.media.id));
+  const rotation = kept.length;
   const rotationIndex = rotation > 0 ? edition.index % rotation : 0;
-  // 冷却是否被缩短：一轮走完需要 rotation 期 × 6 小时。不足 PHOTO_COOLDOWN_DAYS 就是缩短了，说出来。
-  const rotationDays = (rotation * EDITION_HOURS) / 24;
-  const shortened = rotation > 0 && rotationDays < PHOTO_COOLDOWN_DAYS
-    ? `候选不足：合格 (故事, 照片) 对只有 ${rotation} 组，整轮 ${rotationDays} 天 < 同图冷却 ${PHOTO_COOLDOWN_DAYS} 天，冷却缩短为整轮轮换；展示门槛未放宽`
-    : undefined;
+  // 实际做到的同图冷却，是一个**量出来的数**，不是一句话：整轮 rotation 期 × 6 小时。
+  // 纯轮转（位次每期 +1）意味着同一张照片正好隔 rotation 期再出现，这在候选只有 rotation 组时
+  // 是**可达的上限**——所以下面报的是「做到了多少」，以及离 §5.5 的目标差多少。
+  const cooldown = cooldownOf(rotation);
+  const shortened = cooldown.shortfall;
   const explicit = photoKey ? kept.findIndex((entry) => `${entry.story.eventId}|${entry.photo.media.id}` === photoKey) : -1;
   const chosenIndex = explicit >= 0 ? explicit : rotationIndex;
-  const candidates: HomePhotoCandidate[] = kept.slice(0, HOME_PHOTO_CANDIDATES_MAX).map((entry, index) => ({
+  const candidates: HomePhotoCandidate[] = kept.map((entry, index) => ({
     key: `${entry.story.eventId}|${entry.photo.media.id}`,
     photo: entry.photo,
     story: entry.story,
+    qualityRank: qualityRank.get(entry.photo.media.id),
+    cooldown,
     chosen: index === chosenIndex,
     reason: index === chosenIndex
       ? (explicit >= 0
@@ -602,11 +677,22 @@ export function buildPhotoCandidates(
         : `第 ${edition.index} 期轮换到这一对（第 ${rotationIndex + 1}/${rotation} 位）${shortened ? `；${shortened}` : ""}`)
       : `本期未选中${shortened ? `；${shortened}` : `；等轮换到第 ${index + 1}/${rotation} 位`}`,
   }));
-  for (const { entry, reason } of dropped) {
-    if (candidates.length >= HOME_PHOTO_CANDIDATES_MAX) break;
+  // 没进 band 的（质量分排在 HOME_PHOTO_CANDIDATES_MAX 之后）和被连拍分组挡下的，都列出来带原因。
+  // 它们不参与轮换，所以不带 cooldown——那个数只对真正在轮的候选有意义。
+  for (const entry of benched) {
     candidates.push({
       key: `${entry.story.eventId}|${entry.photo.media.id}`,
-      photo: entry.photo, story: entry.story, chosen: false, reason,
+      photo: entry.photo, story: entry.story, chosen: false,
+      qualityRank: qualityRank.get(entry.photo.media.id),
+      reason: `质量分排在第 ${qualityRank.get(entry.photo.media.id)} 位，没进本期轮换的前 ${HOME_PHOTO_CANDIDATES_MAX} 组`,
+    });
+  }
+  for (const { entry, reason } of dropped) {
+    candidates.push({
+      key: `${entry.story.eventId}|${entry.photo.media.id}`,
+      photo: entry.photo, story: entry.story, chosen: false,
+      qualityRank: qualityRank.get(entry.photo.media.id),
+      reason,
     });
   }
   return candidates;
@@ -748,18 +834,9 @@ export function buildReminders(feed: UpcomingFeed | undefined, today: string, so
   }
   const retired: HomeRetiredReminder[] = all
     .filter((reminder) => reminder.state === "expired")
-    .map((reminder) => ({ id: reminder.id, title: reminder.title, reason: reminder.reason, status: reminder.item.status }));
-  // 习惯提醒最多露出两个不同日期（§6.3）。被压下去的进 retired（带原因）而不是消失，
-  // 也仍然在 more 里可达——它不是过期，是「同一件事已经说过两次了」。
-  const { dropped: habitDropped } = limitHabitDates(all.map((reminder) => {
-    const verdict = freshnessOf(reminder.item, today);
-    return { id: reminder.id, title: reminder.title, raisedOn: verdict.raisedOn, klass: verdict.klass };
-  }));
-  const habitDroppedIds = new Set(habitDropped.map(({ entry }) => entry.id));
-  for (const { entry, reason } of habitDropped) retired.push({ id: entry.id, title: entry.title, reason, status: "open" });
+    .map((reminder) => ({ id: reminder.id, title: reminder.title, reason: reminder.reason, status: reminder.item.status, kind: "expired" as const }));
   const showable = all.filter((reminder) =>
-    !habitDroppedIds.has(reminder.id)
-    && (reminder.state === "active" || reminder.state === "needs_confirmation" || reminder.state === "tentative"));
+    reminder.state === "active" || reminder.state === "needs_confirmation" || reminder.state === "tentative");
   const rank = (reminder: HomeReminder) => {
     if (reminder.important && reminder.state === "needs_confirmation") return 0;
     if (reminder.state === "active") return 1;
@@ -770,8 +847,32 @@ export function buildReminders(feed: UpcomingFeed | undefined, today: string, so
     rank(a) - rank(b)
     || (endDayOf(a.item.when) ?? "9999-99-99").localeCompare(endDayOf(b.item.when) ?? "9999-99-99")
     || a.id.localeCompare(b.id));
-  const limit = ordered.some((reminder) => reminder.important) ? REMINDERS_MAX_SHOWN : REMINDERS_DEFAULT_SHOWN;
-  const shown = ordered.slice(0, limit);
+  // 习惯提醒「最多两个不同日期**露出**」（§6.3）——限制的是**实际展示的那几条**，所以它作用在
+  // 已经排好序的 `ordered` 上，而不是先把整份清单筛一遍。
+  //
+  // 2026-09-13 修：原来是拿 `all`（未排序的全部）去跑 limitHabitDates，再把被压下去的塞进
+  // `retired`，而且 **status 硬写成 "open"**——那会把一条 tentative 或 rescheduled 的习惯提醒
+  // 报成 open，也就是拿一个编出来的状态去覆盖库里真实的那一行。退场记录的全部意义就是「首页不显示
+  // 它了，但库里一个字没动」，那条硬编码把这句话变成了假话。
+  //
+  // 另外它和「过期」是两件事，现在分开记：`expired` 是日子过了/新鲜期过了，
+  // `habit_capped` 是同一件习惯已经露出过两个日期了。后者不是过期，只是不再占位。
+  const { kept: habitKept, dropped: habitDropped } = limitHabitDates(ordered.map((reminder) => ({
+    id: reminder.id,
+    title: reminder.title,
+    raisedOn: raisedOnOf(reminder.item),
+    klass: classifyFreshness(reminder.item),
+    rank: rank(reminder),
+  })));
+  for (const { entry, reason } of habitDropped) {
+    const source = all.find((reminder) => reminder.id === entry.id);
+    retired.push({ id: entry.id, title: entry.title, reason, status: source?.item.status ?? "open", kind: "habit_capped" });
+  }
+  // limitHabitDates 为了「留最近两个日期」按日期倒序走了一遍，所以这里把展示次序排回来。
+  const keptIds = new Set(habitKept.map((entry) => entry.id));
+  const displayable = ordered.filter((reminder) => keptIds.has(reminder.id));
+  const limit = displayable.some((reminder) => reminder.important) ? REMINDERS_MAX_SHOWN : REMINDERS_DEFAULT_SHOWN;
+  const shown = displayable.slice(0, limit);
   const shownIds = new Set(shown.map((reminder) => reminder.id));
   const more = all.filter((reminder) => !shownIds.has(reminder.id));
   return { status: "ready", shown, more, retired };
@@ -832,9 +933,35 @@ export async function readHomeFeed(options: BuildHomeFeedOptions = {}): Promise<
     import("@/lib/family-archive"),
     import("@/lib/upcoming"),
   ]);
-  const archive = await loadFamilyArchiveOnDemand();
+  const archive = options.archive ?? await loadFamilyArchiveOnDemand();
   const upcoming = options.upcoming ?? await readHomeUpcoming();
   const upcomingSources = options.upcomingSources
     ?? (upcoming.status === "ready" ? await readHomeUpcomingSources() : undefined);
-  return buildHomeFeed(archive, { ...options, upcoming, upcomingSources });
+  // 离线质量缓存的**最后一段线**。2026-09-13 之前这一段是断的：批次脚本会写出一份缓存，
+  // `buildHomeFeed` 会用传进来的 `quality`，但 `readHomeFeed` 从来没有去读那份文件——
+  // 于是就算批次跑成功了，首页也永远看不到它，每张照片都停在确定性降级分上。
+  // 三个部件都对，中间没人接线，而每一段单独看都是「已实现」。
+  const quality = options.quality ?? await loadHomePhotoQuality();
+  return buildHomeFeed(archive, { ...options, quality, upcoming, upcomingSources });
+}
+
+/**
+ * 读离线质量缓存，读不到就返回 undefined（首页照样渲染，分数标成降级）。
+ *
+ * 路径来自 `HOME_PHOTO_QUALITY_PATH`。没设、文件不在、JSON 坏了、缺 model/assessedAt——
+ * 每一种都当「没有评估结果」，绝不半信半疑地用一半。这里**不调模型**（§4：模型不进入 SSR），
+ * 只读一个已经算好的文件。
+ *
+ * 按请求读一次文件的成本：一份 30 张的缓存是几 KB 的本地 JSON，和这条路径上那次档案读不在一个量级。
+ * 真要缓存它，得先想清楚「缓存失效」和「撤销立刻生效」怎么共存，所以现在不缓存。
+ */
+async function loadHomePhotoQuality(): Promise<HomePhotoQualityLookup | undefined> {
+  try {
+    const { loadQualityCache, qualityLookupFrom } = await import("@/lib/home-photo-quality");
+    const cache = await loadQualityCache();
+    return cache ? qualityLookupFrom(cache) : undefined;
+  } catch {
+    // 连模块都加载不了也不能打掉首页：没有分数就是没有分数。
+    return undefined;
+  }
 }
