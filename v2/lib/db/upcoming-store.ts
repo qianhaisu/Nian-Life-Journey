@@ -67,14 +67,26 @@ const dbFor = (options: { db?: UpcomingDb; env?: NodeJS.ProcessEnv }) => options
  *  top-level `code` reported a missing table as `read_failed`, which is exactly the confusion this
  *  whole feed exists to prevent. Caught by the validation harness on 2026-09-12. */
 /** 42703 = column does not exist. Adding `provenance` to the schema made every read of this table
- *  select it, which THROWS on any database where 0015 has not been applied yet — including the live
- *  one right now. The read must keep working before the migration as well as after, so a query that
- *  hits this falls back to the column list without it and reports no summary, which is the truth.
- *  Caught by the migration rehearsal on 2026-09-13, before the code could reach a running site. */
-const isMissingColumn = (error: unknown): boolean => {
+ *  select it, which THROWS on any database where 0015 has not been applied yet. The read must keep
+ *  working before the migration as well as after, so a query that hits this falls back to the column
+ *  list without it and reports no summary, which is the truth.
+ *  Caught by the migration rehearsal on 2026-09-13, before the code could reach a running site.
+ *
+ *  It matches THAT COLUMN ONLY. Any other 42703 — a column renamed under this code, a typo in a
+ *  query added later — keeps throwing. Swallowing those here would turn a genuinely broken read
+ *  into a page that calmly reports 「摘要待审核」, which is the single confusion this whole feed
+ *  exists to prevent. Narrowed on the commander's instruction, 2026-09-13. */
+export const isMissingProvenanceColumn = (error: unknown): boolean => {
   let current: unknown = error;
   for (let depth = 0; current && depth < 5; depth += 1) {
-    if (typeof current === "object" && (current as { code?: string }).code === "42703") return true;
+    const candidate = current as { code?: string; message?: unknown };
+    // The driver's own wording, e.g. `column "provenance" does not exist`. The query builder's
+    // wrapper carries the SQL (which of course also mentions the column) but not this phrase, so
+    // both halves are required rather than either one — and the walk continues past a level that
+    // fails the test, because the wrapper is checked before the driver error it wraps.
+    const message = String(candidate.message ?? "");
+    if (typeof current === "object" && candidate.code === "42703"
+      && /provenance/i.test(message) && /does not exist/i.test(message)) return true;
     current = (current as { cause?: unknown }).cause;
   }
   return false;
@@ -100,7 +112,7 @@ async function selectUpcomingItems(db: UpcomingDb, where: Parameters<typeof eq>[
   try {
     return await db.select().from(t.upcomingItems).where(where) as Array<typeof t.upcomingItems.$inferSelect>;
   } catch (error) {
-    if (!isMissingColumn(error)) throw error;
+    if (!isMissingProvenanceColumn(error)) throw error;
     const rows = await db.select(ITEM_COLUMNS_WITHOUT_PROVENANCE).from(t.upcomingItems).where(where);
     return rows.map((row) => ({ ...row, provenance: null })) as Array<typeof t.upcomingItems.$inferSelect>;
   }

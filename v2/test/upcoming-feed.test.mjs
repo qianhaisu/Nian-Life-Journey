@@ -31,6 +31,7 @@ import {
   findLeaks,
   noteProblems,
 } from "../lib/upcoming-provenance.ts";
+import { isMissingProvenanceColumn } from "../lib/db/upcoming-store.ts";
 
 const PROFILE = "profile-zhangnian";
 const msg = (n) => `src-${n}`;
@@ -472,4 +473,35 @@ test("缺依据日期、空摘要、没写来源性质，都拒", () => {
   assert.ok(noteProblems(note({ onDay: "" }), []).some((p) => p.includes("依据日期")));
   assert.ok(noteProblems(note({ summary: "  " }), []).some((p) => p.includes("为空")));
   assert.ok(noteProblems(note({ role: { kind: "record_check", label: "" } }), []).some((p) => p.includes("来源性质")));
+});
+
+// 缺列兼容只兜 provenance 这一列。别的 42703 必须继续抛——把一次真正读挂的查询
+// 吞成「摘要待审核」，正好是这套读取最不能犯的错。2026-09-13 按总指挥要求收窄。
+const pgError = (code, message) => Object.assign(new Error(message), { code });
+
+test("缺列兼容：0015 之前 provenance 缺列，走降级列表", () => {
+  assert.ok(isMissingProvenanceColumn(pgError("42703", 'column "provenance" does not exist')));
+  assert.ok(isMissingProvenanceColumn(pgError("42703", "column upcoming_items.provenance does not exist")));
+});
+
+test("缺列兼容：包一层查询构建器的错，仍能认出底下的 provenance 缺列", () => {
+  const wrapped = Object.assign(new Error('Failed query: select "provenance" from "upcoming_items"'), {
+    cause: pgError("42703", 'column "provenance" does not exist'),
+  });
+  assert.ok(isMissingProvenanceColumn(wrapped));
+});
+
+test("缺列兼容：别的列缺了不吞——包括 SQL 里正好提到 provenance 的那次查询", () => {
+  assert.equal(isMissingProvenanceColumn(pgError("42703", 'column "status_note" does not exist')), false);
+  const wrapped = Object.assign(new Error('Failed query: select "provenance", "status_note" from "upcoming_items"'), {
+    code: "42703",
+    cause: pgError("42703", 'column "status_note" does not exist'),
+  });
+  assert.equal(isMissingProvenanceColumn(wrapped), false, "SQL 里出现 provenance 不算证据，只有驱动那句话算");
+});
+
+test("缺列兼容：不是 42703 的错一律不吞", () => {
+  assert.equal(isMissingProvenanceColumn(pgError("42P01", 'relation "upcoming_items" does not exist')), false);
+  assert.equal(isMissingProvenanceColumn(new Error("connection terminated")), false);
+  assert.equal(isMissingProvenanceColumn(undefined), false);
 });
