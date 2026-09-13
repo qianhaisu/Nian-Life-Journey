@@ -31,7 +31,7 @@ import { classifyFreshness, freshnessOf, isImportantItem, limitHabitDates, raise
 import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 /** 契约版本。页面轨按这个字符串确认自己接的是哪一版；只做兼容新增时递增小版本号。 */
-export const HOME_FEED_VERSION = "home-feed/1.1.0";
+export const HOME_FEED_VERSION = "home-feed/1.2.0";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 时钟
