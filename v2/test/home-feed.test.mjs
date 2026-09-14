@@ -428,29 +428,45 @@ test("提醒的证据链：能落到具体记忆就落，落不到就退到那�
   assert.equal(byId.get("n").evidenceKind, undefined);
 });
 
-test("同事件冷却是构造保证的：任意两个候选的事件必不相同，所以相邻期次不会重复同一段故事", () => {
-  // 一段记忆只贡献一个候选（memory.lead 是单数）。这条测试钉住那个不变量：哪天 memory.lead 变成
-  // 能给一段记忆返回多张图，这里会失败，而不是首页悄悄开始连着两期推同一段故事。
+test("一段故事的每张获批配图都进池；轮换按故事交错，交错不开的相邻处照实写进 reason", () => {
+  // 2026-09-14：之前只取 memory.lead，获批了两张的那段故事第二张永远上不了首页。
   const a1 = photo("m-a1", "2026-09-07", { takenAt: "2026-09-07T09:00:00+08:00" });
   const a2 = photo("m-a2", "2026-09-07", { takenAt: "2026-09-07T15:00:00+08:00" });
   const b1 = photo("m-b1", "2026-08-20", { takenAt: "2026-08-20T11:00:00+08:00" });
+  const c1 = photo("m-c1", "2026-08-10", { takenAt: "2026-08-10T11:00:00+08:00" });
   const events = [
     event("e-a", "2026-09-07", { mediaIds: [a1.id, a2.id] }),
     event("e-b", "2026-08-20", { mediaIds: [b1.id] }),
+    event("e-c", "2026-08-10", { mediaIds: [c1.id] }),
   ];
-  const archive = archiveOf({
-    events, media: [a1, a2, b1],
-    // e-a 的两张都获批了 —— 但它只能贡献一个候选。
-    reviews: [binding("e-a", a1.id), binding("e-a", a2.id), binding("e-b", b1.id)],
-  });
-  const candidates = buildHomeFeed(archive, { edition: { id: "t", startedAt: "x", expiresAt: "y", slot: 0, index: 0 } }).photoCandidates;
-  const eventIds = candidates.map((candidate) => candidate.story.eventId);
-  assert.equal(new Set(eventIds).size, eventIds.length, "候选之间不许共用同一个事件");
-  const chosen = [0, 1, 2, 3].map((index) =>
-    buildHomeFeed(archive, { edition: { id: `t${index}`, startedAt: "x", expiresAt: "y", slot: 0, index } }).lead.story.eventId);
-  for (let i = 1; i < chosen.length; i += 1) {
-    assert.notEqual(chosen[i], chosen[i - 1], "相邻期次不该是同一段故事");
-  }
+  const reviews = [binding("e-a", a1.id), binding("e-a", a2.id), binding("e-b", b1.id), binding("e-c", c1.id)];
+  const archive = archiveOf({ events, media: [a1, a2, b1, c1], reviews });
+  const at = (index) => buildHomeFeed(archive, { edition: { id: `t${index}`, startedAt: "x", expiresAt: "y", slot: 0, index } });
+  const candidates = at(0).photoCandidates;
+  assert.deepEqual(candidates.map((c) => c.photo.media.id).sort(), ["m-a1", "m-a2", "m-b1", "m-c1"], "两张都进池");
+  for (const c of candidates) assert.equal(c.photo.approval.eventId, c.story.eventId, "每张仍然只挂在批准它的那段故事上");
+  // 页面按返回清单的顺序「换张照片」：清单顺序里同一段故事也不能挨着（本地实测抓到过按质量分排导致连着两张）。
+  const listOrder = at(0).photoCandidates.filter((c) => c.cooldown).map((c) => c.story.eventId);
+  for (let i = 1; i < listOrder.length; i += 1) assert.notEqual(listOrder[i], listOrder[i - 1], `换图顺序里相邻两张不是同一段故事：${listOrder}`);
+  const seq = [0, 1, 2, 3].map((index) => at(index).lead.story.eventId);
+  for (let i = 1; i < seq.length; i += 1) assert.notEqual(seq[i], seq[i - 1], "有别的故事可插时，相邻期次不是同一段故事");
+  assert.equal(new Set([0, 1, 2, 3].map((index) => at(index).lead.photo.media.id)).size, 4, "一整轮四期四张各不相同");
+  // 两段故事、其中一段有两张：交错不开，必须说出来。
+  const tight = archiveOf({ events: events.slice(0, 2), media: [a1, a2, b1], reviews: reviews.slice(0, 3) });
+  const chosen = buildHomeFeed(tight, { edition: { id: "t", startedAt: "x", expiresAt: "y", slot: 0, index: 0 } }).photoCandidates.find((c) => c.chosen);
+  assert.match(chosen.reason, /相邻两期同属一段故事/);
+});
+
+test("照片池不按 60 天截：更早的已发布故事的获批配图也能上首页，文字兜底仍然只看 60 天", () => {
+  const old = photo("m-old", "2025-06-03", { takenAt: "2025-06-03T10:00:00+08:00" });
+  const events = [event("e-old", "2025-06-03", { mediaIds: [old.id] })];
+  const feed = buildHomeFeed(archiveOf({ events, media: [old], reviews: [binding("e-old", old.id)] }), { edition: editionAt(new Date("2026-09-13T09:00:00+08:00")) });
+  assert.equal(feed.lead.photo.media.id, "m-old", "获批配图就能进池，日期由照片自己的两个时钟说明");
+  assert.equal(feed.lead.photo.dateLabel, "2025 年 6 月 3 日");
+  assert.equal(feed.recentFact, undefined, "近况仍然只从 60 天窗口里取");
+  // 没有获批配图的旧故事照样不会因为放宽窗口而出现在首页。
+  const none = buildHomeFeed(archiveOf({ events, media: [old], reviews: [] }), { edition: editionAt(new Date("2026-09-13T09:00:00+08:00")) });
+  assert.equal(none.photoCandidates.length, 0);
 });
 
 test("整个档案只有一段带获批配图的记忆时，冷却满足不了就说出来，不装作满足", () => {
@@ -538,10 +554,11 @@ function poolOf(n, scores = {}) {
   return { archive, quality, photos };
 }
 
-test("超过 6 个候选：轮换池是全部 20 组，返回给页面的只有 6 条，冷却按 20 算", () => {
+test("超过页面上限：轮换池是全部 20 组，返回给页面的只有上限那几条，冷却按 20 算", () => {
   const { archive } = poolOf(20);
   const feed = buildHomeFeed(archive, { edition: editionAt(new Date("2026-09-13T09:00:00+08:00")) });
-  assert.equal(feed.photoCandidates.length, HOME_PHOTO_CANDIDATES_MAX, "页面最多拿 6 条");
+  assert.equal(HOME_PHOTO_CANDIDATES_MAX, 12, "2026-09-14 起页面最多拿 12 条（「换张照片」能翻到的数）");
+  assert.equal(feed.photoCandidates.length, HOME_PHOTO_CANDIDATES_MAX);
   // 冷却是池子大小，不是清单长度 —— 这正是上一版把两者混用而丢掉的东西。
   const cooldown = feed.photoCandidates[0].cooldown;
   assert.equal(cooldown.editions, 20, "20 组候选 → 同一张照片隔 20 期再出现");
@@ -559,11 +576,13 @@ test("实际冷却就是整轮：20 组候选走 20 期才回到同一张，期�
   for (let i = 1; i < seq.length; i += 1) assert.notEqual(seq[i], seq[i - 1]);
 });
 
-test("评分跨越第 6/7 名：清单成员会换，但当期选中的那一张不变", () => {
+test("评分跨越页面上限那一名：清单成员会换，但当期选中的那一张不变", () => {
   // 20 组候选，全部给分：score = 100 - i，所以 m-00 是第 1 名 … m-19 是第 20 名。
-  // 然后把第 6 名（m-05）和第 7 名（m-06）的分**对调**，让排名正好跨过页面上限那条线。
+  // 然后把第 MAX 名和第 MAX+1 名的分**对调**，让排名正好跨过页面上限那条线。
+  const lastIn = `m-${String(HOME_PHOTO_CANDIDATES_MAX - 1).padStart(2, "0")}`;
+  const firstOut = `m-${String(HOME_PHOTO_CANDIDATES_MAX).padStart(2, "0")}`;
   const ranked = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`m-${String(i).padStart(2, "0")}`, 100 - i]));
-  const swapped = { ...ranked, "m-05": ranked["m-06"], "m-06": ranked["m-05"] };
+  const swapped = { ...ranked, [lastIn]: ranked[firstOut], [firstOut]: ranked[lastIn] };
   const before = poolOf(20, ranked);
   const after = poolOf(20, swapped);
   // 固定期次序号，好让「当期选中谁」是可预期的：池按 mediaId 排序，index 0 → m-00。
@@ -574,15 +593,15 @@ test("评分跨越第 6/7 名：清单成员会换，但当期选中的那一张
   assert.equal(feedBefore.lead.photo.media.id, "m-00", "轮换按 mediaId，index 0 落在 m-00");
   assert.equal(
     feedAfter.lead.photo.media.id, feedBefore.lead.photo.media.id,
-    "分数跨过第 6/7 名的边界，也不许在期内换掉当期那张照片（§5.5）",
+    "分数跨过页面上限那一名的边界，也不许在期内换掉当期那张照片（§5.5）",
   );
 
   // 清单成员确实换了 —— 这正是质量分该管的事，所以这不是「什么都没变」。
   const listed = (feed) => feed.photoCandidates.map((c) => c.photo.media.id);
-  assert.ok(listed(feedBefore).includes("m-05"), "对调前第 6 名在清单里");
-  assert.ok(!listed(feedBefore).includes("m-06"), "对调前第 7 名不在清单里");
-  assert.ok(listed(feedAfter).includes("m-06"), "对调后升到第 6 名的那张进了清单");
-  assert.ok(!listed(feedAfter).includes("m-05"), "对调后掉到第 7 名的那张出了清单");
+  assert.ok(listed(feedBefore).includes(lastIn), "对调前最后一名在清单里");
+  assert.ok(!listed(feedBefore).includes(firstOut), "对调前第一个出界的不在清单里");
+  assert.ok(listed(feedAfter).includes(firstOut), "对调后升上来的那张进了清单");
+  assert.ok(!listed(feedAfter).includes(lastIn), "对调后掉出去的那张出了清单");
 
   // 池子没变，所以冷却一个数都不动 —— 清单长度和池子大小是两件事。
   assert.equal(feedBefore.photoCandidates[0].cooldown.editions, 20);

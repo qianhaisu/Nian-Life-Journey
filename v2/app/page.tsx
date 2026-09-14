@@ -1,4 +1,4 @@
-import { HomeLead, type HomeEmphasis, type HomeLeadSlide } from "@/components/home-lead";
+import { HomeLead, type HomeLeadSlide } from "@/components/home-lead";
 import { HomeReminders, type HomeReminder as HomeReminderView, type HomeReminderSource } from "@/components/home-reminders";
 import { MODALITY_LABEL, SOURCE_KIND_LABEL, roleText, type SourceKind } from "@/components/upcoming-tasks";
 import { readHomeFeed, HOME_REMINDER_LABEL, type HomeFeed, type HomeReminder, type HomeReminderState } from "@/lib/home-feed";
@@ -27,17 +27,9 @@ import "./home.css";
 // lib/home-feed.ts 决定（数据轨 2026-09-13 冻结的 home-feed/1.0.0）。这里只负责把它摆出来，
 // 以及把三种「没有」摆成三种不同的样子：没有合格照片就只留文字，没有故事就说这一句话，
 // 提醒读不出来就整块不画——绝不写成「全部完成」。
-// 标题强调：**逐篇指定**，不按关键词匹配。
 //
-// 键是 eventId，值是那一篇标题里最多两段真有的文字，各自挑一支站点已有的颜色（蓝 / 桃红 /
-// 鼠尾草绿）。没在这张表里的故事——也就是绝大多数——标题就是默认文字色，一个色块都不多。
-//
-// 定稿那一篇之所以有颜色，是因为那天妈妈报的就是 cold 和 hot 两个词，颜色属于**这一篇**；
-// 上一版按 cold/冷/hot/热 自动匹配，等于把每段生活都套成同一个彩色模板，已经删掉
-// （Teddy 2026-09-13）。片段对不上标题时 withEmphasis 自动退回纯文字，不会硬上色。
-const TITLE_EMPHASIS: Record<string, HomeEmphasis[]> = {
-  "event-r10-20260907-coldhot": [{ text: "cold", accent: "blue" }, { text: "hot", accent: "rose" }],
-};
+// 标题强调（2026-09-14）不再是这里按 eventId 逐篇写死的表：lib/title-emphasis.ts 的小词组规则
+// 对任何标题都适用，components/home-lead.tsx 负责画出来。
 
 export default async function HomePage() {
   // Never prerender this page from the build's mock store — see lib/render-on-demand.ts.
@@ -48,26 +40,23 @@ export default async function HomePage() {
   const { clock, lead, photoCandidates } = feed;
 
   // 「换张照片」的切换单位是 (故事, 照片) 对：候选自带自己的故事，所以换图必然连带换标题、
-  // 日期、当时年龄和「读读这一天」的去处，页面不可能只换 img（契约 HomePhotoCandidate）。
+  // 日期、当时年龄、「读读这一天」和点照片的去处，页面不可能只换 img（契约 HomePhotoCandidate）。
   // 当期选中的那一张排在最前，其余按契约给的顺序跟在后面。
   const slides: HomeLeadSlide[] = photoCandidates.length > 0
     ? [...photoCandidates].sort((a, b) => Number(b.chosen) - Number(a.chosen)).map((candidate) => ({
       key: candidate.key,
-      story: { eventId: candidate.story.eventId, href: candidate.story.href, title: candidate.story.title, excerpt: candidate.story.excerpt, emphasis: TITLE_EMPHASIS[candidate.story.eventId] },
+      story: { eventId: candidate.story.eventId, href: candidate.story.href, title: candidate.story.title, excerpt: candidate.story.excerpt },
       photo: {
         media: candidate.photo.media,
         day: candidate.photo.day,
         dayLabel: candidate.photo.dateLabel,
         ageLabel: candidate.photo.ageLabel,
-        // 查看器里一次只翻这一张：候选之间属于不同的故事，把它们串成一卷会读成「这一天的一组照片」，
-        // 而它们不是。同一段生活里的其他照片仍然在那一天的页面上。
-        siblings: [candidate.photo.media],
       },
     }))
     // 有故事但没有一张通过审核的配图（photoAbsence 说明是哪一种「没有」）：只留真实文字。
     // 不画空照片框、不借别的故事的照片，也不写一句「暂无照片」（§5.7、原则三）。
     : lead
-      ? [{ key: lead.story.eventId, story: { eventId: lead.story.eventId, href: lead.story.href, title: lead.story.title, excerpt: lead.story.excerpt, emphasis: TITLE_EMPHASIS[lead.story.eventId] } }]
+      ? [{ key: lead.story.eventId, story: { eventId: lead.story.eventId, href: lead.story.href, title: lead.story.title, excerpt: lead.story.excerpt } }]
       : [];
 
   // 今天和今天几岁收成左栏的一行小字（版式卡一·4）：这一页只留一个主标题，就是题签。

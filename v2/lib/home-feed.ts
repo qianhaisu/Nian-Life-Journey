@@ -444,18 +444,29 @@ export type HomeFeed = {
   reminders: HomeFeedReminders;
 };
 
-/** 候选窗口：最近 60 天（§5.2）。历史照片只有命中现有真实回看关系才参与，本版不参与。 */
+/**
+ * 候选窗口：最近 60 天（§5.2）——**只管文字**：没有合格照片时退回的那段真实文字、以及近况，都从这里取。
+ *
+ * 照片池不再受它限制（2026-09-14 用户：「换张照片」来回只有 3 张）。数据轨只读量化：全库逐对获批的
+ * (故事, 照片) 只有 4 对 / 3 篇，60 天窗口、每篇一张、返回上限都不是瓶颈；但随着人工批准新的故事配图，
+ * 被批准的多半是更早的故事，60 天窗口会让它们永远进不了首页。照片自带自己的日期和当时年龄（原则二），
+ * 一张旧照片在首页也读得出是哪一天——所以照片池是**全部已发布故事的获批配图**，门槛一格没放。
+ */
 export const HOME_CANDIDATE_WINDOW_DAYS = 60;
-/** 交给浏览器的候选上限。 */
-export const HOME_PHOTO_CANDIDATES_MAX = 6;
+/**
+ * 交给浏览器的候选上限——「换张照片」能翻到的就是这几条。2026-09-14 从 6 提到 12：池子会随新获批的
+ * 故事配图自己长大（photoPoolMemories），6 条会先于池子变成「只有几张在循环」的原因。
+ */
+export const HOME_PHOTO_CANDIDATES_MAX = 12;
 /**
  * §5.5 的两个冷却天数。**它们是规格给的目标值，不是这段代码里的开关**——写在这里是为了让实际做到了
  * 多少能被对着一个数字讲清楚：
  *
  * - `PHOTO_COOLDOWN_DAYS`：同一张照片 14 天。整轮走完需要「候选数 × 6 小时」，候选不足 56 组就
  *   满足不了，此时缩短为整轮轮换，理由逐条写进 `candidate.reason`（生产今天是 3 组 = 18 小时）。
- * - `EVENT_COOLDOWN_DAYS`：同一事件 3 天。它的**相邻期次部分是构造保证的**（一段记忆只贡献一个
- *   候选，见 buildPhotoCandidates），满 3 天同样受候选数限制，一并由那条 reason 说明。
+ * - `EVENT_COOLDOWN_DAYS`：同一事件 3 天。2026-09-14 起一段记忆的每张获批配图都进池，相邻期次不重复
+ *   同一段故事改由**按故事交错的轮换次序**保证（见 interleaveByStory）；某段故事的照片多到交错不开时，
+ *   相邻几处照实写进 reason。满 3 天同样受候选数限制，一并由那条 reason 说明。
  *
  * 两个值都没有被当成过滤条件使用：**门槛一格没放，也没有一个候选因为冷却被悄悄丢掉**。
  */
@@ -516,6 +527,23 @@ export function candidateMemories(chapters: YearChapter[], today: string, days =
       for (const memory of month.memories) {
         const day = memory.signature.day;
         if (day < start || day > today) continue;
+        found.push(memory);
+      }
+    }
+  }
+  return found.sort((a, b) => b.signature.day.localeCompare(a.signature.day) || a.id.localeCompare(b.id));
+}
+
+/**
+ * 首页照片池取材的记忆：**全部**已发布记忆，日期不晚于今天（未来日期的行照样进不了首页）。
+ * 哪一张能进池仍然只由逐对人工批准的配图决定（storyPhotosFor），这里不放宽任何门槛，只是不再按 60 天截。
+ */
+export function photoPoolMemories(chapters: YearChapter[], today: string): EditorialMemory[] {
+  const found: EditorialMemory[] = [];
+  for (const year of chapters) {
+    for (const month of year.months) {
+      for (const memory of month.memories) {
+        if (memory.signature.day > today) continue;
         found.push(memory);
       }
     }
@@ -590,21 +618,43 @@ function effectiveQuality(
 }
 
 /**
- * 一段记忆的合格配图。memory.lead 已经是逐 (eventId, mediaId) 人工审核后的结果
- * （lib/memory-chapters.ts → storyDisplayMedia，只认 Basis C），所以这里**不再放宽一格**：
- * 不看 trusted、不看同日、不看 confirmed 扁平集合。
+ * 一段记忆的全部合格配图。memory.storyPhotos 已经是逐 (eventId, mediaId) 人工审核后的结果
+ * （lib/memory-chapters.ts → storyDisplayMedia，只认 Basis C；lead 就是它的第一张），所以这里
+ * **不再放宽一格**：不看 trusted、不看同日、不看 confirmed 扁平集合、不看主体审核。
+ *
+ * 2026-09-14 之前这里只取 lead：一段故事获批了两张（9 月 7 日 cold/hot 那篇），第二张永远上不了首页。
  */
-function leadPhotoOf(memory: EditorialMemory, birthDay: string | undefined): HomeFeedPhoto | undefined {
-  if (!memory.lead) return undefined;
+function storyPhotosFor(memory: EditorialMemory, birthDay: string | undefined): HomeFeedPhoto[] {
+  const approved = memory.storyPhotos ?? (memory.lead ? [memory.lead] : []);
   const day = memory.signature.day;
-  return {
-    media: memory.lead,
+  return approved.map((media) => ({
+    media,
     use: "story_lead",
     approval: { kind: "story_binding", eventId: memory.id },
     day,
     dateLabel: memory.signature.dateLabel,
     ageLabel: ageOn(birthDay, day),
-  };
+  }));
+}
+
+/**
+ * 轮换次序：按故事交错。先按 mediaId 排好（与质量分无关，§5.5），再按故事分组、组按各自第一张的 mediaId
+ * 排序，逐轮各取一张。于是只要有别的故事可以插进来，相邻两期就不是同一段故事；某段故事的照片比其余
+ * 故事加起来还多时，交错不开的那几处由调用方数出来写进 reason，不装作满足。
+ */
+function interleaveByStory<T extends { story: { eventId: string }; photo: { media: { id: string } } }>(entries: T[]): T[] {
+  const groups = new Map<string, T[]>();
+  for (const entry of [...entries].sort((a, b) => a.photo.media.id.localeCompare(b.photo.media.id))) {
+    const group = groups.get(entry.story.eventId);
+    if (group) group.push(entry);
+    else groups.set(entry.story.eventId, [entry]);
+  }
+  const ordered = [...groups.values()];
+  const out: T[] = [];
+  for (let round = 0; out.length < entries.length; round += 1) {
+    for (const group of ordered) if (group[round]) out.push(group[round]);
+  }
+  return out;
 }
 
 function photoAbsenceOf(memory: EditorialMemory): HomePhotoAbsence {
@@ -714,14 +764,15 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
   const { memories, birthDay, today, edition, quality, photoKey, approvedAt } = input;
   type Pair = { photo: HomeFeedPhoto; story: HomeStoryRef; burst: string; key: string };
   const paired: Pair[] = [];
+  const seenKeys = new Set<string>();
   for (const memory of memories) {
-    const photo = leadPhotoOf(memory, birthDay);
-    if (!photo) continue;
-    const scored: HomeFeedPhoto = { ...photo, quality: effectiveQuality(quality, photo, today, edition) };
-    paired.push({
-      photo: scored, story: storyRefOf(memory), burst: burstKeyOf(scored),
-      key: `${memory.id}|${photo.media.id}`,
-    });
+    for (const photo of storyPhotosFor(memory, birthDay)) {
+      const key = `${memory.id}|${photo.media.id}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      const scored: HomeFeedPhoto = { ...photo, quality: effectiveQuality(quality, photo, today, edition) };
+      paired.push({ photo: scored, story: storyRefOf(memory), burst: burstKeyOf(scored), key });
+    }
   }
   paired.sort((a, b) => a.photo.media.id.localeCompare(b.photo.media.id));
 
@@ -753,8 +804,16 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
     seenBursts.add(entry.burst);
     pool.push(entry);
   }
-  // 同事件冷却在这条链路上是构造保证的：一段记忆只贡献一个候选（`memory.lead` 是单数），
-  // 所以任意两个候选的 eventId 必不相同，纯轮转永远不会连着两期推同一段故事。有测试钉住它。
+  // 同事件冷却：一段故事的每张获批配图都在池里，所以轮换次序按故事交错（interleaveByStory）。
+  // 交错不开的相邻处（含整轮回到开头那一处）数出来写进 reason。有测试钉住它。
+  const interleaved = interleaveByStory(pool);
+  pool.splice(0, pool.length, ...interleaved);
+  const adjacentSameStory = pool.length > 1
+    ? pool.filter((entry, i) => entry.story.eventId === pool[(i + 1) % pool.length].story.eventId).length
+    : 0;
+  const adjacency = adjacentSameStory > 0
+    ? `整轮 ${pool.length} 期里有 ${adjacentSameStory} 处相邻两期同属一段故事（这段故事的获批照片多于其余故事之和，交错不开）`
+    : "";
   const rotation = pool.length;
   const rotationIndex = rotation > 0 ? edition.index % rotation : 0;
   const cooldown = cooldownOf(rotation);
@@ -787,12 +846,19 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
       chosen: true, cooldown,
       reason: explicit >= 0
         ? "页面显式切换到这一对"
-        : `第 ${edition.index} 期轮换到这一对（池内第 ${rotationIndex + 1}/${rotation} 位）${shortened ? `；${shortened}` : ""}`,
+        : `第 ${edition.index} 期轮换到这一对（池内第 ${rotationIndex + 1}/${rotation} 位）${shortened ? `；${shortened}` : ""}${adjacency ? `；${adjacency}` : ""}`,
     });
   }
-  // 其余池内候选按质量排序跟在后面，供「换张照片」用。
-  for (const entry of [...pool].sort((a, b) => (rankOf.get(a.key) ?? 0) - (rankOf.get(b.key) ?? 0))) {
-    if (entry === chosen) continue;
+  // 其余池内候选供「换张照片」用：**哪几条**进清单按质量分挑（池子比上限大时分高的先进），**怎么排**
+  // 按轮换次序从当期那一条往后接——页面按清单顺序一张张换，所以清单顺序就是家人看到的换图顺序。
+  // 2026-09-14 本地验收抓到：按质量分排时同一段故事的两张获批照片会连着出现，把按故事交错又拆散了。
+  const restMax = HOME_PHOTO_CANDIDATES_MAX - (chosen ? 1 : 0);
+  const restPicked = new Set([...pool].filter((entry) => entry !== chosen)
+    .sort((a, b) => (rankOf.get(a.key) ?? 0) - (rankOf.get(b.key) ?? 0))
+    .slice(0, restMax));
+  const startAt = chosen ? chosenIndex + 1 : 0;
+  const restInRotation = pool.map((_, k) => pool[(startAt + k) % pool.length]).filter((entry) => restPicked.has(entry));
+  for (const entry of restInRotation) {
     push(entry, {
       chosen: false, cooldown,
       reason: `本期未选中（池内第 ${pool.indexOf(entry) + 1}/${rotation} 位）${shortened ? `；${shortened}` : ""}`,
@@ -1015,7 +1081,8 @@ export function buildHomeFeed(archive: FamilyArchive, options: BuildHomeFeedOpti
   const birthDay = archive.birthDay;
   const memories = candidateMemories(archive.chapters, today);
   const photoCandidates = buildPhotoCandidates({
-    memories, birthDay, today, edition,
+    // 照片池取全部已发布记忆的获批配图；文字兜底与近况仍然只看 60 天窗口（memories）。
+    memories: photoPoolMemories(archive.chapters, today), birthDay, today, edition,
     quality: options.quality,
     photoKey: options.photoKey,
     // 审核时间戳从档案已经带着的账本里现算，不额外读库。

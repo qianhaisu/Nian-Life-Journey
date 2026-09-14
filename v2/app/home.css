@@ -92,7 +92,8 @@
   border-radius: 20px;
   background: var(--paper-dark);
   overflow: hidden;
-  cursor: zoom-in;
+  /* 2026-09-14：点照片进入这张照片所属的那一天的故事，不再是放大。 */
+  cursor: pointer;
   line-height: 0;
 }
 .home-photo img {
@@ -126,8 +127,9 @@
 
 /* 引语（正文摘录已不在首页，这条留给将来仍会出现引语的地方）。 */
 .home-quote { color: var(--home-red); quotes: "「" "」"; }
-/* 标题里的强调片段。三支颜色都是站点已有的；哪一篇标哪几个字、用哪一支，由那一篇自己指定
-   （app/page.tsx 的 TITLE_EMPHASIS），不按关键词自动上色。没指定的标题就是默认文字色。
+/* 标题里的强调片段。三支颜色都是站点已有的；哪几个字、用哪一支，由 lib/title-emphasis.ts 的
+   小词组规则决定（每题最多两段、不整句），命中不了的标题就是默认文字色。
+   对比度（首页题签 ≥24px，大字号门槛 3:1）：蓝 4.20、桃红 4.03、鼠尾草绿 3.63，均对 #F9F6F0。
    加粗对拉丁词是 Nunito 真正的 800；汉字不会被合成粗体（见 app/fonts.css 顶部）。 */
 .home-emphasis { font-weight: 800; }
 .home-emphasis--blue { color: var(--home-blue); }

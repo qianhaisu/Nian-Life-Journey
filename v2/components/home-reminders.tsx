@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { HabitShownReporter } from "@/components/habit-shown-reporter";
 
-// 首页左栏下方那张轻便签：「这几天」。2026-09-13 版式修复把它从一条通栏的色块收成一小块字——
+// 首页左栏下方那张轻便签：「这几天的提醒事项」（2026-09-14 用户：只写「这几天」读不出这块是什么）。2026-09-13 版式修复把它从一条通栏的色块收成一小块字——
 // 没有背景、没有大圆角、没有阴影，也没有右侧那个独立的「查看详情」按钮；整条自己就是展开入口，
 // 命中区域仍然 ≥44px，键盘可用（`<details>`/`<summary>` 原生行为）。
 //
@@ -89,8 +89,8 @@ export function HomeReminders({ reminders, more = [], habitIds = [] }: { reminde
   const habits = new Set(habitIds);
   // 实际画在默认位上的习惯类事项，才是可能被上报的那几条。
   const reportable = shown.map((reminder) => reminder.id).filter((id) => habits.has(id));
-  return <section className="home-notes" aria-label="这几天">
-    <p className="home-notes-label">这几天</p>
+  return <section className="home-notes" aria-label="这几天的提醒事项">
+    <p className="home-notes-label">这几天的提醒事项</p>
     {shown.map((reminder) => <Note key={reminder.id} reminder={reminder} habitId={habits.has(reminder.id) ? reminder.id : undefined} />)}
     {/* 超出两条的**有效**事项收在这里，默认布局不膨胀，但一条都不会因为放不下而消失（§6.6）。
         标题不写数字：家人读的页面上不出现计数式描述（原则三）。过期的不在这里——它们已经退场，
