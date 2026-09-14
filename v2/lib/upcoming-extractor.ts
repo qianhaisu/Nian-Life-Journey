@@ -10,6 +10,7 @@
 //     enough that 13 of the first 30 days produced items citing messages that did not exist.
 //   - an adult's own appointment is not the child's todo. Without that said explicitly, the
 //     mother's own hospital booking came back as a commitment about 张年.
+import { assertProviderModel, resolveDeepSeekModel } from "./organizer/deepseek-model";
 
 export const UPCOMING_PROMPT_VERSION = "upcoming-extract-v1";
 
@@ -175,11 +176,11 @@ export type UpcomingExtraction = {
 /** One bounded call. Fails closed on configuration, aborts at 90 s, and exits on 402 rather than
  *  retrying against an account that cannot pay. Retries are the caller's business. */
 export async function extractFromUnit(prompt: string, env: NodeJS.ProcessEnv = process.env): Promise<UpcomingExtraction> {
-  const model = env.AI_MODEL;
   const apiKey = env.DEEPSEEK_API_KEY;
-  if ((env.AI_PROVIDER ?? "").toLowerCase() !== "deepseek" || !apiKey || !model) {
-    throw new Error("upcoming extractor: AI_PROVIDER must be deepseek with DEEPSEEK_API_KEY and AI_MODEL set");
+  if ((env.AI_PROVIDER ?? "").toLowerCase() !== "deepseek" || !apiKey) {
+    throw new Error("upcoming extractor: AI_PROVIDER must be deepseek with DEEPSEEK_API_KEY set");
   }
+  const model = resolveDeepSeekModel(env);
   const baseUrl = (env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 90_000);
@@ -198,7 +199,8 @@ export async function extractFromUnit(prompt: string, env: NodeJS.ProcessEnv = p
     });
     if (response.status === 402) throw new Error("deepseek_402_insufficient_balance");
     if (!response.ok) throw new Error(`http_${response.status}`);
-    const payload = await response.json() as { content?: Array<{ type: string; name?: string; input?: UpcomingExtraction }> };
+    const payload = await response.json() as { model?: unknown; content?: Array<{ type: string; name?: string; input?: UpcomingExtraction }> };
+    assertProviderModel(model, payload);
     const block = payload.content?.find((part) => part.type === "tool_use" && part.name === UPCOMING_TOOL_NAME);
     if (!block?.input) throw new Error("no_tool_use");
     return block.input;

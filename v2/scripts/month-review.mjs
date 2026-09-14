@@ -24,6 +24,7 @@ loadDotenv({ path: path.resolve(process.cwd(), "../.env.local"), quiet: true });
 process.env.REPOSITORY_BACKEND = "postgres";
 
 const { persistMonthlySnapshot, persistQualityReview } = await import("../lib/db/repository.ts");
+const { resolveDeepSeekModel, assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
 
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => { const hit = args.find((a) => a.startsWith(`--${name}=`)); return hit ? hit.slice(name.length + 3) : fallback; };
@@ -41,7 +42,11 @@ if (!MONTH || !/^\d{4}-\d{2}$/.test(MONTH)) { console.error("--month=YYYY-MM is 
 const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 const apiKey = process.env.DEEPSEEK_API_KEY;
 const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
-const model = process.env.AI_MODEL || "deepseek-v4-pro";
+const model = resolveDeepSeekModel(process.env);
+// 2026-09-14: --commit is refused. persistMonthlySnapshot upserts (onConflictDoUpdate) over a month's
+// summary that the family already reads and that may carry an approved review; there is no guarded
+// write path that checks that first. Dry runs still work.
+if (COMMIT) { console.error("REFUSED: month-review --commit is disabled until monthly snapshots have a guarded write path (2026-09-14)."); process.exit(1); }
 if (!dbUrl) { console.error("Need DATABASE_URL."); process.exit(1); }
 if (!apiKey) { console.error("Need DEEPSEEK_API_KEY."); process.exit(1); }
 
@@ -83,6 +88,7 @@ async function callReviewer(events, month) {
   const res = await fetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (!res.ok) throw new Error(`reviewer http ${res.status}`);
   const payload = await res.json();
+  assertProviderModel(model, payload);
   const tool = payload.content?.find((b) => b.type === "tool_use" && b.name === TOOL_NAME);
   if (!tool) throw new Error("reviewer returned no tool_use");
   return tool.input;

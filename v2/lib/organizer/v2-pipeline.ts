@@ -27,6 +27,7 @@ import { shanghaiCalendarDate } from "./life-date";
 import type { WorthinessAxis } from "./worthiness-v2";
 import type { WorthinessAxisV3 } from "./worthiness-v3";
 import type { WorthinessAxisV4 } from "./worthiness-v4";
+import { assertProviderModel, resolveDeepSeekModel } from "./deepseek-model";
 
 /**
  * The frozen V6 router reads a V4 worthiness axis, and the editor's axis map is typed as any of the
@@ -100,6 +101,9 @@ export function createDeepSeekV2Pipeline(env: NodeJS.ProcessEnv, options: Pipeli
   // stops failing" anti-pattern the sync capture route suffered from, because nobody is waiting on
   // this request. It exists so a hung provider connection cannot hold a job lease forever.
   const timeoutMs = Number(env.ORGANIZER_V2_MODEL_TIMEOUT_MS ?? 120_000);
+  // The Writer's model is pinned exactly like the Judge's. "unspecified" (index.ts's placeholder) is
+  // not a model; it resolves to the pinned one rather than being sent.
+  const writerModel = resolveDeepSeekModel({ ORGANIZER_V2_MODEL: options.model === "unspecified" ? undefined : options.model }, "ORGANIZER_V2_MODEL");
 
   return {
     async judge(window) {
@@ -156,7 +160,7 @@ export function createDeepSeekV2Pipeline(env: NodeJS.ProcessEnv, options: Pipeli
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
         signal: AbortSignal.timeout(timeoutMs),
         body: JSON.stringify({
-          model: options.model, max_tokens: 3000, temperature: 0, thinking: { type: "disabled" },
+          model: writerModel, max_tokens: 3000, temperature: 0, thinking: { type: "disabled" },
           system: WRITER_V2_SYSTEM_PROMPT,
           tools: [{ name: WRITER_V2_TOOL_NAME, description: "输出这一页的标题、正文和逐句依据", input_schema: WRITER_V2_TOOL_SCHEMA }],
           tool_choice: { type: "tool", name: WRITER_V2_TOOL_NAME },
@@ -165,7 +169,8 @@ export function createDeepSeekV2Pipeline(env: NodeJS.ProcessEnv, options: Pipeli
       });
       const latencyMs = Date.now() - started;
       if (!response.ok) throw new V2PipelineError(`Writer v2 HTTP ${response.status}`);
-      const payload = await response.json() as { content?: Array<{ type: string; name?: string; input?: unknown }> };
+      const payload = await response.json() as { model?: unknown; content?: Array<{ type: string; name?: string; input?: unknown }> };
+      assertProviderModel(writerModel, payload);
       const tool = payload.content?.find((block) => block.type === "tool_use" && block.name === WRITER_V2_TOOL_NAME);
       if (!tool) throw new V2PipelineError("Writer v2 returned no tool_use block.");
       const output = { contractVersion: "writer-v2-output-contract-v1", ...(tool.input as object) } as WriterV2Output;

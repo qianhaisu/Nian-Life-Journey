@@ -69,7 +69,7 @@ test("V2 on with an empty allowlist throws — a canary is a list, not a flag", 
 // ---------------------------------------------------------------- enabled, bounded
 
 test("a valid configuration names every version explicitly", () => {
-  const selection = selectProductionOrganizer({ ...ON, ORGANIZER_V2_MODEL: "deepseek-v4-pro" });
+  const selection = selectProductionOrganizer({ ...ON, ORGANIZER_V2_MODEL: "deepseek-flash" });
   assert.equal(selection.useV2, true);
   assert.equal(selection.implementationId, V2_IMPLEMENTATION_ID);
   assert.equal(selection.adapterPolicy.judgmentPolicyId, FROZEN_V6_JUDGMENT.id);

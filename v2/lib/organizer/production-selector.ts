@@ -35,6 +35,7 @@ import { COUPLED_CANDIDATE_JUDGMENT, FROZEN_V6_JUDGMENT, JUDGMENT_POLICIES, type
 import { PRODUCTION_ADAPTER_VERSION, type AdapterPolicy } from "./production-adapter";
 import { WINDOW_POLICY_VERSION } from "./evidence/window";
 import { CONTRACT_POLICY_VERSION } from "./contract";
+import { resolveDeepSeekModel } from "./deepseek-model";
 
 export const LEGACY_IMPLEMENTATION_ID = "legacy-rule-v2";
 export const V2_IMPLEMENTATION_ID = PRODUCTION_ADAPTER_VERSION;
@@ -124,7 +125,9 @@ export function selectProductionOrganizer(env: NodeJS.ProcessEnv = process.env):
     promptVersion: env.ORGANIZER_V2_PROMPT_VERSION ?? WINDOW_POLICY_VERSION,
     policyVersion: CONTRACT_POLICY_VERSION,
     provider: env.ORGANIZER_V2_PROVIDER ?? "deepseek",
-    model: env.ORGANIZER_V2_MODEL,
+    // Recorded on every artifact and sent to the Writer: the pinned DeepSeek model, or a loud
+    // configuration error — never a silent other model.
+    model: resolveDeepSeekModel(env, "ORGANIZER_V2_MODEL"),
     allowedMediaTiers: tiers as AdapterPolicy["allowedMediaTiers"],
   };
 

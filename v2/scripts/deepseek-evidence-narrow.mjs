@@ -28,6 +28,8 @@ const { runPipeline } = await import("../lib/organizer/pipeline.ts");
 const { createDeepSeekMemoryEditor } = await import("../lib/organizer/deepseek-editor.ts");
 const { QUALITY_REVIEW_POLICY_VERSION } = await import("../lib/organizer/quality-review.ts");
 const { classifyCareTopics } = await import("../lib/organizer/care-topics.ts");
+const { resolveDeepSeekModel, assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
+const WRITER_MODEL = resolveDeepSeekModel(process.env);
 const { FAMILY_WRITER_PROMPT_VERSION, FAMILY_WRITER_SYSTEM_PROMPT, FAMILY_WRITER_TOOL_NAME, FAMILY_WRITER_TOOL_SCHEMA, buildFamilyWriterPrompt, validateFamilyWriterOutput } = await import("../lib/organizer/family-writer.ts");
 
 // The story is rewritten from the SAME window the narrowed evidence comes from. Keeping the old
@@ -38,7 +40,7 @@ async function writeStory(input) {
     method: "POST",
     headers: { "x-api-key": process.env.DEEPSEEK_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
-      model: process.env.AI_MODEL, max_tokens: 2000, temperature: 0.3, thinking: { type: "disabled" },
+      model: WRITER_MODEL, max_tokens: 2000, temperature: 0.3, thinking: { type: "disabled" },
       system: FAMILY_WRITER_SYSTEM_PROMPT,
       tools: [{ name: FAMILY_WRITER_TOOL_NAME, description: "输出标题和正文", input_schema: FAMILY_WRITER_TOOL_SCHEMA }],
       tool_choice: { type: "tool", name: FAMILY_WRITER_TOOL_NAME },
@@ -48,6 +50,7 @@ async function writeStory(input) {
   if (res.status === 402) { console.error("DeepSeek 402 insufficient balance — stopping."); process.exit(2); }
   if (!res.ok) throw new Error(`http_${res.status}`);
   const body = await res.json();
+  assertProviderModel(WRITER_MODEL, body);
   const block = body.content?.find((b) => b.type === "tool_use" && b.name === FAMILY_WRITER_TOOL_NAME);
   if (!block) throw new Error("no_tool_use");
   return block.input;

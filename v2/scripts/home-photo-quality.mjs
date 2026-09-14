@@ -27,6 +27,7 @@ import sharp from "sharp";
 import { loadFamilyArchive } from "../lib/family-archive.ts";
 import { candidateMemories, HOME_CANDIDATE_WINDOW_DAYS, HOME_PHOTO_CANDIDATES_MAX } from "../lib/home-feed.ts";
 import { judgeVisionProbe, parseVisionScores } from "../lib/home-photo-quality.ts";
+import { assertProviderModel, resolveDeepSeekModel } from "../lib/organizer/deepseek-model.ts";
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -60,7 +61,7 @@ function env() {
 }
 
 const ENV = env();
-const MODEL = ENV.AI_MODEL ?? "unknown";
+const MODEL = resolveDeepSeekModel(ENV);
 const BASE_URL = ENV.DEEPSEEK_BASE_URL;
 const API_KEY = ENV.DEEPSEEK_API_KEY;
 
@@ -77,6 +78,7 @@ async function ask(content) {
   const text = await res.text();
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
   const body = JSON.parse(text);
+  assertProviderModel(MODEL, body);
   // thinking 块也要一起看：2026-09-13 那次，「没看到图」这句话只出现在 thinking 里。
   return (body.content ?? []).map((part) => part.thinking ?? part.text ?? "").join("\n").trim();
 }

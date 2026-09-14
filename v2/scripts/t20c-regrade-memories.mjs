@@ -36,7 +36,11 @@ const COMMIT = hasFlag("commit");
 const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 const apiKey = process.env.DEEPSEEK_API_KEY;
 const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
-const model = process.env.AI_MODEL || "deepseek-v4-pro";
+const { resolveDeepSeekModel } = await import("../lib/organizer/deepseek-model.ts");
+const model = resolveDeepSeekModel(process.env);
+// 2026-09-14: --commit is refused — T20-C rewrites memory_weight and historical review rows with raw SQL,
+// outside the story write guard. Dry runs still work.
+if (COMMIT) { console.error("REFUSED: t20c-regrade-memories --commit is disabled (2026-09-14 story write guard)."); process.exit(1); }
 if (!dbUrl) { console.error("Need DATABASE_URL."); process.exit(1); }
 if (!apiKey) { console.error("Need DEEPSEEK_API_KEY."); process.exit(1); }
 if (!MONTH || !/^\d{4}-\d{2}$/.test(MONTH)) { console.error("--month=YYYY-MM is required"); process.exit(1); }

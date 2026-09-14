@@ -9,6 +9,12 @@ import { CANONICAL_PROFILE_ID } from "./config";
 import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, MonthArchiveInput, OrganizerWindowInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 import { normalizeSha256 } from "./chat-import-persistence";
 import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
+import { createHash } from "node:crypto";
+import {
+  CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, ProtectedStoryWriteError, STORY_REVIEW_KINDS, StoryWriteContractError,
+  assertAutomaticActor, assertHumanDecisionInput, assertNotAutomaticApproval, boundContentSha256, evaluateStoryProtection, storyContentSha256, storyLinkTargets,
+  type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
+} from "@/lib/organizer/story-write-guard";
 import { storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
 import { storyNeighbours } from "@/lib/story-neighbours";
 import { birthDayOf } from "@/lib/time-signature";
@@ -93,6 +99,52 @@ function guardRowCount<T>(rows: T[], callSite: string): T[] {
 // idempotency decision made by json-repository.ts for the same call — that behavioral parity,
 // not raw SQL cleverness, is what test/repository-contract.test.mjs verifies against both
 // backends. Never falls back to another backend on a query error: a failure here throws.
+// ---------------------------------------------------------------- story write guard (2026-09-14)
+//
+// Every write that could change a story or its review state takes the SAME lock first, in the same
+// order: `content_quality_reviews` in SHARE ROW EXCLUSIVE (conflicts with itself and with the ROW
+// EXCLUSIVE any INSERT/UPDATE on that table needs), then the life_events row FOR UPDATE. Protection is
+// evaluated only after both are held, and the write happens in the same transaction. An isolation
+// level name is not what makes this safe — a SERIALIZABLE transaction can legally commit "before" a
+// concurrent approval — the explicit lock is. No network call ever runs inside these transactions.
+// lock_timeout makes a stuck holder fail this write loudly instead of queueing it forever.
+type GuardTx = { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: unknown[] }> };
+
+async function lockStoryLedger(tx: GuardTx) {
+  await tx.execute(sql`set local lock_timeout = '5s'`);
+  await tx.execute(sql`set local statement_timeout = '60s'`);
+  await tx.execute(sql`lock table content_quality_reviews in share row exclusive mode`);
+}
+
+async function linkedLedgerRows(tx: GuardTx, eventId: string | null, fingerprints: Array<string | null | undefined>): Promise<LedgerRow[]> {
+  const { ids, fingerprintTargets } = storyLinkTargets(eventId, fingerprints);
+  const targets = [...ids, ...fingerprintTargets];
+  if (!targets.length) return [];
+  const list = (values: string[]) => sql.join(values.map((value) => sql`${value}`), sql`, `);
+  const bindingClause = ids.length ? sql` or (target_kind = 'media_binding' and split_part(target_id, '|', 1) in (${list(ids)}))` : sql``;
+  const result = await tx.execute(sql`select target_kind, target_id, decision, provider, prompt_version, reviewed_at::text as reviewed_at
+    from content_quality_reviews where target_id in (${list(targets)})${bindingClause}`);
+  return (result.rows as Array<Record<string, string>>).map((row) => ({ targetKind: row.target_kind, targetId: row.target_id, decision: row.decision, provider: row.provider, promptVersion: row.prompt_version, reviewedAt: row.reviewed_at }));
+}
+
+async function lockEventRow(tx: GuardTx, column: "id" | "organization_fingerprint", value: string): Promise<LifeEvent | null> {
+  const rows = column === "id"
+    ? await (tx as any).select().from(t.lifeEvents).where(eq(t.lifeEvents.id, value)).for("update")
+    : await (tx as any).select().from(t.lifeEvents).where(eq(t.lifeEvents.organizationFingerprint, value)).for("update");
+  return (rows[0] as LifeEvent | undefined) ?? null;
+}
+
+// The canonical content a human approves (see story-write-guard.ts StoryContent for the contract).
+async function readStoryContent(q: GuardTx, eventId: string): Promise<(StoryContent & { profileId: string }) | null> {
+  const result = await q.execute(sql`select profile_id, title, story,
+      to_char((occurred_at::timestamptz) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as occurred_at_utc,
+      memory_weight, source_ids, media_ids, hero_media_id
+    from life_events where id = ${eventId}`);
+  const row = result.rows[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return { profileId: row.profile_id as string, title: (row.title as string | null) ?? null, story: (row.story as string | null) ?? null, occurredAtUtc: row.occurred_at_utc as string, memoryWeight: row.memory_weight as string, sourceIds: (row.source_ids as string[]) ?? [], mediaIds: (row.media_ids as string[]) ?? [], heroMediaId: (row.hero_media_id as string | null) ?? null };
+}
+
 export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): Repository {
   const db = getDb(env);
 
@@ -991,17 +1043,32 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         return location;
       }));
     },
-    async persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[]) {
+    async persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[], options: { actor?: "organizer"; review?: QualityReview } = {}) {
+      assertAutomaticActor(options.actor);
+      if (options.review) {
+        assertNotAutomaticApproval(options.review);
+        if (options.review.targetKind !== "life_event") throw new StoryWriteContractError("REVIEW_KIND", `persistOrganization only writes a life_event review (got ${options.review.targetKind})`);
+      }
       return db.transaction(async (tx) => {
+        // Story lock first (see lockStoryLedger), then the event row. The protection verdict is read
+        // only after both are held, so no approval or human text edit can slip in between the
+        // decision and the write. A refusal throws inside the transaction: nothing below is written —
+        // not the event, not raw_sources, not source_memory_links, not media, not the review row.
+        await lockStoryLedger(tx as unknown as GuardTx);
+        const fp = eventInput.organizationFingerprint ?? null;
+        const refuseIfProtected = async (event: LifeEvent | null) => {
+          const rows = await linkedLedgerRows(tx as unknown as GuardTx, event?.id ?? eventInput.id, [fp, event?.organizationFingerprint]);
+          const verdict = evaluateStoryProtection({ event, eventId: event?.id ?? eventInput.id, fingerprints: [fp] }, rows);
+          if (verdict.protected) throw new ProtectedStoryWriteError({ operation: "persistOrganization", eventId: event?.id ?? null, organizationFingerprint: fp, reasons: verdict.reasons });
+        };
         // Fingerprint guard: prevents parallel workers from creating duplicate events.
         // Mirrors persistDailyTrace's fingerprint-first lookup pattern.
-        const fpRow = eventInput.organizationFingerprint
-          ? (await tx.select().from(t.lifeEvents).where(eq(t.lifeEvents.organizationFingerprint, eventInput.organizationFingerprint)))[0]
-          : undefined;
-        const [existing] = fpRow ? [fpRow] : await tx.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, eventInput.id));
+        const fpRow = fp ? await lockEventRow(tx as unknown as GuardTx, "organization_fingerprint", fp) : null;
+        const existing = fpRow ?? await lockEventRow(tx as unknown as GuardTx, "id", eventInput.id);
         let result: LifeEvent;
         if (existing) {
           const e = existing as unknown as LifeEvent;
+          await refuseIfProtected(e);
           const merged: Partial<LifeEvent> = {
             sourceIds: [...new Set([...e.sourceIds, ...sourceIds])],
             mediaIds: [...new Set([...e.mediaIds, ...eventInput.mediaIds])],
@@ -1016,6 +1083,9 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
           const rows = await tx.update(t.lifeEvents).set(merged).where(eq(t.lifeEvents.id, e.id)).returning();
           result = rows[0] as unknown as LifeEvent;
         } else {
+          // A human decision can already exist for a story that has no row yet: queue169 addresses
+          // candidates as `fingerprint:<fp>`. Creating that story is refused too.
+          await refuseIfProtected(null);
           const toInsert = { ...eventInput, sourceIds: [...new Set(eventInput.sourceIds.length ? eventInput.sourceIds : sourceIds)] };
           // Safety-net: the unique fingerprint index prevents a concurrent INSERT from slipping past
           // the SELECT-then-INSERT gap when two workers race for the same batch.
@@ -1025,8 +1095,9 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
           if (rows[0]) {
             result = rows[0] as unknown as LifeEvent;
           } else {
-            // Concurrent INSERT won; read back the winning event.
-            const [reread] = await tx.select().from(t.lifeEvents).where(eq(t.lifeEvents.organizationFingerprint, eventInput.organizationFingerprint!));
+            // Concurrent INSERT won; read back the winning event — and judge it like any other target.
+            const reread = await lockEventRow(tx as unknown as GuardTx, "organization_fingerprint", eventInput.organizationFingerprint!);
+            await refuseIfProtected(reread);
             result = reread as unknown as LifeEvent;
           }
         }
@@ -1036,6 +1107,10 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
           await tx.insert(t.sourceMemoryLinks).values({ ...link, lifeEventId: result.id }).onConflictDoNothing({ target: [t.sourceMemoryLinks.rawSourceId, t.sourceMemoryLinks.lifeEventId] });
         }
         if (eventInput.mediaIds.length) await tx.update(t.media).set({ lifeEventId: result.id }).where(inArray(t.media.id, eventInput.mediaIds));
+        if (options.review) {
+          await tx.insert(t.contentQualityReviews).values({ ...options.review, targetId: result.id } as any)
+            .onConflictDoNothing({ target: [t.contentQualityReviews.targetKind, t.contentQualityReviews.targetId, t.contentQualityReviews.promptVersion] });
+        }
         return result;
       });
     },
@@ -1079,18 +1154,81 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     // Idempotent on the ledger's own unique key. `onConflictDoNothing` + read-back rather than an
     // UPDATE: a second write of the same decision must be a no-op, and a row a human has since
     // revisited must not be silently reverted by a retrying worker.
-    async persistQualityReview(review: QualityReview) {
-      const rows = await db.insert(t.contentQualityReviews).values(review as any)
-        .onConflictDoNothing({ target: [t.contentQualityReviews.targetKind, t.contentQualityReviews.targetId, t.contentQualityReviews.promptVersion] })
-        .returning();
-      if (rows[0]) return reviewFromRow(rows[0] as unknown as Record<string, unknown>);
-      const [existing] = await db.select().from(t.contentQualityReviews).where(and(
-        eq(t.contentQualityReviews.targetKind, review.targetKind),
-        eq(t.contentQualityReviews.targetId, review.targetId),
-        eq(t.contentQualityReviews.promptVersion, review.promptVersion),
-      ));
-      if (!existing) throw new Error("PostgreSQL repository: quality review insert reported a conflict but no row was found.");
-      return reviewFromRow(existing as unknown as Record<string, unknown>);
+    //
+    // 2026-09-14: on a story kind this is guarded like persistOrganization — same lock order, refuses a
+    // protected story, never writes "approved". Other kinds (daily_trace, monthly_snapshot) are unchanged.
+    async persistQualityReview(review: QualityReview, options: { actor?: "organizer" } = {}) {
+      assertAutomaticActor(options.actor);
+      const insertOrReadBack = async (q: typeof db) => {
+        const rows = await q.insert(t.contentQualityReviews).values(review as any)
+          .onConflictDoNothing({ target: [t.contentQualityReviews.targetKind, t.contentQualityReviews.targetId, t.contentQualityReviews.promptVersion] })
+          .returning();
+        if (rows[0]) return reviewFromRow(rows[0] as unknown as Record<string, unknown>);
+        const [existing] = await q.select().from(t.contentQualityReviews).where(and(
+          eq(t.contentQualityReviews.targetKind, review.targetKind),
+          eq(t.contentQualityReviews.targetId, review.targetId),
+          eq(t.contentQualityReviews.promptVersion, review.promptVersion),
+        ));
+        if (!existing) throw new Error("PostgreSQL repository: quality review insert reported a conflict but no row was found.");
+        return reviewFromRow(existing as unknown as Record<string, unknown>);
+      };
+      if (!STORY_REVIEW_KINDS.has(review.targetKind)) return insertOrReadBack(db);
+      assertNotAutomaticApproval(review);
+      return db.transaction(async (tx) => {
+        await lockStoryLedger(tx as unknown as GuardTx);
+        const head = (review.targetKind as string) === "media_binding" ? review.targetId.split("|")[0] : review.targetId;
+        const fp = head.startsWith(FINGERPRINT_TARGET_PREFIX) ? head.slice(FINGERPRINT_TARGET_PREFIX.length) : null;
+        const event = fp ? await lockEventRow(tx as unknown as GuardTx, "organization_fingerprint", fp) : await lockEventRow(tx as unknown as GuardTx, "id", head);
+        const eventId = event?.id ?? (fp ? null : head);
+        const rows = await linkedLedgerRows(tx as unknown as GuardTx, eventId, [fp, event?.organizationFingerprint]);
+        const verdict = evaluateStoryProtection({ event, eventId, fingerprints: [fp] }, rows);
+        if (verdict.protected) throw new ProtectedStoryWriteError({ operation: "persistQualityReview", eventId, organizationFingerprint: fp ?? event?.organizationFingerprint ?? null, reasons: verdict.reasons });
+        return insertOrReadBack(tx as unknown as typeof db);
+      });
+    },
+    async recordHumanStoryDecision(input: HumanStoryDecisionInput) {
+      assertHumanDecisionInput(input);
+      return db.transaction(async (tx) => {
+        const q = tx as unknown as GuardTx;
+        await lockStoryLedger(q);
+        const event = await lockEventRow(q, "id", input.eventId);
+        if (!event) throw new StoryWriteContractError("EVENT_NOT_FOUND", `no life_event ${input.eventId}`);
+        const content = await readStoryContent(q, input.eventId);
+        const current = storyContentSha256(content!);
+        if (current !== input.reviewedContentSha256) {
+          throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `reviewed content ${input.reviewedContentSha256.slice(0, 12)}… is not the stored story (now ${current.slice(0, 12)}…); nothing written`);
+        }
+        const reasonCodes = [...(input.reasonCodes ?? []), `${CONTENT_SHA256_REASON_PREFIX}${current}`];
+        const id = `human-review-${createHash("sha256").update(`${input.eventId}|${input.promptVersion}`).digest("hex").slice(0, 24)}`;
+        // Strictly later than every existing decision on this story, so it can never tie into a
+        // same-instant conflict; computed in SQL, not via the driver's timezone handling.
+        const inserted = await q.execute(sql`insert into content_quality_reviews
+            (id, profile_id, target_kind, target_id, decision, reason_codes, provider, model, prompt_version, policy_version, review_fingerprint, reviewed_at)
+          select ${id}, ${content!.profileId}, 'life_event', ${input.eventId}, ${input.decision}, ${JSON.stringify(reasonCodes)}::jsonb, ${input.operator}, null,
+            ${input.promptVersion}, ${input.policyVersion}, ${`${input.eventId}:${input.promptVersion}`},
+            greatest((now() at time zone 'utc'), (select max(reviewed_at) + interval '1 microsecond' from content_quality_reviews where target_kind = 'life_event' and target_id = ${input.eventId}))
+          on conflict (target_kind, target_id, prompt_version) do nothing
+          returning id`);
+        const [row] = await (tx as any).select().from(t.contentQualityReviews).where(and(
+          eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
+        const review = reviewFromRow(row as Record<string, unknown>);
+        if (inserted.rows.length) return { review, contentSha256: current, idempotent: false };
+        if (review.decision === input.decision && boundContentSha256(review.reasonCodes) === current) return { review, contentSha256: current, idempotent: true };
+        throw new StoryWriteContractError("HUMAN_DECISION_CONFLICT", `${input.eventId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
+      });
+    },
+    async getStoryContentVersion(eventId: string) {
+      const content = await readStoryContent(db as unknown as GuardTx, eventId);
+      if (!content) return null;
+      const { profileId: _profileId, ...storyContent } = content;
+      return { eventId, contentSha256: storyContentSha256(storyContent), content: storyContent };
+    },
+    async getStoryProtection(eventId: string) {
+      const [event] = await db.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, eventId));
+      if (!event) return null;
+      const e = event as unknown as LifeEvent;
+      const rows = await linkedLedgerRows(db as unknown as GuardTx, e.id, [e.organizationFingerprint]);
+      return { eventId, ...evaluateStoryProtection({ event: e }, rows) };
     },
     // T20-B, 2026-09-04: a month's own written review ("这个月的张年"). Upsert on the schema's
     // real unique key (profileId, month) — re-running the generator for a month (a fixed prompt

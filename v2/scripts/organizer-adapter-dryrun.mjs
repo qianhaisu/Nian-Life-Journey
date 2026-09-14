@@ -42,7 +42,7 @@ const POLICY = {
   promptVersion: "memory-editor-v4",
   policyVersion: "contract-v2",
   provider: "deepseek",
-  model: "deepseek-v4-pro",
+  model: "deepseek-flash",
   allowedMediaTiers: ["confirmed"],
 };
 

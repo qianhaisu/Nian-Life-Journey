@@ -29,7 +29,8 @@ const outPath = path.resolve(outArg);
 if (!path.relative(path.resolve(process.cwd(), ".."), outPath).startsWith("..")) { console.error("Refusing to write real chat content inside the repository."); process.exit(1); }
 
 const PROFILE_ID = "profile-zhangnian";
-const MODEL = process.env.AI_MODEL;
+const { resolveDeepSeekModel, assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
+const MODEL = resolveDeepSeekModel(process.env);
 const BASE_URL = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 if ((process.env.AI_PROVIDER ?? "").toLowerCase() !== "deepseek" || !process.env.DEEPSEEK_API_KEY || !MODEL) {
   console.error("Fail closed: AI_PROVIDER must be deepseek with DEEPSEEK_API_KEY and AI_MODEL set.");
@@ -53,6 +54,7 @@ async function writeStory(input) {
   if (response.status === 402) { console.error("DeepSeek 402 insufficient balance — stopping."); process.exit(2); }
   if (!response.ok) throw new Error(`http_${response.status}`);
   const payload = await response.json();
+  assertProviderModel(MODEL, payload);
   const block = payload.content?.find((b) => b.type === "tool_use" && b.name === FAMILY_WRITER_TOOL_NAME);
   if (!block) throw new Error("no_tool_use");
   stats.push({ latencyMs: Date.now() - started, inputTokens: payload.usage?.input_tokens ?? 0, outputTokens: payload.usage?.output_tokens ?? 0 });

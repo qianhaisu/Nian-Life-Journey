@@ -56,7 +56,7 @@ const selection = selectProductionOrganizer({
   ORGANIZER_V2_JUDGMENT_POLICY: FROZEN_V6_JUDGMENT.id,
   ORGANIZER_V2_WRITER_VERSION: "writer-v2",
   ORGANIZER_V2_PROMPT_VERSION: "memory-editor-v4",
-  ORGANIZER_V2_MODEL: "deepseek-v4-pro",
+  ORGANIZER_V2_MODEL: "deepseek-flash",
   ORGANIZER_V2_SOURCE_ALLOWLIST: allowlist.join(","),
 });
 console.log(describeSelection(selection));

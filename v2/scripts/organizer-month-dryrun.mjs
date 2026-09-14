@@ -191,6 +191,7 @@ console.log(`Ceiling: ${MAX_CALLS === Infinity ? "none — the named day list is
 const editor = createDeepSeekMemoryEditor(process.env, SUBJECT, { variant: "v4", ...OPTS });
 console.log(`Editor ${editor.name} ${editor.model} ${editor.promptVersion} · Writer ${WRITER_V2_PROMPT_VERSION} · Validator ${NARRATIVE_VALIDATOR_VERSION}`);
 
+const { assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
 async function callWriter(pkg) {
   const body = JSON.stringify({
     model: editor.model, max_tokens: 3000, temperature: 0, thinking: { type: "disabled" },
@@ -202,6 +203,7 @@ async function callWriter(pkg) {
   const res = await fetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (!res.ok) throw new Error(`writer http ${res.status}`);
   const payload = await res.json();
+  assertProviderModel(editor.model, payload);
   const tool = payload.content?.find((b) => b.type === "tool_use" && b.name === WRITER_V2_TOOL_NAME);
   if (!tool) throw new Error("writer returned no tool_use");
   return { output: { contractVersion: "writer-v2-output-contract-v1", ...tool.input }, usage: payload.usage };

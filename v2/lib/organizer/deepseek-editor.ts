@@ -22,6 +22,7 @@ import { buildMemoryEditorPromptV4, MEMORY_EDITOR_V4_PROMPT_VERSION, MEMORY_EDIT
 import { toV1WorthinessDimensionsV4, type WorthinessAxisV4 } from "./worthiness-v4";
 import { resolveSubjectBounded, type SubjectResolution as BoundedSubjectResolution } from "./subject-resolver";
 import type { IdentityRegistry } from "./identity";
+import { DeepSeekModelError, assertProviderModel, resolveDeepSeekModel } from "./deepseek-model";
 
 export class DeepSeekEditorError extends Error {
   constructor(message: string, readonly code: string, readonly fatal = false) {
@@ -243,9 +244,10 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
     this.singleChildHousehold = options.singleChildHousehold ?? false;
     this.priorObservationsFor = options.priorObservationsFor;
     if (!env.DEEPSEEK_API_KEY) throw new DeepSeekEditorError("DeepSeek is not configured: DEEPSEEK_API_KEY is missing", "missing_api_key", true);
-    if (!env.AI_MODEL) throw new DeepSeekEditorError("DeepSeek is not configured: AI_MODEL is missing", "missing_model", true);
+    // One pinned model (deepseek-model.ts): unset means deepseek-flash, anything else stops here.
+    try { this.model = resolveDeepSeekModel(env); }
+    catch (error) { throw new DeepSeekEditorError(error instanceof Error ? error.message : String(error), "model_not_allowed", true); }
     this.apiKey = env.DEEPSEEK_API_KEY;
-    this.model = env.AI_MODEL;
     this.baseUrl = (env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
     this.timeoutMs = Math.max(1000, Number.parseInt(env.AI_TIMEOUT_MS ?? "60000", 10) || 60000);
     this.subject = subject;
@@ -302,6 +304,9 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         }
         const payload = await response.json() as AnthropicResponse;
         if (payload.error) throw new DeepSeekEditorError(`DeepSeek error: ${payload.error.type ?? "unknown"}`, "api_error");
+        // A response from another model is not retried into acceptance: fatal, the run stops.
+        try { assertProviderModel(this.model, payload as { model?: unknown }); }
+        catch (error) { if (error instanceof DeepSeekModelError) throw new DeepSeekEditorError(error.message, "provider_model_mismatch", true); throw error; }
         const toolUse = payload.content?.find((block) => block.type === "tool_use" && block.name === toolName);
         if (!toolUse || typeof toolUse.input !== "object" || toolUse.input === null) throw new DeepSeekEditorError("DeepSeek returned no tool_use block", "no_tool_use");
 

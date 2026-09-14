@@ -95,7 +95,7 @@ const { subjectGateFor, passesSubjectGate, subjectRelevanceMayProceed, claimPass
 const { STORY_MEDIA_TIERS } = await import("../lib/organizer/writer-v2.ts");
 const { planArtifacts, applyPlan } = await import("../lib/organizer/production-adapter.ts");
 const { persistDailyTrace, persistOrganizerRun, findOrganizerRun, persistOrganization, markSourcesOrganized, persistQualityReview } = await import("../lib/db/repository.ts");
-const { gradeMonthEvents } = await import("./t20c-grade-events.mjs");
+const { assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
 
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => { const hit = args.find((a) => a.startsWith(`--${name}=`)); return hit ? hit.slice(name.length + 3) : fallback; };
@@ -115,8 +115,13 @@ const COMMIT = hasFlag("commit");
 const FORCE = hasFlag("force");
 // See the header. Both default to OFF: writing a Memory and publishing it are different decisions,
 // and re-grading a month's existing stories is a third one.
-const SELF_APPROVE = hasFlag("self-approve");
-const GRADE = hasFlag("grade");
+// 2026-09-14 (after the 09-13 incident): both are refused outright. --self-approve made model output
+// publish itself; --grade ran T20-C, which rewrote memory_weight and historical review rows with raw
+// SQL outside the story write guard. Neither comes back without a guarded write path.
+if (hasFlag("self-approve") || hasFlag("grade")) {
+  console.error("REFUSED: --self-approve and --grade are disabled (2026-09-14 story write guard). An automatic run never publishes and never re-grades existing stories.");
+  process.exit(1);
+}
 const CONCURRENCY = Math.max(1, Math.min(16, Number(argOf("concurrency", "8")) || 8));
 // --day and --from/--to slice which days of the month are actually processed. T10, 2026-09-04:
 // Cowork's environment has a 175s hard ceiling per command and no surviving background process, so a
@@ -268,9 +273,10 @@ async function callWriter(pkg) {
   if (res.status === 429) { const err = new Error("writer http 429"); err.rateLimited = true; throw err; }
   if (!res.ok) throw new Error(`writer http ${res.status}`);
   const payload = await res.json();
+  const returnedModel = assertProviderModel(editor.model, payload);
   const tool = payload.content?.find((b) => b.type === "tool_use" && b.name === WRITER_V2_TOOL_NAME);
   if (!tool) throw new Error("writer returned no tool_use");
-  return { output: { contractVersion: "writer-v2-output-contract-v1", ...tool.input }, usage: payload.usage };
+  return { output: { contractVersion: "writer-v2-output-contract-v1", ...tool.input }, usage: payload.usage, model: { requested: editor.model, returned: returnedModel } };
 }
 
 const identityOf = (digest, conversationId) => {
@@ -299,6 +305,7 @@ const MEMORY_RUN_ACTIONS = new Set(["create_memory", "life_event_candidate"]);
 const results = new Array(work.length);
 let calls = 0;
 let written = 0;
+let protectedSkips = 0;
 let maxCallsLogged = false;
 let cursor = 0;
 let allowedWorkers = CONCURRENCY;
@@ -444,6 +451,7 @@ async function processItem(item) {
   const validation = validateNarrative({ pkg, output: writer.output });
   entry.validation = { ok: validation.ok, issues: validation.issues?.map((i) => i.code) ?? [] };
   entry.usage = writer.usage;
+  entry.writerModel = writer.model;
   if (writer.output.insufficient) { entry.skipped = "writer declared the evidence insufficient"; console.log(`  ${item.lifeDate} — writer: insufficient`); return entry; }
   if (!validation.ok) { entry.skipped = `narrative validator refused: ${entry.validation.issues.join(",")}`; console.log(`  ${item.lifeDate} — validator refused (${entry.validation.issues.join(",")})`); return entry; }
   const story = String(writer.output.story ?? "").trim();
@@ -544,10 +552,6 @@ async function processItem(item) {
     // Publication is a separate decision from writing, and it is not this script's to make unless
     // a human has said so on this run. Default: keep ADAPTER_REVIEW_DECISION, which is fail-closed.
     plan.review.reasonCodes = [...plan.review.reasonCodes, "t7-subject-gate"];
-    if (SELF_APPROVE) {
-      plan.review.decision = "approved";
-      plan.review.reasonCodes = [...plan.review.reasonCodes, "self-approved-by-flag"];
-    }
     // T7's output is everyday observation, not a curated highlight — memoryWeight stays at the
     // pipeline's lowest tier so it never outranks a real chapter/highlight in curateMemories' sort.
     plan.lifeEvent.event.memoryWeight = "trace";
@@ -558,6 +562,14 @@ async function processItem(item) {
     return entry;
   }
   entry.write = { applied: applied.applied, reason: applied.reason, eventId: applied.eventId };
+  if (applied.protected) {
+    // Not a success and not an error: the story is human-reviewed and the repository refused to touch
+    // it. Recorded with ids and reason codes only — never the family's text. No retry.
+    protectedSkips += 1;
+    entry.protectedSkip = applied.protected;
+    console.log(`  ${item.lifeDate} — PROTECTED, nothing written (event ${applied.protected.eventId ?? "(not created)"}; ${applied.protected.reasons.join(", ")}; run ${applied.protected.runId})`);
+    return entry;
+  }
   if (!applied.applied) { console.log(`  ${item.lifeDate} — already organized under this fingerprint (eventId ${applied.eventId}), no new write`); return entry; }
   written += 1;
   console.log(`  ${item.lifeDate} WRITTEN eventId=${applied.eventId}`);
@@ -607,17 +619,12 @@ const summary = {
   gate: gateStats,
   daysConsidered: days.length, windowsProcessed: results.length, daysWithText: new Set(publishable.map((r) => r.lifeDate)).size,
   refused: results.filter((r) => r.skipped).length, written,
+  protectedSkips,
+  writeErrors: results.filter((r) => r.writeError).length,
+  writerModels: [...new Set(results.map((r) => r.writerModel?.returned).filter(Boolean))],
 };
 console.log(`\n=== SUMMARY ===\n${JSON.stringify(summary, null, 2)}`);
 writeFileSync(outPath, JSON.stringify({ summary, results }, null, 2), "utf8");
 console.log(`\n${COMMIT ? `Wrote ${written} life_event row(s).` : "DRY RUN — nothing was written to the database."} Report: ${outPath} (contains family chat text; keep it outside the repository)`);
 
-// T20-C grading, only when asked for. It reaches every T7 event in the month, including ones this
-// run did not write and ones already published, and it spends calls --max-calls does not count.
-if (COMMIT && GRADE) {
-  console.log(`\n--- T20-C grade (--grade given; this also re-grades the month's EXISTING events) ---`);
-  const gradeModel = process.env.AI_MODEL || "deepseek-v4-pro";
-  await gradeMonthEvents(MONTH, { dbUrl, apiKey, baseUrl, model: gradeModel, persistQualityReview, commit: true });
-} else if (COMMIT) {
-  console.log(`\nT20-C grading skipped (pass --grade to re-grade this whole month, existing events included).`);
-};
+// T20-C grading is disabled (see the --grade refusal at the top).

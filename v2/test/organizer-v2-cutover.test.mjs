@@ -37,7 +37,7 @@ const V2_ENV = {
   ORGANIZER_V2_JUDGMENT_POLICY: FROZEN_V6_JUDGMENT.id,
   ORGANIZER_V2_WRITER_VERSION: "writer-v2",
   ORGANIZER_V2_PROMPT_VERSION: "memory-editor-v4",
-  ORGANIZER_V2_MODEL: "deepseek-v4-pro",
+  ORGANIZER_V2_MODEL: "deepseek-flash",
 };
 const newInputEnv = (after, extra = {}) => ({ ...V2_ENV, ORGANIZER_V2_NEW_INPUT_AFTER: after, ...extra });
 const allowlistEnv = (ids) => ({ ...V2_ENV, ORGANIZER_V2_SOURCE_ALLOWLIST: ids.join(",") });
@@ -131,7 +131,7 @@ const PLAN_POLICY = {
   promptVersion: "memory-editor-v4",
   policyVersion: "evidence-contract-v1",
   provider: "deepseek",
-  model: "deepseek-v4-pro",
+  model: "deepseek-flash",
   allowedMediaTiers: ["confirmed"],
 };
 
@@ -150,7 +150,7 @@ function fakeWindow(profileId, fingerprint) {
     stats: { messageCount: 1, imageCount: 0, senderCount: 1, droppedCount: 0 },
   };
 }
-const memoryOutcome = (window) => ({ action: "life_event_candidate", sourceIds: window.items.map((item) => item.sourceId), windowId: window.windowId, policyVersion: "evidence-contract-v1", modelVersion: "deepseek-v4-pro", selectionReason: "test", worthinessScore: 42, occurredAt: "2026-09-04", eventType: "moment", contentTypes: ["daily"], coreFacts: [], quotableLines: [], worthinessDimensions: {}, uncertainty: {}, sensitivityFlags: [], prohibitedInferences: [], reviewRequirement: "needs_review", confidence: 0.8 });
+const memoryOutcome = (window) => ({ action: "life_event_candidate", sourceIds: window.items.map((item) => item.sourceId), windowId: window.windowId, policyVersion: "evidence-contract-v1", modelVersion: "deepseek-flash", selectionReason: "test", worthinessScore: 42, occurredAt: "2026-09-04", eventType: "moment", contentTypes: ["daily"], coreFacts: [], quotableLines: [], worthinessDimensions: {}, uncertainty: {}, sensitivityFlags: [], prohibitedInferences: [], reviewRequirement: "needs_review", confidence: 0.8 });
 
 const planFor = (window, overrides = {}) => planArtifacts({
   window,
@@ -198,19 +198,26 @@ test("two independent artifacts get two independent reviews", async () => {
   assert.notEqual(rows[0].reviewFingerprint, rows[1].reviewFingerprint);
 });
 
-test("an AI Memory whose review row fails to write stays unpublished", async () => {
-  // The failure this exists to stop: a generated page reaching the family because the ledger write
-  // failed. requiresQualityReview() fails closed for AI content, so a missing row hides it — the
-  // error itself must also propagate, so the job is retried rather than reported as done.
+test("an AI Memory whose persistence fails is never published, and the batch stays retryable", async () => {
+  // The failure this exists to stop: a generated page reaching the family because a ledger write
+  // failed. Since 2026-09-14 the story and its review row are ONE persistence call, so the story
+  // can no longer exist without its review row. What can still fail afterwards is the organizer run;
+  // then the story exists, is unpublished, and the error propagates so the job is retried.
   const repo = createJsonRepository();
   const profileId = (await repo.getStore()).profile.id;
-  const window = fakeWindow(profileId, randomUUID().replace(/-/g, "").slice(0, 32));
-  const plan = planFor(window);
-  const failing = { ...repo, persistQualityReview: async () => { throw new Error("ledger unavailable"); } };
-  await assert.rejects(applyPlan(plan, failing, { newId: (p) => `${p}-${randomUUID()}`, now: "2026-09-04T10:10:00.000Z" }), /ledger unavailable/);
+  const options = { newId: (p) => `${p}-${randomUUID()}`, now: "2026-09-04T10:10:00.000Z" };
+
+  const failedWhole = planFor(fakeWindow(profileId, randomUUID().replace(/-/g, "").slice(0, 32)));
+  await assert.rejects(applyPlan(failedWhole, { ...repo, persistOrganization: async () => { throw new Error("ledger unavailable"); } }, options), /ledger unavailable/);
+  assert.equal((await repo.getStore()).events.some((event) => event.id === failedWhole.lifeEvent.event.id), false, "nothing written");
+
+  const plan = planFor(fakeWindow(profileId, randomUUID().replace(/-/g, "").slice(0, 32)));
+  const failing = { ...repo, persistOrganizerRun: async () => { throw new Error("run ledger unavailable"); } };
+  await assert.rejects(applyPlan(plan, failing, options), /run ledger unavailable/);
   const store = await repo.getStore();
   const written = store.events.find((event) => event.id === plan.lifeEvent.event.id);
-  assert.ok(written, "the artifact may exist — the write order puts it first on purpose");
+  assert.ok(written, "the artifact exists, together with its review row");
+  assert.equal(store.qualityReviews.filter((row) => row.targetId === written.id).length, 1);
   assert.equal(requiresQualityReview(written), true);
   assert.equal(isEventPublishable(written, indexReviews(store.qualityReviews)), false);
   assert.equal(store.organizerRuns.filter((run) => run.organizationFingerprint === plan.organizationFingerprint).length, 0, "the batch is not marked done, so it is retried");
@@ -224,7 +231,7 @@ function stubPipeline({ route = "memory", story = { wrote: true, title: "他自�
     calls,
     judge: async (window) => {
       calls.judge += 1;
-      const base = { sourceIds: window.items.map((item) => item.sourceId), windowId: window.windowId, policyVersion: "evidence-contract-v1", modelVersion: "deepseek-v4-pro", selectionReason: "stub", worthinessScore: 42 };
+      const base = { sourceIds: window.items.map((item) => item.sourceId), windowId: window.windowId, policyVersion: "evidence-contract-v1", modelVersion: "deepseek-flash", selectionReason: "stub", worthinessScore: 42 };
       const outcome = route === "memory"
         ? { ...base, action: "life_event_candidate", occurredAt: "2026-09-04", eventType: "moment", contentTypes: ["daily"], coreFacts: [], quotableLines: [], worthinessDimensions: {}, uncertainty: {}, sensitivityFlags: [], prohibitedInferences: [], reviewRequirement: "needs_review", confidence: 0.8 }
         : route === "trace"

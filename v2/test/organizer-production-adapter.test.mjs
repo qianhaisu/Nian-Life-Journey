@@ -17,7 +17,7 @@ const POLICY = {
   promptVersion: "memory-editor-v4",
   policyVersion: "contract-v2",
   provider: "deepseek",
-  model: "deepseek-v4-pro",
+  model: "deepseek-flash",
   allowedMediaTiers: ["confirmed"],
 };
 
@@ -51,7 +51,7 @@ const NOW = "2026-03-02T00:00:00.000Z";
 
 const memoryOutcome = (window, extra = {}) => ({
   action: "life_event_candidate", sourceIds: window.items.map((i) => i.sourceId), windowId: window.windowId,
-  policyVersion: "contract-v2", modelVersion: "deepseek-v4-pro", occurredAt: "2026-03-01",
+  policyVersion: "contract-v2", modelVersion: "deepseek-flash", occurredAt: "2026-03-01",
   eventType: "moment", contentTypes: ["family"], coreFacts: [], quotableLines: [],
   worthinessDimensions: {}, uncertainty: { time: "low", subject: "low", semantics: "low" },
   sensitivityFlags: [], prohibitedInferences: [], reviewRequirement: "needs_review",
@@ -59,7 +59,7 @@ const memoryOutcome = (window, extra = {}) => ({
 });
 const traceOutcome = (window, extra = {}) => ({
   action: "daily_trace", sourceIds: window.items.map((i) => i.sourceId), windowId: window.windowId,
-  policyVersion: "contract-v2", modelVersion: "deepseek-v4-pro", occurredAt: "2026-03-01",
+  policyVersion: "contract-v2", modelVersion: "deepseek-flash", occurredAt: "2026-03-01",
   scopes: ["family"], contentTypes: ["family"],
   traceLines: [{ text: "小年今天自己站起来了", evidenceRefs: ["r"] }],
   selectionReason: "ordinary_day", worthinessScore: 14, ...extra,
@@ -324,7 +324,8 @@ function fakeRepository() {
   const state = { events: [], traces: [], runs: [], reviews: [], organizedSources: [], calls: [] };
   const repo = {
     async findOrganizerRun(fp) { state.calls.push("findOrganizerRun"); return state.runs.find((r) => r.organizationFingerprint === fp) ?? null; },
-    async persistOrganization(sourceIds, event) { state.calls.push("persistOrganization"); state.events.push(event); return event; },
+    // Mirrors the repository contract: the review row rides inside the same persistence call.
+    async persistOrganization(sourceIds, event, links, options = {}) { state.calls.push("persistOrganization"); state.lastOptions = options; state.events.push(event); if (options.review) state.reviews.push(options.review); return event; },
     async persistDailyTrace(trace) {
       state.calls.push("persistDailyTrace");
       // Mirrors the production unique index on organization_fingerprint.
@@ -372,28 +373,32 @@ test("13. concurrent DailyTrace writers converge on one artifact", async () => {
   assert.equal(state.traces.length, 1, "the fingerprint unique index collapses the race to one trace");
 });
 
-test("14. the review row is written BEFORE the run that marks the batch done", async () => {
+test("14. the review row is written WITH the story, before the run that marks the batch done", async () => {
   const { applyPlan } = await import("../lib/organizer/production-adapter.ts");
   const { repo, state } = fakeRepository();
   const window = windowOf([source()]);
   const built = plan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-order", story: storyOf([]) });
   await applyPlan(built, repo, applyOpts);
   const order = state.calls.filter((c) => c !== "findOrganizerRun");
-  assert.deepEqual(order, ["persistOrganization", "persistQualityReview", "persistOrganizerRun"],
-    "a crash must never leave an artifact whose ledger row was never written");
+  assert.deepEqual(order, ["persistOrganization", "persistOrganizerRun"],
+    "story and review are one persistence call; a crash must never leave an artifact whose ledger row was never written");
+  assert.equal(state.reviews.length, 1);
+  assert.equal(state.reviews[0].decision, "needs_human_review");
+  assert.equal(state.lastOptions.actor, "organizer", "the adapter names itself; it never claims to be human");
 });
 
 test("14b. a partial failure leaves no organizer run, so the batch stays retryable", async () => {
   const { applyPlan } = await import("../lib/organizer/production-adapter.ts");
   const { repo, state } = fakeRepository();
-  repo.persistQualityReview = async () => { throw new Error("ledger unavailable"); };
+  const working = repo.persistOrganization;
+  repo.persistOrganization = async () => { throw new Error("ledger unavailable"); };
   const window = windowOf([source()]);
   const built = plan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-partial", story: storyOf([]) });
   await assert.rejects(() => applyPlan(built, repo, applyOpts), /ledger unavailable/);
   assert.equal(state.runs.length, 0, "no run recorded, so the fingerprint is not marked done");
 
   // Once the ledger is back, the same fingerprint is picked up again and completes.
-  repo.persistQualityReview = async (review) => { state.calls.push("persistQualityReview"); state.reviews.push(review); };
+  repo.persistOrganization = working;
   const retry = await applyPlan(built, repo, applyOpts);
   assert.equal(retry.applied, true, "the batch is retryable");
   assert.equal(state.runs.length, 1);
@@ -418,27 +423,55 @@ test("15. artifact ids are derived from the fingerprint, so a partial-failure re
   const { applyPlan, artifactIdFor } = await import("../lib/organizer/production-adapter.ts");
   const { repo, state } = fakeRepository();
   // Production upserts on the primary key; the double mirrors that so a repeated id is not a new row.
-  repo.persistOrganization = async (sourceIds, event) => {
+  // The first attempt fails after the story row was written but before the run — the shape a crash
+  // between the persistence transaction and persistOrganizerRun leaves behind.
+  let failRun = true;
+  repo.persistOrganization = async (sourceIds, event, links, options = {}) => {
     state.calls.push("persistOrganization");
     const existing = state.events.findIndex((e) => e.id === event.id);
     if (existing >= 0) state.events[existing] = event; else state.events.push(event);
+    if (options.review && !state.reviews.some((r) => r.targetId === options.review.targetId && r.promptVersion === options.review.promptVersion)) state.reviews.push(options.review);
     return event;
   };
-  repo.persistQualityReview = async () => { throw new Error("ledger unavailable"); };
+  const recordRun = repo.persistOrganizerRun;
+  repo.persistOrganizerRun = async (run) => { if (failRun) throw new Error("run ledger unavailable"); return recordRun(run); };
 
   const window = windowOf([source()]);
   // Each attempt plans FRESH, exactly as a real retry would.
   const attempt = () => plan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-derived", story: storyOf([]) });
 
-  await assert.rejects(() => applyPlan(attempt(), repo, applyOpts), /ledger unavailable/);
+  await assert.rejects(() => applyPlan(attempt(), repo, applyOpts), /run ledger unavailable/);
   assert.equal(state.events.length, 1);
 
-  repo.persistQualityReview = async (review) => { state.calls.push("persistQualityReview"); state.reviews.push(review); };
+  failRun = false;
   const retry = await applyPlan(attempt(), repo, applyOpts);
   assert.equal(retry.applied, true);
   assert.equal(state.events.length, 1, "0 duplicate LifeEvent across a partial-failure retry");
   assert.equal(state.events[0].id, artifactIdFor("event", "fp-derived"));
   assert.equal(state.reviews[0].targetId, state.events[0].id, "the review row points at the same artifact");
+  assert.equal(state.reviews.length, 1, "0 duplicate review rows across the retry");
+});
+
+test("16. a protected story is refused at persistence and reported: no review row, no organizer run, no retry", async () => {
+  const { applyPlan } = await import("../lib/organizer/production-adapter.ts");
+  const { ProtectedStoryWriteError } = await import("../lib/organizer/story-write-guard.ts");
+  const { repo, state } = fakeRepository();
+  repo.persistOrganization = async () => {
+    state.calls.push("persistOrganization");
+    throw new ProtectedStoryWriteError({ operation: "persistOrganization", eventId: "event-q169-001", organizationFingerprint: "fp-protected", reasons: ["HUMAN_DECISION:life_event_queue169:human:adopt_original", "PUBLISHED"] });
+  };
+  const window = windowOf([source()]);
+  const built = plan({ window, outcome: memoryOutcome(window), windowFingerprint: "fp-protected", story: storyOf([]) });
+  const result = await applyPlan(built, repo, applyOpts);
+  assert.equal(result.applied, false);
+  assert.equal(result.protected.code, "PROTECTED_STORY");
+  assert.equal(result.protected.eventId, "event-q169-001");
+  assert.equal(result.protected.runId, built.run.id, "the skip carries the run identity");
+  assert.deepEqual(result.protected.reasons, ["HUMAN_DECISION:life_event_queue169:human:adopt_original", "PUBLISHED"]);
+  assert.deepEqual(state.calls, ["findOrganizerRun", "persistOrganization"], "nothing after the refusal: no review, no run");
+  assert.equal(state.runs.length, 0);
+  assert.equal(state.reviews.length, 0);
+  assert.equal(JSON.stringify(result).includes(storyOf([]).story), false, "the skip record carries no family text");
 });
 
 test("15b. the same evidence always yields the same artifact id; different evidence does not", async () => {

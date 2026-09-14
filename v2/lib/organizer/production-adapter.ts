@@ -21,6 +21,7 @@ import { mayAttachToMemory, type MediaBindingTier } from "./evidence/media-tier"
 import type { OrganizerOutcome } from "./contract";
 import type { QualityDecision, QualityReview } from "./quality-review";
 import type { LifeEvent, DailyTrace, SourceMemoryLink, OrganizerRun, ContentType } from "@/lib/types";
+import { isProtectedStoryWriteError, type WriteActor } from "./story-write-guard";
 
 export const PRODUCTION_ADAPTER_VERSION = "organizer-v2-adapter-v1";
 
@@ -310,7 +311,11 @@ export function planArtifacts(input: PlanInput): PersistencePlan {
 /** The repository surface the adapter needs. Narrow on purpose, so it is trivial to double. */
 export type ArtifactRepository = {
   findOrganizerRun(organizationFingerprint: string): Promise<OrganizerRun | null>;
-  persistOrganization(sourceIds: string[], event: LifeEvent, links: SourceMemoryLink[]): Promise<LifeEvent>;
+  /**
+   * Writes the story AND its review row in one transaction (2026-09-14). Throws
+   * ProtectedStoryWriteError, having written nothing, when the target story is protected.
+   */
+  persistOrganization(sourceIds: string[], event: LifeEvent, links: SourceMemoryLink[], options?: { actor?: WriteActor; review?: QualityReview }): Promise<LifeEvent>;
   persistDailyTrace(trace: DailyTrace): Promise<DailyTrace>;
   persistOrganizerRun(run: OrganizerRun): Promise<OrganizerRun>;
   markSourcesOrganized(sourceIds: string[]): Promise<void>;
@@ -326,7 +331,7 @@ export type ArtifactRepository = {
 export function artifactRepositoryOf(repository: ArtifactRepository): ArtifactRepository {
   return {
     findOrganizerRun: (fingerprint) => repository.findOrganizerRun(fingerprint),
-    persistOrganization: (sourceIds, event, links) => repository.persistOrganization(sourceIds, event, links),
+    persistOrganization: (sourceIds, event, links, options) => repository.persistOrganization(sourceIds, event, links, options),
     persistDailyTrace: (trace) => repository.persistDailyTrace(trace),
     persistOrganizerRun: (run) => repository.persistOrganizerRun(run),
     markSourcesOrganized: (sourceIds) => repository.markSourcesOrganized(sourceIds),
@@ -339,18 +344,24 @@ export function artifactRepositoryOf(repository: ArtifactRepository): ArtifactRe
  *  recognise both, or a re-run of an already-written V2 Memory reports no target id. */
 const MEMORY_RUN_ACTIONS = new Set(["create_memory", "life_event_candidate"]);
 
-export type ApplyResult = { applied: boolean; reason: string; run?: OrganizerRun; eventId?: string; traceId?: string };
+/** A refusal is not a write. It carries what an operator needs and nothing from the family's text. */
+export type ProtectedSkip = { eventId: string | null; organizationFingerprint: string; code: "PROTECTED_STORY"; operation: string; reasons: string[]; runId: string };
+
+export type ApplyResult = { applied: boolean; reason: string; run?: OrganizerRun; eventId?: string; traceId?: string; protected?: ProtectedSkip };
 
 /**
  * Writes one plan. Replay-safe: an organizer run already recorded under this fingerprint means the
  * batch was organized before, and nothing is written a second time — the same guard the legacy
  * organizer uses, keyed the same way.
  *
- * Write order is deliberate. The review row goes in BEFORE the organizer run is recorded, because
- * the run is what marks the batch as done; a crash after the artifact but before the review would
- * otherwise leave a Memory that no ledger row covers. AI artifacts are fail-closed
- * (quality-review.ts), so even that window cannot publish anything — the ordering is the second
- * belt, not the only one.
+ * That run guard is NOT the protection for human-reviewed stories (2026-09-13 incident: stories
+ * published through the human route have a fingerprint but no organizer run). Protection lives in the
+ * repository, at persistence; this function only reports it. A protected refusal returns
+ * `applied: false` with `protected` set: no review row, no organizer run, no retry.
+ *
+ * Write order. The story and its review row are one transaction; the organizer run, which marks the
+ * batch as done, is written after. A crash between them leaves no run, so the batch stays retryable,
+ * and the retry lands on the same derived id with the review key already present.
  */
 export async function applyPlan(plan: PersistencePlan, repository: ArtifactRepository, options: { newId: (prefix: string) => string; now: string }): Promise<ApplyResult> {
   const prior = await repository.findOrganizerRun(plan.organizationFingerprint);
@@ -360,11 +371,20 @@ export async function applyPlan(plan: PersistencePlan, repository: ArtifactRepos
   let traceId: string | undefined;
 
   if (plan.lifeEvent) {
-    const saved = await repository.persistOrganization(plan.sourceIds, plan.lifeEvent.event, plan.lifeEvent.links);
-    eventId = saved.id;
-    if (plan.review) {
-      await repository.persistQualityReview({ ...plan.review, targetId: saved.id, id: options.newId("quality-review"), profileId: plan.profileId, reviewedAt: options.now });
+    const review: QualityReview | undefined = plan.review
+      ? { ...plan.review, targetId: plan.lifeEvent.event.id, id: options.newId("quality-review"), profileId: plan.profileId, reviewedAt: options.now } as QualityReview
+      : undefined;
+    let saved: LifeEvent;
+    try {
+      saved = await repository.persistOrganization(plan.sourceIds, plan.lifeEvent.event, plan.lifeEvent.links, { actor: "organizer", review });
+    } catch (error) {
+      if (!isProtectedStoryWriteError(error)) throw error;
+      return {
+        applied: false, reason: "protected story: refused at persistence, nothing written",
+        protected: { eventId: error.detail.eventId, organizationFingerprint: plan.organizationFingerprint, code: "PROTECTED_STORY", operation: error.detail.operation, reasons: error.detail.reasons, runId: plan.run.id },
+      };
     }
+    eventId = saved.id;
   } else if (plan.dailyTrace) {
     const saved = await repository.persistDailyTrace(plan.dailyTrace);
     traceId = saved.id;

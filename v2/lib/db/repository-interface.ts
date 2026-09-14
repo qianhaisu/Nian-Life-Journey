@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { QualityReview } from "@/lib/organizer/quality-review";
+import type { HumanStoryDecisionInput, StoryContent, StoryProtection, WriteActor } from "@/lib/organizer/story-write-guard";
+
+/** Automatic persistence accepts only the organizer actor; anything else is refused at runtime. */
+export type AutomaticWriteOptions = { actor?: WriteActor };
+export type HumanStoryDecisionResult = { review: QualityReview; contentSha256: string; idempotent: boolean };
 import type { StoryNeighbours } from "@/lib/story-neighbours";
 import type { CareEpisode, CareRecord, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportTaskStatus, ChatImportWarning, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, OrganizerJob, OrganizerRun, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
 
@@ -234,7 +239,10 @@ export interface Repository extends ChatImportRepository {
   upsertConnectorState(input: ConnectorState): Promise<ConnectorState>;
   markArchiveStatus(assetId: string, status: NonNullable<MediaAsset["archiveStatus"]>, error?: string): Promise<MediaAsset | null>;
   recordArchivedOriginal(input: { assetId: string; providerRef: string; path?: string; fileSize?: number; checksumVerified?: boolean }): Promise<MediaLocation | null>;
-  persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[]): Promise<LifeEvent>;
+  // Automatic writer. Refuses (ProtectedStoryWriteError, nothing written) when the target story is
+  // protected — see lib/organizer/story-write-guard.ts. `review`, when given, is written in the SAME
+  // transaction under the same lock, so a story and its review state can never be half-applied.
+  persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[], options?: AutomaticWriteOptions & { review?: QualityReview }): Promise<LifeEvent>;
   // Identity is `organizationFingerprint` and nothing else. A calendar day is a presentation
   // grouping key (see buildChapters in lib/memory-chapters.ts, which folds every trace on a day
   // into one TraceDay), never an artifact identity: two organizers looking at different evidence
@@ -250,7 +258,16 @@ export interface Repository extends ChatImportRepository {
   // after a partial failure repairs the batch instead of duplicating the ledger or overwriting a
   // decision someone has since revisited. A new decision on the same artifact is a new
   // promptVersion, never a silent overwrite of the old one.
-  persistQualityReview(review: QualityReview): Promise<QualityReview>;
+  //
+  // 2026-09-14: this is the AUTOMATIC ledger writer. On a story kind it takes the story lock, refuses
+  // a protected story, and never writes "approved". Human story decisions use recordHumanStoryDecision.
+  persistQualityReview(review: QualityReview, options?: AutomaticWriteOptions): Promise<QualityReview>;
+  // The only story-decision write for a person. `reviewedContentSha256` is computed by the caller from
+  // the content the person actually read (getStoryContentVersion at review time), and is compared with
+  // the stored story under the story lock: a mismatch refuses and writes nothing.
+  recordHumanStoryDecision(input: HumanStoryDecisionInput): Promise<HumanStoryDecisionResult>;
+  getStoryContentVersion(eventId: string): Promise<{ eventId: string; contentSha256: string; content: StoryContent } | null>;
+  getStoryProtection(eventId: string): Promise<(StoryProtection & { eventId: string }) | null>;
   findQualityReview(targetKind: QualityReview["targetKind"], targetId: string, promptVersion: string): Promise<QualityReview | null>;
   // T20-B: upserts on the table's real unique key (profileId, month).
   persistMonthlySnapshot(snapshot: MonthlySnapshot): Promise<MonthlySnapshot>;

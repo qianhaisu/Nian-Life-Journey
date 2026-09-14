@@ -31,7 +31,8 @@ if (!path.relative(path.resolve(process.cwd(), ".."), outPath).startsWith(".."))
 
 const PROFILE_ID = "profile-zhangnian";
 const BASE_URL = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
-const MODEL = process.env.AI_MODEL;
+const { resolveDeepSeekModel, assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
+const MODEL = resolveDeepSeekModel(process.env);
 if ((process.env.AI_PROVIDER ?? "").toLowerCase() !== "deepseek" || !process.env.DEEPSEEK_API_KEY || !MODEL) {
   console.error("Fail closed: AI_PROVIDER must be deepseek with DEEPSEEK_API_KEY and AI_MODEL set.");
   process.exit(1);
@@ -83,6 +84,7 @@ async function judgeSupport(centralFact, candidates) {
   if (res.status === 402) { console.error("DeepSeek 402 insufficient balance — stopping."); process.exit(2); }
   if (!res.ok) throw new Error(`http_${res.status}`);
   const payload = await res.json();
+  assertProviderModel(MODEL, payload);
   const block = payload.content?.find((b) => b.type === "tool_use" && b.name === "emit_support");
   if (!block) throw new Error("no_tool_use");
   return { ...block.input, usage: payload.usage };

@@ -15,6 +15,15 @@ import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTas
 import { storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
 import { storyNeighbours } from "@/lib/story-neighbours";
 import { indexReviews, isEventPublishable } from "@/lib/organizer/quality-review";
+import { randomUUID } from "node:crypto";
+import {
+  CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, ProtectedStoryWriteError, STORY_REVIEW_KINDS, StoryWriteContractError,
+  assertAutomaticActor, assertHumanDecisionInput, assertNotAutomaticApproval, boundContentSha256, canonicalOccurredAtUtc, evaluateStoryProtection, storyContentSha256,
+  type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
+} from "@/lib/organizer/story-write-guard";
+
+const jsonLedgerRows = (store: Store): LedgerRow[] => store.qualityReviews.map((review) => ({ targetKind: review.targetKind, targetId: review.targetId, decision: review.decision, provider: review.provider, promptVersion: review.promptVersion, reviewedAt: review.reviewedAt }));
+const jsonStoryContent = (event: LifeEvent): StoryContent => ({ title: event.title ?? null, story: event.story ?? null, occurredAtUtc: canonicalOccurredAtUtc(event.occurredAt), memoryWeight: event.memoryWeight, sourceIds: event.sourceIds ?? [], mediaIds: event.mediaIds ?? [], heroMediaId: event.heroMediaId ?? null });
 
 const dataDir = path.join(process.cwd(), ".data");
 const storeFile = path.join(dataDir, "nian-life.json");
@@ -242,7 +251,9 @@ export function createJsonRepository(): Repository {
     async upsertConnectorState(input: ConnectorState) { const store = await readStore(); const index = store.connectorStates.findIndex((item) => item.id === input.id); if (index === -1) store.connectorStates.push(input); else store.connectorStates[index] = input; await writeStore(store); return input; },
     async markArchiveStatus(assetId: string, status: NonNullable<MediaAsset["archiveStatus"]>, error?: string) { const store = await readStore(); const asset = store.mediaAssets.find((item) => item.id === assetId); if (!asset) return null; asset.archiveStatus = status; asset.archiveLastError = error; const original = store.mediaLocations.find((item) => item.mediaAssetId === assetId && item.provider === "hot" && item.variant === "original"); if (original && status !== "archived") original.status = status === "paused_auth_required" ? "awaiting_archive" : status; await writeStore(store); return asset; },
     async recordArchivedOriginal(input: { assetId: string; providerRef: string; path?: string; fileSize?: number; checksumVerified?: boolean }) { const store = await readStore(); const asset = store.mediaAssets.find((item) => item.id === input.assetId); if (!asset) return null; const now = new Date().toISOString(); const existing = store.mediaLocations.find((item) => item.mediaAssetId === input.assetId && item.provider === "quark" && item.variant === "original"); const location: MediaLocation = existing ?? { id: newId("location"), mediaAssetId: input.assetId, provider: "quark", variant: "original", providerRef: input.providerRef, status: "archived", createdAt: now, updatedAt: now }; Object.assign(location, { providerRef: input.providerRef, fileSize: input.fileSize, status: "archived", quarkPathSnapshot: input.path, updatedAt: now }); if (!existing) store.mediaLocations.push(location); asset.archiveStatus = "archived"; asset.archiveVerifiedAt = now; asset.archiveLastError = undefined; await writeStore(store); return location; },
-    async persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[]) { const store = await readStore(); const existing = store.events.find((event) => event.id === eventInput.id); if (existing) { existing.sourceIds = [...new Set([...existing.sourceIds, ...sourceIds])]; existing.mediaIds = [...new Set([...existing.mediaIds, ...eventInput.mediaIds])]; existing.contentTypes = [...new Set([...existing.contentTypes, ...eventInput.contentTypes])]; existing.story = eventInput.story || existing.story; existing.title = eventInput.title || existing.title; existing.memoryWeight = eventInput.memoryWeight; existing.organizerVersion = eventInput.organizerVersion ?? existing.organizerVersion; existing.organizerRun = eventInput.organizerRun ?? existing.organizerRun; existing.organizationFingerprint = eventInput.organizationFingerprint ?? existing.organizationFingerprint; } else store.events.push({ ...eventInput, sourceIds: [...new Set(eventInput.sourceIds.length ? eventInput.sourceIds : sourceIds)] }); for (const source of store.rawSources) if (sourceIds.includes(source.id)) { source.status = "organized"; source.relatedLifeEventId = eventInput.id; } store.links.push(...links.filter((link) => !store.links.some((old) => old.rawSourceId === link.rawSourceId && old.lifeEventId === link.lifeEventId))); for (const media of store.media) if (eventInput.mediaIds.includes(media.id)) media.lifeEventId = eventInput.id; await writeStore(store); return existing ?? eventInput; },
+    // Local-dev parity with postgres-repository.ts: same protection verdict, same refusals. There is no
+    // lock here because the JSON store is a single local file with no concurrent writer.
+    async persistOrganization(sourceIds: string[], eventInput: LifeEvent, links: SourceMemoryLink[], options: { actor?: "organizer"; review?: QualityReview } = {}) { assertAutomaticActor(options.actor); if (options.review) { assertNotAutomaticApproval(options.review); if (options.review.targetKind !== "life_event") throw new StoryWriteContractError("REVIEW_KIND", `persistOrganization only writes a life_event review (got ${options.review.targetKind})`); } const store = await readStore(); const fp = eventInput.organizationFingerprint ?? null; const existing = (fp ? store.events.find((event) => event.organizationFingerprint === fp) : undefined) ?? store.events.find((event) => event.id === eventInput.id); { const verdict = evaluateStoryProtection({ event: existing ?? null, eventId: existing?.id ?? eventInput.id, fingerprints: [fp] }, jsonLedgerRows(store)); if (verdict.protected) throw new ProtectedStoryWriteError({ operation: "persistOrganization", eventId: existing?.id ?? null, organizationFingerprint: fp, reasons: verdict.reasons }); } const resultId = existing?.id ?? eventInput.id; if (options.review && !store.qualityReviews.some((item) => item.targetKind === "life_event" && item.targetId === resultId && item.promptVersion === options.review!.promptVersion)) store.qualityReviews.push({ ...options.review, targetId: resultId }); if (existing) { existing.sourceIds = [...new Set([...existing.sourceIds, ...sourceIds])]; existing.mediaIds = [...new Set([...existing.mediaIds, ...eventInput.mediaIds])]; existing.contentTypes = [...new Set([...existing.contentTypes, ...eventInput.contentTypes])]; existing.story = eventInput.story || existing.story; existing.title = eventInput.title || existing.title; existing.memoryWeight = eventInput.memoryWeight; existing.organizerVersion = eventInput.organizerVersion ?? existing.organizerVersion; existing.organizerRun = eventInput.organizerRun ?? existing.organizerRun; existing.organizationFingerprint = eventInput.organizationFingerprint ?? existing.organizationFingerprint; } else store.events.push({ ...eventInput, sourceIds: [...new Set(eventInput.sourceIds.length ? eventInput.sourceIds : sourceIds)] }); for (const source of store.rawSources) if (sourceIds.includes(source.id)) { source.status = "organized"; source.relatedLifeEventId = resultId; } store.links.push(...links.map((link) => ({ ...link, lifeEventId: resultId })).filter((link) => !store.links.some((old) => old.rawSourceId === link.rawSourceId && old.lifeEventId === link.lifeEventId))); for (const media of store.media) if (eventInput.mediaIds.includes(media.id)) media.lifeEventId = resultId; await writeStore(store); return existing ?? eventInput; },
     // Fingerprint-only identity, matching postgres-repository.persistDailyTrace(). The `(profileId,
     // day)` fallback is deliberately gone — see the comment there. The fingerprint check is also
     // guarded on the fingerprint being present, so a trace without one no longer matches the first
@@ -252,13 +263,54 @@ export function createJsonRepository(): Repository {
     // Identity is (targetKind, targetId, promptVersion), the PostgreSQL ledger's own unique key: a
     // repeat returns the stored row untouched instead of writing a second one or overwriting a
     // decision that may since have been revisited.
-    async persistQualityReview(review: QualityReview) {
+    async persistQualityReview(review: QualityReview, options: { actor?: "organizer" } = {}) {
+      assertAutomaticActor(options.actor);
+      if (STORY_REVIEW_KINDS.has(review.targetKind)) assertNotAutomaticApproval(review);
       return withStoreMutation((store) => {
+        if (STORY_REVIEW_KINDS.has(review.targetKind)) {
+          const head = (review.targetKind as string) === "media_binding" ? review.targetId.split("|")[0] : review.targetId;
+          const fp = head.startsWith(FINGERPRINT_TARGET_PREFIX) ? head.slice(FINGERPRINT_TARGET_PREFIX.length) : null;
+          const event = (fp ? store.events.find((item) => item.organizationFingerprint === fp) : store.events.find((item) => item.id === head)) ?? null;
+          const eventId = event?.id ?? (fp ? null : head);
+          const verdict = evaluateStoryProtection({ event, eventId, fingerprints: [fp] }, jsonLedgerRows(store));
+          if (verdict.protected) throw new ProtectedStoryWriteError({ operation: "persistQualityReview", eventId, organizationFingerprint: fp ?? event?.organizationFingerprint ?? null, reasons: verdict.reasons });
+        }
         const existing = store.qualityReviews.find((item) => item.targetKind === review.targetKind && item.targetId === review.targetId && item.promptVersion === review.promptVersion);
         if (existing) return existing;
         store.qualityReviews.push(review);
         return review;
       });
+    },
+    async recordHumanStoryDecision(input: HumanStoryDecisionInput) {
+      assertHumanDecisionInput(input);
+      return withStoreMutation((store) => {
+        const event = store.events.find((item) => item.id === input.eventId);
+        if (!event) throw new StoryWriteContractError("EVENT_NOT_FOUND", `no life_event ${input.eventId}`);
+        const current = storyContentSha256(jsonStoryContent(event));
+        if (current !== input.reviewedContentSha256) throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `reviewed content ${input.reviewedContentSha256.slice(0, 12)}… is not the stored story (now ${current.slice(0, 12)}…); nothing written`);
+        const existing = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
+        if (existing) {
+          if (existing.decision === input.decision && boundContentSha256(existing.reasonCodes) === current) return { review: existing, contentSha256: current, idempotent: true };
+          throw new StoryWriteContractError("HUMAN_DECISION_CONFLICT", `${input.eventId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
+        }
+        const latest = Math.max(Date.now(), ...store.qualityReviews.filter((item) => item.targetKind === "life_event" && item.targetId === input.eventId).map((item) => Date.parse(item.reviewedAt) + 1).filter((value) => !Number.isNaN(value)));
+        const review: QualityReview = { id: `human-review-${randomUUID()}`, profileId: event.profileId, targetKind: "life_event", targetId: input.eventId, decision: input.decision, reasonCodes: [...(input.reasonCodes ?? []), `${CONTENT_SHA256_REASON_PREFIX}${current}`], provider: input.operator, promptVersion: input.promptVersion, policyVersion: input.policyVersion, reviewFingerprint: `${input.eventId}:${input.promptVersion}`, reviewedAt: new Date(latest).toISOString() };
+        store.qualityReviews.push(review);
+        return { review, contentSha256: current, idempotent: false };
+      });
+    },
+    async getStoryContentVersion(eventId: string) {
+      const store = await readStore();
+      const event = store.events.find((item) => item.id === eventId);
+      if (!event) return null;
+      const content = jsonStoryContent(event);
+      return { eventId, contentSha256: storyContentSha256(content), content };
+    },
+    async getStoryProtection(eventId: string) {
+      const store = await readStore();
+      const event = store.events.find((item) => item.id === eventId);
+      if (!event) return null;
+      return { eventId, ...evaluateStoryProtection({ event }, jsonLedgerRows(store)) };
     },
     async findQualityReview(targetKind: QualityReview["targetKind"], targetId: string, promptVersion: string) {
       const store = await readStore();

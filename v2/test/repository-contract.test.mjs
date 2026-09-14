@@ -44,7 +44,7 @@ function fixtureLocation(assetId, overrides = {}) {
   return { id: uid("location"), mediaAssetId: assetId, provider: "hot", variant: "web", providerRef: uid("ref"), status: "ready", createdAt: now, updatedAt: now, ...overrides };
 }
 function fixtureReview(overrides = {}) {
-  return { id: uid("quality-review"), profileId: PROFILE_ID, targetKind: "life_event", targetId: uid("event"), decision: "needs_human_review", reasonCodes: ["contract-test"], provider: "contract-test", promptVersion: "memory-editor-v4", policyVersion: "evidence-contract-v1", reviewFingerprint: uid("fp"), reviewedAt: "2026-11-01T10:00:00.000Z", ...overrides };
+  return { id: uid("quality-review"), profileId: PROFILE_ID, targetKind: "life_event", targetId: uid("event"), decision: "needs_human_review", reasonCodes: ["contract-test"], provider: "deepseek", promptVersion: "memory-editor-v4", policyVersion: "evidence-contract-v1", reviewFingerprint: uid("fp"), reviewedAt: "2026-11-01T10:00:00.000Z", ...overrides };
 }
 function fixtureRun(fingerprint, overrides = {}) {
   return { id: uid("run"), profileId: PROFILE_ID, organizationFingerprint: fingerprint, organizerType: "rule", organizerVersion: "rule-v1", provider: "rule", action: "daily_trace", sourceIds: [], sourceCount: 0, mediaInputCount: 0, processedAt: "2026-11-01T10:00:00.000Z", ...overrides };
@@ -74,19 +74,97 @@ function runContractSuite(name, createRepo) {
     assert.equal(store.rawSources.find((item) => item.id === source.id).status, "organized");
   });
 
-  test(`[${name}] persistOrganization on an existing event merges rather than duplicating`, async () => {
+  test(`[${name}] persistOrganization on an existing unreviewed event merges rather than duplicating`, async () => {
     const repo = createRepo();
     const first = fixtureSource();
     await repo.appendUpload({ source: first, media: [] });
-    const event = fixtureEvent({ sourceIds: [first.id] });
+    // createdBy "ai" with no ledger row is an unpublished, unreviewed candidate — the only kind the
+    // Organizer may still update. (A "user" story with no row is published, so it is protected.)
+    const event = fixtureEvent({ sourceIds: [first.id], createdBy: "ai" });
     await repo.persistOrganization([first.id], event, []);
     const second = fixtureSource();
     await repo.appendUpload({ source: second, media: [] });
     await repo.persistOrganization([second.id], { ...event, sourceIds: [second.id] }, []);
-    const store = await repo.getStore();
-    assert.equal(store.events.filter((item) => item.id === event.id).length, 1);
-    const merged = store.events.find((item) => item.id === event.id);
-    assert.ok(merged.sourceIds.includes(first.id) && merged.sourceIds.includes(second.id));
+    const version = await repo.getStoryContentVersion(event.id);
+    assert.ok(version.content.sourceIds.includes(first.id) && version.content.sourceIds.includes(second.id));
+  });
+
+  // ---------------------------------------------------------------- story write guard (2026-09-14)
+
+  const guardedCandidate = async (repo, overrides = {}) => {
+    const source = fixtureSource();
+    await repo.appendUpload({ source, media: [] });
+    const fp = uid("fp");
+    const event = fixtureEvent({ sourceIds: [source.id], createdBy: "ai", organizationFingerprint: fp, ...overrides });
+    const review = fixtureReview({ targetId: event.id, promptVersion: "writer-candidate-v1" });
+    await repo.persistOrganization([source.id], event, [], { actor: "organizer", review });
+    return { source, event, fp, review };
+  };
+
+  test(`[${name}] guard: automatic writes refuse a human actor, an approval, and a human provenance`, async () => {
+    const repo = createRepo();
+    const source = fixtureSource();
+    await repo.appendUpload({ source, media: [] });
+    await assert.rejects(() => repo.persistOrganization([source.id], fixtureEvent({ createdBy: "ai" }), [], { actor: "human" }), /ACTOR_NOT_ACCEPTED/);
+    await assert.rejects(() => repo.persistQualityReview(fixtureReview(), { actor: "human" }), /ACTOR_NOT_ACCEPTED/);
+    await assert.rejects(() => repo.persistQualityReview(fixtureReview({ decision: "approved" })), /AUTOMATIC_APPROVAL_FORBIDDEN/);
+    await assert.rejects(() => repo.persistQualityReview(fixtureReview({ provider: "claude-code" })), /PROVIDER_NOT_AUTOMATIC/);
+  });
+
+  test(`[${name}] guard: an unreviewed Organizer candidate is still updated (positive control)`, async () => {
+    const repo = createRepo();
+    const { event, fp, source } = await guardedCandidate(repo);
+    const before = await repo.getStoryContentVersion(event.id);
+    await repo.persistOrganization([source.id], { ...event, title: "rewritten by a later run", organizationFingerprint: fp }, [], { actor: "organizer" });
+    const after = await repo.getStoryContentVersion(event.id);
+    assert.notEqual(after.contentSha256, before.contentSha256);
+    assert.equal(after.content.title, "rewritten by a later run");
+    assert.equal((await repo.getStoryProtection(event.id)).protected, false);
+  });
+
+  test(`[${name}] guard: a human-approved story cannot be rewritten or re-reviewed by the Organizer`, async () => {
+    const repo = createRepo();
+    const { event, fp } = await guardedCandidate(repo);
+    const reviewed = await repo.getStoryContentVersion(event.id);
+    await repo.recordHumanStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: reviewed.contentSha256, operator: "contract-test-human", promptVersion: "release-contract-1", policyVersion: "release-contract" });
+    assert.equal((await repo.getStoryProtection(event.id)).protected, true);
+
+    const other = fixtureSource();
+    await repo.appendUpload({ source: other, media: [] });
+    await assert.rejects(
+      () => repo.persistOrganization([other.id], { ...event, title: "overwrite", story: "overwrite", sourceIds: [other.id], organizationFingerprint: fp }, [{ rawSourceId: other.id, lifeEventId: event.id, role: "supporting", createdAt: "2026-11-01T10:00:00.000Z" }], { actor: "organizer", review: fixtureReview({ targetId: event.id, promptVersion: "writer-rerun-v2" }) }),
+      /PROTECTED_STORY/);
+    // Default actor is the organizer too: omitting it is not a way around the guard.
+    await assert.rejects(() => repo.persistOrganization([other.id], { ...event, title: "overwrite", organizationFingerprint: fp }, []), /PROTECTED_STORY/);
+    await assert.rejects(() => repo.persistQualityReview(fixtureReview({ targetId: event.id, promptVersion: "writer-rerun-v2" })), /PROTECTED_STORY/);
+
+    const after = await repo.getStoryContentVersion(event.id);
+    assert.equal(after.contentSha256, reviewed.contentSha256, "title, story, sources, media, date: byte-identical");
+    assert.equal(await repo.findQualityReview("life_event", event.id, "writer-rerun-v2"), null, "no review row appended");
+    const input = await repo.getOrganizerWindowInput([other.id]);
+    assert.equal(input.sources[0].status, "uploaded", "the refused source was not marked organized");
+  });
+
+  test(`[${name}] guard: a human decision on stale content is refused and writes nothing; matching content is written once`, async () => {
+    const repo = createRepo();
+    const { event, fp, source } = await guardedCandidate(repo);
+    const readByHuman = await repo.getStoryContentVersion(event.id);
+    // The Organizer rewrites the still-unreviewed candidate while the person is reading.
+    await repo.persistOrganization([source.id], { ...event, story: `${event.story} `, organizationFingerprint: fp }, [], { actor: "organizer" });
+    const current = await repo.getStoryContentVersion(event.id);
+    assert.notEqual(current.contentSha256, readByHuman.contentSha256, "one trailing space is a different version");
+
+    await assert.rejects(() => repo.recordHumanStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: readByHuman.contentSha256, operator: "contract-test-human", promptVersion: "release-contract-2", policyVersion: "release-contract" }), /STALE_REVIEW_CONTENT/);
+    assert.equal(await repo.findQualityReview("life_event", event.id, "release-contract-2"), null);
+    assert.equal((await repo.getStoryProtection(event.id)).protected, false);
+
+    const first = await repo.recordHumanStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: current.contentSha256, operator: "contract-test-human", promptVersion: "release-contract-2", policyVersion: "release-contract" });
+    assert.equal(first.idempotent, false);
+    assert.ok(first.review.reasonCodes.includes(`content-sha256:${current.contentSha256}`));
+    const again = await repo.recordHumanStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: current.contentSha256, operator: "contract-test-human", promptVersion: "release-contract-2", policyVersion: "release-contract" });
+    assert.equal(again.idempotent, true);
+    await assert.rejects(() => repo.recordHumanStoryDecision({ eventId: event.id, decision: "store_only", reviewedContentSha256: current.contentSha256, operator: "contract-test-human", promptVersion: "release-contract-2", policyVersion: "release-contract" }), /HUMAN_DECISION_CONFLICT/);
+    await assert.rejects(() => repo.recordHumanStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: current.contentSha256, operator: "deepseek", promptVersion: "release-contract-3", policyVersion: "release-contract" }), /OPERATOR_NOT_HUMAN/);
   });
 
   test(`[${name}] MediaAsset/MediaLocation: append, update, and lookup by providerRef`, async () => {
@@ -334,7 +412,7 @@ function runContractSuite(name, createRepo) {
     await repo.persistQualityReview(review);
     // A retry after a partial failure re-runs applyPlan with a freshly minted row id: same artifact,
     // same prompt version, different id. It must land on the existing row, not beside it.
-    const retry = await repo.persistQualityReview({ ...review, id: uid("quality-review"), decision: "approved" });
+    const retry = await repo.persistQualityReview({ ...review, id: uid("quality-review"), decision: "store_only" });
     assert.equal(retry.id, review.id, "the stored row is returned, not the retry's row");
     assert.equal(retry.decision, "needs_human_review", "a replay never overwrites a decision");
     // Read back through the ledger's own identity rather than getStore(): the row that is there is
@@ -349,14 +427,14 @@ function runContractSuite(name, createRepo) {
     const a = fixtureReview();
     const b = fixtureReview();
     await repo.persistQualityReview(a);
-    await repo.persistQualityReview({ ...b, decision: "approved" });
+    await repo.persistQualityReview({ ...b, decision: "store_only" });
     assert.equal((await repo.findQualityReview("life_event", a.targetId, a.promptVersion)).decision, "needs_human_review");
-    assert.equal((await repo.findQualityReview("life_event", b.targetId, b.promptVersion)).decision, "approved");
+    assert.equal((await repo.findQualityReview("life_event", b.targetId, b.promptVersion)).decision, "store_only");
     // Same artifact, a later review round: a new promptVersion is a new row, never a silent
     // overwrite of the decision that is already on the record.
-    await repo.persistQualityReview({ ...a, id: uid("quality-review"), promptVersion: "human-review-round-2", decision: "approved" });
+    await repo.persistQualityReview({ ...a, id: uid("quality-review"), promptVersion: "review-round-2", decision: "rejected_unrelated" });
     assert.equal((await repo.findQualityReview("life_event", a.targetId, a.promptVersion)).decision, "needs_human_review");
-    assert.equal((await repo.findQualityReview("life_event", a.targetId, "human-review-round-2")).decision, "approved");
+    assert.equal((await repo.findQualityReview("life_event", a.targetId, "review-round-2")).decision, "rejected_unrelated");
   });
 
   test(`[${name}] findQualityReview returns null for an artifact with no ledger row`, async () => {
@@ -435,6 +513,9 @@ if (CONTRACT_DATABASE_URL) {
     for (const table of ["media", "media_assets", "raw_sources", "life_events", "daily_traces", "growth_records", "care_records", "care_episodes", "monthly_snapshot", "monthly_focus_goals", "organizer_runs", "organizer_jobs", "connector_states"]) {
       await client.query(`delete from ${table} where profile_id = $1`, [PROFILE_ID]);
     }
+    // The ledger rows this suite writes reference the fixture profile; the real schema's FK refuses the
+    // profile delete while they remain.
+    await client.query(`delete from content_quality_reviews where profile_id = $1`, [PROFILE_ID]);
     await client.query(`delete from contributors where profile_id = $1`, [PROFILE_ID]);
     await client.query(`delete from profiles where id = $1`, [PROFILE_ID]);
     await client.end();

@@ -64,6 +64,7 @@ export async function callGrader(batch, { apiKey, baseUrl, model }) {
   const res = await fetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (!res.ok) throw new Error(`grader http ${res.status}: ${await res.text()}`);
   const payload = await res.json();
+  if (typeof payload?.model === "string" && payload.model !== model) throw new Error(`PROVIDER_MODEL_MISMATCH: requested ${model} but the provider answered as ${payload.model}`);
   const tool = payload.content?.find((b) => b.type === "tool_use" && b.name === TOOL_NAME);
   if (!tool) throw new Error("grader returned no tool_use");
   return tool.input.grades;
@@ -77,6 +78,10 @@ export async function callGrader(batch, { apiKey, baseUrl, model }) {
  * @returns {{ high: number, medium: number, low: number, total: number, updated: number }}
  */
 export async function gradeMonthEvents(month, { dbUrl, apiKey, baseUrl, model, persistQualityReview, commit }) {
+  // 2026-09-14: the commit path below updates life_events.memory_weight and rewrites existing
+  // content_quality_reviews rows in place with raw SQL — it can demote a published, human-reviewed
+  // story without passing the story write guard. Refused before any model call or database read.
+  if (commit) throw new Error("REFUSED: T20-C grading commit is disabled (2026-09-14 story write guard); dry run only.");
   const pool = new pg.Pool({ connectionString: dbUrl });
   try {
     const { rows: events } = await pool.query(
