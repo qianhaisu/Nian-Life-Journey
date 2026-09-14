@@ -1,14 +1,4 @@
-import path from "node:path";
-
-type PathApi = Pick<typeof path, "resolve" | "relative" | "isAbsolute">;
-
-/**
- * True when `target` is `root` itself or anything beneath it. Decided on resolved absolute paths, so
- * the caller's working directory never changes the answer. On Windows `path.win32.relative` compares
- * case-insensitively and returns an absolute path for a different drive, which is outside.
- */
-export function isInsideDirectory(target: string, root: string, api: PathApi = path): boolean {
-  const relative = api.relative(api.resolve(root), api.resolve(target));
-  if (relative === "") return true;
-  return !relative.startsWith("..") && !api.isAbsolute(relative);
-}
+// Repository containment for scripts that write family text. The implementation is plain JavaScript in
+// scripts/lib/repo-containment.mjs so the story-review CLI can run it before any TypeScript loader
+// (DATA-0914-05); this module re-exports it for TypeScript callers. See that file for the rules.
+export { ContainmentError, assertOutsideRepository, findRepositoryRoot, isInsideDirectory, isParentRelative, resolveThroughLinks } from "../../scripts/lib/repo-containment.mjs";
