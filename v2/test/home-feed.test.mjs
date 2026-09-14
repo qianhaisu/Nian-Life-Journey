@@ -446,15 +446,18 @@ test("一段故事的每张获批配图都进池；轮换按故事交错，交�
   assert.deepEqual(candidates.map((c) => c.photo.media.id).sort(), ["m-a1", "m-a2", "m-b1", "m-c1"], "两张都进池");
   for (const c of candidates) assert.equal(c.photo.approval.eventId, c.story.eventId, "每张仍然只挂在批准它的那段故事上");
   // 页面按返回清单的顺序「换张照片」：清单顺序里同一段故事也不能挨着（本地实测抓到过按质量分排导致连着两张）。
+  // 首尾相接也算：一圈转完回到开头、换图翻到末尾回到第一张（数据轨审查 192984a 抓到的生产形状：3 篇、4 张、其中一篇 2 张）。
   const listOrder = at(0).photoCandidates.filter((c) => c.cooldown).map((c) => c.story.eventId);
-  for (let i = 1; i < listOrder.length; i += 1) assert.notEqual(listOrder[i], listOrder[i - 1], `换图顺序里相邻两张不是同一段故事：${listOrder}`);
-  const seq = [0, 1, 2, 3].map((index) => at(index).lead.story.eventId);
-  for (let i = 1; i < seq.length; i += 1) assert.notEqual(seq[i], seq[i - 1], "有别的故事可插时，相邻期次不是同一段故事");
+  for (let i = 0; i < listOrder.length; i += 1) assert.notEqual(listOrder[i], listOrder[(i + 1) % listOrder.length], `换图顺序（环形）里相邻两张不是同一段故事：${listOrder}`);
+  const seq = [0, 1, 2, 3, 4].map((index) => at(index).lead.story.eventId);
+  for (let i = 1; i < seq.length; i += 1) assert.notEqual(seq[i], seq[i - 1], "有别的故事可插时，相邻期次（含绕回开头那一期）不是同一段故事");
+  assert.doesNotMatch(at(0).photoCandidates.find((c) => c.chosen).reason, /相邻两期同属一段故事|交错不开/, "2 对 2 排得开，就不许写交错不开");
   assert.equal(new Set([0, 1, 2, 3].map((index) => at(index).lead.photo.media.id)).size, 4, "一整轮四期四张各不相同");
   // 两段故事、其中一段有两张：交错不开，必须说出来。
   const tight = archiveOf({ events: events.slice(0, 2), media: [a1, a2, b1], reviews: reviews.slice(0, 3) });
   const chosen = buildHomeFeed(tight, { edition: { id: "t", startedAt: "x", expiresAt: "y", slot: 0, index: 0 } }).photoCandidates.find((c) => c.chosen);
   assert.match(chosen.reason, /相邻两期同属一段故事/);
+  assert.match(chosen.reason, /超过一圈 3 张的一半，交错不开/, "只有真的超过一半才写交错不开");
 });
 
 test("照片池不按 60 天截：更早的已发布故事的获批配图也能上首页，文字兜底仍然只看 60 天", () => {

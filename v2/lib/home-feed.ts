@@ -638,9 +638,15 @@ function storyPhotosFor(memory: EditorialMemory, birthDay: string | undefined): 
 }
 
 /**
- * 轮换次序：按故事交错。先按 mediaId 排好（与质量分无关，§5.5），再按故事分组、组按各自第一张的 mediaId
- * 排序，逐轮各取一张。于是只要有别的故事可以插进来，相邻两期就不是同一段故事；某段故事的照片比其余
- * 故事加起来还多时，交错不开的那几处由调用方数出来写进 reason，不装作满足。
+ * 轮换次序：按故事**环形**交错。轮换是一圈——最后一期之后回到第一期，「换张照片」翻到末尾也回到开头——
+ * 所以首尾也算相邻。
+ *
+ * 做法：先按 mediaId 排好（与质量分无关，§5.5），按故事分组，组按照片数从多到少（同数按第一张 mediaId），
+ * 依次填进偶数位、再填奇数位。只要照片最多的那段故事不超过总数的一半（floor(n/2)），这样排出来的一圈里
+ * 没有任何两个相邻位置属于同一段故事；超过一半时本来就交错不开，调用方数出相邻处写进 reason。
+ *
+ * 2026-09-14 数据轨审查抓到上一版：逐轮各取一张，生产上排成 coldhot、庆典、小辫子、coldhot，
+ * 绕回开头时两张 coldhot 挨着，reason 还写着「交错不开」——其实 2 对 2 完全排得开。
  */
 function interleaveByStory<T extends { story: { eventId: string }; photo: { media: { id: string } } }>(entries: T[]): T[] {
   const groups = new Map<string, T[]>();
@@ -649,12 +655,22 @@ function interleaveByStory<T extends { story: { eventId: string }; photo: { medi
     if (group) group.push(entry);
     else groups.set(entry.story.eventId, [entry]);
   }
-  const ordered = [...groups.values()];
-  const out: T[] = [];
-  for (let round = 0; out.length < entries.length; round += 1) {
-    for (const group of ordered) if (group[round]) out.push(group[round]);
-  }
-  return out;
+  const ordered = [...groups.values()].sort((a, b) => b.length - a.length || a[0].photo.media.id.localeCompare(b[0].photo.media.id));
+  const slots: T[] = new Array(entries.length);
+  const positions = [
+    ...Array.from({ length: Math.ceil(entries.length / 2) }, (_, i) => i * 2),
+    ...Array.from({ length: Math.floor(entries.length / 2) }, (_, i) => i * 2 + 1),
+  ];
+  let next = 0;
+  for (const group of ordered) for (const entry of group) slots[positions[next++]] = entry;
+  return slots;
+}
+
+/** 照片最多的那段故事是否超过一圈的一半——只有这时才是真的「交错不开」。 */
+function largestStoryShare<T extends { story: { eventId: string } }>(entries: T[]): { largest: number; limit: number } {
+  const counts = new Map<string, number>();
+  for (const entry of entries) counts.set(entry.story.eventId, (counts.get(entry.story.eventId) ?? 0) + 1);
+  return { largest: Math.max(0, ...counts.values()), limit: Math.floor(entries.length / 2) };
 }
 
 function photoAbsenceOf(memory: EditorialMemory): HomePhotoAbsence {
@@ -811,8 +827,10 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
   const adjacentSameStory = pool.length > 1
     ? pool.filter((entry, i) => entry.story.eventId === pool[(i + 1) % pool.length].story.eventId).length
     : 0;
+  const share = largestStoryShare(pool);
   const adjacency = adjacentSameStory > 0
-    ? `整轮 ${pool.length} 期里有 ${adjacentSameStory} 处相邻两期同属一段故事（这段故事的获批照片多于其余故事之和，交错不开）`
+    ? `整轮 ${pool.length} 期里有 ${adjacentSameStory} 处相邻两期同属一段故事（首尾相接也算）`
+      + (share.largest > share.limit ? `：一段故事有 ${share.largest} 张获批照片，超过一圈 ${pool.length} 张的一半，交错不开` : "")
     : "";
   const rotation = pool.length;
   const rotationIndex = rotation > 0 ? edition.index % rotation : 0;
