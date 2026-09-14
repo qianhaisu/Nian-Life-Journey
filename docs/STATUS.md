@@ -9415,3 +9415,17 @@ DeepSeek 全部钉死 `deepseek-flash`（账号 /models 实列、合成请求回
 **下一件事**：总指挥审 0b6af92 并决定部署与限定验证窗口 → 部署后页面轨跑 g04 + g01/g03（期望全不变）→ 限定 `--commit` 前后各拍 g01，按 59/46/28/3 + 阳性对照分组验收 → 通过前不恢复任何循环；刷新通知接线另立单写者。
 
 > 更正（页面轨 12:5x）：上文页面轨回执第 2 行「`deepseek-flash` 即「V4.1 Flash」的对应未独立证明」撤回——页面轨已独立核对 DeepSeek 官方定价页模型表（`deepseek-flash` → "DeepSeek-V4.1-Flash"）与文档首页原句（"Use `deepseek-flash` as the model name"，旧 flash 名由 DeepSeek-V4.1-Flash 承接），为抓取摘要、非截图、控制台未看。另：提交 `15ae4f2` 误把工作区里数据轨「更正（数据轨 12:45）」一行一并提交，该行作者是数据轨、原文未改。
+
+## 2026-09-14 13:45 · 数据轨 · DATA-0914-02 修正轮：共享来源/媒体连带保护 + 人工审核入口（688f729，已 push、未部署）
+
+**本轮线上多了什么家人能读的东西**：无新内容，本轮是护栏修正。总审 0b6af92 为 changes_requested，688f729 补上：
+①（P1）一篇未审故事、trace、care、undo、markSources 的自动写入，会**改走或清空另一篇人工已审/暂停故事**的来源与媒体关联（生产同源 DDL 合成复现成立，含只靠 links / 数组的关联）；
+现在按五条关联路径追到所有占用故事，任一受保护就同事务整笔拒绝。修后复现 14/14：拒绝组零变化，未受保护阳性组确实改走。页面轨只读定性：**生产数据未发生，修复为预防性、无需回填**。
+②（P2）下一次人工批准走 `scripts/story-review.mjs`：出包时记下所审内容哈希，apply 用包内哈希；出包后故事被改则 STALE 零写入。历史批准不动，旧裸 SQL 脚本不调用。
+③（P3）本机 `.env.local` 仓库外备份后只改 `AI_MODEL=deepseek-flash`；ECS 最新三份部署 env `AI_MODEL` 为空，解析为 flash。
+
+**没做到什么 / 最大的已知 blocker**：未部署、Organizer 仍停；undo server action 已注册、可被 POST，未受保护事件仍可删改，是否移除交总指挥；
+保护面进一步变宽，含受保护故事消息的窗口整条被拒，trace/care 实际命中量待限定试跑统计；无触发器、发布门不校验哈希；`markSourcesProcessing` 未纳入；月回顾与刷新仍停；契约 4 条既有失败未修。
+验证：npm test 1144/1134/0 败；tsc、lint、生产构建（独立 distDir，不碰运行中 `.next`）过；19 场景回归 19/19。证据 `NianlifeOps/timeline-2026-09-13-overnight/reports/ORGANIZER-WRITE-GUARD-DELIVERY.md` 5c 节。
+
+**下一件事**：页面轨按新接口复核 688f729（22 场景判定器已做阴性对照）→ 总指挥复审 → 决定部署与限定试跑窗口（先 `--concurrency=1`）；通过前不恢复任何循环。
