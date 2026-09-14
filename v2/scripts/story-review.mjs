@@ -33,17 +33,21 @@ if (command !== "package" && command !== "apply") { console.error("usage: story-
 let repo;
 try { repo = findRepositoryRoot(import.meta.url); } catch (error) { refuse(`could not locate the repository root from the script location (${error instanceof ContainmentError ? error.code : String(error)}); refusing rather than guessing.`); }
 
+const outsideRepositoryOrRefuse = (target) => {
+  try {
+    return assertOutsideRepository(target, repo).literal;
+  } catch (error) {
+    const code = error instanceof ContainmentError ? error.code : "PATH_UNRESOLVABLE";
+    if (code.startsWith("INSIDE_REPOSITORY")) refuse(`the package contains family text; write it outside the repository (${code}).`);
+    refuse(`cannot verify the package path is outside the repository (${code}); refusing.`);
+  }
+};
+
 let out;
 if (command === "package") {
   out = argOf("out");
   if (!(argOf("events") ?? "").trim() || !out) { console.error("--events=<id,...> and --out=<abs path>.json are required"); process.exit(1); }
-  try {
-    out = assertOutsideRepository(out, repo).literal;
-  } catch (error) {
-    const code = error instanceof ContainmentError ? error.code : "PATH_UNRESOLVABLE";
-    if (code === "INSIDE_REPOSITORY" || code === "INSIDE_REPOSITORY_THROUGH_LINK") refuse(`the package contains family text; write it outside the repository (${code}).`);
-    refuse(`cannot verify the package path is outside the repository (${code}); refusing.`);
-  }
+  out = outsideRepositoryOrRefuse(out);
 }
 if (hasFlag("allow-json")) refuse("--allow-json is not supported by the production CLI; JSON-store behaviour is covered by the library tests.");
 if ((process.env.REPOSITORY_BACKEND ?? "").toLowerCase() !== "postgres") refuse("set REPOSITORY_BACKEND=postgres (with DATABASE_URL). This script does not write to the local JSON store.");
@@ -55,6 +59,8 @@ const repository = { getStoryContentVersion, recordHumanStoryDecision };
 if (command === "package") {
   const events = argOf("events").split(",").map((id) => id.trim()).filter(Boolean);
   const { pkg, missing } = await buildReviewPackage(repository, events, new Date().toISOString());
+  // Checked again right before writing: the database read above takes time, and the path may have changed.
+  outsideRepositoryOrRefuse(out);
   try {
     writeFileSync(out, JSON.stringify(pkg, null, 2), { encoding: "utf8", flag: "wx" });
   } catch (error) {

@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { ContainmentError, assertOutsideRepository, findRepositoryRoot, isInsideDirectory, resolveThroughLinks } from "../scripts/lib/repo-containment.mjs";
+import { ContainmentError, assertOutsideRepository, findAncestorWithIdentity, findRepositoryRoot, hasRefusedWindowsForm, isInsideDirectory, repositoryIdentities, resolveThroughLinks } from "../scripts/lib/repo-containment.mjs";
 
 // DATA-0914-03/05: the story-review CLI decides "inside the repository" from its own location, through
 // symlinks and junctions, fails closed when a path cannot be resolved, and has no JSON-store back door.
@@ -133,6 +133,63 @@ test("a dangling link or an unresolvable path fails closed", () => {
   fs.writeFileSync(aFile, "x");
   const r2 = run(V2, ["package", "--events=event-x", `--out=${path.join(aFile, "child", "pkg.json")}`]);
   assert.match(r2.stderr, /REFUSED: cannot verify the package path is outside the repository \(PATH_UNRESOLVABLE\)/, "a path through a file is unresolvable");
+});
+
+// G17 (page review of 1af79a4): an administrative share names the repository without sharing a prefix.
+const DRIVE = /^([a-zA-Z]):\\/.exec(REPO_ROOT)?.[1];
+const shareSpellings = DRIVE ? ["localhost", "127.0.0.1", os.hostname()].map((host) => `\\\\${host}\\${DRIVE}$${REPO_ROOT.slice(2)}`) : [];
+
+test("Windows forms that Win32 reinterprets are refused as forms: UNC and device namespace, trailing dot/space, colon streams", () => {
+  const w = path.win32;
+  for (const p of ["\\\\localhost\\C$\\Users\\teddy\\x.json", "//localhost/C$/x.json", "\\\\?\\C:\\x.json", "\\\\.\\C:\\x.json", "\\\\?\\UNC\\localhost\\C$\\x.json",
+    "C:\\Users\\teddy\\Nianlife.\\docs\\x.json", "C:\\Users\\teddy\\Nianlife \\docs\\x.json", "C:\\Users\\teddy\\docs\\x.json.", "C:\\Users\\teddy\\docs\\STATUS.md:stream", "C:docs\\x:y"]) {
+    assert.equal(hasRefusedWindowsForm(p, w), true, p);
+  }
+  for (const p of ["C:\\Users\\teddy\\..review\\x.json", "C:\\Users\\teddy\\a..b\\x.json", "C:\\Users\\teddy\\NianlifeOps\\x.json", "D:\\review\\x.json", "..\\..\\x.json"]) {
+    assert.equal(hasRefusedWindowsForm(p, w), false, p);
+  }
+  assert.equal(hasRefusedWindowsForm("//server/share/x", path.posix), false, "POSIX paths are not Windows forms");
+});
+
+test("administrative-share and trailing-dot spellings of the repository are refused by the CLI before the backend check", { skip: process.platform !== "win32" && "Windows only" }, () => {
+  const targets = [...shareSpellings.map((share) => `${share}\\docs\\g17-share.json`), `${REPO_ROOT}.\\docs\\g17-dot.json`, `${path.join(REPO_ROOT, "docs")}.\\g17-dot2.json`];
+  assert.ok(targets.length >= 5);
+  for (const cwd of [V2, os.tmpdir()]) {
+    for (const out of targets) {
+      const r = run(cwd, ["package", "--events=event-x", `--out=${out}`]);
+      assert.equal(r.status, 1, out);
+      assert.ok(!passesPathCheck(r), `must not reach the backend check: ${out}: ${r.stderr}`);
+      assert.match(r.stderr, /REFUSED: cannot verify the package path is outside the repository \(PATH_FORM_REFUSED\)/, out);
+    }
+  }
+  for (const name of ["g17-share.json", "g17-dot.json", "g17-dot2.json"]) assert.equal(fs.existsSync(path.join(REPO_ROOT, "docs", name)), false);
+});
+
+test("file identity catches a share spelling that string and realpath comparison miss (mutation control), and does not catch legal outside paths", (t) => {
+  const identities = repositoryIdentities(REPO);
+  const reachable = shareSpellings.filter((share) => safeLstat(`${share}\\docs`));
+  if (!reachable.length) { t.skip("no administrative share of this drive is reachable from this account; the CLI still refuses the form (previous test)"); return; }
+  for (const share of reachable) {
+    const docs = `${share}\\docs`;
+    const real = resolveThroughLinks(path.join(docs, "x.json"));
+    // Control: without the identity criterion, this spelling is judged outside.
+    assert.equal(isInsideDirectory(real, REPO.real) || isInsideDirectory(real, REPO.literal), false, `string/realpath alone misses ${real}`);
+    // With it: the repository root is found among the ancestors.
+    assert.ok(findAncestorWithIdentity(docs, identities), `identity must find the repository root above ${docs}`);
+  }
+  for (const outside of [SCRATCH, os.tmpdir(), path.dirname(REPO_ROOT)]) {
+    assert.equal(findAncestorWithIdentity(outside, identities), null, outside);
+  }
+  const sibling = path.join(path.dirname(REPO_ROOT), `${path.basename(REPO_ROOT)}Ops`);
+  if (safeLstat(sibling)) assert.equal(findAncestorWithIdentity(sibling, identities), null, "a sibling with a shared prefix is outside by identity too");
+});
+
+test("a legal outside path next to the repository (shared-prefix sibling, not created) passes every check and stops at the backend check", () => {
+  const out = path.join(path.dirname(REPO_ROOT), `${path.basename(REPO_ROOT)}Ops-g17-probe-${process.pid}`, "pkg.json");
+  assert.doesNotThrow(() => assertOutsideRepository(out, REPO));
+  const r = run(V2, ["package", "--events=event-x", `--out=${out}`]);
+  assert.ok(passesPathCheck(r), r.stderr);
+  assert.equal(fs.existsSync(path.dirname(out)), false, "nothing is created");
 });
 
 test("--allow-json is not a way around the postgres requirement", () => {
