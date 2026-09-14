@@ -9429,3 +9429,15 @@ DeepSeek 全部钉死 `deepseek-flash`（账号 /models 实列、合成请求回
 验证：npm test 1144/1134/0 败；tsc、lint、生产构建（独立 distDir，不碰运行中 `.next`）过；19 场景回归 19/19。证据 `NianlifeOps/timeline-2026-09-13-overnight/reports/ORGANIZER-WRITE-GUARD-DELIVERY.md` 5c 节。
 
 **下一件事**：页面轨按新接口复核 688f729（22 场景判定器已做阴性对照）→ 总指挥复审 → 决定部署与限定试跑窗口（先 `--concurrency=1`）；通过前不恢复任何循环。
+
+## 2026-09-14 14:40 · 数据轨 · DATA-0914-03 部署前短收尾（c18e07e，已 push、未部署）
+
+**本轮线上多了什么家人能读的东西**：无新内容，本轮是部署前的收尾。总审已认可 688f729 隔离阶段通过。c18e07e 做了三件事：
+- **关闭网页上无身份校验的破坏性入口 `undoCapture`**：删掉导出，而不是隐藏。它原来没有任何 UI 调用方，却能被直接 POST，来删改故事的来源。构建后 server action 清单里已经没有它。
+- **修 story-review 命令行**：仓库位置改由脚本自身所在目录判定，从 v2/scripts 启动也不会把仓库 docs 误当成仓库外；去掉 `--allow-json` 后门。
+- **部署脚本改成必须显式指定配置来源**（仓库外 `NianlifeOps/deploy-2026-09-14/d04-deploy.sh`，原 d01 保留），不再用 `ls -t` 自动挑文件。本轮固定为 `.env.runtime.ca266f2`，已核对它与运行容器的实际配置逐行一致；worker 关闭、V2 未开、AI_MODEL 为空（解析为 flash）；回滚镜像 `nianlife-web:ca266f2`。
+
+**没做到什么 / 最大的已知 blocker**：未部署，Organizer / worker / 循环仍停；限定 `--commit` 试跑仍需总指挥单独批准；无触发器、发布门不校验哈希；刷新通知常驻调用方、月回顾写入列出但不启用；PITR 释放不执行；契约 4 条既有失败未修。
+验证：npm test 1150/1140/0 败；tsc、lint、生产构建过；d04 以 688f729 做只读 plan 通过，负例（缺参数、短 SHA、路径不合规、文件不存在、`.diag` 配置不对应）均停下。旧交付报告第 6 节已追加「当前生效方案」，标明旧的「部署 0b6af92 / 等 Teddy 选模型」作废；第 7 节重列昨晚遗漏清单。证据 `NianlifeOps/timeline-2026-09-13-overnight/reports/ORGANIZER-WRITE-GUARD-DELIVERY.md` 5d–7 节。
+
+**下一件事**：页面轨复核 c18e07e（含 g14 manifest、g15 阅读链对照）→ 总审 → 用 `d04-deploy.sh <sha> plan|build|swap --env-source=/home/ecs-user/.env.runtime.ca266f2` 私有部署 → 部署后 g04 与 g01/g03 验收、八原则重跑；通过前不恢复任何循环。
