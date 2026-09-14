@@ -921,11 +921,16 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
   // 按轮换次序从当期那一条往后接——页面按清单顺序一张张换，所以清单顺序就是家人看到的换图顺序。
   // 2026-09-14 本地验收抓到：按质量分排时同一段故事的两张获批照片会连着出现，把按故事交错又拆散了。
   const restMax = HOME_PHOTO_CANDIDATES_MAX - (chosen ? 1 : 0);
-  const restPicked = new Set([...pool].filter((entry) => entry !== chosen)
+  const restPicked = [...pool].filter((entry) => entry !== chosen)
     .sort((a, b) => (rankOf.get(a.key) ?? 0) - (rankOf.get(b.key) ?? 0))
-    .slice(0, restMax));
-  const startAt = chosen ? chosenIndex + 1 : 0;
-  const restInRotation = pool.map((_, k) => pool[(startAt + k) % pool.length]).filter((entry) => restPicked.has(entry));
+    .slice(0, restMax);
+  // 2026-09-14 总指挥批准修复：清单本身要重新按故事交错成一圈，再从当期那一张起转。
+  // 上一版是在整个池的轮换次序上把没挑中的项抽掉——池子比上限大时，被抽掉的中间项让本来隔开的同一段故事
+  // 挨在一起（生产 22 对时 16 次换图相邻 4 处）。对「挑中的这几条」重新交错，只要其中照片最多的一段故事不超过
+  // 一半，整圈（含首尾相接）就没有相邻；池子不超过上限时挑中的就是整个池，排出来和原来的轮换次序一模一样。
+  const listed = interleaveByStory(chosen ? [chosen, ...restPicked] : restPicked);
+  const startAt = chosen ? listed.indexOf(chosen) + 1 : 0;
+  const restInRotation = listed.map((_, k) => listed[(startAt + k) % listed.length]).filter((entry) => entry !== chosen);
   for (const entry of restInRotation) {
     push(entry, {
       chosen: false, cooldown,

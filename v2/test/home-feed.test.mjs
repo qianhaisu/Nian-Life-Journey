@@ -559,6 +559,57 @@ function poolOf(n, scores = {}) {
   return { archive, quality, photos };
 }
 
+// 2026-09-14 总指挥批准修复：池子超过页面上限时，清单「按质量挑 12 条、再按轮换序排」会把中间被挑掉的项抽空，
+// 让本来隔开的同一段故事挨在一起（生产实测：获批 22 对时 16 次换图里相邻 4 处）。
+// 回归覆盖：每个故事 2 张、质量分参差、池子 > 上限，任意期次、显式切换，整轮（含首尾相接）零相邻。
+function twoPerStoryPool(stories, scoreOf = (i, j) => (i * 7 + j * 13) % 100) {
+  const media = [];
+  const events = [];
+  const reviews = [];
+  const scores = {};
+  for (let i = 0; i < stories; i += 1) {
+    const ids = [];
+    for (let j = 0; j < 2; j += 1) {
+      const id = `m-s${String(i).padStart(2, "0")}-${j}`;
+      // 每张相隔数小时，避免连拍分组把同篇两张并成一张。
+      media.push(photo(id, "2026-09-01", { takenAt: `2026-08-${String(1 + i).padStart(2, "0")}T${String(2 + j * 8).padStart(2, "0")}:00:00+08:00` }));
+      scores[id] = scoreOf(i, j);
+      ids.push(id);
+    }
+    const eventId = `e-s${String(i).padStart(2, "0")}`;
+    events.push(event(eventId, "2026-09-01", { mediaIds: ids }));
+    for (const id of ids) reviews.push(binding(eventId, id));
+  }
+  const quality = (mediaId) => ({ score: scores[mediaId], interaction: 0, readability: 0, context: 0, distinction: 0, source: "ai_vision", model: "m", assessedAt: "2026-08-01T00:00:00Z" });
+  return { archive: archiveOf({ events, media, reviews }), quality };
+}
+
+test("池子超过页面上限时，换图清单整轮（含首尾相接）零相邻同一段故事", () => {
+  for (const stories of [7, 10, 16]) {
+    const { archive, quality } = twoPerStoryPool(stories);
+    const ringOf = (feed) => feed.photoCandidates.filter((c) => c.chosen || c.cooldown).map((c) => c.story.eventId);
+    for (let index = 0; index < stories * 2 + 3; index += 1) {
+      const feed = buildHomeFeed(archive, { quality, edition: { id: `t${index}`, startedAt: "2026-09-13T00:00:00+08:00", expiresAt: "y", slot: 0, index } });
+      const ring = ringOf(feed);
+      assert.equal(ring.length, Math.min(HOME_PHOTO_CANDIDATES_MAX, stories * 2), `${stories} 篇：清单长度`);
+      assert.equal(feed.photoCandidates[0].chosen, true, "当期那张仍排第一");
+      for (let i = 0; i < ring.length; i += 1) {
+        assert.notEqual(ring[i], ring[(i + 1) % ring.length], `${stories} 篇 · 第 ${index} 期：位置 ${i} 与 ${(i + 1) % ring.length} 同属 ${ring[i]}（${ring.join(",")}）`);
+      }
+    }
+    // 显式切换到任意一张，清单同样整轮零相邻。
+    const base = buildHomeFeed(archive, { quality, edition: { id: "t", startedAt: "2026-09-13T00:00:00+08:00", expiresAt: "y", slot: 0, index: 0 } });
+    for (const c of base.photoCandidates) {
+      const ring = ringOf(buildHomeFeed(archive, { quality, photoKey: c.key, edition: { id: "t", startedAt: "2026-09-13T00:00:00+08:00", expiresAt: "y", slot: 0, index: 0 } }));
+      for (let i = 0; i < ring.length; i += 1) assert.notEqual(ring[i], ring[(i + 1) % ring.length], `显式切到 ${c.key}：${ring.join(",")}`);
+    }
+    // 修复不改变轮换本身：走满一整轮，池里每一张都当过一次当期照片。
+    const leads = new Set(Array.from({ length: stories * 2 }, (_, index) =>
+      buildHomeFeed(archive, { quality, edition: { id: `t${index}`, startedAt: "2026-09-13T00:00:00+08:00", expiresAt: "y", slot: 0, index } }).lead.photo.media.id));
+    assert.equal(leads.size, stories * 2, `${stories} 篇：整轮覆盖全部获批照片`);
+  }
+});
+
 test("超过页面上限：轮换池是全部 20 组，返回给页面的只有上限那几条，冷却按 20 算", () => {
   const { archive } = poolOf(20);
   const feed = buildHomeFeed(archive, { edition: editionAt(new Date("2026-09-13T09:00:00+08:00")) });
