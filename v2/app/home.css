@@ -55,17 +55,20 @@
 }
 .home-today time { color: inherit; font-weight: 400; }
 /* 题签：这一页唯一的主标题。最多两行——超出的部分不改写事实，用省略号收住，
-   完整标题仍然在「读读这一天」后面的事件页里（版式卡一·3）。 */
+   完整标题仍然在「读读这一天」后面的事件页里（版式卡一·3）。
+   2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT：降成画册题签——字号约为照片旁的一行说明、常规字重、
+   宋体，先看照片、后读题签。宋体只用系统自带的（不再下一套中文字体），没有宋体的设备回到 serif。 */
 .home-title {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  margin: 0 0 18px;
-  font-size: clamp(26px, 3.4vw, 34px);
+  margin: 0 0 10px;
+  font-family: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif;
+  font-size: clamp(18px, 1.5vw, 21px);
   font-weight: 400;
-  line-height: 1.45;
-  letter-spacing: -.02em;
+  line-height: 1.7;
+  letter-spacing: .04em;
 }
 .home-read {
   display: inline-flex;
@@ -127,14 +130,14 @@
 
 /* 引语（正文摘录已不在首页，这条留给将来仍会出现引语的地方）。 */
 .home-quote { color: var(--home-red); quotes: "「" "」"; }
-/* 标题里的强调片段。三支颜色都是站点已有的；哪几个字、用哪一支，由 lib/title-emphasis.ts 的
-   小词组规则决定（每题最多两段、不整句），命中不了的标题就是默认文字色。
-   对比度（首页题签 ≥24px，大字号门槛 3:1）：蓝 4.20、桃红 4.03、鼠尾草绿 3.63，均对 #F9F6F0。
-   加粗对拉丁词是 Nunito 真正的 800；汉字不会被合成粗体（见 app/fonts.css 顶部）。 */
-.home-emphasis { font-weight: 800; }
-.home-emphasis--blue { color: var(--home-blue); }
-.home-emphasis--rose { color: var(--home-red); }
-.home-emphasis--sage { color: var(--home-sage); }
+/* 标题里的强调片段。哪几个字、用哪一支，由 lib/title-emphasis.ts 的小词组规则决定（每题最多两段、
+   不超过一半），命中不了的标题就是默认文字色。
+   题签降到 18–21px 常规字重以后不再算「大字号」，门槛从 3:1 变成 4.5:1，所以三支颜色各压深一档
+   （同色相）：蓝 5.04、桃红 4.82、鼠尾草绿 4.94，均对 #F9F6F0。字重只到 600，不再用 800 去抢照片。 */
+.home-emphasis { font-weight: 600; }
+.home-emphasis--blue { color: #4a6e86; }
+.home-emphasis--rose { color: #a35845; }
+.home-emphasis--sage { color: #5f7056; }
 
 /* ── 轻便签：这几天 ──────────────────────────────────────────────────────
    不是通栏色条，也不是卡片：左栏下方、和题签同一条左对齐线、最大 300px 的一小块字。
@@ -233,29 +236,67 @@
   line-height: 1.95;
 }
 
-/* ── 桌面两栏 ─────────────────────────────────────────────────────────────
-   1200px 版心：左 336（28%）+ 间隔 48（4%）+ 右 816（68%）。
-   grid 的行列摆位让「照片在右、题签和便签在左」，而 DOM 顺序仍然是窄屏要的那个顺序。 */
+/* ── 桌面两栏（2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT）──────────────────────
+   版心和顶部导航同宽（min(1400px, 100% - 64px)），照片右缘贴着导航右缘。左栏约 30%，照片栏约 67%。
+   首屏看全：照片高度不超过「视口 - 导航 72 - 上下留白 - 照片说明行 54」，按原图比例缩，一个像素不裁；
+   竖照因此变窄，靠右摆，照片说明跟着照片宽度走。（这一条替掉 e66c4dd 的「宽度优先、竖照往下长」。）
+   左栏是一个 flex 列：日期 + 题签 + 读读这一天 贴着照片顶，提醒贴着照片底，中间留白。 */
 @media (min-width: 900px) {
-  .home-spread {
-    grid-template-columns: minmax(250px, 28%) minmax(0, 1fr);
-    column-gap: clamp(32px, 4%, 48px);
-    row-gap: 0;
-    align-items: start;
+  .home-v2 { --home-caption-h: 54px; }
+  .home-sheet {
+    width: min(1400px, calc(100% - 64px));
+    padding-block: 28px 32px;
   }
-  /* 两个单元：左栏（题签 + 便签）和照片。左栏不跨行，所以 1088px 高的照片撑不散它。 */
+  .home-spread {
+    grid-template-columns: minmax(250px, 30%) minmax(0, 1fr);
+    column-gap: clamp(32px, 3%, 48px);
+    row-gap: 0;
+    align-items: stretch;
+  }
   /* 行号也要写死：照片在 DOM 里排在前面，只给它 grid-column: 2 的话，自动放置不会回头，
      左栏会被推到第二行去（实测：题签 y=1286，掉到照片下面）。 */
-  .home-aside { grid-column: 1; grid-row: 1; padding-top: 4px; }
-  .home-figure { grid-column: 2; grid-row: 1; }
-
-  /* 左栏靠上排，不随一张 1088px 高的竖照垂直居中沉到首屏之外（裁决第 2 条）。 */
-  .home-aside { align-self: start; }
-  .home-caption { padding-inline: 4px; }
+  .home-aside {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0;
+    /* 照片说明那一行不算照片：提醒的底边对齐照片的底边，不对齐说明行。 */
+    padding-bottom: var(--home-caption-h);
+  }
+  .home-figure {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    width: fit-content;
+    max-width: 100%;
+  }
+  .home-photo img {
+    width: auto;
+    max-width: 100%;
+    max-height: max(420px, calc(100vh - 72px - 60px - var(--home-caption-h)));
+    max-height: max(420px, calc(100dvh - 72px - 60px - var(--home-caption-h)));
+  }
+  .home-caption { min-height: var(--home-caption-h); padding: 6px 4px 0; }
+  .home-notes { margin-top: 28px; }
 }
 
-/* 窄屏：单列，左右留白 20px（.home-sheet 的 100% - 40px），照片在最前。 */
+/* 窄屏：单列，左右留白 20px（.home-sheet 的 100% - 40px）。顺序照片 → 日期 → 题签 → 提醒，
+   间距是自然的段落距，不做上下顶底。照片不裁：特别高的竖照限高、居中，留出往下读的余地。 */
 @media (max-width: 899px) {
-  .home-notes { max-width: none; }
-  .home-title { font-size: clamp(24px, 6.4vw, 30px); }
+  .home-spread { gap: 14px; }
+  .home-photo {
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+  .home-photo img {
+    width: auto;
+    max-width: 100%;
+    max-height: 72vh;
+    max-height: 72svh;
+  }
+  .home-notes { max-width: none; margin-top: 26px; }
+  .home-title { font-size: 19px; }
 }

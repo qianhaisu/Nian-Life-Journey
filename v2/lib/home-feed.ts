@@ -604,6 +604,21 @@ function qualityFor(lookup: HomePhotoQualityLookup | undefined, photo: HomeFeedP
  *
  * 没有 `assessedAt` 的分数不受这条约束：确定性降级分是此刻算出来的默认值，不是一次「更新」。
  */
+/**
+ * 这个时间戳是不是落在本期开始之时或之后。**按时刻比，不按字符串比。**
+ *
+ * 2026-09-14 数据轨查出：审核账本的 reviewedAt 是 UTC 写法（"2026-09-14T10:58:51.000Z"），期次的
+ * startedAt 是 +08:00 写法（"2026-09-14T18:00:00+08:00"）。按字符串比，UTC 10:58 排在 18:00 前面，
+ * 于是一张 18:58（上海）才批的照片被当成「本期开始前就批了」，期中直接进了轮换——六小时稳定就破了。
+ * 两边任一解析不出来时按「不在本期之后」处理：宁可让它照常参与，也不因为一个坏时间把它挡掉。
+ */
+export function isAtOrAfterEditionStart(at: string, startedAt: string): boolean {
+  const atMs = Date.parse(at);
+  const startMs = Date.parse(startedAt);
+  if (Number.isNaN(atMs) || Number.isNaN(startMs)) return false;
+  return atMs >= startMs;
+}
+
 function effectiveQuality(
   lookup: HomePhotoQualityLookup | undefined,
   photo: HomeFeedPhoto,
@@ -611,7 +626,7 @@ function effectiveQuality(
   edition: HomeFeedEdition,
 ): HomePhotoQuality {
   const found = qualityFor(lookup, photo, today);
-  if (found.source === "ai_vision" && found.assessedAt && found.assessedAt >= edition.startedAt) {
+  if (found.source === "ai_vision" && found.assessedAt && isAtOrAfterEditionStart(found.assessedAt, edition.startedAt)) {
     return deterministicQuality(photo, today, `这张照片的视觉评估是本期（${edition.id}）开始后才写下的，本期先用确定性降级分，下一期起生效`);
   }
   return found;
@@ -816,7 +831,7 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
   const pending: { entry: Pair; reason: string }[] = [];
   for (const entry of paired) {
     const at = approvedAt?.get(entry.key);
-    if (at && at >= edition.startedAt) {
+    if (at && isAtOrAfterEditionStart(at, edition.startedAt)) {
       pending.push({ entry, reason: `本期（${edition.id}）开始后才通过审核，从下一期起参与轮换` });
       continue;
     }

@@ -12,6 +12,7 @@ import {
   buildHomeFeed, buildPhotoCandidates, buildReminders, candidateMemories, deadlineLabelOf,
   deterministicQuality, editionAt, EDITION_HOURS, HOME_FEED_VERSION, isImportantReminder,
   QUALITY_NOT_ASSESSED, reminderStateOf, REMINDERS_MAX_SHOWN, cooldownOf, HOME_PHOTO_CANDIDATES_MAX,
+  isAtOrAfterEditionStart,
 } from "../lib/home-feed.ts";
 
 const BIRTH = "2025-01-03";
@@ -715,4 +716,57 @@ test("期内新批准的同组照片不挤掉本期那张旧照片（先过资�
   assert.ok(nextPool.includes("m-a-new"), "下一期由 mediaId 序取组代表，轮到新的那张");
   const bumped = next.photoCandidates.find((c) => c.photo.media.id === "m-z-old");
   assert.match(bumped.reason, /连拍/, "这一期它才是被连拍去重挡下的那张");
+});
+
+// 2026-09-14：账本 reviewedAt 是 UTC「Z」写法，期次 startedAt 是 +08:00 写法。按字符串比时
+// "2026-09-13T04:30:00Z" < "2026-09-13T12:00:00+08:00"，一张 12:30（上海）才批的照片被当成本期前就批了。
+test("跨时区写法按时刻比较：isAtOrAfterEditionStart 的边界", () => {
+  const start = "2026-09-13T12:00:00+08:00";
+  assert.equal(isAtOrAfterEditionStart("2026-09-13T04:30:00.000Z", start), true, "UTC 04:30 = 上海 12:30，在本期开始之后");
+  assert.equal(isAtOrAfterEditionStart("2026-09-13T04:00:00Z", start), true, "恰好等于开始时刻算本期之后");
+  assert.equal(isAtOrAfterEditionStart("2026-09-13T03:59:59.999Z", start), false, "早一毫秒就是本期之前");
+  assert.equal(isAtOrAfterEditionStart("2026-09-13T11:00:00Z", start), true, "UTC 11:00 字符串上排在 12:00 前面，时刻上是上海 19:00");
+  assert.equal(isAtOrAfterEditionStart("2026-09-13T13:00:00+08:00", "2026-09-13T04:00:00Z"), true, "反过来的写法组合也按时刻比");
+  assert.equal(isAtOrAfterEditionStart("not-a-time", start), false, "解析不出来的时间不挡候选");
+  assert.equal(isAtOrAfterEditionStart("2026-09-13T13:00:00Z", "x"), false);
+});
+
+test("UTC 写法的本期新批准照片不进本期轮换；本期前批准的照常参与", () => {
+  const p1 = photo("m-1", "2026-09-07");
+  const p2 = photo("m-2", "2026-08-20", { takenAt: "2026-08-20T11:00:00+08:00" });
+  const fresh = photo("m-3", "2026-08-10", { takenAt: "2026-08-10T11:00:00+08:00" });
+  const justBefore = photo("m-4", "2026-08-01", { takenAt: "2026-08-01T11:00:00+08:00" });
+  const events = [
+    event("e-1", "2026-09-07", { mediaIds: [p1.id] }),
+    event("e-2", "2026-08-20", { mediaIds: [p2.id] }),
+    event("e-3", "2026-08-10", { mediaIds: [fresh.id] }),
+    event("e-4", "2026-08-01", { mediaIds: [justBefore.id] }),
+  ];
+  const edition = editionAt(new Date("2026-09-13T14:00:00+08:00"));
+  const reviews = [
+    binding("e-1", p1.id, "approved", { reviewedAt: "2026-09-01T00:00:00Z" }),
+    binding("e-2", p2.id, "approved", { reviewedAt: "2026-09-01T00:00:00Z" }),
+    // 上海 12:30 批的，写成 UTC：字符串上比 "2026-09-13T12:00:00+08:00" 小。
+    binding("e-3", fresh.id, "approved", { reviewedAt: "2026-09-13T04:30:00.000Z" }),
+    // 上海 11:59:59 批的：本期开始前，照常参与。
+    binding("e-4", justBefore.id, "approved", { reviewedAt: "2026-09-13T03:59:59.000Z" }),
+  ];
+  const archive = archiveOf({ events, media: [p1, p2, fresh, justBefore], reviews });
+  const pool = (feed) => feed.photoCandidates.filter((c) => c.cooldown).map((c) => c.photo.media.id).sort();
+  const feed = buildHomeFeed(archive, { edition });
+  assert.deepEqual(pool(feed), ["m-1", "m-2", "m-4"], "期中获批的 UTC 写法那张不参与本期");
+  assert.match(feed.photoCandidates.find((c) => c.photo.media.id === "m-3").reason, /开始后才通过审核/);
+  // 同一期里任意时刻刷新，池子都是这三张（六小时稳定）。
+  for (const at of ["2026-09-13T12:00:00+08:00", "2026-09-13T15:10:00+08:00", "2026-09-13T17:59:59+08:00"]) {
+    assert.deepEqual(pool(buildHomeFeed(archive, { edition: editionAt(new Date(at)) })), ["m-1", "m-2", "m-4"], at);
+  }
+  assert.deepEqual(pool(buildHomeFeed(archive, { edition: editionAt(new Date("2026-09-13T18:00:00+08:00")) })), ["m-1", "m-2", "m-3", "m-4"], "下一期起才进池");
+});
+
+test("UTC 写法的期中视觉评分本期也不生效", () => {
+  const { archive } = poolOf(3);
+  const edition = editionAt(new Date("2026-09-13T14:00:00+08:00"));
+  const scored = (assessedAt) => () => ({ score: 99, interaction: 0, readability: 0, context: 0, distinction: 0, source: "ai_vision", model: "m", assessedAt });
+  assert.equal(buildHomeFeed(archive, { edition, quality: scored("2026-09-13T05:00:00Z") }).lead.photo.quality.source, "deterministic", "上海 13:00 写下的");
+  assert.equal(buildHomeFeed(archive, { edition, quality: scored("2026-09-13T03:00:00Z") }).lead.photo.quality.source, "ai_vision", "上海 11:00 写下的");
 });
