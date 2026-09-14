@@ -8,7 +8,7 @@
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { NO_HERO_MEDIA_ID, heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
-import { storyDisplayMedia, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
+import { ledgerOnlyStoryPhotoIds, storyDisplayMedia, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
 
@@ -123,7 +123,19 @@ export function memoryTitle(event: Pick<LifeEvent, "title" | "occurredAt">): str
 export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>, birthDay?: string, confirmations?: StoryPhotoConfirmations): EditorialMemory | undefined {
   const signature = timeSignatureFor(event.occurredAt, birthDay);
   if (!signature) return undefined;
-  const media = event.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
+  // Candidates: the story's own media_ids, plus photographs a person approved for exactly this story in
+  // the ledger (ledgerOnlyStoryPhotoIds). Both are looked up in the same family-visible, deliverable
+  // set, and both still pass storyDisplayMedia below — nothing unapproved is added.
+  // The media_ids path relies on the caller having passed family-visible media (composeFamilyArchive
+  // hands in familyMedia); the ledger path is new, so it states the family-visible rule itself rather
+  // than inheriting it silently.
+  const ledgerOnly = ledgerOnlyStoryPhotoIds(event.id, event.mediaIds, confirmations)
+    .map((id) => mediaById.get(id))
+    .filter((item): item is Media => Boolean(item) && item!.visibility !== "private");
+  const media = [
+    ...event.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item)),
+    ...ledgerOnly,
+  ];
   const title = memoryTitle(event);
   // A lead photo claims "this picture is this story", so only a picture that can show why may be
   // one: it has to be part of the material the story was written from (lib/media/story-binding.ts).

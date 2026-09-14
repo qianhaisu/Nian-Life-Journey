@@ -15,7 +15,7 @@ import {
   assertAutomaticActor, assertHumanDecisionInput, assertNotAutomaticApproval, boundContentSha256, evaluateStoryProtection, storyContentSha256, storyLinkTargets,
   type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
 } from "@/lib/organizer/story-write-guard";
-import { storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
+import { ledgerOnlyStoryPhotoIds, storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
 import { storyNeighbours } from "@/lib/story-neighbours";
 import { birthDayOf } from "@/lib/time-signature";
 import { calendarMonthOf } from "@/lib/timeline-dates";
@@ -802,8 +802,12 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       // array as "match nothing" for free, and a life_event legitimately can have zero sources,
       // zero media, etc. (e.g. a text-only memory has no mediaIds).
       const emptyRows: never[] = [];
+      // PAGE-DECISION-0914-C: photographs approved for this story in the ledger but not in its
+      // media_ids are read too — still id-scoped (a handful of ids from rows already in memory).
+      const photoConfirmations = storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ id?: string; targetKind?: string; targetId?: string; decision?: unknown; reviewedAt?: string }>);
+      const storyMediaIds = [...e.mediaIds, ...ledgerOnlyStoryPhotoIds(e.id, e.mediaIds, photoConfirmations)];
       const [mediaRows, sourceRows, growthRows, careRows, contributorRows, linkRows, profileRows] = await Promise.all([
-        e.mediaIds.length ? db.select().from(t.media).where(inArray(t.media.id, e.mediaIds)) : Promise.resolve(emptyRows),
+        storyMediaIds.length ? db.select().from(t.media).where(inArray(t.media.id, storyMediaIds)) : Promise.resolve(emptyRows),
         e.sourceIds.length
           ? db.select({
               id: t.rawSources.id, profileId: t.rawSources.profileId, contributorId: t.rawSources.contributorId,
@@ -872,7 +876,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         mediaAssets: guardRowCount(assetRows as unknown as MediaAsset[], "getEventDetail.mediaAssets"),
         mediaLocations: guardRowCount(locationRows as unknown as MediaLocation[], "getEventDetail.mediaLocations"),
         birthDay: birthDayOf(profileRows[0] as unknown as { birthDate?: string | null } | undefined),
-        photoConfirmations: storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ id?: string; targetKind?: string; targetId?: string; decision?: unknown; reviewedAt?: string }>),
+        photoConfirmations,
         neighbours: storyNeighbours({ id: e.id, title: e.title, occurredAt: e.occurredAt }, readable),
       };
     },

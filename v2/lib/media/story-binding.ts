@@ -284,6 +284,54 @@ export function confirmedStoryPhotoIdsByEvent(
   return byEvent;
 }
 
+/**
+ * How many different stories each photograph is approved for (latest decision per pair, approved only).
+ */
+export function storyPhotoOwnerCounts(confirmations?: StoryPhotoConfirmations): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const key of confirmations ?? []) {
+    const [eventId, mediaId] = key.split("|");
+    if (!eventId || !mediaId) continue;
+    counts.set(mediaId, (counts.get(mediaId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Photographs a person approved for THIS story that the story's own `media_ids` does not list
+ * (总指挥 PAGE-DECISION-0914-C, 2026-09-14).
+ *
+ * Why this exists: every approved binding from the content-evidence review is a photograph of the
+ * story's day, and none of them are in the story's `media_ids` — that column records what the
+ * Organizer attached when it wrote the story. A reviewer's approval alone therefore drew nothing.
+ * Appending to `media_ids` would rewrite published story rows; reading the ledger here does not.
+ *
+ * What still has to hold, and where it is enforced:
+ *   · the pair's LATEST `media_binding` decision is `approved` — `confirmations` is built by
+ *     storyPhotoConfirmationsFrom, so `needs_human_review`, `rejected` and superseded rows never reach here;
+ *   · one photograph, one story: a photograph approved for more than one story is left out entirely;
+ *   · family-visible, deliverable, drawable: the caller looks these ids up in the same filtered media
+ *     set it uses for `media_ids`, so a missing or private file simply does not resolve.
+ * Sorted by mediaId so the order never depends on the order ledger rows were read in.
+ */
+export function ledgerOnlyStoryPhotoIds(
+  eventId: string,
+  mediaIds: readonly string[],
+  confirmations?: StoryPhotoConfirmations,
+): string[] {
+  if (!confirmations?.size) return [];
+  const owners = storyPhotoOwnerCounts(confirmations);
+  const listed = new Set(mediaIds);
+  const extra: string[] = [];
+  for (const key of confirmations) {
+    const [owner, mediaId] = key.split("|");
+    if (owner !== eventId || !mediaId || listed.has(mediaId)) continue;
+    if ((owners.get(mediaId) ?? 0) > 1) continue;
+    extra.push(mediaId);
+  }
+  return [...new Set(extra)].sort();
+}
+
 export function isStoryAssociated(
   event: AssociationEvent,
   media: Pick<Media, "id" | "rawSourceId">,

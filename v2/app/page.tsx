@@ -42,8 +42,11 @@ export default async function HomePage() {
   // 「换张照片」的切换单位是 (故事, 照片) 对：候选自带自己的故事，所以换图必然连带换标题、
   // 日期、当时年龄、「读读这一天」和点照片的去处，页面不可能只换 img（契约 HomePhotoCandidate）。
   // 当期选中的那一张排在最前，其余按契约给的顺序跟在后面。
-  const slides: HomeLeadSlide[] = photoCandidates.length > 0
-    ? [...photoCandidates].sort((a, b) => Number(b.chosen) - Number(a.chosen)).map((candidate) => ({
+  // 只有真正参与本期轮换的候选（当期那张，或带 cooldown 的池内候选）才成为可以翻到的照片。
+  // 契约里还带着本期未生效、连拍被挡下的候选（带原因，供审计），它们不该出现在「换张照片」里。
+  const rotating = photoCandidates.filter((candidate) => candidate.chosen || candidate.cooldown);
+  const slides: HomeLeadSlide[] = rotating.length > 0
+    ? [...rotating].sort((a, b) => Number(b.chosen) - Number(a.chosen)).map((candidate) => ({
       key: candidate.key,
       story: { eventId: candidate.story.eventId, href: candidate.story.href, title: candidate.story.title, excerpt: candidate.story.excerpt },
       photo: {

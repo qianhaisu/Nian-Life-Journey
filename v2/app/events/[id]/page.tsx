@@ -118,7 +118,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
     </section> : null}
     {materialCount > 0 ? <details className="evidence-disclosure reading-wrap">
       <summary><span className="serif">当时留下的资料</span><small>{materialCount} 项</small></summary>
-      <EvidenceList sources={eventSources} media={eventMedia} contributors={contributors} deliverableIds={deliverable} sourceRoles={sourceRoles} />
+      {/* The material list is what the day left behind with this story (its own media_ids). A photograph
+          that is here only because a reviewer approved it for the story (PAGE-DECISION-0914-C) is the
+          story's picture above, not material it was written from, so it is not listed as such. */}
+      <EvidenceList sources={eventSources} media={eventMedia.filter((item) => event.mediaIds.includes(item.id))} contributors={contributors} deliverableIds={deliverable} sourceRoles={sourceRoles} />
     </details> : null}
     {/* Keep reading. The archive is chronological, so the page after this one is a real thing —
         the next day somebody wrote something down — and it is named rather than left as an arrow.

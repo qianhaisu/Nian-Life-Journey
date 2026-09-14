@@ -790,6 +790,17 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
       paired.push({ photo: scored, story: storyRefOf(memory), burst: burstKeyOf(scored), key });
     }
   }
+  // 一张照片只能对应一篇故事（PAGE-DECISION-0914-C）：同一个 mediaId 在两篇以上故事里都是获批配图时，
+  // 首页不知道点它该进哪一篇，这张照片整个不进首页池——不是挑一篇，也不作为候选返回给页面。
+  const storiesPerPhoto = new Map<string, Set<string>>();
+  for (const entry of paired) {
+    const owners = storiesPerPhoto.get(entry.photo.media.id) ?? new Set<string>();
+    owners.add(entry.story.eventId);
+    storiesPerPhoto.set(entry.photo.media.id, owners);
+  }
+  for (let i = paired.length - 1; i >= 0; i -= 1) {
+    if ((storiesPerPhoto.get(paired[i].photo.media.id)?.size ?? 0) > 1) paired.splice(i, 1);
+  }
   paired.sort((a, b) => a.photo.media.id.localeCompare(b.photo.media.id));
 
   // **先按本期资格过滤，再分连拍组。这个顺序是要害，不是实现细节。**

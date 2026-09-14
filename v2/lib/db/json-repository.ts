@@ -12,7 +12,7 @@ import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
 import { assetByChecksum, normalizeChatImportTask, persistChatImportBatchInStore, persistUploadInStore } from "./chat-import-persistence";
 import { acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
-import { storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
+import { ledgerOnlyStoryPhotoIds, storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
 import { storyNeighbours } from "@/lib/story-neighbours";
 import { indexReviews, isEventPublishable } from "@/lib/organizer/quality-review";
 import { randomUUID } from "node:crypto";
@@ -195,7 +195,9 @@ export function createJsonRepository(): Repository {
       const store = await readStore();
       const event = store.events.find((item) => item.id === id);
       if (!event) return null;
-      const media = store.media.filter((item) => event.mediaIds.includes(item.id));
+      const photoConfirmations = storyPhotoConfirmationsFrom(store.qualityReviews ?? []);
+      const storyMediaIds = new Set([...event.mediaIds, ...ledgerOnlyStoryPhotoIds(event.id, event.mediaIds, photoConfirmations)]);
+      const media = store.media.filter((item) => storyMediaIds.has(item.id));
       const assetIds = new Set(media.map((item) => item.mediaAssetId).filter((v): v is string => Boolean(v)));
       // Same reading order the PostgreSQL backend builds, under the same rule: only stories a
       // reader could already open. The local store is small enough to filter in memory.
@@ -214,7 +216,7 @@ export function createJsonRepository(): Repository {
         mediaAssets: store.mediaAssets.filter((asset) => assetIds.has(asset.id)),
         mediaLocations: store.mediaLocations.filter((location) => assetIds.has(location.mediaAssetId)),
         birthDay: birthDayOf(store.profile),
-        photoConfirmations: storyPhotoConfirmationsFrom(store.qualityReviews ?? []),
+        photoConfirmations,
         neighbours: storyNeighbours({ id: event.id, title: event.title, occurredAt: event.occurredAt }, readable),
       };
     },
