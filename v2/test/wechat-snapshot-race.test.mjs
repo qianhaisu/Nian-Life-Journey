@@ -80,8 +80,9 @@ test("a stable export root still loads normally, with the offset-bearing since h
     const all = await loadWechatBundle(root, { maxMessages: 10, maxMedia: 1 });
     assert.equal(all.availableMessageCount, 2);
 
-    // A bare YYYY-MM-DD is parsed as UTC midnight, which is 08:00 in Shanghai — both messages here
-    // are later than that, so both stay eligible.
+    // A bare YYYY-MM-DD means Shanghai midnight (lib/timeline-dates.ts sinceInstantMs; it used to be
+    // parsed as UTC midnight = 08:00 Shanghai, which dropped the since day's first eight hours) — both
+    // messages here are later than that, so both stay eligible.
     const byDate = await loadWechatBundle(root, { maxMessages: 10, maxMedia: 1, since: "2026-09-10" });
     assert.equal(byDate.availableMessageCount, 2);
 

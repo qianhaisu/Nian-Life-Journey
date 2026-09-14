@@ -52,6 +52,7 @@ export function applyQuarkPhotoArtifact(config: {
 }): Promise<ApplyResult>;
 
 export function capturedAtIso(item: { capture_time: { text: string } }): string;
+export function mediaTakenAt(item: { capture_time: { text: string } }): string;
 
 export const DEFAULT_PROFILE_ID: string;
 export const DEFAULT_CONTRIBUTOR_ID: string;

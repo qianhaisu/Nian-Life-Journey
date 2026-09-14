@@ -97,10 +97,19 @@ for (const row of rows) {
 
     planned.push({
       sourceId: row.id, rel, abs, bytes: st.size, checksum: `sha256:${checksumHex}`, mimeType,
-      assetId, mediaId, locationId, providerRef, takenAt: row.captured_at.toISOString(),
+      // takenAt (instant) is for media_assets.taken_at (timestamptz); mediaTakenAt (Shanghai wall clock)
+      // is for media.taken_at, a plain timestamp that drops a "Z" and would store UTC (§3).
+      assetId, mediaId, locationId, providerRef, takenAt: row.captured_at.toISOString(), mediaTakenAt: shanghaiWallClock(row.captured_at),
       duplicateAssetOf: duplicateOf ?? null,
     });
   });
+}
+
+// "YYYY-MM-DD HH:MM:SS" in Asia/Shanghai — the wall clock media.taken_at (plain timestamp) must hold (§3).
+function shanghaiWallClock(date) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
 const distinctAssets = new Set(planned.map((p) => p.assetId));
@@ -147,7 +156,7 @@ try {
       `insert into media (id, profile_id, raw_source_id, media_asset_id, type, src, original_filename, mime_type, file_size, alt, taken_at, visibility, width, height)
        values ($1,$2,$3,$4,'video',$5,$6,$7,$8,'WeChat video',$9,'family',0,0)
        on conflict (id) do nothing`,
-      [p.mediaId, PROFILE_ID, p.sourceId, p.assetId, `/api/media/${p.mediaId}?variant=web`, path.basename(p.rel), p.mimeType, p.bytes, p.takenAt]);
+      [p.mediaId, PROFILE_ID, p.sourceId, p.assetId, `/api/media/${p.mediaId}?variant=web`, path.basename(p.rel), p.mimeType, p.bytes, p.mediaTakenAt]);
     created.media += m.rowCount;
     if (m.rowCount) rollback.push({ table: "media", id: p.mediaId });
 

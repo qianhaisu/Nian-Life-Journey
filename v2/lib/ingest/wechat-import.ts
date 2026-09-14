@@ -3,6 +3,7 @@ import { mediaDeliveryUrl } from "@/lib/media/paths";
 import type { ChatImportBundle, ChatMediaRef } from "./chat-import-bundle";
 import { chatImportBatchId, validateChatImportBundle } from "./chat-import-bundle";
 import { normalizeSha256 } from "@/lib/db/chat-import-persistence";
+import { wallClockOf } from "@/lib/timeline-dates";
 import type { Media, MediaAsset, MediaLocation, MediaType, RawSource } from "@/lib/types";
 import type { Repository, UploadPersistInput } from "@/lib/db/repository-interface";
 
@@ -83,7 +84,7 @@ export function buildWechatMessageItem(bundle: ChatImportBundle, message: ChatIm
     const { mediaType, mimeType } = mediaKindOf(ref);
     assets.push({ id: assetId, profileId: options.profileId, rawSourceId: sourceId, mediaType, mimeType, width: ref.width, height: ref.height, checksum, archiveStatus: "awaiting_archive", createdAt: now });
     locations.push({ id: `wechat-location:${digest(providerRef)}`, mediaAssetId: assetId, provider: "wechat", variant: "original", providerRef, status: "ready", mimeType, fileSize: ref.fileSize, width: ref.width, height: ref.height, createdAt: now, updatedAt: now });
-    media.push({ id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: mediaType, src: mediaDeliveryUrl(mediaId, "web"), mimeType, fileSize: ref.fileSize, alt: mediaType === "video" ? "WeChat video" : "WeChat image", takenAt: message.sentAt, visibility: "family", width: ref.width ?? (mediaType === "video" ? 0 : 1200), height: ref.height ?? (mediaType === "video" ? 0 : 900) });
+    media.push({ id: mediaId, profileId: options.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: mediaType, src: mediaDeliveryUrl(mediaId, "web"), mimeType, fileSize: ref.fileSize, alt: mediaType === "video" ? "WeChat video" : "WeChat image", takenAt: wallClockOf(message.sentAt) ?? message.sentAt, visibility: "family", width: ref.width ?? (mediaType === "video" ? 0 : 1200), height: ref.height ?? (mediaType === "video" ? 0 : 900) });
   }
 
   const source: RawSource = {

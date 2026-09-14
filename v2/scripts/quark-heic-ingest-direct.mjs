@@ -317,7 +317,9 @@ for (const item of items) {
           thumbLoc ? `/api/media/${mediaId}?variant=thumbnail` : mediaSrc,
           webKey, thumbKey,
           item.filename, item.format_type, bytes.byteLength,
-          item.filename, capturedAt, VISIBILITY,
+          // media.taken_at is a plain timestamp read as Shanghai wall clock; capture_time.text already is
+          // that wall clock. capturedAt (ISO "Z") stays for media_assets/raw_sources, which are timestamptz (§3).
+          item.filename, item.capture_time.text.trim().replace("T", " "), VISIBILITY,
           dims.width, dims.height,
         ]
       );

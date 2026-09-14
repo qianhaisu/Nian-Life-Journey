@@ -6,6 +6,7 @@ import sharp from "sharp";
 import type { ChatImportBundle, ChatMediaRef, MediaAvailability } from "./chat-import-bundle";
 import { parseWechatMarkdown } from "./wechat-markdown";
 import { isWeflowJson, parseWeflowJson } from "./wechat-weflow-json";
+import { sinceInstantMs } from "@/lib/timeline-dates";
 
 export type WechatSnapshotEntry = { relativePath: string; absolutePath: string; kind: "markdown" | "weflow-json" | "jpeg" | "other"; size: number; mtimeMs: number; contentDigest?: string };
 export type WechatSnapshot = { rootFingerprint: string; fileCount: number; files: WechatSnapshotEntry[] };
@@ -155,7 +156,10 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   // is never truncated by an arbitrary canary-era cap.
   if (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 200_000) throw new Error("WECHAT_MESSAGE_LIMIT_INVALID");
   if (!Number.isInteger(maxMedia) || maxMedia < 1 || maxMedia > 200_000) throw new Error("WECHAT_MEDIA_LIMIT_INVALID");
-  const sinceMs = options.since !== undefined ? Date.parse(options.since) : undefined;
+  // A bare YYYY-MM-DD is the start of that day in Shanghai, not UTC midnight (§3: Date.parse read it as
+  // 08:00 Shanghai and dropped the since day's first eight hours). chatImportBatchId keeps its own
+  // parse on purpose: changing it would re-key every existing task for the same `since`.
+  const sinceMs = options.since !== undefined ? sinceInstantMs(options.since) : undefined;
   if (sinceMs !== undefined && Number.isNaN(sinceMs)) throw new Error("WECHAT_SINCE_INVALID");
   const snapshot = await scanWechatSnapshot(sourceRoot);
   const transcripts = snapshot.files.filter((file) => file.kind === "markdown" || file.kind === "weflow-json").toSorted((a, b) => digest(a.relativePath).localeCompare(digest(b.relativePath)));

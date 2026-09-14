@@ -13,6 +13,37 @@ export const PROFILE_TIMEZONE = "Asia/Shanghai";
 
 const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;
 const DATE_PREFIX = /^(\d{4})-(\d{2})-(\d{2})/;
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+// media.taken_at is a plain `timestamp` (no offset) that every reader takes at face value
+// (calendarDayOf below slices the date as written). So it must hold the profile's wall clock, not a
+// UTC instant: Postgres silently drops the "Z" of an ISO instant written into a plain timestamp,
+// which is how 6,738 media rows ended up eight hours early (2026-09-14 §3). media_assets.taken_at and
+// raw_sources.captured_at are timestamptz and store instants correctly — only media needs this.
+//
+// Returns "YYYY-MM-DD HH:MM:SS" (plus ".mmm" when there are milliseconds) in the profile timezone.
+// A value without an offset is already local and is returned as written (T replaced by a space).
+export function wallClockOf(value: string | undefined | null, timeZone: string = PROFILE_TIMEZONE): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!DATE_PREFIX.test(trimmed)) return undefined;
+  if (!HAS_OFFSET.test(trimmed)) return trimmed.replace("T", " ");
+  const parsed = new Date(trimmed.includes("T") ? trimmed : trimmed.replace(" ", "T"));
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(parsed);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const ms = parsed.getUTCMilliseconds();
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}${ms ? `.${String(ms).padStart(3, "0")}` : ""}`;
+}
+
+// A `--since` value as an instant. A bare "YYYY-MM-DD" means the start of that day in the profile's
+// timezone (Asia/Shanghai, +08:00). Date.parse alone reads a bare date as UTC midnight — 08:00 in
+// Shanghai — which silently dropped the first eight hours of the since day (2026-09-14 §3).
+// Values that already carry a time are parsed as given.
+export function sinceInstantMs(since: string): number {
+  const trimmed = since.trim();
+  return DATE_ONLY.test(trimmed) ? Date.parse(`${trimmed}T00:00:00+08:00`) : Date.parse(trimmed);
+}
 
 // Returns "YYYY-MM-DD" for the day this record belongs to, or undefined when the value carries no
 // usable date. Undefined must be treated as undated and kept out of every year/month bucket — it is

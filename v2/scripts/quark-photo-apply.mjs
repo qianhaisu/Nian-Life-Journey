@@ -29,6 +29,14 @@ export function capturedAtIso(item) {
   return new Date(`${item.capture_time.text.replace(" ", "T")}+08:00`).toISOString();
 }
 
+// media.taken_at is a plain timestamp read as local wall clock (lib/timeline-dates.ts wallClockOf). The
+// ISO instant above is right for raw_sources.captured_at and media_assets.taken_at (both timestamptz),
+// but written into media.taken_at Postgres drops the "Z" and stores UTC — eight hours early (§3).
+// capture_time.text already IS the Shanghai wall clock, so media gets it as written.
+export function mediaTakenAt(item) {
+  return item.capture_time.text.trim().replace("T", " ");
+}
+
 async function readVerified(item, originalsDir) {
   const resolved = await realpath(item.local_path);
   const originalsRoot = await realpath(originalsDir);
@@ -73,7 +81,7 @@ async function ingestOne(item, ctx) {
   }
 
   const source = { id: sourceId, profileId: ctx.profileId, sourceType: "family_photo", contentTypes: ["daily", "family"], contributorId: ctx.contributorId, capturedAt, importedAt: now, mediaIds: [mediaId], sourceLabel: ctx.sourceLabel, visibility: ctx.visibility, status: "uploaded", originalFilename: item.filename, metadata: { provider: "quark", checksum: sha256 } };
-  const media = { id: mediaId, profileId: ctx.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: "photo", src: ctx.mediaDeliveryUrl(mediaId, "web"), originalFilename: item.filename, mimeType: item.format_type, fileSize: bytes.byteLength, alt: item.filename, takenAt: capturedAt, visibility: ctx.visibility, width: dims.width, height: dims.height };
+  const media = { id: mediaId, profileId: ctx.profileId, rawSourceId: sourceId, mediaAssetId: assetId, type: "photo", src: ctx.mediaDeliveryUrl(mediaId, "web"), originalFilename: item.filename, mimeType: item.format_type, fileSize: bytes.byteLength, alt: item.filename, takenAt: mediaTakenAt(item), visibility: ctx.visibility, width: dims.width, height: dims.height };
 
   await ctx.repo.appendUpload({ source, media: [media], assets: [asset], locations });
   ctx.existingAssetsByChecksum.set(checksumKey, { id: assetId, rawSourceId: sourceId });

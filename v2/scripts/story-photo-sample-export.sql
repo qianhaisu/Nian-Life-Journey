@@ -21,11 +21,15 @@
 -- The two timestamps this comparison depends on are stored in different conventions, and nothing
 -- in their names says so:
 --   raw_sources.captured_at  timestamptz — comes back as +08 (e.g. 2026-08-01 11:47:15+08)
---   media.taken_at           timestamp WITHOUT time zone — holds the UTC instant (…03:47:15)
--- They are 8 hours apart for the same event. Confirmed on real rows: a photograph whose own source
--- was captured at 11:47:15+08 carries taken_at 03:47:15. Comparing them directly silently shifts
--- every window by 8h and yields confident, wrong answers about whether a photograph falls inside
--- the messages a story was written from.
+--   media.taken_at           timestamp WITHOUT time zone — the CONTRACT is Shanghai wall clock
+--                            (every page reader takes it at face value: lib/timeline-dates.ts calendarDayOf)
+-- CORRECTED 2026-09-14: this comment used to say media.taken_at "holds the UTC instant". That was the
+-- observed state of a BUG, not the rule: four import paths wrote ISO "Z" instants into this plain
+-- timestamp, Postgres dropped the "Z", and 6,738 rows (all Quark photos, 4,828 WeChat photos, all 121
+-- WeChat videos) were stored 8 hours early — e.g. a photograph captured at 11:47:15+08 carried 03:47:15.
+-- The writers are fixed and those rows are corrected to wall clock by the §3 repair; the other 4,135
+-- rows were always wall clock. Do not "fix" corrected rows back to UTC.
+-- Even so, prefer captured_at for time-window comparisons: it is an instant and needs no convention.
 --
 -- So: compare like with like. Result set 3 selects `s.captured_at AS source_captured_at` for
 -- exactly this reason — use it, not taken_at, against result set 2's captured_at. If a future
