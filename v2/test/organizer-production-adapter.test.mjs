@@ -474,6 +474,24 @@ test("16. a protected story is refused at persistence and reported: no review ro
   assert.equal(JSON.stringify(result).includes(storyOf([]).story), false, "the skip record carries no family text");
 });
 
+test("16b. a trace route refused because a protected story holds one of its sources is reported, with no run", async () => {
+  const { applyPlan } = await import("../lib/organizer/production-adapter.ts");
+  const { ProtectedStoryWriteError } = await import("../lib/organizer/story-write-guard.ts");
+  const { repo, state } = fakeRepository();
+  repo.persistDailyTrace = async () => {
+    state.calls.push("persistDailyTrace");
+    throw new ProtectedStoryWriteError({ operation: "persistDailyTrace", eventId: null, organizationFingerprint: "fp-trace-protected", reasons: ["SHARED_RESOURCE:raw_sources.related_life_event_id:src-1->event-q169-001"], affectedEventIds: ["event-q169-001"] });
+  };
+  const window = windowOf([source()]);
+  const built = plan({ window, outcome: traceOutcome(window), windowFingerprint: "fp-trace-protected" });
+  const result = await applyPlan(built, repo, applyOpts);
+  assert.equal(result.applied, false);
+  assert.deepEqual(result.protected.affectedEventIds, ["event-q169-001"]);
+  assert.equal(result.protected.operation, "persistDailyTrace");
+  assert.deepEqual(state.calls, ["findOrganizerRun", "persistDailyTrace"]);
+  assert.equal(state.runs.length, 0);
+});
+
 test("15b. the same evidence always yields the same artifact id; different evidence does not", async () => {
   const { artifactIdFor } = await import("../lib/organizer/production-adapter.ts");
   assert.equal(artifactIdFor("event", "fp-a"), artifactIdFor("event", "fp-a"));

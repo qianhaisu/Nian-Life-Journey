@@ -345,7 +345,7 @@ export function artifactRepositoryOf(repository: ArtifactRepository): ArtifactRe
 const MEMORY_RUN_ACTIONS = new Set(["create_memory", "life_event_candidate"]);
 
 /** A refusal is not a write. It carries what an operator needs and nothing from the family's text. */
-export type ProtectedSkip = { eventId: string | null; organizationFingerprint: string; code: "PROTECTED_STORY"; operation: string; reasons: string[]; runId: string };
+export type ProtectedSkip = { eventId: string | null; organizationFingerprint: string; code: "PROTECTED_STORY"; operation: string; reasons: string[]; affectedEventIds: string[]; runId: string };
 
 export type ApplyResult = { applied: boolean; reason: string; run?: OrganizerRun; eventId?: string; traceId?: string; protected?: ProtectedSkip };
 
@@ -370,26 +370,28 @@ export async function applyPlan(plan: PersistencePlan, repository: ArtifactRepos
   let eventId: string | undefined;
   let traceId: string | undefined;
 
-  if (plan.lifeEvent) {
-    const review: QualityReview | undefined = plan.review
-      ? { ...plan.review, targetId: plan.lifeEvent.event.id, id: options.newId("quality-review"), profileId: plan.profileId, reviewedAt: options.now } as QualityReview
-      : undefined;
-    let saved: LifeEvent;
-    try {
-      saved = await repository.persistOrganization(plan.sourceIds, plan.lifeEvent.event, plan.lifeEvent.links, { actor: "organizer", review });
-    } catch (error) {
-      if (!isProtectedStoryWriteError(error)) throw error;
-      return {
-        applied: false, reason: "protected story: refused at persistence, nothing written",
-        protected: { eventId: error.detail.eventId, organizationFingerprint: plan.organizationFingerprint, code: "PROTECTED_STORY", operation: error.detail.operation, reasons: error.detail.reasons, runId: plan.run.id },
-      };
+  // Every route can be refused at persistence — a Memory by its own story, and any route (trace,
+  // store_only) by a source or photograph a protected story holds (2026-09-14 P1). A refusal is
+  // reported, never retried, and is not followed by an organizer run.
+  try {
+    if (plan.lifeEvent) {
+      const review: QualityReview | undefined = plan.review
+        ? { ...plan.review, targetId: plan.lifeEvent.event.id, id: options.newId("quality-review"), profileId: plan.profileId, reviewedAt: options.now } as QualityReview
+        : undefined;
+      const saved = await repository.persistOrganization(plan.sourceIds, plan.lifeEvent.event, plan.lifeEvent.links, { actor: "organizer", review });
+      eventId = saved.id;
+    } else if (plan.dailyTrace) {
+      const saved = await repository.persistDailyTrace(plan.dailyTrace);
+      traceId = saved.id;
+    } else {
+      await repository.markSourcesOrganized(plan.sourceIds);
     }
-    eventId = saved.id;
-  } else if (plan.dailyTrace) {
-    const saved = await repository.persistDailyTrace(plan.dailyTrace);
-    traceId = saved.id;
-  } else {
-    await repository.markSourcesOrganized(plan.sourceIds);
+  } catch (error) {
+    if (!isProtectedStoryWriteError(error)) throw error;
+    return {
+      applied: false, reason: "protected story: refused at persistence, nothing written",
+      protected: { eventId: error.detail.eventId, organizationFingerprint: plan.organizationFingerprint, code: "PROTECTED_STORY", operation: error.detail.operation, reasons: error.detail.reasons, affectedEventIds: error.detail.affectedEventIds ?? [], runId: plan.run.id },
+    };
   }
 
   const run = await repository.persistOrganizerRun({ ...plan.run, targetId: eventId ?? traceId });

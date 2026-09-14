@@ -162,7 +162,13 @@ export class StoryWriteContractError extends Error {
 
 export class ProtectedStoryWriteError extends Error {
   readonly code = "PROTECTED_STORY";
-  constructor(readonly detail: { operation: string; eventId: string | null; organizationFingerprint: string | null; reasons: string[] }) {
+  /**
+   * `affectedEventIds` names the protected stories that were actually in the way. For a direct hit
+   * it is empty (the target itself is protected); for a shared source or photograph (2026-09-14 P1:
+   * a write to one story re-pointing or clearing another story's raw_sources.related_life_event_id /
+   * media.life_event_id) it lists the other, protected stories.
+   */
+  constructor(readonly detail: { operation: string; eventId: string | null; organizationFingerprint: string | null; reasons: string[]; affectedEventIds?: string[] }) {
     super(`PROTECTED_STORY: ${detail.operation} refused for ${detail.eventId ?? `fingerprint ${detail.organizationFingerprint}`} (${detail.reasons.join(", ")})`);
     this.name = "ProtectedStoryWriteError";
   }

@@ -167,6 +167,44 @@ function runContractSuite(name, createRepo) {
     await assert.rejects(() => repo.recordHumanStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: current.contentSha256, operator: "deepseek", promptVersion: "release-contract-3", policyVersion: "release-contract" }), /OPERATOR_NOT_HUMAN/);
   });
 
+  // P1 (2026-09-14): a write to one story also re-points or clears pointers another story holds.
+  const sourcePointer = async (repo, sourceId) => (await repo.getOrganizerWindowInput([sourceId])).sources[0];
+
+  test(`[${name}] guard P1: a source a protected story holds refuses every writer that would re-point or clear it`, async () => {
+    const repo = createRepo();
+    const { event: a, source: aSource } = await guardedCandidate(repo);
+    const reviewed = await repo.getStoryContentVersion(a.id);
+    await repo.recordHumanStoryDecision({ eventId: a.id, decision: "approved", reviewedContentSha256: reviewed.contentSha256, operator: "contract-test-human", promptVersion: "release-contract-p1", policyVersion: "release-contract" });
+    const { event: b, fp: fpB, source: bSource } = await guardedCandidate(repo);
+    const bBefore = await repo.getStoryContentVersion(b.id);
+    const before = await sourcePointer(repo, aSource.id);
+    assert.equal(before.relatedLifeEventId, a.id);
+
+    const refusal = await repo.persistOrganization([bSource.id, aSource.id], { ...b, title: "B takes A's message", sourceIds: [bSource.id, aSource.id], organizationFingerprint: fpB }, [], { actor: "organizer" }).then(() => null, (error) => error);
+    assert.match(String(refusal?.message), /PROTECTED_STORY/);
+    assert.deepEqual(refusal.detail.affectedEventIds, [a.id], "the refusal names the story that was in the way");
+    await assert.rejects(() => repo.persistDailyTrace({ id: uid("trace"), profileId: PROFILE_ID, occurredAt: "2026-11-01", entries: ["p1"], sourceIds: [aSource.id], scopes: ["family"], visibility: "family", organizationFingerprint: uid("fp-trace") }), /PROTECTED_STORY/);
+    await assert.rejects(() => repo.persistCareEpisode({ id: uid("care"), profileId: PROFILE_ID, title: "p1", startedAt: "2026-11-01", recordIds: [], sourceIds: [aSource.id], status: "open", visibility: "private" }), /PROTECTED_STORY/);
+    await assert.rejects(() => repo.undoOrganization([aSource.id], a.id), /PROTECTED_STORY/);
+
+    const after = await sourcePointer(repo, aSource.id);
+    assert.equal(after.relatedLifeEventId, a.id, "A's source still points at A");
+    assert.equal(after.status, before.status);
+    assert.equal((await repo.getStoryContentVersion(a.id)).contentSha256, reviewed.contentSha256);
+    assert.equal((await repo.getStoryContentVersion(b.id)).contentSha256, bBefore.contentSha256, "B was not partly written");
+  });
+
+  test(`[${name}] guard P1 positive control: the same moves on an unprotected story's source do happen`, async () => {
+    const repo = createRepo();
+    const { source: aSource } = await guardedCandidate(repo);
+    const { event: b, fp: fpB, source: bSource } = await guardedCandidate(repo);
+    await repo.persistOrganization([bSource.id, aSource.id], { ...b, title: "B takes A' message", sourceIds: [bSource.id, aSource.id], organizationFingerprint: fpB }, [], { actor: "organizer" });
+    assert.equal((await sourcePointer(repo, aSource.id)).relatedLifeEventId, b.id, "the unprotected pointer moves to B");
+    assert.equal((await repo.getStoryContentVersion(b.id)).content.title, "B takes A' message");
+    await repo.persistDailyTrace({ id: uid("trace"), profileId: PROFILE_ID, occurredAt: "2026-11-01", entries: ["p1 positive"], sourceIds: [aSource.id], scopes: ["family"], visibility: "family", organizationFingerprint: uid("fp-trace") });
+    assert.ok(!(await sourcePointer(repo, aSource.id)).relatedLifeEventId, "a trace clears an unprotected pointer");
+  });
+
   test(`[${name}] MediaAsset/MediaLocation: append, update, and lookup by providerRef`, async () => {
     const repo = createRepo();
     const asset = fixtureAsset();
@@ -293,7 +331,9 @@ function runContractSuite(name, createRepo) {
     const repo = createRepo();
     const source = fixtureSource();
     await repo.appendUpload({ source, media: [] });
-    const event = fixtureEvent({ sourceIds: [source.id] });
+    // An unreviewed candidate. A "user" story with no ledger row is published, and undo refuses a
+    // protected story since 2026-09-14 (covered by the guard P1 case above).
+    const event = fixtureEvent({ sourceIds: [source.id], createdBy: "ai" });
     await repo.persistOrganization([source.id], event, [{ rawSourceId: source.id, lifeEventId: event.id, role: "primary", createdAt: "2026-11-01T10:00:00.000Z" }]);
     await repo.undoOrganization([source.id], event.id);
     const store = await repo.getStore();

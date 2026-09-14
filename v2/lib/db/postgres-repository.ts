@@ -145,6 +145,66 @@ async function readStoryContent(q: GuardTx, eventId: string): Promise<(StoryCont
   return { profileId: row.profile_id as string, title: (row.title as string | null) ?? null, story: (row.story as string | null) ?? null, occurredAtUtc: row.occurred_at_utc as string, memoryWeight: row.memory_weight as string, sourceIds: (row.source_ids as string[]) ?? [], mediaIds: (row.media_ids as string[]) ?? [], heroMediaId: (row.hero_media_id as string | null) ?? null };
 }
 
+// A write to one story also writes pointers that can belong to OTHER stories:
+// raw_sources.related_life_event_id (re-pointed by persistOrganization, cleared by persistDailyTrace /
+// persistCareEpisode / undoOrganization), raw_sources.status, and media.life_event_id. Reproduced
+// 2026-09-14 on the production DDL (P1-shared-association-0b6af92-*.json): an unreviewed story B
+// organizing a window that contains a human-approved story A's message re-pointed A's source and
+// photograph to B, and a DailyTrace over the same message cleared A's pointer.
+//
+// So every resource a write touches is traced to every story that claims it, by all five routes a
+// story can hold a resource — including the ones only a link row or an array records — and if any
+// claimant is protected the whole write is refused. Claimants are locked (id order) after the ledger
+// lock and the target row, so the verdict reads their current state.
+type ResourceClaim = { storyId: string; route: string; resourceId: string };
+
+async function resourceClaims(tx: GuardTx, sourceIds: Array<string | null | undefined>, mediaIds: Array<string | null | undefined>): Promise<ResourceClaim[]> {
+  const S = [...new Set(sourceIds.filter((id): id is string => Boolean(id)))];
+  const M = [...new Set(mediaIds.filter((id): id is string => Boolean(id)))];
+  const list = (values: string[]) => sql.join(values.map((value) => sql`${value}`), sql`, `);
+  const parts = [];
+  if (S.length) {
+    parts.push(
+      sql`select related_life_event_id as story_id, 'raw_sources.related_life_event_id'::text as route, id as resource_id from raw_sources where id in (${list(S)}) and related_life_event_id is not null`,
+      sql`select life_event_id, 'source_memory_links'::text, raw_source_id from source_memory_links where raw_source_id in (${list(S)})`,
+      sql`select e.id, 'life_events.source_ids'::text, x.v from life_events e cross join lateral jsonb_array_elements_text(e.source_ids) as x(v) where x.v in (${list(S)})`,
+    );
+  }
+  if (M.length) {
+    parts.push(
+      sql`select life_event_id, 'media.life_event_id'::text, id from media where id in (${list(M)}) and life_event_id is not null`,
+      sql`select e.id, 'life_events.media_ids'::text, x.v from life_events e cross join lateral jsonb_array_elements_text(e.media_ids) as x(v) where x.v in (${list(M)})`,
+      sql`select id, 'life_events.hero_media_id'::text, hero_media_id from life_events where hero_media_id in (${list(M)})`,
+    );
+  }
+  if (!parts.length) return [];
+  const result = await tx.execute(sql.join(parts, sql` union all `));
+  return (result.rows as Array<Record<string, string>>).map((row) => ({ storyId: row.story_id, route: row.route, resourceId: row.resource_id }));
+}
+
+async function refuseIfSharedWithProtected(tx: GuardTx, input: { operation: string; targetEventId: string | null; organizationFingerprint: string | null; sourceIds: Array<string | null | undefined>; mediaIds: Array<string | null | undefined> }) {
+  const claims = (await resourceClaims(tx, input.sourceIds, input.mediaIds)).filter((claim) => claim.storyId && claim.storyId !== input.targetEventId);
+  if (!claims.length) return;
+  const storyIds = [...new Set(claims.map((claim) => claim.storyId))].sort();
+  const list = sql.join(storyIds.map((value) => sql`${value}`), sql`, `);
+  const locked = await tx.execute(sql`select id, organization_fingerprint, created_by, organizer_version, organizer_run from life_events where id in (${list}) order by id for update`);
+  const byId = new Map((locked.rows as Array<Record<string, unknown>>).map((row) => [row.id as string, row]));
+  const hits: Array<{ id: string; reasons: string[] }> = [];
+  for (const id of storyIds) {
+    const row = byId.get(id);
+    const event = row ? { id, organizationFingerprint: row.organization_fingerprint as string | null, createdBy: row.created_by as string | null, organizerVersion: row.organizer_version as string | null, organizerRun: row.organizer_run as { organizerType?: string } | null } : null;
+    const verdict = evaluateStoryProtection({ event, eventId: id }, await linkedLedgerRows(tx, id, [event?.organizationFingerprint]));
+    if (verdict.protected) hits.push({ id, reasons: verdict.reasons });
+  }
+  if (!hits.length) return;
+  const hitIds = new Set(hits.map((hit) => hit.id));
+  throw new ProtectedStoryWriteError({
+    operation: input.operation, eventId: input.targetEventId, organizationFingerprint: input.organizationFingerprint,
+    reasons: [...new Set([...claims.filter((claim) => hitIds.has(claim.storyId)).map((claim) => `SHARED_RESOURCE:${claim.route}:${claim.resourceId}->${claim.storyId}`), ...hits.flatMap((hit) => hit.reasons.map((reason) => `${hit.id}:${reason}`))])].sort(),
+    affectedEventIds: [...hitIds].sort(),
+  });
+}
+
 export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): Repository {
   const db = getDb(env);
 
@@ -660,6 +720,10 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
   // work.
   const persistDailyTraceOnce = (trace: DailyTrace): Promise<DailyTrace> =>
     db.transaction(async (tx) => {
+        // 2026-09-14 P1: a trace clears raw_sources.related_life_event_id on its sources, which may be
+        // a protected story's pointer. Same lock order as every story write; refused before anything.
+        await lockStoryLedger(tx as unknown as GuardTx);
+        await refuseIfSharedWithProtected(tx as unknown as GuardTx, { operation: "persistDailyTrace", targetEventId: null, organizationFingerprint: trace.organizationFingerprint ?? null, sourceIds: trace.sourceIds, mediaIds: [] });
         // Fingerprint is the whole identity. There used to be a `(profileId, day)` fallback here,
         // and it was a cutover blocker: every day the evidence organizer will ever write already
         // holds a rule-derived trace, so the fallback made a new artifact adopt the legacy row —
@@ -1065,10 +1129,19 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         // Mirrors persistDailyTrace's fingerprint-first lookup pattern.
         const fpRow = fp ? await lockEventRow(tx as unknown as GuardTx, "organization_fingerprint", fp) : null;
         const existing = fpRow ?? await lockEventRow(tx as unknown as GuardTx, "id", eventInput.id);
+        // The target first — a human decision can already exist for a story that has no row yet:
+        // queue169 addresses candidates as `fingerprint:<fp>`, so creating that story is refused too.
+        await refuseIfProtected(existing as unknown as LifeEvent | null);
+        // Then everything this write re-points: raw_sources.related_life_event_id and status on
+        // `sourceIds`, link rows, media.life_event_id — whoever else holds those resources.
+        await refuseIfSharedWithProtected(tx as unknown as GuardTx, {
+          operation: "persistOrganization", targetEventId: existing?.id ?? eventInput.id, organizationFingerprint: fp,
+          sourceIds: [...sourceIds, ...links.map((link) => link.rawSourceId), ...eventInput.sourceIds],
+          mediaIds: [...eventInput.mediaIds, eventInput.heroMediaId],
+        });
         let result: LifeEvent;
         if (existing) {
           const e = existing as unknown as LifeEvent;
-          await refuseIfProtected(e);
           const merged: Partial<LifeEvent> = {
             sourceIds: [...new Set([...e.sourceIds, ...sourceIds])],
             mediaIds: [...new Set([...e.mediaIds, ...eventInput.mediaIds])],
@@ -1083,9 +1156,6 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
           const rows = await tx.update(t.lifeEvents).set(merged).where(eq(t.lifeEvents.id, e.id)).returning();
           result = rows[0] as unknown as LifeEvent;
         } else {
-          // A human decision can already exist for a story that has no row yet: queue169 addresses
-          // candidates as `fingerprint:<fp>`. Creating that story is refused too.
-          await refuseIfProtected(null);
           const toInsert = { ...eventInput, sourceIds: [...new Set(eventInput.sourceIds.length ? eventInput.sourceIds : sourceIds)] };
           // Safety-net: the unique fingerprint index prevents a concurrent INSERT from slipping past
           // the SELECT-then-INSERT gap when two workers race for the same batch.
@@ -1135,6 +1205,9 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     },
     async persistCareEpisode(episode: CareEpisode) {
       return db.transaction(async (tx) => {
+        // 2026-09-14 P1: clears related_life_event_id on its sources — guarded like a trace.
+        await lockStoryLedger(tx as unknown as GuardTx);
+        await refuseIfSharedWithProtected(tx as unknown as GuardTx, { operation: "persistCareEpisode", targetEventId: null, organizationFingerprint: null, sourceIds: episode.sourceIds, mediaIds: [] });
         const day = episode.startedAt.slice(0, 10);
         const candidates = await tx.select().from(t.careEpisodes).where(and(eq(t.careEpisodes.profileId, episode.profileId), eq(t.careEpisodes.status, "open")));
         const existing = (candidates as unknown as CareEpisode[]).find((item) => item.startedAt.slice(0, 10) === day);
@@ -1249,7 +1322,14 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     },
     async markSourcesOrganized(sourceIds: string[]) {
       if (!sourceIds.length) return;
-      await db.update(t.rawSources).set({ status: "organized" }).where(inArray(t.rawSources.id, sourceIds));
+      await db.transaction(async (tx) => {
+        // Only a source whose status would actually change can alter another story's evidence; an
+        // already-organized message in a store_only window is a no-op and is not refused.
+        await lockStoryLedger(tx as unknown as GuardTx);
+        const changing = await tx.select({ id: t.rawSources.id }).from(t.rawSources).where(and(inArray(t.rawSources.id, sourceIds), sql`${t.rawSources.status} <> 'organized'`));
+        await refuseIfSharedWithProtected(tx as unknown as GuardTx, { operation: "markSourcesOrganized", targetEventId: null, organizationFingerprint: null, sourceIds: changing.map((row) => row.id), mediaIds: [] });
+        await tx.update(t.rawSources).set({ status: "organized" }).where(inArray(t.rawSources.id, sourceIds));
+      });
     },
     async markSourcesProcessing(sourceIds: string[]) {
       if (!sourceIds.length) return;
@@ -1269,11 +1349,18 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
     },
     async undoOrganization(sourceIds: string[], eventId: string) {
       await db.transaction(async (tx) => {
-        const [event] = await tx.select().from(t.lifeEvents).where(eq(t.lifeEvents.id, eventId));
+        // 2026-09-14 P1: undo unlinks sources, clears their pointers and media, and can delete the
+        // story. Not an automatic path (the capture page's undo), but it carries no reviewed-content
+        // proof either, so a protected story — or a source/photo another protected story holds — refuses.
+        await lockStoryLedger(tx as unknown as GuardTx);
+        const event = await lockEventRow(tx as unknown as GuardTx, "id", eventId);
         if (!event) return;
         const e = event as unknown as LifeEvent;
+        const own = evaluateStoryProtection({ event: e }, await linkedLedgerRows(tx as unknown as GuardTx, e.id, [e.organizationFingerprint]));
+        if (own.protected) throw new ProtectedStoryWriteError({ operation: "undoOrganization", eventId: e.id, organizationFingerprint: e.organizationFingerprint ?? null, reasons: own.reasons });
         const sourceRows = await tx.select().from(t.rawSources).where(inArray(t.rawSources.id, sourceIds));
         const removedMediaIds = new Set((sourceRows as unknown as RawSource[]).flatMap((source) => source.mediaIds));
+        await refuseIfSharedWithProtected(tx as unknown as GuardTx, { operation: "undoOrganization", targetEventId: e.id, organizationFingerprint: e.organizationFingerprint ?? null, sourceIds, mediaIds: [...removedMediaIds] });
         const nextSourceIds = e.sourceIds.filter((id) => !sourceIds.includes(id));
         const nextMediaIds = e.mediaIds.filter((id) => !removedMediaIds.has(id));
         await tx.delete(t.sourceMemoryLinks).where(and(eq(t.sourceMemoryLinks.lifeEventId, eventId), inArray(t.sourceMemoryLinks.rawSourceId, sourceIds)));
