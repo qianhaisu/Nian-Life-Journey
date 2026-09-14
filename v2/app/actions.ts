@@ -5,6 +5,7 @@ import { appendUpload, enqueueOrganizerJob, markSourcesProcessing, newId } from 
 import { kickOrganizerWorker } from "@/lib/organizer/kick";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
+import { wallClockOf } from "@/lib/timeline-dates";
 import { activeMediaProvider, getStorageForProvider, hotStorage } from "@/lib/storage/hot-storage";
 import type { Media, MediaAsset, MediaLocation, RawSource, SourceType, Visibility } from "@/lib/types";
 
@@ -71,7 +72,9 @@ export async function captureSources(formData: FormData) {
     const width = dimensions.width ?? (type === "document" ? 960 : 1280);
     const height = dimensions.height ?? (type === "document" ? 1280 : type === "video" ? 720 : 900);
     const firstVariant = type === "photo" ? "web" : type === "video" ? "poster" : "document_preview";
-    media.push({ id: mediaId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaAssetId: assetId, type, src: mediaDeliveryUrl(mediaId, firstVariant), objectKey, originalFilename: file.name, mimeType: file.type, fileSize: file.size, alt: note || file.name, takenAt: capturedAt, visibility, width, height });
+    media.push({ id: mediaId, profileId: "profile-zhangnian", rawSourceId: sourceId, mediaAssetId: assetId, type, src: mediaDeliveryUrl(mediaId, firstVariant), objectKey, originalFilename: file.name, mimeType: file.type, fileSize: file.size, alt: note || file.name, takenAt: wallClockOf(capturedAt) ?? capturedAt, visibility, width, height });
+    // ↑ media.taken_at is a plain timestamp read as Shanghai wall clock; capturedAt defaults to an ISO "Z"
+    // instant, which Postgres would store as UTC (§3). The source row below keeps the instant (timestamptz).
   }
 
   const sourceType = (kind === "daycare" ? "daycare_photo" : kind) as SourceType;

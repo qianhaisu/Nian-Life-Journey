@@ -76,6 +76,18 @@ test("微信导入：media.takenAt 是上海墙钟；raw_sources.capturedAt 仍�
   assert.equal(md.input.media[0].takenAt, "2026-09-10 11:12:58", "markdown 路径（+08:00）结果不变");
 });
 
+test("站内上传（app/actions.ts）：默认的 ISO Z 与表单 datetime-local 都落成上海墙钟", () => {
+  // 表单不带 capturedAt 时默认 new Date().toISOString()——UTC 瞬间，旧写法会存成 UTC 墙钟（数据轨 90b1069 审码抓到）。
+  assert.equal(wallClockOf(new Date("2026-09-14T19:30:00.000Z").toISOString()), "2026-09-15 03:30:00");
+  // <input type="datetime-local"> 交来的是不带时区、不带秒的本地时间，本来就是墙钟，原样保留。
+  assert.equal(wallClockOf("2026-09-15T03:30"), "2026-09-15 03:30");
+  assert.equal(calendarDayOf(wallClockOf("2026-09-15T03:30")), "2026-09-15");
+  // 写入 media 行的那一处必须经过 wallClockOf；来源行（timestamptz）保持瞬间。
+  const source = fs.readFileSync(new URL("../app/actions.ts", import.meta.url), "utf8");
+  assert.match(source, /takenAt: wallClockOf\(capturedAt\) \?\? capturedAt/);
+  assert.match(source, /capturedAt, importedAt:/, "raw_sources.capturedAt 仍写原值");
+});
+
 test("夸克照片：media 用 capture_time 的上海墙钟，assets/来源仍用 ISO 瞬间", () => {
   const item = { capture_time: { text: "2026-05-24 03:19:31" } };
   assert.equal(mediaTakenAt(item), "2026-05-24 03:19:31", "capture_time.text 本来就是上海墙钟");
