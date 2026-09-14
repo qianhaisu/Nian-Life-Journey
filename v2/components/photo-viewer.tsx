@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { orientationOf, aspectRatioOf } from "@/lib/media/presentation";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
 import { VideoPlayer } from "@/components/video-player";
@@ -24,6 +24,14 @@ export type GalleryPhoto = {
 // stopped being playable the moment you tapped it would be a worse answer than the frame it
 // replaced. It plays where it sits, with its own controls.
 const isVideo = (item: GalleryPhoto) => item.type === "video";
+
+// A clip's box keeps its own proportions, and also hands them to CSS as a number (--media-ar) so a
+// layout that shows it large can narrow a tall one to fit the screen's height without cropping —
+// aspect-ratio alone cannot be read back into a width. See .detail-supporting in app/globals.css.
+export function videoFrameStyle(item: Pick<GalleryPhoto, "width" | "height">): CSSProperties {
+  const ratio = aspectRatioOf(item);
+  return ratio ? ({ aspectRatio: ratio, "--media-ar": ratio } as CSSProperties) : {};
+}
 
 // Full-screen viewer: scroll-snap reel + double-tap zoom + keyboard nav + back-button close.
 //
@@ -165,7 +173,7 @@ export function PhotoGallery({
   return (
     <>
       {heroPhoto && isVideo(heroPhoto) ? (
-        <figure className={`photo photo-video photo-${orientationOf(heroPhoto)} ${heroClassName}`.trim()} style={{ aspectRatio: aspectRatioOf(heroPhoto) }}>
+        <figure className={`photo photo-video photo-${orientationOf(heroPhoto)} ${heroClassName}`.trim()} style={videoFrameStyle(heroPhoto)}>
           <VideoPlayer mediaId={heroPhoto.id} alt={heroPhoto.alt} durationSeconds={heroPhoto.durationSeconds} />
         </figure>
       ) : null}
@@ -190,7 +198,7 @@ export function PhotoGallery({
             const origIdx = heroPhoto ? photos.indexOf(photo) : si;
             if (isVideo(photo)) {
               return (
-                <figure key={photo.id} className={`photo photo-video photo-${orientationOf(photo)}`} style={{ aspectRatio: aspectRatioOf(photo) }}>
+                <figure key={photo.id} className={`photo photo-video photo-${orientationOf(photo)}`} style={videoFrameStyle(photo)}>
                   <VideoPlayer mediaId={photo.id} alt={photo.alt} durationSeconds={photo.durationSeconds} />
                 </figure>
               );

@@ -695,6 +695,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .detail-supporting { padding-bottom: clamp(24px, 4vw, 40px); }
 .detail-supporting .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .detail-supporting .photo { max-height: 300px; }
+/* A clip on its own story's page is the thing being read, not a thumbnail beside one: in the
+   three-up strip it came out 115×205 on a 390px phone. It takes the whole row at the text measure,
+   keeps its own proportions, and a tall one is narrowed until it fits 78% of the screen's height
+   (--media-ar is the clip's width / height, set beside aspect-ratio in components/photo-viewer.tsx).
+   `dense` lets the photographs close up behind a clip that moved to its own row. */
+.detail-supporting .photo-strip { grid-auto-flow: row dense; }
+.detail-supporting .photo-strip .photo-video { grid-column: 1 / -1; justify-self: center; max-height: none;
+  width: min(100%, calc(78svh * var(--media-ar, 16 / 9))); border-radius: 10px; }
 .story-layer { display: grid; gap: 40px; padding: clamp(40px, 6vw, 72px) 0 clamp(40px, 6vw, 64px); }
 .story-column > p { margin: 0 0 22px; font-size: 1.05rem; line-height: 1.85; }
 .story-column .story-lead { font-family: var(--font-heading); font-size: clamp(1.4rem, 3.4vw, 1.9rem); line-height: 1.5; }
