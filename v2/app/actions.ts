@@ -1,7 +1,7 @@
 "use server";
 
 import { createHash } from "node:crypto";
-import { appendUpload, enqueueOrganizerJob, markSourcesProcessing, newId, undoOrganization } from "@/lib/db/repository";
+import { appendUpload, enqueueOrganizerJob, markSourcesProcessing, newId } from "@/lib/db/repository";
 import { kickOrganizerWorker } from "@/lib/organizer/kick";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
@@ -83,7 +83,9 @@ export async function captureSources(formData: FormData) {
   return { sourceId, jobId: job.id, count: files.length + (note ? 1 : 0) };
 }
 
-export async function undoCapture(sourceId: string, eventId: string) {
-  await undoOrganization([sourceId], eventId);
-  return { ok: true };
-}
+// 2026-09-14 (DATA-0914-03): `undoCapture(sourceId, eventId)` used to live here. It was a registered
+// server action with no caller in the UI and no identity check: anyone who could reach the private
+// site and knew a source id and an event id could POST it and unlink sources from — or delete — a
+// story. It is removed rather than hidden, so it is no longer registered at all. Undo stays a
+// controlled Repository capability (guarded against protected stories); a web entry for it needs
+// its own review before it comes back.
