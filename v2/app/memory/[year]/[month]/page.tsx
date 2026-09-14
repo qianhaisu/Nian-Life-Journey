@@ -12,7 +12,7 @@ import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { findMonth } from "@/lib/memory-chapters";
-import { buildMonthComposition, dayAlbumDays } from "@/lib/publication-moments";
+import { buildMonthComposition, chronicleAlbumDays, dayAlbumDays } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
 import { formatMonth } from "@/lib/time-signature";
 
@@ -64,6 +64,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const archivePhotoCount = composition.archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
   const dayGroups = new Map(composition.dayPhotoGroups.map((day) => [day.day, day]));
   const albumDays = dayAlbumDays(composition);
+  const chronicleAlbum = chronicleAlbumDays(composition);
   // The section is named for what is actually in it. A month with a playable clip says so; a month
   // without one is not promised a video it does not have.
   const albumHasVideo = composition.archiveDays.some((day) => day.photos.some((item) => item.type === "video"));
@@ -114,8 +115,11 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
     {composition.chronicle.length > 0 ? <section className="month-days" aria-labelledby="days-title">
       <h2 id="days-title" className="section-mark">{composition.chapter.length > 0 ? "这个月的日子" : "这个月"}</h2>
       <ol>
+        {/* A day here that carries words gets the same way into the album at its date as a story day
+            (chronicleAlbumDays) — after its words, once, only when the album has that exact day. */}
         {composition.chronicle.map((moment, index) => <li className="month-day" key={moment.day}>
           <MonthMoment moment={moment} year={year} monthAgeLabel={chapter.ageLabel} priority={index === 0 && composition.chapter.length === 0} />
+          {chronicleAlbum.has(moment.day) ? <DayAlbumLink year={year} month={monthSegment} day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} /> : null}
         </li>)}
       </ol>
     </section> : null}

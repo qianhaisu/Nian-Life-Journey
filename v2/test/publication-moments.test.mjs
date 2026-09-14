@@ -11,7 +11,7 @@ import { NO_HERO_MEDIA_ID } from "../lib/media/hero.ts";
 import { mediaPrivilegeOf } from "../lib/family-archive.ts";
 import {
   BURST_GAP_SECONDS, MOMENT_SUPPORTING_MAX,
-  buildMonthComposition, burstGroups, burstRepresentatives, dayAlbumDays, dayAlbumFrom, readableEntries,
+  buildMonthComposition, burstGroups, burstRepresentatives, chronicleAlbumDays, dayAlbumDays, dayAlbumFrom, readableEntries,
 } from "../lib/publication-moments.ts";
 
 const BIRTH = "2025-01-03";
@@ -712,4 +712,41 @@ test("an unvouched picture on a story's day opens no album entry — the entry n
   const composition = buildMonthComposition(monthOf({ media: [chat], events }, "2026-08"), { confirmed: new Set(), trusted: new Set() });
   assert.equal(dayAlbumFrom(composition, "2026-08-24"), undefined);
   assert.equal(dayAlbumDays(composition).size, 0);
+});
+
+// PAGE-0914-06: a trace day in 「这个月的日子」 is a reading context too, and gets the same entry.
+test("a trace day offers the album at its date; a wordless photo day, a day without album photographs and a chapter day do not", () => {
+  const traceNote = (id, occurredAt, title) => event(id, occurredAt, [], { title, story: `${title}，记在当天。`, memoryWeight: "trace", sourceIds: [] });
+  const onTraceDay = photo("album-0603", "2026-06-03T03:00:00.000Z");      // trusted, unchecked → album only
+  const checkedPhotoDay = photo("checked-0605", "2026-06-05T03:00:00.000Z"); // checked, no words
+  const checkedTraceDay = photo("checked-0606", "2026-06-06T03:00:00.000Z"); // checked, with trace words
+  const onStoryDay = photo("album-0610", "2026-06-10T03:00:00.000Z");
+  const unvouched = photo("chat-0612", "2026-06-12T03:00:00.000Z");          // nobody vouches → no album
+  const media = [onTraceDay, checkedPhotoDay, checkedTraceDay, onStoryDay, unvouched];
+  const privilege = { confirmed: new Set(), trusted: new Set(["album-0603", "checked-0605", "checked-0606", "album-0610"]), checked: new Set(["checked-0605", "checked-0606"]) };
+  const traceEvents = [
+    traceNote("t-0603", "2026-06-03 00:00:00+00", "张小年趴在窗边看雨"),
+    traceNote("t-0604", "2026-06-04 00:00:00+00", "张小年自己拿勺子"),
+    traceNote("t-0606", "2026-06-06 00:00:00+00", "张小年在公园追鸽子"),
+    traceNote("t-0610", "2026-06-10 00:00:00+00", "张小年午睡很久"),
+    traceNote("t-0612", "2026-06-12 00:00:00+00", "张小年学拍手"),
+  ];
+  const events = [event("story-0610", "2026-06-10 00:00:00+00", [], { sourceIds: ["chat-text"] })];
+  const composition = buildMonthComposition(monthOf({ media, events }, "2026-06"), privilege, traceEvents, BIRTH);
+
+  const kinds = Object.fromEntries(composition.chronicle.map((m) => [m.day, [m.kind, m.text.length]]));
+  assert.deepEqual(kinds, { "2026-06-03": ["trace", 1], "2026-06-04": ["trace", 1], "2026-06-05": ["photo_led", 0], "2026-06-06": ["photo_led", 1], "2026-06-12": ["trace", 1] },
+    "fixture shape: two trace days with album photographs, one without, one wordless photo day, one unvouched");
+  assert.deepEqual([...chronicleAlbumDays(composition)].sort(), ["2026-06-03", "2026-06-06"]);
+  assert.deepEqual(dayAlbumFrom(composition, "2026-06-03")?.photos.map((p) => p.id), ["album-0603"], "exactly that day's album");
+  assert.ok(!chronicleAlbumDays(composition).has("2026-06-04"), "no photographs that day → no entry, not 6/3's or 6/5's");
+  assert.ok(!chronicleAlbumDays(composition).has("2026-06-05"), "a photographed day with no words is not a reading context");
+  assert.ok(!chronicleAlbumDays(composition).has("2026-06-12"), "an unvouched picture opens nothing");
+  // The story day keeps its one entry from the chapter; the chronicle never offers the same date again.
+  assert.ok(composition.chapter.some((m) => m.day === "2026-06-10") && dayAlbumDays(composition).has("2026-06-10"));
+  assert.ok(!composition.chronicle.some((m) => m.day === "2026-06-10"));
+  const chapterDays = new Set(composition.chapter.map((m) => m.day));
+  assert.ok([...chronicleAlbumDays(composition)].every((day) => !chapterDays.has(day)), "no date carries two entries");
+  // A day from another month is never offered, even if a composition were handed one.
+  assert.equal(chronicleAlbumDays({ ...composition, month: "2026-07" }).size, 0);
 });

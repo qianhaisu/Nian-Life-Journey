@@ -398,6 +398,23 @@ export function dayAlbumDays(composition: Pick<MonthComposition, "archiveDays">)
   return new Set(composition.archiveDays.filter((item) => item.photos.length > 0).map((item) => item.day));
 }
 
+// 「这个月的日子」 carries days a reader reads too: a trace day's own words (a trace-only day, or a
+// photographed day that absorbed its trace lines) are as much "the diary the reader is in" as a story
+// (总指挥 PAGE-0914-06). Such a day offers the same way into the album at its date, under the same
+// three limits dayAlbumFrom states — and only when the day is a real calendar day of this month and
+// the album holds photographs of exactly that day. A photographed day with no words is not given one:
+// it is not a reading context, and its pictures are already the day. The chapter and the chronicle
+// never share a day (composition excludes chapter days from both the chronicle and its trace notes),
+// so a date is offered at most once on the page.
+export function chronicleAlbumDays(composition: Pick<MonthComposition, "month" | "chronicle" | "archiveDays">): Set<string> {
+  const album = dayAlbumDays(composition);
+  return new Set(composition.chronicle
+    .filter((moment) => moment.text.length > 0)
+    .filter((moment) => /^\d{4}-\d{2}-\d{2}$/.test(moment.day) && moment.day.slice(0, 7) === composition.month)
+    .filter((moment) => album.has(moment.day))
+    .map((moment) => moment.day));
+}
+
 export type TraceNote = { day: string; dateLabel: string; ageLabel?: string; text: string };
 
 // The trace tier's data source, isolated in one function per the P2 dispatch note ("数据源抽成一个
