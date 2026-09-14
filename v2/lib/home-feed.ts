@@ -604,17 +604,41 @@ function qualityFor(lookup: HomePhotoQualityLookup | undefined, photo: HomeFeedP
  *
  * 没有 `assessedAt` 的分数不受这条约束：确定性降级分是此刻算出来的默认值，不是一次「更新」。
  */
+const LEDGER_TIME = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)(?:\.(\d+))?\s*(Z|[+-]\d{2}(?::?\d{2})?)?$/i;
+
 /**
- * 这个时间戳是不是落在本期开始之时或之后。**按时刻比，不按字符串比。**
+ * 账本时间 → 毫秒时刻，**与进程时区无关**。解析不出来返回 NaN。
  *
- * 2026-09-14 数据轨查出：审核账本的 reviewedAt 是 UTC 写法（"2026-09-14T10:58:51.000Z"），期次的
- * startedAt 是 +08:00 写法（"2026-09-14T18:00:00+08:00"）。按字符串比，UTC 10:58 排在 18:00 前面，
- * 于是一张 18:58（上海）才批的照片被当成「本期开始前就批了」，期中直接进了轮换——六小时稳定就破了。
+ * content_quality_reviews.reviewed_at 是 timestamp without time zone（schema.ts mode:"string"），库时区
+ * Asia/Shanghai，所以进档案时长这样："2026-09-14 19:02:13.893609"——空格、微秒、**没有时区**。
+ * 生产容器是 UTC：直接 Date.parse 会把它当成 UTC 19:02，晚 8 小时（数据轨 2026-09-14 审查实测）。
+ * 所以没有时区后缀的一律按上海时间（+08:00）解释；带 Z 或 ±hh:mm 的照常。小数秒截到毫秒。
+ */
+export function parseLedgerTime(value: string): number {
+  const match = LEDGER_TIME.exec(value.trim());
+  if (!match) return Number.NaN;
+  const [, day, clock, fraction, zone] = match;
+  const seconds = clock.length === 5 ? `${clock}:00` : clock;
+  const millis = fraction ? `.${fraction.slice(0, 3).padEnd(3, "0")}` : "";
+  let offset = "+08:00";
+  if (zone) {
+    if (zone.toUpperCase() === "Z") offset = "Z";
+    else { const digits = zone.replace(":", ""); offset = `${digits.slice(0, 3)}:${digits.slice(3, 5) || "00"}`; }
+  }
+  return Date.parse(`${day}T${seconds}${millis}${offset}`);
+}
+
+/**
+ * 这个时间戳是不是落在本期开始之时或之后。**按时刻比，不按字符串比，也不依赖进程时区。**
+ *
+ * 2026-09-14：账本 reviewedAt 是不带时区的上海本地时间（见 parseLedgerTime），期次 startedAt 是
+ * "2026-09-14T18:00:00+08:00"。按字符串比，"2026-09-14 19:02" 的空格排在 "T" 前面，一张 19:02 才批
+ * 的照片被当成「本期开始前就批了」，期中直接进了轮换——六小时稳定就破了。
  * 两边任一解析不出来时按「不在本期之后」处理：宁可让它照常参与，也不因为一个坏时间把它挡掉。
  */
 export function isAtOrAfterEditionStart(at: string, startedAt: string): boolean {
-  const atMs = Date.parse(at);
-  const startMs = Date.parse(startedAt);
+  const atMs = parseLedgerTime(at);
+  const startMs = parseLedgerTime(startedAt);
   if (Number.isNaN(atMs) || Number.isNaN(startMs)) return false;
   return atMs >= startMs;
 }

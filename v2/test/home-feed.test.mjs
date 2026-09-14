@@ -12,8 +12,9 @@ import {
   buildHomeFeed, buildPhotoCandidates, buildReminders, candidateMemories, deadlineLabelOf,
   deterministicQuality, editionAt, EDITION_HOURS, HOME_FEED_VERSION, isImportantReminder,
   QUALITY_NOT_ASSESSED, reminderStateOf, REMINDERS_MAX_SHOWN, cooldownOf, HOME_PHOTO_CANDIDATES_MAX,
-  isAtOrAfterEditionStart,
+  isAtOrAfterEditionStart, parseLedgerTime,
 } from "../lib/home-feed.ts";
+import { execFileSync } from "node:child_process";
 
 const BIRTH = "2025-01-03";
 const TODAY = "2026-09-13";
@@ -718,8 +719,31 @@ test("期内新批准的同组照片不挤掉本期那张旧照片（先过资�
   assert.match(bumped.reason, /连拍/, "这一期它才是被连拍去重挡下的那张");
 });
 
-// 2026-09-14：账本 reviewedAt 是 UTC「Z」写法，期次 startedAt 是 +08:00 写法。按字符串比时
-// "2026-09-13T04:30:00Z" < "2026-09-13T12:00:00+08:00"，一张 12:30（上海）才批的照片被当成本期前就批了。
+// 2026-09-14：生产账本 reviewedAt 是不带时区的上海本地时间（"2026-09-14 19:02:13.893609"），生产容器
+// 是 UTC。判断必须与进程时区无关：同一个时刻用上海裸写法、+08:00、Z 三种写法断言同一个结果。
+test("账本裸时间按上海解释，与进程时区无关", () => {
+  const bare = "2026-09-14 19:02:13.893609";
+  assert.equal(parseLedgerTime(bare), Date.parse("2026-09-14T11:02:13.893Z"), "上海 19:02 = UTC 11:02，不是 UTC 19:02");
+  assert.equal(parseLedgerTime("2026-09-14T19:02:13.893+08:00"), parseLedgerTime(bare));
+  assert.equal(parseLedgerTime("2026-09-14 19:02"), Date.parse("2026-09-14T11:02:00Z"));
+  assert.equal(parseLedgerTime("2026-09-14T11:02:13Z"), Date.parse("2026-09-14T11:02:13Z"));
+  assert.equal(parseLedgerTime("2026-09-14 19:02:13+0800"), Date.parse("2026-09-14T11:02:13Z"));
+  assert.ok(Number.isNaN(parseLedgerTime("x")));
+  // 今晚那一期（#3 从 18:00 开始）：19:02 批的本期不进；下一期 00:00 起进。
+  assert.equal(isAtOrAfterEditionStart(bare, "2026-09-14T18:00:00+08:00"), true, "本期内批的，本期待定");
+  assert.equal(isAtOrAfterEditionStart(bare, "2026-09-15T00:00:00+08:00"), false, "下一期 00:00 起参与，不多挡一期");
+  assert.equal(isAtOrAfterEditionStart("2026-09-14 18:00:00.000000", "2026-09-14T18:00:00+08:00"), true, "恰好等于期始算本期");
+  assert.equal(isAtOrAfterEditionStart("2026-09-14 17:59:59.999", "2026-09-14T18:00:00+08:00"), false, "早 1ms 算上一期");
+  assert.equal(isAtOrAfterEditionStart("2026-09-14 17:59:59.999", "2026-09-14T10:00:00Z"), false, "期始用 Z 写法也按时刻比");
+  // 同一份判断在子进程 TZ=UTC 与 TZ=Asia/Shanghai 下结果一致（进程时区不进入判断）。
+  const probe = `import { isAtOrAfterEditionStart as f } from ${JSON.stringify(new URL("../lib/home-feed.ts", import.meta.url).href)};`
+    + `console.log(JSON.stringify([f(${JSON.stringify(bare)}, "2026-09-14T18:00:00+08:00"), f(${JSON.stringify(bare)}, "2026-09-15T00:00:00+08:00")]))`;
+  for (const tz of ["UTC", "Asia/Shanghai"]) {
+    const out = execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", probe], { env: { ...process.env, TZ: tz }, encoding: "utf8" });
+    assert.equal(out.trim().split("\n").pop(), "[true,false]", `TZ=${tz}`);
+  }
+});
+
 test("跨时区写法按时刻比较：isAtOrAfterEditionStart 的边界", () => {
   const start = "2026-09-13T12:00:00+08:00";
   assert.equal(isAtOrAfterEditionStart("2026-09-13T04:30:00.000Z", start), true, "UTC 04:30 = 上海 12:30，在本期开始之后");
