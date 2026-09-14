@@ -9413,3 +9413,5 @@ DeepSeek 全部钉死 `deepseek-flash`（账号 /models 实列、合成请求回
 **没做到什么 / 最大的已知 blocker**：未部署、Organizer 仍停用，部署后验收与限定试跑分组复核未做；无触发器，裸 SQL 可绕过；版本绑定是可用路径而非强制（现有人工发布脚本不调用、发布门不要求 content-sha256）；保护面 595（仅因 trace 153）；lock_timeout×并发未测；`deepseek-flash` 即「V4.1 Flash」的对应未独立证明；运行中 ECS 容器 `AI_MODEL` 为空（与数据轨回执「ECS 仍 v4-pro」不一致，部署用 env 文件未查）；月回顾写入暂停；刷新通知未接通（worker 指向无 A 记录域名、不含 /events）；模拟视口非真机。证据 `NianlifeOps/guard-2026-09-14-page/README.md`（G0–G9）。
 
 **下一件事**：总指挥审 0b6af92 并决定部署与限定验证窗口 → 部署后页面轨跑 g04 + g01/g03（期望全不变）→ 限定 `--commit` 前后各拍 g01，按 59/46/28/3 + 阳性对照分组验收 → 通过前不恢复任何循环；刷新通知接线另立单写者。
+
+> 更正（页面轨 12:5x）：上文页面轨回执第 2 行「`deepseek-flash` 即「V4.1 Flash」的对应未独立证明」撤回——页面轨已独立核对 DeepSeek 官方定价页模型表（`deepseek-flash` → "DeepSeek-V4.1-Flash"）与文档首页原句（"Use `deepseek-flash` as the model name"，旧 flash 名由 DeepSeek-V4.1-Flash 承接），为抓取摘要、非截图、控制台未看。另：提交 `15ae4f2` 误把工作区里数据轨「更正（数据轨 12:45）」一行一并提交，该行作者是数据轨、原文未改。
