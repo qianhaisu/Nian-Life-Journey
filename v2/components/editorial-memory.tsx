@@ -31,7 +31,9 @@ export function EditorialMemory({ memory, size = "entry", priority = false, show
     {memory.excerpt ? <p>{memory.excerpt}</p> : null}
   </div>;
   if (photos === "story") {
-    const storyPhotos = memory.storyPhotos ?? (memory.lead ? [memory.lead] : []);
+    // Approved photographs first, then approved videos (2026-09-14). PhotoGallery already draws a
+    // video as a tap-to-play player with its poster, and keeps clips out of the zoomable photo reel.
+    const storyPhotos = [...(memory.storyPhotos ?? (memory.lead ? [memory.lead] : [])), ...(memory.storyVideos ?? [])];
     const shape = storyPhotos.length === 1 ? ` memory-photo-${orientationOf(storyPhotos[0])}` : storyPhotos.length > 1 ? " memory-photo-set" : "";
     return <article className={`memory memory-${size} memory-weight-${memory.weight} memory-story${shape}`}>
       {copy}

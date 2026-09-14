@@ -7,7 +7,7 @@
 // photo on the server and the client receives only that.
 import type { DailyTrace, LifeEvent, Media, MemoryWeight } from "@/lib/types";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
-import { NO_HERO_MEDIA_ID, heroCandidates, heroSized, isHeroEligible } from "@/lib/media/hero";
+import { NO_HERO_MEDIA_ID, heroCandidates, heroSized, isHeroEligible, isThumbnailEligible } from "@/lib/media/hero";
 import { ledgerOnlyStoryPhotoIds, storyDisplayMedia, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
 import { presentableAlt } from "@/lib/media/presentation";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
@@ -26,7 +26,7 @@ export function isGarbageLifeEvent(event: Pick<LifeEvent, "title" | "story">): b
   return false;
 }
 
-export type MediaRef = Pick<Media, "id" | "src" | "thumbnailSrc" | "width" | "height" | "type" | "posterSrc" | "takenAt"> & { alt: string };
+export type MediaRef = Pick<Media, "id" | "src" | "thumbnailSrc" | "width" | "height" | "type" | "posterSrc" | "takenAt" | "durationSeconds"> & { alt: string };
 
 export type EditorialMemory = {
   id: string;
@@ -41,6 +41,11 @@ export type EditorialMemory = {
   // surfaces use. Optional so hand-built memories (tests, fixtures) keep working: absent means
   // "just the lead, if any".
   storyPhotos?: MediaRef[];
+  // Every VIDEO a person approved for this story (the same media_binding gate), read after the
+  // photographs on the story card and never used as `lead` (2026-09-14 总指挥 视频首批：先把故事卡/
+  // 详情的消费契约做成最小实现). Kept out of `storyPhotos` on purpose: the home page, covers and every
+  // other photo surface read `storyPhotos`/`lead`, and a clip must not appear on any of them.
+  storyVideos?: MediaRef[];
   // Reviewed: no photo belongs on this story (the event's heroMediaId is NO_HERO_MEDIA_ID). Kept
   // distinct from `lead === undefined`, which now means only "nothing here can show it belongs to
   // this story" (lib/media/story-binding.ts). The two answer different questions — one is a
@@ -93,9 +98,12 @@ export const MONTH_PHOTO_LIMIT = 5;
 // How many approved photographs one story reads inside a month page. A bound, not a quota: today no
 // story has more than two approved bindings.
 export const STORY_PHOTOS_MAX = 4;
+// How many approved videos a story card reads. Bounded separately from photographs, so a clip never
+// takes a photograph's place and a story never becomes a wall of players.
+export const STORY_VIDEOS_MAX = 2;
 
 export function toMediaRef(media: Media, context?: string): MediaRef {
-  return { id: media.id, src: media.src, thumbnailSrc: media.thumbnailSrc, width: media.width, height: media.height, type: media.type, posterSrc: media.posterSrc, takenAt: media.takenAt, alt: presentableAlt(media, context) };
+  return { id: media.id, src: media.src, thumbnailSrc: media.thumbnailSrc, width: media.width, height: media.height, type: media.type, posterSrc: media.posterSrc, takenAt: media.takenAt, durationSeconds: media.durationSeconds, alt: presentableAlt(media, context) };
 }
 
 // First paragraph of the story, trimmed to a reading length. Titles are not repeated into it.
@@ -150,6 +158,11 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
   // empties it, so a story reviewed as text-only draws nothing here either.
   const approved = heroCandidates(event.heroMediaId, associated).slice(0, STORY_PHOTOS_MAX);
   const lead = approved[0];
+  // Approved videos: same reviewed-binding gate, same deliverable set (mediaById), drawable size, and
+  // NO_HERO_MEDIA_ID (text-only by review) draws none. heroCandidates above never admits a video.
+  const videos = event.heroMediaId === NO_HERO_MEDIA_ID
+    ? []
+    : associated.filter((item) => item.type === "video" && isThumbnailEligible(item)).slice(0, STORY_VIDEOS_MAX);
   return {
     id: event.id,
     title,
@@ -158,6 +171,7 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
     signature,
     lead: lead ? toMediaRef(lead, title) : undefined,
     storyPhotos: approved.map((item) => toMediaRef(item, title)),
+    storyVideos: videos.map((item) => toMediaRef(item, title)),
     // A review decision about this story, independent of whether any of its pictures could have
     // been associated with it in the first place.
     noPhoto: event.heroMediaId === NO_HERO_MEDIA_ID,

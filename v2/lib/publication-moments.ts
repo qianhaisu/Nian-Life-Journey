@@ -370,6 +370,13 @@ export function storyPhotosOf(memory: Pick<EditorialMemory, "lead" | "storyPhoto
   return memory.storyPhotos ?? (memory.lead ? [memory.lead] : []);
 }
 
+// Everything a story card draws: its approved photographs, then its approved videos. This — not
+// storyPhotosOf — is what the day group and the month album hold back, so an approved clip is read
+// once, inside its story, the same way an approved photograph is.
+export function storyMediaOf(memory: Pick<EditorialMemory, "lead" | "storyPhotos" | "storyVideos">): MediaRef[] {
+  return [...storyPhotosOf(memory), ...(memory.storyVideos ?? [])];
+}
+
 /**
  * 「这一天的相册」 — the month's own album, opened at one date.
  *
@@ -621,7 +628,8 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // in the album — so the split below is per photograph rather than per day.
   // 2026-09-13 (图文衔接): a story card now reads every photograph approved for it, not only its
   // lead, so every one of those is what "the card already drew" means here.
-  const chapterLeadIds = new Set(chapter.memories.flatMap((memory) => storyPhotosOf(memory).map((item) => item.id)));
+  // 2026-09-14: and every approved video it reads (storyMediaOf).
+  const chapterLeadIds = new Set(chapter.memories.flatMap((memory) => storyMediaOf(memory).map((item) => item.id)));
   const dayPhotoGroups: PhotoDay[] = [];
   const groupedPhotoIds = new Set<string>();
   for (const day of photoDaysAsc) {
