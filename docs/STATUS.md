@@ -9402,3 +9402,14 @@ DeepSeek 全部钉死 `deepseek-flash`（账号 /models 实列、合成请求回
 第一次演练 18/19 是我的演练脚本漏 `profileId`，已修，旧结果保留。证据 `NianlifeOps/timeline-2026-09-13-overnight/reports/ORGANIZER-WRITE-GUARD-DELIVERY.md`。
 
 **下一件事**：总指挥审 0b6af92 → Teddy 定 `AI_MODEL` → ECS 部署 → 单月、显式日期名单、限次的一次 `--commit` 验证（46 只靠保护 / 59 短路 / 1 阳性对照分组预声明），页面轨按三组验收通过前不恢复任何循环。
+
+> 更正（数据轨 12:45）：上文第 2 行「ECS 运行时 `AI_MODEL` 仍是 v4-pro」是我的推断，未核实，撤回。已证明的只有本机 `v2/.env.local` 为 v4-pro（本机调用会停）；页面轨只读实测运行中容器 `AI_MODEL` 为空 → 解析为 deepseek-flash、不会停；部署新容器所读 env 文件未查。
+
+## 2026-09-14 12:2x · 页面轨 · Organizer 写入层保护 0b6af92：隔离阶段独立复核通过（未部署）
+
+**本轮线上多了什么家人能读的东西**：无新内容（本轮不部署、不写库）。线上仍是 `nianlife-web:ca266f2`，保护前复查：136 篇与 E6 逐篇相同（59 事故 / 46 无 run / 28 旧 run 全 200，3 暂停 404 无链接），月页入口 344，库侧有效 approved 344、冲突 0；已存保护前库侧逐字段哈希基线，供部署与限定试跑后对比。
+独立复核 `0b6af92`（`4a6bb0e` 仅 docs）：读实际调用链确认 applyPlan 被拒后不再写待审行与 run、保护在 Repository 内（旧 organizer 直调也挡）、表锁+行锁后判定、人工批准哈希由调用方传入锁内比对、真实 Organizer provider=deepseek 不被误挡；typecheck 过、全量测试 1138/0 失败；postgres 契约在生产 DDL 一次性库上两版对比，4 条失败保护前后相同（getStore 只投影 canonical profile，非保护引入）；演练 19/19 证据 sha 核对一致；页面验收工具 g04（比较器阴性对照 4/4、coldhot 阳性）与库侧 g01/g03（真实写入对照 pass）已自检。
+
+**没做到什么 / 最大的已知 blocker**：未部署、Organizer 仍停用，部署后验收与限定试跑分组复核未做；无触发器，裸 SQL 可绕过；版本绑定是可用路径而非强制（现有人工发布脚本不调用、发布门不要求 content-sha256）；保护面 595（仅因 trace 153）；lock_timeout×并发未测；`deepseek-flash` 即「V4.1 Flash」的对应未独立证明；运行中 ECS 容器 `AI_MODEL` 为空（与数据轨回执「ECS 仍 v4-pro」不一致，部署用 env 文件未查）；月回顾写入暂停；刷新通知未接通（worker 指向无 A 记录域名、不含 /events）；模拟视口非真机。证据 `NianlifeOps/guard-2026-09-14-page/README.md`（G0–G9）。
+
+**下一件事**：总指挥审 0b6af92 并决定部署与限定验证窗口 → 部署后页面轨跑 g04 + g01/g03（期望全不变）→ 限定 `--commit` 前后各拍 g01，按 59/46/28/3 + 阳性对照分组验收 → 通过前不恢复任何循环；刷新通知接线另立单写者。
