@@ -9386,3 +9386,19 @@ Organizer 循环命中 `persistOrganization` 的 fingerprint-update 分支原地
 **四次里有三次是页面轨查出来的。**
 
 **下一件事**：写入层保护的设计与授权；之后才是继续「持续更新链路」。
+
+## 2026-09-14 12:00 · 数据轨 · Organizer 写入层保护交付（0b6af92，已 push、未部署）
+
+**本轮线上多了什么家人能读的东西**：**没有新内容**——本轮是护栏。0b6af92 让 Organizer 在持久化边界上**改不动任何人工审过的故事**：
+已发布、曾批准、或带任何非自动来源决定（queue169 按 id 或 `fingerprint:`、发布/恢复/预览/cowork 行、media_binding）的对象，
+故事字段、来源、媒体关联、审核状态一概拒写（锁审核表→锁事件行→判定→同事务写）；人工批准只能走带「所审内容哈希」的新入口，旧正文的批准上不了线。
+生产只读分类：已发布 344/344、暂停 3/3、无 run 的人工路线 46/46 全在保护内，仍可被更新的未审候选 437。
+DeepSeek 全部钉死 `deepseek-flash`（账号 /models 实列、合成请求回同名），v4-pro 回退全部去掉。
+
+**没做到什么 / 最大的已知 blocker**：① **未部署、Organizer 仍停用**，部署与限定生产验证等总指挥审版本；
+② 无触发器，`v2/.data` 裸 SQL 脚本仍能绕过（保护只覆盖经 Repository 的写入）；③ 本机 `.env.local` 与 ECS 运行时 `AI_MODEL` 仍是 v4-pro——代码上线后 DeepSeek 调用会直接停，改 env 需 Teddy 授权；
+④ 保护面变宽：153 篇仅因 cowork-a6 trace 行受保护；⑤ 刷新通知仍无常驻调用方（worker Phase 5 指向无 A 记录的公网域名）；⑥ 契约套件 4 条既有失败（未改动的 HEAD 同样失败）；八原则本节点未重跑。
+验证：npm test 1128 过 0 败、tsc、lint；生产全库 DDL 隔离演练 19/19（含并发批准、人工迟到批准、中途失败、锁超时、阳性对照、幂等）。
+第一次演练 18/19 是我的演练脚本漏 `profileId`，已修，旧结果保留。证据 `NianlifeOps/timeline-2026-09-13-overnight/reports/ORGANIZER-WRITE-GUARD-DELIVERY.md`。
+
+**下一件事**：总指挥审 0b6af92 → Teddy 定 `AI_MODEL` → ECS 部署 → 单月、显式日期名单、限次的一次 `--commit` 验证（46 只靠保护 / 59 短路 / 1 阳性对照分组预声明），页面轨按三组验收通过前不恢复任何循环。
