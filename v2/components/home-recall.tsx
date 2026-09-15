@@ -6,8 +6,8 @@ import type { HomeRecall as HomeRecallEntry } from "@/lib/home-recall";
 export function HomeRecall({ recall }: { recall?: HomeRecallEntry }) {
   if (!recall) return null;
   return <p className="home-recall">
-    <span className="home-recall-label">{recall.contextLabel}</span>
+    <span className="home-recall-label">{recall.contextLabel}：</span>
     <Link href={recall.href}>{recall.title} <span aria-hidden="true">↗</span></Link>
-    <time dateTime={recall.day}>{recall.dateLabel}</time>
+    <span className="home-recall-when"> · <time dateTime={recall.day}>{recall.dateLabel}</time></span>
   </p>;
 }

@@ -253,6 +253,22 @@
   line-height: 1.95;
 }
 
+/* PAGE-0915-FULL-REMEDIATION-R1 D3：回忆浮现——一句安静的话，跟 .home-notes 平级但不挤进
+   home-spread 的居中计算，也不是又一块卡片。 */
+.home-recall {
+  max-width: 640px;
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  color: var(--home-muted);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.home-recall-label { color: var(--home-ink); }
+.home-recall a { color: var(--home-sage); }
+.home-recall a:hover { color: #5d6e53; }
+.home-recall-when time { color: inherit; font-weight: 400; }
+
 /* ── 桌面两栏（2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT，2026-09-15 PAGE-0915-HOME-BALANCE 调整聚合方式）
    版心和顶部导航同宽（min(1400px, 100% - 64px)），照片右缘贴着导航右缘。左栏约 30%，照片栏约 67%。
 

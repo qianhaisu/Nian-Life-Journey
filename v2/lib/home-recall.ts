@@ -77,10 +77,12 @@ export function selectHomeRecall(chapters: YearChapter[], today: string, birthDa
   }
 
   // 3) 第一次：标题本身写着是第一次的已发布记忆，多条时按「今天是这一年第几天」取模稳定挑一条。
+  // 标题本身已经说了"第一次"，contextLabel 不重复这两个字（"他的一个第一次·第一次翻绘本"读起来
+  // 会打结），改成一句引出的话。
   const firsts = pool.filter((memory) => FIRST_TIME_TITLE.test(memory.title)).sort((a, b) => a.day.localeCompare(b.day) || a.eventId.localeCompare(b.eventId));
   if (firsts.length > 0) {
     const memory = firsts[dayOfYear(today) % firsts.length];
-    return { ...memory, relation: "first-time", contextLabel: "他的一个第一次" };
+    return { ...memory, relation: "first-time", contextLabel: "想起一段" };
   }
 
   return undefined;

@@ -49,7 +49,8 @@ test("前两档都没有，退到「第一次」标题；同一天多条时用�
   const r = selectHomeRecall(cs, "2026-01-01", undefined, undefined);
   assert.equal(r?.relation, "first-time");
   assert.ok(["e2", "e3"].includes(r?.eventId ?? ""));
-  assert.equal(r?.contextLabel, "他的一个第一次");
+  // 标题本身已经写着"第一次"，contextLabel 不重复这两个字，避免"第一次…第一次…"读起来打结。
+  assert.equal(r?.contextLabel, "想起一段");
   // 同一天再选一次，结果必须一样（纯函数，不是随机）。
   const again = selectHomeRecall(cs, "2026-01-01", undefined, undefined);
   assert.equal(again?.eventId, r?.eventId);
