@@ -51,6 +51,17 @@ Readiness requires objective evidence for all four links: Codex control plane, d
 - Invoke Cowork only at milestones, before merging visual/content changes, and before release.
 - Report to Teddy every two hours in the required three sections.
 
+## User-visible execution lifecycle
+
+Codex does not keep running after it sends a final response. Never describe a finished turn as background monitoring or let Teddy reasonably infer that work will continue invisibly.
+
+- While an accepted goal still has safe in-scope work in progress, keep the current turn active. Use commentary for interim status instead of ending the turn with a final response.
+- Send a concise visible update when starting work, after a worker/Cowork wake is verified, when objective progress or a blocker appears, at each phase transition, and on completion.
+- During supervised waits, combine the visible update with the normal worker check so Teddy sees a heartbeat at least once every 15 minutes. Do not add extra GUI messages, screenshots, tests, or polls solely to create activity.
+- If Teddy asks for status while the goal is still running, answer in commentary and continue the workflow. Do not treat the status question as a reason to end the active turn.
+- Do not send the final response until the current milestone is completed, genuinely blocked on Teddy/external state, or Teddy explicitly asks to stop. If the turn must end for another reason, say plainly that no background work will continue and record the exact checkpoint, evidence, and next action in `ORCHESTRATOR-STATE.md`.
+- A Claude worker showing idle is not by itself a failure: first read the task card and Git evidence. Wake it only when there is a queued/revision task that has not already been delivered.
+
 ## Failure handling
 
 - Missing branch, worktree, directory, or session during bootstrap: create only authorized infrastructure or mark the exact link `BLOCKED`.
