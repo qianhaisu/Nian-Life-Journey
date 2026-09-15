@@ -41,6 +41,7 @@ import {
   unlinkSync,
 } from "node:fs";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { config as loadDotenv } from "dotenv";
 import pg from "pg";
@@ -52,7 +53,7 @@ process.env.REPOSITORY_BACKEND = "postgres";
 
 const { loadWechatBundle } = await import("../lib/ingest/wechat-snapshot.ts");
 const { runWechatImportWorker } = await import("../lib/ingest/wechat-worker.ts");
-const { countContentKeys, selectUnarchivedOrdinals, shanghaiDateDaysAgo } = await import("../lib/ingest/wechat-content-dedupe.ts");
+const { buildArchiveIndex, classifyDocumentMessages, commitReservation, releaseReservation, shanghaiDateDaysAgo } = await import("../lib/ingest/wechat-content-dedupe.ts");
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -151,6 +152,10 @@ function readImportExcluded() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// The ledger records which chat a decision was about without writing the chat's own id into a file:
+// the id is the group's real WeChat identifier, and this file is read by other sessions.
+const digestOf = (value) => createHash("sha256").update(String(value), "utf8").digest("hex").slice(0, 16);
 
 function safeErrorInfo(error) {
   const code = (error && (error.code || error.name)) || "UNKNOWN_ERROR";
@@ -355,27 +360,63 @@ async function main() {
   // conversation digest, holding the resume key that made this run's work a no-op or not.
   const conversationState = { ...(workerState.conversations ?? {}) };
 
-  // Content keys already in the archive for this window, across every wechat label. Consumed and
-  // extended as conversations are selected (see selectUnarchivedOrdinals).
-  let archivedKeys = null;
+  // ── Content dedupe: the archive as it stands, scoped by real chat ─────────────
+  //
+  // A message is only ever compared with rows of the SAME chat (lib/ingest/wechat-content-dedupe.ts
+  // says why that scope, the sender and the attachments are all required). The archive stores a
+  // document-derived `source_label`, not the chat's own id, so the mapping label → sessionKey is
+  // built here, from the exports actually on disk: each document states its own chat id, and both of
+  // a chat's exports state the same one. Labels no document on disk explains stay UNMAPPED — their
+  // rows can only ever make a message ambiguous, never make it look archived.
+  let archiveIndex = null;
+  const sessionByIndex = new Map();
+  const ambiguousTotal = [];
   if (CLI_CONTENT_DEDUPE) {
+    const labelToSession = new Map();
+    for (let index = 0; index < CONVERSATION_LIMIT; index += 1) {
+      let probe;
+      try {
+        probe = await loadWechatBundle(SOURCE_ROOT, { maxMessages: 1, maxMedia: 1, conversationIndex: index, since: importSince });
+      } catch (error) {
+        if (error instanceof Error && error.message === "WECHAT_NO_VALID_SESSION") break;
+        throw error;
+      }
+      const label = probe.bundle.conversations[0]?.id;
+      if (label && probe.sessionKey) { labelToSession.set(label, probe.sessionKey); sessionByIndex.set(index, probe.sessionKey); }
+      else if (label) sessionByIndex.set(index, "");
+    }
     const keyPool = new pg.Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false }, max: 1 });
+    let rows;
     try {
-      // One day of slack below the window: a message stamped just before `since` in one export can
-      // sit just after it in another only if the parsers disagreed on the instant, which they must not
-      // — but reading a day more costs nothing and a false "missing" costs a duplicate row.
-      const { rows } = await keyPool.query(
-        `SELECT captured_at, text FROM raw_sources
-          WHERE profile_id = $1 AND source_type = 'wechat' AND deleted_at IS NULL
-            AND captured_at >= ($2::date - interval '1 day') AT TIME ZONE 'Asia/Shanghai'`,
+      // One day of slack below the window: reading a day more costs nothing, and a row just outside
+      // the window that is really the same message would otherwise read as missing.
+      ({ rows } = await keyPool.query(
+        `SELECT r.id, r.source_label, r.captured_at, r.text,
+                r.metadata->>'senderDigest' AS sender_digest,
+                r.metadata->'mediaEvidence' AS media_evidence,
+                COALESCE(array_agg(a.checksum) FILTER (WHERE a.checksum IS NOT NULL), '{}') AS checksums
+           FROM raw_sources r
+           LEFT JOIN media m ON m.raw_source_id = r.id
+           LEFT JOIN media_assets a ON a.id = m.media_asset_id
+          WHERE r.profile_id = $1 AND r.source_type = 'wechat' AND r.deleted_at IS NULL
+            AND r.captured_at >= ($2::date - interval '1 day') AT TIME ZONE 'Asia/Shanghai'
+          GROUP BY r.id`,
         [PROFILE_ID, importSince.slice(0, 10)],
-      );
-      archivedKeys = countContentKeys(rows.map((row) => ({ sentAt: row.captured_at, text: row.text })));
-      log(`content dedupe: ${rows.length} archived wechat row(s) in window`);
-      ledger({ phase: "import", event: "content_keys_loaded", rows: rows.length, since: importSince });
+      ));
     } finally {
       await keyPool.end();
     }
+    archiveIndex = buildArchiveIndex(rows.map((row) => ({
+      sessionKey: labelToSession.get(row.source_label),
+      sentAt: row.captured_at,
+      senderDigest: row.sender_digest,
+      text: row.text,
+      mediaEvidence: row.media_evidence,
+      checksums: row.checksums,
+      rowId: row.id,
+    })));
+    log(`content dedupe: ${archiveIndex.rowCount} archived row(s) in window · ${labelToSession.size} chat(s) mapped · ${archiveIndex.unmappedRowCount} row(s) under unmapped chats`);
+    ledger({ phase: "import", event: "archive_index_built", rows: archiveIndex.rowCount, mappedChats: labelToSession.size, unmappedRows: archiveIndex.unmappedRowCount, since: importSince });
   }
   ledger({ phase: "run", event: "started", since: importSince, stateFile: WORKER_STATE_PATH, flags: {
     organizer: !CLI_NO_ORGANIZER, review: !CLI_NO_REVIEW, revalidate: !CLI_NO_REVALIDATE,
@@ -448,19 +489,38 @@ async function main() {
 
     let recordOrdinals;
     let batchKey;
-    if (archivedKeys) {
-      const full = await loadWechatBundle(SOURCE_ROOT, { maxMessages: Math.max(probe.availableMessageCount, 1), maxMedia: 1, conversationIndex: index, since: importSince });
-      const selection = selectUnarchivedOrdinals(full.bundle.messages, archivedKeys);
+    let reservation;
+    if (archiveIndex) {
+      const sessionKey = sessionByIndex.get(index);
+      if (!sessionKey) {
+        // The export does not state which chat it is. Comparing it against anything would be a
+        // guess, and importing it blind would duplicate whatever is already there.
+        log(`conversation ${index}: export states no chat id — skipped by --content-dedupe, needs a look`);
+        ledger({ phase: "import", event: "no_session_key", conversationIndex: index, digest });
+        totals.failed += 1;
+        totals.failureClasses.NO_SESSION_KEY = (totals.failureClasses.NO_SESSION_KEY ?? 0) + 1;
+        continue;
+      }
+      // Media refs are hashed here (maxMedia = the window's real count) so an attachment can be
+      // compared by content, not only by the path it happens to have in this export.
+      const full = await loadWechatBundle(SOURCE_ROOT, { maxMessages: Math.max(probe.availableMessageCount, 1), maxMedia: Math.max(probe.availableMediaRefCount, 1), conversationIndex: index, since: importSince });
+      const selection = classifyDocumentMessages(full.bundle.messages, archiveIndex, sessionKey);
+      if (selection.ambiguous.length > 0) {
+        ambiguousTotal.push(...selection.ambiguous.map((item) => ({ conversationIndex: index, digest, ...item })));
+        log(`conversation ${index}: ${selection.ambiguous.length} message(s) could not be decided — listed, not imported`);
+        ledger({ phase: "import", event: "content_ambiguous", conversationIndex: index, digest, ambiguous: selection.ambiguous });
+      }
       if (selection.ordinals.size === 0) {
-        log(`conversation ${index}: all ${full.bundle.messages.length} message(s) in window already archived (content) — nothing to import`);
+        log(`conversation ${index}: all ${full.bundle.messages.length} message(s) in window already archived (${selection.alreadyArchived} matched, ${selection.ambiguous.length} undecided) — nothing to import`);
         conversationState[digest] = { resumeKey, status: "ok", at: new Date().toISOString(), created: 0, reused: 0, note: "content already archived" };
-        ledger({ phase: "import", event: "content_already_archived", conversationIndex: index, digest, resumeKey, inWindow: full.bundle.messages.length });
+        ledger({ phase: "import", event: "content_already_archived", conversationIndex: index, digest, resumeKey, inWindow: full.bundle.messages.length, ambiguous: selection.ambiguous.length });
         continue;
       }
       recordOrdinals = selection.ordinals;
+      reservation = selection.reservation;
       batchKey = `content:${[...selection.ordinals].sort((a, b) => a - b).join(",")}`;
-      log(`conversation ${index}: content dedupe selected ${selection.ordinals.size} of ${full.bundle.messages.length} (${selection.alreadyArchived} already archived)`);
-      ledger({ phase: "import", event: "content_selected", conversationIndex: index, digest, selected: selection.ordinals.size, alreadyArchived: selection.alreadyArchived });
+      log(`conversation ${index}: content dedupe selected ${selection.ordinals.size} of ${full.bundle.messages.length} (${selection.alreadyArchived} already archived, ${selection.ambiguous.length} undecided)`);
+      ledger({ phase: "import", event: "content_selected", conversationIndex: index, digest, sessionKeyDigest: digestOf(sessionKey), selected: selection.ordinals.size, alreadyArchived: selection.alreadyArchived, ambiguous: selection.ambiguous.length });
     }
 
     log(`conversation ${index}: ${recordOrdinals ? recordOrdinals.size : messages} message(s), ${mediaRefs} media ref(s)`);
@@ -485,6 +545,9 @@ async function main() {
         report = { ...report, status: "failed", safeErrorCode: `CONTENT_BATCH_SHORTFALL_${report.createdMessages + report.reusedMessages}_OF_${recordOrdinals.size}` };
       }
     } catch (error) {
+      // Nothing was written, so the reservation must go back: this message may still arrive through
+      // a retry or through the other export of the same chat.
+      if (reservation) releaseReservation(reservation);
       const info = safeErrorInfo(error);
       const failure = classifyFailure({ error });
       totals.failed += 1;
@@ -497,6 +560,12 @@ async function main() {
 
     const ok =
       report.status === "completed" || report.status === "completed_with_warnings";
+    // Archived means written. Only a successful import turns this document's reservations into
+    // occurrences the next document of the same chat is allowed to match against.
+    if (reservation && archiveIndex) {
+      if (ok) commitReservation(archiveIndex, reservation);
+      else releaseReservation(reservation);
+    }
     log(
       `conversation ${index}: ${report.status}` +
         ` · msgs +${report.createdMessages} / reused ${report.reusedMessages}` +
@@ -533,7 +602,11 @@ async function main() {
 
   ledger({ phase: "import", event: "phase_done", conversations: totals.conversations, created: totals.created,
     reused: totals.reused, mediaCreated: totals.mediaCreated, mediaReused: totals.mediaReused,
-    skipped: totals.skipped, failed: totals.failed, failureClasses: totals.failureClasses });
+    skipped: totals.skipped, failed: totals.failed, failureClasses: totals.failureClasses,
+    ambiguous: ambiguousTotal.length });
+  if (ambiguousTotal.length > 0) {
+    log(`content dedupe: ${ambiguousTotal.length} message(s) left undecided — neither imported nor treated as archived; see the ledger`);
+  }
   log(
     `import phase done` +
       ` · msgs +${totals.created} / reused ${totals.reused}` +

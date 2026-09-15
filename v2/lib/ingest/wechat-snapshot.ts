@@ -25,7 +25,11 @@ export type WechatSnapshot = { rootFingerprint: string; fileCount: number; files
 // pins the batch by (source file sha256, approved id set) and must assert the resulting ids against
 // that set; see scripts/wechat-import-all.mjs, which refuses the run on any mismatch.
 export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number; since?: string; recordOrdinals?: ReadonlySet<number> };
-export type WechatBundleLoad = { snapshot: WechatSnapshot; bundle: ChatImportBundle; selectedDocument: string; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number };
+// `sessionKey` is the selected document's own chat id (Markdown 会话ID / JSON session.wxid). Two
+// exports of one chat share it and differ in every other identity, so it is what a cross-export
+// comparison has to be scoped by (lib/ingest/wechat-content-dedupe.ts). Empty when the export did
+// not carry one.
+export type WechatBundleLoad = { snapshot: WechatSnapshot; bundle: ChatImportBundle; selectedDocument: string; sessionKey: string; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number };
 export type WechatCapacityAudit = { fileCount: number; markdownFileCount: number; jpegFileCount: number; otherFileCount: number; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number; presentMediaCount: number; missingMediaCount: number; needsReviewMediaCount: number; invalidMediaCount: number; hashChangedMediaCount: number; deferredByLimitMediaCount: number; messageLimitReached: boolean; mediaLimitReached: boolean; maxMessages: number; maxMedia: number };
 
 const digest = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
@@ -141,7 +145,7 @@ function parseTranscript(
   // A .json in the export root is only a transcript if it says so. Anything else is left alone
   // rather than guessed at: a stray JSON file with a `messages` array must not become a conversation.
   if (entry.kind === "weflow-json") {
-    if (!isWeflowJson(text)) return { document: entry.relativePath, conversationId: "", conversationName: "", messages: [], warnings: ["not_a_weflow_transcript"] };
+    if (!isWeflowJson(text)) return { document: entry.relativePath, conversationId: "", conversationName: "", sessionKey: "", messages: [], warnings: ["not_a_weflow_transcript"] };
     return parseWeflowJson({ root, document: entry.relativePath, media, text });
   }
   return parseWechatMarkdown({ root, document: entry.relativePath, media, text });
@@ -220,7 +224,7 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
     mediaRefs,
     warnings: [],
   };
-  return { snapshot, bundle, selectedDocument: selected.entry.relativePath, availableMessageCount, selectedMessageCount: messages.length, availableMediaRefCount, selectedMediaRefCount: mediaRefs.length };
+  return { snapshot, bundle, selectedDocument: selected.entry.relativePath, sessionKey: reparsed.sessionKey, availableMessageCount, selectedMessageCount: messages.length, availableMediaRefCount, selectedMediaRefCount: mediaRefs.length };
 }
 
 export async function auditWechatCapacity(sourceRoot: string, options: WechatBundleOptions = {}): Promise<WechatCapacityAudit> {

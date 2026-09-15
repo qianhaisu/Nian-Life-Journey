@@ -49,11 +49,11 @@ export function parseWeflowJson(input: {
   try {
     parsed = JSON.parse(input.text.replace(/^﻿/, "")) as { session?: WeflowSession; messages?: unknown };
   } catch {
-    return { document: input.document, conversationId: "", conversationName: "", messages: [], warnings: ["weflow_json_unparseable"] };
+    return { document: input.document, conversationId: "", conversationName: "", sessionKey: "", messages: [], warnings: ["weflow_json_unparseable"] };
   }
   const session = parsed.session ?? {};
   const rawMessages = Array.isArray(parsed.messages) ? (parsed.messages as WeflowMessage[]) : undefined;
-  if (!rawMessages) return { document: input.document, conversationId: "", conversationName: "", messages: [], warnings: ["weflow_json_no_messages"] };
+  if (!rawMessages) return { document: input.document, conversationId: "", conversationName: "", sessionKey: "", messages: [], warnings: ["weflow_json_no_messages"] };
 
   const conversationName = asString(session.displayName) || asString(session.nickname) || asString(session.remark);
   // Namespaced so a JSON conversation id can never collide with the Markdown id for the same
@@ -108,7 +108,7 @@ export function parseWeflowJson(input: {
       mediaRefs,
       sourceLocator: { document: input.document, recordOrdinal: ordinal },
     };
-    messages.push({ ...base, messageId: canonicalMessageId(base, 0) });
+    messages.push({ ...base, senderName: sender, messageId: canonicalMessageId(base, 0) });
   }
 
   if (undated) warnings.push("weflow_json_message_without_time");
@@ -123,5 +123,6 @@ export function parseWeflowJson(input: {
     message.occurrenceRank = seen;
   }
 
-  return { document: input.document, conversationId, conversationName: conversationName || "conversation_1", messages, warnings };
+  const wxid = asString(session.wxid);
+  return { document: input.document, conversationId, conversationName: conversationName || "conversation_1", sessionKey: wxid ? `wechat-session:${wxid}` : "", messages, warnings };
 }
