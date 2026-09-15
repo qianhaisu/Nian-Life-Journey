@@ -1,7 +1,7 @@
 # Nianlife Orchestrator State
 
-- updated_at: 2026-09-15T19:31:00+08:00
-- overall: BLOCKED_RUNTIME_SECOND_EXIT
+- updated_at: 2026-09-15T20:20:00+08:00
+- overall: COWORK_REVIEW_COMPLETE_AWAITING_TEDDY
 - objective: Teddy 已批准推荐整改方案并要求今天同时启动关系回忆、记忆流权重和空占位整改；页面线任务 `PAGE-0915-FULL-REMEDIATION-R1` 已写卡并通过现有 `页面` Claude Code 会话派发。Cowork 已获得 NianlifeOps 与 Nianlife 仓库完整项目内容读取权限。
 - control_plane: `C:\Users\teddy\Documents\Nianlife\collab`
 - integration_branch: `main`
@@ -39,9 +39,10 @@
 
 - correction: 先前被当作 Cowork 的 `Nianlife 视频覆盖盘点与页面核验` 实为 Claude Code session；其生成的 `review-PAGE-0915-FULL-REMEDIATION-E2F455D` 报告和当前后台续审一律标记 `INVALID_SOURCE_CODE_SESSION`，不得作为 Cowork 结论、不得据此合并。
 - evidence: 该会话页面存在仓库 `Nian-Life-Journey`、分支 `main`、Changes/Create PR 控件，且续审指令显示为 Code session 的 `1 running task`；真正 Cowork 为 Chat and Cowork 下的 `Skill review and adjustments`，ready session id=`session_018dTG49462GUuQtbCQLZgLB`。
-- completed: 错误 Code session 的后台审核已通过其 Background tasks 停止；旧目录 README 已标 `INVALID_SOURCE_CODE_SESSION`。真正 Cowork `Skill review and adjustments` 已收到续审请求，并在独立目录 `C:\Users\teddy\NianlifeOps\review-PAGE-0915-FULL-REMEDIATION-E2F455D-TRUE-COWORK-CONT1` 写入回执，session id 与 ready 文件一致。
-- blockers: 数据线恢复的 `18081/4916/15681` 在真正 Cowork 开始验收前第二次整体退出；Codex 独立复核仅 `18080` 仍监听，`18081` health 不可达，可用内存约 3.79 GB。按 efficiency-first 规则不再重启循环。Cowork 采集链路仍无法提供真实 `390x844` CSS viewport。
-- cowork_result: `BLOCKED`；未把任何本轮页面写成通过。建议由宿主机固定 Playwright `390x844` 采集截图和溢出数据后交 Cowork读图；桌面验收需先解决 `18081` 生命周期稳定性。
+- completed: Teddy 授权后，数据线用宿主机隐藏持久进程恢复 `18081/4916/15681`；启动约 7 分钟后 health 仍为 200、db connected、SHA=`e2f455d88a3797823ea45e7c8f19381a704b23a7`。宿主机 Playwright 已生成 9 页真实 `390x844` 证据，全部无横向溢出、无 console error、无非 GET 请求。真正 Cowork `Skill review and adjustments` 已在 `C:\Users\teddy\NianlifeOps\review-PAGE-0915-FULL-REMEDIATION-E2F455D-TRUE-COWORK-CONT2\README.md` 完成审核，session id 与 ready 文件一致。
+- blockers: Cowork 结论为 1 BLOCKER：`/about` 把 15 个月前的身高与近期体重等权并列在“现在”区块，造成过期数据被读作现状。实施前等 Teddy review。
+- cowork_result: 1 BLOCKER、5 SHOULD-FIX、6 POLISH；主要待改为过期身高呈现、11 天前的低质量回忆命中、首页日期重复堆叠、照片可访问名、图片密集页异常慢、首页提醒仍像育儿待办。移动 9 页零横向溢出；about/inbox/capture/伪占位/主体时间口径等整改通过。
+- commander_review: Cowork 把当前环境误称为开发服务器；实际为既有 `.next` 的 `next start` 生产构建，因此加载慢不能用“首次路由编译”免责，但仍需结合本机低内存与真实 RDS 再诊断，不直接猜测修复。
 - pending_before_cowork_review: 无；后续若源产品原则发生变化，派发审美请求前必须重新同步快照并核对 SHA-256。
 - production_actions: 无；未部署、未连接生产、未产生费用、未删除数据。
-- next_check: 等 Teddy/执行侧决定稳定验收运行环境的方式；未经新决定不第三次重启 `18081`。后续恢复时仅续审缺项，并用宿主机 Playwright 解决手机视口证据。
+- next_check: Teddy review Cowork 新结论并裁决首页提醒是否保留；确认后立即写今日整改卡并派页面线/数据线，先清 BLOCKER。
