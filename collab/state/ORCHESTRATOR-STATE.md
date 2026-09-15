@@ -1,0 +1,21 @@
+# Nianlife Orchestrator State
+
+- updated_at: 2026-09-15T13:51:03+08:00
+- overall: PARTIAL
+- objective: 建立 Codex、数据线、页面线、Cowork 四方文件链路，等待 Teddy 新目标
+- control_plane: `C:\Users\teddy\Documents\Nianlife\collab`
+- integration_branch: `main`
+- data_branch: `claude/data-line`
+- data_worktree: `C:\Users\teddy\Nianlife-worktrees\data`
+- data_session: `数据`（窗口已见，ACK 待完成）
+- page_branch: `claude/page-line`
+- page_worktree: `C:\Users\teddy\Nianlife-worktrees\page`
+- page_session: `页面`（窗口已见，ACK 待完成）
+- cowork_session: 待识别并执行当前会话 B0
+- gui_lock: `C:\Users\teddy\NianlifeOps\_locks\gui.lock`（当前未创建）
+- completed_evidence:
+  - Claude 原生 Windows 枚举成功；同一窗口中 `数据`、`页面` 均为 Idle。
+  - Codex 指挥 skill 已写入 `.agents/skills/nianlife-orchestrator/SKILL.md`。
+- in_progress: 创建固定 branches/worktrees、控制面目录和 NianlifeOps 运行目录
+- blockers: 无；ACK/B0 尚未执行，故不得标 READY
+- next_check: 完成基础设施后立即由目标 Codex session 继续 bootstrap

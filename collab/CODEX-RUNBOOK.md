@@ -73,11 +73,17 @@ C:\Users\teddy\NianlifeOps\
 
 固定执行分支：
 
-- 数据线：`claude/data-line`
-- 页面线：`claude/page-line`
+- 数据线：`claude/data-line`，固定 worktree `C:\Users\teddy\Nianlife-worktrees\data`
+- 页面线：`claude/page-line`，固定 worktree `C:\Users\teddy\Nianlife-worktrees\page`
 - 集成线：`main`
 
 分支和独立 worktree 必须由 Codex 在派单前确认已准备好；本协议本身不授权任何执行方新建分支。若分支或 worktree 不存在，任务状态为 `BLOCKED`，不得退回共用 checkout 并行写。
+
+控制面始终是主 checkout 的绝对路径 `C:\Users\teddy\Documents\Nianlife\collab`。两个执行 worktree 中随分支复制的 `collab` 不是消息源；任务卡和 handoff 一律从控制面绝对路径读写。
+
+### 4.1 首次自举
+
+Codex 连接整条链路时加载 `.agents/skills/nianlife-orchestrator/SKILL.md`，而不是执行方的 `exec-protocol`。依次建立控制面目录、两条固定分支/worktree、Claude `数据`/`页面` session ACK、Cowork 当前会话 B0，并把客观证据写入 `collab/state/ORCHESTRATOR-STATE.md`。四条链接未全部有证据前只能写 `PARTIAL` 或 `BLOCKED`，不得宣称已连接。
 
 目录所有权的完整表在 `.claude/skills/exec-protocol/SKILL.md`。跨线或共享保留区改动必须先停，由 Codex 在任务卡里指定唯一写者、依赖和合并顺序。任务发出后不得临时交换合并顺序；确需改变时，旧任务作废并发新版任务卡。
 

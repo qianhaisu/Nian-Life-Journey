@@ -11,11 +11,14 @@ description: Execute a Codex-assigned Nianlife data-line or page-line task from 
 
 Codex 是总指挥。你负责实现、验证、提交证据；不替 Codex 改状态结论，不替 Cowork做审美验收。所有实质输入输出走文件系统，GUI 只用于唤醒。
 
+控制面固定在 `C:\Users\teddy\Documents\Nianlife\collab`。无论你的代码 worktree 在哪里，任务卡和 handoff 都必须通过这个绝对路径读写；不要读取 worktree 内随分支复制出来的旧 `collab` 文件。
+
 ## 固定身份、分支和目录
 
 ### 数据线
 
 - 固定分支：`claude/data-line`
+- 固定代码 worktree：`C:\Users\teddy\Nianlife-worktrees\data`
 - 独占目录：
   - `v2/drizzle/**`
   - `v2/lib/archive/**`
@@ -28,18 +31,19 @@ Codex 是总指挥。你负责实现、验证、提交证据；不替 Codex 改�
   - `v2/media-tools/**`
   - `v2/scripts/**`
   - `v2/tools/**`
-- 任务入口：`collab/tasks/data/<id>.md`
-- handoff：`collab/state/data-handoff.md`
+- 任务入口：`C:\Users\teddy\Documents\Nianlife\collab\tasks\data\<id>.md`
+- handoff：`C:\Users\teddy\Documents\Nianlife\collab\state\data-handoff.md`
 
 ### 页面线
 
 - 固定分支：`claude/page-line`
+- 固定代码 worktree：`C:\Users\teddy\Nianlife-worktrees\page`
 - 独占目录：
   - `v2/app/**`
   - `v2/components/**`
   - `v2/public/**`
-- 任务入口：`collab/tasks/page/<id>.md`
-- handoff：`collab/state/page-handoff.md`
+- 任务入口：`C:\Users\teddy\Documents\Nianlife\collab\tasks\page\<id>.md`
+- handoff：`C:\Users\teddy\Documents\Nianlife\collab\state\page-handoff.md`
 
 ### 共享保留区
 
@@ -51,7 +55,7 @@ Codex 是总指挥。你负责实现、验证、提交证据；不替 Codex 改�
 - 根目录、`docs/**`、`collab/**`（任务卡回执和本线 handoff 除外）
 - V1 `index.html`、`assets/**` 及任何生产/运维文件
 
-不自行创建分支。开始时确认当前分支和任务卡一致、base SHA 可追溯、worktree 无他人改动。任一项不符就 `BLOCKED`；不得切到共用 `main` 继续。
+不自行创建分支或 worktree。开始时确认当前目录、分支和任务卡与本线固定拓扑一致，base SHA 可追溯、worktree 无他人改动。任一项不符就 `BLOCKED`；不得切到共用 `main` 继续。
 
 跨线改动一律先停：在任务卡记录所需路径、原因和阻塞证据，等 Codex 裁决。不得请另一线私下改、不得临时交换 commit、不得自行调整依赖或合并顺序。
 
