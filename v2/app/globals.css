@@ -180,6 +180,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .bottom-nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 100; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 60px; padding: 4px 8px max(6px, env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); background: var(--color-surface); }
 .bottom-nav > a { display: grid; min-width: 0; min-height: 48px; place-items: center; color: var(--color-muted); font-size: .8rem; letter-spacing: .04em; }
 .bottom-nav > a.is-active { color: var(--color-primary); font-weight: 700; }
+/* 备案号页脚。手机上底部导航是 fixed，页脚落在 site-shell 的底部留白之后，自己再留出导航的高度，
+   不被导航盖住；桌面没有底部导航，只留常规边距。 */
+.site-footer { padding: 0 16px calc(72px + env(safe-area-inset-bottom)); text-align: center; font-size: .75rem; letter-spacing: .02em; }
+.site-footer a { color: var(--color-muted); }
+.site-footer a:hover { color: var(--color-primary); }
 
 /* ---------- Editorial layer ---------- */
 .time-signature { display: flex; flex-wrap: wrap; gap: 0 14px; margin: 0; color: var(--color-muted); font-size: .8rem; letter-spacing: .04em; }
@@ -965,6 +970,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
 @media (min-width: 700px) {
   .site-shell { padding-bottom: 0; }
+  .site-footer { padding: 32px 16px 28px; }
   .header-inner { width: min(1400px, calc(100% - 64px)); }
   .desktop-nav { display: flex; align-items: center; justify-self: end; gap: 36px; }
   .desktop-nav a { position: relative; display: inline-flex; min-height: 44px; align-items: center; font-size: .82rem; letter-spacing: .04em; }

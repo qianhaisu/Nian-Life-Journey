@@ -1,0 +1,45 @@
+# nianlife.cn 公网入口（ECS 实际部署用）。
+#
+# 接入方式：Caddy 容器以 `--network host` 运行，直接占用宿主机 80/443，反代到宿主机
+# 127.0.0.1:3000——Web 容器由 docker run 启动，只发布在 127.0.0.1:3000（见
+# scripts/deploy-ecs-public.sh）。bridge 网络里的容器连不到宿主机回环地址，所以这里不用
+# bridge + host.docker.internal，也不用只在 compose 网络内才能解析的 web:3000
+# （那是 compose.production.yaml + Caddyfile 的私有基线，当前 ECS 并不用它运行）。
+#
+# 证书：Caddy 自动 HTTPS（Let's Encrypt，失败时回落 ZeroSSL，两者 2026-09-15 从 ECS 均可达）。
+# 证书和账户存放在 /data，自动续期状态在 /config；两者都挂具名卷，重建容器不重新申请。
+# HTTP 请求由 Caddy 自动 308 跳转 HTTPS。
+{
+	servers {
+		# 只开 HTTP/1.1 与 HTTP/2：安全组未确认放行 UDP 443，不对外宣告 HTTP/3。
+		protocols h1 h2
+	}
+}
+
+# 公网只读：只有 GET/HEAD 会转发给应用，其余方法（含 Server Action 的 POST）在这里直接 405，
+# 不进应用。管理写入走 SSH 隧道直连 127.0.0.1:3000，不经过这个入口。
+# /api/internal/* 另外整段 404：organizer-worker 的 GET 等同 POST，内部接口不对公网开放。
+# 图片、视频的 Range 请求是 GET，照常转发。
+nianlife.cn {
+	@notRead not method GET HEAD
+	handle @notRead {
+		header Allow "GET, HEAD"
+		respond "Method Not Allowed" 405
+	}
+	handle /api/internal/* {
+		respond "Not Found" 404
+	}
+	handle {
+		encode zstd gzip
+		reverse_proxy 127.0.0.1:3000
+	}
+}
+
+# www 只做跳转：HTTPS 和 HTTP 都一跳到主域名，保留路径和查询串。
+www.nianlife.cn {
+	redir https://nianlife.cn{uri} 308
+}
+
+http://www.nianlife.cn {
+	redir https://nianlife.cn{uri} 308
+}

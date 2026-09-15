@@ -6,6 +6,7 @@ import { Nunito } from "next/font/google";
 import "./fonts.css";
 import "./globals.css";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
@@ -30,5 +31,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f5efe4" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="zh-CN" data-scroll-behavior="smooth" className={nunito.variable}><body><a className="skip-link" href="#main-content">跳到主要内容</a><SiteHeader /><main id="main-content" className="site-shell">{children}</main><ScrollReveal /></body></html>;
+  return <html lang="zh-CN" data-scroll-behavior="smooth" className={nunito.variable}><body><a className="skip-link" href="#main-content">跳到主要内容</a><SiteHeader /><main id="main-content" className="site-shell">{children}</main><SiteFooter /><ScrollReveal /></body></html>;
 }
