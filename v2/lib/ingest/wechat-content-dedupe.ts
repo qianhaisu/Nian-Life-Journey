@@ -21,9 +21,18 @@ const IMAGE_REFERENCE = /!\[[^\]]*\]\([^)]*\)/g;
 // What lib/ingest/wechat-import.ts's sanitizeText stores in raw_sources.text in place of an image
 // reference. Archived rows carry this; freshly parsed transcripts carry the reference itself.
 const STORED_MEDIA_PLACEHOLDER = /\[media\]/g;
+// WeFlow does not render one attachment the same way in every export: a video written as an image
+// reference (stored as "[media]") on 09-13 came back as a plain link `[视频文件](media/videos/….mp4)`
+// on 09-14, and the content key missed it — one duplicate row, found by the first scheduled run.
+// Any Markdown link into the export's media folder is an attachment, not words.
+const MEDIA_LINK = /\[[^\]]*\]\((?:[^)]*\/)?media\/[^)]*\)/g;
 
 export function normalizeWechatText(text: string | null | undefined): string {
-  return String(text ?? "").replace(IMAGE_REFERENCE, "").split("\\").join("").replace(IMAGE_REFERENCE, "").replace(STORED_MEDIA_PLACEHOLDER, "").replace(/\s+/g, "").slice(0, 200);
+  return String(text ?? "")
+    .replace(IMAGE_REFERENCE, "").replace(MEDIA_LINK, "")
+    .split("\\").join("")
+    .replace(IMAGE_REFERENCE, "").replace(MEDIA_LINK, "").replace(STORED_MEDIA_PLACEHOLDER, "")
+    .replace(/\s+/g, "").slice(0, 200);
 }
 
 export function wechatContentKey(sentAt: string | Date, text: string | null | undefined): string {

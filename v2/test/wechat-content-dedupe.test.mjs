@@ -20,6 +20,14 @@ test("an archived row's [media] placeholder matches the transcript's image refer
   assert.equal(wechatContentKey(new Date("2026-09-14T00:45:05.000Z"), "看\n[media]\n"), wechatContentKey("2026-09-14T08:45:05+08:00", "看\n![](media/images/a.jpg)\n"));
 });
 
+test("an attachment re-rendered as a plain media link still matches its stored [media] row", () => {
+  const stored = wechatContentKey(new Date("2026-09-13T04:33:41.000Z"), "\n[media]\n");
+  assert.equal(stored, wechatContentKey("2026-09-13T12:33:41+08:00", "\n[视频文件](media/videos/20260913_123341_1.mp4)\n"));
+  assert.equal(stored, wechatContentKey("2026-09-13T12:33:41+08:00", "[视频](texts/conv/media/videos/a\\_b.mp4)"));
+  // an ordinary link someone sent is still words
+  assert.notEqual(stored, wechatContentKey("2026-09-13T12:33:41+08:00", "[攻略](https://example.com/guide)"));
+});
+
 test("a different second or different text is a different key", () => {
   assert.notEqual(wechatContentKey("2026-09-14T08:45:05+08:00", "a"), wechatContentKey("2026-09-14T08:45:06+08:00", "a"));
   assert.notEqual(wechatContentKey("2026-09-14T08:45:05+08:00", "a"), wechatContentKey("2026-09-14T08:45:05+08:00", "b"));
