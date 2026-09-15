@@ -56,19 +56,20 @@
 .home-today time { color: inherit; font-weight: 400; }
 /* 题签：这一页唯一的主标题。最多两行——超出的部分不改写事实，用省略号收住，
    完整标题仍然在「读读这一天」后面的事件页里（版式卡一·3）。
-   2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT：降成画册题签——字号约为照片旁的一行说明、常规字重、
-   宋体，先看照片、后读题签。宋体只用系统自带的（不再下一套中文字体），没有宋体的设备回到 serif。 */
+   2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT 曾降成画册题签（18–21px、常规字重），宽屏上读起来像
+   加载出了问题。2026-09-15 PAGE-0915-HOME-BALANCE 恢复上一版有分量的题签：clamp(30px, 2.5vw,
+   36px)、约 500 字重，宋体维持不变（先看照片、后读题签这条没变，只是字重回来了）。 */
 .home-title {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  margin: 0 0 10px;
+  margin: 0 0 14px;
   font-family: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif;
-  font-size: clamp(18px, 1.5vw, 21px);
-  font-weight: 400;
-  line-height: 1.7;
-  letter-spacing: .04em;
+  font-size: clamp(30px, 2.5vw, 36px);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0;
 }
 .home-read {
   display: inline-flex;
@@ -236,11 +237,20 @@
   line-height: 1.95;
 }
 
-/* ── 桌面两栏（2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT）──────────────────────
+/* ── 桌面两栏（2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT，2026-09-15 PAGE-0915-HOME-BALANCE 调整聚合方式）
    版心和顶部导航同宽（min(1400px, 100% - 64px)），照片右缘贴着导航右缘。左栏约 30%，照片栏约 67%。
-   首屏看全：照片高度不超过「视口 - 导航 72 - 上下留白 - 照片说明行 54」，按原图比例缩，一个像素不裁；
-   竖照因此变窄，靠右摆，照片说明跟着照片宽度走。（这一条替掉 e66c4dd 的「宽度优先、竖照往下长」。）
-   左栏是一个 flex 列：日期 + 题签 + 读读这一天 贴着照片顶，提醒贴着照片底，中间留白。 */
+
+   2026-09-15 之前：左栏用 `justify-content: space-between` 把「日期+题签+入口」推到顶、「这几天的
+   事」推到底对齐照片说明行，两块散在左栏的上下两个角落；竖照又按视口高度限高，宽屏上看起来像一堵
+   接近通高的墙。用户判断：目标是「聚集与平衡」——左栏四项应该是同一个视觉块，整体跟照片垂直居中；
+   竖照应该像挂在墙上的画，四周有呼吸感，不是墙本身。
+
+   现在：`.home-aside` 改成 `justify-content: center` + `gap`，日期/题签/入口和便签变成一个连续的
+   块，中间留白由 gap 给（不再是「贴顶」和「贴底对齐说明行」两条分开的规则），整块在照片的高度里
+   居中；`--home-caption-h` 因此不再用来做 padding-bottom，只留给 `.home-caption` 自己算高度。
+   竖照（含接近方形的照片）限高约 75dvh、给了像素上限，横照不受这条限制，仍按列宽自然出高——方向
+   由 components/home-lead.tsx 算好写成 `.home-figure--portrait/landscape/square` 类名，CSS 选不出
+   一张 <img> 自己的长宽比。 */
 @media (min-width: 900px) {
   .home-v2 { --home-caption-h: 54px; }
   .home-sheet {
@@ -260,10 +270,9 @@
     grid-row: 1;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: center;
+    gap: clamp(56px, 6vw, 72px);
     min-width: 0;
-    /* 照片说明那一行不算照片：提醒的底边对齐照片的底边，不对齐说明行。 */
-    padding-bottom: var(--home-caption-h);
   }
   .home-figure {
     grid-column: 2;
@@ -275,11 +284,16 @@
   .home-photo img {
     width: auto;
     max-width: 100%;
-    max-height: max(420px, calc(100vh - 72px - 60px - var(--home-caption-h)));
-    max-height: max(420px, calc(100dvh - 72px - 60px - var(--home-caption-h)));
+  }
+  /* 竖照与近方形照片：约 75dvh 限高，给了 420px 的地板和 780px 的天花板，原比例不裁不拉伸。
+     横照（.home-figure--landscape）不套这条，继续用列宽撑满——列宽本身已经够窄，横照的自然高度
+     很少会超过这个上限，不用另设规则。 */
+  .home-figure--portrait .home-photo img,
+  .home-figure--square .home-photo img {
+    max-height: clamp(420px, 75dvh, 780px);
   }
   .home-caption { min-height: var(--home-caption-h); padding: 6px 4px 0; }
-  .home-notes { margin-top: 28px; }
+  .home-notes { margin-top: 0; }
 }
 
 /* 窄屏：单列，左右留白 20px（.home-sheet 的 100% - 40px）。顺序照片 → 日期 → 题签 → 提醒，

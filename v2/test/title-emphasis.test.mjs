@@ -2,6 +2,7 @@
 // 2026-09-14 用户反馈：着色不该只有 cold / hot 那一篇；点首页照片应该进入这张照片那一天的故事，不是放大。
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 globalThis.React ??= React;
@@ -82,4 +83,30 @@ test("首页便签的标签说清这块是什么：「这几天的提醒事项�
 test("首页题签按规则局部着色，其余文字保持原样", () => {
   const html = render({ slides: [slide("event-v2-e98e09bddcec2801bcb726d0261d7d3d", "小年也扎了个小辫子", "wechat-media:def")], today: "2026-09-14" });
   assert.match(html, /<h1 class="home-title"><span>小年也扎了个<\/span><span class="home-emphasis home-emphasis--sage">小辫子<\/span><\/h1>/);
+});
+
+// PAGE-0915-HOME-BALANCE：CSS 选不出一张 <img> 自己的长宽比，桌面竖照限高、横照不限高这条只能靠
+// 组件算好方向、写成类名。这里钉住三种方向都标对，且不影响照片链接本身。
+test("首页主照片按方向标 home-figure--portrait/landscape/square，供桌面版式挑竖照限高", () => {
+  const portrait = render({ slides: [{ ...slide("event-v2-11f294e5906320de95580078c404cb59", "竖照那天", "wechat-media:tall"), photo: { ...slide("e", "t", "m").photo, media: { id: "wechat-media:tall", src: "/api/media/tall?variant=web", width: 1200, height: 1600, alt: "竖照", type: "photo" } } }], today: "2026-09-14" });
+  assert.match(portrait, /<figure class="home-figure home-figure--portrait">/);
+
+  const landscape = render({ slides: [slide("event-v2-21318c0b4837bca17f39fc37bb092602", "横照那天", "wechat-media:wide")], today: "2026-09-14" });
+  assert.match(landscape, /<figure class="home-figure home-figure--landscape">/);
+
+  const square = render({ slides: [{ ...slide("event-v2-4ee118293a728414a49b8c629a57b5f3", "方照那天", "wechat-media:sq"), photo: { ...slide("e", "t", "m").photo, media: { id: "wechat-media:sq", src: "/api/media/sq?variant=web", width: 1200, height: 1200, alt: "方照", type: "photo" } } }], today: "2026-09-14" });
+  assert.match(square, /<figure class="home-figure home-figure--square">/);
+});
+
+test("app/home.css：桌面竖照/方照按约 75dvh 限高（带地板与天花板），横照不套这条、左栏整体居中而不是上下分推", () => {
+  const css = fs.readFileSync(new URL("../app/home.css", import.meta.url), "utf8");
+  const desktop = css.slice(css.indexOf("@media (min-width: 900px)"));
+  const heightRule = desktop.match(/\.home-figure--portrait \.home-photo img,\s*\n\s*\.home-figure--square \.home-photo img \{([^}]*)\}/);
+  assert.ok(heightRule, "找不到竖照/方照的限高规则");
+  assert.match(heightRule[1], /max-height:\s*clamp\(420px,\s*75dvh,\s*780px\)/);
+  assert.doesNotMatch(desktop, /\.home-figure--landscape[^,{]*\{[^}]*max-height/, "横照不应该被单独限高");
+  const asideRule = desktop.match(/\.home-aside \{([^}]*)\}/)[1];
+  assert.match(asideRule, /justify-content:\s*center/);
+  assert.doesNotMatch(asideRule, /space-between/);
+  assert.match(asideRule, /gap:\s*clamp\(56px,\s*6vw,\s*72px\)/);
 });

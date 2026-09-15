@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { GalleryPhoto } from "@/components/photo-viewer";
 import { titleEmphasis } from "@/lib/title-emphasis";
+import { orientationOf } from "@/lib/media/presentation";
 
 // 首页的主体：一张照片 + 它所属的那一段真实生活。2026-09-13 的新版首页只有这一组。
 //
@@ -98,8 +99,13 @@ export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLead
 
   // 2026-09-13 改版：照片是第一眼的东西，占右侧约三分之二；左边只留题签。
   // DOM 顺序就是手机上的阅读顺序（照片 → 日期 → 题签/入口 → 便签）；桌面靠 grid 把照片放到右栏。
+  // PAGE-0915-HOME-BALANCE：竖图（含近方形）在桌面单独限高，横图不受这条限制，仍铺满右栏宽度——
+  // CSS 选不出一张 <img> 自己的长宽比，所以这里算一次方向，交给 app/home.css 的
+  // `.home-figure--portrait` / `.home-figure--square` 选择器去决定要不要限高。
+  const orientation = photo ? orientationOf(photo.media) : undefined;
+
   return <>
-    {photo ? <figure className="home-figure">
+    {photo ? <figure className={`home-figure${orientation ? ` home-figure--${orientation}` : ""}`}>
       {/* 一个真正的链接：Enter 可达、中键/长按可在新标签打开、返回键回到首页。可读名称说清去处，
           不只是「照片」两个字——屏幕阅读器读到的是「读这张照片的那一天：<标题>」。 */}
       <Link className="home-photo" href={slide.story.href} aria-label={`读这张照片的那一天：${slide.story.title}`}>
