@@ -75,11 +75,15 @@ export default async function AboutPage() {
       </div> : null}
     </section> : null}
 
-    {health.length > 0 ? <section className="about-block" aria-labelledby="health-title">
+    {/* PAGE-0915-FULL-REMEDIATION-R1 C1：健康记录改成默认收起的次级折叠区，不再是跟「量过的身高
+        体重」同级、一整块摆出来的一级内容——这一页先答"张年是谁、现在是怎样的"，健康记录是想找
+        才会点开看的档案。折叠不改变这一区块本身的任何规则（不印状态、记录于而非发生于……）。 */}
+    {health.length > 0 ? <details className="about-block about-health-fold">
       {/* 健康记录, not 家人关注的健康问题: twelve of these rows are a vaccination, a checkup and a
           few days of a runny nose. Calling the whole block 问题 makes an ordinary record read as a
-          worry, and the heading is the one line on this page nobody can skip. */}
-      <h2 id="health-title" className="section-mark">健康记录</h2>
+          worry, and the heading is the one line on this page nobody can skip. `<summary>` is itself
+          the accessible name for the disclosure — no separate aria-labelledby needed. */}
+      <summary className="section-mark">健康记录</summary>
       {/* One group per issue as it was recorded, and inside it every record with its own day. The
           page states no current status and no recovery: a record that stopped arriving is not a
           problem that ended (lib/about-view.ts).
@@ -107,7 +111,7 @@ export default async function AboutPage() {
           {line.eventHref ? <p className="note-meta"><Link className="text-link" href={line.eventHref}>看那一天</Link></p> : null}
         </li>)}</ol>
       </article>)}
-    </section> : null}
+    </details> : null}
 
     {learned.length > 0 ? <section className="about-block" aria-labelledby="learned-title">
       <h2 id="learned-title" className="section-mark">学会了什么</h2>

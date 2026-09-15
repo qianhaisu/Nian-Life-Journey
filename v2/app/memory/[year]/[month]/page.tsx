@@ -14,7 +14,8 @@ import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { findMonth } from "@/lib/memory-chapters";
 import { buildMonthComposition, chronicleAlbumDays, dayAlbumDays } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
-import { formatMonth } from "@/lib/time-signature";
+import { formatMonth, monthAgeQualifier } from "@/lib/time-signature";
+import { productToday } from "@/lib/time-truth";
 
 export const revalidate = 300;
 
@@ -78,7 +79,8 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       <Link className="back-link" href={`/memory/${year}`}>← {year} 年</Link>
       <span className="section-mark">月份章节</span>
       <h1 className="serif">{chapter.label}</h1>
-      {chapter.ageLabel ? <p className="chapter-age">当时 {chapter.ageLabel}</p> : null}
+      {/* B1：当前月读「现在」，翻回去的历史月份读「当时」（monthAgeQualifier，lib/time-signature.ts）。 */}
+      {chapter.ageLabel ? <p className="chapter-age">{monthAgeQualifier(month, productToday())} {chapter.ageLabel}</p> : null}
       {summary?.summary ? <SnapshotSummary text={summary.summary} className="chapter-summary serif" /> : null}
       {!summary && composition.narration ? <p className="chapter-narration serif">{composition.narration}</p> : null}
       {/* No standfirst any more: 「这个月记下 N 天。」 was a count standing in for the month (原则三,

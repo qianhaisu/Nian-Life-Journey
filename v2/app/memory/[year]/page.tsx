@@ -8,6 +8,8 @@ import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { buildMemoryIndex, buildYearView } from "@/lib/memory-index";
+import { monthAgeQualifier } from "@/lib/time-signature";
+import { productToday } from "@/lib/time-truth";
 
 export const revalidate = 300;
 
@@ -41,6 +43,7 @@ export default async function YearPage({ params }: { params: Promise<{ year: str
 
   const view = buildYearView(chapter, undefined, privilege);
   const { nav } = buildMemoryIndex(chapters);
+  const today = productToday();
 
   return <div className="year-page reading-wrap">
     <header className="chapter-masthead">
@@ -52,7 +55,8 @@ export default async function YearPage({ params }: { params: Promise<{ year: str
     {view.months.map((month) => <section className="year-month" key={month.chapter.month} aria-labelledby={`month-${month.chapter.month}`}>
       <header className="month-anchor">
         <h2 id={`month-${month.chapter.month}`} className="serif"><Link href={month.href}>{month.chapter.shortLabel}</Link></h2>
-        {month.chapter.ageLabel ? <p>当时 {month.chapter.ageLabel}</p> : null}
+        {/* B1：当前月读「现在」，历史月份读「当时」。 */}
+        {month.chapter.ageLabel ? <p>{monthAgeQualifier(month.chapter.month, today)} {month.chapter.ageLabel}</p> : null}
       </header>
       {month.preview.length > 0 ? <PhotoStrip photos={month.preview} /> : null}
       {month.titles.length > 0 ? <ul className="memory-lines">{month.titles.map((memory) => <EditorialMemory memory={memory} size="line" key={memory.id} />)}</ul> : null}

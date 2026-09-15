@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GalleryPhoto } from "@/components/photo-viewer";
 import { titleEmphasis } from "@/lib/title-emphasis";
 import { orientationOf } from "@/lib/media/presentation";
@@ -37,6 +37,13 @@ export type HomeLeadStory = {
   title: string;
   // 已审核的摘录原文；页面不生成、不改写，只负责把其中的引语标出来。
   excerpt?: string;
+  // PAGE-0915-FULL-REMEDIATION-R1 A1：这段故事自己的日子和当时年龄——不是今天，是它发生的那天。
+  // 题签正下方要单独出这一行，跟页面顶部「今天 · 现在几岁」（clockLine）分开写，不能让读的人把
+  // 一段旧故事的标题看成今天发生的事。有照片的 slide 和纯文字的 slide 都有（lib/home-feed.ts 的
+  // HomeStoryRef 本来就带这三个字段，之前页面只往下传了 eventId/href/title/excerpt）。
+  day: string;
+  dateLabel: string;
+  ageLabel?: string;
 };
 
 export type HomeLeadPhoto = {
@@ -93,9 +100,22 @@ export function withQuotes(text: string, keyPrefix: string) {
 
 export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLeadSlide[]; clockLine?: string; today: string; notes?: React.ReactNode }) {
   const [index, setIndex] = useState(0);
-  if (slides.length === 0) return null;
-  const slide = slides[Math.min(index, slides.length - 1)];
+  // PAGE-0915-FULL-REMEDIATION-R1 A3：换到下一张之前，先假定它还没画出来。`<Image>` 复用同一个
+  // DOM 节点换 src 时，浏览器在新图下载完之前常常继续显示上一张的像素（不是空白，是错的那张），
+  // 这里不去猜网络快慢，只管「这一张真的画出来了没有」——img 自己的 onLoad 说了算。
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  // PAGE-0915-FULL-REMEDIATION-R2 修复：Hooks 顺序不能随 slides 是否为空而改变——之前
+  // `if (slides.length === 0) return null;` 插在 useState 和 useEffect 之间，slides 从空变
+  // 非空（或反过来）时同一个组件实例调用的 Hook 数量会不一样，违反 Hooks 规则。现在所有 Hook
+  // 都在任何提前返回之前调用；`slide` 允许是 undefined，effect 内部自己判断，早退判断挪到最后。
+  const slide = slides.length > 0 ? slides[Math.min(index, slides.length - 1)] : undefined;
+  useEffect(() => {
+    if (slide && imgRef.current?.complete) setLoadedKey(slide.key);
+  }, [slide?.key]);
+  if (!slide) return null;
   const photo = slide.photo;
+  const photoLoaded = photo ? loadedKey === slide.key : false;
 
   // 2026-09-13 改版：照片是第一眼的东西，占右侧约三分之二；左边只留题签。
   // DOM 顺序就是手机上的阅读顺序（照片 → 日期 → 题签/入口 → 便签）；桌面靠 grid 把照片放到右栏。
@@ -111,7 +131,14 @@ export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLead
       <Link className="home-photo" href={slide.story.href} aria-label={`读这张照片的那一天：${slide.story.title}`}>
         {/* unoptimized：这些派生图在入库时已经是定宽 webp，Next 的优化器只会重编码一遍，
             并且把缓存键和 /api/media 分开（components/photo.tsx 里同样的理由）。 */}
+        {/* key=slide.key：换图时整个 <img> 重新挂载，而不是复用旧节点改 src。同一个节点改 src
+            在新图下载完之前会继续显示上一张的像素（尺寸、比例都是上一张的，不是空白，是错的
+            那张），换成竖图/横图时尤其明显。重新挂载 + onLoad 淡入，保证画面要么是稳定的占位
+            背景（.home-photo 的 background），要么就是这一张真正加载完的照片，不会有中间那种
+            "看着是上一张、实际已经换了故事"的状态。 */}
         <Image
+          key={slide.key}
+          ref={imgRef}
           src={photo.media.src}
           alt={photo.media.alt}
           width={photo.media.width || 4}
@@ -119,6 +146,8 @@ export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLead
           sizes="(max-width: 760px) 96vw, 816px"
           priority
           unoptimized
+          style={{ opacity: photoLoaded ? 1 : 0 }}
+          onLoad={() => setLoadedKey(slide.key)}
         />
       </Link>
       <figcaption className="home-caption">
@@ -144,6 +173,12 @@ export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLead
         {clockLine ? <p className="home-today"><time dateTime={today}>{clockLine}</time></p> : null}
         {/* 题签 = 那段真实生活自己的标题，最多两行；这一版首页不再渲染正文摘录。 */}
         <h1 className="home-title">{withEmphasis(slide.story.title, `title-${slide.key}`)}</h1>
+        {/* A1：题签自己的日子，紧跟在题签下面，和上面「今天 · 现在几岁」分开一行、分开着色——
+            读的人一眼能分清哪句是今天、哪句是这段故事发生的那天。 */}
+        <p className="home-story-when">
+          <time dateTime={slide.story.day}>{slide.story.dateLabel}</time>
+          {slide.story.ageLabel ? <span> · 当时 {slide.story.ageLabel}</span> : null}
+        </p>
         <Link className="home-read" href={slide.story.href}>读读这一天 <span aria-hidden="true">↗</span></Link>
       </div>
       {notes}

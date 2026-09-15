@@ -71,6 +71,14 @@
   line-height: 1.35;
   letter-spacing: 0;
 }
+/* PAGE-0915-FULL-REMEDIATION-R1 A1：题签自己的日子。跟上面 .home-today（今天/现在几岁）刻意用
+   不一样的字号和位置——挨着题签、不挨着「今天」，读的人不会把这段旧故事看成今天发生的事。 */
+.home-story-when {
+  margin: 0 0 16px;
+  color: var(--home-muted);
+  font-size: 13px;
+}
+.home-story-when time { color: inherit; font-weight: 400; }
 .home-read {
   display: inline-flex;
   align-items: center;
@@ -104,6 +112,11 @@
   display: block;
   width: 100%;
   height: auto;
+  /* PAGE-0915-FULL-REMEDIATION-R1 A3：换图时 img 重新挂载（home-lead.tsx 的 key），这条过渡负责
+     让它从「还没画出来」淡入到「画出来了」，而不是直接从 0 跳到 1 那种一闪。背景色
+     （.home-photo 的 --paper-dark）本身就是稳定的低成本占位，加载慢的时候看到的是这块颜色，
+     不是空白，也不会一直停在旧照片上。 */
+  transition: opacity 180ms ease-out;
 }
 .home-caption {
   display: flex;
@@ -170,6 +183,9 @@
 .home-note > summary::-webkit-details-marker { display: none; }
 .home-note > summary:hover { color: var(--home-sage); }
 .home-note > summary:focus-visible { outline: 2px solid var(--home-sage); outline-offset: 3px; }
+/* PAGE-0915-FULL-REMEDIATION-R1 A2：没有可展开内容的一条，长得跟上面一模一样，只是没有可点的
+   "＋"、没有 hover 变色——它是一句话，不是一个（假装能展开的）控件。 */
+.home-note-plain { margin: 0; min-height: 44px; padding: 8px 0; color: var(--home-ink); font-size: 13.5px; line-height: 1.65; }
 .home-note-when { color: var(--home-muted); }
 .home-note-when time { color: inherit; font-weight: 400; }
 .home-note-status { color: #977051; }
@@ -236,6 +252,22 @@
   font-size: 15px;
   line-height: 1.95;
 }
+
+/* PAGE-0915-FULL-REMEDIATION-R1 D3：回忆浮现——一句安静的话，跟 .home-notes 平级但不挤进
+   home-spread 的居中计算，也不是又一块卡片。 */
+.home-recall {
+  max-width: 640px;
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  color: var(--home-muted);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.home-recall-label { color: var(--home-ink); }
+.home-recall a { color: var(--home-sage); }
+.home-recall a:hover { color: #5d6e53; }
+.home-recall-when time { color: inherit; font-weight: 400; }
 
 /* ── 桌面两栏（2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT，2026-09-15 PAGE-0915-HOME-BALANCE 调整聚合方式）
    版心和顶部导航同宽（min(1400px, 100% - 64px)），照片右缘贴着导航右缘。左栏约 30%，照片栏约 67%。

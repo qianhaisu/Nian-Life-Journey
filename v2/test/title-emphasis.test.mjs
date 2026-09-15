@@ -62,7 +62,7 @@ test("规则表本身保持小词组：中文 ≤4 字或一个英文词，颜�
 const render = (props) => renderToStaticMarkup(React.createElement(HomeLead, props));
 const slide = (eventId, title, mediaId) => ({
   key: `${eventId}|${mediaId}`,
-  story: { eventId, href: `/events/${eventId}`, title },
+  story: { eventId, href: `/events/${eventId}`, title, day: "2025-12-18", dateLabel: "2025 年 12 月 18 日", ageLabel: "11 个月" },
   photo: { media: { id: mediaId, src: `/api/media/${mediaId}?variant=web`, width: 1600, height: 1200, alt: "那天的照片", type: "photo" }, day: "2026-08-19", dayLabel: "2026 年 8 月 19 日", ageLabel: "1 岁 7 个月" },
 });
 
@@ -96,6 +96,60 @@ test("首页主照片按方向标 home-figure--portrait/landscape/square，供�
 
   const square = render({ slides: [{ ...slide("event-v2-4ee118293a728414a49b8c629a57b5f3", "方照那天", "wechat-media:sq"), photo: { ...slide("e", "t", "m").photo, media: { id: "wechat-media:sq", src: "/api/media/sq?variant=web", width: 1200, height: 1200, alt: "方照", type: "photo" } } }], today: "2026-09-14" });
   assert.match(square, /<figure class="home-figure home-figure--square">/);
+});
+
+// PAGE-0915-FULL-REMEDIATION-R1 A1：题签旁要有故事自己的日子，跟页面顶部「今天/现在几岁」
+// （clockLine）分开一行——不能让一段旧故事的标题看起来像今天发生的。
+test("题签下面单独一行故事自己的日期与当时年龄，和顶部的「今天」分开", () => {
+  const html = render({ slides: [slide("event-v2-11f294e5906320de95580078c404cb59", "体重接近23斤了", "wechat-media:x")], clockLine: "2026 年 9 月 15 日 · 现在 1 岁 8 个月", today: "2026-09-15" });
+  assert.match(html, /<p class="home-today"><time dateTime="2026-09-15">2026 年 9 月 15 日 · 现在 1 岁 8 个月<\/time><\/p>/);
+  assert.match(html, /<p class="home-story-when"><time dateTime="2025-12-18">2025 年 12 月 18 日<\/time><span> · 当时 11 个月<\/span><\/p>/);
+});
+
+test("没有合格照片的纯文字 slide，题签下面照样有故事自己的日期——不是只有配了图才有", () => {
+  const html = renderToStaticMarkup(React.createElement(HomeLead, {
+    slides: [{ key: "event-v2-9be207929e855a69c91a1cd93bc10d64", story: { eventId: "event-v2-9be207929e855a69c91a1cd93bc10d64", href: "/events/event-v2-9be207929e855a69c91a1cd93bc10d64", title: "只有文字的一段", day: "2026-03-02", dateLabel: "2026 年 3 月 2 日", ageLabel: "1 岁 2 个月" } }],
+    today: "2026-09-15",
+  }));
+  assert.doesNotMatch(html, /home-figure/);
+  assert.match(html, /<p class="home-story-when"><time dateTime="2026-03-02">2026 年 3 月 2 日<\/time><span> · 当时 1 岁 2 个月<\/span><\/p>/);
+});
+
+// PAGE-0915-FULL-REMEDIATION-R1 A3：换图重新挂载 <img>（key=slide.key），首帧透明、onLoad 后淡入，
+// 不会出现"看着还是上一张、其实已经换了故事"的中间状态。
+test("主照片按 slide.key 重新挂载，首帧不透明度为 0，等 onLoad 才淡入", () => {
+  const html = render({ slides: [slide("event-v2-e98e09bddcec2801bcb726d0261d7d3d", "小年也扎了个小辫子", "wechat-media:y")], today: "2026-09-14" });
+  assert.match(html, /style="[^"]*opacity:0"/);
+});
+
+// PAGE-0915-FULL-REMEDIATION-R2：Codex 审核发现 `if (slides.length === 0) return null;` 原来插在
+// 两个 useState 和 useEffect 之间——slides 在空和非空之间变化时，同一个组件实例调用的 Hook 数量
+// 会不一样，违反 Hooks 规则。修好之后所有 Hook 都在提前返回之前，早退挪到最后。
+// react-dom/server 的单次渲染看不出"同一实例换 props 后 Hook 数量变没变"（那需要真的挂载后再换
+// props 重渲染，这个仓库的测试基础设施里没有 jsdom/客户端渲染环境）；这里能验证的是两条分支各自
+// 独立渲染都安全（不抛错、行为对），并且直接核对源码里 Hook 调用确实都在早退判断之前。
+test("空 slides：安全渲染成空字符串，不抛错", () => {
+  assert.equal(render({ slides: [], today: "2026-09-15" }), "");
+});
+
+test("非空 slides：安全渲染出主体内容，不抛错", () => {
+  const html = render({ slides: [slide("event-v2-11f294e5906320de95580078c404cb59", "有内容的一段", "wechat-media:z")], today: "2026-09-15" });
+  assert.match(html, /home-figure/);
+  assert.match(html, /有内容的一段/);
+});
+
+test("home-lead.tsx：三个 Hook（useState ×2、useEffect）都在 `if (!slide) return null;` 之前，顺序和数量不随 slides 是否为空而变", () => {
+  const src = fs.readFileSync(new URL("../components/home-lead.tsx", import.meta.url), "utf8");
+  const body = src.slice(src.indexOf("export function HomeLead("));
+  const earlyReturnIdx = body.indexOf("if (!slide) return null;");
+  assert.ok(earlyReturnIdx > 0, "找不到早退判断，或者判断条件变了");
+  const before = body.slice(0, earlyReturnIdx);
+  // useState 第二次调用带了泛型参数（useState<string | null>(...)），匹配 "useState(" 或
+  // "useState<" 两种写法。
+  assert.equal((before.match(/useState[(<]/g) ?? []).length, 2, "两个 useState 都该在早退之前");
+  assert.equal((before.match(/useEffect\(/g) ?? []).length, 1, "useEffect 也该在早退之前");
+  const firstHookIdx = body.search(/useState[(<]/);
+  assert.doesNotMatch(body.slice(0, firstHookIdx), /return/, "第一个 Hook 之前不该有提前返回");
 });
 
 test("app/home.css：桌面竖照/方照按约 75dvh 限高（带地板与天花板），横照不套这条、左栏整体居中而不是上下分推", () => {

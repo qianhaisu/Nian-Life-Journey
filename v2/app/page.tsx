@@ -1,7 +1,12 @@
+import Link from "next/link";
 import { HomeLead, type HomeLeadSlide } from "@/components/home-lead";
+import { HomeRecall } from "@/components/home-recall";
 import { HomeReminders, type HomeReminder as HomeReminderView, type HomeReminderSource } from "@/components/home-reminders";
 import { MODALITY_LABEL, SOURCE_KIND_LABEL, roleText, type SourceKind } from "@/components/upcoming-tasks";
 import { readHomeFeed, HOME_REMINDER_LABEL, type HomeFeed, type HomeReminder, type HomeReminderState } from "@/lib/home-feed";
+import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
+import { selectHomeRecall } from "@/lib/home-recall";
+import { HOME_QUIET_STATES } from "@/lib/home-reminder-display";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { formatDay, formatMonth } from "@/lib/time-signature";
 import "./home.css";
@@ -34,9 +39,11 @@ import "./home.css";
 export default async function HomePage() {
   // Never prerender this page from the build's mock store — see lib/render-on-demand.ts.
   await renderOnDemand();
-  // 读取笔数和今天的首页完全一样：一次记忆化的档案读 + 待办的三次小查询（+ 来源摘要的两次），
+  // 读取笔数和今天的首页基本一样：一次记忆化的档案读（下面显式拿一次、传给 readHomeFeed 复用，
+  // 「回忆浮现」用同一份 chapters，不再多读一次）+ 待办的三次小查询（+ 来源摘要的两次），
   // 没有新增整表查询、没有 getStore()/getOrganizerStore()（CLAUDE.md 渲染路径那条）。
-  const feed = await readHomeFeed();
+  const archive = await loadFamilyArchiveOnDemand();
+  const feed = await readHomeFeed({ archive });
   const { clock, lead, photoCandidates } = feed;
 
   // 「换张照片」的切换单位是 (故事, 照片) 对：候选自带自己的故事，所以换图必然连带换标题、
@@ -45,10 +52,14 @@ export default async function HomePage() {
   // 只有真正参与本期轮换的候选（当期那张，或带 cooldown 的池内候选）才成为可以翻到的照片。
   // 契约里还带着本期未生效、连拍被挡下的候选（带原因，供审计），它们不该出现在「换张照片」里。
   const rotating = photoCandidates.filter((candidate) => candidate.chosen || candidate.cooldown);
+  // A1：story 自己的日子/当时年龄跟着 eventId/href/title/excerpt 一起传下去——lib/home-feed.ts 的
+  // HomeStoryRef 本来就带这三个字段，之前这里没往下传，题签旁边就没有自己的日期可显示。
+  const storyOf = (story: { eventId: string; href: string; title: string; excerpt?: string; day: string; dateLabel: string; ageLabel?: string }) =>
+    ({ eventId: story.eventId, href: story.href, title: story.title, excerpt: story.excerpt, day: story.day, dateLabel: story.dateLabel, ageLabel: story.ageLabel });
   const slides: HomeLeadSlide[] = rotating.length > 0
     ? [...rotating].sort((a, b) => Number(b.chosen) - Number(a.chosen)).map((candidate) => ({
       key: candidate.key,
-      story: { eventId: candidate.story.eventId, href: candidate.story.href, title: candidate.story.title, excerpt: candidate.story.excerpt },
+      story: storyOf(candidate.story),
       photo: {
         media: candidate.photo.media,
         day: candidate.photo.day,
@@ -59,12 +70,16 @@ export default async function HomePage() {
     // 有故事但没有一张通过审核的配图（photoAbsence 说明是哪一种「没有」）：只留真实文字。
     // 不画空照片框、不借别的故事的照片，也不写一句「暂无照片」（§5.7、原则三）。
     : lead
-      ? [{ key: lead.story.eventId, story: { eventId: lead.story.eventId, href: lead.story.href, title: lead.story.title, excerpt: lead.story.excerpt } }]
+      ? [{ key: lead.story.eventId, story: storyOf(lead.story) }]
       : [];
 
   // 今天和今天几岁收成左栏的一行小字（版式卡一·4）：这一页只留一个主标题，就是题签。
   // 出生日期未知时不猜年龄，那一半直接不出现。
   const clockLine = clock.ageToday ? `${clock.todayLabel} · 现在 ${clock.ageToday}` : clock.todayLabel;
+
+  // D3：回忆浮现。跟首页正在讲的这段故事共用同一份 archive，不重复整表读；三档关系一个都不成立
+  // 就是 undefined，HomeRecall 什么都不画——不是"没找到就换一条随便的"。
+  const recall = selectHomeRecall(archive.chapters, clock.today, archive.birthDay, lead?.story.eventId);
 
   return <div className="home-v2">
     <div className="home-sheet">
@@ -83,6 +98,9 @@ export default async function HomePage() {
             <Reminders feed={feed} />
           </div>}
       </div>
+      {/* D3：一句安静的话，不是又一块卡片——跟首页原有的"一张照片、一句题签、一处提醒"平级，
+          不挤进 home-spread 的居中计算里（PAGE-0915-HOME-BALANCE 的左栏整体居中不受影响）。 */}
+      <HomeRecall recall={recall} />
     </div>
   </div>;
 }
@@ -120,7 +138,9 @@ function Reminders({ feed }: { feed: HomeFeed }) {
 }
 
 // 契约项 → 展示用的几行字。状态文案取 HOME_REMINDER_LABEL，页面不自拟；「要做的」是默认含义，
-// 不重复印在一条本来就摆在「近期提醒」下面的事项上。
+// 不重复印在一条本来就摆在「近期提醒」下面的事项上。HOME_QUIET_STATES 见 lib/home-reminder-display.ts
+// （单独放一个 lib 文件，因为这个文件顶部 import "./home.css"，直接从这里导出会让测试连带把一份
+// CSS 当 JS 解析）。
 function toReminderView(reminder: HomeReminder): HomeReminderView {
   const when = reminder.item.when;
   return {
@@ -128,7 +148,7 @@ function toReminderView(reminder: HomeReminder): HomeReminderView {
     title: reminder.title,
     whenText: reminder.deadlineLabel,
     whenDay: when.kind === "day" ? when.day : undefined,
-    statusLabel: reminder.state === "active" ? undefined : HOME_REMINDER_LABEL[reminder.state],
+    statusLabel: HOME_QUIET_STATES.has(reminder.state) ? undefined : HOME_REMINDER_LABEL[reminder.state],
     note: reminder.detail,
     sources: provenanceRows(reminder),
   };

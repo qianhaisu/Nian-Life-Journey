@@ -129,3 +129,11 @@ export function currentAge(birthDay: string | undefined, today: Date = new Date(
   const day = calendarDayOf(today.toISOString());
   return day ? ageOn(birthDay, day) : undefined;
 }
+
+// PAGE-0915-FULL-REMEDIATION-R1 B1：一个月份是不是"当前"这个月，只取决于它是不是今天所在的那个
+// 日历月——不是"数据里最新的月"，也不是"家人最后打开的月"。/memory/2026/09 这类当前月的年龄要读
+// 「现在」，翻回去的历史月份读「当时」；同一页里这两个词不能同时用来说同一件事（原来月份章节的
+// 页头无论翻到哪个月都写死「当时」，在当前月和首页的「现在」打了架）。
+export function monthAgeQualifier(month: string, today: string): "现在" | "当时" {
+  return month === today.slice(0, 7) ? "现在" : "当时";
+}
