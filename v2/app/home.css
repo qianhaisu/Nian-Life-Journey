@@ -122,7 +122,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  /* 2026-09-15 起照片下方不再印日期，只剩「换张照片」，仍靠右。 */
+  justify-content: flex-end;
   gap: 8px;
   padding: 10px 2px 0;
   color: var(--home-muted);

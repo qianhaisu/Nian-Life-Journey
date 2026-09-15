@@ -98,12 +98,18 @@ test("首页主照片按方向标 home-figure--portrait/landscape/square，供�
   assert.match(square, /<figure class="home-figure home-figure--square">/);
 });
 
-// PAGE-0915-FULL-REMEDIATION-R1 A1：题签旁要有故事自己的日子，跟页面顶部「今天/现在几岁」
-// （clockLine）分开一行——不能让一段旧故事的标题看起来像今天发生的。
-test("题签下面单独一行故事自己的日期与当时年龄，和顶部的「今天」分开", () => {
-  const html = render({ slides: [slide("event-v2-11f294e5906320de95580078c404cb59", "体重接近23斤了", "wechat-media:x")], clockLine: "2026 年 9 月 15 日 · 现在 1 岁 8 个月", today: "2026-09-15" });
-  assert.match(html, /<p class="home-today"><time dateTime="2026-09-15">2026 年 9 月 15 日 · 现在 1 岁 8 个月<\/time><\/p>/);
+// PAGE-0915-FULL-REMEDIATION-R1 A1：题签旁要有故事自己的日子。
+// 2026-09-15 用户：首页不再显示「今天 · 现在几岁」那一行，照片下方也不再重复印日期与当时年龄——
+// 日期年龄只在题签下面出现一次。
+test("首页只在题签下面显示一次故事自己的日期与当时年龄，没有今天那一行，照片下方不重复", () => {
+  const html = render({ slides: [slide("event-v2-11f294e5906320de95580078c404cb59", "体重接近23斤了", "wechat-media:x")] });
+  assert.doesNotMatch(html, /home-today|现在 /, "no today/current-age line");
   assert.match(html, /<p class="home-story-when"><time dateTime="2025-12-18">2025 年 12 月 18 日<\/time><span> · 当时 11 个月<\/span><\/p>/);
+  assert.equal((html.match(/当时 /g) ?? []).length, 1, "the date and age appear once");
+  assert.doesNotMatch(html, /<figcaption/, "a single slide has no caption row left");
+  const two = render({ slides: [slide("event-a", "第一段", "wechat-media:a"), slide("event-b", "第二段", "wechat-media:b")] });
+  assert.match(two, /<figcaption class="home-caption"><button class="home-swap"/);
+  assert.doesNotMatch(two.match(/<figcaption.*?<\/figcaption>/s)?.[0] ?? "", /<time|当时/, "the caption only swaps photos");
 });
 
 test("没有合格照片的纯文字 slide，题签下面照样有故事自己的日期——不是只有配了图才有", () => {

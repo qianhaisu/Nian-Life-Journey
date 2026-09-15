@@ -98,7 +98,7 @@ export function withQuotes(text: string, keyPrefix: string) {
   });
 }
 
-export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLeadSlide[]; clockLine?: string; today: string; notes?: React.ReactNode }) {
+export function HomeLead({ slides, notes }: { slides: HomeLeadSlide[]; notes?: React.ReactNode }) {
   const [index, setIndex] = useState(0);
   // PAGE-0915-FULL-REMEDIATION-R1 A3：换到下一张之前，先假定它还没画出来。`<Image>` 复用同一个
   // DOM 节点换 src 时，浏览器在新图下载完之前常常继续显示上一张的像素（不是空白，是错的那张），
@@ -150,18 +150,16 @@ export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLead
           onLoad={() => setLoadedKey(slide.key)}
         />
       </Link>
-      <figcaption className="home-caption">
-        <span>
-          <time dateTime={photo.day}>{photo.dayLabel}</time>
-          {photo.ageLabel ? <span className="home-caption-age"> · 当时 {photo.ageLabel}</span> : null}
-        </span>
-        {slides.length > 1 ? <button
+      {/* 2026-09-15 用户：照片下方不再重复印日期和当时年龄——同一对日期年龄紧跟在题签下面
+          （.home-story-when）只出现一次。这里只留「换张照片」。 */}
+      {slides.length > 1 ? <figcaption className="home-caption">
+        <button
           className="home-swap"
           type="button"
           aria-label="换看另一张照片"
           onClick={() => setIndex((current) => (current + 1) % slides.length)}
-        >换张照片 <span aria-hidden="true">↻</span></button> : null}
-      </figcaption>
+        >换张照片 <span aria-hidden="true">↻</span></button>
+      </figcaption> : null}
     </figure> : null}
 
     {/* 左栏是**一个** grid 单元。分成两个单元试过：右边那张 1088px 高的竖照跨两行时，会把
@@ -169,8 +167,6 @@ export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLead
         便签由服务端组件渲染，作为 notes 传进来——它不需要变成客户端组件。 */}
     <div className="home-aside">
       <div className="home-headline">
-        {/* 今天和今天几岁收成一行小字：这一页只留一个主标题，就是下面那句题签。 */}
-        {clockLine ? <p className="home-today"><time dateTime={today}>{clockLine}</time></p> : null}
         {/* 题签 = 那段真实生活自己的标题，最多两行；这一版首页不再渲染正文摘录。 */}
         <h1 className="home-title">{withEmphasis(slide.story.title, `title-${slide.key}`)}</h1>
         {/* A1：题签自己的日子，紧跟在题签下面，和上面「今天 · 现在几岁」分开一行、分开着色——

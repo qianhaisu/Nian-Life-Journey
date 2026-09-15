@@ -19,7 +19,7 @@ import "./home.css";
 
 // 首页（2026-09-13 定稿）。一屏回答一个问题：最近怎么样，张年。
 //
-// 这一版把首页收敛成四件事——今天与今天的年龄 → 一张照片和它所属的那一段真实生活 →
+// 这一版把首页收敛成几件事（2026-09-15 起不再显示今天与今天的年龄）——一张照片和它所属的那一段真实生活 →
 // 至多一条不重复的近况 → 默认一条、最多两条还有效的提醒。它替掉的是同一个页面上并排的七个模块
 // （近况概览、上月回顾、完整待办清单、抽到的一天、同日其他条目、最近照片组、忽然想起、底部月份
 // 入口），那些内容一条都没有删，只是各回各的页面：月份与全部记忆在顶部的「记忆」里，
@@ -73,9 +73,8 @@ export default async function HomePage() {
       ? [{ key: lead.story.eventId, story: storyOf(lead.story) }]
       : [];
 
-  // 今天和今天几岁收成左栏的一行小字（版式卡一·4）：这一页只留一个主标题，就是题签。
-  // 出生日期未知时不猜年龄，那一半直接不出现。
-  const clockLine = clock.ageToday ? `${clock.todayLabel} · 现在 ${clock.ageToday}` : clock.todayLabel;
+  // 2026-09-15 用户：首页不再显示「今天的日期 · 现在几岁」这一行。日期和年龄只跟着内容走——
+  // 题签下面那段故事自己的日子与当时年龄照常显示。`clock.today` 仍用于回忆浮现的选择。
 
   // D3：回忆浮现。跟首页正在讲的这段故事共用同一份 archive，不重复整表读；三档关系一个都不成立
   // 就是 undefined，HomeRecall 什么都不画——不是"没找到就换一条随便的"。
@@ -89,10 +88,9 @@ export default async function HomePage() {
             对应记录在记忆页和事件页照常可达，只是不占首页这块地方。
             便签作为左栏的一部分传给 HomeLead：左栏必须是一个 grid 单元，否则高照片会把它撑散。 */}
         {slides.length > 0
-          ? <HomeLead slides={slides} clockLine={clockLine} today={clock.today} notes={<Reminders feed={feed} />} />
+          ? <HomeLead slides={slides} notes={<Reminders feed={feed} />} />
           : <div className="home-aside">
             <div className="home-headline">
-              <p className="home-today"><time dateTime={clock.today}>{clockLine}</time></p>
               <p className="home-nothing">{feed.leadAbsence?.kind === "empty_material" ? "还没有一段整理好的记忆可以放在这里。" : "档案还是空的。等时间再走一会儿。"}</p>
             </div>
             <Reminders feed={feed} />
