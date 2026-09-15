@@ -9743,3 +9743,19 @@ C 画面证据只做了 50/520：其余约 470 张可做，只读、不写库。
 **没做到什么 / 最大的已知 blocker**：无。视频 preview Range 冒烟用的是占位 id、404，属于未再单独核实的次要项，不影响本轮改动范围（未碰视频代码）
 
 **下一件事**：等待新指令；回滚点 `nianlife-diag-web-pre-a56fee4-20260915-082356`（镜像 47d6734）已保留
+
+## 2026-09-15 22:5x · nianlife.cn 正式上线（ECS + Caddy HTTPS，公网只读）+ 月相册改 GET + 首页去重复日期（a660a57，已部署已验收）
+
+**本轮线上多了什么家人能读的东西**（公网 https://nianlife.cn 实测）：
+- nianlife.cn 公网可访问：Let's Encrypt 证书两张（nianlife.cn / www.nianlife.cn，到期 2026-12-14，/data、/config 具名卷持久化，Caddy 自动续期）；HTTP 与 www 一跳 308 到 https://nianlife.cn；每页底部显示 浙ICP备2026024416号-2（链接 beian.miit.gov.cn）
+- 今日页面整改 e2f455d（R1/R2）随 f1663ae 合入并上线：首页回忆浮现、月份卡「现在/当时」、关于页健康记录默认收起
+- 月页「展开这个月其余的照片」与「翻开这一天的相册」在公网恢复可用：改为只读 GET /api/memory/[year]/[month]/album（?day= 取单日），读取逻辑与可见性闸门原样搬到 lib/month-album.ts
+- 首页去掉「今天 · 现在几岁」一行（删除动态生成逻辑）和照片下方重复的日期年龄；题签下方故事自己的日期与当时年龄保留一处
+
+**部署与 SHA**：main = 构建 = ECS 运行 = `a660a5712fb0cdf0c71f2cec7618a0308e08831d`（镜像 `nianlife-web:a660a57`，/api/health 核对）。当晚依次发布 f1663ae（页脚+Caddy+今日整改）→ a660a57（7d75a52 相册 GET + a660a57 首页）。应用仍只绑 127.0.0.1:3000；ORGANIZER_WORKER_ENABLED=false、AI_ORGANIZER_ENABLED=false；Caddy 容器 nianlife-caddy（host 网络，配置 v2/Caddyfile.ecs）；ECS 剩余磁盘 4507 MB，未删除任何镜像/容器
+
+**验证**：npm test 1253=1242/0/11 跳过；tsc 过；eslint 过；生产构建在 ECS docker build 通过。公网只读规则：本地真实 Caddy 2.10.2 + 记录上游实测与公网复测均为 POST/PUT/DELETE/PATCH/OPTIONS/Server Action → 405 且不转发，/api/internal/* → 404，GET 与 Range（206）正常，公网 3000 端口不通。无头 Chromium 390×844 公网实点：修复前（f1663ae）展开 30 秒无响应；修复后 2026-08 展开 2→29 天、接口 200、抽查 16/16 张照片加载，2026-08-04 当天相册接口 200、7/7 项加载、无失败提示，全程无非 GET 请求、无控制台错误；整月接口 29 天 544 项、地址全在 /api/media/，错月/坏参数 400，POST 405。首页：home-today 0、「现在」0、照片说明无日期、「当时」1 处；记忆页月份卡与关于页日期年龄未变
+
+**没做到什么 / 最大的已知 blocker**：公网禁 POST 后 /api/internal/habit-shown 露出上报在公网不记账（提醒配额不按公网浏览计数）；/capture、/inbox 页面公网仍可打开但写入被 405 拦截；Codex 未审 3393415/f1663ae/7d75a52/a660a57；验收为 HTML 标记 + 手机尺寸截图，未做桌面截图目测。2026-08-04 相册第 7 项是视频界面截屏，属原有素材，未处理
+
+**下一件事**：等待新指令。回滚点：应用 `bash v2/scripts/deploy-ecs-public.sh rollback-app nianlife-diag-web-pre-a660a57-20260915-224718`（f1663ae），更早 `nianlife-diag-web-pre-f1663ae-20260915-222408`（a56fee4）；公网入口 `bash v2/scripts/deploy-ecs-public.sh rollback-caddy`（停 Caddy，保留证书卷）
