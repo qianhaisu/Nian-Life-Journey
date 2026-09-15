@@ -1,16 +1,18 @@
 // 首页「回忆浮现」：只用已经存在的数据可以证明的关系，禁止随机内容伪装成关系（PAGE-0915-FULL-REMEDIATION-R1
-// 已批准的产品决策 4、验收 D3）。三档关系，按顺序找到第一个真的成立的就用，一个都没有就整块不显示：
+// 已批准的产品决策 4、验收 D3）。两档关系，按顺序找到第一个真的成立的就用，一个都没有就整块不显示：
 //
 //   1. 一年前同日 / N 年前同日 —— 某段记忆的日子和今天月、日相同，年份更早。这是唯一一种「今天」
 //      本身就构成的关系，不需要任何猜测。
 //   2. 相同月龄 —— 某段记忆发生时张年的月龄，和他今天的月龄一样（同一算法 ageBetween，不是估的）。
-//   3. 第一次 —— 一段标题本身就说是「第一次/第一天/第一步/首次」的已发布记忆（复用 lib/about-view.ts
-//      的 FIRST_TIME_TITLE，不额外发明一套关键词猜测）。同一天可能有多条，按「今天是一年中第几天」
-//      取模稳定挑一条——是当天日期的纯函数，不是随机数，同一天刷新多次结果不变，只随日期真的推进而变。
+//
+// PAGE-0915-FULL-REMEDIATION-R2：原来还有第三档「第一次」——标题写着「第一次」的已发布记忆，
+// 同一天有多条时按「今天是一年中第几天」取模挑一条。Codex 审核指出：那个取模挑选和「今天」之间
+// 没有真实关系，挑哪一条纯粹是日期对余数的巧合，本质是一套包着"确定性"外衣的任意轮换——跟"禁止
+// 随机内容伪装成关系"这条要求相悖。删掉整档，不用别的规则（关键词、另一套轮换）去凑一个替代。
+// 没有可靠命中就返回 undefined，整块不显示，符合原本的兜底。
 //
 // 不做的事：不比较标题、不猜"重要"、不读健康/私密记录、不把 lead 自己算作浮现出来的另一条。
 import type { YearChapter } from "@/lib/memory-chapters";
-import { FIRST_TIME_TITLE } from "@/lib/about-view";
 import { ageBetween, formatAge } from "@/lib/time-signature";
 
 export type HomeRecall = {
@@ -21,8 +23,8 @@ export type HomeRecall = {
   dateLabel: string;
   ageLabel?: string;
   // 页面用它决定怎么把这条和"今天"接起来读，不重新判断关系种类。
-  relation: "anniversary" | "same-age" | "first-time";
-  // "一年前的今天"「3 年前的今天」「那时他也是 1 岁 3 个月」「他的一个第一次」—— 已经是完整短句，
+  relation: "anniversary" | "same-age";
+  // "一年前的今天"「3 年前的今天」「那时他也是 1 岁 3 个月」—— 已经是完整短句，
   // 页面直接拼进句子里，不再自己判断措辞。
   contextLabel: string;
 };
@@ -39,12 +41,6 @@ function flatten(chapters: YearChapter[]): Candidate[] {
 
 function monthDayOf(day: string): string { return day.slice(5); } // "MM-DD"
 function yearOf(day: string): number { return Number(day.slice(0, 4)); }
-
-// 今天是这一年的第几天（1–366），只用来在多条「第一次」里稳定挑一条——纯粹是今天日期的函数。
-function dayOfYear(day: string): number {
-  const [y, m, d] = [Number(day.slice(0, 4)), Number(day.slice(5, 7)), Number(day.slice(8, 10))];
-  return Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 86_400_000) + 1;
-}
 
 export function selectHomeRecall(chapters: YearChapter[], today: string, birthDay: string | undefined, excludeEventId: string | undefined): HomeRecall | undefined {
   const pool = flatten(chapters).filter((memory) => memory.eventId !== excludeEventId && memory.day !== today);
@@ -74,15 +70,6 @@ export function selectHomeRecall(chapters: YearChapter[], today: string, birthDa
         return { ...memory, relation: "same-age", contextLabel: ageLabel ? `那时他也是${ageLabel}大` : "那时他也是这个月龄" };
       }
     }
-  }
-
-  // 3) 第一次：标题本身写着是第一次的已发布记忆，多条时按「今天是这一年第几天」取模稳定挑一条。
-  // 标题本身已经说了"第一次"，contextLabel 不重复这两个字（"他的一个第一次·第一次翻绘本"读起来
-  // 会打结），改成一句引出的话。
-  const firsts = pool.filter((memory) => FIRST_TIME_TITLE.test(memory.title)).sort((a, b) => a.day.localeCompare(b.day) || a.eventId.localeCompare(b.eventId));
-  if (firsts.length > 0) {
-    const memory = firsts[dayOfYear(today) % firsts.length];
-    return { ...memory, relation: "first-time", contextLabel: "想起一段" };
   }
 
   return undefined;

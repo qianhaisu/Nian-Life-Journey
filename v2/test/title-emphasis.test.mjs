@@ -122,6 +122,36 @@ test("主照片按 slide.key 重新挂载，首帧不透明度为 0，等 onLoad
   assert.match(html, /style="[^"]*opacity:0"/);
 });
 
+// PAGE-0915-FULL-REMEDIATION-R2：Codex 审核发现 `if (slides.length === 0) return null;` 原来插在
+// 两个 useState 和 useEffect 之间——slides 在空和非空之间变化时，同一个组件实例调用的 Hook 数量
+// 会不一样，违反 Hooks 规则。修好之后所有 Hook 都在提前返回之前，早退挪到最后。
+// react-dom/server 的单次渲染看不出"同一实例换 props 后 Hook 数量变没变"（那需要真的挂载后再换
+// props 重渲染，这个仓库的测试基础设施里没有 jsdom/客户端渲染环境）；这里能验证的是两条分支各自
+// 独立渲染都安全（不抛错、行为对），并且直接核对源码里 Hook 调用确实都在早退判断之前。
+test("空 slides：安全渲染成空字符串，不抛错", () => {
+  assert.equal(render({ slides: [], today: "2026-09-15" }), "");
+});
+
+test("非空 slides：安全渲染出主体内容，不抛错", () => {
+  const html = render({ slides: [slide("event-v2-11f294e5906320de95580078c404cb59", "有内容的一段", "wechat-media:z")], today: "2026-09-15" });
+  assert.match(html, /home-figure/);
+  assert.match(html, /有内容的一段/);
+});
+
+test("home-lead.tsx：三个 Hook（useState ×2、useEffect）都在 `if (!slide) return null;` 之前，顺序和数量不随 slides 是否为空而变", () => {
+  const src = fs.readFileSync(new URL("../components/home-lead.tsx", import.meta.url), "utf8");
+  const body = src.slice(src.indexOf("export function HomeLead("));
+  const earlyReturnIdx = body.indexOf("if (!slide) return null;");
+  assert.ok(earlyReturnIdx > 0, "找不到早退判断，或者判断条件变了");
+  const before = body.slice(0, earlyReturnIdx);
+  // useState 第二次调用带了泛型参数（useState<string | null>(...)），匹配 "useState(" 或
+  // "useState<" 两种写法。
+  assert.equal((before.match(/useState[(<]/g) ?? []).length, 2, "两个 useState 都该在早退之前");
+  assert.equal((before.match(/useEffect\(/g) ?? []).length, 1, "useEffect 也该在早退之前");
+  const firstHookIdx = body.search(/useState[(<]/);
+  assert.doesNotMatch(body.slice(0, firstHookIdx), /return/, "第一个 Hook 之前不该有提前返回");
+});
+
 test("app/home.css：桌面竖照/方照按约 75dvh 限高（带地板与天花板），横照不套这条、左栏整体居中而不是上下分推", () => {
   const css = fs.readFileSync(new URL("../app/home.css", import.meta.url), "utf8");
   const desktop = css.slice(css.indexOf("@media (min-width: 900px)"));

@@ -105,16 +105,17 @@ export function HomeLead({ slides, clockLine, today, notes }: { slides: HomeLead
   // 这里不去猜网络快慢，只管「这一张真的画出来了没有」——img 自己的 onLoad 说了算。
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
-  if (slides.length === 0) return null;
-  const slide = slides[Math.min(index, slides.length - 1)];
+  // PAGE-0915-FULL-REMEDIATION-R2 修复：Hooks 顺序不能随 slides 是否为空而改变——之前
+  // `if (slides.length === 0) return null;` 插在 useState 和 useEffect 之间，slides 从空变
+  // 非空（或反过来）时同一个组件实例调用的 Hook 数量会不一样，违反 Hooks 规则。现在所有 Hook
+  // 都在任何提前返回之前调用；`slide` 允许是 undefined，effect 内部自己判断，早退判断挪到最后。
+  const slide = slides.length > 0 ? slides[Math.min(index, slides.length - 1)] : undefined;
+  useEffect(() => {
+    if (slide && imgRef.current?.complete) setLoadedKey(slide.key);
+  }, [slide?.key]);
+  if (!slide) return null;
   const photo = slide.photo;
   const photoLoaded = photo ? loadedKey === slide.key : false;
-  // 服务端渲染的第一张图，浏览器常常在 React 接上 onLoad 之前就已经把它下载完了——`onLoad` 那时
-  // 已经错过，`complete` 会一直是 false 以外的旧值。挂载或换图时先问一次元素自己，真的已经好了
-  // 就直接算数，不用等一个不会再来的事件。
-  useEffect(() => {
-    if (imgRef.current?.complete) setLoadedKey(slide.key);
-  }, [slide.key]);
 
   // 2026-09-13 改版：照片是第一眼的东西，占右侧约三分之二；左边只留题签。
   // DOM 顺序就是手机上的阅读顺序（照片 → 日期 → 题签/入口 → 便签）；桌面靠 grid 把照片放到右栏。
