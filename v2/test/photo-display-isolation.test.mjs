@@ -190,7 +190,7 @@ test("a day group carries the photographs somebody opened, and only those", () =
   assert.equal(composition.totalPhotoCount, 2);
 });
 
-// The expander is not a second, looser door. `app/memory/[year]/[month]/actions.ts` returns
+// The expander is not a second, looser door. `lib/month-album.ts` (the GET album route) returns
 // `archiveDays` verbatim and `components/day-photos.tsx` mounts the rest of a group's `photos`, so
 // a gate applied only to the first six would be cosmetic — the rest arrives on click.
 test("the gate holds past the first screen: a day group's expanded remainder is checked too", () => {

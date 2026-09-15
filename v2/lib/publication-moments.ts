@@ -447,7 +447,7 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const traceByDay = new Map(chapter.traceDays.map((day) => [day.day, day]));
 
   // THE MONTH'S PHOTO SET — what 「这个月的照片」 may show, computed once so the first screen, the
-  // expand-all payload (app/memory/[year]/[month]/actions.ts returns archiveDays straight from
+  // expand-all payload (lib/month-album.ts, behind the GET album route, returns archiveDays straight from
   // here) and every count and date the page prints all describe the same set.
   //
   // 2026-09-10: this section used to show every deliverable, drawable picture the month held. Once

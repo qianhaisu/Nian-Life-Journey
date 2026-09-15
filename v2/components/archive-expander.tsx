@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { PhotoGallery } from "@/components/photo-viewer";
-import { getFullArchiveDays } from "@/app/memory/[year]/[month]/actions";
 import type { PhotoDay } from "@/lib/memory-chapters";
+import { fetchFullArchiveDays } from "@/lib/month-album-request";
 
 // Mirrors DayHead from month-moment.tsx without importing the server-component file.
 function DayHead({ day, dateLabel, ageLabel, monthAgeLabel, year }: { day: string; dateLabel: string; ageLabel?: string; monthAgeLabel?: string; year: string }) {
@@ -36,7 +36,7 @@ export function orderedArchiveDays(visible: readonly PhotoDay[], hidden: readonl
 }
 
 // The archive section's list of photographed days, plus the control that fetches the days the first
-// render left out. On first expand it calls the server action; subsequent expands use cached data.
+// render left out. On first expand it reads the month album (GET); subsequent expands use cached data.
 export function ArchiveExpander({
   year,
   month,
@@ -61,7 +61,7 @@ export function ArchiveExpander({
     if (hiddenDays.length > 0) { setState("open"); return; }
     setState("loading");
     try {
-      const allDays = await getFullArchiveDays(year, month);
+      const allDays = await fetchFullArchiveDays(year, month);
       const visible = new Set(visibleDays.map((day) => day.day));
       setHiddenDays(allDays.filter((d) => !visible.has(d.day)));
       setState("open");

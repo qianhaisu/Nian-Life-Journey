@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { createPortal } from "react-dom";
 import { dayMediaKind } from "@/components/day-photos";
 import { PhotoGallery } from "@/components/photo-viewer";
-import { getDayAlbum } from "@/app/memory/[year]/[month]/actions";
 import type { PhotoDay } from "@/lib/memory-chapters";
+import { fetchDayAlbum } from "@/lib/month-album-request";
 
 // The way from a day's words into that day's photographs in the month's album
 // (lib/publication-moments.ts dayAlbumFrom says what it may show and why).
@@ -36,7 +36,7 @@ export function DayAlbumLink({ year, month, day, dateLabel, ageLabel, afterDayPh
     if (state === "loading") return;
     setState("loading");
     try {
-      const found = album ?? await getDayAlbum(year, month, day);
+      const found = album ?? await fetchDayAlbum(year, month, day);
       if (!found || found.photos.length === 0) { setState("failed"); return; }
       setAlbum(found);
       setState("open");

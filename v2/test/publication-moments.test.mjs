@@ -106,7 +106,7 @@ test("the photo section shows vouched pictures at any size, and the same set on 
   // The gate is source trust, not the hero floor: an ordinary small snapshot from the family's own
   // album is still one of the month's photographs. Only the thumbnail floor (can it be drawn)
   // applies. And because the expander returns composition.archiveDays verbatim
-  // (app/memory/[year]/[month]/actions.ts), one set feeds the first screen, the expansion and every
+  // (lib/month-album.ts), one set feeds the first screen, the expansion and every
   // count the page prints.
   const small = photo("small-but-real", "2026-08-10T08:00:00.000Z", { width: 300, height: 300 });
   const sticker = photo("sticker", "2026-08-10T08:30:00.000Z", { width: 67, height: 120 });
