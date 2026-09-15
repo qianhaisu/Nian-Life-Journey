@@ -36,6 +36,8 @@ Use the shortest route that preserves objective evidence. Coordination is overhe
 - Keep a task card compact: state the decision, observable acceptance, exact allowed paths, evidence, ETA, and stop conditions. Reference prior reports by path and finding; do not paste their full history. Default to one implementation card and one correction card only when review finds a concrete defect.
 - A 15-minute interval is a maximum silence/check bound, not a demand for workers to manufacture progress notes. Check the task file and Git together at ETA or on an objective event. Stay quiet while execution is healthy.
 - Before touching GUI, read the task/result file and Git evidence. If a task is already acknowledged/running or its evidence is changing, do not wake it again. One verified wake per new card is enough.
+- Treat Claude Code and Cowork as different products inside the same Claude window. A worker wake must target `Code` and may show repository/branch/Changes controls. A Cowork wake must explicitly target `Chat and Cowork`; its pane must not show repository, branch, Changes, Create PR, or other Code-session controls. Session title alone is insufficient.
+- A Code session can read a Cowork request and spawn a browser agent, but that output is an invalid source: label it `INVALID_SOURCE_CODE_SESSION`, do not merge from it, and resend the request only to the verified Cowork session. Never describe a Code background task as Cowork running.
 - Reuse accepted evidence. Track review coverage by page and viewport; continuation reviews contain only missing or changed items. Never repeat a page, screenshot, build, test, or health probe whose evidence remains valid for the same SHA.
 - Treat a browser-control timeout separately from a site failure. First probe the exact URL/health/process once. Restart only the failed, identified component; never rebuild or restart a healthy service just because GUI automation timed out.
 - Once an environment is stable, keep it alive through review. If resource pressure kills it, remove only the verified obsolete process, restart the same environment once, and continue only missing review items. A second runtime failure becomes `BLOCKED` instead of a restart loop.
@@ -51,7 +53,7 @@ When asked to connect or initialize the chain, complete every applicable step be
 4. Ensure `NianlifeOps/_inbox/cowork`, `_state`, and `_locks` exist. Maintain only `_locks/gui.lock`; do not create a competing repository lock.
 5. Use the bundled `computer-use` skill for Windows apps. Initialize `@oai/sky` in `node_repl`, call `sky.list_apps()`, select exactly one returned Claude window, and inspect its current state. Do not use the generic browser-only `cua_repl` inventory to decide whether Claude is running. If native enumeration fails, report the control bridge failure; do not infer that the desktop is locked or Claude is closed.
 6. Verify the Claude sidebar contains the existing `数据` and `页面` Code sessions. Wake each only after writing its bootstrap task file. GUI text is exactly one line pointing to the absolute task file; all substantive content stays in that file.
-7. For Cowork, verify `_state/cowork-ready.md` belongs to the current Cowork session. If not, run B0 exactly as defined in the Cowork protocol. A valid current-session ready file is required before marking Cowork connected.
+7. For Cowork, explicitly switch to `Chat and Cowork`, select the exact Cowork task, verify the pane has no repository/branch/Changes/Create PR controls, then verify `_state/cowork-ready.md` belongs to that session. If not, run B0 exactly as defined in the Cowork protocol. Both UI identity and a valid current-session ready file are required before marking Cowork connected.
 8. Update `collab/state/ORCHESTRATOR-STATE.md` with branches, worktrees, session mapping, GUI lock, Cowork readiness, evidence, and next check.
 
 Readiness requires objective evidence for all four links: Codex control plane, data session, page session, and Cowork channel. Use `READY`, `PARTIAL`, or `BLOCKED`; never call a partial chain connected.
@@ -84,6 +86,7 @@ Codex does not keep running after it sends a final response. Never describe a fi
 - Dirty main checkout: do not move or copy unrelated changes into worktrees.
 - Worker task written but wake not verified: status is `PARTIAL`, not connected.
 - Cowork session is not current-ready: run B0 before review dispatch.
+- Cowork request appears inside a Code session: stop treating that run as review evidence, label any output `INVALID_SOURCE_CODE_SESSION`, and dispatch once to the verified Cowork task.
 - Production database changes, deletion, fees, three failed review rounds, or unresolved Codex/Cowork BLOCKER conflict: stop and ask Teddy.
 
 ## Minimal connection example

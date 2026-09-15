@@ -163,7 +163,7 @@ purpose: <task/review id>
 每个新 Cowork 会话的第一件事都是 B0。文件夹授权按会话、不继承；只能由 Cowork 发起，Codex只能在系统弹窗点击批准。派发任何审美请求前，必须核对 `_state/cowork-ready.md` 的会话标识等于当前会话。
 
 1. Codex 取 GUI 锁。
-2. 每一步先截图，确认 Cowork 会话在前台、光标在输入框。
+2. 明确切换到 `Chat and Cowork` 并选择目标 Cowork task；截图必须同时证明会话名正确，且主区域没有仓库、分支、Changes、Create PR 等 Code 控件。仅凭会话名称不得继续。
 3. 用剪贴板粘贴并发送（禁止直接键入中文）：`请对 C:\Users\teddy\NianlifeOps 和 C:\Users\teddy\Documents\Nianlife 申请文件夹访问权限，完成后写 _state/cowork-ready.md`
 4. Cowork 发起授权；Codex 重新截图定位系统弹窗，再点“批准 / Allow”，不得硬编码坐标。
 5. Cowork 写 `_state/cowork-ready.md`：全部已授权路径、时间戳、会话标识、context 余量。
@@ -186,6 +186,8 @@ Codex 先确认 dev server、隧道和验收期间的存活责任，再写 `C:\U
 - `_state/nianlife-product-principles.md` 的当轮 SHA-256。
 
 唤醒顺序：取锁 → 截图确认窗口和输入框 → 剪贴板粘贴 `读 C:\Users\teddy\NianlifeOps\_inbox\cowork\<id>.md 并执行审美验收` → 截图确认已发送 → 释放锁。之后每 5 分钟只轮询目标 `review-<轮次名>\README.md`，运行期间不重复派发。
+
+身份门：发送前必须处于 `Chat and Cowork` 的目标 task，且页面无仓库、分支、Changes、Create PR 控件。请求若误入 Code session，即使它能调用浏览器 agent，其产物也标为 `INVALID_SOURCE_CODE_SESSION`，不得算 Cowork 结论；停止错误计数后只向正确 Cowork task 重新派发一次。
 
 20 分钟无结果时才重新取锁并截图一次，只判断：仍运行、等待权限、已中断。随后释放锁并据实记状态。
 
