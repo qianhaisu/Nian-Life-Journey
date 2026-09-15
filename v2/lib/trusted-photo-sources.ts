@@ -22,6 +22,10 @@ import type { RawSource } from "@/lib/types";
 // 主群 (主力作战部队群) added — Teddy confirmed every photo there is of Zhang Nian.
 const TRUSTED_WECHAT_SOURCE_LABELS: ReadonlySet<string> = new Set([
   DAYCARE_CONVERSATION,                     // 乳儿班群 (WeFlow JSON)
+  // 2026-09-15: the same 乳儿班张小年家庭群, exported as Markdown. WeFlow's daily automation writes
+  // only this .md slice (the JSON is a one-off export that stopped at 09-13), so every day after that
+  // arrives under this label and its photographs never reached 「这个月的照片」.
+  "conversation:d3a0e5f619ac6fe3e40d81cf", // 乳儿班群 (WeFlow Markdown)
   "conversation:a673c0e0563be6ecf1867094", // 主群 (作战部队), current export
   "conversation:856b8ec2b8f3ec2871782ca6", // 主群, earlier export
   "conversation:064d5dfbd798a5f27223c758", // 主群 (作战部队), post-fix id

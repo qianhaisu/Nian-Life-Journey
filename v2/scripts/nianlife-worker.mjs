@@ -52,6 +52,7 @@ process.env.REPOSITORY_BACKEND = "postgres";
 
 const { loadWechatBundle } = await import("../lib/ingest/wechat-snapshot.ts");
 const { runWechatImportWorker } = await import("../lib/ingest/wechat-worker.ts");
+const { countContentKeys, selectUnarchivedOrdinals, shanghaiDateDaysAgo } = await import("../lib/ingest/wechat-content-dedupe.ts");
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -288,6 +289,17 @@ const CLI_FORCE = process.argv.includes("--force-all");
 // document path is part of it). That layout can change with the next export, so the choice belongs
 // to the run that can see it, written into the ledger, not baked into shared state.
 const CLI_EXCLUDE = (argValue("exclude") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+// Added 2026-09-15 (每日增量入口).
+//   --since-days=N     rolling window: import since the Shanghai calendar day N days ago. What a
+//                        scheduled run uses instead of --since, so a missed day (the machine asleep, the
+//                        exporter skipped) is still inside the next run's window.
+//   --content-dedupe   import only messages whose (instant, normalized text) is not already in the
+//                        archive under ANY wechat label — see lib/ingest/wechat-content-dedupe.ts for
+//                        why canonical ids cannot catch the .md/.json overlap WeFlow's daily export creates.
+//                        Each conversation is then imported through an exact ordinal allowlist, and a
+//                        run that does not account for every selected message counts as failed.
+const CLI_SINCE_DAYS = argValue("since-days") !== null ? Number(argValue("since-days")) : null;
+const CLI_CONTENT_DEDUPE = process.argv.includes("--content-dedupe");
 const CLI_MAX_ORG_MONTHS = argValue("max-organizer-months") ? Number(argValue("max-organizer-months")) : null;
 const CLI_ORGANIZER_ARGS = (argValue("organizer-args") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 for (const forbidden of ["--self-approve", "--grade"]) {
@@ -316,6 +328,7 @@ async function main() {
   // in the DB and will be counted as "reused", which is fine — the import is idempotent).
   const importSince =
     CLI_SINCE ??
+    (CLI_SINCE_DAYS !== null ? shanghaiDateDaysAgo(CLI_SINCE_DAYS) : null) ??
     (workerState.lastRunAt
       ? new Date(workerState.lastRunAt).toISOString().slice(0, 10)
       : BIRTH_DAY);
@@ -341,6 +354,29 @@ async function main() {
   // Carried into worker-state.json at the end of the run: one entry per conversation, keyed by
   // conversation digest, holding the resume key that made this run's work a no-op or not.
   const conversationState = { ...(workerState.conversations ?? {}) };
+
+  // Content keys already in the archive for this window, across every wechat label. Consumed and
+  // extended as conversations are selected (see selectUnarchivedOrdinals).
+  let archivedKeys = null;
+  if (CLI_CONTENT_DEDUPE) {
+    const keyPool = new pg.Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false }, max: 1 });
+    try {
+      // One day of slack below the window: a message stamped just before `since` in one export can
+      // sit just after it in another only if the parsers disagreed on the instant, which they must not
+      // — but reading a day more costs nothing and a false "missing" costs a duplicate row.
+      const { rows } = await keyPool.query(
+        `SELECT captured_at, text FROM raw_sources
+          WHERE profile_id = $1 AND source_type = 'wechat' AND deleted_at IS NULL
+            AND captured_at >= ($2::date - interval '1 day') AT TIME ZONE 'Asia/Shanghai'`,
+        [PROFILE_ID, importSince.slice(0, 10)],
+      );
+      archivedKeys = countContentKeys(rows.map((row) => ({ sentAt: row.captured_at, text: row.text })));
+      log(`content dedupe: ${rows.length} archived wechat row(s) in window`);
+      ledger({ phase: "import", event: "content_keys_loaded", rows: rows.length, since: importSince });
+    } finally {
+      await keyPool.end();
+    }
+  }
   ledger({ phase: "run", event: "started", since: importSince, stateFile: WORKER_STATE_PATH, flags: {
     organizer: !CLI_NO_ORGANIZER, review: !CLI_NO_REVIEW, revalidate: !CLI_NO_REVALIDATE,
     maxOrganizerMonths: CLI_MAX_ORG_MONTHS, organizerArgs: CLI_ORGANIZER_ARGS, force: CLI_FORCE,
@@ -410,7 +446,24 @@ async function main() {
       continue;
     }
 
-    log(`conversation ${index}: ${messages} message(s), ${mediaRefs} media ref(s)`);
+    let recordOrdinals;
+    let batchKey;
+    if (archivedKeys) {
+      const full = await loadWechatBundle(SOURCE_ROOT, { maxMessages: Math.max(probe.availableMessageCount, 1), maxMedia: 1, conversationIndex: index, since: importSince });
+      const selection = selectUnarchivedOrdinals(full.bundle.messages, archivedKeys);
+      if (selection.ordinals.size === 0) {
+        log(`conversation ${index}: all ${full.bundle.messages.length} message(s) in window already archived (content) — nothing to import`);
+        conversationState[digest] = { resumeKey, status: "ok", at: new Date().toISOString(), created: 0, reused: 0, note: "content already archived" };
+        ledger({ phase: "import", event: "content_already_archived", conversationIndex: index, digest, resumeKey, inWindow: full.bundle.messages.length });
+        continue;
+      }
+      recordOrdinals = selection.ordinals;
+      batchKey = `content:${[...selection.ordinals].sort((a, b) => a - b).join(",")}`;
+      log(`conversation ${index}: content dedupe selected ${selection.ordinals.size} of ${full.bundle.messages.length} (${selection.alreadyArchived} already archived)`);
+      ledger({ phase: "import", event: "content_selected", conversationIndex: index, digest, selected: selection.ordinals.size, alreadyArchived: selection.alreadyArchived });
+    }
+
+    log(`conversation ${index}: ${recordOrdinals ? recordOrdinals.size : messages} message(s), ${mediaRefs} media ref(s)`);
 
     let report;
     try {
@@ -418,12 +471,19 @@ async function main() {
         sourceRoot: SOURCE_ROOT,
         profileId: PROFILE_ID,
         contributorId: CONTRIBUTOR_ID,
-        maxMessages: Math.max(messages, 1),
+        maxMessages: Math.max(recordOrdinals ? recordOrdinals.size : messages, 1),
         maxMedia: Math.max(mediaRefs, 1),
         conversationIndex: index,
         since: importSince,
+        recordOrdinals,
+        batchKey,
         retryFailed: true,
       });
+      // An allowlisted import that does not account for every selected message is a silent partial
+      // import, the one outcome wechat-import-all.mjs also refuses to call success.
+      if (recordOrdinals && (report.status === "completed" || report.status === "completed_with_warnings") && report.createdMessages + report.reusedMessages !== recordOrdinals.size) {
+        report = { ...report, status: "failed", safeErrorCode: `CONTENT_BATCH_SHORTFALL_${report.createdMessages + report.reusedMessages}_OF_${recordOrdinals.size}` };
+      }
     } catch (error) {
       const info = safeErrorInfo(error);
       const failure = classifyFailure({ error });
