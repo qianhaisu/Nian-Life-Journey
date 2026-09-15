@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ageBetween, ageInMonth, ageOn, birthDayOf, formatAge, formatDay, formatMonth, ageAtMonth, ageSpan, timeSignatureFor, currentAge } from "../lib/time-signature.ts";
+import { ageBetween, ageInMonth, ageOn, birthDayOf, formatAge, formatDay, formatMonth, ageAtMonth, ageSpan, timeSignatureFor, currentAge, monthAgeQualifier } from "../lib/time-signature.ts";
 import { profile } from "../lib/mock-data.ts";
 import { CANONICAL_PROFILE_ID } from "../lib/db/config.ts";
 
@@ -116,4 +116,13 @@ test("currentAge is today's age in the family's calendar, not UTC's", () => {
   assert.equal(currentAge(BIRTH, new Date("2026-09-02T15:59:00Z")), "1 岁 7 个月");
   assert.equal(currentAge(BIRTH, new Date("2026-09-02T16:00:00Z")), "1 岁 8 个月");
   assert.equal(currentAge(undefined), undefined);
+});
+
+// PAGE-0915-FULL-REMEDIATION-R1 B1：/memory/2026/09 这类当前月读「现在」，翻回去的历史月份读
+// 「当时」——之前月份章节的页头无论翻到哪个月都写死「当时」，当前月和首页的「现在」在同一屏矛盾。
+test("monthAgeQualifier：只有今天所在的那个日历月读「现在」，其余一律「当时」", () => {
+  assert.equal(monthAgeQualifier("2026-09", "2026-09-15"), "现在");
+  assert.equal(monthAgeQualifier("2026-08", "2026-09-15"), "当时");
+  assert.equal(monthAgeQualifier("2027-01", "2026-09-15"), "当时", "未来月份也不是现在");
+  assert.equal(monthAgeQualifier("2026-09", "2026-09-01"), "现在", "月初也算这个月");
 });

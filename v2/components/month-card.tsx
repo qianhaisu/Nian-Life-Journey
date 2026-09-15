@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { MonthIndexEntry } from "@/lib/memory-index";
 import { Photo } from "@/components/photo";
+import { monthAgeQualifier } from "@/lib/time-signature";
+import { productToday } from "@/lib/time-truth";
 
 // One month as a tappable card on /memory: a cropped cover photo, the month and age, and the first
 // line of the month's snapshot (or the first memory's title). No counts — the card is an invitation,
@@ -25,9 +27,13 @@ export function MonthCard({ entry, blurb }: { entry: MonthIndexEntry; blurb?: st
   // it) while losing the bypass. No checked picture → no image area, not a guess.
   const coverPhoto = preview[0];
   const cardBlurb = blurb ?? featured[0]?.title;
+  // D1：没有封面照片的卡（通常是刚开始、内容还很少的当前月）不该占跟有照片的卡一样高的地方——
+  // 网格默认把同一行的卡拉伸到等高（globals.css `.memory-month-grid`），没有照片区块的卡会被拉出
+  // 一截自己的纯白背景，看着像一张空白卡。加一个 compact 类，配合 CSS 让它按自己内容的高度显示。
+  const compact = !coverPhoto;
 
   return (
-    <Link href={href} className="month-card scroll-reveal">
+    <Link href={href} className={`month-card scroll-reveal${compact ? " month-card--compact" : ""}`}>
       {coverPhoto ? (
         <div className="month-card-photo">
           <Photo
@@ -40,7 +46,8 @@ export function MonthCard({ entry, blurb }: { entry: MonthIndexEntry; blurb?: st
       ) : null}
       <div className="month-card-body">
         <span className="serif month-card-label">{chapter.shortLabel}</span>
-        {chapter.ageLabel ? <span className="month-card-age">当时 {chapter.ageLabel}</span> : null}
+        {/* B1：当前月读「现在」，历史月份读「当时」。 */}
+        {chapter.ageLabel ? <span className="month-card-age">{monthAgeQualifier(chapter.month, productToday())} {chapter.ageLabel}</span> : null}
         {cardBlurb ? <p className="month-card-blurb">{cardBlurb}</p> : null}
       </div>
     </Link>

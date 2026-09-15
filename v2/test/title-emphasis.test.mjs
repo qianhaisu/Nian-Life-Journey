@@ -62,7 +62,7 @@ test("规则表本身保持小词组：中文 ≤4 字或一个英文词，颜�
 const render = (props) => renderToStaticMarkup(React.createElement(HomeLead, props));
 const slide = (eventId, title, mediaId) => ({
   key: `${eventId}|${mediaId}`,
-  story: { eventId, href: `/events/${eventId}`, title },
+  story: { eventId, href: `/events/${eventId}`, title, day: "2025-12-18", dateLabel: "2025 年 12 月 18 日", ageLabel: "11 个月" },
   photo: { media: { id: mediaId, src: `/api/media/${mediaId}?variant=web`, width: 1600, height: 1200, alt: "那天的照片", type: "photo" }, day: "2026-08-19", dayLabel: "2026 年 8 月 19 日", ageLabel: "1 岁 7 个月" },
 });
 
@@ -96,6 +96,30 @@ test("首页主照片按方向标 home-figure--portrait/landscape/square，供�
 
   const square = render({ slides: [{ ...slide("event-v2-4ee118293a728414a49b8c629a57b5f3", "方照那天", "wechat-media:sq"), photo: { ...slide("e", "t", "m").photo, media: { id: "wechat-media:sq", src: "/api/media/sq?variant=web", width: 1200, height: 1200, alt: "方照", type: "photo" } } }], today: "2026-09-14" });
   assert.match(square, /<figure class="home-figure home-figure--square">/);
+});
+
+// PAGE-0915-FULL-REMEDIATION-R1 A1：题签旁要有故事自己的日子，跟页面顶部「今天/现在几岁」
+// （clockLine）分开一行——不能让一段旧故事的标题看起来像今天发生的。
+test("题签下面单独一行故事自己的日期与当时年龄，和顶部的「今天」分开", () => {
+  const html = render({ slides: [slide("event-v2-11f294e5906320de95580078c404cb59", "体重接近23斤了", "wechat-media:x")], clockLine: "2026 年 9 月 15 日 · 现在 1 岁 8 个月", today: "2026-09-15" });
+  assert.match(html, /<p class="home-today"><time dateTime="2026-09-15">2026 年 9 月 15 日 · 现在 1 岁 8 个月<\/time><\/p>/);
+  assert.match(html, /<p class="home-story-when"><time dateTime="2025-12-18">2025 年 12 月 18 日<\/time><span> · 当时 11 个月<\/span><\/p>/);
+});
+
+test("没有合格照片的纯文字 slide，题签下面照样有故事自己的日期——不是只有配了图才有", () => {
+  const html = renderToStaticMarkup(React.createElement(HomeLead, {
+    slides: [{ key: "event-v2-9be207929e855a69c91a1cd93bc10d64", story: { eventId: "event-v2-9be207929e855a69c91a1cd93bc10d64", href: "/events/event-v2-9be207929e855a69c91a1cd93bc10d64", title: "只有文字的一段", day: "2026-03-02", dateLabel: "2026 年 3 月 2 日", ageLabel: "1 岁 2 个月" } }],
+    today: "2026-09-15",
+  }));
+  assert.doesNotMatch(html, /home-figure/);
+  assert.match(html, /<p class="home-story-when"><time dateTime="2026-03-02">2026 年 3 月 2 日<\/time><span> · 当时 1 岁 2 个月<\/span><\/p>/);
+});
+
+// PAGE-0915-FULL-REMEDIATION-R1 A3：换图重新挂载 <img>（key=slide.key），首帧透明、onLoad 后淡入，
+// 不会出现"看着还是上一张、其实已经换了故事"的中间状态。
+test("主照片按 slide.key 重新挂载，首帧不透明度为 0，等 onLoad 才淡入", () => {
+  const html = render({ slides: [slide("event-v2-e98e09bddcec2801bcb726d0261d7d3d", "小年也扎了个小辫子", "wechat-media:y")], today: "2026-09-14" });
+  assert.match(html, /style="[^"]*opacity:0"/);
 });
 
 test("app/home.css：桌面竖照/方照按约 75dvh 限高（带地板与天花板），横照不套这条、左栏整体居中而不是上下分推", () => {

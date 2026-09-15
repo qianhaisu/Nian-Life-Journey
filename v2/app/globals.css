@@ -802,10 +802,27 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .about-portrait-date { margin: 10px 0 0; color: var(--color-muted); font-size: .78rem; }
 .note-meta { display: flex; align-items: baseline; gap: 12px; margin: 0; color: var(--color-muted); font-size: .78rem; }
 .note-meta time { color: inherit; font-size: inherit; }
-/* One part of the record. Every part is a heading, then its rows; nothing is behind a disclosure
-   any more — height and weight and what the family is watching are the page, not an appendix. */
+/* One part of the record. Every part is a heading, then its rows — that "every part" no longer
+   includes 健康记录: PAGE-0915-FULL-REMEDIATION-R1 (Teddy 已批准的产品决策 1) demotes it back to a
+   collapsed-by-default disclosure, so it reads as a secondary archive a family member opens on
+   purpose rather than a first-class block sitting level with 量过的身高体重. Nothing else here
+   changed — the 2026-09-13 rewrite's point (no hidden CURRENT/更早的时候 era split) still holds for
+   every other part. */
 .about-block { padding: clamp(36px, 5vw, 56px) 0 0; }
 .about-block > .section-mark { display: block; margin-bottom: 18px; }
+/* 健康记录 折叠：跟别的 .about-block 一样的外边距，summary 换成可点击的同款标题样式。 */
+.about-health-fold > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 18px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+.about-health-fold > summary::-webkit-details-marker { display: none; }
+.about-health-fold > summary::after { color: var(--color-secondary); content: "查看 ＋"; font-size: .78rem; letter-spacing: 0; }
+.about-health-fold[open] > summary::after { content: "收起 －"; }
 
 /* 量过的身高体重: the newest of each, each with the day IT was measured. */
 .measure-latest { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
@@ -864,8 +881,13 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .year-pill:hover { transform: translateY(-2px); box-shadow: var(--shadow); color: var(--clay); }
 .year-pill--active { background: var(--clay); color: #fff; }
 .memory-year-section { padding: clamp(32px, 5vw, 56px) 0; }
-.memory-month-grid { display: grid; grid-template-columns: 1fr; gap: clamp(14px, 2.5vw, 20px); }
+/* PAGE-0915-FULL-REMEDIATION-R1 D1：grid 默认 align-items:stretch 会把同一行里没有封面照片的卡
+   （通常是内容还很少的当前月）拉伸到跟旁边有照片的卡一样高，那张卡自己的 #fff 背景就把多出来的
+   高度填成一块空白——读起来像一张没做完的卡。改成 start，每张卡按自己内容的高度显示。 */
+.memory-month-grid { display: grid; grid-template-columns: 1fr; align-items: start; gap: clamp(14px, 2.5vw, 20px); }
 .month-card { display: block; background: #fff; border-radius: var(--r-card); overflow: hidden; box-shadow: var(--shadow); transition: transform .4s var(--ease-hover), box-shadow .4s var(--ease-hover); }
+/* 没有封面照片的卡（月份刚开始、内容还少）：更紧凑的内边距，不假装自己有一张要展示的照片。 */
+.month-card--compact .month-card-body { padding: 16px 20px 20px; }
 @media (hover: hover) { .month-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-hover); } }
 .month-card:active { transform: scale(.98); }
 /* Crop mode (Photo fit="crop"): the card owns the height, the photo fills it. */

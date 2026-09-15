@@ -58,20 +58,33 @@ function SourceRow({ source }: { source: HomeReminderSource }) {
   </li>;
 }
 
-// 一条便签：一行「事情 + 时间/必要状态」，整条可展开。展开层里才是来源、原始日期与状态。
+// 一条便签的可见行：不管有没有能展开的内容，这一行都长一样。抽出来是因为下面两种壳
+// （<details><summary> 和普通 <p>）要包住同一行文字。
+function NoteLine({ reminder }: { reminder: HomeReminder }) {
+  return <>
+    {reminder.title}
+    <span className="home-note-when">
+      {" · "}
+      {reminder.whenDay ? <time dateTime={reminder.whenDay}>{reminder.whenText}</time> : reminder.whenText}
+      {reminder.ageText ? ` · ${reminder.ageText}` : null}
+    </span>
+    {reminder.statusLabel ? <span className="home-note-status">{" · "}{reminder.statusLabel}</span> : null}
+  </>;
+}
+
+// 一条便签：一行「事情 + 时间/必要状态」，确有内容可展开才是 <details>；没有就是普通一行。
+//
+// PAGE-0915-FULL-REMEDIATION-R1 A2：`.home-note > summary::after` 给每一个 <summary> 画一个
+// "＋"——这曾经是无条件的，`note` 和 `sources` 都为空时，这个"＋"点开只有一个空的展开层，
+// 对读的人来说是一个不会做任何事的按钮。展开控件只在真有内容时才出现；没有就画成不带
+// "＋"、不可点的普通一行，可见文字不变。
 function Note({ reminder, habitId }: { reminder: HomeReminder; habitId?: string }) {
+  const hasDetail = Boolean(reminder.note) || reminder.sources.length > 0;
+  if (!hasDetail) return <p className="home-note home-note-plain"><NoteLine reminder={reminder} /></p>;
   return <details className="home-note">
     {/* data-habit-id 只出现在默认位上、且只出现在习惯类事项上（id 由数据轨的 habitShownIds 给定）。
         折叠层里的那几条不带这个属性——「露出」数的是家人真的看见的那几天（§6.3）。 */}
-    <summary data-habit-id={habitId}>
-      {reminder.title}
-      <span className="home-note-when">
-        {" · "}
-        {reminder.whenDay ? <time dateTime={reminder.whenDay}>{reminder.whenText}</time> : reminder.whenText}
-        {reminder.ageText ? ` · ${reminder.ageText}` : null}
-      </span>
-      {reminder.statusLabel ? <span className="home-note-status">{" · "}{reminder.statusLabel}</span> : null}
-    </summary>
+    <summary data-habit-id={habitId}><NoteLine reminder={reminder} /></summary>
     <div className="home-note-detail">
       {reminder.note ? <p>{reminder.note}</p> : null}
       {reminder.sources.length > 0 ? <ul className="home-note-sources">

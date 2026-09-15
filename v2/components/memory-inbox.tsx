@@ -39,14 +39,14 @@ export function MemoryInbox() {
       <label>选择资料<input name="files" type="file" multiple accept={kind === "medical_document" ? ".pdf,image/jpeg,image/png" : "image/*,video/mp4,video/quicktime"} /></label>
       <div className="capture-form-grid"><label>日期<input name="capturedAt" type="date" defaultValue="2026-08-28" required /></label><label>谁留下的<select name="contributorId" defaultValue="contributor-dad"><option value="contributor-dad">爸爸</option><option value="contributor-mom">妈妈</option><option value="contributor-teacher">老师</option><option value="contributor-hospital">医院</option></select></label></div>
       <label>补充一句（可选）<textarea name="text" rows={3} placeholder="比如：今天回来一直在说车车。" /></label>
-      <label>可见范围<select name="visibility" defaultValue="family"><option value="family">家庭可见</option><option value="private">仅自己</option><option value="public">公开（需之后主动设置）</option></select></label>
+      <label>可见范围<select name="visibility" defaultValue="family"><option value="family">家庭可见</option><option value="private">仅自己可见</option><option value="public">公开（需之后主动设置）</option></select></label>
       <button className="primary-button" type="submit" disabled={isPending}>{isPending ? "正在收好…" : "上传并自动整理"}</button>
       {message ? <p className="form-error" role="alert">{message}</p> : null}
     </form> : <section className="capture-done" aria-live="polite">
-      <span className="section-mark">已经收好了</span><h2 className="serif">今天留下了 {result.count} 项东西。</h2><p>原始资料和媒体已经安全保留，Organizer 正在后台整理，整理完成后会出现在时间线里。</p>
+      <span className="section-mark">已经收好了</span><h2 className="serif">今天留下了 {result.count} 项东西。</h2><p>原始资料和媒体已经安全保留，正在自动整理，整理完成后会出现在时间线里。</p>
       <div className="done-summary"><strong>正在整理中</strong><span>不用等待，可以直接继续留下下一项东西。</span></div>
       <div className="candidate-actions"><Link className="primary-button" href="/">看看时间线 ↗</Link><button type="button" onClick={() => setResult(null)}>继续留下东西</button></div>
     </section>}
-    <p className="capture-privacy">医疗资料自动保持 private；公开展示需要家庭成员之后主动设置。自动整理出错时，原始资料不会被删除。</p>
+    <p className="capture-privacy">医疗资料自动保持仅自己可见；公开展示需要家庭成员之后主动设置。自动整理出错时，原始资料不会被删除。</p>
   </div>;
 }

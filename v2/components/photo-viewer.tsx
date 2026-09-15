@@ -170,6 +170,14 @@ export function PhotoGallery({
     return Math.max(0, viewerPhotos.indexOf(photos[originalIdx]));
   }
 
+  // PAGE-0915-FULL-REMEDIATION-R1 B4：一个相册里好几张照片时，每张的可访问名称都是同一句「打开
+  // 照片」——屏幕阅读器一个一个读过去分不清是哪张。`alt` 常常也是同一句通用描述（没有专门写的
+  // alt 时落到「一张照片」，lib/media/presentation.ts 的 presentableAlt），不够用来区分。用打开
+  // 后会看到的第几张（跟查看器自己的「1 / 6」计数一致）作为可靠的区分依据。
+  function photoAriaLabel(originalIdx: number): string {
+    return `打开第 ${viewerIdxFor(originalIdx) + 1} 张照片`;
+  }
+
   return (
     <>
       {heroPhoto && isVideo(heroPhoto) ? (
@@ -184,7 +192,7 @@ export function PhotoGallery({
           style={{ aspectRatio: aspectRatioOf(heroPhoto) }}
           role="button"
           tabIndex={0}
-          aria-label="打开照片"
+          aria-label={photoAriaLabel(heroIndex!)}
           onClick={() => openViewer(viewerIdxFor(heroIndex!))}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(viewerIdxFor(heroIndex!)); } }}
         >
@@ -210,7 +218,7 @@ export function PhotoGallery({
                 style={{ aspectRatio: aspectRatioOf(photo) }}
                 role="button"
                 tabIndex={0}
-                aria-label="打开照片"
+                aria-label={photoAriaLabel(origIdx)}
                 onClick={() => openViewer(viewerIdxFor(origIdx))}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(viewerIdxFor(origIdx)); } }}
               >
