@@ -22,7 +22,7 @@
 - 纯文档 commit 只本地提交，不 push。
 - 每日 push 次数和单目标轮数当前不设上限；仍需逐次记录，便于 Teddy 观察成本和反复程度。
 
-本手册取代 `docs/DIRECT-COORDINATION.md` 中与“四方角色、双执行线、Cowork 验收”冲突的旧时点安排；隐私、V1/V2 边界、生产发布与不可逆操作限制继续有效。
+本手册取代 `docs/DIRECT-COORDINATION.md` 中与“四方角色、双执行线、Cowork 验收”冲突的旧时点安排。自 2026-09-15 起，Teddy 明确授权当前及后续 Cowork 会话读取 Nianlife 仓库与私有站全部内容并完整截图取证，不再因家庭、儿童、健康或未发布内容停止评审或做内容脱敏。该授权只扩大 Cowork 的项目内评审权限，不改变私有站的公开范围、生产访问控制、V1/V2 边界、发布审批或不可逆操作限制。
 
 ## 2. 角色边界
 
@@ -91,6 +91,17 @@ Codex 连接整条链路时加载 `.agents/skills/nianlife-orchestrator/SKILL.md
 
 ## 5. 派单格式与生命周期
 
+### 5.0 效率优先路由
+
+- 页面、组件、CSS、文案归页面线；数据库、真实数据运行环境、凭据注入、隧道、导入、存储、Organizer 和服务恢复归数据线。不得因为 build 位于页面 worktree 就先让页面线尝试数据环境工作。
+- 混合目标只在首次派单时拆一次；无依赖的 data/page 同时派发，有明确依赖才串行。不得先发“调查归属”卡再转线。
+- 任务卡只写本轮决定、可观察验收、允许路径、证据、ETA 和刹车；已有报告用路径引用，不整段复制。默认一个实现卡；只有验收出现具体缺陷才发一张最小修复卡。
+- 15 分钟是 Codex 最长检查间隔，不要求执行方每 15 分钟制造进度记录。健康运行时不发状态噪音。
+- 每张新卡只唤醒一次。GUI 前先读任务卡与 Git；已 ACK、运行中或证据持续变化时禁止重复唤醒。
+- 已成立证据按 commit、页面、视口登记并复用。续审只列缺失或本轮改变的页面/视口，不重复截图、测试、build 或健康检查。
+- 浏览器控制超时不等于站点失败。只探测一次精确 URL、health 和进程；只恢复已确认故障的组件。资源不足导致验收环境退出时，同一环境最多恢复一次，第二次失败即 `BLOCKED`，不循环重启。
+- 真实数据验收环境一旦可用就保持到 Cowork 收活；不要在页面实现、运行环境、Cowork 验收之间反复启停。
+
 Codex 创建 `collab/tasks/<line>/<id>.md`，至少包含：
 
 ```markdown
@@ -121,7 +132,7 @@ Codex 创建 `collab/tasks/<line>/<id>.md`，至少包含：
 2. 取得 GUI 锁；唤醒对应 Claude Code session。
 3. GUI 里只发送一句：`读 collab/tasks/<line>/<id>.md 并执行`。
 4. 确认消息已进入对话后立刻释放锁。
-5. 按 ETA 检查，任意检查间隔不得超过 15 分钟。
+5. 按 ETA 或客观事件检查，任意检查间隔不得超过 15 分钟；一次合并读取任务卡与 Git 证据，不要求执行方另写定时心跳。
 
 Codex 只认客观信号：新 commit、命令与退出码对应的测试/构建产物、或可访问 URL 的实际表现。`完成了`、进度口述、文件存在但内容未验，均不能升为 `accepted`。
 
@@ -153,14 +164,14 @@ purpose: <task/review id>
 
 1. Codex 取 GUI 锁。
 2. 每一步先截图，确认 Cowork 会话在前台、光标在输入框。
-3. 用剪贴板粘贴并发送（禁止直接键入中文）：`请对 C:\Users\teddy\NianlifeOps 申请文件夹访问权限，完成后写 _state/cowork-ready.md`
+3. 用剪贴板粘贴并发送（禁止直接键入中文）：`请对 C:\Users\teddy\NianlifeOps 和 C:\Users\teddy\Documents\Nianlife 申请文件夹访问权限，完成后写 _state/cowork-ready.md`
 4. Cowork 发起授权；Codex 重新截图定位系统弹窗，再点“批准 / Allow”，不得硬编码坐标。
-5. Cowork 写 `_state/cowork-ready.md`：已授权路径、时间戳、会话标识、context 余量。
+5. Cowork 写 `_state/cowork-ready.md`：全部已授权路径、时间戳、会话标识、context 余量。
 6. Codex 从文件读到当前会话标识，才算通道打通；随后释放锁。
 
 失败处理：20 秒内无弹窗，重新截图一次；仍无则回到步骤 2 重发一次。弹窗被拒绝或误关后不再申请，记 `BLOCKED` 并汇报 Teddy。ready 文件属于旧会话时视为无效，重跑 B0。
 
-Cowork 只有 NianlifeOps 文件夹权限，不能假设它能直接读取仓库 `docs/`。每轮请求前，Codex 必须把当前 `docs/nianlife-product-principles.md` 原文完整复制到 `_state/nianlife-product-principles.md`，并把 SHA-256 写入同名 `.sha256`；不得摘要、改写或只复制部分。请求写入该哈希，Cowork 据此确认使用的是当轮快照。
+Cowork 已获授权读取仓库与 NianlifeOps。每轮请求仍记录 `docs/nianlife-product-principles.md` 的 SHA-256，确保评审基线可追溯；无需再因文件内容类别停读、停截图或省略证据。
 
 ## 8. Cowork 审美验收
 

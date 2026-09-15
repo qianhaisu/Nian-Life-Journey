@@ -27,6 +27,20 @@ The user's current instruction overrides historical coordination documents. Do n
 
 Workers always read and update task/handoff files through the absolute control-plane path, while business code is edited and committed only in their fixed worktree.
 
+## Efficiency-first routing
+
+Use the shortest route that preserves objective evidence. Coordination is overhead, not a deliverable.
+
+- Route page/component/CSS/copy work to `页面`; route databases, real-data runtime, credentials-as-environment, tunnels, imports, storage, Organizer, and service recovery to `数据`. Do not send a runtime task to the page worker merely because the build came from its worktree.
+- Split a mixed goal once at dispatch. Run independent data/page tasks in parallel; serialize only an explicit dependency. Do not create a discovery task for one worker just to decide that another worker owns it.
+- Keep a task card compact: state the decision, observable acceptance, exact allowed paths, evidence, ETA, and stop conditions. Reference prior reports by path and finding; do not paste their full history. Default to one implementation card and one correction card only when review finds a concrete defect.
+- A 15-minute interval is a maximum silence/check bound, not a demand for workers to manufacture progress notes. Check the task file and Git together at ETA or on an objective event. Stay quiet while execution is healthy.
+- Before touching GUI, read the task/result file and Git evidence. If a task is already acknowledged/running or its evidence is changing, do not wake it again. One verified wake per new card is enough.
+- Reuse accepted evidence. Track review coverage by page and viewport; continuation reviews contain only missing or changed items. Never repeat a page, screenshot, build, test, or health probe whose evidence remains valid for the same SHA.
+- Treat a browser-control timeout separately from a site failure. First probe the exact URL/health/process once. Restart only the failed, identified component; never rebuild or restart a healthy service just because GUI automation timed out.
+- Once an environment is stable, keep it alive through review. If resource pressure kills it, remove only the verified obsolete process, restart the same environment once, and continue only missing review items. A second runtime failure becomes `BLOCKED` instead of a restart loop.
+- Do not produce extra status documents, screenshots, or GUI inspections for reassurance. Update `ORCHESTRATOR-STATE.md` at phase changes, blockers, completion, or handoff.
+
 ## Bootstrap
 
 When asked to connect or initialize the chain, complete every applicable step before saying ready:
@@ -47,7 +61,7 @@ Readiness requires objective evidence for all four links: Codex control plane, d
 - Create a complete task card at the absolute control-plane path before waking a worker.
 - Write dependencies and merge order before dispatch and do not revise them afterward; supersede the card if the plan changes.
 - Use GUI only to wake. Read task progress and results from files and Git evidence, not from the Claude conversation.
-- Check no later than the ETA and never leave more than 15 minutes between worker checks. Two checks without objective change means `stalled` and one diagnosis.
+- Check no later than the ETA and never leave more than 15 minutes between worker checks. Combine file and Git checks; do not require a separate worker heartbeat. Two checks without objective change means `stalled` and one diagnosis.
 - Invoke Cowork only at milestones, before merging visual/content changes, and before release.
 - Report to Teddy every two hours in the required three sections.
 
@@ -61,6 +75,7 @@ Codex does not keep running after it sends a final response. Never describe a fi
 - If Teddy asks for status while the goal is still running, answer in commentary and continue the workflow. Do not treat the status question as a reason to end the active turn.
 - Do not send the final response until the current milestone is completed, genuinely blocked on Teddy/external state, or Teddy explicitly asks to stop. If the turn must end for another reason, say plainly that no background work will continue and record the exact checkpoint, evidence, and next action in `ORCHESTRATOR-STATE.md`.
 - A Claude worker showing idle is not by itself a failure: first read the task card and Git evidence. Wake it only when there is a queued/revision task that has not already been delivered.
+- A Cowork window not visibly running is not evidence that review never ran: read the target README/capture log first. If it is partial, resume only the listed gaps.
 
 ## Failure handling
 
