@@ -106,6 +106,8 @@ export type HomeMemory = {
   /** 「读读这一天」/「翻到 2025 年」——标签必须跟着去处走，不能共用一句话（原则八那条教训）。 */
   linkLabel?: string;
   slides: HomeMemorySlide[];
+  /** 封面是第几张：价值分最高的那一张，不一定是第一张。见 coverIndexOf。 */
+  coverIndex: number;
   durationSeconds: number;
   mood: MemoryMood;
   moodReason: string;
@@ -208,6 +210,25 @@ function pickSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLo
   return picked.sort(byTime);
 }
 
+/**
+ * 封面取**价值分最高**的那一张，不是时间上最早的那一张。
+ *
+ * 为什么要单独挑：预览不动的时候、家人第一眼看到的就是第 0 张，而幻灯片是按时间排的，
+ * 所以跨时间的主题封面永远是最老的一张。2026-09-17 线上「睡着的样子」的封面因此是
+ * **出生当天医院小床里的新生儿**——副标题写着 2025 年 1 月 — 2026 年 9 月，
+ * 时间是铺开了，可那一眼看到的还是最小的时候，正是 Teddy 抱怨的那件事。
+ *
+ * 播放顺序仍然是时间顺序（那是一段回忆该有的样子），只有**起点**挪到最好的一张。
+ */
+function coverIndexOf(picked: readonly MediaRef[], topics: PhotoTopicLookup): number {
+  const better = byValue(topics);
+  let best = 0;
+  for (let i = 1; i < picked.length; i += 1) {
+    if (better(picked[i], picked[best]) < 0) best = i;
+  }
+  return best;
+}
+
 function memoriesOn(month: MonthChapter, day: string): EditorialMemory[] {
   return month.memories.filter((memory) => memory.signature.day === day);
 }
@@ -266,6 +287,7 @@ export function buildDayMemory(input: {
     href: `/events/${lead.id}`,
     linkLabel: "读读这一天",
     slides: picked.map((media, index) => ({ key: `${day}|${media.id}`, media, caption: captions.get(index) })),
+    coverIndex: coverIndexOf(picked, topics),
     durationSeconds: picked.length * SLIDE_SECONDS,
     mood: mood.mood,
     moodReason: mood.reason,
@@ -303,7 +325,7 @@ const TOPIC_THEMES: ReadonlyArray<{
   {
     key: "water",
     title: "玩水的日子",
-    basis: "泳池，且画面里真的有这个孩子（洗澡、婴儿澡盆、湖边河边已排除）",
+    basis: "泳池，且这个孩子真的泡在水里（洗澡、婴儿澡盆、湖边河边、岸上抱着的都已排除）",
     // **不要再用 `swimming === true` 把 kind 绕过去。** 2026-09-17 线上「玩水的日子」
     // 第一张就是澡盆：室内瓷砖墙、戴洗头帽、坐在充气盆里。查账本，模型自己判的是
     // kind=洗澡、why=「浴室浴缸，小孩泡在水中」——它说对了，是这条规则用 swimming 把它捞了回来。
@@ -311,9 +333,15 @@ const TOPIC_THEMES: ReadonlyArray<{
     // 洗澡和湖边河边现在是**无条件否决**，模型说它在游泳也不行。
     // 还要求画面里真的有这个孩子：2026-09-17 查账本，45 张判为泳池的有 21 张没有孩子
     // （酒店空泳池、只有水面、只有泳圈），而它们的 value 照样 ≥ 0.7——价值分没兜住这一条。
-    preferred: (l) => l.water && l.waterKind === "泳池" && l.childInFrame === true,
+    // 还要求 swimming：**「画面里有这个孩子」不等于「这个孩子在玩水」。**
+    // 2026-09-17 线上那一张是大人抱着 5 个月的张年站在湖边，背后是水面和远山——
+    // 模型判成 泳池 + child=true + swimming=false，前两项都对，人却根本没沾水。
+    // 账本里 泳池+有孩子 共 24 张，其中 18 张（8 天）是真的泡在水里的，
+    // 剩下 6 张全是这种"站在水边"。8 天高于 6 个瞬间的下限，所以这一条收得起。
+    preferred: (l) => l.water && l.waterKind === "泳池"
+      && l.childInFrame === true && l.swimming === true,
     match: (l) => l.water && l.waterKind !== undefined && WATER_OK.has(l.waterKind)
-      && l.childInFrame === true,
+      && l.childInFrame === true && l.swimming === true,
   },
   { key: "sleep", title: "睡着的样子", basis: "主题判为「睡觉」", match: (l) => l.topic === "睡觉" && l.confidence >= TOPIC_MIN_CONFIDENCE },
   { key: "laugh", title: "笑起来的时候", basis: "主题判为「笑」", match: (l) => l.topic === "笑" && l.confidence >= TOPIC_MIN_CONFIDENCE },
@@ -355,6 +383,7 @@ function buildTopicMemory(input: {
       // 一个主题横跨很多个月，没有单一的去处——与其给一个「翻到 2026 年」这种对不上的链接，
       // 不如不给（原则八：标签必须跟着去处走）。
       slides: picked.map((media) => ({ key: `topic:${theme.key}|${media.id}`, media })),
+      coverIndex: coverIndexOf(picked, topics),
       durationSeconds: picked.length * SLIDE_SECONDS,
       mood: mood.mood,
       moodReason: mood.reason,
@@ -438,6 +467,7 @@ function buildSeasonMemory(input: {
     href,
     linkLabel,
     slides: picked.map((media) => ({ key: `${key}|${media.id}`, media })),
+    coverIndex: coverIndexOf(picked, topics),
     durationSeconds: picked.length * SLIDE_SECONDS,
     mood: mood.mood,
     moodReason: mood.reason,

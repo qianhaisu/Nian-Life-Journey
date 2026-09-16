@@ -63,7 +63,11 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
   const reduced = usePrefersReducedMotion();
   const stage = useRef<HTMLDivElement>(null);
   const onScreen = useOnScreen(stage);
-  const index = useSlideshow(memory.key, memory.slides.length, !reduced && onScreen, MEMORY_TIMING.slideSeconds * 1000);
+  // 从封面那一张起步（不是第 0 张）。关掉动效时轮播不跑，停在封面上——这正是想要的。
+  const index = useSlideshow(
+    memory.key, memory.slides.length, !reduced && onScreen,
+    MEMORY_TIMING.slideSeconds * 1000, memory.coverIndex,
+  );
   const current = memory.slides[index] ?? memory.slides[0];
 
   return <div className="memory-stage" ref={stage}>
@@ -85,7 +89,8 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
           width={slide.media.width || 4}
           height={slide.media.height || 3}
           sizes="(max-width: 899px) 96vw, 620px"
-          priority={i === 0}
+          // 优先加载的是**封面**那一张，不是第 0 张——否则抢着下载的是一张没人看到的图。
+          priority={i === memory.coverIndex}
           unoptimized
           aria-hidden={i !== index}
         /> : null
@@ -431,10 +436,17 @@ function useOnScreen(ref: React.RefObject<HTMLElement | null>): boolean {
   return onScreen;
 }
 
-/** 预览轮播。`resetKey` 变了（换了一段）就从第一张重新开始。 */
-function useSlideshow(resetKey: string, count: number, running: boolean, intervalMs: number): number {
-  const [index, setIndex] = useState(0);
-  useEffect(() => { setIndex(0); }, [resetKey]);
+/**
+ * 预览轮播。`resetKey` 变了（换了一段）就回到**封面那一张**重新开始。
+ *
+ * 起点是 `startAt` 而不是 0：幻灯片按时间排，所以第 0 张永远是最早的一张，
+ * 而预览不动时家人看到的就是它。2026-09-17 线上「睡着的样子」的封面因此是出生当天
+ * 医院小床里的新生儿——副标题跨到 2026 年 9 月，第一眼却还是最小的时候。
+ * 封面改取价值分最高的那一张（lib/home-memory.ts 的 coverIndexOf），播放顺序不变。
+ */
+function useSlideshow(resetKey: string, count: number, running: boolean, intervalMs: number, startAt = 0): number {
+  const [index, setIndex] = useState(startAt);
+  useEffect(() => { setIndex(startAt); }, [resetKey, startAt]);
   useEffect(() => {
     if (!running || count <= 1) return;
     const timer = setInterval(() => setIndex((i) => (i + 1) % count), intervalMs);

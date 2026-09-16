@@ -298,7 +298,7 @@ test("「玩水」不看 topic 判成了什么——在泳池里笑，两段回�
   const months = eightDays("p");
   const { memories } = selectHomeMemories(
     archiveOf(months),
-    labels({}, { topic: "笑", water: true, waterKind: "泳池", childInFrame: true, value: 0.9, confidence: 0.95 }),
+    labels({}, { topic: "笑", water: true, waterKind: "泳池", childInFrame: true, swimming: true, value: 0.9, confidence: 0.95 }),
   );
   assert.ok(memories.some((m) => m.title === "玩水的日子"), "topic 是「笑」不该让这段回忆消失");
   assert.ok(memories.some((m) => m.title === "笑起来的时候"), "同一批照片也该能聚成「笑」");
@@ -318,6 +318,37 @@ test("洗澡和湖边河边不算「玩水的日子」——宁可没有这一�
     assert.equal(memories.some((m) => m.title === "玩水的日子"), false,
       `${waterKind} 不该凑成一段「玩水的日子」`);
   }
+});
+
+test("站在水边被抱着不算玩水——人得真的泡在水里", () => {
+  // 2026-09-17 线上那一张：大人抱着 5 个月的张年站在湖边，背后是水面和远山。
+  // 模型判成 泳池 + child=true + swimming=false——前两项都对，人却根本没沾水。
+  // 「画面里有这个孩子」不等于「这个孩子在玩水」，所以 swimming 必须单独要求。
+  const { memories } = selectHomeMemories(
+    archiveOf(eightDays("poolside")),
+    labels({}, { topic: "抱着", water: true, waterKind: "泳池", childInFrame: true, swimming: false, value: 0.95, confidence: 0.95 }),
+  );
+  assert.equal(memories.some((m) => m.title === "玩水的日子"), false,
+    "只是站在池边/湖边，不该凑成一段「玩水的日子」");
+});
+
+test("封面取价值分最高的那一张，不是时间上最早的那一张", () => {
+  // 「睡着的样子」的封面曾经是出生当天医院小床里的新生儿——副标题跨到 2026 年 9 月，
+  // 时间铺开了，但第一眼看到的还是最小的时候。封面单独挑，播放顺序仍按时间。
+  const photos = moments("m", "2026-09-09", 12, 6);
+  const topics = (id) => ({
+    topic: "笑", water: false, confidence: 0.9,
+    value: id === "m-7" ? 0.99 : 0.72, // 第 8 张最好，但它不在开头
+  });
+  const memory = buildDayMemory({
+    day: "2026-09-09", dateLabel: "d", photos, published: [story("e1", "2026-09-09", "标题")],
+    privilege: { checked: new Set(photos.map((p) => p.id)) },
+    topics,
+  });
+  assert.equal(memory.slides[memory.coverIndex].media.id, "m-7", "封面该是价值分最高的那一张");
+  assert.notEqual(memory.coverIndex, 0, "封面不该永远是第一张");
+  const times = memory.slides.map((s) => s.media.takenAt);
+  assert.deepEqual(times, [...times].sort(), "播放顺序仍然是时间顺序");
 });
 
 test("空泳池不算「玩水的日子」——画面里得真的有这个孩子", () => {
