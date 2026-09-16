@@ -41,7 +41,7 @@ import { isRecent } from "@/lib/time-truth";
 import { ageOn, formatDay } from "@/lib/time-signature";
 import type { CareRecord, GrowthKind, GrowthRecord } from "@/lib/types";
 
-export type AboutPortrait = { photo: MediaRef; day: string; dateLabel: string; recent: boolean };
+export type AboutPortrait = { photo: MediaRef; day: string; dateLabel: string; ageLabel?: string; recent: boolean };
 
 export type AboutBasics = {
   age?: string;
@@ -189,7 +189,9 @@ export function buildAboutView({ chapters, store, birthDay, time }: FamilyArchiv
       birthLabel: birthDay ? formatDay(birthDay) : undefined,
       // The portrait says the day it was taken, and whether that day is recent, so a year-old
       // picture is never read as what he looks like now (lib/time-truth.ts).
-      portrait: portrait ? { ...portrait, recent: isRecent(portrait.day, time) } : undefined,
+      // 2026-09-16 视觉验收（原则二）：这是全站最大的一张照片，而它的说明原来只有「摄于 X 年 X 月 X
+      // 日」——一个只读得出「什么时候」、读不出「当时几岁」的位置，是检验句点名的那一类。
+      portrait: portrait ? { ...portrait, ageLabel: birthDay ? ageOn(birthDay, portrait.day) : undefined, recent: isRecent(portrait.day, time) } : undefined,
     },
     measures: measureTracks(store.growthRecords, birthDay),
     health: healthGroups(store.careRecords, birthDay),

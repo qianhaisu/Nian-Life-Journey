@@ -48,7 +48,7 @@ export default async function AboutPage() {
       <Photo media={portrait.photo} priority sizes="(max-width: 700px) 100vw, 760px" />
       {/* The day it was taken, always — and when that day is not recent, the page says so rather
           than letting an undated portrait stand for what he looks like now. */}
-      <figcaption className="about-portrait-date"><time dateTime={portrait.day}>摄于 {portrait.dateLabel}</time>{portrait.recent ? null : <span> · 档案里最新的一张</span>}</figcaption>
+      <figcaption className="about-portrait-date"><time dateTime={portrait.day}>摄于 {portrait.dateLabel}</time>{portrait.ageLabel ? <span> · 当时 {portrait.ageLabel}</span> : null}{portrait.recent ? null : <span> · 档案里最新的一张</span>}</figcaption>
     </figure> : null}
 
     {measures.length > 0 ? <section className="about-block" aria-labelledby="measures-title">
