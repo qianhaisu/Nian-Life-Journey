@@ -83,10 +83,14 @@ if (command === "photos-versions") {
   for (const eventId of events) {
     const version = await repository.getStoryContentVersion(eventId);
     if (!version) { console.log(`${eventId}  missing`); continue; }
-    const detail = await repository.getEventDetail(eventId);
+    // The story's own sources, read by id. getEventDetail() is a family read and returns nothing for an
+    // unpublished story, which is exactly what is under review -- so it cannot supply the evidence.
+    const sourceIds = version.content.sourceIds ?? [];
+    const windowInput = sourceIds.length ? await repository.getOrganizerWindowInput(sourceIds) : { sources: [], media: [] };
     entries.push({
       eventId, reviewedContentVersion: version.contentSha256, content: version.content,
-      sources: (detail?.sources ?? []).map((source) => ({ id: source.id, capturedAt: source.capturedAt, sourceLabel: source.sourceLabel, sourceType: source.sourceType, text: source.text ?? null, mediaIds: source.mediaIds ?? [] })),
+      sources: (windowInput.sources ?? []).map((source) => ({ id: source.id, capturedAt: source.capturedAt, sourceLabel: source.sourceLabel, sourceType: source.sourceType, contributorId: source.contributorId ?? null, text: source.text ?? null, mediaIds: source.mediaIds ?? [] })),
+      media: (windowInput.media ?? []).filter((item) => (version.content.mediaIds ?? []).includes(item.id)).map((item) => ({ id: item.id, type: item.type, src: item.src })),
     });
     console.log(`${eventId}  sha ${version.contentSha256.slice(0, 16)}  sources ${entries.at(-1).sources.length}`);
   }
