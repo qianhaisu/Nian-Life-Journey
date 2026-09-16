@@ -280,7 +280,7 @@ test("主题回忆：泳池的照片聚成「玩水的日子」，横跨很多�
   const months = eightDays("w");
   const { memories } = selectHomeMemories(
     archiveOf(months),
-    labels({}, { topic: "笑", water: true, waterKind: "泳池", swimming: true, value: 0.9, confidence: 0.9 }),
+    labels({}, { topic: "笑", water: true, waterKind: "泳池", swimming: true, childInFrame: true, value: 0.9, confidence: 0.9 }),
   );
   const water = memories.find((m) => m.title === "玩水的日子");
   assert.ok(water, `应当有一段玩水的回忆，实得 ${memories.map((m) => m.title).join(" / ")}`);
@@ -298,7 +298,7 @@ test("「玩水」不看 topic 判成了什么——在泳池里笑，两段回�
   const months = eightDays("p");
   const { memories } = selectHomeMemories(
     archiveOf(months),
-    labels({}, { topic: "笑", water: true, waterKind: "泳池", value: 0.9, confidence: 0.95 }),
+    labels({}, { topic: "笑", water: true, waterKind: "泳池", childInFrame: true, value: 0.9, confidence: 0.95 }),
   );
   assert.ok(memories.some((m) => m.title === "玩水的日子"), "topic 是「笑」不该让这段回忆消失");
   assert.ok(memories.some((m) => m.title === "笑起来的时候"), "同一批照片也该能聚成「笑」");
@@ -307,14 +307,39 @@ test("「玩水」不看 topic 判成了什么——在泳池里笑，两段回�
 test("洗澡和湖边河边不算「玩水的日子」——宁可没有这一段", () => {
   // Teddy 2026-09-17：「尽量多换成泳池游泳 不要洗澡的 湖边河边的」。
   // 线上 226 张有水的照片里 109 张是湖边河边、19 张是洗澡，正是它看起来不像玩水的原因。
+  // **swimming: true 也不许把它捞回来。** 这正是 2026-09-17 线上那张澡盆照片的形状：
+  // 模型判的是 kind=洗澡 + swimming=true，旧规则 `swimming === true || kind === '泳池'`
+  // 于是照样放行。洗澡是无条件否决。
   for (const waterKind of ["洗澡", "湖边河边"]) {
     const { memories } = selectHomeMemories(
       archiveOf(eightDays(`k${waterKind}`)),
-      labels({}, { topic: "其他", water: true, waterKind, value: 0.95, confidence: 0.95 }),
+      labels({}, { topic: "其他", water: true, waterKind, swimming: true, value: 0.95, confidence: 0.95 }),
     );
     assert.equal(memories.some((m) => m.title === "玩水的日子"), false,
       `${waterKind} 不该凑成一段「玩水的日子」`);
   }
+});
+
+test("空泳池不算「玩水的日子」——画面里得真的有这个孩子", () => {
+  // 2026-09-17 查账本：45 张判为泳池的照片里 **21 张根本没有孩子**——酒店空泳池、
+  // 只有水面、只有泳圈玩具，而它们的 value 照样 ≥ 0.7。价值分没兜住这一条，
+  // 所以「画面里有没有孩子」必须单独问、单独判。
+  const { memories } = selectHomeMemories(
+    archiveOf(eightDays("emptypool")),
+    labels({}, { topic: "其他", water: true, waterKind: "泳池", childInFrame: false, value: 0.95, confidence: 0.95 }),
+  );
+  assert.equal(memories.some((m) => m.title === "玩水的日子"), false,
+    "空泳池的风景照不该凑成一段「玩水的日子」");
+});
+
+test("没问过画面里有没有孩子的，也不放行——没问过不等于没有", () => {
+  // childInFrame 缺失 = media-water-v1 那批压根没问过这一项，不是「问过、没有孩子」。
+  // 两者都不放行，但理由不同：这一条是"没有依据"，上一条是"有依据、依据说不行"。
+  const { memories } = selectHomeMemories(
+    archiveOf(eightDays("notasked")),
+    labels({}, { topic: "其他", water: true, waterKind: "泳池", value: 0.95, confidence: 0.95 }),
+  );
+  assert.equal(memories.some((m) => m.title === "玩水的日子"), false);
 });
 
 test("没问过是哪一种水的照片也不进「玩水」——没依据就不说", () => {

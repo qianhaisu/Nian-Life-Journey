@@ -33,7 +33,7 @@ export type PhotoTopic = "玩水" | "睡觉" | "笑" | "吃饭" | "户外" | "�
  * 澡盆、泳池、河滩在那一层是同一个值。线上实测 218 张有水的照片里，
  * **109 张是湖边河边、19 张是洗澡**，所以「玩水的日子」看起来才不像在玩水。
  */
-export type WaterKind = "泳池" | "海边" | "湖边河边" | "洗澡" | "喷水戏水" | "说不准";
+export type WaterKind = "泳池" | "海边" | "湖边河边" | "洗澡" | "婴儿澡盆" | "喷水戏水" | "说不准";
 
 /** 一张照片的标注。前四项缺一不可——导出时就已经按这条筛过了。 */
 export type PhotoTopicLabel = {
@@ -51,6 +51,16 @@ export type PhotoTopicLabel = {
   waterKind?: WaterKind;
   /** 是不是真的泡在水里游，而不是只站在旁边。同样只有问过才有。 */
   swimming?: boolean;
+  /**
+   * 画面里到底有没有出现这个孩子。
+   *
+   * 单独问这一项，是因为 2026-09-17 线上查出来：45 张判为泳池的照片里 **21 张根本没有孩子**
+   * ——酒店空泳池、只有水面、只有泳圈玩具，而它们照样拿到了 value ≥ 0.7。
+   * 一段「玩水的日子」放一屏空泳池，比放澡盆还糟。
+   *
+   * 只有 media-water-v2 问过；v1 那批没有这个字段（undefined = 没问过，不是"没有孩子"）。
+   */
+  childInFrame?: boolean;
 };
 
 export type PhotoTopicCache = {
@@ -72,7 +82,7 @@ const TOPICS: ReadonlySet<string> = new Set<PhotoTopic>([
 ]);
 
 const WATER_KINDS: ReadonlySet<string> = new Set<WaterKind>([
-  "泳池", "海边", "湖边河边", "洗澡", "喷水戏水", "说不准",
+  "泳池", "海边", "湖边河边", "洗澡", "婴儿澡盆", "喷水戏水", "说不准",
 ]);
 
 /**
@@ -95,6 +105,7 @@ function validLabel(raw: unknown): PhotoTopicLabel | undefined {
   if (typeof waterKind === "string" && WATER_KINDS.has(waterKind)) {
     label.waterKind = waterKind as WaterKind;
     if (typeof swimming === "boolean") label.swimming = swimming;
+    if (typeof record.childInFrame === "boolean") label.childInFrame = record.childInFrame;
   }
   return label;
 }

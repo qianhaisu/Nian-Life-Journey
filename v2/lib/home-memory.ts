@@ -303,9 +303,17 @@ const TOPIC_THEMES: ReadonlyArray<{
   {
     key: "water",
     title: "玩水的日子",
-    basis: "泳池，或真的泡在水里游（洗澡、湖边河边已排除）",
-    preferred: (l) => l.water && (l.swimming === true || l.waterKind === "泳池"),
-    match: (l) => l.water && l.waterKind !== undefined && WATER_OK.has(l.waterKind),
+    basis: "泳池，且画面里真的有这个孩子（洗澡、婴儿澡盆、湖边河边已排除）",
+    // **不要再用 `swimming === true` 把 kind 绕过去。** 2026-09-17 线上「玩水的日子」
+    // 第一张就是澡盆：室内瓷砖墙、戴洗头帽、坐在充气盆里。查账本，模型自己判的是
+    // kind=洗澡、why=「浴室浴缸，小孩泡在水中」——它说对了，是这条规则用 swimming 把它捞了回来。
+    // 审计里 10 张可疑的有 6 张都是 `kind=洗澡 swim=true` 这个形状。
+    // 洗澡和湖边河边现在是**无条件否决**，模型说它在游泳也不行。
+    // 还要求画面里真的有这个孩子：2026-09-17 查账本，45 张判为泳池的有 21 张没有孩子
+    // （酒店空泳池、只有水面、只有泳圈），而它们的 value 照样 ≥ 0.7——价值分没兜住这一条。
+    preferred: (l) => l.water && l.waterKind === "泳池" && l.childInFrame === true,
+    match: (l) => l.water && l.waterKind !== undefined && WATER_OK.has(l.waterKind)
+      && l.childInFrame === true,
   },
   { key: "sleep", title: "睡着的样子", basis: "主题判为「睡觉」", match: (l) => l.topic === "睡觉" && l.confidence >= TOPIC_MIN_CONFIDENCE },
   { key: "laugh", title: "笑起来的时候", basis: "主题判为「笑」", match: (l) => l.topic === "笑" && l.confidence >= TOPIC_MIN_CONFIDENCE },
