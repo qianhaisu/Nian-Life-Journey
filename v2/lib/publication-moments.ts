@@ -694,12 +694,21 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // unit the reader browses by, so it is the unit the budget spends. The first ranked day is always
   // taken whole, even if it alone is over budget: a month must show something, and every image here
   // is lazy, so a long day costs DOM nodes rather than bandwidth.
+  //
+  // 2026-09-16：预算按**铺出来的张数**花，不是按这一天的总张数。相册层现在每天只铺每组连拍的
+  // 一张（archive-expander 用 burstLeads），如果预算还按整天的总张数扣，一天 40 张连拍就把
+  // 24 张的额度一次花光，而屏幕上其实只出现了 8 张——线上实测 2026-07 的第一屏就是 1 天 8 张。
+  // 「一屏照片」这个预算的本意是屏幕上的照片数，所以按 leads 数扣；折叠计数
+  // （archiveFoldedPhotoCount）仍然按整天的真实张数算，它描述的是「还没展开的有多少」。
   const archiveDaysVisible: PhotoDay[] = [];
   let visiblePhotoCount = 0;
+  let visibleLeadCount = 0;
   for (const day of archiveDaysRanked) {
-    if (archiveDaysVisible.length > 0 && visiblePhotoCount + day.photos.length > ARCHIVE_FIRST_SCREEN_MAX) break;
+    const leadCount = burstLeads(day.photos).length;
+    if (archiveDaysVisible.length > 0 && visibleLeadCount + leadCount > ARCHIVE_FIRST_SCREEN_MAX) break;
     archiveDaysVisible.push(day);
     visiblePhotoCount += day.photos.length;
+    visibleLeadCount += leadCount;
   }
   archiveDaysVisible.sort((a, b) => a.day.localeCompare(b.day));
   const visibleCountByDay = new Map(archiveDaysVisible.map((day) => [day.day, day.photos.length]));
