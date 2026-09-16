@@ -9922,3 +9922,23 @@ C 画面证据只做了 50/520：其余约 470 张可做，只读、不写库。
 **没做到什么 / 最大的已知 blocker**：`93d8cd6` 未部署（磁盘）；189+9 条视频无派生图、页面打不开；26 张 jpeg 的关联补挂未做（会改变这些消息在页面上「有无配图」，超出本轮授权字面范围）；21 个可渲染的历史 invalid 附件未补；4 条视频存疑未动；WorkBuddy 夸克交付仍无产出；计划任务自然触发尚未发生（09-16 23:30 首次）。
 
 **下一件事**：Teddy 定磁盘清理方案（或由页面轨放行 02bbb0e 连带上线 93d8cd6）；定 26 张 jpeg 与视频派生图是否做；09-16 23:30 看自然触发日志。
+
+## 2026-09-16 · Organizer 生产现状核查（只读，一行没写）——CLAUDE.md 那段已过时，瓶颈不在「放行太少」
+
+只读连生产 RDS（`nianlife` / PG 18.4 / `default_transaction_read_only = on`）。**已证实**：
+
+1. **放行数早就不是 3。** CLAUDE.md 写的是 2026-09-04 的快照「life_event approved 3 / store_only 15 / downgrade 10 / rejected 6」。现在：`life_event` **approved 404 / store_only 439 / needs_human_review 443**，最新一条 2026-09-14。gate 一直在跑，也一直在放行。
+2. **放行了，但全部被压平。** 1,035 条 life_events：`event_type` **全部是 `moment`**（milestone / chapter / outing 一条都没有），`memory_weight` 只有 `trace` 987 / `memory` 48，`created_by` 全是 `ai`。988 条带 `organizer_version = organizer-v2-t7-subject-gate`（最后写入 2026-09-14 17:18）。
+3. **worthiness 在生产里几乎全是 0。** 1,433 条有分的评审里 **1,407 条是 0**，最高 51。只有更早的 `daily_trace` 那批带真分（approved 平均 21 / store_only 平均 1）。`reason_codes` 前三：`t7-subject-gate` 988、`cowork-reviewed` 674、`t20-c-regrade-low-tier` 445。
+4. **69% 的素材从没被整理过。** `raw_sources`：`uploaded` 36,877 / `organized` 16,255。
+
+**代码层面三处把轻重压平**（已读到行）：
+- `lib/organizer/production-adapter.ts:254` **写死 `memoryWeight: "memory"`**——V2 生产路径在结构上就不可能产出 chapter/highlight，无论模型怎么判。
+- `lib/organizer/policy.ts:35-41` `conservativeWeight()`：`chapter` 要求 contentTypes 含 **travel** 且有文本或 location；`highlight` 要求 `hasStrongSignal`（一个 `explicitChange` 正则，或 contentTypes 含 milestone/travel）。**「第一次走路」「第一次说话」「入园」按这套规则永远当不了 chapter**，而原则五点名的恰好就是这些。
+- 同一处的 `eventTypeFor()` 同样只在 milestone 上出非 moment，所以 event_type 全平。
+
+**推断（未证实）**：那 988 条的 `t7-subject-gate` / `t20-c-regrade-low-tier` 看起来是批量回填/降级脚本的产物，不是 V2 判断管线逐条跑出来的——`validator.ts` 里 `worthiness.score` 是真的会算的，但这批行的分是 0。要确认得读那两个脚本的运行记录。
+
+**结论**：`/memory` 21 张等权白卡、年页一张登记表、原则五在索引层「未交付」，**根因不是「精度机制把人生挡在外面」（那是 09-04 的诊断），是放行之后写库时把分级信息丢掉了**。展示层已经会分轻重（`month-moment.tsx` 实测有效），判断层也在出结果，断在中间那一段。
+
+**下一件事**：等 Teddy 定 Organizer 这条线怎么走；①②（02bbb0e）按他的要求暂不部署。
