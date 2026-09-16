@@ -6,13 +6,14 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HomeMemory as HomeMemoryData } from "@/lib/home-memory";
 import { MEMORY_TIMING } from "@/lib/home-memory";
-import { MOOD_LABEL, trackSrc } from "@/lib/home-memory-mood";
+import { pickTrack } from "@/lib/home-memory-mood";
 
 // 首页第一部分：**几段各有主题的回忆**，一次呈现一段，可以换。
 //
-// 主题有三种（lib/home-memory.ts）：某一天、一个季节、一年。标题与副标题的粒度跟着主题走，
-// 所以这个组件不自己拼日期——它只画 `title` / `subtitle` / `linkLabel`，措辞全部由数据层给定。
-// 这一点是故意的：跨天的主题没有「当时几岁」可言，硬拼一句就会在一整季上印一个具体日期。
+// 主题有三种（lib/home-memory.ts）：某一天、一个主题（玩水 / 睡觉 / 笑……）、一个季节。
+// 标题与副标题的粒度跟着主题走，所以这个组件不自己拼日期——它只画 `title` / `subtitle` /
+// `linkLabel`，措辞全部由数据层给定。这一点是故意的：跨天的主题没有「当时几岁」可言，
+// 硬拼一句就会在一整季上印一个具体日期。
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // 为什么是「一次一段 + 换一段」，而不是一排卡片
@@ -21,16 +22,16 @@ import { MOOD_LABEL, trackSrc } from "@/lib/home-memory-mood";
 // Apple 把回忆铺成一排可横滑的卡片，那是一个装着几千段回忆的相册应用的做法。这里是一个人的档案，
 // 首页只回答「最近怎么样，张年」——一次摆三段封面，等于让家人先做选择题，照片也立刻从主角
 // 变成缩略图（原则一、原则五）。所以一次一段，照片该多大还多大；想看别的，按「换一段」。
-// 列表本身按主题轮流排（day / season / year），所以按下去多半换到**另一种主题**，
+// 列表本身按主题轮流排（day / topic / season），所以按下去多半换到**另一种主题**，
 // 而不是同一种主题的另一个日期。
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // 没有音轨的时候，什么都不要说
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Teddy 2026-09-16 线上验收：我合成的音轨质量太差，已全部删除，等他给真实文件。
-// `trackSrc()` 现在对所有情绪返回 undefined，这个组件据此**不挂 <audio>、不画静音键、不写曲名**——
-// 不是指向一个 404 让它静静失败，也不是留一个点了没反应的按钮。
+// 配乐：Teddy 2026-09-16 深夜给了两首真实音轨，放在 public/audio/。点一次播放**随机挑一首**
+// （pickTrack()，抽签发生在浏览器里，见 MemoryPlayer）。一首都没有时这个组件仍然
+// **不挂 <audio>、不画静音键**——不是指向一个 404 让它静静失败，也不是留一个点了没反应的按钮。
 export function HomeMemory({ memories }: { memories: HomeMemoryData[] }) {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -104,7 +105,8 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
     </div>
 
     <div className="memory-actions">
-      {/* 标签跟着去处走：一天是「读读这一天」，一季/一年是「翻到 2025 年」。 */}
+      {/* 标签跟着去处走：一天是「读读这一天」，一季是「翻到 2025 年」；
+          主题横跨很多个月，没有对得上的单一去处，就什么都不画。 */}
       {memory.href && memory.linkLabel
         ? <Link className="memory-read" href={memory.href}>{memory.linkLabel} <span aria-hidden="true">↗</span></Link>
         : <span />}
@@ -138,7 +140,11 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
   const audio = useRef<HTMLAudioElement>(null);
   const slide = memory.slides[index];
   const last = memory.slides.length - 1;
-  const track = trackSrc(memory.mood);
+  // 随机挑一首。放在 useState 的初始化里有两个作用：**这个组件只在点了播放之后才创建**，
+  // 所以抽签发生在浏览器里，不会有 hydration 不一致；而且一次播放全程同一首，
+  // 不会因为任何一次重渲染半路换曲。
+  const [picked] = useState(pickTrack);
+  const track = picked?.src;
 
   const closeViaUI = useCallback(() => history.back(), []);
 
@@ -231,7 +237,7 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
             type="button"
             className="memory-player-mute"
             onClick={() => setMuted((m) => !m)}
-            aria-label={muted ? `打开声音（${MOOD_LABEL[memory.mood]}）` : `静音（${MOOD_LABEL[memory.mood]}）`}
+            aria-label={muted ? `打开声音（${picked?.title ?? "配乐"}）` : `静音（${picked?.title ?? "配乐"}）`}
             aria-pressed={muted}
           >{muted ? <MutedGlyph /> : <SoundGlyph />}</button>
           // 没有音轨时留一个等宽空位，标题才不会从居中偏出去。

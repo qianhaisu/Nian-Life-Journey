@@ -6,6 +6,8 @@ import { MODALITY_LABEL, SOURCE_KIND_LABEL, roleText, type SourceKind } from "@/
 import { readHomeFeed, HOME_REMINDER_LABEL, type HomeFeed, type HomeReminder, type HomeReminderState } from "@/lib/home-feed";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { selectHomeMemories } from "@/lib/home-memory";
+import { topicLookupFrom } from "@/lib/home-memory-topics";
+import { loadTopicCache } from "@/lib/home-memory-topics-load";
 import { HOME_QUIET_STATES } from "@/lib/home-reminder-display";
 import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { renderOnDemand } from "@/lib/render-on-demand";
@@ -28,9 +30,14 @@ export default async function HomePage() {
   await renderOnDemand();
   const archive = await loadFamilyArchiveOnDemand();
   const feed = await readHomeFeed({ archive });
-  // 几段回忆，一次呈现一段，页面上用「换一段」切换（lib/home-memory.ts 按月份铺开，
-  // 所以按几次必然翻到更早的月份，而不是在这一周里打转）。
-  const { memories, absence } = selectHomeMemories(archive);
+  // 几段回忆，一次呈现一段，页面上用「换一段」切换（lib/home-memory.ts 按 天/主题/季节 轮流取，
+  // 所以按几次必然翻到另一种主题，而不是在这一周里打转）。
+  //
+  // 主题与价值分来自一份**随仓库发布的标注缓存**（data/photo-topics.json），不是数据库查询——
+  // 渲染路径一次新增读取都没有（CLAUDE.md 那条 $87 出站流量的规矩）。缓存读不到时
+  // 主题回忆自动消失，天与季节照常，见 lib/home-memory-topics.ts。
+  const topics = topicLookupFrom(await loadTopicCache());
+  const { memories, absence } = selectHomeMemories(archive, topics);
 
   return <div className="home-v2">
     <div className="home-sheet">

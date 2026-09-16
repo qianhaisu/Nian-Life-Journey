@@ -110,24 +110,42 @@ export function moodFor(input: MemoryMoodInput): MemoryMoodVerdict {
 }
 
 /**
- * 现在**真的有文件**的那几种情绪。
+ * 首页回忆的配乐。
  *
- * 2026-09-16 线上验收，Teddy 的原话：「音轨质量太差 清空你做的音轨 等下我给你具体的音轨你读取」。
- * 我合成的那 4 首连同生成脚本已经删除，所以这个集合现在是**空的**。
+ * Teddy 2026-09-16 深夜：「音轨我先放了两首到 Music\Nianlife 下面，
+ * 先不用定 mood，随机配合首页点播放使用。」
  *
- * 空集合不是"坏了"，它是这条链路上唯一诚实的状态：任务书写死了
- * 「没有可用音轨就报告具体缺口，不能用按钮和假曲名冒充音乐已交付」。
- * 所以 `trackSrc()` 返回 undefined，播放器据此**不挂 <audio>、不画静音键、不写曲名**——
- * 而不是指向一个 404 的地址让它静静地失败。
+ * 所以**这一版不按情绪选曲**：点一次播放，随机挑一首。`moodFor` 仍然在跑，判定结果写进每段
+ * 回忆的 `moodReason` 供审计——但它现在不决定放哪首。等音轨多到每种情绪都有，再把 mood 接回来
+ * （那时只需要给下面每条加一个 mood 字段，判定逻辑一行都不用改）。
  *
- * 等 Teddy 给了音轨：把文件放进 v2/public/audio/memory-<mood>.mp3，
- * 在这里把对应的 mood 加进来，其余一行都不用改——情绪判定（moodFor）本来就已经在跑了。
+ * 两个文件都是 Teddy 自己提供的本地文件，放在站内 public/audio/，**不是外链也不是流媒体地址**
+ * （任务书那条「不要用临时外链冒充永久地址」仍然成立）。flac 那首转成了 160kbps mp3：
+ * 原文件 6.3MB，手机上一段 30–60 秒的背景音乐没必要花这个流量。
  */
-export const AVAILABLE_TRACK_MOODS: ReadonlySet<MemoryMood> = new Set<MemoryMood>();
+export type MemoryTrack = {
+  /** 站内永久地址。 */
+  src: string;
+  /** **真实曲名**，给读屏和静音键用——不是编出来的名字，也不是「轻柔钢琴」那种示意文案。 */
+  title: string;
+};
 
-/** 这段回忆的曲子地址；**没有可用音轨时是 undefined**，调用方必须据此降级。 */
-export function trackSrc(mood: MemoryMood): string | undefined {
-  return AVAILABLE_TRACK_MOODS.has(mood) ? `/audio/memory-${mood}.mp3` : undefined;
+export const MEMORY_TRACKS: readonly MemoryTrack[] = [
+  { src: "/audio/memory-1.mp3", title: "时空储蓄罐《底色》" },
+  { src: "/audio/memory-2.mp3", title: "时空储蓄罐《忙碌的生活（人山人海）》" },
+];
+
+/**
+ * 随机挑一首。
+ *
+ * **只能在点了播放之后、在浏览器里调用。** 放进渲染路径的话，服务端和客户端会各抽各的，
+ * React 立刻报 hydration 不一致——而且那种错会表现成"偶尔白屏"，很难查。
+ *
+ * 一首都没有时返回 undefined，调用方据此不挂 <audio>、不画静音键，而不是指向一个 404。
+ */
+export function pickTrack(): MemoryTrack | undefined {
+  if (MEMORY_TRACKS.length === 0) return undefined;
+  return MEMORY_TRACKS[Math.floor(Math.random() * MEMORY_TRACKS.length)];
 }
 
 /**

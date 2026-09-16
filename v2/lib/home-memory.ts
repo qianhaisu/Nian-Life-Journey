@@ -1,55 +1,66 @@
-// 首页第一部分：**几段各有主题的回忆**（2026-09-16 晚，按 Teddy 线上验收的两轮反馈重做）。
+// 首页第一部分：**几段各有主题的回忆**（2026-09-16，按 Teddy 线上验收的三轮反馈重做）。
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// 主题从哪来：只能从**日期事实**里长出来
+// 主题有两种来源：日期事实，和逐张看过的视觉标注
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Teddy 给了两张 iPhone 相册「回忆」的截图：「夏天 · 2026年」是一个季节，「杭州市 · 2025年12月14日」
-// 是一个地点，「周游世界 · 2019年旅程」是一段旅程——**每段有各自的主题，副标题的粒度也跟着主题走**。
-// 第一版我做成了「每段 = 某一天」，六段全是同一种主题，只是日期不同，那不叫多主题。
+// Teddy 给了两张 iPhone 相册「回忆」的截图：「夏天 · 2026年」是一个季节，「周游世界 · 2019年旅程」
+// 是一段旅程——**每段有各自的主题**。第一版我做成「每段 = 某一天」，六段全是同一种主题；
+// 第二版补上了季节和年。第三版（Teddy 2026-09-16）：
 //
-// 这个档案里**能诚实支撑**的主题只有三种，因为其余的没有依据：
+//   「主题把年去掉，换成玩水，睡觉，笑等主题。选片也选和主题有关的。」
+//   「玩水的意思就是游泳，有水就行。不要放弃这个主题。」
+//   「之前保留的主题，选照片也用 deepseek 模型跑下，确认选的是最有价值的图片。」
 //
-//   day    —— 有已发布记忆的那一天。标题就是那天的标题原文，副标题是具体日期 + 当时年龄。
+// 所以现在是三种：
+//
+//   day    —— 有已发布记忆的那一天。标题是那天的标题原文，副标题是具体日期 + 当时年龄。
+//   topic  —— 玩水 / 睡觉 / 笑 / 吃饭 / 户外 / 玩玩具 / 抱着。依据是**逐张看过的视觉标注**，
+//             记在账本里（content_quality_reviews, target_kind='media_topic'），可逐条核对。
 //   season —— 一个季节。标题「2026 年的夏天」，副标题「6 月 — 8 月」。
-//   year   —— 一年。标题「2025 年」，副标题用两个时钟的跨度（当时 11 个月 — 1 岁 10 个月）。
 //
-// **地点主题做不了**：2026-09-16 查生产，1036 条 life_event 的 `location_label` **全空**（0 条）。
-// 没有依据就不做，不拿「杭州市」这种标题去套一个其实不知道在哪拍的日子。
+// **「年」去掉了**，因为它其实不是一个主题——「2025 年」只是一个更大的时间桶，
+// 里面什么都有，正是 Teddy 说的「随机选的」那种感觉。
 //
-// 季节按人说话的方式跨年：「2025 年的冬天」= 2025-12 → 2026-02，不是把 1 月和 12 月塞进同一个冬天。
+// **地点主题仍然做不了**：1036 条 life_event 的 `location_label` 全空（0 条）。
+// 没有依据就不做，不拿「杭州市」去套一个其实不知道在哪拍的日子。
 //
-// ─────────────────────────────────────────────────────────────────────────────
-// 跨天主题怎么选片（Teddy 2026-09-16 裁定：从全季照片里均匀取）
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// 季节和年度不要求那一天有已发布故事——只要主体核验通过，沿时间均匀铺开。
-// 但「均匀」不能退化成某个下午的十二张，所以跨天主题**每天最多取两张**再均匀抽。
-// 没有这条上限时，2026-09 那种「13 天里 310 张」的月份会让一整季看起来像某一天。
+// 季节按人说话的方式跨年：「2025 年的冬天」= 2025-12 → 2026-02。
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// 照片门槛：收紧过，不是放宽
+// 选片：**去重看像素，挑好看的看价值分**——两件事，两把尺子
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// 1. **每一张都要有 `media_subject_check` approved**（有人开过这个文件、记下画面里是这个孩子）。
-//    不再用来源担保——来源说的是「这张图来自哪」，不说画面里是谁，所以菜单牌、单词表、
-//    微信截屏都能混进来，那正是 Teddy 说的「照片有的质量不高」。
-//    实测：该标记已从 64 张涨到 1,049 张，收紧之后素材仍然充足。
+// 这两步刻意分开，因为它们解决的是两个不同的毛病：
 //
-// 2. **每组连拍取像素最大的那一张**。同一次快门在库里常常同时存着原图和微信压缩版
-//    （3120×4160 与 1280×1706，takenAt 相同）；实测 273 个多张连拍组里有 47 组（17%）
-//    原来选中的不是最大那张，平均少 6.8MP，最差一例 960×1280 顶替 3120×4160。
+//   1. **连拍折叠取像素最大的那一张**（representatives）。同一次快门在库里常常同时存着原图和
+//      微信压缩版（3120×4160 与 1280×1706，takenAt 相同）；实测 273 个多张连拍组里有 47 组（17%）
+//      选中的不是最大那张，平均少 6.8MP，最差一例 960×1280 顶替 3120×4160。
+//      这一步**绝不能改用价值分**：两张画面几乎一样的图，价值分也几乎一样，
+//      一旦压缩版侥幸高 0.01 分，就又把原图顶掉了——那正是要修的毛病。
 //
-// 两条都不需要模型：一条读账本，一条比像素。**不要在这里调用视觉模型**——
-// lib/home-photo-quality.ts 顶部记着生产 provider 会把图片悄悄换成 `[Unsupported Image]` 再开始编。
+//   2. **最终取哪几张看价值分**（pickSlides / capPerDay）。到这一步剩下的都是彼此不同的画面，
+//      问题变成「哪几张最值得给家人看」，那就该用逐张看过的价值分，而不是按时间均匀取。
 //
-// 全部材料来自已经读好的 archive（chapters + privilege），不新增任何数据库读取。
+// 没有价值分时（缓存缺失、这批还没标过）**退回沿时间均匀取**，不假装有依据。
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// 照片门槛
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// 每一张都要有 `media_subject_check` approved（有人开过这个文件、记下画面里是这个孩子）。
+// 不用来源担保——来源说的是「这张图来自哪」，不说画面里是谁，所以菜单牌、单词表、微信截屏
+// 都能混进来，那正是 Teddy 说的「照片有的质量不高」。
+//
+// 全部材料来自已经读好的 archive + 一份随仓库发布的标注缓存，**不新增任何数据库读取**
+// （CLAUDE.md 渲染路径那条 $87 出站流量的规矩）。
 import type { FamilyArchive } from "@/lib/family-archive";
 import type { EditorialMemory, MediaRef, MonthChapter } from "@/lib/memory-chapters";
 import { burstGroups, isSubjectChecked, type MediaPrivilege } from "@/lib/publication-moments";
 import { thumbnailSized } from "@/lib/media/hero";
 import { ageAtMonth, formatMonth } from "@/lib/time-signature";
 import { moodFor, type MemoryMood } from "@/lib/home-memory-mood";
+import { NO_TOPICS, type PhotoTopicLabel, type PhotoTopicLookup } from "@/lib/home-memory-topics";
 
 export const MEMORY_MIN_SLIDES = 6;
 export const MEMORY_MAX_SLIDES = 12;
@@ -60,8 +71,13 @@ export const CROSS_DAY_PER_DAY_MAX = 2;
 export const SLIDE_SECONDS = 5;
 export const CROSSFADE_MS = 800;
 
+/** 主题回忆只收价值分到这条线以上的照片。 */
+export const TOPIC_MIN_VALUE = 0.7;
+/** 主题判断的把握下限。**玩水不受这条约束**——water 是另一个问题，见 TOPIC_THEMES。 */
+export const TOPIC_MIN_CONFIDENCE = 0.6;
+
 /** 三种主题。每一种的标题与副标题粒度都不同，这正是「每段有单独主题」的意思。 */
-export type MemoryThemeKind = "day" | "season" | "year";
+export type MemoryThemeKind = "day" | "topic" | "season";
 
 export type HomeMemorySlide = {
   key: string;
@@ -74,7 +90,7 @@ export type HomeMemory = {
   kind: MemoryThemeKind;
   /** React key 与切换用的稳定标识。 */
   key: string;
-  /** 这段回忆的名字。day 用当天标题原文；season/year 是日期事实，不是对画面的判断。 */
+  /** 这段回忆的名字。 */
   title: string;
   /** 副标题，粒度跟着主题走。 */
   subtitle: string;
@@ -87,7 +103,7 @@ export type HomeMemory = {
   durationSeconds: number;
   mood: MemoryMood;
   moodReason: string;
-  /** 为什么是这一段、折叠掉多少、取的是不是最大那张。供审计，不显示。 */
+  /** 为什么是这一段、依据是什么、折叠掉多少。供审计，不显示。 */
   reason: string;
 };
 
@@ -95,38 +111,71 @@ export type HomeMemoryAbsence = { kind: "empty_archive" | "no_qualified_theme"; 
 
 const pixels = (media: MediaRef) => (media.width ?? 0) * (media.height ?? 0);
 const dayOf = (media: MediaRef) => (media.takenAt ?? "").slice(0, 10);
+const monthOfMedia = (media: MediaRef) => (media.takenAt ?? "").slice(0, 7);
 const hourOf = (media: MediaRef) => Number((media.takenAt ?? "").slice(11, 13));
+const byTime = (a: MediaRef, b: MediaRef) =>
+  (a.takenAt ?? "").localeCompare(b.takenAt ?? "") || a.id.localeCompare(b.id);
 
 /** 能进幻灯片的照片：主体核验通过 + 画得出来。 */
 function usable(photos: readonly MediaRef[], privilege: MediaPrivilege): MediaRef[] {
   return photos.filter((item) => isSubjectChecked(item, privilege) && thumbnailSized(item));
 }
 
-/** 每组连拍取**像素最大**的那一张；同样大时按 id 取定，保证确定性。 */
+/**
+ * 每组连拍取**像素最大**的那一张；同样大时按 id 取定，保证确定性。
+ *
+ * 这一步是**去重**，不是选美——不要改成按价值分排（见文件顶部第 1 条）。
+ */
 function representatives(photos: readonly MediaRef[]): MediaRef[] {
   return burstGroups([...photos]).map((group) =>
     [...group].sort((a, b) => pixels(b) - pixels(a) || a.id.localeCompare(b.id))[0]);
 }
 
-/** 沿序列均匀取 max 个，保住开头、中段与结尾。 */
+/** 沿序列均匀取 max 个，保住开头、中段与结尾。**没有价值分时的退路。** */
 function spread<T>(items: readonly T[], max: number): T[] {
   if (items.length <= max) return [...items];
   const step = (items.length - 1) / (max - 1);
   return Array.from({ length: max }, (_, i) => items[Math.round(i * step)]);
 }
 
-/** 跨天主题：同一天最多留 perDay 张，避免某一天吃掉整段。 */
-function capPerDay(photos: readonly MediaRef[], perDay: number): MediaRef[] {
-  const seen = new Map<string, number>();
-  const kept: MediaRef[] = [];
+/** 价值分越高越靠前；没有标注的排在有标注的后面（undefined 不等于 0 分）。 */
+const byValue = (topics: PhotoTopicLookup) => (a: MediaRef, b: MediaRef) => {
+  const va = topics(a.id)?.value;
+  const vb = topics(b.id)?.value;
+  if (va !== undefined && vb !== undefined && va !== vb) return vb - va;
+  if (va !== undefined && vb === undefined) return -1;
+  if (va === undefined && vb !== undefined) return 1;
+  return pixels(b) - pixels(a) || a.id.localeCompare(b.id);
+};
+
+/**
+ * 跨天主题：同一天最多留 perDay 张，避免某一天吃掉整段。
+ * 留下的是那一天里**价值分最高**的几张，不是最早的几张。
+ */
+function capPerDay(photos: readonly MediaRef[], perDay: number, topics: PhotoTopicLookup): MediaRef[] {
+  const byDay = new Map<string, MediaRef[]>();
   for (const photo of photos) {
     const day = dayOf(photo);
-    const used = seen.get(day) ?? 0;
-    if (used >= perDay) continue;
-    seen.set(day, used + 1);
-    kept.push(photo);
+    const bucket = byDay.get(day) ?? [];
+    bucket.push(photo);
+    byDay.set(day, bucket);
   }
-  return kept;
+  const kept: MediaRef[] = [];
+  for (const list of byDay.values()) kept.push(...[...list].sort(byValue(topics)).slice(0, perDay));
+  return kept.sort(byTime);
+}
+
+/**
+ * 最终取哪几张：**按价值分取最高的 max 张，再按时间排回去播放**。
+ *
+ * 价值分不够用时（缓存缺失、或这一批还没标过）退回 `spread` 沿时间均匀取——
+ * 少一个依据就少说一句话，不拿「按时间取」冒充「挑了最好的」。
+ */
+function pickSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLookup): MediaRef[] {
+  if (reps.length <= max) return [...reps];
+  const scored = reps.filter((media) => topics(media.id)?.value !== undefined);
+  if (scored.length < max) return spread(reps, max);
+  return [...scored].sort(byValue(topics)).slice(0, max).sort(byTime);
 }
 
 function memoriesOn(month: MonthChapter, day: string): EditorialMemory[] {
@@ -161,20 +210,23 @@ function moodOf(slides: readonly MediaRef[], pool: readonly MediaRef[], titles: 
 export function buildDayMemory(input: {
   day: string; dateLabel: string; ageLabel?: string;
   photos: readonly MediaRef[]; published: readonly EditorialMemory[]; privilege: MediaPrivilege;
+  topics?: PhotoTopicLookup;
 }): HomeMemory | undefined {
   const { day, dateLabel, ageLabel, photos, published, privilege } = input;
+  const topics = input.topics ?? NO_TOPICS;
   // 没有已发布记忆的一天不做 day 主题：它得有真名字和能点进去的去处（原则八）。
   if (published.length === 0) return undefined;
   const pool = usable(photos, privilege);
   const reps = representatives(pool);
   if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
-  const picked = spread(reps, MEMORY_MAX_SLIDES);
+  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
   const titles = published.map((memory) => memory.title);
   const captions = captionAt(picked.length, titles);
   const lead = published[0];
   const mood = moodOf(picked, pool, titles);
   const age = ageLabel ?? lead.signature.ageLabel;
+  const scored = picked.filter((media) => topics(media.id)?.value !== undefined).length;
   return {
     kind: "day",
     key: `day:${day}`,
@@ -188,11 +240,95 @@ export function buildDayMemory(input: {
     mood: mood.mood,
     moodReason: mood.reason,
     reason: `一天：${photos.length} 张里主体核验通过 ${pool.length} 张，折叠成 ${reps.length} 个瞬间`
-      + `（每组取像素最大的），取 ${picked.length} 张；标题取自当天已发布记忆「${lead.title}」`,
+      + `（每组取像素最大的），取 ${picked.length} 张`
+      + `（其中 ${scored} 张按视觉价值分挑选，其余按时间均匀取）`
+      + `；标题取自当天已发布记忆「${lead.title}」`,
   };
 }
 
-// ── 主题二 / 三：季节与年 ─────────────────────────────────────────────────────
+// ── 主题二：玩水 / 睡觉 / 笑 …… ───────────────────────────────────────────────
+
+/**
+ * 主题词表。**顺序就是首页「换一段」翻到的顺序**，Teddy 点名的三个排在前面。
+ *
+ * 标题刻意写成一句短的白话，不是分类名：家人读到的是「玩水的日子」，不是「topic=玩水」。
+ * 每一条的依据都是逐张标注，可以回账本核对（provider='claude-code-vision'）。
+ */
+const TOPIC_THEMES: ReadonlyArray<{
+  key: string; title: string; match: (label: PhotoTopicLabel) => boolean; basis: string;
+}> = [
+  // Teddy：「玩水的意思就是游泳，有水就行。」所以这一条看的是 water 标记本身，
+  // **不看 topic、也不看 topic 的把握**——在泳池里笑，topic 是「笑」，但它仍然是一张玩水的照片。
+  { key: "water", title: "玩水的日子", basis: "画面里有水（游泳、泳池、洗澡、戏水、海边）", match: (l) => l.water },
+  { key: "sleep", title: "睡着的样子", basis: "主题判为「睡觉」", match: (l) => l.topic === "睡觉" && l.confidence >= TOPIC_MIN_CONFIDENCE },
+  { key: "laugh", title: "笑起来的时候", basis: "主题判为「笑」", match: (l) => l.topic === "笑" && l.confidence >= TOPIC_MIN_CONFIDENCE },
+  { key: "eat", title: "吃饭这件事", basis: "主题判为「吃饭」", match: (l) => l.topic === "吃饭" && l.confidence >= TOPIC_MIN_CONFIDENCE },
+  { key: "outdoor", title: "在外面的时候", basis: "主题判为「户外」", match: (l) => l.topic === "户外" && l.confidence >= TOPIC_MIN_CONFIDENCE },
+  { key: "toy", title: "和玩具在一起", basis: "主题判为「玩玩具」", match: (l) => l.topic === "玩玩具" && l.confidence >= TOPIC_MIN_CONFIDENCE },
+  { key: "hold", title: "被抱着的时候", basis: "主题判为「抱着」", match: (l) => l.topic === "抱着" && l.confidence >= TOPIC_MIN_CONFIDENCE },
+];
+
+function buildTopicMemory(input: {
+  theme: (typeof TOPIC_THEMES)[number];
+  photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup; birthDay?: string;
+}): HomeMemory | undefined {
+  const { theme, photos, privilege, topics, birthDay } = input;
+  const pool = usable(photos, privilege).filter((media) => {
+    const label = topics(media.id);
+    return Boolean(label) && label!.value >= TOPIC_MIN_VALUE && theme.match(label!);
+  });
+  if (pool.length === 0) return undefined;
+
+  const ordered = [...pool].sort(byTime);
+  const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics);
+  if (reps.length < MEMORY_MIN_SLIDES) return undefined;
+
+  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
+  // 跨天主题没有逐张可依据的文字，所以**一句配文都不写**。
+  const mood = moodOf(picked, pool, []);
+  const days = new Set(picked.map(dayOf)).size;
+  return {
+    kind: "topic",
+    key: `topic:${theme.key}`,
+    title: theme.title,
+    subtitle: spanSubtitle(pool, birthDay, days),
+    // 一个主题横跨很多个月，没有单一的去处——与其给一个「翻到 2026 年」这种对不上的链接，
+    // 不如不给（原则八：标签必须跟着去处走）。
+    slides: picked.map((media) => ({ key: `topic:${theme.key}|${media.id}`, media })),
+    durationSeconds: picked.length * SLIDE_SECONDS,
+    mood: mood.mood,
+    moodReason: mood.reason,
+    reason: `主题「${theme.title}」：依据是${theme.basis}，价值分 ≥ ${TOPIC_MIN_VALUE}；`
+      + `符合的照片 ${pool.length} 张，每天最多取 ${CROSS_DAY_PER_DAY_MAX} 张得到 ${reps.length} 张，`
+      + `按价值分取 ${picked.length} 张，来自 ${days} 个不同的日子`,
+  };
+}
+
+/** 「当时 6 个月 — 1 岁 7 个月 · 12 个日子」。跨很多个月的主题用两个时钟（原则二）。 */
+function spanSubtitle(photos: readonly MediaRef[], birthDay: string | undefined, days: number): string {
+  const months = [...new Set(photos.map(monthOfMedia))].filter(Boolean).sort();
+  if (months.length === 0) return `${days} 个日子`;
+  const first = months[0];
+  const last = months[months.length - 1];
+  const span = ageSpan(birthDay, first, last) ?? `${formatMonth(first)} — ${formatMonth(last)}`;
+  return `${span} · ${days} 个日子`;
+}
+
+/**
+ * 「当时 6 个月 — 1 岁 7 个月」。
+ *
+ * `ageAtMonth` 对出生当月返回的是「出生的那个月」，接在「当时」后面会读成
+ * 「当时 出生的那个月 — 11 个月」——句子不通。这种时候返回 undefined，让调用方退回月份跨度。
+ */
+function ageSpan(birthDay: string | undefined, first: string, last: string): string | undefined {
+  const from = ageAtMonth(birthDay, first);
+  const to = ageAtMonth(birthDay, last);
+  if (!from || !to) return undefined;
+  if (from.startsWith("出生") || to.startsWith("出生")) return undefined;
+  return from === to ? `当时 ${from}` : `当时 ${from} — ${to}`;
+}
+
+// ── 主题三：季节 ──────────────────────────────────────────────────────────────
 
 const SEASONS = [
   { key: "spring", label: "春天", months: [3, 4, 5] },
@@ -212,25 +348,23 @@ function seasonOf(month: string): { key: string; label: string; year: number } |
   return { key: season.key, label: season.label, year: anchorYear };
 }
 
-function buildSpanMemory(input: {
-  kind: "season" | "year";
+function buildSeasonMemory(input: {
   key: string; title: string; subtitle: string;
   href?: string; linkLabel?: string;
-  photos: readonly MediaRef[]; privilege: MediaPrivilege;
+  photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup;
 }): HomeMemory | undefined {
-  const { kind, key, title, subtitle, href, linkLabel, photos, privilege } = input;
+  const { key, title, subtitle, href, linkLabel, photos, privilege, topics } = input;
   const pool = usable(photos, privilege);
-  // 按时间排好再折叠——跨天主题的「均匀」是沿时间的均匀。
-  const ordered = [...pool].sort((a, b) => (a.takenAt ?? "").localeCompare(b.takenAt ?? "") || a.id.localeCompare(b.id));
-  const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX);
+  const ordered = [...pool].sort(byTime);
+  const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics);
   if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
-  const picked = spread(reps, MEMORY_MAX_SLIDES);
-  // 跨天主题没有逐张可依据的文字，所以**一句配文都不写**，不拿某一天的标题去概括一整季。
+  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
   const mood = moodOf(picked, pool, []);
   const days = new Set(picked.map(dayOf)).size;
+  const scored = picked.filter((media) => topics(media.id)?.value !== undefined).length;
   return {
-    kind,
+    kind: "season",
     key,
     title,
     subtitle,
@@ -240,8 +374,9 @@ function buildSpanMemory(input: {
     durationSeconds: picked.length * SLIDE_SECONDS,
     mood: mood.mood,
     moodReason: mood.reason,
-    reason: `${kind === "season" ? "一个季节" : "一年"}：主体核验通过 ${pool.length} 张，折叠后每天最多取`
-      + ` ${CROSS_DAY_PER_DAY_MAX} 张得到 ${reps.length} 张，沿时间均匀取 ${picked.length} 张，来自 ${days} 个不同的日子`,
+    reason: `一个季节：主体核验通过 ${pool.length} 张，折叠后每天最多取 ${CROSS_DAY_PER_DAY_MAX} 张`
+      + `得到 ${reps.length} 张，取 ${picked.length} 张（其中 ${scored} 张有视觉价值分），`
+      + `来自 ${days} 个不同的日子`,
   };
 }
 
@@ -252,15 +387,22 @@ type DayEntry = { day: string; month: MonthChapter; photos: readonly MediaRef[] 
 /**
  * 选出首页可以切换的那几段回忆，**三种主题混在一起**。
  *
- * 顺序：按 day / season / year 轮流取（interleave），所以「换一段」按下去换到的多半是
+ * 顺序：按 day / topic / season 轮流取（interleave），所以「换一段」按下去换到的多半是
  * 另一种主题，而不是同一种主题的另一个日期。全程确定，无随机。
+ *
+ * `topics` 读不到时（缓存缺失）**主题回忆一段都不出**——不知道画面里是什么，就不能说
+ * 这是一段玩水的回忆；天与季节照常，因为它们的依据是日期事实。
  */
-export function selectHomeMemories(archive: FamilyArchive): { memories: HomeMemory[]; absence?: HomeMemoryAbsence } {
+export function selectHomeMemories(
+  archive: FamilyArchive,
+  topics: PhotoTopicLookup = NO_TOPICS,
+): { memories: HomeMemory[]; absence?: HomeMemoryAbsence } {
   const { chapters, privilege, birthDay } = archive;
   const today = archive.time.today;
 
   const dayEntries: DayEntry[] = [];
   const byMonth = new Map<string, MediaRef[]>();
+  const allPhotos: MediaRef[] = [];
   let scannedDays = 0;
 
   for (const year of chapters) {
@@ -272,6 +414,7 @@ export function selectHomeMemories(archive: FamilyArchive): { memories: HomeMemo
         const bucket = byMonth.get(month.month) ?? [];
         bucket.push(...photoDay.photos);
         byMonth.set(month.month, bucket);
+        allPhotos.push(...photoDay.photos);
       }
     }
   }
@@ -285,18 +428,25 @@ export function selectHomeMemories(archive: FamilyArchive): { memories: HomeMemo
   for (const entry of dayEntries) {
     const month = entry.day.slice(0, 7);
     if (seenMonths.has(month)) continue; // 每个月最多出一天，天然铺开
+    const dayInfo = entry.month.photoDays.find((d) => d.day === entry.day);
     const memory = buildDayMemory({
       day: entry.day,
-      dateLabel: entry.month.photoDays.find((d) => d.day === entry.day)?.dateLabel ?? entry.day,
-      ageLabel: entry.month.photoDays.find((d) => d.day === entry.day)?.ageLabel,
+      dateLabel: dayInfo?.dateLabel ?? entry.day,
+      ageLabel: dayInfo?.ageLabel,
       photos: entry.photos,
       published: memoriesOn(entry.month, entry.day),
       privilege,
+      topics,
     });
     if (!memory) continue;
     seenMonths.add(month);
     dayMemories.push(memory);
   }
+
+  // 主题回忆：玩水 / 睡觉 / 笑 …… 从**全部照片**里找，不限于某一天或某一季。
+  const topicMemories = TOPIC_THEMES
+    .map((theme) => buildTopicMemory({ theme, photos: allPhotos, privilege, topics, birthDay }))
+    .filter((memory): memory is HomeMemory => Boolean(memory));
 
   // 季节主题
   const seasonPhotos = new Map<string, { label: string; year: number; photos: MediaRef[] }>();
@@ -310,8 +460,7 @@ export function selectHomeMemories(archive: FamilyArchive): { memories: HomeMemo
   }
   const seasonMemories = [...seasonPhotos.entries()]
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([key, bucket]) => buildSpanMemory({
-      kind: "season",
+    .map(([key, bucket]) => buildSeasonMemory({
       key: `season:${key}`,
       title: `${bucket.year} 年的${bucket.label}`,
       subtitle: seasonSubtitle(bucket.label, bucket.year),
@@ -319,30 +468,11 @@ export function selectHomeMemories(archive: FamilyArchive): { memories: HomeMemo
       linkLabel: `翻到 ${bucket.year} 年`,
       photos: bucket.photos,
       privilege,
+      topics,
     }))
     .filter((memory): memory is HomeMemory => Boolean(memory));
 
-  // 年主题
-  const yearPhotos = new Map<string, MediaRef[]>();
-  for (const [month, photos] of byMonth) {
-    const year = month.slice(0, 4);
-    yearPhotos.set(year, [...(yearPhotos.get(year) ?? []), ...photos]);
-  }
-  const yearMemories = [...yearPhotos.entries()]
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([year, photos]) => buildSpanMemory({
-      kind: "year",
-      key: `year:${year}`,
-      title: `${year} 年`,
-      subtitle: yearSubtitle(year, byMonth, birthDay),
-      href: `/memory/${year}`,
-      linkLabel: `翻到 ${year} 年`,
-      photos,
-      privilege,
-    }))
-    .filter((memory): memory is HomeMemory => Boolean(memory));
-
-  const memories = interleaveKinds([dayMemories, seasonMemories, yearMemories], HOME_MEMORIES_MAX);
+  const memories = interleaveKinds([dayMemories, topicMemories, seasonMemories], HOME_MEMORIES_MAX);
   if (memories.length === 0) {
     return {
       memories: [],
@@ -363,18 +493,6 @@ function seasonSubtitle(label: string, year: number): string {
   return season.key === "winter"
     ? `${year} 年 12 月 — 次年 2 月`
     : `${year} 年 ${months[0]} 月 — ${months[months.length - 1]} 月`;
-}
-
-/** 一年的副标题用两个时钟：这一年他从几岁到几岁（原则二）。拿不到出生日期就退回月份跨度。 */
-function yearSubtitle(year: string, byMonth: ReadonlyMap<string, MediaRef[]>, birthDay?: string): string {
-  const months = [...byMonth.keys()].filter((month) => month.startsWith(year)).sort();
-  if (months.length === 0) return `${year} 年`;
-  const first = months[0];
-  const last = months[months.length - 1];
-  const from = ageAtMonth(birthDay, first);
-  const to = ageAtMonth(birthDay, last);
-  if (from && to) return from === to ? `当时 ${from}` : `当时 ${from} — ${to}`;
-  return `${formatMonth(first)} — ${formatMonth(last)}`;
 }
 
 /** 三种主题轮流取，所以「换一段」换到的多半是另一种主题。 */

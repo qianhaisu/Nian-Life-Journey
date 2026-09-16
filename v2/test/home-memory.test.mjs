@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import {
   selectHomeMemories, buildDayMemory, MEMORY_MIN_SLIDES, MEMORY_MAX_SLIDES, CROSS_DAY_PER_DAY_MAX,
 } from "../lib/home-memory.ts";
-import { moodFor, trackSrc, AVAILABLE_TRACK_MOODS } from "../lib/home-memory-mood.ts";
+import { moodFor, MEMORY_TRACKS, pickTrack } from "../lib/home-memory-mood.ts";
 import { reminderInWindow, lastMentionedOn, windowStart } from "../lib/home-reminder-window.ts";
 import { lastMentionFrom } from "../lib/upcoming-contract.ts";
 
@@ -133,22 +133,32 @@ test("配文只用当天已发布标题原文，且不压在第一张和最后�
 // ── 主题：季节与年 ────────────────────────────────────────────────────────────
 
 test("三种主题混在一起，且「换一段」换到的多半是另一种主题", () => {
+  // 季节要凑得出一段，就得有足够多的不同日子：每天封顶 CROSS_DAY_PER_DAY_MAX 张，
+  // 所以一季至少要 3 个日子。生产里一季有 24–42 个，这里照那个形状写。
   const months = [
     monthOf("2026-09", [
       { day: "2026-09-09", photos: moments("a", "2026-09-09", 8) },
       { day: "2026-09-02", photos: moments("b", "2026-09-02", 8) },
     ], [story("e1", "2026-09-09", "他说了「打开」"), story("e2", "2026-09-02", "开始要说话了")]),
-    monthOf("2026-08", [{ day: "2026-08-20", photos: moments("c", "2026-08-20", 8) }],
-      [story("e3", "2026-08-20", "八月的一天")]),
-    monthOf("2026-07", [{ day: "2026-07-15", photos: moments("d", "2026-07-15", 8) }],
-      [story("e4", "2026-07-15", "七月的一天")]),
+    monthOf("2026-08", [
+      { day: "2026-08-20", photos: moments("c", "2026-08-20", 8) },
+      { day: "2026-08-06", photos: moments("c2", "2026-08-06", 8) },
+    ], [story("e3", "2026-08-20", "八月的一天")]),
+    monthOf("2026-07", [
+      { day: "2026-07-15", photos: moments("d", "2026-07-15", 8) },
+      { day: "2026-07-03", photos: moments("d2", "2026-07-03", 8) },
+    ], [story("e4", "2026-07-15", "七月的一天")]),
   ];
-  const { memories } = selectHomeMemories(archiveOf(months));
+  const { memories } = selectHomeMemories(
+    archiveOf(months),
+    () => ({ topic: "睡觉", water: true, value: 0.9, confidence: 0.9 }),
+  );
   assert.ok(memories.length >= 3, `应当有多段，实得 ${memories.length}`);
   const kinds = new Set(memories.map((m) => m.kind));
-  assert.ok(kinds.size >= 2, `应当不止一种主题，实得 ${[...kinds].join("/")}`);
+  assert.equal(kinds.size, 3, `天/主题/季节三种都该出现，实得 ${[...kinds].join("/")}`);
   // 相邻两段不应是同一种主题（轮流取的直接后果）
   assert.notEqual(memories[0].kind, memories[1].kind, "第一段和第二段应当是不同主题");
+  assert.notEqual(memories[1].kind, memories[2].kind, "第二段和第三段也应当不同");
 });
 
 // 跨天主题的夹具必须摊到**足够多的不同日子**：每天封顶 CROSS_DAY_PER_DAY_MAX 张，
@@ -251,13 +261,124 @@ test("一天都不合格时说明白原因，不编一段内容", () => {
   assert.equal(absence.kind, "no_qualified_theme");
 });
 
+// ── 主题：玩水 / 睡觉 / 笑 …… ─────────────────────────────────────────────────
+
+/** 一个假的标注 lookup。生产里这份数据来自逐张看过的视觉标注缓存。 */
+const labels = (map, fallback) => (id) => map[id] ?? fallback;
+
+/** 八个不同的日子，每天 3 个瞬间——跨天主题每天封顶 2 张，所以够凑 6 张以上。 */
+const eightDays = (prefix) => {
+  const days = ["2026-07-01", "2026-07-08", "2026-07-15", "2026-07-22",
+    "2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"];
+  return [
+    monthOf("2026-07", days.slice(0, 4).map((d) => ({ day: d, photos: moments(`${prefix}${d}`, d, 3) }))),
+    monthOf("2026-08", days.slice(4).map((d) => ({ day: d, photos: moments(`${prefix}${d}`, d, 3) }))),
+  ];
+};
+
+test("主题回忆：有水的照片聚成「玩水的日子」，横跨很多天", () => {
+  const months = eightDays("w");
+  const { memories } = selectHomeMemories(
+    archiveOf(months),
+    labels({}, { topic: "笑", water: true, value: 0.9, confidence: 0.9 }),
+  );
+  const water = memories.find((m) => m.title === "玩水的日子");
+  assert.ok(water, `应当有一段玩水的回忆，实得 ${memories.map((m) => m.title).join(" / ")}`);
+  assert.equal(water.kind, "topic");
+  assert.ok(water.slides.length >= MEMORY_MIN_SLIDES);
+  assert.equal(water.href, undefined, "一个主题横跨很多个月，没有对得上的单一去处");
+  assert.equal(water.dateTime, undefined, "跨天主题没有单一日期");
+  assert.ok(water.slides.every((s) => s.caption === undefined), "跨天主题不写配文");
+  assert.match(water.subtitle, /个日子/);
+});
+
+test("「玩水」只看有没有水，不看主题判成了什么——在泳池里笑仍然是玩水", () => {
+  // 每一张的 topic 都是「笑」、把握很高，water 是 true。旧口径（强制单选主题）会把水丢掉。
+  const months = eightDays("p");
+  const { memories } = selectHomeMemories(
+    archiveOf(months),
+    labels({}, { topic: "笑", water: true, value: 0.9, confidence: 0.95 }),
+  );
+  assert.ok(memories.some((m) => m.title === "玩水的日子"), "topic 是「笑」不该让这段回忆消失");
+  assert.ok(memories.some((m) => m.title === "笑起来的时候"), "同一批照片也该能聚成「笑」");
+});
+
+test("价值分不够的照片进不了主题回忆——宁可没有这一段", () => {
+  const months = eightDays("low");
+  const { memories } = selectHomeMemories(
+    archiveOf(months),
+    labels({}, { topic: "睡觉", water: true, value: 0.3, confidence: 0.95 }),
+  );
+  assert.equal(memories.some((m) => m.kind === "topic"), false,
+    "全部低于价值分下限时，一段主题回忆都不该出现");
+});
+
+test("读不到标注缓存时主题回忆一段都不出，天与季节照常", () => {
+  const months = eightDays("n");
+  // 不传 lookup ＝ 缓存缺失
+  const { memories } = selectHomeMemories(archiveOf(months));
+  assert.equal(memories.some((m) => m.kind === "topic"), false,
+    "不知道画面里是什么，就不能说这是一段玩水的回忆");
+  assert.ok(memories.some((m) => m.kind === "season"), "季节的依据是日期事实，不受影响");
+});
+
+test("选片按价值分取最高的那几张，不是按时间均匀取", () => {
+  const photos = moments("m", "2026-09-09", 30, 6);
+  // 后 12 张高分，前 18 张低分
+  const topics = (id) => {
+    const index = Number(id.split("-")[1]);
+    return { topic: "笑", water: false, value: index >= 18 ? 0.95 : 0.3, confidence: 0.9 };
+  };
+  const memory = buildDayMemory({
+    day: "2026-09-09", dateLabel: "d", photos, published: [story("e1", "2026-09-09", "标题")],
+    privilege: { checked: new Set(photos.map((p) => p.id)) },
+    topics,
+  });
+  assert.equal(memory.slides.length, MEMORY_MAX_SLIDES);
+  for (const slide of memory.slides) {
+    assert.ok(Number(slide.media.id.split("-")[1]) >= 18,
+      `取到了低价值的那一张：${slide.media.id}`);
+  }
+  // 取完之后按时间排回去播放，不是按分数排
+  const times = memory.slides.map((s) => s.media.takenAt);
+  assert.deepEqual(times, [...times].sort(), "播放顺序仍然是时间顺序");
+});
+
+test("连拍折叠只看像素，不看价值分——压缩版分再高也不能顶替原图", () => {
+  // 这条是防回归：去重和选美是两把尺子。两张画面几乎一样的图价值分也几乎一样，
+  // 一旦让价值分参与去重，压缩版侥幸高 0.01 分就又把原图顶掉了。
+  const day = "2026-09-09";
+  const photos = [];
+  for (let i = 0; i < 7; i += 1) {
+    const at = `${day} 1${i}:00:00`;
+    photos.push(photo(`small-${i}`, at, { width: 960, height: 1280 }));
+    photos.push(photo(`orig-${i}`, at, { width: 3120, height: 4160 }));
+  }
+  const topics = (id) => ({
+    topic: "笑", water: false, confidence: 0.9,
+    value: id.startsWith("small-") ? 0.99 : 0.50, // 压缩版分更高
+  });
+  const memory = buildDayMemory({
+    day, dateLabel: "d", photos, published: [story("e1", day, "标题")],
+    privilege: { checked: new Set(photos.map((p) => p.id)) },
+    topics,
+  });
+  for (const slide of memory.slides) {
+    assert.match(slide.media.id, /^orig-/, `价值分把压缩版选上来了：${slide.media.id}`);
+  }
+});
+
 // ── 配乐 ──────────────────────────────────────────────────────────────────────
 
-test("现在没有音轨：trackSrc 对每一种情绪都返回 undefined，不指向 404", () => {
-  assert.equal(AVAILABLE_TRACK_MOODS.size, 0, "我合成的音轨已按 Teddy 的指示清空");
-  for (const mood of ["bright", "tender", "calm", "open"]) {
-    assert.equal(trackSrc(mood), undefined, `${mood} 不该指向一个不存在的文件`);
+test("配乐：两首真实音轨都在站内，随机挑一首，不按情绪选曲", () => {
+  assert.equal(MEMORY_TRACKS.length, 2, "Teddy 2026-09-16 放了两首");
+  for (const track of MEMORY_TRACKS) {
+    assert.match(track.src, /^\/audio\/memory-\d+\.mp3$/, "必须是站内永久地址，不是临时外链");
+    assert.ok(track.title.length > 0, "读屏要念得出真实曲名");
   }
+  // 抽签真的会抽到两首，而不是永远第一首
+  const seen = new Set(Array.from({ length: 80 }, () => pickTrack().src));
+  assert.equal(seen.size, 2, `随机挑曲应当两首都挑得到，实得 ${[...seen].join(" / ")}`);
 });
 
 test("情绪判定仍然按真实依据走，理由说得出是哪一条", () => {
