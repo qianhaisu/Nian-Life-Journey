@@ -11,14 +11,17 @@
    - 尺寸用视口媒体查询而不是容器查询：这一块本来就铺满视口，断点仍然是稿子的 1180 / 710 / 430。 */
 
 .home-v2 {
-  --home-sage: #74866a;
+  /* 2026-09-16 视觉验收：首页所有可点的字（读读这一天 / 换张照片 / 翻到某月 / 回忆浮现里的
+     故事链接）都是 --home-sage，实测对纸底 3.63:1，达不到 AA 正文 4.5。与站点级 --sage-ink
+     取同一支，色相不变，只压深明度：4.96:1。--home-muted 同理，4.39 → 4.95。 */
+  --home-sage: var(--sage-ink);
   --home-sage-soft: #edf0e7;
   --home-clay: #c2a88a;
   --home-blue: #537b95;
   --home-red: #b26450;
   --home-peach: #f3e9df;
   --home-ink: #433e38;
-  --home-muted: #7a7267;
+  --home-muted: #716a60;
   color: var(--home-ink);
   font-size: 15px;
   line-height: 1.75;
@@ -76,7 +79,7 @@
 .home-story-when {
   margin: 0 0 16px;
   color: var(--home-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 .home-story-when time { color: inherit; font-weight: 400; }
 .home-read {
@@ -127,7 +130,7 @@
   gap: 8px;
   padding: 10px 2px 0;
   color: var(--home-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .home-caption time { color: inherit; font-weight: 400; }
 .home-swap {
@@ -139,7 +142,7 @@
   border: 0;
   background: none;
   color: var(--home-sage);
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -167,7 +170,7 @@
 .home-notes-label {
   margin: 0 0 10px;
   color: var(--home-muted);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: .1em;
 }
 .home-note + .home-note { margin-top: 4px; }
@@ -176,7 +179,7 @@
   min-height: 44px;
   padding: 8px 0;
   color: var(--home-ink);
-  font-size: 13.5px;
+  font-size: 15px;
   line-height: 1.65;
   cursor: pointer;
   list-style: none;
@@ -186,7 +189,7 @@
 .home-note > summary:focus-visible { outline: 2px solid var(--home-sage); outline-offset: 3px; }
 /* PAGE-0915-FULL-REMEDIATION-R1 A2：没有可展开内容的一条，长得跟上面一模一样，只是没有可点的
    "＋"、没有 hover 变色——它是一句话，不是一个（假装能展开的）控件。 */
-.home-note-plain { margin: 0; min-height: 44px; padding: 8px 0; color: var(--home-ink); font-size: 13.5px; line-height: 1.65; }
+.home-note-plain { margin: 0; min-height: 44px; padding: 8px 0; color: var(--home-ink); font-size: 15px; line-height: 1.65; }
 .home-note-when { color: var(--home-muted); }
 .home-note-when time { color: inherit; font-weight: 400; }
 .home-note-status { color: #977051; }
@@ -201,7 +204,7 @@
 .home-note-detail {
   padding: 2px 0 10px;
   color: var(--home-muted);
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.8;
 }
 .home-note-detail > p { margin: 0 0 8px; }
@@ -215,13 +218,13 @@
   gap: 0 7px;
   margin: 0;
   color: var(--home-muted);
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 .home-note-source-head > * + *::before { margin-right: 7px; color: var(--color-border); content: "·"; }
 .home-note-kind { color: var(--home-sage); }
 .home-note-role { color: var(--home-sage); }
 .home-note-role--unconfirmed { color: var(--home-muted); font-style: italic; }
-.home-note-summary { margin: 3px 0 0; color: var(--home-ink); font-size: 12.5px; line-height: 1.7; }
+.home-note-summary { margin: 3px 0 0; color: var(--home-ink); font-size: 13.5px; line-height: 1.7; }
 .home-note-link { margin: 2px 0 0; }
 .home-note-link a {
   display: inline-flex;
@@ -262,8 +265,8 @@
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
   color: var(--home-muted);
-  font-size: 13.5px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.75;
 }
 .home-recall-label { color: var(--home-ink); }
 .home-recall a { color: var(--home-sage); }
@@ -338,12 +341,21 @@
     max-width: 100%;
     margin-inline: auto;
   }
+  /* 2026-09-16 视觉验收（390×844 实测）：原来的 72svh 让照片吃掉 608px，题签被顶到 y=769，
+     而固定底栏 .bottom-nav 从 784 开始——题签压在底栏下面，它下面那行「日期 · 当时几岁」
+     整个掉出首屏。等于手机上第一眼只有一张照片和半行字：原则一（不点任何东西能说出张年
+     最近怎么样）和原则二（同时可读什么时候和当时几岁）在最该成立的地方不成立。
+     所以限高不再用百分比，改成「视口高度减去下面这段必须读到的字」：
+     题签两行 ~65 + 日期行 ~23 + 说明行 ~54 + 段距 ~38 + 底栏 60 + 余量 ~100 ≈ 340px。
+     百分比在小屏（667）上会重新压上去，这个减法不会。 */
   .home-photo img {
     width: auto;
     max-width: 100%;
-    max-height: 72vh;
-    max-height: 72svh;
+    max-height: max(240px, calc(100vh - 340px));
+    max-height: max(240px, calc(100svh - 340px));
   }
   .home-notes { max-width: none; margin-top: 26px; }
-  .home-title { font-size: 19px; }
+  /* 题签是这一页唯一的主标题，手机上却只有 19px——比正文 16px 大三个像素，读起来仍然像
+     「还没加载完」。桌面在 0915 已经恢复到 30–36px，手机这条当时漏了。 */
+  .home-title { font-size: clamp(22px, 6.2vw, 27px); }
 }

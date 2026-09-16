@@ -36,7 +36,8 @@ export default async function MemoryPage() {
   return (
     <div className="memory-page">
       <header className="page-masthead reading-wrap">
-        <span className="section-mark">记忆</span>
+        {/* 2026-09-16 视觉验收：标题上方原本还有一行「记忆」——顶栏已经写着「记忆」，
+            标题自己也说了「往回翻翻」，这行只是重复一次结构名。 */}
         <h1 className="serif">往回翻翻，<br /><em>张年。</em></h1>
         <p>那些已经过去、但还想再看一次的日子。</p>
       </header>
@@ -64,7 +65,11 @@ export default async function MemoryPage() {
           <YearNavHighlight />
 
           {index.years.map((year) => (
-            <section key={year.year} id={`year-${year.year}`} className="memory-year-section">
+            <section key={year.year} id={`year-${year.year}`} className="memory-year-section" aria-labelledby={`year-heading-${year.year}`}>
+              {/* 2026-09-16 视觉验收：这个 section 原来只有 id、没有可见标题。两年的卡片在同一条
+                  瀑布流里，滚过 2026 年 1 月就静默进入 2025 年，读的人不知道自己换了年份——
+                  上面那排年份按钮又长得像筛选器（其实是锚点），会让人以为筛选失效了。 */}
+              <h2 className="section-mark memory-year-heading" id={`year-heading-${year.year}`}>{year.year} 年</h2>
               <div className="memory-month-grid reading-wrap">
                 {year.months.map((month) => (
                   <MonthCard

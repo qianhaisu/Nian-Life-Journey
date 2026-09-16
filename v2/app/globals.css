@@ -1,8 +1,16 @@
 /* B-9 Earth Tones — Nian Life (Teddy 2026-09-05 定稿) */
 :root {
-  /* New earth-tone primitives */
+  /* New earth-tone primitives.
+     --sage / --clay 是**面和线**用的浅色（品牌块底、药丸底、图表线、色块），不是字色。
+     2026-09-16 视觉验收实测：#9EAB92 当字色时对纸底只有 2.24:1、#C2A88A 只有 2.10:1，
+     WCAG AA 正文要求 4.5:1——站里约六十处功能文字（日期、当时几岁、章节名、相册入口、
+     身高体重数值）都踩在这两个值上，在手机上是「看得见但读不动」。
+     解决办法不是换色相（B-9 定稿不动），是给同色相补一档**字色**：
+     --sage-ink / --clay-ink，用 HSL 只降明度算到刚过 4.6:1，面和线继续用原来的浅色。 */
   --sage: #9EAB92;
   --clay: #C2A88A;
+  --sage-ink: #626F56;  /* 对 #F9F6F0 纸底 4.96 · 白 5.35 · #F3EEE6 卡底 4.63 */
+  --clay-ink: #826544;  /* 对 #F9F6F0 纸底 5.00 · 白 5.39 · #F3EEE6 卡底 4.67 */
   --shadow: 0 16px 40px rgba(138,121,102,.08);
   --shadow-hover: 0 24px 48px rgba(138,121,102,.15);
   --shadow-badge: 0 4px 12px rgba(138,121,102,.05);
@@ -10,12 +18,15 @@
   --r-badge: 20px;
   /* Canonical aliases — all existing CSS continues using these names */
   --color-primary: #433E38;
-  --color-secondary: #9EAB92;
-  --color-accent: #9EAB92;
+  /* --color-secondary / --color-accent 站里几乎只当字色用（grep：约 60 处 color:，非字色只有
+     焦点框、两条图表线、三条 1px 分隔线和一个 9% 色块底），所以它们指向 --sage-ink；
+     真正需要浅色面的地方直接写 var(--sage) / var(--clay)。 */
+  --color-secondary: var(--sage-ink);
+  --color-accent: var(--sage-ink);
   --color-bg: #F9F6F0;
   --color-surface: #FFFFFF;
   --color-text: #433E38;
-  --color-muted: #7A7267;
+  --color-muted: #716A60;  /* 原 #7A7267 = 4.39:1，差 0.11 就过 AA；同色相压深一档到 4.95 */
   --color-border: #E4DDD4;
   /* 中文是 NianRound（自托管圆体，app/fonts.css），英文和数字仍然是 Nunito——Nunito 排在前面，
      拉丁字符先被它接住，汉字才落到圆体上。PingFang / 雅黑只是最后的系统兜底，正常情况下
@@ -33,7 +44,7 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-hover: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-out: cubic-bezier(.25, 1, .5, 1);
-  --muted: #7A7267;
+  --muted: #716A60;
   --card-soft: #F3EEE6;
 }
 
@@ -45,6 +56,8 @@ a { color: inherit; text-decoration: none; }
 button { color: inherit; font: inherit; touch-action: manipulation; border-radius: 8px; }
 img { display: block; }
 h1, h2, h3 { scroll-margin-top: 88px; text-wrap: balance; }
+/* 不该被断开的一小段文字（现在只有张年的名字，见 components/home-lead.tsx）。 */
+.keep-whole { white-space: nowrap; }
 p { text-wrap: pretty; }
 time, .growth-chart strong, .portrait-facts strong { font-variant-numeric: tabular-nums; }
 .serif { font-family: var(--font-heading); font-weight: 600; }
@@ -52,16 +65,23 @@ time, .growth-chart strong, .portrait-facts strong { font-variant-numeric: tabul
 .skip-link:focus { transform: translateY(0); }
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
 
-.site-header { position: relative; z-index: 20; border-bottom: 1px solid var(--color-border); background: color-mix(in oklch, var(--color-bg) 94%, transparent); animation: fadeInUp 1s var(--ease) both; }
+/* 2026-09-16 视觉验收：页眉条比正文纸色偏粉，全站每一页都带着。实测计算值是
+   `oklch(0.973792 0.00859903 none / 0.94)`——色相被插成了 none。`transparent` 在 oklch 里是
+   `oklch(0 0 0 / 0)`，和暖纸色混合时纸色那点色度留下了、色相丢了，于是渲染成偏红。
+   这不是审美选择，是一个 bug。直接写死同一支纸色带透明度，不再做色彩空间插值。 */
+.site-header { position: relative; z-index: 20; border-bottom: 1px solid var(--color-border); background: rgb(249 246 240 / .94); animation: fadeInUp 1s var(--ease) both; }
 .header-inner { display: grid; grid-template-columns: auto 1fr; align-items: center; width: min(1400px, calc(100% - 32px)); min-height: 72px; margin-inline: auto; }
 .brand { display: inline-flex; min-width: 0; align-items: center; gap: 12px; min-height: 44px; }
-.brand-mark { display: grid; width: 48px; height: 48px; flex-shrink: 0; place-items: center; background: var(--clay); color: #fff; border-radius: 16px; font-size: 24px; font-weight: 800; transition: transform .3s var(--ease); }
+.brand-mark { display: grid; width: 48px; height: 48px; flex-shrink: 0; place-items: center; background: var(--clay); color: var(--color-primary); border-radius: 16px; font-size: 24px; font-weight: 800; transition: transform .3s var(--ease); }
 .brand-mark:hover { transform: scale(1.05) rotate(-5deg); }
 .brand-copy { display: flex; min-width: 0; align-items: baseline; gap: 10px; line-height: 1.15; white-space: nowrap; }
 .brand-copy strong { overflow: hidden; color: var(--color-primary); font-size: clamp(.95rem, 2.4vw, 1.2rem); font-weight: 600; letter-spacing: .015em; text-overflow: ellipsis; }
 .brand-copy small { flex: 0 0 auto; color: var(--color-muted); font-size: clamp(.64rem, 1.5vw, .76rem); letter-spacing: .08em; }
 .desktop-nav { display: none; }
-.section-mark, .eyebrow, .layer-label { display: block; color: var(--color-accent); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+/* 章节小标题。0.72rem = 11.52px 对着「量过的身高体重」「这个月记下来的」这种真的在分区的
+   标题来说太小了（2026-09-16 实测），提到 0.8rem = 12.8px；颜色跟着 --color-accent 一起从
+   2.24:1 升到 4.96:1。 */
+.section-mark, .eyebrow, .layer-label { display: block; color: var(--color-accent); font-size: .8rem; font-weight: 700; letter-spacing: .08em; }
 .text-link, .back-link { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 2px solid var(--sage); font-size: .82rem; font-weight: 700; transition: color 180ms var(--ease-out), transform 180ms var(--ease-out); }
 .text-link:hover, .back-link:hover { color: var(--color-accent); transform: translateX(4px); }
 .primary-button { border: 1px solid var(--color-primary) !important; background: var(--color-primary) !important; color: var(--color-bg) !important; border-radius: 12px !important; }
@@ -92,7 +112,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .monthly-focus--review { padding: 84px 0 16px; }
 .monthly-focus--review .monthly-focus-heading { padding-top: 24px; }
 .page-masthead, .about-masthead { padding: clamp(64px, 10vw, 120px) 0 clamp(48px, 8vw, 88px); }
-.page-masthead h1, .about-masthead h1 { max-width: 12ch; margin: 18px 0 24px; font-size: clamp(3.6rem, 10vw, 7.5rem); letter-spacing: -.055em; line-height: .98; }
+/* 2026-09-16 视觉验收：`-.055em` 字距和 `.98` 行高是拉丁展示字的手法，加在汉字上必然撞笔画、
+   撞句号——「往回翻翻，张年。」排到 120px 时尤其明显。汉字方块本身就是等宽的，不需要负字距。
+   同时字号从 7.5rem 收到 5.5rem：原来 /memory 的第一屏整屏只有一句标语，一张照片都没有。 */
+.page-masthead h1, .about-masthead h1 { max-width: 12ch; margin: 18px 0 24px; font-size: clamp(3rem, 8vw, 5.5rem); letter-spacing: -.01em; line-height: 1.12; }
 .page-masthead > p, .about-masthead > p { max-width: 48ch; margin: 0; color: var(--color-muted); font-size: 1.05rem; }
 .chart-pair { display: grid; gap: 24px; margin-top: 56px; }
 .growth-chart { margin: 0; padding: 24px 0; border-top: 1px solid var(--color-primary); }
@@ -183,7 +206,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* 备案号页脚。手机上底部导航是 fixed，页脚落在 site-shell 的底部留白之后，自己再留出导航的高度，
    不被导航盖住；桌面没有底部导航，只留常规边距。 */
 .site-footer { padding: 0 16px calc(72px + env(safe-area-inset-bottom)); text-align: center; font-size: .75rem; letter-spacing: .02em; }
-.site-footer a { color: var(--color-muted); }
+/* 2026-09-16 视觉验收：备案号原本只有 143×16，够不到 44px 触达高度。 */
+.site-footer a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 8px; color: var(--color-muted); }
 .site-footer a:hover { color: var(--color-primary); }
 
 /* ---------- Editorial layer ---------- */
@@ -214,7 +238,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-moment .chapter-meta { margin-top: 20px; }
 
 /* B-9a: date badge + moment left-right layout */
-.date-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 20px; white-space: nowrap; }
+.date-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay-ink); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 20px; white-space: nowrap; }
 .moment-layout { padding-bottom: clamp(56px, 8vw, 96px); }
 .moment-photo-col { min-width: 0; }
 .moment-text-col { min-width: 0; }
@@ -234,7 +258,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .home-lead .memory-lead .memory-photo:hover .photo { transform: translateY(-8px) scale(1.02); box-shadow: var(--shadow-hover); }
 }
 .home-lead .memory-lead .memory-photo:active .photo { transform: scale(.98); }
-.home-lead .memory-lead .time-signature { display: inline-flex; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 12px; white-space: nowrap; }
+.home-lead .memory-lead .time-signature { display: inline-flex; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay-ink); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 12px; white-space: nowrap; }
 .home-lead .memory-lead .time-signature time, .home-lead .memory-lead .time-signature span { color: inherit; font-size: inherit; font-weight: inherit; }
 @media (min-width: 900px) {
   .home-lead .memory-lead { display: flex; flex-direction: row; align-items: flex-start; gap: 60px; }
@@ -295,7 +319,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .upcoming-item > .upcoming-title:first-child { margin-top: 0; }
 .upcoming-item--done .upcoming-title, .upcoming-item--cancelled .upcoming-title { color: var(--color-muted); }
 .upcoming-title del { text-decoration-thickness: 1px; text-decoration-color: var(--color-muted); }
-.upcoming-badge { padding: 2px 8px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--clay) 12%, transparent); color: var(--clay); font-size: .72rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+.upcoming-badge { padding: 2px 8px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--clay) 12%, transparent); color: var(--clay-ink); font-size: .72rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
 .upcoming-badge--tentative { background: color-mix(in srgb, var(--sage) 16%, transparent); color: color-mix(in srgb, var(--sage) 70%, #000); }
 .upcoming-badge--done { background: transparent; border: 1px solid var(--color-border); color: var(--color-muted); }
 .upcoming-note { margin: 4px 0 0; color: var(--color-muted); font-size: .9rem; line-height: 1.6; }
@@ -384,13 +408,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-month-card { display: block; padding: clamp(24px, 4vw, 40px); background: var(--card-soft); border-radius: var(--r-card); text-decoration: none; transition: transform .3s var(--ease-hover), box-shadow .3s var(--ease-hover); }
 @media (hover: hover) { .home-month-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); } }
 .home-month-card:active { transform: scale(.98); }
-.month-card-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); white-space: nowrap; }
+.month-card-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay-ink); font-weight: 600; box-shadow: var(--shadow-badge); white-space: nowrap; }
 .month-card-cta { margin: 16px 0 0; color: var(--muted); font-size: .88rem; font-weight: 600; }
 
 /* Year / month anchors */
 .year-chapter { padding-bottom: clamp(48px, 7vw, 88px); }
 .year-anchor { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; padding: 40px 0 12px; border-bottom: 1px solid var(--color-primary); }
 .year-anchor h2 { margin: 0; color: var(--color-accent); font-size: clamp(2.6rem, 7vw, 4rem); font-weight: 500; line-height: 1; letter-spacing: -.03em; }
+/* 年页上「9 月」这类月份链接在手机上只有 45×32，够不到 44px 触达高度。 */
+.month-anchor h2 a, .year-anchor h2 a { display: inline-flex; align-items: center; min-height: 44px; }
 .year-anchor p { margin: 0; color: var(--color-muted); font-size: .85rem; }
 .month-anchor { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 28px 0 10px; border-bottom: 1px solid var(--color-border); }
 .month-anchor h2, .month-anchor h3 { margin: 0; font-size: clamp(1.5rem, 3.6vw, 2rem); font-weight: 600; line-height: 1.2; }
@@ -471,6 +497,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-reading { margin-top: clamp(24px, 4vw, 40px); }
 .month-reading > .section-mark { display: block; margin-bottom: 8px; }
 .month-reading .month-moment { padding: clamp(24px, 3.6vw, 34px) 0 0; border-bottom: 0; }
+/* 2026-09-16 视觉验收：`.moment-memory_led` 的 margin-top(≤72) + padding-top(≤38) 是给**两段记忆
+   之间**的呼吸，但月页的第一段紧挨着「这个月记下来的」这行小标题，于是标题下面出现约 120px 空白，
+   标题被晾在那儿，手机上第一眼像是内容没加载出来。标题上方留白多、下方留白少才是对的。 */
+.month-reading > .section-mark + .month-moment,
+.month-reading > .section-mark + .month-moment.moment-memory_led { margin-top: 0; padding-top: clamp(12px, 2vw, 18px); }
 .month-reading .month-day-date { margin: 0 0 10px; }
 /* The same day continuing under a head already stated: closer, so it reads on. */
 .month-reading .moment-continued { padding-top: clamp(12px, 1.8vw, 16px); }
@@ -677,7 +708,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .trace-disclosure .trace-more { font-size: .8rem; }
 .trace-disclosure .trace-more::before { content: "…"; }
 .trace-disclosure .trace-more a { border-bottom: 1px solid currentColor; }
-.month-chapter .chapter-meta .text-link, .year-month .chapter-meta .text-link { min-height: 36px; font-weight: 600; }
+.month-chapter .chapter-meta .text-link, .year-month .chapter-meta .text-link { min-height: 44px; font-weight: 600; }
 
 /* Year / age navigation */
 .archive-nav { margin-top: 8px; }
@@ -882,10 +913,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    `margin-inline: auto` is what centres it in the story column. A shorthand here resets
    margin-inline to 0 and the year pills slide to the viewport's left edge. */
 .memory-year-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 32px 0; }
-.year-pill { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 20px; border-radius: var(--r-badge); background: #fff; color: var(--clay); font-size: .92rem; font-weight: 600; box-shadow: var(--shadow-badge); transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out); }
-.year-pill:hover { transform: translateY(-2px); box-shadow: var(--shadow); color: var(--clay); }
-.year-pill--active { background: var(--clay); color: #fff; }
+.year-pill { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 20px; border-radius: var(--r-badge); background: #fff; color: var(--clay-ink); font-size: .92rem; font-weight: 600; box-shadow: var(--shadow-badge); transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out); }
+.year-pill:hover { transform: translateY(-2px); box-shadow: var(--shadow); color: var(--clay-ink); }
+.year-pill--active { background: var(--clay); color: var(--color-primary); }
 .memory-year-section { padding: clamp(32px, 5vw, 56px) 0; }
+/* 年份分节的标题跟卡片网格同一条左对齐线（网格自己有 .reading-wrap 的版心）。 */
+.memory-year-heading { width: min(760px, calc(100% - 32px)); margin: 0 auto clamp(12px, 2vw, 18px); }
 /* PAGE-0915-FULL-REMEDIATION-R1 D1：grid 默认 align-items:stretch 会把同一行里没有封面照片的卡
    （通常是内容还很少的当前月）拉伸到跟旁边有照片的卡一样高，那张卡自己的 #fff 背景就把多出来的
    高度填成一块空白——读起来像一张没做完的卡。改成 start，每张卡按自己内容的高度显示。 */
@@ -917,7 +950,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* B-12: Event detail page shell */
 .detail-head h1 { font-weight: 800; }
 /* Date + age as a Badge on the detail page (matching the home cover badge) */
-.detail-head .time-signature { display: inline-flex; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; white-space: nowrap; }
+.detail-head .time-signature { display: inline-flex; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay-ink); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; white-space: nowrap; }
 .detail-head .time-signature time, .detail-head .time-signature span { color: inherit; font-size: inherit; font-weight: inherit; letter-spacing: 0; }
 .detail-hero { box-shadow: var(--shadow); }
 /* Evidence disclosure: card style, no outer 1px lines */
@@ -1044,8 +1077,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 .year-pill { min-height: 44px; background: transparent; box-shadow: none; border: 1px solid var(--color-border); }
 .year-pill:hover { transform: none; box-shadow: none; background: color-mix(in srgb, var(--clay) 10%, transparent); }
-.year-pill--active { background: var(--clay); color: #fff; border-color: var(--clay); }
-.year-pill--active:hover { background: var(--clay); color: #fff; }
+.year-pill--active { background: var(--clay); color: var(--color-primary); border-color: var(--clay); }
+.year-pill--active:hover { background: var(--clay); color: var(--color-primary); }
 
 /* ── 首页的阅读宽度 ───────────────────────────────────────────────────────
    The front page only. One column at every width.

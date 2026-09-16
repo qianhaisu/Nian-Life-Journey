@@ -82,7 +82,14 @@ test("首页便签的标签说清这块是什么：「这几天的提醒事项�
 
 test("首页题签按规则局部着色，其余文字保持原样", () => {
   const html = render({ slides: [slide("event-v2-e98e09bddcec2801bcb726d0261d7d3d", "小年也扎了个小辫子", "wechat-media:def")], today: "2026-09-14" });
-  assert.match(html, /<h1 class="home-title"><span>小年也扎了个<\/span><span class="home-emphasis home-emphasis--sage">小辫子<\/span><\/h1>/);
+  // 2026-09-16 视觉验收：名字额外包了一层 .keep-whole（不可断行），因为线上出现过把「张小年」
+  // 劈到两行的断行。着色规则本身没变：命中的仍然只有「小辫子」一段，其余文字原样。
+  assert.match(html, /<h1 class="home-title"><span><span class="keep-whole">小年<\/span>也扎了个<\/span><span class="home-emphasis home-emphasis--sage">小辫子<\/span><\/h1>/);
+});
+
+test("题签里的名字不被断行：包成一段 .keep-whole，标题文字一个字不变", () => {
+  const html = render({ slides: [slide("event-v2-0000000000000000000000000000abcd", "就哭一声，张小年是个硬汉", "wechat-media:def")], today: "2026-09-14" });
+  assert.match(html, /<h1 class="home-title">就哭一声，<span class="keep-whole">张小年<\/span>是个硬汉<\/h1>/);
 });
 
 // PAGE-0915-HOME-BALANCE：CSS 选不出一张 <img> 自己的长宽比，桌面竖照限高、横照不限高这条只能靠

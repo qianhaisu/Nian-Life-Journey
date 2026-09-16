@@ -77,7 +77,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   return <div className="month-page reading-wrap">
     <header className="chapter-masthead">
       <Link className="back-link" href={`/memory/${year}`}>← {year} 年</Link>
-      <span className="section-mark">月份章节</span>
+      {/* 「月份章节」同上：结构名，不是家人的话，而且下一行就是「2026 年 9 月」。 */}
       <h1 className="serif">{chapter.label}</h1>
       {/* B1：当前月读「现在」，翻回去的历史月份读「当时」（monthAgeQualifier，lib/time-signature.ts）。 */}
       {chapter.ageLabel ? <p className="chapter-age">{monthAgeQualifier(month, productToday())} {chapter.ageLabel}</p> : null}

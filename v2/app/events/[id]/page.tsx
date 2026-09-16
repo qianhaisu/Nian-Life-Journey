@@ -117,7 +117,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       </aside> : null}
     </section> : null}
     {materialCount > 0 ? <details className="evidence-disclosure reading-wrap">
-      <summary><span className="serif">当时留下的资料</span><small>{materialCount} 项</small></summary>
+      {/* 2026-09-16 视觉验收：原来这里还挂着 `<small>{materialCount} 项</small>`，线上读作
+          「当时留下的资料 7 项」。原则三把「计数式描述」列为违反方式，而 `<summary>` 本身
+          已经承诺了里面有东西——数字不增加任何她想知道的信息。 */}
+      <summary><span className="serif">当时留下的资料</span></summary>
       {/* The material list is what the day left behind with this story (its own media_ids). A photograph
           that is here only because a reviewer approved it for the story (PAGE-DECISION-0914-C) is the
           story's picture above, not material it was written from, so it is not listed as such. */}

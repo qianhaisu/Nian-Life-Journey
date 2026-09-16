@@ -3,7 +3,14 @@
 //
 //   1. 一年前同日 / N 年前同日 —— 某段记忆的日子和今天月、日相同，年份更早。这是唯一一种「今天」
 //      本身就构成的关系，不需要任何猜测。
-//   2. 相同月龄 —— 某段记忆发生时张年的月龄，和他今天的月龄一样（同一算法 ageBetween，不是估的）。
+//   2. 去年的这个月 / N 年前的这个月 —— 某段记忆和今天落在同一个公历月份，年份更早。
+//
+// 2026-09-16 视觉验收：第二档原本是「相同月龄」。它在线上渲染出来的是「那时他也是 1 岁 8 个月大：
+// 到了时间，他会自己爬上床 · 2026 年 9 月 4 日」——那天离今天只有 12 天。这不是巧合，是定义决定的：
+// 「和今天月龄相同的日子」这个集合，就是他当前这个月龄区间的那三十天，永远只能落在最近一个月内。
+// 一个 20 个月大的孩子，上周当然也是 1 岁 8 个月——同义反复，不是关系。原则六的检验句是「浮现出来的
+// 内容是否让人停一下」，这条让人停不下来。按 R2 删掉「第一次」档的同一条理由（不用别的规则去凑一个
+// 替代），把这一档换成原则六明确列出的、天然带回看距离的关系：去年这个月。
 //
 // PAGE-0915-FULL-REMEDIATION-R2：原来还有第三档「第一次」——标题写着「第一次」的已发布记忆，
 // 同一天有多条时按「今天是一年中第几天」取模挑一条。Codex 审核指出：那个取模挑选和「今天」之间
@@ -13,7 +20,6 @@
 //
 // 不做的事：不比较标题、不猜"重要"、不读健康/私密记录、不把 lead 自己算作浮现出来的另一条。
 import type { YearChapter } from "@/lib/memory-chapters";
-import { ageBetween, formatAge } from "@/lib/time-signature";
 
 export type HomeRecall = {
   eventId: string;
@@ -23,8 +29,8 @@ export type HomeRecall = {
   dateLabel: string;
   ageLabel?: string;
   // 页面用它决定怎么把这条和"今天"接起来读，不重新判断关系种类。
-  relation: "anniversary" | "same-age";
-  // "一年前的今天"「3 年前的今天」「那时他也是 1 岁 3 个月」—— 已经是完整短句，
+  relation: "anniversary" | "same-month";
+  // 「一年前的今天」「3 年前的今天」「去年的这个月」—— 已经是完整短句，
   // 页面直接拼进句子里，不再自己判断措辞。
   contextLabel: string;
 };
@@ -42,7 +48,8 @@ function flatten(chapters: YearChapter[]): Candidate[] {
 function monthDayOf(day: string): string { return day.slice(5); } // "MM-DD"
 function yearOf(day: string): number { return Number(day.slice(0, 4)); }
 
-export function selectHomeRecall(chapters: YearChapter[], today: string, birthDay: string | undefined, excludeEventId: string | undefined): HomeRecall | undefined {
+// birthDay 现在两档都用不到了（两档关系都只看日历），签名保留以免动所有调用方。
+export function selectHomeRecall(chapters: YearChapter[], today: string, _birthDay: string | undefined, excludeEventId: string | undefined): HomeRecall | undefined {
   const pool = flatten(chapters).filter((memory) => memory.eventId !== excludeEventId && memory.day !== today);
   if (pool.length === 0) return undefined;
 
@@ -55,21 +62,16 @@ export function selectHomeRecall(chapters: YearChapter[], today: string, birthDa
     return { ...memory, relation: "anniversary", contextLabel: years === 1 ? "一年前的今天" : `${years} 年前的今天` };
   }
 
-  // 2) 相同月龄：今天的月龄和那天的月龄用同一算法算出来一样（没有出生日期就没法算，整档跳过）。
-  if (birthDay) {
-    const todayAge = ageBetween(birthDay, today);
-    if (todayAge) {
-      const sameAge = pool.filter((memory) => {
-        const age = ageBetween(birthDay, memory.day);
-        return age && age.years === todayAge.years && age.months === todayAge.months;
-      });
-      if (sameAge.length > 0) {
-        sameAge.sort((a, b) => yearOf(a.day) - yearOf(b.day) || a.eventId.localeCompare(b.eventId));
-        const memory = sameAge[0];
-        const ageLabel = formatAge(todayAge) ?? memory.ageLabel;
-        return { ...memory, relation: "same-age", contextLabel: ageLabel ? `那时他也是${ageLabel}大` : "那时他也是这个月龄" };
-      }
-    }
+  // 2) 去年 / N 年前的这个月：同一个公历月份、更早的年份。回看距离至少跨一个年份，
+  //    不会像「相同月龄」那样退化成「上周」。最近的一年优先；同一年里取日子离今天最近的那条。
+  const earlierSameMonth = pool.filter((memory) => memory.day.slice(5, 7) === today.slice(5, 7) && yearOf(memory.day) < yearOf(today));
+  if (earlierSameMonth.length > 0) {
+    const todayDayOfMonth = Number(today.slice(8, 10));
+    const distance = (day: string) => Math.abs(Number(day.slice(8, 10)) - todayDayOfMonth);
+    earlierSameMonth.sort((a, b) => yearOf(b.day) - yearOf(a.day) || distance(a.day) - distance(b.day) || a.eventId.localeCompare(b.eventId));
+    const memory = earlierSameMonth[0];
+    const years = yearOf(today) - yearOf(memory.day);
+    return { ...memory, relation: "same-month", contextLabel: years === 1 ? "去年的这个月" : `${years} 年前的这个月` };
   }
 
   return undefined;

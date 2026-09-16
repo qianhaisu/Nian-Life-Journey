@@ -28,20 +28,43 @@ test("三年前同一天：写「3 年前的今天」，不是「一年前」", 
   assert.equal(r?.contextLabel, "3 年前的今天");
 });
 
-test("没有同日周年时，退到相同月龄那一档", () => {
-  const cs = chapters([memory("e1", "2025-05-10", "会翻身了")]);
-  // 出生日 2025-01-01：5-10 和 5-25 都落在「满 4 个月」的区间里（4 月 1 日满 4 个月的锚点之后），
-  // 月龄相同、日子不同，不构成同日周年。
-  const r = selectHomeRecall(cs, "2025-05-25", "2025-01-01", undefined);
+test("没有同日周年时，退到「去年的这个月」", () => {
+  const cs = chapters([memory("e1", "2025-09-04", "会翻身了")]);
+  const r = selectHomeRecall(cs, "2026-09-16", undefined, undefined);
   assert.equal(r?.eventId, "e1");
-  assert.equal(r?.relation, "same-age");
-  assert.match(r?.contextLabel ?? "", /那时他也是.*大/);
+  assert.equal(r?.relation, "same-month");
+  assert.equal(r?.contextLabel, "去年的这个月");
 });
 
-test("没有出生日期时相同月龄这档直接跳过，不报错", () => {
-  const cs = chapters([memory("e1", "2025-05-01", "普通的一天")]);
-  const r = selectHomeRecall(cs, "2025-09-01", undefined, undefined);
-  assert.equal(r, undefined);
+test("更早的年份写「N 年前的这个月」；最近的一年优先", () => {
+  const cs = chapters([
+    memory("e1", "2024-09-20", "更早那年的九月"),
+    memory("e2", "2025-09-28", "去年的九月"),
+  ]);
+  assert.equal(selectHomeRecall(cs, "2026-09-16", undefined, undefined)?.eventId, "e2");
+  const onlyOlder = chapters([memory("e1", "2024-09-20", "更早那年的九月")]);
+  assert.equal(selectHomeRecall(onlyOlder, "2026-09-16", undefined, undefined)?.contextLabel, "2 年前的这个月");
+});
+
+test("同一年的这个月里，取日子离今天最近的那条", () => {
+  const cs = chapters([
+    memory("e1", "2025-09-01", "月初"),
+    memory("e2", "2025-09-18", "接近今天这一天"),
+  ]);
+  assert.equal(selectHomeRecall(cs, "2026-09-16", undefined, undefined)?.eventId, "e2");
+});
+
+// 2026-09-16 视觉验收抓到的那条：线上浮现的是 12 天前的事，因为原来的第二档是「相同月龄」——
+// 而「和今天月龄相同的日子」按定义就只能落在最近一个月内。这条钉住它不会再回来。
+test("同月龄但只隔十几天的记忆不再浮现：那不是关系，是同义反复", () => {
+  const cs = chapters([memory("e1", "2026-09-04", "到了时间，他会自己爬上床")]);
+  const r = selectHomeRecall(cs, "2026-09-16", "2025-01-03", undefined);
+  assert.equal(r, undefined, "同一个月里的前几天不构成回看距离，整块应该消失而不是凑一条");
+});
+
+test("这一档不需要出生日期：只看日历，没有生日也能命中", () => {
+  const cs = chapters([memory("e1", "2025-09-02", "普通的一天")]);
+  assert.equal(selectHomeRecall(cs, "2026-09-01", undefined, undefined)?.relation, "same-month");
 });
 
 // R2：标题写着"第一次"不再是独立一档——没有一年前同日、也没有相同月龄时，即使有一屋子"第一次"

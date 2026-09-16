@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { GalleryPhoto } from "@/components/photo-viewer";
 import { titleEmphasis } from "@/lib/title-emphasis";
 import { orientationOf } from "@/lib/media/presentation";
@@ -74,17 +74,32 @@ const QUOTE_ACCENT_MAX = 10;
 
 // 标题里的强调片段：哪几个字、哪一支颜色由 lib/title-emphasis.ts 的小词组规则给出（位置精确，
 // 不会把 photo 里的 hot 也涂上）；这里只按位置切开标题。没有命中就是原样一段文字。
+// 2026-09-16 视觉验收：线上题签断成「就哭一声，张 / 小年是个硬汉」——浏览器在汉字之间可以任意
+// 换行，于是把他的名字劈成了两行。这是全站字号最大的一行字，也是他的名字，劈开会改变读法。
+// 只把名字包成一段不可断的文字，其余断行仍然交给浏览器（用 keep-all 会让没有标点的长标题在
+// 336px 的左栏里整行溢出，那是更糟的一种失败）。
+const UNBREAKABLE_NAMES = ["张小年", "小年年", "张年", "小年"];
+
+function keepNamesWhole(text: string, keyPrefix: string): React.ReactNode {
+  const pattern = new RegExp(`(${UNBREAKABLE_NAMES.join("|")})`, "gu");
+  const pieces = text.split(pattern);
+  if (pieces.length === 1) return text;
+  return pieces.map((piece, index) => (UNBREAKABLE_NAMES.includes(piece)
+    ? <span className="keep-whole" key={`${keyPrefix}-n${index}`}>{piece}</span>
+    : <Fragment key={`${keyPrefix}-p${index}`}>{piece}</Fragment>));
+}
+
 export function withEmphasis(text: string, keyPrefix: string) {
   const spans = titleEmphasis(text);
-  if (spans.length === 0) return text;
+  if (spans.length === 0) return keepNamesWhole(text, keyPrefix);
   const parts: React.ReactNode[] = [];
   let at = 0;
   spans.forEach((span, index) => {
-    if (span.start > at) parts.push(<span key={`${keyPrefix}-t${index}`}>{text.slice(at, span.start)}</span>);
+    if (span.start > at) parts.push(<span key={`${keyPrefix}-t${index}`}>{keepNamesWhole(text.slice(at, span.start), `${keyPrefix}-t${index}`)}</span>);
     parts.push(<span className={`home-emphasis home-emphasis--${span.accent}`} key={`${keyPrefix}-e${index}`}>{span.text}</span>);
     at = span.end;
   });
-  if (at < text.length) parts.push(<span key={`${keyPrefix}-tail`}>{text.slice(at)}</span>);
+  if (at < text.length) parts.push(<span key={`${keyPrefix}-tail`}>{keepNamesWhole(text.slice(at), `${keyPrefix}-tail`)}</span>);
   return parts;
 }
 

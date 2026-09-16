@@ -48,7 +48,8 @@ export default async function YearPage({ params }: { params: Promise<{ year: str
   return <div className="year-page reading-wrap">
     <header className="chapter-masthead">
       <Link className="back-link" href="/memory">← 回到记忆</Link>
-      <span className="section-mark">年度篇章</span>
+      {/* 「年度篇章」是这套系统对自己结构的称呼，不是家人会说的话（原则三）；
+          它上面就是「← 回到记忆」，下面就是大字年份，去掉不丢信息。 */}
       <h1 className="serif">{year}</h1>
       {chapter.ageSpan ? <p className="chapter-age">这一年，张年 {chapter.ageSpan}。</p> : null}
     </header>

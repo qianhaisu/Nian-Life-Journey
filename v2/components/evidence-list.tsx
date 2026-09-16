@@ -118,7 +118,8 @@ export function EvidenceList({ sources, media, contributors, deliverableIds, sou
       ))}
       {secondarySources.length > 0 ? (
         <details className="evidence-secondary">
-          <summary className="evidence-secondary-label">当天其余资料（{secondarySources.length} 项）</summary>
+          {/* 同上：不写「（6 项）」。 */}
+          <summary className="evidence-secondary-label">当天其余资料</summary>
           {secondarySources.map((source) => (
             <EvidenceItem key={source.id} source={source} mediaById={mediaById} contributorById={contributorById} deliverableIds={deliverableIds} />
           ))}

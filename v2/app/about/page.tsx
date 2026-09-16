@@ -39,7 +39,7 @@ export default async function AboutPage() {
 
   return <div className="about-page reading-wrap">
     <header className="page-masthead">
-      <span className="section-mark">现在</span>
+      {/* 「现在」这行紧接着就被下面那句「现在 1 岁 8 个月，…出生。」原样说了一遍。 */}
       <h1 className="serif">张年</h1>
       {basics.age ? <p className="about-age">现在 {basics.age}{basics.birthLabel ? `，${basics.birthLabel}出生` : ""}。</p> : null}
     </header>
