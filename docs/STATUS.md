@@ -10030,3 +10030,24 @@ worker 从工作区 import `lib/ingest/wechat-content-dedupe.ts`；`git status -
 **因此 ③ 的修法比原先估计的小得多**：不是「造一个重要性信号」，是把已有判断的落点改对——`t20c-grade-events.mjs` 的 high 改映射到 `highlight`，`production-adapter.ts:254` 去掉写死值。42 条现成的高档事件立刻让原则五在月页和索引页上有东西可分。**未做，等 Teddy 定。**
 
 **要一起决定的两件事**：① high 映射到 `highlight` 还是 `chapter`（分档 prompt 说「worth a chapter」，但 `chapter` 是尺子的顶格，也许该留给更强的，或者干脆退役掉）；② 42 条存量是直接改权重，还是重跑一次分档。
+
+## 2026-09-16 · ③ 做完了（Teddy 全权）：分档落点改对 + 年页真的分轻重（代码 d8b06c7 已 push **未部署**；数据已生效）
+
+**判断与执行**（Teddy「你判断并执行吧」）。上一轮我以为 ③ 需要造一个「重要性信号」——查完生产库发现**判断早就做出来了，只是记错了档位，而且展示层最后一公里把它丢了**。
+
+**三处代码**（已改，已 push）：
+1. `scripts/t20c-grade-events.mjs:131` 高档写 `"memory"`（四档尺第三档），同文件第 7 行注释却写着 milestone/chapter → 改写 `"highlight"`。
+2. `lib/organizer/production-adapter.ts:254` 写死 `memoryWeight: "memory"` → 改用上一行已算好的 milestone 信号（这条路径当前未运行，`ORGANIZER_WORKER_ENABLED=false`，属于把结构性封死解开，今天没有可见效果）。
+3. `components/editorial-memory.tsx` 的 `size === "line"` 分支**早返回、连 weight 类名都不带** → 年页每月 6 条（`yearTitlesPerMonth`）按 WEIGHT_RANK 排、高档不足用 trace 补满，本来就混着两种分量，却是同一段 markup。现在类名传下去，CSS 按分量给字号墨色：高档 1.32rem/500，trace 1rem/muted。不加边框色块图标。
+
+**数据（已写生产，delta 与预期一致）**：T7 写手把每条强制写 `trace`（`organizer-month-write.mjs:557`），所以那批里出现 `memory` 的唯一来源就是 T20-C 的高档分支 → 42 条提到 `highlight`。**实际 delta：trace 987 不变、memory 48→6、highlight 0→42，写入行数 42，核对通过。** 回滚点 `NianlifeOps/weight-promote-2026-09-16/pre-promote.json`。42 条标题核对确认是里程碑（独立走路第一步、正式成为芽星班一员、长出第七颗牙、第一天自己盖被睡着、入选毕业庆典节目……），21 个月共 42 条＝分档 prompt 要求的每月 1-4 条。未动其余 6 条 `memory`（来自别的路径）。
+
+**这次数据变更在当前已部署代码下无副作用**：`highlight` 与 `memory` 走同一条渲染分支（`editorial-memory.tsx:57` 的 `isChapterWeight`、`globals.css:647`），`globals.css:650` 那条 `.memory-weight-memory.memory-entry` 是死 CSS（全仓库没有 `size="entry"`）。唯一变化是 `curateMemories` 里里程碑排得更靠前——是改善。
+
+**线上预览（未部署的代码注入线上真实内容，数据用生产真实权重）**：2026 年页 54 行 = highlight 25 + memory 5 + trace 24。9 月六行里五条判过的里程碑是大字深墨，第六条「画画涂到脸上，吃饭香香」明显更小更淡，**一眼能分辨**。
+
+**验证**：npm test 1277 = 1266 过 / 0 败 / 11 跳过（新增 2 条：类名真的传到 `.memory-line` 上、CSS 真的把两档字号拉开 >1.15 倍）；tsc、eslint、build 过。
+
+**没做到 / blocker**：**d8b06c7 未部署**——部署脚本这次被 Claude Code 的 auto 模式分类器以「Modify Shared Resources」拦下（本会话早些时候同一脚本跑通过 precheck/upload/build/swap/verify）。年页那个可见变化要部署后才到家人眼前。数据侧已经生效。
+
+**下一件事**：Teddy 放行部署（`d8b06c7`，会连带 02bbb0e 的 ①② 与另外两个 Session 的 ingest 提交）→ 部署后复拍 2026/2025 年页与 9 月月页。
