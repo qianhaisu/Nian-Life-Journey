@@ -10187,3 +10187,16 @@ node --import tsx scripts/story-review.mjs apply --package=<该文件> --operato
 **唯一悬着的人工动作**：`2026-09-14 爸爸说儿子一直在笑`（`event-v2-3d4cd6c1…`，trace，`needs_human_review`）。包在 `C:\Users\teddy\NianlifeOps\sept-tail-2026-09-16\review-package.json`。Teddy 在会话中明确要求由本 Session 代填 `decision`，**但 Claude Code 的 auto 模式分类器两次以 `Instruction Poisoning` 拒绝了写入该字段**（换工具、换措辞均拒）。没有绕。需要 Teddy 自己把 `"decision": null` 改成 `"decision": "approved"`，然后跑 `story-review.mjs apply --commit`。
 
 **线上 SHA**：`3750dc744...`（镜像 `nianlife-web:3750dc7`）。回滚点 `nianlife-diag-web-pre-3750dc7-20260916-190307`。最终复验：5 页 × 390/1440，对比度不合格 0、横向溢出 0、无 4xx/5xx、无页面错误。
+
+## 2026-09-16 夸克 2026-09-15 增量批次已消费（Claude）
+
+1. **线上多了什么**：536 张夸克原图入库并生成派生，覆盖 2025-01 → 2026-09 共 21 个月（最多的是 2025-12 的 95 张、2025-03 的 62 张、2026-02 的 53 张）。原图与派生都落 OSS（`oss/original/archived` + `oss/thumbnail/ready` + `oss/web/ready`），跨月抽查 7 张线上取图全部 200/image/webp，可交付 674/674。这些照片进入各月的「这个月的照片」；**主体核验一条没写**，默认阅读面（hero、日照片组、月封面）不受影响。
+2. **没做到 / 最大 blocker**：142 条没有入业务库——19 条 EXIF 与服务器时间冲突、109 条完全没有 EXIF（逐条查过文件名没有任何一条有严格匹配的完整时间戳）、1 条窗口外（2014-01，早于出生）、13 条复用来源记录（交付方未给日期判定）。一律判 date-uncertain，不归月、不生成每日轨迹或故事，原件与两个时间值都原样保留。集中清单在仓库外 `NianlifeOps/quark-history/2026-09-15/待确认清单.md`，不需要现在逐张处理。另有 732 个视频本轮未下载（交付方按指令只做照片）。
+3. **下一件事**：803 张全是 `search_candidate`，没有逐张主体确认；2026-09 的 8 张候选已固定 mediaId、内容哈希、日期依据与可读预览，等主体复核。
+
+**两个必须记下的坑**：
+
+- **「新增下载」≠「数据库新增」。** 交付 803 个新下载，实际数据库新增 536，另有 138 张早已在库。原因是 HEIC 转 JPEG 的字节是确定性的：同一张原图在 2026-09-03 批次和这批里转出完全相同的 sha256、相同的 asset id。按**原始 HEIC 哈希**做差集看不到这一层（那次差集显示 808 个哈希命中 0），必须按**入库身份哈希**（转换后的）才算得准。
+- **`v2/.env.local` 指向 Neon，且 `MEDIA_STORAGE_PROVIDER=r2` 桶是 `nianlife-test`。** 线上跑的是 RDS + OSS。任何直接用 .env.local 跑的入库都会写进错误的库和测试桶。本轮用显式覆盖（RDS 隧道 + OSS 公网 endpoint + `MEDIA_STORAGE_PROVIDER=oss`）执行，运行器在 `v2/.data/q07-run-ingest.mjs`。用 r2 会把 provider 标成 `hot`，而线上容器读不到 R2——2026-09 有 13 张照片就是这样 404 的。
+
+入库走的仍是唯一实现 `applyQuarkPhotoArtifact`；本批 adapter 见 `v2/scripts/quark-history-init-20260915.mjs`（提交 6464338）。幂等已验证：同一命令重跑 created=0 / reused=2。
