@@ -73,7 +73,8 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
         推拉时长和换片节奏会悄悄错开，而且看起来一切正常。 */}
     <div className="memory-frames" style={{ "--memory-slide-ms": `${MEMORY_TIMING.slideSeconds * 1000}ms` } as React.CSSProperties}>
       {memory.slides.map((slide, i) => (
-        <Image
+        // 只挂当前与前后各一张，见 isNear——全挂会让 12 张一起抢连接。
+        isNear(i, index, memory.slides.length) ? <Image
           key={slide.key}
           className={i === index ? "memory-frame is-current" : "memory-frame"}
           // 第几张决定用哪一种运镜（app/home.css 的 [data-fx]）。写成属性而不是靠 nth-child：
@@ -87,7 +88,7 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
           priority={i === 0}
           unoptimized
           aria-hidden={i !== index}
-        />
+        /> : null
       ))}
       <div className="memory-scrim" aria-hidden="true" />
       <button ref={playRef} type="button" className="memory-play" onClick={onOpen} aria-label="播放回忆">
@@ -122,6 +123,29 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
     </p>
   </div>;
 }
+
+/**
+ * 这一张/这一幕要不要现在就挂到 DOM 上（当前、前一个、后一个，首尾相接）。
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 这不是性能优化，是在修一个"点开播放先黑屏 15 秒"的 bug
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * 之前把一段回忆的 12 张全部挂上去，每一张都是 `position:absolute; inset:0`——
+ * 于是**每一张都在视口里**，`opacity:0` 一点都挡不住下载，浏览器一口气发 12 个请求，
+ * 去抢同源那 6 条连接。第一幕因此排在第十幕后面。
+ *
+ * 2026-09-17 线上实测（.data/home0917-firstpaint.mjs）：
+ *   第一幕单张的那一段  ->    89ms 就能看见
+ *   第一幕两张的那一段  -> 15278ms 才能看见（点开之后整整十五秒是黑的）
+ *
+ * 只挂前后各一个之后，同时在飞的请求从 12 降到 2–6，第一幕拿得到连接；
+ * 下一幕提前一轮挂上，5 秒的停留足够它加载完，翻页时不会白。
+ */
+const isNear = (i: number, index: number, total: number) =>
+  Math.abs(i - index) <= 1
+  || (index === 0 && i === total - 1)
+  || (index === total - 1 && i === 0);
 
 /** 一幕 = 一屏里同时出现的照片。多数时候一张，横照会 2–3 张叠在一起。 */
 type MemoryScene = { key: string; items: HomeMemoryData["slides"] };
@@ -333,9 +357,11 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
             className={i === index ? "memory-player-scene is-current" : "memory-player-scene"}
             aria-hidden={i !== index}
           >
+            {/* 幕的外壳一直在（进度条和版式要它），但**照片只在临近时才挂**：
+                这就是那个「点开先黑屏 15 秒」的修法，见 isNear。 */}
             {item.items.map((entry, j) => (
               <div key={entry.key}>
-                <Image
+                {isNear(i, index, scenes.length) ? <Image
                   className={i === index ? "memory-player-frame is-current" : "memory-player-frame"}
                   data-fx={(i + j) % 4}
                   src={entry.media.src}
@@ -345,7 +371,7 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
                   sizes="100vw"
                   priority={i === 0}
                   unoptimized
-                />
+                /> : null}
               </div>
             ))}
           </div>
