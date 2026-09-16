@@ -77,8 +77,27 @@
   object-position: 50% 38%;
   opacity: 0;
   transition: opacity 800ms ease-in-out;
+  /* 静止时也保持放大起点，避免切换瞬间画面"跳"一下回到 1.0。 */
+  transform: scale(1.08);
 }
-.memory-frame.is-current { opacity: 1; }
+/* Ken Burns（Teddy 2026-09-16 裁定：做到明显，8%）。
+   Apple 的回忆把静态照片做成"动起来"靠的就是这个——缓慢推拉 + 交叉淡化，
+   而我第一版是纯淡入淡出，一点运镜都没有，这是"质感差太远"里最直接的一条。
+   只动 transform（合成层，不触发重排），和站点既有动效规范一致。
+   方向按序号交替：偶数张推近、奇数张拉远，连着看不会一直往一个方向漂。 */
+.memory-frame.is-current {
+  opacity: 1;
+  animation: memoryKenBurnsIn calc(var(--memory-slide-ms, 5000ms) + 900ms) linear both;
+}
+.memory-frame.is-current:nth-child(2n) { animation-name: memoryKenBurnsOut; }
+@keyframes memoryKenBurnsIn {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to   { transform: scale(1.10) translate3d(-1.2%, -1.6%, 0); }
+}
+@keyframes memoryKenBurnsOut {
+  from { transform: scale(1.10) translate3d(1.2%, 1.2%, 0); }
+  to   { transform: scale(1.02) translate3d(0, 0, 0); }
+}
 
 /* 只有压字的那一条给局部遮罩，照片本身不加任何全局滤镜（任务书三：照片保持原色）。 */
 .memory-scrim {
@@ -430,4 +449,9 @@
 @media (prefers-reduced-motion: reduce) {
   .memory-frames img, .memory-player-stage img { transition: none; }
   .memory-play, .memory-dot, .memory-bar { transition: none; }
+  /* Ken Burns 是 animation，不是 transition——全局那条 reduce 规则把时长压到 0.01ms 就够了，
+     但这里写死 none 更清楚：要求减少动态的人不该看到任何推拉，静止在原始取景上。 */
+  .memory-frame.is-current,
+  .memory-frame.is-current:nth-child(2n) { animation: none; transform: scale(1); }
+  .memory-player-frame.is-current { animation: none; transform: scale(1); }
 }

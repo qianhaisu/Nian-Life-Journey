@@ -66,7 +66,11 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
   const current = memory.slides[index] ?? memory.slides[0];
 
   return <div className="memory-stage" ref={stage}>
-    <div className="memory-frames">
+    {/* 运镜时长必须跟着**同一个**常量走。app/home.css 里写的是
+        `calc(var(--memory-slide-ms, 5000ms) + 900ms)`，那个 5000ms 兜底今天恰好等于
+        SLIDE_SECONDS×1000——**是巧合，不是约束**。不把变量传下去的话，哪天改了 SLIDE_SECONDS，
+        推拉时长和换片节奏会悄悄错开，而且看起来一切正常。 */}
+    <div className="memory-frames" style={{ "--memory-slide-ms": `${MEMORY_TIMING.slideSeconds * 1000}ms` } as React.CSSProperties}>
       {memory.slides.map((slide, i) => (
         <Image
           key={slide.key}

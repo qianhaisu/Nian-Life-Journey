@@ -7,9 +7,15 @@
 // 这个文件真正存在的理由：2026-09-13 的探测结果
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// 生产 provider 是 DeepSeek（AI_PROVIDER=deepseek、AI_MODEL=deepseek-v4-pro，端点
+// 2026-09-13 当时的生产 provider 是 DeepSeek，模型是 **deepseek-v4-pro**（端点
 // https://api.deepseek.com/anthropic）。给它发一张自己生成的 64×64 纯橙色 PNG，问「这张图是什么
 // 颜色，一个词回答」：
+//
+// 【2026-09-16 更新，别把下面这段读成"DeepSeek 都看不见图"】站上已统一改用 **deepseek-flash**
+// （V4.1 Flash，见 lib/organizer/deepseek-model.ts；Teddy 2026-09-16 两次要求不要再用 v4-pro）。
+// 同一套合成探测在 deepseek-flash 上**三种颜色三次全对**（orange / Blue / Green，input_tokens=230），
+// 也就是说它**真的看得见图**。所以下面这段记的是 v4-pro 的历史结论，不是这条链路今天的状态；
+// 而这个文件里的守卫一条都不放松——探测仍然每批必跑，说不对就整批中止。
 //
 //   HTTP 200。usage.input_tokens = 100。模型自己的 thinking 里写着：
 //   「The prompt says "[Unsupported Image] What single colour fills this image?" We don't see image.
