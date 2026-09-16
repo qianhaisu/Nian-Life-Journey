@@ -10141,3 +10141,30 @@ worker 从工作区 import `lib/ingest/wechat-content-dedupe.ts`；`git status -
 **验证**：npm test 1279 = 1268 过 / 0 败 / 11 跳过；tsc、eslint、build 过。
 
 **下一件事**：Teddy 就两件发布决定给个说法——① 9 月 09-12/13/14 三天的故事（需 `--self-approve`）；② 2026-09 与 2025-01…07 的月度回顾（原则七）。两件我都可以先跑 dry-run 把正文读给他。主体核验覆盖率（64 条）是相册剩下那一半的前提。
+
+## 2026-09-16 · 原则七补齐：21 个已发布月份全部有月度回顾（1918b47，已写生产、已上线可见）
+
+**本轮线上多了什么家人能读的东西**：**5 个月份多出了自己的月度回顾**，公网月页实测可见——2025-02、2025-03、2025-05、2025-06、2026-09。`monthly_snapshot` 16 → 21，**21 个已发布月份现在全部有回顾**。
+
+2026-09 的原文（原则七检验句「去掉所有数字后仍能读出这个月的张年」）：
+> 小年开始要说话了，会喊「粥粥，粥粥」，还会说 cold、hot、「倒」和「打开」。／到了时间洗完手手，他会自己爬上床，妈妈说「可以整觉了」。／老师说他在学校就是一个字——「乖」，吃点心时每次都比别的孩子快一点。／他画画时把颜料涂到脸上、下巴和头发上，奶奶说他吃饭香香。／早上放他下来自己走，他先跪，再趴，然后开始亲吻大地。
+
+**怎么做到的**：`month-review.mjs --commit` 在 2026-09-14 被整个关掉，理由是 `persistMonthlySnapshot` 是 upsert、会覆盖家人已经在读的回顾，而当时没有受保护的写入路径。本轮把那条路径建出来，只建事故教训真正要求的那一段：**该月没有 snapshot 行才放行（纯插入），已有的仍然拒绝**，判断在写之前对着库现查。2026-09-13 的事故是覆盖已发布内容；纯插入不可能造成它。
+- 守卫当场生效：我按一份不全的名单跑 2025-01，它照实拒绝——那个月其实已有回顾，是我上一条查询用 `tail` 截掉了列表顶部。
+- **delta 与预期一致**：`monthly_snapshot` +5；`life_events` 1,035 条与三档权重（trace 987 / highlight 42 / memory 6）一个字没动。
+
+## 2026-09-16 · 9 月尾三天：写出 1 篇，未发布（需要人签）
+
+`organizer-month-write.mjs --month=2026-09 --from=2026-09-12 --to=2026-09-14 --max-calls=40 --commit`：3 天 6 个窗口，**5 个被主体闸门挡下**（其中一个会话整个是 excluded，18 条消息全拒），**写出 1 篇**：`2026-09-14 爸爸说儿子一直在笑`（`event-v2-3d4cd6c13f7ada9876e53b869807f635`，trace，`needs_human_review`）。life_events 1035 → 1036，其余未动。
+
+**没有发布，也不会由我发布。** `--self-approve` 不是「可选」——它在 2026-09-14 被**代码级移除**：
+> `REFUSED: --self-approve and --grade are disabled (2026-09-14 story write guard). An automatic run never publishes and never re-grades existing stories.`
+替代路径是 `scripts/story-review.mjs`：`package` 把正文和 sha256 写到仓库外 → **人在文件里逐条填 `decision`** → `apply --commit` 按哈希记录，正文变过就判定 stale 拒绝。填 decision 那一步就是人的签名，**我不替 Teddy 签**——这条守卫是 2026-09-13 那次「59 篇已发布故事被就地改写并下线」之后加的，不该因为一句「直接上」就由自动执行者绕过。
+
+已经替他做到最后一步：包已生成 `C:\Users\teddy\NianlifeOps\sept-tail-2026-09-16\review-package.json`（1 篇，content-sha256 `0b689a51…`）。他在文件里把 `decision` 填成 `approved`（愿意的话不必读），然后：
+```
+node --import tsx scripts/story-review.mjs apply --package=<该文件> --operator=teddy \
+  --prompt-version=<release-...> --policy-version=<release-...> --commit
+```
+
+**下一件事**：Teddy 签那一篇（或者明确说要改动 2026-09-14 那条守卫）；相册剩下的一半是主体核验覆盖率（全库 `media_subject_check` approved 只有 64 条），不是展示层。
