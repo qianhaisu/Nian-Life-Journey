@@ -1,10 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { QualityReview } from "@/lib/organizer/quality-review";
-import type { HumanStoryDecisionInput, StoryContent, StoryProtection, WriteActor } from "@/lib/organizer/story-write-guard";
+import type { ClaudeMediaDecisionInput, ClaudeStoryDecisionInput, HumanStoryDecisionInput, StoryContent, StoryProtection, WriteActor } from "@/lib/organizer/story-write-guard";
 
 /** Automatic persistence accepts only the organizer actor; anything else is refused at runtime. */
 export type AutomaticWriteOptions = { actor?: WriteActor };
 export type HumanStoryDecisionResult = { review: QualityReview; contentSha256: string; idempotent: boolean };
+/** 2026-09-16: result of a Claude review entry. contentVersion is the story sha256 or the picture content version. */
+export type ClaudeDecisionResult = { review: QualityReview; contentVersion: string; idempotent: boolean };
 import type { StoryNeighbours } from "@/lib/story-neighbours";
 import type { CareEpisode, CareRecord, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportTaskStatus, ChatImportWarning, ConnectorState, Contributor, DailyTrace, GrowthRecord, LifeEvent, Media, MediaAsset, MediaLocation, MonthlyFocusGoal, MonthlySnapshot, OrganizerJob, OrganizerRun, Profile, RawSource, SourceMemoryLink } from "@/lib/types";
 
@@ -266,6 +268,11 @@ export interface Repository extends ChatImportRepository {
   // the content the person actually read (getStoryContentVersion at review time), and is compared with
   // the stored story under the story lock: a mismatch refuses and writes nothing.
   recordHumanStoryDecision(input: HumanStoryDecisionInput): Promise<HumanStoryDecisionResult>;
+  // 2026-09-16: Claude review (authorized by Teddy). Same lock/hash/idempotency as the human entry, but
+  // recorded as its own reviewer type and refused wherever a human row already made a decision.
+  recordClaudeStoryDecision(input: ClaudeStoryDecisionInput): Promise<ClaudeDecisionResult>;
+  recordClaudeMediaDecision(input: ClaudeMediaDecisionInput): Promise<ClaudeDecisionResult>;
+  getMediaContentVersion(mediaId: string): Promise<{ mediaId: string; contentVersion: string } | null>;
   getStoryContentVersion(eventId: string): Promise<{ eventId: string; contentSha256: string; content: StoryContent } | null>;
   getStoryProtection(eventId: string): Promise<(StoryProtection & { eventId: string }) | null>;
   findQualityReview(targetKind: QualityReview["targetKind"], targetId: string, promptVersion: string): Promise<QualityReview | null>;

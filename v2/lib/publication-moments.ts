@@ -38,7 +38,9 @@ import type { LifeEvent } from "@/lib/types";
 // `checked` is the third and narrowest: a reviewer opened the file and recorded that it is a
 // photograph of this child, with no story attached (lib/media/story-binding.ts
 // checkedPhotoIdsFrom). It is optional — an archive with no such rows behaves exactly as before.
-export type MediaPrivilege = { confirmed: ReadonlySet<string>; trusted: ReadonlySet<string>; checked?: ReadonlySet<string> };
+// `excluded` (2026-09-16): pictures a reviewer classified as not a life photo of this child. They leave
+// the month's photo surfaces (album, day groups, photo-led moments, cover, preview) and nothing else.
+export type MediaPrivilege = { confirmed: ReadonlySet<string>; trusted: ReadonlySet<string>; checked?: ReadonlySet<string>; excluded?: ReadonlySet<string> };
 
 export const NO_PRIVILEGE: MediaPrivilege = { confirmed: new Set(), trusted: new Set() };
 
@@ -457,7 +459,19 @@ export function buildTraceNotes(events: LifeEvent[], birthDay?: string): TraceNo
 }
 
 export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPrivilege = NO_PRIVILEGE, traceEvents: LifeEvent[] = [], birthDay?: string): MonthComposition {
-  const photoDaysAsc = [...chapter.photoDays].sort((a, b) => a.day.localeCompare(b.day));
+  // 2026-09-16: a picture a reviewer classified as not a life photo (menu, document, screenshot, or
+  // clearly not him) leaves every photo surface built below. Only an explicit decision does this --
+  // see excludedPhotoIdsFrom. A day whose pictures were ALL excluded has nothing left to show; a day
+  // that was already empty before this filter is left exactly as it was.
+  const excluded = privilege.excluded;
+  const photoDaysAsc = [...chapter.photoDays]
+    .flatMap((day) => {
+      if (!excluded || excluded.size === 0) return [day];
+      const photos = day.photos.filter((item) => !excluded.has(item.id));
+      if (photos.length === day.photos.length) return [day];
+      return photos.length > 0 ? [{ ...day, photos }] : [];
+    })
+    .sort((a, b) => a.day.localeCompare(b.day));
   const traceByDay = new Map(chapter.traceDays.map((day) => [day.day, day]));
 
   // THE MONTH'S PHOTO SET — what 「这个月的照片」 may show, computed once so the first screen, the

@@ -40,6 +40,32 @@ export type WriteActor = "organizer";
  */
 export const AUTOMATIC_REVIEW_PROVIDERS: ReadonlySet<string> = new Set(["deepseek"]);
 
+/**
+ * 2026-09-16：Claude 审核是一个**独立的审核者类型**，既不是自动写手，也不是家庭人工决定。
+ *
+ * 为什么要单列：Teddy 本轮授权「由 Claude 实际审核，通过后直接发布」，同时要求「不得把机器决定
+ * 塞进人工签名字段」「明确区分 Claude 决定与家庭人工决定」。在这之前账本里只有两类：
+ * `deepseek`（自动）和其余一切（被当成人工）。如果 Claude 的决定用任何别的名字写进去，
+ * 守卫就会把它算成家庭人工决定——既冒充了人，又让以后真正的人工决定无法辨认它。
+ *
+ * 所以：
+ *   · `claude-review` 只能经由 recordClaudeStoryDecision / recordClaudeMediaDecision 写入；
+ *     人工入口 recordHumanStoryDecision 拒收这个 operator。
+ *   · 它和人工决定一样，让故事免受**自动写手**覆盖（Claude 读过并批准的正文不该被 Organizer 改写）。
+ *   · 但它**不能**覆盖一条家庭人工决定：Claude 入口遇到最新决定来自人工，直接拒绝。
+ *   · 历史上的 `claude-code`（257 行，2026-09-16 前）不属于这个类型，仍按原规则当人工处理——
+ *     它们是当时以人工流程名义写入的，本轮不改写历史记录的归属。
+ */
+export const CLAUDE_REVIEW_PROVIDER = "claude-review";
+/** Claude 审核行必须带上的授权依据。写进 reason_codes，查账时一眼可见。 */
+export const CLAUDE_AUTHORIZATION_REASON = "authorized-by:teddy-2026-09-16";
+export type ReviewerType = "automatic" | "claude" | "human";
+export function reviewerTypeOf(provider: string | null | undefined): ReviewerType {
+  if (provider && AUTOMATIC_REVIEW_PROVIDERS.has(provider)) return "automatic";
+  if (provider === CLAUDE_REVIEW_PROVIDER) return "claude";
+  return "human";
+}
+
 /** Ledger kinds that are never a decision about a story, even when a target id happens to match. */
 const NON_STORY_KINDS: ReadonlySet<string> = new Set(["media_subject_check", "daily_trace", "monthly_snapshot", "monthly_review_draft", "echo_group"]);
 
@@ -101,7 +127,9 @@ export function evaluateStoryProtection(target: { event?: ProtectableEvent | nul
   }
   for (const row of linked) {
     if (row.decision === "approved") reasons.add(`EVER_APPROVED:${row.targetKind}`);
-    if (!AUTOMATIC_REVIEW_PROVIDERS.has(row.provider)) reasons.add(`HUMAN_DECISION:${row.targetKind}:${row.provider}:${row.decision}`);
+    const reviewer = reviewerTypeOf(row.provider);
+    if (reviewer === "claude") reasons.add(`CLAUDE_DECISION:${row.targetKind}:${row.decision}`);
+    else if (reviewer === "human") reasons.add(`HUMAN_DECISION:${row.targetKind}:${row.provider}:${row.decision}`);
   }
   const list = [...reasons].sort();
   // A same-instant conflict alone is not protection; it is reported beside a real reason.
@@ -216,6 +244,95 @@ export function assertHumanDecisionInput(input: HumanStoryDecisionInput): void {
   if (!input.eventId) throw new StoryWriteContractError("MISSING_EVENT", "eventId is required");
   if (!/^[0-9a-f]{64}$/.test(input.reviewedContentSha256 ?? "")) throw new StoryWriteContractError("MISSING_REVIEWED_CONTENT_HASH", "reviewedContentSha256 must be the 64-hex sha256 of the reviewed story content");
   if (!input.operator || AUTOMATIC_REVIEW_PROVIDERS.has(input.operator)) throw new StoryWriteContractError("OPERATOR_NOT_HUMAN", `operator "${input.operator}" is empty or an automatic provider`);
+  if (input.operator === CLAUDE_REVIEW_PROVIDER) throw new StoryWriteContractError("OPERATOR_NOT_HUMAN", `operator "${CLAUDE_REVIEW_PROVIDER}" is not a human; Claude decisions go through recordClaudeStoryDecision`);
   if (!input.promptVersion || !input.policyVersion) throw new StoryWriteContractError("MISSING_VERSION", "promptVersion and policyVersion are required");
   if ((input.reasonCodes ?? []).some((code) => code.startsWith(CONTENT_SHA256_REASON_PREFIX))) throw new StoryWriteContractError("REASON_CODE_RESERVED", `reason codes may not carry their own ${CONTENT_SHA256_REASON_PREFIX} entry`);
+}
+
+
+// ---------------------------------------------------------------- Claude review decisions (2026-09-16)
+
+export type ClaudeStoryDecisionInput = {
+  eventId: string;
+  decision: QualityDecision;
+  /** sha256 of `storyContentPayload` for the version Claude actually read against its sources. */
+  reviewedContentSha256: string;
+  promptVersion: string;
+  policyVersion: string;
+  /** 必须含 CLAUDE_AUTHORIZATION_REASON；其余写审核依据（主体、日期、来源核对结果、暂缓原因）。 */
+  reasonCodes: string[];
+};
+
+export function assertClaudeStoryDecisionInput(input: ClaudeStoryDecisionInput): void {
+  if (!input.eventId) throw new StoryWriteContractError("MISSING_EVENT", "eventId is required");
+  if (!/^[0-9a-f]{64}$/.test(input.reviewedContentSha256 ?? "")) throw new StoryWriteContractError("MISSING_REVIEWED_CONTENT_HASH", "reviewedContentSha256 must be the 64-hex sha256 of the reviewed story content");
+  if (!input.promptVersion || !input.policyVersion) throw new StoryWriteContractError("MISSING_VERSION", "promptVersion and policyVersion are required");
+  assertClaudeReasonCodes(input.reasonCodes);
+}
+
+export type ClaudeMediaDecisionInput = {
+  mediaId: string;
+  decision: QualityDecision;
+  /** 被审核时这张图的内容版本（资产 checksum，缺失时见 mediaContentVersion）。 */
+  reviewedContentVersion: string;
+  promptVersion: string;
+  policyVersion: string;
+  /** 必须含 CLAUDE_AUTHORIZATION_REASON，以及 kind:/subject:/use:/sensitive: 四类分类码。 */
+  reasonCodes: string[];
+};
+
+export const MEDIA_CONTENT_VERSION_REASON_PREFIX = "content-version:";
+const MEDIA_CLASSIFIERS = ["kind:", "subject:", "use:", "sensitive:"] as const;
+
+export function assertClaudeMediaDecisionInput(input: ClaudeMediaDecisionInput): void {
+  if (!input.mediaId || input.mediaId.includes("|")) throw new StoryWriteContractError("MISSING_MEDIA", "mediaId is required and names one picture");
+  if (!input.reviewedContentVersion) throw new StoryWriteContractError("MISSING_REVIEWED_CONTENT_VERSION", "reviewedContentVersion is required");
+  if (!input.promptVersion || !input.policyVersion) throw new StoryWriteContractError("MISSING_VERSION", "promptVersion and policyVersion are required");
+  assertClaudeReasonCodes(input.reasonCodes);
+  for (const prefix of MEDIA_CLASSIFIERS) {
+    if (!input.reasonCodes.some((code) => code.startsWith(prefix))) throw new StoryWriteContractError("MISSING_CLASSIFICATION", `a Claude photo decision must record ${prefix}…`);
+  }
+  if ((input.reasonCodes ?? []).some((code) => code.startsWith(MEDIA_CONTENT_VERSION_REASON_PREFIX))) throw new StoryWriteContractError("REASON_CODE_RESERVED", `reason codes may not carry their own ${MEDIA_CONTENT_VERSION_REASON_PREFIX} entry`);
+  // 主体确认不等于公开授权：敏感内容不许经由 approved 被推到默认阅读位置。
+  if (input.decision === "approved" && !input.reasonCodes.includes("sensitive:none")) {
+    throw new StoryWriteContractError("SENSITIVE_NOT_APPROVABLE", "only sensitive:none pictures may be approved; keep sensitive ones as deferred or store_only");
+  }
+  if (input.decision === "approved" && !input.reasonCodes.includes("kind:life")) {
+    throw new StoryWriteContractError("NOT_A_LIFE_PHOTO", "only kind:life pictures may be approved for the album");
+  }
+  if (input.decision === "approved" && !input.reasonCodes.includes("subject:zhangnian")) {
+    throw new StoryWriteContractError("SUBJECT_NOT_CONFIRMED", "approved means the subject is confirmed as 张年; use deferred when it cannot be confirmed");
+  }
+}
+
+function assertClaudeReasonCodes(codes: string[] | undefined): void {
+  if (!Array.isArray(codes) || !codes.includes(CLAUDE_AUTHORIZATION_REASON)) {
+    throw new StoryWriteContractError("MISSING_AUTHORIZATION", `a Claude decision must carry ${CLAUDE_AUTHORIZATION_REASON}`);
+  }
+  if (codes.some((code) => code.startsWith(CONTENT_SHA256_REASON_PREFIX))) throw new StoryWriteContractError("REASON_CODE_RESERVED", `reason codes may not carry their own ${CONTENT_SHA256_REASON_PREFIX} entry`);
+}
+
+/** 「还没人决定」的标记，不算一条要被尊重的人工决定。 */
+const PENDING_DECISIONS: ReadonlySet<string> = new Set(["needs_human_review", "needs_review"]);
+
+/**
+ * Claude 入口的人工优先规则：同一个对象上，只要存在一条**已经作出决定**的人工行（不是待审标记），
+ * Claude 就不能在它上面再下决定——无论人工当时是批准、保留不发布、暂缓还是改写。
+ * 返回第一条挡路的行（用于报错），没有则 undefined。`kinds` 限定看哪些账本种类。
+ */
+export function blockingHumanDecision(rows: readonly LedgerRow[], kinds: ReadonlySet<string>): LedgerRow | undefined {
+  return rows.find((row) => kinds.has(row.targetKind) && reviewerTypeOf(row.provider) === "human" && !PENDING_DECISIONS.has(row.decision));
+}
+
+/** 故事上会被人工决定挡住的账本种类（media_binding 是照片配对，另走自己的判断）。 */
+export const STORY_DECISION_KINDS: ReadonlySet<string> = new Set(["life_event", "life_event_preview", "life_event_queue169", "life_event_trace"]);
+export const PHOTO_SUBJECT_KINDS: ReadonlySet<string> = new Set(["media_subject_check"]);
+
+/**
+ * 一张图的内容版本。有资产 checksum 就用它（原图、预览、重复引用共享同一资产时自然复用审核结果）；
+ * 没有就用 id + 存储键 + 尺寸的哈希——变了就会被判为 stale、要求重审。
+ */
+export function mediaContentVersion(media: { id: string; objectKey?: string | null; width?: number | null; height?: number | null }, assetChecksum?: string | null): string {
+  if (assetChecksum) return `sha256:${assetChecksum.replace(/^sha256:/, "")}`;
+  return `shape:${createHash("sha256").update(`${media.id}|${media.objectKey ?? ""}|${media.width ?? ""}|${media.height ?? ""}`).digest("hex")}`;
 }

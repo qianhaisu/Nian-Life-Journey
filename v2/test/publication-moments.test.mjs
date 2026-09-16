@@ -203,6 +203,45 @@ test("burst grouping is temporal redundancy only: one representative reads, ever
 // 587 张里 440 张是 ≤90 秒连拍的第二张及以后（75%），2026-08 68%。铺开来读的是同一个瞬间按了
 // 好几次快门，不是这个月的日子。和 burstRepresentatives 的唯一区别：那一支服务阅读层，一组全是
 // 小图时整组不出现是它的本意；相册层不能少一组，所以兜底到 group[0]。
+// 2026-09-16: a picture leaves the month's photo surfaces only when a reviewer classified it as not a
+// life photo (store_only). Unreviewed pictures stay; nothing is narrowed to the reviewed set.
+test("excludedPhotoIdsFrom: only the latest store_only subject check excludes; approved or unreviewed does not", async () => {
+  const { excludedPhotoIdsFrom } = await import("../lib/media/story-binding.ts");
+  const rows = [
+    { id: "1", targetKind: "media_subject_check", targetId: "menu", decision: "store_only", reviewedAt: "2026-09-16T01:00:00Z" },
+    { id: "2", targetKind: "media_subject_check", targetId: "kid", decision: "approved", reviewedAt: "2026-09-16T01:00:00Z" },
+    { id: "3", targetKind: "media_subject_check", targetId: "flip", decision: "store_only", reviewedAt: "2026-09-16T01:00:00Z" },
+    { id: "4", targetKind: "media_subject_check", targetId: "flip", decision: "approved", reviewedAt: "2026-09-16T02:00:00Z" },
+    { id: "5", targetKind: "media_binding", targetId: "event|menu2", decision: "store_only", reviewedAt: "2026-09-16T01:00:00Z" },
+    { id: "6", targetKind: "media_subject_check", targetId: "held", decision: "needs_human_review", reviewedAt: "2026-09-16T01:00:00Z" },
+  ];
+  assert.deepEqual([...excludedPhotoIdsFrom(rows)], ["menu"]);
+});
+
+test("buildMonthComposition drops excluded pictures from every photo surface and leaves the rest alone", () => {
+  const chapters = buildChapters({
+    events: [],
+    traces: [],
+    media: [
+      { ...photo("kid", "2026-08-27T08:00:00.000Z"), profileId: "p", visibility: "family", type: "photo" },
+      { ...photo("menu", "2026-08-27T12:00:00.000Z"), profileId: "p", visibility: "family", type: "photo" },
+      { ...photo("unreviewed", "2026-08-28T08:00:00.000Z"), profileId: "p", visibility: "family", type: "photo" },
+      { ...photo("allmenu", "2026-08-29T08:00:00.000Z"), profileId: "p", visibility: "family", type: "photo" },
+    ],
+    deliverable: new Set(["kid", "menu", "unreviewed", "allmenu"]),
+    birthDay: "2025-01-03",
+  });
+  const month = findMonth(chapters, "2026-08");
+  const trusted = new Set(["kid", "menu", "unreviewed", "allmenu"]);
+  const before = buildMonthComposition(month, { confirmed: new Set(), trusted });
+  const after = buildMonthComposition(month, { confirmed: new Set(), trusted, excluded: new Set(["menu", "allmenu"]) });
+  const ids = (composition) => composition.archiveDays.flatMap((day) => day.photos.map((item) => item.id)).sort();
+  assert.deepEqual(ids(before), ["allmenu", "kid", "menu", "unreviewed"]);
+  assert.deepEqual(ids(after), ["kid", "unreviewed"], "the menu and the all-menu day are gone; the unreviewed photo stays");
+  assert.ok(!after.archiveDays.some((day) => day.day === "2026-08-29"), "a day with nothing left is not shown");
+  assert.ok(after.archiveDays.some((day) => day.day === "2026-08-28"), "an unreviewed day is untouched");
+});
+
 test("burstLeads：一组连拍留一张；一组全是小图也要留一张（相册层不能整组消失）", () => {
   const burst = [];
   for (let n = 0; n < 8; n += 1) burst.push(photo(`b${n}`, `2026-08-27T08:00:${String(n * 5).padStart(2, "0")}.000Z`));

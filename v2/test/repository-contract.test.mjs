@@ -167,6 +167,89 @@ function runContractSuite(name, createRepo) {
     await assert.rejects(() => repo.recordHumanStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: current.contentSha256, operator: "deepseek", promptVersion: "release-contract-3", policyVersion: "release-contract" }), /OPERATOR_NOT_HUMAN/);
   });
 
+  // ---------------------------------------------------------------- Claude review (2026-09-16)
+  // Teddy authorized Claude to review and publish. These pin the four things that authorization must
+  // not blur: a Claude decision is its own reviewer type, it publishes, it is idempotent and refuses a
+  // stale version, and it never lands on top of a family decision.
+  const CLAUDE_AUTH = "authorized-by:teddy-2026-09-16";
+
+  test(`[${name}] claude review: approves an Organizer candidate, is idempotent, refuses stale content`, async () => {
+    const repo = createRepo();
+    const { event } = await guardedCandidate(repo);
+    const read = await repo.getStoryContentVersion(event.id);
+    const first = await repo.recordClaudeStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: read.contentSha256, promptVersion: "claude-review-contract-1", policyVersion: "claude-review-v1", reasonCodes: [CLAUDE_AUTH, "subject:zhangnian"] });
+    assert.equal(first.idempotent, false);
+    assert.equal(first.review.provider, "claude-review", "recorded as its own reviewer type, never as a human operator");
+    assert.ok(first.review.reasonCodes.includes(CLAUDE_AUTH));
+    assert.ok(first.review.reasonCodes.includes(`content-sha256:${read.contentSha256}`));
+
+    const again = await repo.recordClaudeStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: read.contentSha256, promptVersion: "claude-review-contract-1", policyVersion: "claude-review-v1", reasonCodes: [CLAUDE_AUTH, "subject:zhangnian"] });
+    assert.equal(again.idempotent, true, "a rerun writes nothing new");
+    const store = await repo.getStore();
+    assert.equal(store.qualityReviews.filter((item) => item.targetId === event.id && item.promptVersion === "claude-review-contract-1").length, 1, "zero duplicate rows");
+
+    await assert.rejects(() => repo.recordClaudeStoryDecision({ eventId: event.id, decision: "store_only", reviewedContentSha256: read.contentSha256, promptVersion: "claude-review-contract-1", policyVersion: "claude-review-v1", reasonCodes: [CLAUDE_AUTH] }), /CLAUDE_DECISION_CONFLICT/);
+    await assert.rejects(() => repo.recordClaudeStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: "e".repeat(64), promptVersion: "claude-review-contract-2", policyVersion: "claude-review-v1", reasonCodes: [CLAUDE_AUTH] }), /STALE_REVIEW_CONTENT/);
+    await assert.rejects(() => repo.recordClaudeStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: read.contentSha256, promptVersion: "claude-review-contract-3", policyVersion: "claude-review-v1", reasonCodes: ["subject:zhangnian"] }), /MISSING_AUTHORIZATION/);
+
+    const protection = await repo.getStoryProtection(event.id);
+    assert.equal(protection.protected, true, "a Claude-approved story is safe from automatic rewrites");
+    assert.ok(protection.reasons.some((reason) => reason.startsWith("CLAUDE_DECISION:")), "and the reason says Claude, not human");
+    assert.ok(!protection.reasons.some((reason) => reason.startsWith("HUMAN_DECISION:")));
+  });
+
+  test(`[${name}] claude review: never placed over a family decision; the human entry refuses the Claude operator`, async () => {
+    const repo = createRepo();
+    const { event } = await guardedCandidate(repo);
+    const read = await repo.getStoryContentVersion(event.id);
+    await repo.recordHumanStoryDecision({ eventId: event.id, decision: "store_only", reviewedContentSha256: read.contentSha256, operator: "contract-test-human", promptVersion: "release-contract-claude", policyVersion: "release-contract" });
+    await assert.rejects(() => repo.recordClaudeStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: read.contentSha256, promptVersion: "claude-review-contract-h", policyVersion: "claude-review-v1", reasonCodes: [CLAUDE_AUTH] }), /HUMAN_DECISION_PRESENT/);
+    assert.equal(await repo.findQualityReview("life_event", event.id, "claude-review-contract-h"), null, "nothing written");
+
+    const { event: other } = await guardedCandidate(repo);
+    const otherRead = await repo.getStoryContentVersion(other.id);
+    await assert.rejects(() => repo.recordHumanStoryDecision({ eventId: other.id, decision: "approved", reviewedContentSha256: otherRead.contentSha256, operator: "claude-review", promptVersion: "release-contract-x", policyVersion: "release-contract" }), /OPERATOR_NOT_HUMAN/);
+  });
+
+  test(`[${name}] claude review: a pending automatic marker does not block; a changed story needs a fresh review`, async () => {
+    const repo = createRepo();
+    const { event, fp, source } = await guardedCandidate(repo);
+    const read = await repo.getStoryContentVersion(event.id);
+    await repo.persistOrganization([source.id], { ...event, title: "changed after Claude read it", organizationFingerprint: fp }, [], { actor: "organizer" });
+    await assert.rejects(() => repo.recordClaudeStoryDecision({ eventId: event.id, decision: "approved", reviewedContentSha256: read.contentSha256, promptVersion: "claude-review-contract-c", policyVersion: "claude-review-v1", reasonCodes: [CLAUDE_AUTH] }), /STALE_REVIEW_CONTENT/);
+    const reread = await repo.getStoryContentVersion(event.id);
+    const ok = await repo.recordClaudeStoryDecision({ eventId: event.id, decision: "needs_human_review", reviewedContentSha256: reread.contentSha256, promptVersion: "claude-review-contract-c", policyVersion: "claude-review-v1", reasonCodes: [CLAUDE_AUTH, "hold:date-unverified"] });
+    assert.equal(ok.review.decision, "needs_human_review", "a Claude hold is recorded and does not publish");
+  });
+
+  test(`[${name}] claude photo review: classifies, excludes a document, is idempotent, refuses stale and human-checked pictures`, async () => {
+    const repo = createRepo();
+    const asset = fixtureAsset({ checksum: "a".repeat(64) });
+    const location = fixtureLocation(asset.id);
+    const mediaId = uid("media");
+    const source = fixtureSource({ mediaIds: [mediaId] });
+    await repo.persistUpload({ source, media: [{ id: mediaId, profileId: PROFILE_ID, rawSourceId: source.id, mediaAssetId: asset.id, type: "photo", src: "", mimeType: "image/jpeg", alt: "", takenAt: source.capturedAt, visibility: "family", width: 100, height: 100 }], assets: [asset], locations: [location] });
+    const version = await repo.getMediaContentVersion(mediaId);
+    assert.equal(version.contentVersion, `sha256:${"a".repeat(64)}`, "the asset checksum is the content version");
+
+    const doc = ["kind:document", "subject:uncertain", "use:source", "sensitive:none", CLAUDE_AUTH];
+    const first = await repo.recordClaudeMediaDecision({ mediaId, decision: "store_only", reviewedContentVersion: version.contentVersion, promptVersion: "claude-photo-contract-1", policyVersion: "claude-photo-v1", reasonCodes: doc });
+    assert.equal(first.idempotent, false);
+    assert.equal(first.review.provider, "claude-review");
+    const again = await repo.recordClaudeMediaDecision({ mediaId, decision: "store_only", reviewedContentVersion: version.contentVersion, promptVersion: "claude-photo-contract-1", policyVersion: "claude-photo-v1", reasonCodes: doc });
+    assert.equal(again.idempotent, true);
+    await assert.rejects(() => repo.recordClaudeMediaDecision({ mediaId, decision: "store_only", reviewedContentVersion: "sha256:" + "b".repeat(64), promptVersion: "claude-photo-contract-2", policyVersion: "claude-photo-v1", reasonCodes: doc }), /STALE_REVIEW_CONTENT/);
+
+    // approval rules: only a confirmed, non-sensitive life photo
+    const life = ["kind:life", "subject:zhangnian", "use:album", "sensitive:none", CLAUDE_AUTH];
+    await assert.rejects(() => repo.recordClaudeMediaDecision({ mediaId, decision: "approved", reviewedContentVersion: version.contentVersion, promptVersion: "claude-photo-contract-3", policyVersion: "claude-photo-v1", reasonCodes: ["kind:life", "subject:uncertain", "use:album", "sensitive:none", CLAUDE_AUTH] }), /SUBJECT_NOT_CONFIRMED/);
+    await assert.rejects(() => repo.recordClaudeMediaDecision({ mediaId, decision: "approved", reviewedContentVersion: version.contentVersion, promptVersion: "claude-photo-contract-3", policyVersion: "claude-photo-v1", reasonCodes: ["kind:life", "subject:zhangnian", "use:album", "sensitive:health", CLAUDE_AUTH] }), /SENSITIVE_NOT_APPROVABLE/);
+    await assert.rejects(() => repo.recordClaudeMediaDecision({ mediaId, decision: "approved", reviewedContentVersion: version.contentVersion, promptVersion: "claude-photo-contract-3", policyVersion: "claude-photo-v1", reasonCodes: ["kind:screenshot", "subject:zhangnian", "use:album", "sensitive:none", CLAUDE_AUTH] }), /NOT_A_LIFE_PHOTO/);
+    await assert.rejects(() => repo.recordClaudeMediaDecision({ mediaId, decision: "approved", reviewedContentVersion: version.contentVersion, promptVersion: "claude-photo-contract-3", policyVersion: "claude-photo-v1", reasonCodes: ["kind:life", "subject:zhangnian", CLAUDE_AUTH] }), /MISSING_CLASSIFICATION/);
+    const approved = await repo.recordClaudeMediaDecision({ mediaId, decision: "approved", reviewedContentVersion: version.contentVersion, promptVersion: "claude-photo-contract-3", policyVersion: "claude-photo-v1", reasonCodes: life });
+    assert.equal(approved.review.decision, "approved", "a later Claude decision supersedes an earlier Claude decision");
+  });
+
   // P1 (2026-09-14): a write to one story also re-points or clears pointers another story holds.
   const sourcePointer = async (repo, sourceId) => (await repo.getOrganizerWindowInput([sourceId])).sources[0];
 

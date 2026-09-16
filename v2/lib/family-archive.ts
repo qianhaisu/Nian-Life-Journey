@@ -9,7 +9,7 @@ import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
 import { isSnapshotPublishable } from "@/lib/organizer/quality-review";
-import { checkedPhotoIdsFrom, isStoryAssociated, storyPhotoConfirmationsFrom, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
+import { checkedPhotoIdsFrom, excludedPhotoIdsFrom, isStoryAssociated, storyPhotoConfirmationsFrom, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
 import { isTrustedPhotoSource } from "@/lib/trusted-photo-sources";
 import type { EventIdentity } from "@/lib/preview-reading";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
@@ -129,7 +129,9 @@ export function composeFamilyArchive(
   // Photographs somebody opened and recorded as being of this child (no story attached). Only the
   // opening picture of 「这个月的日子」 asks for this; everything else is unchanged by it.
   const checkedPhotos = checkedPhotoIdsFrom(store.qualityReviews ?? []);
-  const privilege = mediaPrivilegeOf(events, familyMedia, store.rawSources, photoConfirmations, checkedPhotos);
+  // 2026-09-16: same ledger array, no extra read on the render path.
+  const excludedPhotos = excludedPhotoIdsFrom(store.qualityReviews ?? []);
+  const privilege = { ...mediaPrivilegeOf(events, familyMedia, store.rawSources, photoConfirmations, checkedPhotos), excluded: excludedPhotos };
   // store.events (from getStore()) is already the publishable-only set — the same fail-closed gate
   // getAllEvents() applies — so a store_only event is never in it. `allEvents` is
   // getAllEventIdentities()'s unfiltered read, the one place the app reads every life_event row

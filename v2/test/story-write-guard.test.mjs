@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
-  AUTOMATIC_REVIEW_PROVIDERS, assertAutomaticActor, assertHumanDecisionInput, assertNotAutomaticApproval, boundContentSha256,
-  canonicalOccurredAtUtc, evaluateStoryProtection, storyContentSha256,
+  AUTOMATIC_REVIEW_PROVIDERS, CLAUDE_REVIEW_PROVIDER, STORY_DECISION_KINDS, assertAutomaticActor, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256,
+  canonicalOccurredAtUtc, evaluateStoryProtection, mediaContentVersion, reviewerTypeOf, storyContentSha256,
 } from "../lib/organizer/story-write-guard.ts";
 import { NIANLIFE_DEEPSEEK_MODEL, assertProviderModel, resolveDeepSeekModel } from "../lib/organizer/deepseek-model.ts";
 
@@ -130,6 +130,66 @@ test("human decisions must carry the reviewed hash and a non-automatic operator,
   assert.throws(() => assertHumanDecisionInput({ ...ok, reviewedContentSha256: "" }), /MISSING_REVIEWED_CONTENT_HASH/);
   assert.throws(() => assertHumanDecisionInput({ ...ok, operator: "deepseek" }), /OPERATOR_NOT_HUMAN/);
   assert.throws(() => assertHumanDecisionInput({ ...ok, reasonCodes: [`content-sha256:${"d".repeat(64)}`] }), /REASON_CODE_RESERVED/);
+});
+
+test("2026-09-16 reviewer types: automatic, claude and human are three different things", () => {
+  assert.equal(reviewerTypeOf("deepseek"), "automatic");
+  assert.equal(reviewerTypeOf(CLAUDE_REVIEW_PROVIDER), "claude");
+  assert.equal(reviewerTypeOf("human"), "human");
+  // the historical claude-code rows were written through human routes; this change does not re-attribute them
+  assert.equal(reviewerTypeOf("claude-code"), "human");
+  assert.equal(reviewerTypeOf("nianlife-preview"), "human");
+  assert.equal(reviewerTypeOf(undefined), "human", "unknown provenance fails closed as human");
+  assert.ok(!AUTOMATIC_REVIEW_PROVIDERS.has(CLAUDE_REVIEW_PROVIDER), "a Claude decision is not an automatic write");
+});
+
+test("2026-09-16 a Claude approval protects a story and is reported as CLAUDE_DECISION, not HUMAN_DECISION", () => {
+  const e = aiEvent("event-claude-x");
+  const verdict = evaluateStoryProtection({ event: e }, [
+    row("life_event", e.id, "needs_human_review", "deepseek", "family-writer-v2-calibrated-r2.2", "2026-09-11 01:51:00"),
+    row("life_event", e.id, "approved", CLAUDE_REVIEW_PROVIDER, "claude-review-2026-09-16", "2026-09-16 12:00:00"),
+  ]);
+  assert.equal(verdict.protected, true);
+  assert.ok(verdict.reasons.includes("CLAUDE_DECISION:life_event:approved"));
+  assert.ok(!verdict.reasons.some((reason) => reason.startsWith("HUMAN_DECISION:")));
+});
+
+test("2026-09-16 human precedence: a pending marker does not block Claude, a decided human row does", () => {
+  const id = "event-hp";
+  const pending = [row("life_event_preview", id, "needs_human_review", "nianlife-preview", "p", "2026-09-10")];
+  assert.equal(blockingHumanDecision(pending, STORY_DECISION_KINDS), undefined, "nobody decided yet");
+  for (const decision of ["keep_unpublished", "deferred", "adopt_original", "approved", "store_only"]) {
+    const decided = [row("life_event_queue169", id, decision, "human", "q", "2026-09-13")];
+    assert.ok(blockingHumanDecision(decided, STORY_DECISION_KINDS), `a human ${decision} blocks`);
+  }
+  const claudeOnly = [row("life_event", id, "approved", CLAUDE_REVIEW_PROVIDER, "c", "2026-09-16")];
+  assert.equal(blockingHumanDecision(claudeOnly, STORY_DECISION_KINDS), undefined, "Claude may revise its own earlier decision");
+  const photoOnly = [row("media_binding", `${id}|m`, "approved", "human", "b", "2026-09-13")];
+  assert.equal(blockingHumanDecision(photoOnly, STORY_DECISION_KINDS), undefined, "a photo pairing is judged separately");
+});
+
+test("2026-09-16 picture content version: checksum when there is one, a shape hash otherwise", () => {
+  assert.equal(mediaContentVersion({ id: "m" }, "c".repeat(64)), `sha256:${"c".repeat(64)}`);
+  assert.equal(mediaContentVersion({ id: "m" }, `sha256:${"c".repeat(64)}`), `sha256:${"c".repeat(64)}`);
+  const a = mediaContentVersion({ id: "m", objectKey: "k", width: 10, height: 20 });
+  assert.match(a, /^shape:[0-9a-f]{64}$/);
+  assert.notEqual(a, mediaContentVersion({ id: "m", objectKey: "k", width: 10, height: 21 }), "a resized picture is a new version");
+});
+
+test("no automatic code path references the Claude review methods either", () => {
+  const root = process.cwd();
+  const offenders = [];
+  const scan = (dir, accept) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { scan(full, accept); continue; }
+      if (!accept(entry.name)) continue;
+      if (/recordClaude(Story|Media)Decision/.test(readFileSync(full, "utf8"))) offenders.push(path.relative(root, full));
+    }
+  };
+  scan(path.join(root, "lib", "organizer"), (name) => /\.(ts|mjs)$/.test(name) && name !== "story-write-guard.ts");
+  scan(path.join(root, "scripts"), (name) => /^(organizer-|deepseek-|nianlife-worker|t20c-|month-review|wechat-|quark-)/.test(name));
+  assert.deepEqual(offenders, []);
 });
 
 test("no automatic code path references the human decision method", () => {
