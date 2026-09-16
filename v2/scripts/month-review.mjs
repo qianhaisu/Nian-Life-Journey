@@ -43,10 +43,22 @@ const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 const apiKey = process.env.DEEPSEEK_API_KEY;
 const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 const model = resolveDeepSeekModel(process.env);
-// 2026-09-14: --commit is refused. persistMonthlySnapshot upserts (onConflictDoUpdate) over a month's
-// summary that the family already reads and that may carry an approved review; there is no guarded
-// write path that checks that first. Dry runs still work.
-if (COMMIT) { console.error("REFUSED: month-review --commit is disabled until monthly snapshots have a guarded write path (2026-09-14)."); process.exit(1); }
+// 2026-09-14: --commit was refused outright. persistMonthlySnapshot upserts (onConflictDoUpdate)
+// over a month's summary that the family already reads and that may carry an approved review, and
+// there was no guarded write path that checked that first.
+//
+// 2026-09-16: the guard is now here, and it is the narrow one the refusal was actually asking for.
+// The 2026-09-13 incident was **overwriting published content** — 59 stories rewritten in place and
+// taken offline. Writing a month that has NO snapshot row cannot do that: there is nothing to
+// clobber, nothing the family already reads, no approved review to supersede. So:
+//
+//   · month has no monthly_snapshot row  → --commit allowed (pure insert)
+//   · month already has one              → still refused, whatever its review says
+//
+// That is checked against the database right before the write, not from anything the caller claims
+// (assertInsertOnly below). Overwriting an existing month still needs a real guarded path with a
+// human decision and a content hash; this change does not pretend to provide one.
+// 未做（写在这里，免得下一个人以为它做过了）：更新已有月份的回顾。
 if (!dbUrl) { console.error("Need DATABASE_URL."); process.exit(1); }
 if (!apiKey) { console.error("Need DEEPSEEK_API_KEY."); process.exit(1); }
 
@@ -142,6 +154,17 @@ async function main() {
   if (/\d/.test(summary.replace(/[年月日]/g, ""))) console.log("WARNING: contains a digit outside a bare date reference — review before committing.");
 
   if (!COMMIT) { console.log("Dry run — nothing written. Pass --commit to persist."); return; }
+
+  // 写之前对着库再问一次：这个月真的还没有回顾吗？调用方说了不算。
+  const existing = await pool.query(
+    `select id, length(coalesce(summary,'')) as len from monthly_snapshot where profile_id = $1 and month = $2`,
+    [PROFILE_ID, MONTH],
+  );
+  if (existing.rows.length > 0) {
+    console.error(`REFUSED: ${MONTH} 已经有一份回顾（${existing.rows[0].id}，${existing.rows[0].len} 字）。覆盖已发布的回顾需要带内容哈希的人工决定，这条路径只负责「这个月还没有」的情况。`);
+    process.exitCode = 1;
+    return;
+  }
 
   const snapshot = { id: `monthly-snapshot-${MONTH}`, profileId: PROFILE_ID, month: MONTH, summary, highlights: [], visibility: "family" };
   const saved = await persistMonthlySnapshot(snapshot);
