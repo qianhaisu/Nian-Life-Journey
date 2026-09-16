@@ -63,7 +63,15 @@ if (!media) stop(`no media row ${MEDIA_ID}`);
 if (media.type !== "video" || media.media_type !== "video") stop("not a video");
 if (media.visibility === "private") stop("visibility is private");
 const trusted = media.source_type === "family_photo" || TRUSTED_WECHAT_SOURCE_LABELS.has(media.source);
-if (!trusted) stop(`source ${media.source} is not on the trusted list — a video from an unvouched conversation does not belong on a family page`);
+// 2026-09-16, Teddy: explicit opt-in for the 78 videos whose conversation is not on the trusted
+// list. What this switch does and does not do, stated plainly because the default refusal is here
+// for a reason: attaching a poster and a preview only makes a video PLAYABLE at its delivery URL —
+// it does not put it on any page. Every reading surface still asks isPrivileged() (trusted source
+// or an approved media_subject_check, lib/publication-moments.ts), so an unvouched video stays out
+// of 「这个月的照片」 and out of every day group exactly as before. Without the switch the refusal
+// below is unchanged, and no caller gets it by accident.
+const allowUnvouched = process.env.ALLOW_UNVOUCHED_SOURCE === "1";
+if (!trusted && !allowUnvouched) stop(`source ${media.source} is not on the trusted list — a video from an unvouched conversation does not belong on a family page (set ALLOW_UNVOUCHED_SOURCE=1 only with an explicit human decision)`);
 if (!media.checksum?.startsWith("sha256:")) stop("asset has no sha256 checksum to key derivatives by");
 
 const checksumHex = media.checksum.replace(/^sha256:/, "");

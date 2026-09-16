@@ -10072,3 +10072,16 @@ worker 从工作区 import `lib/ingest/wechat-content-dedupe.ts`；`git status -
 - 首页那 5 条 9 月的 `memory` 权重来自另一条路径（无 organizer_version），本轮未动。
 
 **下一件事**：等新指令。Organizer 线的下一步候选：把剩下 69% 素材过一遍 / 审阅台（443 条 needs_human_review 无人看）/ 让 `event_type` 与 `worthiness` 真的产出。
+
+## 2026-09-16 视频可播放 + 故事配视频（续，Claude）
+
+1. **线上多了什么**：313 个视频资产现在全部有封面和可播的 H.264 预览（原件里大部分是 HEVC，浏览器放不了，全部在 ECS 上转码后回挂）；故事卡新增 21 对逐段看过画面才写的视频绑定（第一轮 19 + 第二轮 2），已在事件页和月页确认渲染；7 个来自 WeFlow JSON 导出的视频附件补挂进库并完成派生。`content_quality_reviews` 已批 `media_binding` 共 65 条。
+2. **没做到 / 最大 blocker**：每日同步任务的**自然触发**还没验证过。`Nianlife WeChat Daily Sync` 已注册、state=Ready、下次触发 2026-09-16 23:30:30；今天 00:10 那次是我手动触发的（返回 0），不算自然触发。23:30 之后需要有人看一眼结果。另有 4 条 9 月托班视频因附件证据缺失被归为 ambiguous，按规则列出未导入。
+3. **下一件事**：新一批视频拿到封面后候选故事会再扩大，可做第三轮逐对核对。
+
+**两处更正（此前报错了）**：
+
+- 我曾报告故事视频绑定「线上 0 命中」。实际是我抓到了 ISR 缓存的旧版本，又按页面里 `<video>` 标签的**数量**去判断，结论错了——当时 19 段里已有 17 段在页面上。第二轮又重演了一次同样的误判。**判定口径固定为：等 ISR 过期后重抓，看 mediaId 的哈希是否出现在 HTML 里，不看标签数。**
+- 「有 2 段没显示」不是故障。`v2/lib/memory-chapters.ts:103` 的 `STORY_VIDEOS_MAX = 2` 限定每篇故事最多显示 2 段视频；那篇故事我收了 3 段，第 3 段按规则本就不出。
+
+派生脚本的可信来源校验加了显式开关 `ALLOW_UNVOUCHED_SOURCE=1`（Teddy 2026-09-16 授权）：派生只让视频在自己的地址上可播，**不会把它放到任何页面**——展示仍由 `isPrivileged` 与逐对绑定把关。账本与回滚语句在仓库外 `NianlifeOps/data-sync-2026-09-15/video-batch/ledger.jsonl`。
