@@ -313,14 +313,20 @@
 }
 .memory-player-close svg, .memory-player-mute svg { width: 22px; height: 22px; }
 
-/* 画面：contain，不裁。首页预览为了构图用 cover，播放器里这是"在看照片"，不该切掉边角。 */
+/* 画面：cover，铺满，允许裁。
+   2026-09-16 的第一版用的是 contain（一寸不裁），代价是竖照上下两条黑边，
+   看起来像个播放器控件而不是一段回忆。Teddy 看过线上截图后裁定：裁。
+   所以这里和首页预览统一成 cover——播放器本来就该是沉浸的那一个。
+   `object-position` 偏上，理由和预览、以及站里既有的 .photo-strip 一致：人脸通常在画面中上部，
+   横构图在这个竖长的舞台里会被上下裁，居中裁就容易把脸切掉。 */
 .memory-player-stage { position: relative; flex: 1; min-height: 0; }
 .memory-player-stage img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
+  object-position: 50% 38%;
   opacity: 0;
   transition: opacity 800ms ease-in-out;
 }
