@@ -10200,3 +10200,15 @@ node --import tsx scripts/story-review.mjs apply --package=<该文件> --operato
 - **`v2/.env.local` 指向 Neon，且 `MEDIA_STORAGE_PROVIDER=r2` 桶是 `nianlife-test`。** 线上跑的是 RDS + OSS。任何直接用 .env.local 跑的入库都会写进错误的库和测试桶。本轮用显式覆盖（RDS 隧道 + OSS 公网 endpoint + `MEDIA_STORAGE_PROVIDER=oss`）执行，运行器在 `v2/.data/q07-run-ingest.mjs`。用 r2 会把 provider 标成 `hot`，而线上容器读不到 R2——2026-09 有 13 张照片就是这样 404 的。
 
 入库走的仍是唯一实现 `applyQuarkPhotoArtifact`；本批 adapter 见 `v2/scripts/quark-history-init-20260915.mjs`（提交 6464338）。幂等已验证：同一命令重跑 created=0 / reused=2。
+
+## 2026-09-16 夸克批次全量主体核验 + 日期冲突按相机优先（Claude）
+
+1. **线上多了什么**：这批 674 张全部逐张看过主体（拼成 57 页带编号审阅图，看缩览图 + 拍摄时间），全部通过、0 剔除；去重后 666 张不同照片，写入 664 条 `media_subject_check / approved`（`content_quality_reviews` 2101 → 2765）。各月获批张数从个位数跳到几十上百：2025-01 3→114、2025-12 3→96、2025-03 3→65、2026-02 3→56、2025-11 6→52、2026-08 4→48。另按 Teddy 裁决「日期以相机优先」，19 条 EXIF 与服务器冲突的照片改用 EXIF DateTimeOriginal 入库，实际新增 18 张（1 张同哈希复用），0 失败；服务器时间在交付 manifest 里原样保留未改写。
+2. **没做到 / 需要 Teddy**：① `v2/.env.local` 的改写被权限分类器拦下（判为不可逆本地破坏），文件原封不动——要做的是仓库外备份后把 `MEDIA_STORAGE_PROVIDER` 切 oss、补 OSS 配置、把 Neon 的 `DATABASE_URL` 改名让脚本响亮失败；**RDS 只能经 ECS 的 SSH 隧道访问，没法在该文件里写直接可用的连接串**。② 那 19 张按相机时间入库的照片不在审阅图里，未批主体核验。
+3. **下一件事**：今晚 23:30 之后确认每日微信同步任务的自然触发结果。
+
+**月度封面因此变了 9 个月**（封面每次渲染重算，候选池扩大就会改选）：2025-01、2025-02 由一张夸克照片换成另一张；2025-09、2025-10、2025-11、2026-05、2026-07、2026-08、2026-09 由微信照片换成夸克照片；其余 12 个月未变。基线与对比落在仓库外 `cover-baseline-before.txt` / `cover-after-isr.txt`。要回退某个月，删掉对应照片的核验行即可。
+
+**口径复用**：写入后立刻抓页面得到「21 个月全部未变」，那是 300 秒 ISR 窗口内的旧渲染，不是结论；等窗口过期重抓才得到真实的 9 个月变化。判定一律以「等 ISR 过期后 mediaId 是否出现在 HTML 里」为准。
+
+回滚：`delete from content_quality_reviews where policy_version='quark-batch-20260915-subject-v1';`
