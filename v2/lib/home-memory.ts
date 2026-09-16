@@ -64,8 +64,14 @@ import { NO_TOPICS, type PhotoTopicLabel, type PhotoTopicLookup } from "@/lib/ho
 
 export const MEMORY_MIN_SLIDES = 6;
 export const MEMORY_MAX_SLIDES = 12;
-/** 首页一共准备几段可切换的回忆。 */
-export const HOME_MEMORIES_MAX = 6;
+/**
+ * 首页一共准备几段可切换的回忆。
+ *
+ * **8 而不是 6**：下面 interleaveKinds 按 day / topic / season 轮流取，一轮各取一段，
+ * 所以 6 段只轮得到前两个主题（玩水、睡觉）——Teddy 点名的第三个「笑」排在第三位，
+ * 永远轮不到。2026-09-16 线上实测就是这个结果。8 段让它露面。
+ */
+export const HOME_MEMORIES_MAX = 8;
 /** 跨天主题里，同一天最多贡献几张——防止「一整季」变成「某个下午」。 */
 export const CROSS_DAY_PER_DAY_MAX = 2;
 export const SLIDE_SECONDS = 5;
