@@ -361,9 +361,15 @@ Policy 约束 unsupported facts、medical inference、first-time hallucination�
 ### P2：完善媒体与运营能力
 
 1. 真实视频 poster/transcode、文档 preview、poster/字幕策略和失败重试。
-2. R2/Quark 的 checksum、容量、保留、删除授权和灾备恢复演练。
-3. 引入结构化 observability：ingest、organizer、archive、permission denial 的 metrics/traces，但不记录儿童原文或凭据。
-4. 加浏览器 E2E、真实 PostgreSQL migration smoke、R2 contract test、并发/恢复测试。
+2. **iPhone Live 照片支持**（Teddy 2026-09-16 决定要做，排长期计划，不在当前主线里抢位置）。今天完全不支持，缺口是三个独立的，不是一个开关：
+   - **数据模型没有「一对」的概念**：`media.type` 只有 photo/video/document，`poster_src` 是给视频存封面的，没有任何字段能把静态半边和动态半边绑成一对（`v2/lib/db/schema.ts:96-123`）。要么当照片丢掉动态，要么当视频丢掉静态原图画质。
+   - **夸克入库路径只做照片**：唯一实现 `applyQuarkPhotoArtifact` 没有时长/封面/编码处理，把视频喂进去会被当成静态图静默出错（`v2/scripts/quark-photo-apply.mjs`，`quark-history-init.mjs:11-14` 已写明）；夸克视频入库路径至今未建。
+   - **微信那条线拿不到动态半边**：微信发送时只保留静态图。
+   素材现状（2026-09-15 批次实测）：夸克有 732 个视频（585 `.MOV` + 147 `.mp4`），本轮一个都没下载；其中**文件名与相册某张照片同名的有 37 个**（同名正是 Live 两半的存储方式，`IMG_9300.HEIC` + `IMG_9300.MOV`），**其中 7 个的静态半边已在库**。732 个里只有 104 个小于 6MB，中位数 16.7MB，所以绝大多数是普通视频而非 Live 的 3 秒片段。
+   落点：`media` 加配对字段 + 读取层（`lib/memory-chapters.ts`、`lib/publication-moments.ts`）+ 前端「按住播放」。中间态可选：先把那 37 个 `.MOV` 当普通视频收进来（走 2026-09-16 已建成的 ECS ffmpeg 转码 + 抽封面 + 挂派生链路），同一瞬间在库里存成两条，页面各算各的——这条只需要 WorkBuddy 交付视频，不需要动 schema。
+3. R2/Quark 的 checksum、容量、保留、删除授权和灾备恢复演练。
+4. 引入结构化 observability：ingest、organizer、archive、permission denial 的 metrics/traces，但不记录儿童原文或凭据。
+5. 加浏览器 E2E、真实 PostgreSQL migration smoke、R2 contract test、并发/恢复测试。
 
 ### P3：长期产品差异化
 
