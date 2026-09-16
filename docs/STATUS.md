@@ -10013,3 +10013,20 @@ worker 从工作区 import `lib/ingest/wechat-content-dedupe.ts`；`git status -
 `ops-daily/logs` 里只有 09-16 00:10 那次**手动**运行（exit 0）。按要求不承诺自动醒来——到点后需要有人（或下一轮会话）去查这一轮日志。
 
 **下一件事**：Teddy 对「JPEG 26 条关联写入 / 视频样本 + 续批 / 由谁执行这次合并发布」一次确认后执行。
+
+## 2026-09-16 · 那 988 条是谁写的：查清了，判断已经做出来了，被写低了一档
+
+**链条（全部读到行 + 生产实测）**：
+
+1. **写手是 `v2/scripts/organizer-month-write.mjs`（T7）**，不是 V2 常驻管线。它在 `:557` **故意**把权重压到最低：
+   `plan.lifeEvent.event.memoryWeight = "trace";`，注释写着「T7's output is everyday observation, not a curated highlight — so it never outranks a real chapter/highlight」。这是 2026-09-04 T11 记在案的决定。
+2. **同一天 Cowork 就发现了这个问题**，写了 `scripts/t20c-regrade-memories.mjs` / `t20c-grade-events.mjs`（T20-C + T19，原则五），头注释原文：「every T7-written life_event was forced to memoryWeight='trace' regardless of content, so 「小年年升入大班了」 and 「老师提醒尿不湿不多了」 render identically.」
+3. **重评真的跑了，而且判得不错。** 生产实测：T7 那 988 条里 `t20-c-regrade-low-tier → store_only` **445 条**（下沉、不再当标题记忆渲染），**42 条被提到 `memory`**（高档，无 reason code，所以前一次查询里 `with_t20c=0`）。分档 prompt 原文：「high：真正的变化或第一次——新技能、新习惯、重要里程碑、明显的成长节点。一个月最多 1-4 条应该是 high。」
+4. **但高档映射写错了一档。** `t20c-grade-events.mjs:7` 原文：`high -> memoryWeight "memory" (milestone/chapter)`——注释说它是 milestone/chapter，写进库的值却是四档里的第三档 `memory`。而展示层（`month-moment.tsx` 的分级、`curateMemories` 的排序）用的是 trace < memory < highlight < chapter 这把四档尺。
+5. 另一条路同样封死：`lib/organizer/production-adapter.ts:254` 写死 `memoryWeight: "memory"`。
+
+**结论**：**没有任何生产路径能写出 `highlight` 或 `chapter`。** T7 那句「不能盖过真正的 chapter/highlight」让位的对象，从来就不存在、也造不出来。而 42 条「真正的变化或第一次」**已经被判出来、已经在库里**，只是记在了第三档，所以在四档尺上和普通日子挨着。
+
+**因此 ③ 的修法比原先估计的小得多**：不是「造一个重要性信号」，是把已有判断的落点改对——`t20c-grade-events.mjs` 的 high 改映射到 `highlight`，`production-adapter.ts:254` 去掉写死值。42 条现成的高档事件立刻让原则五在月页和索引页上有东西可分。**未做，等 Teddy 定。**
+
+**要一起决定的两件事**：① high 映射到 `highlight` 还是 `chapter`（分档 prompt 说「worth a chapter」，但 `chapter` 是尺子的顶格，也许该留给更强的，或者干脆退役掉）；② 42 条存量是直接改权重，还是重跑一次分档。
