@@ -49,7 +49,9 @@ export type QualityReview = {
   // review ("这个月的张年") — the same ledger, not a second one. Publication itself still gates
   // on isSnapshotPublishable (an approved life_event must exist for the month); this row is the
   // audit trail Cowork's spec asked for, not yet a second hard gate.
-  targetKind: "life_event" | "daily_trace" | "monthly_snapshot";
+  // 2026-09-16: "media_subject_check" added -- the ledger has always stored it (lib/media/story-binding.ts
+  // PHOTO_SUBJECT_REVIEW_KIND reads it), and the Claude photo review entry now writes it through this type.
+  targetKind: "life_event" | "daily_trace" | "monthly_snapshot" | "media_subject_check";
   targetId: string;
   decision: QualityDecision;
   gateA?: string;

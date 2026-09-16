@@ -17,9 +17,9 @@ import { storyNeighbours } from "@/lib/story-neighbours";
 import { indexReviews, isEventPublishable } from "@/lib/organizer/quality-review";
 import { randomUUID } from "node:crypto";
 import {
-  CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, ProtectedStoryWriteError, STORY_REVIEW_KINDS, StoryWriteContractError,
-  assertAutomaticActor, assertHumanDecisionInput, assertNotAutomaticApproval, boundContentSha256, canonicalOccurredAtUtc, evaluateStoryProtection, storyContentSha256,
-  type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
+  CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
+  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryDecisionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, canonicalOccurredAtUtc, evaluateStoryProtection, mediaContentVersion, rowLinksToStory, storyContentSha256,
+  type ClaudeMediaDecisionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
 } from "@/lib/organizer/story-write-guard";
 
 const jsonLedgerRows = (store: Store): LedgerRow[] => store.qualityReviews.map((review) => ({ targetKind: review.targetKind, targetId: review.targetId, decision: review.decision, provider: review.provider, promptVersion: review.promptVersion, reviewedAt: review.reviewedAt }));
@@ -329,6 +329,62 @@ export function createJsonRepository(): Repository {
         store.qualityReviews.push(review);
         return { review, contentSha256: current, idempotent: false };
       });
+    },
+    // 2026-09-16: JSON mirror of the Claude review entries (postgres-repository.ts). Same rules.
+    async recordClaudeStoryDecision(input: ClaudeStoryDecisionInput) {
+      assertClaudeStoryDecisionInput(input);
+      return withStoreMutation((store) => {
+        const event = store.events.find((item) => item.id === input.eventId);
+        if (!event) throw new StoryWriteContractError("EVENT_NOT_FOUND", `no life_event ${input.eventId}`);
+        const current = storyContentSha256(jsonStoryContent(event));
+        if (current !== input.reviewedContentSha256) throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `reviewed content ${input.reviewedContentSha256.slice(0, 12)} is not the stored story (now ${current.slice(0, 12)}); nothing written`);
+        const ledger: LedgerRow[] = store.qualityReviews
+          .filter((item) => rowLinksToStory(item, event.id, [event.organizationFingerprint]))
+          .map((item) => ({ targetKind: item.targetKind, targetId: item.targetId, decision: item.decision, provider: item.provider ?? "", promptVersion: item.promptVersion, reviewedAt: item.reviewedAt }));
+        const blocker = blockingHumanDecision(ledger, STORY_DECISION_KINDS);
+        if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human ${blocker.targetKind} decision (${blocker.provider}: ${blocker.decision}); a Claude decision may not be placed over it`);
+        const existing = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
+        if (existing) {
+          if (existing.provider === CLAUDE_REVIEW_PROVIDER && existing.decision === input.decision && boundContentSha256(existing.reasonCodes) === current) return { review: existing, contentVersion: current, idempotent: true };
+          throw new StoryWriteContractError("CLAUDE_DECISION_CONFLICT", `${input.eventId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
+        }
+        const latest = Math.max(Date.now(), ...store.qualityReviews.filter((item) => item.targetKind === "life_event" && item.targetId === input.eventId).map((item) => Date.parse(item.reviewedAt) + 1).filter((value) => !Number.isNaN(value)));
+        const review: QualityReview = { id: `claude-review-${randomUUID()}`, profileId: event.profileId, targetKind: "life_event", targetId: input.eventId, decision: input.decision, reasonCodes: [...input.reasonCodes, `${CONTENT_SHA256_REASON_PREFIX}${current}`], provider: CLAUDE_REVIEW_PROVIDER, promptVersion: input.promptVersion, policyVersion: input.policyVersion, reviewFingerprint: `${input.eventId}:${input.promptVersion}`, reviewedAt: new Date(latest).toISOString() };
+        store.qualityReviews.push(review);
+        return { review, contentVersion: current, idempotent: false };
+      });
+    },
+    async recordClaudeMediaDecision(input: ClaudeMediaDecisionInput) {
+      assertClaudeMediaDecisionInput(input);
+      return withStoreMutation((store) => {
+        const media = store.media.find((item) => item.id === input.mediaId);
+        if (!media) throw new StoryWriteContractError("MEDIA_NOT_FOUND", `no media ${input.mediaId}`);
+        const asset = media.mediaAssetId ? store.mediaAssets.find((item) => item.id === media.mediaAssetId) : undefined;
+        const current = mediaContentVersion({ id: media.id, objectKey: media.objectKey ?? null, width: media.width, height: media.height }, asset?.checksum ?? null);
+        if (current !== input.reviewedContentVersion) throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `reviewed picture ${input.reviewedContentVersion.slice(0, 20)} is not the stored one (now ${current.slice(0, 20)}); nothing written`);
+        const ledger: LedgerRow[] = store.qualityReviews
+          .filter((item) => item.targetKind === "media_subject_check" && item.targetId === input.mediaId)
+          .map((item) => ({ targetKind: item.targetKind, targetId: item.targetId, decision: item.decision, provider: item.provider ?? "", promptVersion: item.promptVersion, reviewedAt: item.reviewedAt }));
+        const blocker = blockingHumanDecision(ledger, PHOTO_SUBJECT_KINDS);
+        if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.mediaId} carries a human subject check (${blocker.provider}: ${blocker.decision}); a Claude decision may not be placed over it`);
+        const existing = store.qualityReviews.find((item) => item.targetKind === "media_subject_check" && item.targetId === input.mediaId && item.promptVersion === input.promptVersion);
+        if (existing) {
+          const bound = existing.reasonCodes.find((code) => code.startsWith(MEDIA_CONTENT_VERSION_REASON_PREFIX))?.slice(MEDIA_CONTENT_VERSION_REASON_PREFIX.length);
+          if (existing.provider === CLAUDE_REVIEW_PROVIDER && existing.decision === input.decision && bound === current) return { review: existing, contentVersion: current, idempotent: true };
+          throw new StoryWriteContractError("CLAUDE_DECISION_CONFLICT", `${input.mediaId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
+        }
+        const latest = Math.max(Date.now(), ...store.qualityReviews.filter((item) => item.targetKind === "media_subject_check" && item.targetId === input.mediaId).map((item) => Date.parse(item.reviewedAt) + 1).filter((value) => !Number.isNaN(value)));
+        const review: QualityReview = { id: `claude-review-media-${randomUUID()}`, profileId: media.profileId, targetKind: "media_subject_check", targetId: input.mediaId, decision: input.decision, reasonCodes: [...input.reasonCodes, `${MEDIA_CONTENT_VERSION_REASON_PREFIX}${current}`], provider: CLAUDE_REVIEW_PROVIDER, promptVersion: input.promptVersion, policyVersion: input.policyVersion, reviewFingerprint: `${input.mediaId}:${input.promptVersion}`, reviewedAt: new Date(latest).toISOString() };
+        store.qualityReviews.push(review);
+        return { review, contentVersion: current, idempotent: false };
+      });
+    },
+    async getMediaContentVersion(mediaId: string) {
+      const store = await readStore();
+      const media = store.media.find((item) => item.id === mediaId);
+      if (!media) return null;
+      const asset = media.mediaAssetId ? store.mediaAssets.find((item) => item.id === media.mediaAssetId) : undefined;
+      return { mediaId, contentVersion: mediaContentVersion({ id: media.id, objectKey: media.objectKey ?? null, width: media.width, height: media.height }, asset?.checksum ?? null) };
     },
     async getStoryContentVersion(eventId: string) {
       const store = await readStore();

@@ -141,6 +141,33 @@ export const PHOTO_SUBJECT_REVIEW_KIND = "media_subject_check";
  * (exposure-evidence.json, 601 photographs). It decides whether a withdrawal written tomorrow is
  * honoured.
  */
+/**
+ * 2026-09-16: pictures whose LATEST subject check says they are not one of the month's life photos
+ * (`store_only`: a menu, a document, a vocabulary chart, a chat screenshot, or clearly not this child).
+ *
+ * This is deliberately the ONLY thing that takes a picture out of the album. An unreviewed picture
+ * stays exactly where it was -- the album is not narrowed to the reviewed set, because doing that
+ * while review coverage is still being built would empty whole months. A picture leaves only when a
+ * reviewer looked at it and said what it is. Its row, its source link and any story it illustrates
+ * are untouched: story display is decided separately (media_binding), not by this set.
+ */
+export function excludedPhotoIdsFrom(
+  reviews: ReadonlyArray<{ id?: string | null; targetKind?: string | null; targetId?: string | null; decision?: unknown; reviewedAt?: string | null }>,
+): ReadonlySet<string> {
+  const latest = new Map<string, { decision: unknown; rank: string }>();
+  for (const review of reviews) {
+    if (review.targetKind !== PHOTO_SUBJECT_REVIEW_KIND) continue;
+    const id = (review.targetId ?? "").trim();
+    if (!id || id.includes("|")) continue;
+    const rank = `${review.reviewedAt ?? ""}|${review.id ?? ""}`;
+    const held = latest.get(id);
+    if (!held || rank > held.rank) latest.set(id, { decision: review.decision, rank });
+  }
+  const excluded = new Set<string>();
+  for (const [id, held] of latest) if (held.decision === "store_only") excluded.add(id);
+  return excluded;
+}
+
 export function checkedPhotoIdsFrom(
   reviews: ReadonlyArray<{ id?: string | null; targetKind?: string | null; targetId?: string | null; decision?: unknown; reviewedAt?: string | null }>,
 ): ReadonlySet<string> {

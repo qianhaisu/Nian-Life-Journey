@@ -11,9 +11,9 @@ import { normalizeSha256 } from "./chat-import-persistence";
 import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
 import { createHash } from "node:crypto";
 import {
-  CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, ProtectedStoryWriteError, STORY_REVIEW_KINDS, StoryWriteContractError,
-  assertAutomaticActor, assertHumanDecisionInput, assertNotAutomaticApproval, boundContentSha256, evaluateStoryProtection, storyContentSha256, storyLinkTargets,
-  type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
+  CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
+  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryDecisionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, evaluateStoryProtection, mediaContentVersion, storyContentSha256, storyLinkTargets,
+  type ClaudeMediaDecisionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
 } from "@/lib/organizer/story-write-guard";
 import { ledgerOnlyStoryPhotoIds, storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
 import { storyNeighbours } from "@/lib/story-neighbours";
@@ -132,6 +132,27 @@ async function lockEventRow(tx: GuardTx, column: "id" | "organization_fingerprin
     ? await (tx as any).select().from(t.lifeEvents).where(eq(t.lifeEvents.id, value)).for("update")
     : await (tx as any).select().from(t.lifeEvents).where(eq(t.lifeEvents.organizationFingerprint, value)).for("update");
   return (rows[0] as LifeEvent | undefined) ?? null;
+}
+
+// 2026-09-16: ledger rows for a set of target ids, in the guard's LedgerRow shape.
+async function readLedgerRows(q: GuardTx, targetIds: string[]): Promise<LedgerRow[]> {
+  if (targetIds.length === 0) return [];
+  // drizzle expands a JS array into a row tuple, so `= any(${array})` is invalid SQL -- found by running
+  // the Postgres contract suite; the JSON mirror cannot catch it. Same list idiom as the guard above.
+  const list = sql.join(targetIds.map((value) => sql`${value}`), sql`, `);
+  const result = await q.execute(sql`select target_kind, target_id, decision, provider, prompt_version, reviewed_at
+    from content_quality_reviews where target_id in (${list})`);
+  return (result.rows as Array<Record<string, unknown>>).map((r) => ({
+    targetKind: String(r.target_kind), targetId: String(r.target_id), decision: String(r.decision),
+    provider: String(r.provider), promptVersion: String(r.prompt_version), reviewedAt: r.reviewed_at ? String(r.reviewed_at) : null,
+  }));
+}
+
+function mediaVersionOfRow(m: Record<string, unknown>): string {
+  return mediaContentVersion(
+    { id: String(m.id), objectKey: (m.object_key as string | null) ?? null, width: (m.width as number | null) ?? null, height: (m.height as number | null) ?? null },
+    (m.checksum as string | null) ?? null,
+  );
 }
 
 // The canonical content a human approves (see story-write-guard.ts StoryContent for the contract).
@@ -1293,6 +1314,85 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
         if (review.decision === input.decision && boundContentSha256(review.reasonCodes) === current) return { review, contentSha256: current, idempotent: true };
         throw new StoryWriteContractError("HUMAN_DECISION_CONFLICT", `${input.eventId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
       });
+    },
+    // 2026-09-16: Claude review entry (see story-write-guard.ts CLAUDE_REVIEW_PROVIDER). Same lock,
+    // content-hash check, strictly-later timestamp and (kind, id, promptVersion) idempotency as the
+    // human entry. One addition: if the story already carries a human row that made a decision,
+    // refuse -- a Claude decision is never placed over a family decision.
+    async recordClaudeStoryDecision(input: ClaudeStoryDecisionInput) {
+      assertClaudeStoryDecisionInput(input);
+      return db.transaction(async (tx) => {
+        const q = tx as unknown as GuardTx;
+        await lockStoryLedger(q);
+        const event = await lockEventRow(q, "id", input.eventId);
+        if (!event) throw new StoryWriteContractError("EVENT_NOT_FOUND", `no life_event ${input.eventId}`);
+        const content = await readStoryContent(q, input.eventId);
+        const current = storyContentSha256(content!);
+        if (current !== input.reviewedContentSha256) {
+          throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `reviewed content ${input.reviewedContentSha256.slice(0, 12)} is not the stored story (now ${current.slice(0, 12)}); nothing written`);
+        }
+        const targets = storyLinkTargets(input.eventId, [event.organizationFingerprint]);
+        const ledger = await readLedgerRows(q, [...targets.ids, ...targets.fingerprintTargets]);
+        const blocker = blockingHumanDecision(ledger, STORY_DECISION_KINDS);
+        if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human ${blocker.targetKind} decision (${blocker.provider}: ${blocker.decision}); a Claude decision may not be placed over it`);
+        const reasonCodes = [...input.reasonCodes, `${CONTENT_SHA256_REASON_PREFIX}${current}`];
+        const id = `claude-review-${createHash("sha256").update(`${input.eventId}|${input.promptVersion}`).digest("hex").slice(0, 24)}`;
+        const inserted = await q.execute(sql`insert into content_quality_reviews
+            (id, profile_id, target_kind, target_id, decision, reason_codes, provider, model, prompt_version, policy_version, review_fingerprint, reviewed_at)
+          select ${id}, ${content!.profileId}, 'life_event', ${input.eventId}, ${input.decision}, ${JSON.stringify(reasonCodes)}::jsonb, ${CLAUDE_REVIEW_PROVIDER}, null,
+            ${input.promptVersion}, ${input.policyVersion}, ${`${input.eventId}:${input.promptVersion}`},
+            greatest((now() at time zone 'utc'), (select max(reviewed_at) + interval '1 microsecond' from content_quality_reviews where target_kind = 'life_event' and target_id = ${input.eventId}))
+          on conflict (target_kind, target_id, prompt_version) do nothing
+          returning id`);
+        const [row] = await (tx as any).select().from(t.contentQualityReviews).where(and(
+          eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
+        const review = reviewFromRow(row as Record<string, unknown>);
+        if (inserted.rows.length) return { review, contentVersion: current, idempotent: false };
+        if (review.provider === CLAUDE_REVIEW_PROVIDER && review.decision === input.decision && boundContentSha256(review.reasonCodes) === current) return { review, contentVersion: current, idempotent: true };
+        throw new StoryWriteContractError("CLAUDE_DECISION_CONFLICT", `${input.eventId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
+      });
+    },
+    async recordClaudeMediaDecision(input: ClaudeMediaDecisionInput) {
+      assertClaudeMediaDecisionInput(input);
+      return db.transaction(async (tx) => {
+        const q = tx as unknown as GuardTx;
+        await lockStoryLedger(q);
+        const found = await q.execute(sql`select m.id, m.profile_id, m.object_key, m.width, m.height, a.checksum
+          from media m left join media_assets a on a.id = m.media_asset_id
+          where m.id = ${input.mediaId} for update of m`);
+        const m = (found.rows as Array<Record<string, unknown>>)[0];
+        if (!m) throw new StoryWriteContractError("MEDIA_NOT_FOUND", `no media ${input.mediaId}`);
+        const current = mediaVersionOfRow(m);
+        if (current !== input.reviewedContentVersion) {
+          throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `reviewed picture ${input.reviewedContentVersion.slice(0, 20)} is not the stored one (now ${current.slice(0, 20)}); nothing written`);
+        }
+        const ledger = (await readLedgerRows(q, [input.mediaId])).filter((row) => row.targetKind === "media_subject_check");
+        const blocker = blockingHumanDecision(ledger, PHOTO_SUBJECT_KINDS);
+        if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.mediaId} carries a human subject check (${blocker.provider}: ${blocker.decision}); a Claude decision may not be placed over it`);
+        const reasonCodes = [...input.reasonCodes, `${MEDIA_CONTENT_VERSION_REASON_PREFIX}${current}`];
+        const id = `claude-review-media-${createHash("sha256").update(`${input.mediaId}|${input.promptVersion}`).digest("hex").slice(0, 24)}`;
+        const inserted = await q.execute(sql`insert into content_quality_reviews
+            (id, profile_id, target_kind, target_id, decision, reason_codes, provider, model, prompt_version, policy_version, review_fingerprint, reviewed_at)
+          select ${id}, ${String(m.profile_id)}, 'media_subject_check', ${input.mediaId}, ${input.decision}, ${JSON.stringify(reasonCodes)}::jsonb, ${CLAUDE_REVIEW_PROVIDER}, null,
+            ${input.promptVersion}, ${input.policyVersion}, ${`${input.mediaId}:${input.promptVersion}`},
+            greatest((now() at time zone 'utc'), (select max(reviewed_at) + interval '1 microsecond' from content_quality_reviews where target_kind = 'media_subject_check' and target_id = ${input.mediaId}))
+          on conflict (target_kind, target_id, prompt_version) do nothing
+          returning id`);
+        const [row] = await (tx as any).select().from(t.contentQualityReviews).where(and(
+          eq(t.contentQualityReviews.targetKind, "media_subject_check"), eq(t.contentQualityReviews.targetId, input.mediaId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
+        const review = reviewFromRow(row as Record<string, unknown>);
+        const bound = review.reasonCodes.find((code) => code.startsWith(MEDIA_CONTENT_VERSION_REASON_PREFIX))?.slice(MEDIA_CONTENT_VERSION_REASON_PREFIX.length);
+        if (inserted.rows.length) return { review, contentVersion: current, idempotent: false };
+        if (review.provider === CLAUDE_REVIEW_PROVIDER && review.decision === input.decision && bound === current) return { review, contentVersion: current, idempotent: true };
+        throw new StoryWriteContractError("CLAUDE_DECISION_CONFLICT", `${input.mediaId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
+      });
+    },
+    async getMediaContentVersion(mediaId: string) {
+      const found = await db.execute(sql`select m.id, m.object_key, m.width, m.height, a.checksum
+        from media m left join media_assets a on a.id = m.media_asset_id where m.id = ${mediaId}`);
+      const m = (found.rows as Array<Record<string, unknown>>)[0];
+      if (!m) return null;
+      return { mediaId, contentVersion: mediaVersionOfRow(m) };
     },
     async getStoryContentVersion(eventId: string) {
       const content = await readStoryContent(db as unknown as GuardTx, eventId);
