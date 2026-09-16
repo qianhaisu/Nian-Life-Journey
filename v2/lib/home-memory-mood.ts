@@ -109,9 +109,25 @@ export function moodFor(input: MemoryMoodInput): MemoryMoodVerdict {
   };
 }
 
-/** 曲子的静态地址。文件由 scripts/build-memory-music.mjs 生成并提交，运行时不合成。 */
-export function trackSrc(mood: MemoryMood): string {
-  return `/audio/memory-${mood}.mp3`;
+/**
+ * 现在**真的有文件**的那几种情绪。
+ *
+ * 2026-09-16 线上验收，Teddy 的原话：「音轨质量太差 清空你做的音轨 等下我给你具体的音轨你读取」。
+ * 我合成的那 4 首连同生成脚本已经删除，所以这个集合现在是**空的**。
+ *
+ * 空集合不是"坏了"，它是这条链路上唯一诚实的状态：任务书写死了
+ * 「没有可用音轨就报告具体缺口，不能用按钮和假曲名冒充音乐已交付」。
+ * 所以 `trackSrc()` 返回 undefined，播放器据此**不挂 <audio>、不画静音键、不写曲名**——
+ * 而不是指向一个 404 的地址让它静静地失败。
+ *
+ * 等 Teddy 给了音轨：把文件放进 v2/public/audio/memory-<mood>.mp3，
+ * 在这里把对应的 mood 加进来，其余一行都不用改——情绪判定（moodFor）本来就已经在跑了。
+ */
+export const AVAILABLE_TRACK_MOODS: ReadonlySet<MemoryMood> = new Set<MemoryMood>();
+
+/** 这段回忆的曲子地址；**没有可用音轨时是 undefined**，调用方必须据此降级。 */
+export function trackSrc(mood: MemoryMood): string | undefined {
+  return AVAILABLE_TRACK_MOODS.has(mood) ? `/audio/memory-${mood}.mp3` : undefined;
 }
 
 /**

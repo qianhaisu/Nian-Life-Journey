@@ -149,8 +149,17 @@
 .memory-dot { height: 2px; flex: 1; background: var(--home-line); border-radius: 2px; transition: background-color 300ms ease; }
 .memory-dot.is-on { background: var(--home-accent); }
 
-.memory-read { margin: 14px 0 0; }
-.memory-read a {
+/* 照片下面那一行：左边「读读这一天」，右边「换一段」。
+   「换一段」只在真的不止一段时才渲染（components/home-memory.tsx），所以这一行有时只有左边一项。 */
+.memory-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 12px 0 0;
+}
+.memory-read {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -158,7 +167,27 @@
   color: var(--home-accent);
   font-size: 15px;
 }
-@media (hover: hover) { .memory-read a:hover { color: var(--home-ink); } }
+@media (hover: hover) { .memory-read:hover { color: var(--home-ink); } }
+/* 「换一段」：一枚安静的描边胶囊。它是这一页上除播放键之外唯一的控件——
+   做成实心会和播放键抢主角，做成纯文字又不像能按；描边是这两者之间那一档。 */
+.memory-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--home-line);
+  border-radius: 999px;
+  background: none;
+  color: var(--home-muted);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color 180ms var(--ease-out), color 180ms var(--ease-out);
+}
+@media (hover: hover) { .memory-switch:hover { border-color: var(--home-accent); color: var(--home-ink); } }
+.memory-switch:active { transform: scale(.98); }
+/* 没有音轨时占住静音键的位置，标题才不会从居中偏出去。 */
+.memory-player-spacer { display: block; width: 44px; height: 44px; flex: none; }
 
 /* 降级：没有合格回忆时用已有的真实封面与真实文字，不画空框、不写「暂无」。 */
 .home-memory--single .memory-single-photo { display: block; border-radius: 20px; overflow: hidden; background: var(--paper-dark); }
@@ -392,8 +421,7 @@
   .home-sheet { width: min(980px, calc(100% - 64px)); }
   /* 竖照在宽屏上不要撑满版心：一张 4:5 的照片铺到 980px 宽就成了一堵墙。 */
   .memory-frames { max-width: 620px; margin-inline: auto; max-height: 68svh; }
-  .memory-dots, .memory-read { max-width: 620px; margin-inline: auto; }
-  .memory-read { text-align: right; }
+  .memory-dots, .memory-actions { max-width: 620px; margin-inline: auto; }
 }
 
 /* ── 减少动态 ──────────────────────────────────────────────────────────────── */

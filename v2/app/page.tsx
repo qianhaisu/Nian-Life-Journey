@@ -5,7 +5,7 @@ import { HomeReminders, type HomeReminder as HomeReminderView, type HomeReminder
 import { MODALITY_LABEL, SOURCE_KIND_LABEL, roleText, type SourceKind } from "@/components/upcoming-tasks";
 import { readHomeFeed, HOME_REMINDER_LABEL, type HomeFeed, type HomeReminder, type HomeReminderState } from "@/lib/home-feed";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
-import { selectHomeMemory } from "@/lib/home-memory";
+import { selectHomeMemories } from "@/lib/home-memory";
 import { HOME_QUIET_STATES } from "@/lib/home-reminder-display";
 import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { renderOnDemand } from "@/lib/render-on-demand";
@@ -28,15 +28,17 @@ export default async function HomePage() {
   await renderOnDemand();
   const archive = await loadFamilyArchiveOnDemand();
   const feed = await readHomeFeed({ archive });
-  const { memory, absence } = selectHomeMemory(archive);
+  // 几段回忆，一次呈现一段，页面上用「换一段」切换（lib/home-memory.ts 按月份铺开，
+  // 所以按几次必然翻到更早的月份，而不是在这一周里打转）。
+  const { memories, absence } = selectHomeMemories(archive);
 
   return <div className="home-v2">
     <div className="home-sheet">
       {/* 这一页的 h1 是这句问候，不是照片上的题签：页面回答的问题是「最近怎么样」，
           那段回忆是答案的一部分（原则一）。题签因此降成 h2，标题层级和阅读顺序一致。 */}
       <h1 className="home-greeting">最近怎么样，<span className="keep-whole">张年</span></h1>
-      {memory
-        ? <HomeMemory memory={memory} mood={memory.mood} />
+      {memories.length > 0
+        ? <HomeMemory memories={memories} />
         : <MemoryFallback feed={feed} reason={absence?.reason} />}
       <Reminders feed={feed} />
     </div>

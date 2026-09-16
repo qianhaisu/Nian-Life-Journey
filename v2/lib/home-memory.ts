@@ -1,151 +1,139 @@
-// 首页第一部分「最近怎么样，张年」的那一段回忆（2026-09-16）。
-//
-// 一段回忆 = **同一天**的一组照片 + 这一天自己已发布的标题。不是把不同故事的封面串起来，
-// 也不是把一张照片反复裁切当成多张（用户 2026-09-16 明确点名的两种做法）。
+// 首页第一部分：**几段各有主题的回忆**（2026-09-16 晚，按 Teddy 线上验收的两轮反馈重做）。
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// 不新增任何数据库读取
+// 主题从哪来：只能从**日期事实**里长出来
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// 全部材料来自 `loadFamilyArchiveOnDemand()` 已经读好的那一份档案：
-//   · `archive.chapters[].months[].photoDays` —— 每一天的照片（已过 family-visible + 可投递）
-//   · `archive.chapters[].months[].memories`  —— 这一天已发布的记忆（标题、链接、当时年龄）
-//   · `archive.privilege`                     —— 哪些照片有来源担保
-// 没有 getStore()、没有 getOrganizerStore()、没有 raw_sources.text、没有整表查询
-// （CLAUDE.md 渲染路径那条 $87 出站流量的规矩）。
+// Teddy 给了两张 iPhone 相册「回忆」的截图：「夏天 · 2026年」是一个季节，「杭州市 · 2025年12月14日」
+// 是一个地点，「周游世界 · 2019年旅程」是一段旅程——**每段有各自的主题，副标题的粒度也跟着主题走**。
+// 第一版我做成了「每段 = 某一天」，六段全是同一种主题，只是日期不同，那不叫多主题。
+//
+// 这个档案里**能诚实支撑**的主题只有三种，因为其余的没有依据：
+//
+//   day    —— 有已发布记忆的那一天。标题就是那天的标题原文，副标题是具体日期 + 当时年龄。
+//   season —— 一个季节。标题「2026 年的夏天」，副标题「6 月 — 8 月」。
+//   year   —— 一年。标题「2025 年」，副标题用两个时钟的跨度（当时 11 个月 — 1 岁 10 个月）。
+//
+// **地点主题做不了**：2026-09-16 查生产，1036 条 life_event 的 `location_label` **全空**（0 条）。
+// 没有依据就不做，不拿「杭州市」这种标题去套一个其实不知道在哪拍的日子。
+//
+// 季节按人说话的方式跨年：「2025 年的冬天」= 2025-12 → 2026-02，不是把 1 月和 12 月塞进同一个冬天。
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// 门槛一格没放宽：和「这个月的照片」是同一套闸门
+// 跨天主题怎么选片（Teddy 2026-09-16 裁定：从全季照片里均匀取）
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// 一张照片能进这段回忆，条件和它能进月末相册完全一样，逐条对齐
-// lib/publication-moments.ts 里 `albumPhotosByDay` 的做法：
-//   1. `isPrivileged` —— 来源可信（家庭相册原图，或 Teddy 确认过的那几个微信群），
-//      或有人开过这个文件并记下画面里是这个孩子（media_subject_check）；
-//   2. `thumbnailSized` —— 画得出来，不是 20×20 的表情碎片；
-//   3. `photographsFirst` —— 屏幕形状的截图排到后面（只影响次序，不影响资格）。
-//
-// **这里没有新增一条授权，也没有放宽一条。** 同一批照片今天已经在 /memory 的月末相册里，
-// 家人点得到；这一段做的是把其中**一天**的照片换一种读法，不是把没授权的东西搬上首页。
+// 季节和年度不要求那一天有已发布故事——只要主体核验通过，沿时间均匀铺开。
+// 但「均匀」不能退化成某个下午的十二张，所以跨天主题**每天最多取两张**再均匀抽。
+// 没有这条上限时，2026-09 那种「13 天里 310 张」的月份会让一整季看起来像某一天。
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// 连拍折叠：57 张 ≠ 57 个瞬间
+// 照片门槛：收紧过，不是放宽
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// 2026-09-16 对着生产相册接口实测：2026-09-08 那天「78 张照片」，按 90 秒分组只有 **9 组**。
-// 原因是同一次快门在库里常常存了 2–4 行（原图 3120×4160 + 缩放版 1280×1706，takenAt 一模一样）。
-// 不折叠就会连着放四张几乎一样的画面，那正是用户说的「把一张照片反复裁切当作多张」。
+// 1. **每一张都要有 `media_subject_check` approved**（有人开过这个文件、记下画面里是这个孩子）。
+//    不再用来源担保——来源说的是「这张图来自哪」，不说画面里是谁，所以菜单牌、单词表、
+//    微信截屏都能混进来，那正是 Teddy 说的「照片有的质量不高」。
+//    实测：该标记已从 64 张涨到 1,049 张，收紧之后素材仍然充足。
 //
-// 折叠用的是 lib/publication-moments.ts 已有的 `burstGroups`（90 秒），不另写一套——
-// 月末相册的折叠也是它，两处对「什么算同一个瞬间」的理解必须是同一个。
+// 2. **每组连拍取像素最大的那一张**。同一次快门在库里常常同时存着原图和微信压缩版
+//    （3120×4160 与 1280×1706，takenAt 相同）；实测 273 个多张连拍组里有 47 组（17%）
+//    原来选中的不是最大那张，平均少 6.8MP，最差一例 960×1280 顶替 3120×4160。
 //
-// ─────────────────────────────────────────────────────────────────────────────
-// 配文：一个字都不编
-// ─────────────────────────────────────────────────────────────────────────────
+// 两条都不需要模型：一条读账本，一条比像素。**不要在这里调用视觉模型**——
+// lib/home-photo-quality.ts 顶部记着生产 provider 会把图片悄悄换成 `[Unsupported Image]` 再开始编。
 //
-// 配文只用**这一天已发布记忆的标题原文**，原样搬过来，不改写、不拼接、不生成。
-// 没有标题的一天根本不会被选中（见 `qualifies`），所以不存在"配文缺了要补一句"的情况。
-// 不虚构对白、心理、关系或成长结论（产品原则 + 用户 2026-09-16 的原话）。
+// 全部材料来自已经读好的 archive（chapters + privilege），不新增任何数据库读取。
 import type { FamilyArchive } from "@/lib/family-archive";
 import type { EditorialMemory, MediaRef, MonthChapter } from "@/lib/memory-chapters";
-import { burstGroups, isPrivileged, type MediaPrivilege } from "@/lib/publication-moments";
-import { heroSized, thumbnailSized } from "@/lib/media/hero";
-import { photographsFirst } from "@/lib/media/presentation";
+import { burstGroups, isSubjectChecked, type MediaPrivilege } from "@/lib/publication-moments";
+import { thumbnailSized } from "@/lib/media/hero";
+import { ageAtMonth, formatMonth } from "@/lib/time-signature";
 import { moodFor, type MemoryMood } from "@/lib/home-memory-mood";
 
-/** 一段回忆至少要几个**不同的瞬间**才算数。低于这个数就不是一段回忆，是几张零散的照片。 */
 export const MEMORY_MIN_SLIDES = 6;
-/** 上限。再多就超过一分钟，也超出用户给的 6–12 张参考范围。 */
 export const MEMORY_MAX_SLIDES = 12;
-/** 每张停留多久（秒）。用户给的参考是 4–6 秒。 */
+/** 首页一共准备几段可切换的回忆。 */
+export const HOME_MEMORIES_MAX = 6;
+/** 跨天主题里，同一天最多贡献几张——防止「一整季」变成「某个下午」。 */
+export const CROSS_DAY_PER_DAY_MAX = 2;
 export const SLIDE_SECONDS = 5;
-/** 交叉淡化时长（毫秒）。用户给的参考是 0.6–0.9 秒。 */
 export const CROSSFADE_MS = 800;
 
+/** 三种主题。每一种的标题与副标题粒度都不同，这正是「每段有单独主题」的意思。 */
+export type MemoryThemeKind = "day" | "season" | "year";
+
 export type HomeMemorySlide = {
-  /** React key 与切换用的稳定标识。 */
   key: string;
   media: MediaRef;
-  /**
-   * 这一张出现时要不要压一行字。**只可能是这一天已发布记忆的标题原文**，
-   * 绝大多数 slide 是 undefined——用户要的是「少量配文在适当节点出现」，不是每张都有字。
-   */
+  /** 只可能是已发布记忆的标题原文，且只有 day 主题有——跨天主题没有逐张可依据的文字，就不写。 */
   caption?: string;
 };
 
 export type HomeMemory = {
-  day: string;
-  /** "2026 年 9 月 8 日" */
-  dateLabel: string;
-  /** 「当时 1 岁 8 个月」里的那截；不知道出生日期时没有，不猜（原则二）。 */
-  ageLabel?: string;
-  /** 这一天已发布记忆的标题原文，作为这段回忆的名字。不是生成的。 */
+  kind: MemoryThemeKind;
+  /** React key 与切换用的稳定标识。 */
+  key: string;
+  /** 这段回忆的名字。day 用当天标题原文；season/year 是日期事实，不是对画面的判断。 */
   title: string;
-  /** 读这一天的去处（站内既有路由）。 */
-  href: string;
+  /** 副标题，粒度跟着主题走。 */
+  subtitle: string;
+  /** `<time datetime>` 用；跨天主题没有单一日期，就没有。 */
+  dateTime?: string;
+  href?: string;
+  /** 「读读这一天」/「翻到 2025 年」——标签必须跟着去处走，不能共用一句话（原则八那条教训）。 */
+  linkLabel?: string;
   slides: HomeMemorySlide[];
-  /** 折叠前这一天真实的照片张数，只用于审计与 reason，**不显示给家人**（原则三：不出现计数式描述）。 */
-  photoCount: number;
   durationSeconds: number;
-  /**
-   * 配哪一首曲子。在这里算而不是在页面里算，理由是它要和 `reason` 一起被审计：
-   * 判定依据（照片节奏 + 已发布标题原文）都在这一层手上，页面拿不到也不该拿。
-   */
   mood: MemoryMood;
-  /** 为什么是这首曲子。见 lib/home-memory-mood.ts。不显示给家人。 */
   moodReason: string;
-  /** 为什么是这一天、用了哪个窗口、折叠掉多少。供 STATUS 取证，不显示。 */
+  /** 为什么是这一段、折叠掉多少、取的是不是最大那张。供审计，不显示。 */
   reason: string;
 };
 
-/**
- * 没有合格回忆时的明确状态。页面据此**保留上一次的真实内容或降级到真实封面**，
- * 绝不画空框、绝不写「暂无」（原则三、原则六）。
- */
-export type HomeMemoryAbsence = {
-  kind: "empty_archive" | "no_qualified_day";
-  reason: string;
-};
+export type HomeMemoryAbsence = { kind: "empty_archive" | "no_qualified_theme"; reason: string };
 
-/** 一天里能用的照片：和月末相册同一套闸门，次序也一致。 */
-function usablePhotos(photos: readonly MediaRef[], privilege: MediaPrivilege): MediaRef[] {
-  const vouched = photos.filter((item) => isPrivileged(item, privilege));
-  return photographsFirst(vouched.filter(thumbnailSized));
+const pixels = (media: MediaRef) => (media.width ?? 0) * (media.height ?? 0);
+const dayOf = (media: MediaRef) => (media.takenAt ?? "").slice(0, 10);
+const hourOf = (media: MediaRef) => Number((media.takenAt ?? "").slice(11, 13));
+
+/** 能进幻灯片的照片：主体核验通过 + 画得出来。 */
+function usable(photos: readonly MediaRef[], privilege: MediaPrivilege): MediaRef[] {
+  return photos.filter((item) => isSubjectChecked(item, privilege) && thumbnailSized(item));
 }
 
-/**
- * 每组连拍出一张代表：优先大图，退而求其次能画出来的，最后兜底组里第一张。
- *
- * 兜底到 `group[0]` 是故意的，和 `burstLeads` 同一个理由：相册层的承诺是每一组都留下一个入口，
- * 一组全是小图时整组消失会让那个瞬间从这一天里凭空少掉。
- */
+/** 每组连拍取**像素最大**的那一张；同样大时按 id 取定，保证确定性。 */
 function representatives(photos: readonly MediaRef[]): MediaRef[] {
-  return burstGroups([...photos]).map((group) => group.find(heroSized) ?? group.find(thumbnailSized) ?? group[0]);
+  return burstGroups([...photos]).map((group) =>
+    [...group].sort((a, b) => pixels(b) - pixels(a) || a.id.localeCompare(b.id))[0]);
 }
 
-/**
- * 多于上限时怎么取：**沿着这一天均匀取**，不是砍掉后半天。
- *
- * 砍前 12 个会让一段"回忆"停在中午——2026-09-14 那天从早上 8 点拍到晚上 10 点，取前 12 组只到下午。
- * 均匀取保证开头、中段、结尾都在，这一天的弧线才完整（用户：「开头交代场景，中段变化，结尾自然停住」）。
- */
+/** 沿序列均匀取 max 个，保住开头、中段与结尾。 */
 function spread<T>(items: readonly T[], max: number): T[] {
   if (items.length <= max) return [...items];
   const step = (items.length - 1) / (max - 1);
   return Array.from({ length: max }, (_, i) => items[Math.round(i * step)]);
 }
 
-/** 这一天已发布的记忆，按 signature.day 精确匹配。 */
+/** 跨天主题：同一天最多留 perDay 张，避免某一天吃掉整段。 */
+function capPerDay(photos: readonly MediaRef[], perDay: number): MediaRef[] {
+  const seen = new Map<string, number>();
+  const kept: MediaRef[] = [];
+  for (const photo of photos) {
+    const day = dayOf(photo);
+    const used = seen.get(day) ?? 0;
+    if (used >= perDay) continue;
+    seen.set(day, used + 1);
+    kept.push(photo);
+  }
+  return kept;
+}
+
 function memoriesOn(month: MonthChapter, day: string): EditorialMemory[] {
   return month.memories.filter((memory) => memory.signature.day === day);
 }
 
-/**
- * 把标题放到哪几张上。
- *
- * 至多两句，放在大约三分之一和三分之二处——开头那张不压字（先让人看见照片，
- * 这是「媒体在前」那条），结尾那张也不压字（自然停住，不要用一句话收尾）。
- */
+/** 至多两句配文，放在约三分之一与三分之二处；开头与结尾那张不压字。 */
 function captionAt(slideCount: number, titles: readonly string[]): Map<number, string> {
   const spots = new Map<number, string>();
   if (slideCount < 3 || titles.length === 0) return spots;
@@ -157,88 +145,253 @@ function captionAt(slideCount: number, titles: readonly string[]): Map<number, s
   return spots;
 }
 
+function moodOf(slides: readonly MediaRef[], pool: readonly MediaRef[], titles: readonly string[]) {
+  const hours = pool.map(hourOf).filter((hour) => Number.isFinite(hour));
+  return moodFor({
+    slides: slides.length,
+    photos: pool.length,
+    firstHour: hours.length > 0 ? Math.min(...hours) : 12,
+    lastHour: hours.length > 0 ? Math.max(...hours) : 12,
+    titles,
+  });
+}
+
+// ── 主题一：某一天 ────────────────────────────────────────────────────────────
+
+export function buildDayMemory(input: {
+  day: string; dateLabel: string; ageLabel?: string;
+  photos: readonly MediaRef[]; published: readonly EditorialMemory[]; privilege: MediaPrivilege;
+}): HomeMemory | undefined {
+  const { day, dateLabel, ageLabel, photos, published, privilege } = input;
+  // 没有已发布记忆的一天不做 day 主题：它得有真名字和能点进去的去处（原则八）。
+  if (published.length === 0) return undefined;
+  const pool = usable(photos, privilege);
+  const reps = representatives(pool);
+  if (reps.length < MEMORY_MIN_SLIDES) return undefined;
+
+  const picked = spread(reps, MEMORY_MAX_SLIDES);
+  const titles = published.map((memory) => memory.title);
+  const captions = captionAt(picked.length, titles);
+  const lead = published[0];
+  const mood = moodOf(picked, pool, titles);
+  const age = ageLabel ?? lead.signature.ageLabel;
+  return {
+    kind: "day",
+    key: `day:${day}`,
+    title: lead.title,
+    subtitle: age ? `${dateLabel} · 当时 ${age}` : dateLabel,
+    dateTime: day,
+    href: `/events/${lead.id}`,
+    linkLabel: "读读这一天",
+    slides: picked.map((media, index) => ({ key: `${day}|${media.id}`, media, caption: captions.get(index) })),
+    durationSeconds: picked.length * SLIDE_SECONDS,
+    mood: mood.mood,
+    moodReason: mood.reason,
+    reason: `一天：${photos.length} 张里主体核验通过 ${pool.length} 张，折叠成 ${reps.length} 个瞬间`
+      + `（每组取像素最大的），取 ${picked.length} 张；标题取自当天已发布记忆「${lead.title}」`,
+  };
+}
+
+// ── 主题二 / 三：季节与年 ─────────────────────────────────────────────────────
+
+const SEASONS = [
+  { key: "spring", label: "春天", months: [3, 4, 5] },
+  { key: "summer", label: "夏天", months: [6, 7, 8] },
+  { key: "autumn", label: "秋天", months: [9, 10, 11] },
+  // 冬天跨年：2025 年的冬天 = 2025-12 → 2026-02，这是人说话的方式。
+  { key: "winter", label: "冬天", months: [12, 1, 2] },
+] as const;
+
+/** 这个月属于哪个季节的哪一年（冬天的 1、2 月归上一年）。 */
+function seasonOf(month: string): { key: string; label: string; year: number } | undefined {
+  const year = Number(month.slice(0, 4));
+  const m = Number(month.slice(5, 7));
+  const season = SEASONS.find((item) => (item.months as readonly number[]).includes(m));
+  if (!season) return undefined;
+  const anchorYear = season.key === "winter" && m <= 2 ? year - 1 : year;
+  return { key: season.key, label: season.label, year: anchorYear };
+}
+
+function buildSpanMemory(input: {
+  kind: "season" | "year";
+  key: string; title: string; subtitle: string;
+  href?: string; linkLabel?: string;
+  photos: readonly MediaRef[]; privilege: MediaPrivilege;
+}): HomeMemory | undefined {
+  const { kind, key, title, subtitle, href, linkLabel, photos, privilege } = input;
+  const pool = usable(photos, privilege);
+  // 按时间排好再折叠——跨天主题的「均匀」是沿时间的均匀。
+  const ordered = [...pool].sort((a, b) => (a.takenAt ?? "").localeCompare(b.takenAt ?? "") || a.id.localeCompare(b.id));
+  const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX);
+  if (reps.length < MEMORY_MIN_SLIDES) return undefined;
+
+  const picked = spread(reps, MEMORY_MAX_SLIDES);
+  // 跨天主题没有逐张可依据的文字，所以**一句配文都不写**，不拿某一天的标题去概括一整季。
+  const mood = moodOf(picked, pool, []);
+  const days = new Set(picked.map(dayOf)).size;
+  return {
+    kind,
+    key,
+    title,
+    subtitle,
+    href,
+    linkLabel,
+    slides: picked.map((media) => ({ key: `${key}|${media.id}`, media })),
+    durationSeconds: picked.length * SLIDE_SECONDS,
+    mood: mood.mood,
+    moodReason: mood.reason,
+    reason: `${kind === "season" ? "一个季节" : "一年"}：主体核验通过 ${pool.length} 张，折叠后每天最多取`
+      + ` ${CROSS_DAY_PER_DAY_MAX} 张得到 ${reps.length} 张，沿时间均匀取 ${picked.length} 张，来自 ${days} 个不同的日子`,
+  };
+}
+
+// ── 组装 ──────────────────────────────────────────────────────────────────────
+
+type DayEntry = { day: string; month: MonthChapter; photos: readonly MediaRef[] };
+
 /**
- * 选出首页要放的那一段回忆。
+ * 选出首页可以切换的那几段回忆，**三种主题混在一起**。
  *
- * 选法：**从最近的一天往回找，第一个合格的就是它。** 没有轮换、没有取模、没有随机。
- *
- * 为什么不做期次轮换（首页照片那边有 EDITION_HOURS 的六小时期次）：用户 2026-09-16 明确说
- * 「质量优先，不强制每日更新，也不机械沿用旧的每 6 小时轮换」。确定性的"最近一个合格日"天然稳定——
- * 它只在**真的多出一天合格材料**时才变，这正是「有意义的新增材料才替换当期」。
+ * 顺序：按 day / season / year 轮流取（interleave），所以「换一段」按下去换到的多半是
+ * 另一种主题，而不是同一种主题的另一个日期。全程确定，无随机。
  */
-export function selectHomeMemory(archive: FamilyArchive): { memory?: HomeMemory; absence?: HomeMemoryAbsence } {
+export function selectHomeMemories(archive: FamilyArchive): { memories: HomeMemory[]; absence?: HomeMemoryAbsence } {
   const { chapters, privilege, birthDay } = archive;
   const today = archive.time.today;
+
+  const dayEntries: DayEntry[] = [];
+  const byMonth = new Map<string, MediaRef[]>();
   let scannedDays = 0;
 
   for (const year of chapters) {
     for (const month of year.months) {
-      // photoDays 本来就是新到旧；跨月时 chapters 也是新到旧，所以整体就是时间倒序。
       for (const photoDay of month.photoDays) {
-        if (photoDay.day > today) continue; // 未来日期的行永远进不了首页
+        if (photoDay.day > today) continue;
         scannedDays += 1;
-        const published = memoriesOn(month, photoDay.day);
-        // 没有已发布记忆的一天不做回忆：这段东西要有真名字和可追溯的去处（原则八），
-        // 而未发布的故事本来就不在 chapters 里，家人也点不进去。
-        if (published.length === 0) continue;
-
-        const usable = usablePhotos(photoDay.photos, privilege);
-        const reps = representatives(usable);
-        if (reps.length < MEMORY_MIN_SLIDES) continue;
-
-        const picked = spread(reps, MEMORY_MAX_SLIDES);
-        const titles = published.map((memory) => memory.title);
-        const captions = captionAt(picked.length, titles);
-        const lead = published[0];
-        // 配乐依据：这一天的照片节奏（拍摄时刻，元数据）+ 已发布标题原文。不看画面内容。
-        const hours = photoDay.photos
-          .map((item) => (item.takenAt ? Number(item.takenAt.slice(11, 13)) : Number.NaN))
-          .filter((hour) => Number.isFinite(hour));
-        const mood = moodFor({
-          slides: picked.length,
-          photos: photoDay.photos.length,
-          firstHour: hours.length > 0 ? Math.min(...hours) : 12,
-          lastHour: hours.length > 0 ? Math.max(...hours) : 12,
-          titles,
-        });
-        return {
-          memory: {
-            day: photoDay.day,
-            dateLabel: photoDay.dateLabel,
-            // 照片自己那一天的年龄，来自 PhotoDay（groupPhotoDays 用 birthDay 算好的）。
-            ageLabel: photoDay.ageLabel ?? lead.signature.ageLabel,
-            title: lead.title,
-            href: `/events/${lead.id}`,
-            slides: picked.map((media, index) => ({
-              key: `${photoDay.day}|${media.id}`,
-              media,
-              caption: captions.get(index),
-            })),
-            photoCount: photoDay.photos.length,
-            durationSeconds: picked.length * SLIDE_SECONDS,
-            mood: mood.mood,
-            moodReason: mood.reason,
-            reason: `最近一个合格日（往回找了 ${scannedDays} 天）；`
-              + `这一天 ${photoDay.photos.length} 张，过闸门后 ${usable.length} 张，`
-              + `按 90 秒连拍折叠成 ${reps.length} 个瞬间，取 ${picked.length} 张`
-              + `${reps.length > picked.length ? "（沿全天均匀取，不截断后半天）" : ""}；`
-              + `标题取自当天已发布记忆「${lead.title}」`,
-          },
-        };
+        dayEntries.push({ day: photoDay.day, month, photos: photoDay.photos });
+        const bucket = byMonth.get(month.month) ?? [];
+        bucket.push(...photoDay.photos);
+        byMonth.set(month.month, bucket);
       }
     }
   }
-
   if (scannedDays === 0) {
-    return { absence: { kind: "empty_archive", reason: "档案里还没有一天带照片的记录" } };
+    return { memories: [], absence: { kind: "empty_archive", reason: "档案里还没有一天带照片的记录" } };
   }
-  return {
-    absence: {
-      kind: "no_qualified_day",
-      reason: `往回看了 ${scannedDays} 天，没有一天同时满足「有已发布记忆」和「折叠后至少 ${MEMORY_MIN_SLIDES} 个不同瞬间」`,
-    },
-  };
+
+  // 天主题：按月份铺开，避免六段全挤在同一周。
+  const dayMemories: HomeMemory[] = [];
+  const seenMonths = new Set<string>();
+  for (const entry of dayEntries) {
+    const month = entry.day.slice(0, 7);
+    if (seenMonths.has(month)) continue; // 每个月最多出一天，天然铺开
+    const memory = buildDayMemory({
+      day: entry.day,
+      dateLabel: entry.month.photoDays.find((d) => d.day === entry.day)?.dateLabel ?? entry.day,
+      ageLabel: entry.month.photoDays.find((d) => d.day === entry.day)?.ageLabel,
+      photos: entry.photos,
+      published: memoriesOn(entry.month, entry.day),
+      privilege,
+    });
+    if (!memory) continue;
+    seenMonths.add(month);
+    dayMemories.push(memory);
+  }
+
+  // 季节主题
+  const seasonPhotos = new Map<string, { label: string; year: number; photos: MediaRef[] }>();
+  for (const [month, photos] of byMonth) {
+    const season = seasonOf(month);
+    if (!season) continue;
+    const key = `${season.year}-${season.key}`;
+    const bucket = seasonPhotos.get(key) ?? { label: season.label, year: season.year, photos: [] };
+    bucket.photos.push(...photos);
+    seasonPhotos.set(key, bucket);
+  }
+  const seasonMemories = [...seasonPhotos.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, bucket]) => buildSpanMemory({
+      kind: "season",
+      key: `season:${key}`,
+      title: `${bucket.year} 年的${bucket.label}`,
+      subtitle: seasonSubtitle(bucket.label, bucket.year),
+      href: `/memory/${bucket.year}`,
+      linkLabel: `翻到 ${bucket.year} 年`,
+      photos: bucket.photos,
+      privilege,
+    }))
+    .filter((memory): memory is HomeMemory => Boolean(memory));
+
+  // 年主题
+  const yearPhotos = new Map<string, MediaRef[]>();
+  for (const [month, photos] of byMonth) {
+    const year = month.slice(0, 4);
+    yearPhotos.set(year, [...(yearPhotos.get(year) ?? []), ...photos]);
+  }
+  const yearMemories = [...yearPhotos.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([year, photos]) => buildSpanMemory({
+      kind: "year",
+      key: `year:${year}`,
+      title: `${year} 年`,
+      subtitle: yearSubtitle(year, byMonth, birthDay),
+      href: `/memory/${year}`,
+      linkLabel: `翻到 ${year} 年`,
+      photos,
+      privilege,
+    }))
+    .filter((memory): memory is HomeMemory => Boolean(memory));
+
+  const memories = interleaveKinds([dayMemories, seasonMemories, yearMemories], HOME_MEMORIES_MAX);
+  if (memories.length === 0) {
+    return {
+      memories: [],
+      absence: {
+        kind: "no_qualified_theme",
+        reason: `往回看了 ${scannedDays} 天，没有一种主题凑得出 ${MEMORY_MIN_SLIDES} 个主体核验过的不同瞬间`,
+      },
+    };
+  }
+  return { memories };
 }
 
-/** 播放器与静音预览共用的时间轴常量，导出给组件，避免两处各写一份。 */
+/** 「6 月 — 8 月」；冬天跨年，所以写成「12 月 — 次年 2 月」。 */
+function seasonSubtitle(label: string, year: number): string {
+  const season = SEASONS.find((item) => item.label === label);
+  if (!season) return `${year} 年`;
+  const months = season.months;
+  return season.key === "winter"
+    ? `${year} 年 12 月 — 次年 2 月`
+    : `${year} 年 ${months[0]} 月 — ${months[months.length - 1]} 月`;
+}
+
+/** 一年的副标题用两个时钟：这一年他从几岁到几岁（原则二）。拿不到出生日期就退回月份跨度。 */
+function yearSubtitle(year: string, byMonth: ReadonlyMap<string, MediaRef[]>, birthDay?: string): string {
+  const months = [...byMonth.keys()].filter((month) => month.startsWith(year)).sort();
+  if (months.length === 0) return `${year} 年`;
+  const first = months[0];
+  const last = months[months.length - 1];
+  const from = ageAtMonth(birthDay, first);
+  const to = ageAtMonth(birthDay, last);
+  if (from && to) return from === to ? `当时 ${from}` : `当时 ${from} — ${to}`;
+  return `${formatMonth(first)} — ${formatMonth(last)}`;
+}
+
+/** 三种主题轮流取，所以「换一段」换到的多半是另一种主题。 */
+function interleaveKinds(groups: HomeMemory[][], max: number): HomeMemory[] {
+  const picked: HomeMemory[] = [];
+  for (let round = 0; picked.length < max; round += 1) {
+    let tookAny = false;
+    for (const group of groups) {
+      const item = group[round];
+      if (!item) continue;
+      picked.push(item);
+      tookAny = true;
+      if (picked.length >= max) break;
+    }
+    if (!tookAny) break;
+  }
+  return picked;
+}
+
 export const MEMORY_TIMING = { slideSeconds: SLIDE_SECONDS, crossfadeMs: CROSSFADE_MS } as const;
