@@ -1,7 +1,7 @@
 # PAGE-0916-HOME-MEMORIES-R1
 
 - line: page
-- status: queued
+- status: blocked
 - round: 1
 - branch: main（用户本轮提供的规则：只使用 main；不新建分支）
 - workdir: C:/Users/teddy/Documents/Nianlife
@@ -27,7 +27,10 @@
 
 - 2026-09-16 13:34 +08:00：原生应用枚举显示 Claude 未运行；正在尝试打开既有应用。未宣称送达或接单。
 - 发现旧 GUI 锁：holder=codex，acquired_at=2026-09-15T21:47:24.4708390+08:00，purpose=public-launch；已超过 10 分钟有效期，本轮只在唤醒前回收并重新申请。
+- 2026-09-16：已打开现有 Claude 应用并定位 Code 下的「页面」会话；该会话明确显示 “Can't reach your computer. It may be asleep or offline. This session will reconnect when it's back.” 这是执行会话连接阻塞，不推断本机休眠或网站故障。未发送任务、无 ACK、未启动实现；没有新开执行会话或改动业务代码。
+- 设计规范与任务卡初始提交：77b2fb9，已 push origin/main。连接恢复后，只需向既有页面 Claude 投递本任务绝对路径，再核对 ACK 和当前 main SHA；不要重启旧卡。
+- 本轮结束后不进行后台轮询；GUI 锁在本轮结束前释放。
 
 ## Execution result
 
-待页面 Claude 接单。
+未交付：既有页面 Claude 会话无法连接执行电脑。设计已确认，交接材料齐备，等待连接恢复后投递。
