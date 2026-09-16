@@ -162,7 +162,42 @@ function buildScenes(slides: HomeMemoryData["slides"]): MemoryScene[] {
     scenes.push({ key: slide.key, items: [slide] });
   }
   flushRun();
-  return scenes;
+  return pairSomePortraits(scenes);
+}
+
+/**
+ * 每隔几幕把相邻两张竖照并成一幕。
+ *
+ * 为什么需要这一步：**这份档案约 85% 是竖照**，只按「连着的横照才叠」来分，
+ * 2026-09-17 线上实测 85 幕里只有 1 幕是多图——等于没有版式变化，
+ * 而 Teddy 要的正是「有的是一张，有的是三张……多加点变化」。
+ *
+ * 所以竖照默认仍然独占一屏（那是它最好看的样子），但每隔 3 幕凑一对，
+ * 让一段回忆里有节奏地出现两三次"一屏两张"。规则是确定的，不随机——
+ * 同一段回忆每次打开的版式一样，不会这次一张下次两张。
+ *
+ * 最后一幕不参与配对：一段回忆用单张收尾，比用一对收尾干净。
+ */
+function pairSomePortraits(scenes: MemoryScene[]): MemoryScene[] {
+  const out: MemoryScene[] = [];
+  let sinceMulti = 0;
+  for (let i = 0; i < scenes.length; i += 1) {
+    const here = scenes[i];
+    const next = scenes[i + 1];
+    const canPair = here.items.length === 1
+      && next !== undefined && next.items.length === 1
+      && sinceMulti >= 3
+      && i + 1 < scenes.length - 1; // 留最后一幕单独收尾
+    if (canPair) {
+      out.push({ key: `${here.key}+${next.key}`, items: [...here.items, ...next.items] });
+      sinceMulti = 0;
+      i += 1; // next 已经并进来了
+      continue;
+    }
+    out.push(here);
+    sinceMulti = here.items.length > 1 ? 0 : sinceMulti + 1;
+  }
+  return out;
 }
 
 function MemoryPlayer({ memory, onClose, returnFocusTo }: {
