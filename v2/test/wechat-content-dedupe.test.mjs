@@ -123,6 +123,21 @@ test("a failed import is retried, not swallowed", () => {
   assert.equal(third.ordinals.size, 0);
 });
 
+test("one export's matches do not starve the other export of the same chat", () => {
+  // The archive holds this message twice — once under each export's label, the duplication that
+  // already exists in this archive. Two documents of one chat must each find a copy.
+  const index = buildArchiveIndex([
+    row(CHAT_A, "2026-09-10T16:31:00+08:00", "他今天自己走了两步", { rowId: "row-md" }),
+    row(CHAT_A, "2026-09-10T16:31:00+08:00", "他今天自己走了两步", { rowId: "row-json" }),
+  ]);
+  const fromMd = classifyDocumentMessages([msg(40, "2026-09-10T16:31:00+08:00", "他今天自己走了两步")], index, CHAT_A);
+  assert.equal(fromMd.ordinals.size, 0);
+  commitReservation(index, fromMd.reservation);
+  const fromJson = classifyDocumentMessages([msg(676, "2026-09-10T08:31:00.000Z", "他今天自己走了两步")], index, CHAT_A);
+  assert.equal(fromJson.ordinals.size, 0, "the .json export must not re-import what the archive already holds");
+  assert.equal(fromJson.alreadyArchived, 1);
+});
+
 test("genuinely repeated messages in one second are all kept", () => {
   const index = buildArchiveIndex([row(CHAT_A, "2026-09-14T08:00:01+08:00", "[强]")]);
   const result = classifyDocumentMessages([

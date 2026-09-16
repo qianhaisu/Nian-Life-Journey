@@ -216,13 +216,27 @@ export function classifyDocumentMessages(
   const ambiguous: AmbiguousMessage[] = [];
   const reservation: Reservation = { sessionKey, entries: [], pending: [] };
   let alreadyArchived = 0;
+  // Consumption is per document, not global. Two exports of one chat are two statements of the same
+  // history, not two claims on the same rows: when the archive already holds a message twice (the
+  // pre-existing .md/.json duplication), letting the first document consume the second's copy left
+  // the second document short and made real, already-archived messages look missing — measured
+  // 2026-09-16: 8 messages of 张小年小群 on 09-10. Double-importing a genuinely NEW message within
+  // one run is prevented by the reservation below, not by this counter.
+  const remaining = new Map<IndexedRow, number>();
+  const take = (row: IndexedRow) => {
+    const left = remaining.get(row) ?? row.available;
+    if (left <= 0) return false;
+    remaining.set(row, left - 1);
+    return true;
+  };
+  const left = (row: IndexedRow) => (remaining.get(row) ?? row.available) > 0;
 
   for (const message of messages) {
     const second = secondOf(message.sentAt);
     const normalizedText = normalizeWechatText(message.text);
     const attachments = attachmentEvidenceOfRefs(message.mediaRefs ?? []);
     const senderDigests = senderDigestsFor(message);
-    const candidates = (buckets?.get(second) ?? []).filter((row) => row.available > 0
+    const candidates = (buckets?.get(second) ?? []).filter((row) => left(row)
       && row.normalizedText === normalizedText
       && (row.senderDigest === "" || senderDigests.size === 0 || senderDigests.has(row.senderDigest)));
 
@@ -230,7 +244,7 @@ export function classifyDocumentMessages(
     const undecided: IndexedRow[] = [];
     for (const row of candidates) {
       const verdict = compareAttachments(attachments, row.attachments);
-      if (verdict === "match") { row.available -= 1; alreadyArchived += 1; matched = true; break; }
+      if (verdict === "match" && take(row)) { alreadyArchived += 1; matched = true; break; }
       if (verdict === "unknown") undecided.push(row);
     }
     if (matched) continue;
@@ -240,7 +254,7 @@ export function classifyDocumentMessages(
     }
     // No row of this chat matches. Before importing, check the rows whose chat is unknown: one of
     // them may be this very message, filed under a conversation label nothing has mapped yet.
-    const unmapped = (index.unmappedBySecond.get(second) ?? []).filter((row) => row.available > 0
+    const unmapped = (index.unmappedBySecond.get(second) ?? []).filter((row) => left(row)
       && row.normalizedText === normalizedText
       && (row.senderDigest === "" || senderDigests.size === 0 || senderDigests.has(row.senderDigest)));
     if (unmapped.length > 0) {
