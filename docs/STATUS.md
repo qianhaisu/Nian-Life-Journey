@@ -10263,3 +10263,12 @@ node --import tsx scripts/story-review.mjs apply --package=<该文件> --operato
 - 另：曾为「3750dc7 + 本会话改动」构造过发布专用提交 `e3d6c33` 并推送 tag `deploy/2026-09-16-claude-review`，发现线上已是 e0f92b5 后**未使用**；tag 保留未删（不删远端引用），它不代表线上版本。
 
 **下一件事**：按固定清单放大——照片先 2026-09、再 2025 各月；故事审完其余 149 条可审待审；之后才评估新生成。
+
+## 2026-09-16 拆掉 .env.local 这颗地雷（Claude，Teddy 授权）
+
+`v2/.env.local` 原本 `DATABASE_URL` 指向 Neon、`MEDIA_STORAGE_PROVIDER=r2` 且桶是 `nianlife-test`，而线上 nianlife.cn 跑的是阿里云 RDS + OSS——任何直接用该文件跑的入库都会写进错误的库和测试桶（2026-09-16 差点发生）。已改：
+
+- `MEDIA_STORAGE_PROVIDER` → `oss`，补齐 OSS 五项配置（endpoint 用公网，不是 `-internal`）。
+- Neon 的 `DATABASE_URL` / `DATABASE_URL_UNPOOLED` 改名为 `NEON_LEGACY_*`。**RDS 只能经 ECS 的 SSH 隧道访问，没法在这个文件里写一个直接可用的连接串**，所以做法是让脚本缺变量时响亮失败，而不是静悄悄连到 Neon。要连 RDS 用 `v2/.data/night-rds.mjs`（它会先证明目标确实是 RDS 才继续）。
+
+双向验证：直接跑入库脚本会在任何写操作之前抛 `DATABASE_URL is required (postgres backend)` 停下；经隧道运行器跑同一张照片是 `created:0 / reused:1`，零写入、链路完好。改写前已在仓库外备份并逐字节校验：`NianlifeOps/env-backups/env.local.2026-09-16T13-30-12.bak`。文件仍被 `v2/.gitignore` 的 `.env*` 覆盖，未进版本库。
