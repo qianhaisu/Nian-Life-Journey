@@ -86,17 +86,35 @@ export type AttachmentEvidence = { pathDigests: string[]; checksums: string[] };
 const sorted = (values: Iterable<string>) => [...new Set(values)].sort();
 
 /** A transcript message's attachments, in the shape the importer records them. */
-export function attachmentEvidenceOfRefs(refs: ReadonlyArray<{ relativePath: string; checksum?: string }>): AttachmentEvidence {
+// A media link the parser does not turn into a mediaRef — `[视频文件](media/videos/x.mp4)`, which
+// only the image syntax `![](…)` becomes an attachment — still identifies this message. Dropping it
+// from the text (normalizeWechatText must, because the other export stores it as "[media]") without
+// putting it back here left such a message as "empty text, no attachments", indistinguishable from
+// any other media message in the same second. Measured 2026-09-16: a 09-13 video message matched a
+// photo message one second apart, and was reported as an already-archived duplicate when the archive
+// held neither its bytes nor any other row referencing that file.
+const MEDIA_LINK_TARGET = /\[[^\]]*\]\(((?:[^)]*\/)?media\/[^)]*)\)/g;
+
+export function mediaLinkTargets(text: string | null | undefined): string[] {
+  return [...String(text ?? "").split("\\").join("").matchAll(MEDIA_LINK_TARGET)].map((match) => match[1].replaceAll("\\", "/"));
+}
+
+export function attachmentEvidenceOfRefs(
+  refs: ReadonlyArray<{ relativePath: string; checksum?: string }>,
+  text?: string | null,
+): AttachmentEvidence {
   return {
-    pathDigests: sorted(refs.map((ref) => sha256(ref.relativePath.replaceAll("\\", "/")))),
+    pathDigests: sorted([...refs.map((ref) => ref.relativePath.replaceAll("\\", "/")), ...mediaLinkTargets(text)].map(sha256)),
     checksums: sorted(refs.map((ref) => (ref.checksum ?? "").replace(/^sha256:/i, "").toLowerCase()).filter(Boolean)),
   };
 }
 
 /** An archived row's attachments: metadata.mediaEvidence digests plus its assets' checksums. */
-export function attachmentEvidenceOfRow(row: { mediaEvidence?: ReadonlyArray<{ digest?: string }> | null; checksums?: ReadonlyArray<string | null> | null }): AttachmentEvidence {
+export function attachmentEvidenceOfRow(row: { mediaEvidence?: ReadonlyArray<{ digest?: string }> | null; checksums?: ReadonlyArray<string | null> | null; text?: string | null }): AttachmentEvidence {
   return {
-    pathDigests: sorted((row.mediaEvidence ?? []).map((item) => String(item?.digest ?? "")).filter(Boolean)),
+    // The stored row's own text carries the same unparsed media links (sanitizeText only rewrites
+    // image syntax), so both sides of a comparison are built the same way.
+    pathDigests: sorted([...(row.mediaEvidence ?? []).map((item) => String(item?.digest ?? "")).filter(Boolean), ...mediaLinkTargets(row.text).map(sha256)]),
     checksums: sorted((row.checksums ?? []).map((value) => String(value ?? "").replace(/^sha256:/i, "").toLowerCase()).filter(Boolean)),
   };
 }
@@ -157,7 +175,7 @@ export function buildArchiveIndex(rows: Iterable<ArchivedMessage>): ArchiveIndex
     const entry: IndexedRow = {
       senderDigest: String(row.senderDigest ?? ""),
       normalizedText: normalizeWechatText(row.text),
-      attachments: attachmentEvidenceOfRow(row),
+      attachments: attachmentEvidenceOfRow({ ...row, text: row.text }),
       rowId: row.rowId,
       available: 1,
     };
@@ -234,7 +252,7 @@ export function classifyDocumentMessages(
   for (const message of messages) {
     const second = secondOf(message.sentAt);
     const normalizedText = normalizeWechatText(message.text);
-    const attachments = attachmentEvidenceOfRefs(message.mediaRefs ?? []);
+    const attachments = attachmentEvidenceOfRefs(message.mediaRefs ?? [], message.text);
     const senderDigests = senderDigestsFor(message);
     const candidates = (buckets?.get(second) ?? []).filter((row) => left(row)
       && row.normalizedText === normalizedText

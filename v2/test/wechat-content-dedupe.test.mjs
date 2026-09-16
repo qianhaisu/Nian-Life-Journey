@@ -87,6 +87,40 @@ test("attachments with the same content under different paths match; different c
   assert.deepEqual([...differ.ordinals], [1]);
 });
 
+test("a media link the parser does not attach still identifies the message", () => {
+  // `[视频文件](media/videos/x.mp4)` never becomes a mediaRef (only `![](…)` does), and the text
+  // normaliser has to strip it. Without counting it as attachment identity the message collapses to
+  // "empty text, no attachments" and matches any media message in the same second — which is how a
+  // real 2026-09-13 video message was wrongly reported as an already-archived duplicate.
+  const index = buildArchiveIndex([
+    row(CHAT_A, "2026-09-13T12:33:41+08:00", "\n[media]\n", { evidence: ["texts/c/media/images/a.jpg"], rowId: "row-photo" }),
+  ]);
+  const video = msg(10, "2026-09-13T12:33:41+08:00", "\n[视频文件](media/videos/20260913_043341_5.mp4)\n");
+  const result = classifyDocumentMessages([video], index, CHAT_A);
+  // Not "already archived": the link is attachment identity, so the two no longer look alike. With
+  // no content hash on either side the paths alone cannot prove they differ either, so it is listed.
+  assert.equal(result.alreadyArchived, 0, "a video message is not the photo message beside it");
+  assert.deepEqual(result.ambiguous.map((item) => [item.recordOrdinal, item.reason]), [[10, "attachment_evidence_unknown"]]);
+  // Even when the archived photo carries a content hash, this message still cannot be decided: a
+  // media LINK gives a path and nothing else — the parser never opens the file, so there is no
+  // sha256 on the message side to compare against. One-sided content evidence proves nothing, so it
+  // is listed rather than guessed at in either direction.
+  const withHash = buildArchiveIndex([
+    row(CHAT_A, "2026-09-13T12:33:41+08:00", "\n[media]\n", { evidence: ["texts/c/media/images/a.jpg"], checksums: [`sha256:${"a".repeat(64)}`], rowId: "row-photo" }),
+  ]);
+  const hashed = classifyDocumentMessages([video], withHash, CHAT_A);
+  assert.equal(hashed.ordinals.size, 0);
+  assert.equal(hashed.alreadyArchived, 0);
+  assert.deepEqual(hashed.ambiguous.map((item) => item.reason), ["attachment_evidence_unknown"]);
+  // and the same video, once archived with its link in the stored text, matches itself
+  const archived = buildArchiveIndex([
+    { sessionKey: CHAT_A, sentAt: "2026-09-13T04:33:41.000Z", text: "\n[视频文件](media/videos/20260913_043341_5.mp4)\n", senderDigest: digestOf("妈妈"), rowId: "row-video" },
+  ]);
+  const again = classifyDocumentMessages([video], archived, CHAT_A);
+  assert.equal(again.ordinals.size, 0);
+  assert.equal(again.alreadyArchived, 1);
+});
+
 test("a long message is not matched by a shared prefix", () => {
   const prefix = "这是很长的一段话，".repeat(40);
   const index = buildArchiveIndex([row(CHAT_A, "2026-09-14T10:00:00+08:00", `${prefix}今天去打疫苗`)]);
