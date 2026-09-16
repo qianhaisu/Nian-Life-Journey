@@ -193,10 +193,15 @@ test("app/home.css：回忆舞台限高保住第一屏的题签与日期，宽�
   assert.doesNotMatch(css, /\.memory-player-stage img \{[^}]*filter:/, "播放器里的照片同样不加滤镜");
 
   // 播放入口只有图标，但命中区域不许缩水（≥44px）。
+  // **断言的是 44px 这条底线，不是某一个具体数字。** 2026-09-17 按 Teddy 的意见把播放键
+  // 从 56px 收到 52px 做视觉精修，写死 56px 的旧断言当场就炸了——尺寸是设计可以调的，
+  // 触达下限不是。测试该钉住的是后者。
   const play = css.match(/\.memory-play \{([^}]*)\}/);
   assert.ok(play, "找不到 .memory-play");
-  assert.match(play[1], /width:\s*56px/);
-  assert.match(play[1], /height:\s*56px/);
+  const playWidth = Number(play[1].match(/width:\s*(\d+)px/)?.[1]);
+  const playHeight = Number(play[1].match(/height:\s*(\d+)px/)?.[1]);
+  assert.ok(playWidth >= 44, `播放键宽 ${playWidth}px，低于 44px 触达下限`);
+  assert.ok(playHeight >= 44, `播放键高 ${playHeight}px，低于 44px 触达下限`);
 });
 
 // ── 原则五在年页/索引行上的落地（2026-09-16 视觉验收）──────────────────────────

@@ -276,11 +276,11 @@ const eightDays = (prefix) => {
   ];
 };
 
-test("主题回忆：有水的照片聚成「玩水的日子」，横跨很多天", () => {
+test("主题回忆：泳池的照片聚成「玩水的日子」，横跨很多天", () => {
   const months = eightDays("w");
   const { memories } = selectHomeMemories(
     archiveOf(months),
-    labels({}, { topic: "笑", water: true, value: 0.9, confidence: 0.9 }),
+    labels({}, { topic: "笑", water: true, waterKind: "泳池", swimming: true, value: 0.9, confidence: 0.9 }),
   );
   const water = memories.find((m) => m.title === "玩水的日子");
   assert.ok(water, `应当有一段玩水的回忆，实得 ${memories.map((m) => m.title).join(" / ")}`);
@@ -292,15 +292,38 @@ test("主题回忆：有水的照片聚成「玩水的日子」，横跨很多�
   assert.match(water.subtitle, /个日子/);
 });
 
-test("「玩水」只看有没有水，不看主题判成了什么——在泳池里笑仍然是玩水", () => {
-  // 每一张的 topic 都是「笑」、把握很高，water 是 true。旧口径（强制单选主题）会把水丢掉。
+test("「玩水」不看 topic 判成了什么——在泳池里笑，两段回忆都该成立", () => {
+  // 每一张的 topic 都是「笑」、把握很高，但它们是泳池照片。
+  // 旧口径（强制单选主题）会把水整个丢掉，那正是 2026-09-16 只认出 2 张水的原因。
   const months = eightDays("p");
   const { memories } = selectHomeMemories(
     archiveOf(months),
-    labels({}, { topic: "笑", water: true, value: 0.9, confidence: 0.95 }),
+    labels({}, { topic: "笑", water: true, waterKind: "泳池", value: 0.9, confidence: 0.95 }),
   );
   assert.ok(memories.some((m) => m.title === "玩水的日子"), "topic 是「笑」不该让这段回忆消失");
   assert.ok(memories.some((m) => m.title === "笑起来的时候"), "同一批照片也该能聚成「笑」");
+});
+
+test("洗澡和湖边河边不算「玩水的日子」——宁可没有这一段", () => {
+  // Teddy 2026-09-17：「尽量多换成泳池游泳 不要洗澡的 湖边河边的」。
+  // 线上 226 张有水的照片里 109 张是湖边河边、19 张是洗澡，正是它看起来不像玩水的原因。
+  for (const waterKind of ["洗澡", "湖边河边"]) {
+    const { memories } = selectHomeMemories(
+      archiveOf(eightDays(`k${waterKind}`)),
+      labels({}, { topic: "其他", water: true, waterKind, value: 0.95, confidence: 0.95 }),
+    );
+    assert.equal(memories.some((m) => m.title === "玩水的日子"), false,
+      `${waterKind} 不该凑成一段「玩水的日子」`);
+  }
+});
+
+test("没问过是哪一种水的照片也不进「玩水」——没依据就不说", () => {
+  // waterKind 缺失 = 「没问过」，不是「问过、是泳池」。不能靠 water 布尔一个字段就当泳池用。
+  const { memories } = selectHomeMemories(
+    archiveOf(eightDays("unknown")),
+    labels({}, { topic: "其他", water: true, value: 0.95, confidence: 0.95 }),
+  );
+  assert.equal(memories.some((m) => m.title === "玩水的日子"), false);
 });
 
 test("价值分不够的照片进不了主题回忆——宁可没有这一段", () => {
@@ -322,26 +345,49 @@ test("读不到标注缓存时主题回忆一段都不出，天与季节照常",
   assert.ok(memories.some((m) => m.kind === "season"), "季节的依据是日期事实，不受影响");
 });
 
-test("选片按价值分取最高的那几张，不是按时间均匀取", () => {
+test("选片：先按价值分砍掉差的一半，再沿时间铺开——两个都要", () => {
+  // 好坏交替：偶数张高分、奇数张低分，均匀分布在一整天里。
+  // 这样「只按价值取」和「只按时间取」会给出不同答案，才测得出来。
   const photos = moments("m", "2026-09-09", 30, 6);
-  // 后 12 张高分，前 18 张低分
-  const topics = (id) => {
-    const index = Number(id.split("-")[1]);
-    return { topic: "笑", water: false, value: index >= 18 ? 0.95 : 0.3, confidence: 0.9 };
-  };
+  const valueOf = (id) => (Number(id.split("-")[1]) % 2 === 0 ? 0.95 : 0.3);
+  const topics = (id) => ({ topic: "笑", water: false, value: valueOf(id), confidence: 0.9 });
   const memory = buildDayMemory({
     day: "2026-09-09", dateLabel: "d", photos, published: [story("e1", "2026-09-09", "标题")],
     privilege: { checked: new Set(photos.map((p) => p.id)) },
     topics,
   });
   assert.equal(memory.slides.length, MEMORY_MAX_SLIDES);
-  for (const slide of memory.slides) {
-    assert.ok(Number(slide.media.id.split("-")[1]) >= 18,
-      `取到了低价值的那一张：${slide.media.id}`);
-  }
+
+  const picked = memory.slides.map((s) => s.media.id);
+  const good = picked.filter((id) => valueOf(id) >= 0.9).length;
+  assert.ok(good >= 10, `绝大多数应当是高价值的那一批，实得 ${good}/12`);
+
+  // 时间覆盖：不能 12 张全挤在一天的前三分之一（Teddy 2026-09-17 第 4 条那个毛病）
+  const index = picked.map((id) => Number(id.split("-")[1]));
+  assert.ok(Math.min(...index) <= 4, `应当包含靠前的瞬间，最早的是第 ${Math.min(...index)} 个`);
+  assert.ok(Math.max(...index) >= 25, `应当包含靠后的瞬间，最晚的是第 ${Math.max(...index)} 个`);
+
   // 取完之后按时间排回去播放，不是按分数排
   const times = memory.slides.map((s) => s.media.takenAt);
   assert.deepEqual(times, [...times].sort(), "播放顺序仍然是时间顺序");
+});
+
+test("时间覆盖对跨天主题同样成立：一个主题不能只剩最小的时候", () => {
+  // 2025 上半年的照片分高，2026 的分低——上一版会把 12 张全从 2025 挑走。
+  const days = ["2025-02-04", "2025-03-11", "2025-04-08", "2025-05-13",
+    "2026-06-02", "2026-07-07", "2026-08-11", "2026-09-01"];
+  const months = [
+    monthOf("2025-02", days.slice(0, 4).map((d) => ({ day: d, photos: moments(`s${d}`, d, 3) }))),
+    monthOf("2026-06", days.slice(4).map((d) => ({ day: d, photos: moments(`s${d}`, d, 3) }))),
+  ];
+  const { memories } = selectHomeMemories(archiveOf(months), (id) => ({
+    topic: "睡觉", water: false, confidence: 0.95,
+    value: id.startsWith("s2025") ? 0.95 : 0.72,
+  }));
+  const sleep = memories.find((m) => m.title === "睡着的样子");
+  assert.ok(sleep, "应当有一段睡觉的回忆");
+  const years = new Set(sleep.slides.map((s) => s.media.takenAt.slice(0, 4)));
+  assert.ok(years.has("2026"), `不能只剩 2025 年的照片，实得 ${[...years].join("/")}`);
 });
 
 test("连拍折叠只看像素，不看价值分——压缩版分再高也不能顶替原图", () => {

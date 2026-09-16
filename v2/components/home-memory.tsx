@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HomeMemory as HomeMemoryData } from "@/lib/home-memory";
 import { MEMORY_TIMING } from "@/lib/home-memory";
 import { pickTrack } from "@/lib/home-memory-mood";
@@ -76,6 +76,9 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
         <Image
           key={slide.key}
           className={i === index ? "memory-frame is-current" : "memory-frame"}
+          // 第几张决定用哪一种运镜（app/home.css 的 [data-fx]）。写成属性而不是靠 nth-child：
+          // 运镜是「第几张」的属性，不是 DOM 位置的属性。
+          data-fx={i % 4}
           src={slide.media.src}
           alt={slide.media.alt}
           width={slide.media.width || 4}
@@ -96,12 +99,6 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
           : <span>{memory.subtitle}</span>}
       </p>
       <h2 className="memory-title">{memory.title}</h2>
-    </div>
-
-    <div className="memory-dots" aria-hidden="true">
-      {memory.slides.map((slide, i) => (
-        <span key={slide.key} className={i === index ? "memory-dot is-on" : "memory-dot"} />
-      ))}
     </div>
 
     <div className="memory-actions">
@@ -126,6 +123,48 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
   </div>;
 }
 
+/** 一幕 = 一屏里同时出现的照片。多数时候一张，横照会 2–3 张叠在一起。 */
+type MemoryScene = { key: string; items: HomeMemoryData["slides"] };
+
+/**
+ * 按**画幅**把照片分成幕（Teddy 2026-09-17 第 7 条：「有的时候会有三张图片从上到下布满一屏，
+ * 有的是一张……结合图片比例」）。
+ *
+ * 规则只有一条，而且是画幅逼出来的，不是为了花样：
+ *   · 竖照 / 方照 —— 自己占满一屏。把竖照压成三分之一屏，人就被切成一条。
+ *   · 横照       —— 连着的 2–3 张上下叠起来占一屏。一张横照独占竖屏时左右必然裁掉一大半，
+ *                   叠起来反而每张都能看全。
+ *
+ * **不为了凑版式打乱照片顺序**：落单的横照就自己占一屏。时间顺序比版式整齐重要——
+ * 这是一段回忆，不是一个图库。
+ */
+function buildScenes(slides: HomeMemoryData["slides"]): MemoryScene[] {
+  const scenes: MemoryScene[] = [];
+  let run: HomeMemoryData["slides"] = [];
+
+  const flushRun = () => {
+    while (run.length > 0) {
+      // 3 张一幕最好看；正好剩 4 张时切成 2+2，免得最后一张落单自己占一屏。
+      const take = run.length === 4 ? 2 : Math.min(3, run.length);
+      const group = run.slice(0, take);
+      scenes.push({ key: group.map((item) => item.key).join("+"), items: group });
+      run = run.slice(take);
+    }
+  };
+
+  for (const slide of slides) {
+    const width = slide.media.width ?? 0;
+    const height = slide.media.height ?? 0;
+    // 1.2 而不是 1.0：接近正方的照片叠起来两头都难看，按竖照处理让它独占一屏。
+    const landscape = width > 0 && height > 0 && width / height >= 1.2;
+    if (landscape) { run.push(slide); continue; }
+    flushRun();
+    scenes.push({ key: slide.key, items: [slide] });
+  }
+  flushRun();
+  return scenes;
+}
+
 function MemoryPlayer({ memory, onClose, returnFocusTo }: {
   memory: HomeMemoryData;
   onClose: () => void;
@@ -138,8 +177,13 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
   const [done, setDone] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
-  const slide = memory.slides[index];
-  const last = memory.slides.length - 1;
+  // 按画幅分幕：一屏有时一张，有时叠 2–3 张（见 buildScenes）。
+  // useMemo 是必须的，不是优化：不缓存的话每次暂停、静音、换曲都会重新分一次版式。
+  const scenes = useMemo(() => buildScenes(memory.slides), [memory.slides]);
+  const scene = scenes[index];
+  const last = scenes.length - 1;
+  // 一幕里只要有一张带配文就显示那一句——配文仍然只可能是已发布标题原文。
+  const caption = scene?.items.find((item) => item.caption)?.caption;
   // 随机挑一首。放在 useState 的初始化里有两个作用：**这个组件只在点了播放之后才创建**，
   // 所以抽签发生在浏览器里，不会有 hydration 不一致；而且一次播放全程同一首，
   // 不会因为任何一次重渲染半路换曲。
@@ -244,26 +288,39 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
           : <span className="memory-player-spacer" aria-hidden="true" />}
       </header>
 
-      <div className="memory-player-stage">
-        {memory.slides.map((item, i) => (
-          <Image
+      {/* 运镜时长必须跟着同一个常量走，和预览一样——播放器之前整个漏了运镜
+          （Teddy 2026-09-17 第 3 条），补上的时候这个变量也要一起传，
+          否则 CSS 里那个 5000ms 兜底会和真实换片节奏悄悄错开。 */}
+      <div className="memory-player-stage" style={{ "--memory-slide-ms": `${MEMORY_TIMING.slideSeconds * 1000}ms` } as React.CSSProperties}>
+        {scenes.map((item, i) => (
+          <div
             key={item.key}
-            className={i === index ? "memory-player-frame is-current" : "memory-player-frame"}
-            src={item.media.src}
-            alt={item.media.alt}
-            width={item.media.width || 4}
-            height={item.media.height || 3}
-            sizes="100vw"
-            priority={i === 0}
-            unoptimized
+            className={i === index ? "memory-player-scene is-current" : "memory-player-scene"}
             aria-hidden={i !== index}
-          />
+          >
+            {item.items.map((entry, j) => (
+              <div key={entry.key}>
+                <Image
+                  className={i === index ? "memory-player-frame is-current" : "memory-player-frame"}
+                  data-fx={(i + j) % 4}
+                  src={entry.media.src}
+                  alt={entry.media.alt}
+                  width={entry.media.width || 4}
+                  height={entry.media.height || 3}
+                  sizes="100vw"
+                  priority={i === 0}
+                  unoptimized
+                />
+              </div>
+            ))}
+          </div>
         ))}
-        {slide?.caption ? <p className="memory-player-caption">{slide.caption}</p> : null}
+        {caption ? <p className="memory-player-caption">{caption}</p> : null}
       </div>
 
+      {/* 进度条按**幕**走，不按张走——一幕叠了三张时，它仍然只前进一格。 */}
       <div className="memory-player-progress" aria-hidden="true">
-        {memory.slides.map((item, i) => (
+        {scenes.map((item, i) => (
           <span key={item.key} className={i <= index ? "memory-bar is-on" : "memory-bar"} />
         ))}
       </div>
@@ -277,7 +334,9 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
       </footer>
 
       <p className="visually-hidden" role="status">
-        第 {index + 1} 张，共 {memory.slides.length} 张{slide?.caption ? `。${slide.caption}` : ""}
+        第 {index + 1} 幕，共 {scenes.length} 幕
+        {scene && scene.items.length > 1 ? `，这一幕有 ${scene.items.length} 张照片` : ""}
+        {caption ? `。${caption}` : ""}
         {done ? "。这一段放完了。" : ""}
       </p>
     </div>,

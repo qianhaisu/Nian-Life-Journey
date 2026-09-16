@@ -172,16 +172,40 @@ function capPerDay(photos: readonly MediaRef[], perDay: number, topics: PhotoTop
 }
 
 /**
- * 最终取哪几张：**按价值分取最高的 max 张，再按时间排回去播放**。
+ * 最终取哪几张：**先按价值分砍掉差的一半，再在剩下的里沿时间分段，每段取最好的一张。**
  *
- * 价值分不够用时（缓存缺失、或这一批还没标过）退回 `spread` 沿时间均匀取——
+ * 为什么不是单纯「取价值分最高的 max 张」——那是上一版，Teddy 2026-09-17 第 4 条当场看出来了：
+ *
+ *   「睡着的样子都是特别小的时候拍的，没有近期的」
+ *
+ * 原因不是后来不睡了，而是那一阵的照片恰好分高，于是 12 张全从同一段时间里挑走。
+ * 家人该看到的是"这件事一直在发生"，所以时间覆盖本身就是质量的一部分。
+ *
+ * 但也不能倒过来只按时间均匀取——那正是更早那一版被说「随机选的」的原因。
+ * 所以两条一起用：**价值分决定谁有资格，时间决定从哪几段里各挑一个**。
+ *
+ * 价值分不够用时（缓存缺失、这一批还没标过）退回 `spread` 沿时间均匀取——
  * 少一个依据就少说一句话，不拿「按时间取」冒充「挑了最好的」。
  */
 function pickSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLookup): MediaRef[] {
   if (reps.length <= max) return [...reps];
   const scored = reps.filter((media) => topics(media.id)?.value !== undefined);
   if (scored.length < max) return spread(reps, max);
-  return [...scored].sort(byValue(topics)).slice(0, max).sort(byTime);
+
+  // 一、按价值分留下前一半（至少留够 max 张，否则下一步没得挑）
+  const keep = Math.max(max, Math.ceil(scored.length / 2));
+  const good = [...scored].sort(byValue(topics)).slice(0, keep).sort(byTime);
+
+  // 二、把这些按时间切成 max 段，每段取价值分最高的那一张
+  const picked: MediaRef[] = [];
+  const taken = new Set<string>();
+  for (let i = 0; i < max; i += 1) {
+    const from = Math.floor((i * good.length) / max);
+    const to = Math.max(from + 1, Math.floor(((i + 1) * good.length) / max));
+    const best = good.slice(from, to).sort(byValue(topics)).find((media) => !taken.has(media.id));
+    if (best) { taken.add(best.id); picked.push(best); }
+  }
+  return picked.sort(byTime);
 }
 
 function memoriesOn(month: MonthChapter, day: string): EditorialMemory[] {
@@ -260,12 +284,29 @@ export function buildDayMemory(input: {
  * 标题刻意写成一句短的白话，不是分类名：家人读到的是「玩水的日子」，不是「topic=玩水」。
  * 每一条的依据都是逐张标注，可以回账本核对（provider='claude-code-vision'）。
  */
+/** 「玩水」退一步也能接受的水。**洗澡和湖边河边两种口径下都不要**（Teddy 2026-09-17 第 2 条）。 */
+const WATER_OK: ReadonlySet<string> = new Set(["泳池", "海边", "喷水戏水"]);
+
 const TOPIC_THEMES: ReadonlyArray<{
-  key: string; title: string; match: (label: PhotoTopicLabel) => boolean; basis: string;
+  key: string; title: string; basis: string;
+  match: (label: PhotoTopicLabel) => boolean;
+  /** 先按这个更窄的口径试；够得出一段就用它，不够再退回 `match`。 */
+  preferred?: (label: PhotoTopicLabel) => boolean;
 }> = [
-  // Teddy：「玩水的意思就是游泳，有水就行。」所以这一条看的是 water 标记本身，
-  // **不看 topic、也不看 topic 的把握**——在泳池里笑，topic 是「笑」，但它仍然是一张玩水的照片。
-  { key: "water", title: "玩水的日子", basis: "画面里有水（游泳、泳池、洗澡、戏水、海边）", match: (l) => l.water },
+  // 这一条改过两次，两次都是看了线上之后改的：
+  //   2026-09-16 Teddy：「玩水的意思就是游泳，有水就行」-> 只看 water 布尔。
+  //   2026-09-17 Teddy：「尽量多换成泳池游泳 不要洗澡的 湖边河边的」。
+  // 为什么第一版看起来不像玩水：226 张有水的照片里 **109 张是湖边河边、19 张是洗澡**，
+  // 它们在 water 布尔那一层和泳池是同一个值，于是一段「玩水」里大半是在河边站着和在澡盆里。
+  // 现在先只用泳池和真的泡在水里游的（22 张，17 张高价值，够做一段）；
+  // 万一以后不够了才退回海边与喷水戏水。两种口径都不含洗澡和湖边河边。
+  {
+    key: "water",
+    title: "玩水的日子",
+    basis: "泳池，或真的泡在水里游（洗澡、湖边河边已排除）",
+    preferred: (l) => l.water && (l.swimming === true || l.waterKind === "泳池"),
+    match: (l) => l.water && l.waterKind !== undefined && WATER_OK.has(l.waterKind),
+  },
   { key: "sleep", title: "睡着的样子", basis: "主题判为「睡觉」", match: (l) => l.topic === "睡觉" && l.confidence >= TOPIC_MIN_CONFIDENCE },
   { key: "laugh", title: "笑起来的时候", basis: "主题判为「笑」", match: (l) => l.topic === "笑" && l.confidence >= TOPIC_MIN_CONFIDENCE },
   { key: "eat", title: "吃饭这件事", basis: "主题判为「吃饭」", match: (l) => l.topic === "吃饭" && l.confidence >= TOPIC_MIN_CONFIDENCE },
@@ -279,35 +320,47 @@ function buildTopicMemory(input: {
   photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup; birthDay?: string;
 }): HomeMemory | undefined {
   const { theme, photos, privilege, topics, birthDay } = input;
-  const pool = usable(photos, privilege).filter((media) => {
-    const label = topics(media.id);
-    return Boolean(label) && label!.value >= TOPIC_MIN_VALUE && theme.match(label!);
-  });
-  if (pool.length === 0) return undefined;
 
-  const ordered = [...pool].sort(byTime);
-  const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics);
-  if (reps.length < MEMORY_MIN_SLIDES) return undefined;
+  const attempt = (
+    match: (label: PhotoTopicLabel) => boolean,
+    scope: string,
+  ): HomeMemory | undefined => {
+    const pool = usable(photos, privilege).filter((media) => {
+      const label = topics(media.id);
+      return Boolean(label) && label!.value >= TOPIC_MIN_VALUE && match(label!);
+    });
+    if (pool.length === 0) return undefined;
 
-  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
-  // 跨天主题没有逐张可依据的文字，所以**一句配文都不写**。
-  const mood = moodOf(picked, pool, []);
-  const days = new Set(picked.map(dayOf)).size;
-  return {
-    kind: "topic",
-    key: `topic:${theme.key}`,
-    title: theme.title,
-    subtitle: spanSubtitle(pool, birthDay, days),
-    // 一个主题横跨很多个月，没有单一的去处——与其给一个「翻到 2026 年」这种对不上的链接，
-    // 不如不给（原则八：标签必须跟着去处走）。
-    slides: picked.map((media) => ({ key: `topic:${theme.key}|${media.id}`, media })),
-    durationSeconds: picked.length * SLIDE_SECONDS,
-    mood: mood.mood,
-    moodReason: mood.reason,
-    reason: `主题「${theme.title}」：依据是${theme.basis}，价值分 ≥ ${TOPIC_MIN_VALUE}；`
-      + `符合的照片 ${pool.length} 张，每天最多取 ${CROSS_DAY_PER_DAY_MAX} 张得到 ${reps.length} 张，`
-      + `按价值分取 ${picked.length} 张，来自 ${days} 个不同的日子`,
+    const ordered = [...pool].sort(byTime);
+    const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics);
+    if (reps.length < MEMORY_MIN_SLIDES) return undefined;
+
+    const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
+    // 跨天主题没有逐张可依据的文字，所以**一句配文都不写**。
+    const mood = moodOf(picked, pool, []);
+    const days = new Set(picked.map(dayOf)).size;
+    return {
+      kind: "topic",
+      key: `topic:${theme.key}`,
+      title: theme.title,
+      subtitle: spanSubtitle(pool, birthDay, days),
+      // 一个主题横跨很多个月，没有单一的去处——与其给一个「翻到 2026 年」这种对不上的链接，
+      // 不如不给（原则八：标签必须跟着去处走）。
+      slides: picked.map((media) => ({ key: `topic:${theme.key}|${media.id}`, media })),
+      durationSeconds: picked.length * SLIDE_SECONDS,
+      mood: mood.mood,
+      moodReason: mood.reason,
+      reason: `主题「${theme.title}」（${scope}）：依据是${theme.basis}，价值分 ≥ ${TOPIC_MIN_VALUE}；`
+        + `符合的照片 ${pool.length} 张，每天最多取 ${CROSS_DAY_PER_DAY_MAX} 张得到 ${reps.length} 张，`
+        + `先按价值分筛再沿时间铺开取 ${picked.length} 张，来自 ${days} 个不同的日子`,
+    };
   };
+
+  // 先试最窄的口径（「玩水」= 只要泳池和真在游泳的）。它凑得出一段就用它——
+  // **宁可这一段更小众、更准，也不要为了凑数把河边和澡盆掺进来。**
+  // 只有窄口径连 6 个瞬间都凑不出时，才退回宽一点的口径；再不行这段主题就不出现。
+  return (theme.preferred ? attempt(theme.preferred, "严格口径") : undefined)
+    ?? attempt(theme.match, "放宽口径");
 }
 
 /** 「当时 6 个月 — 1 岁 7 个月 · 12 个日子」。跨很多个月的主题用两个时钟（原则二）。 */

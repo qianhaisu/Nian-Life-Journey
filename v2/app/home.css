@@ -85,18 +85,47 @@
    而我第一版是纯淡入淡出，一点运镜都没有，这是"质感差太远"里最直接的一条。
    只动 transform（合成层，不触发重排），和站点既有动效规范一致。
    方向按序号交替：偶数张推近、奇数张拉远，连着看不会一直往一个方向漂。 */
-.memory-frame.is-current {
+.memory-frame.is-current,
+.memory-player-frame.is-current {
   opacity: 1;
   animation: memoryKenBurnsIn calc(var(--memory-slide-ms, 5000ms) + 900ms) linear both;
 }
-.memory-frame.is-current:nth-child(2n) { animation-name: memoryKenBurnsOut; }
+
+/* 四种运镜轮着来（Teddy 2026-09-17 第 6 条：「切换图片时多点效果变化」）。
+   之前只有推近/拉远两种交替，连看十二张仍然像同一个动作在重复。
+
+   **按 data-fx 选，不按 nth-child 选。** 一开始写的是 nth-child(4n+2) 那一套，
+   它依赖「<img> 正好是舞台的第 n 个子元素」——播放器改成多图版式（一屏放 2–3 张）之后，
+   照片被包进了 .memory-player-scene，nth-child 立刻错位。运镜是第几张的属性，
+   不是 DOM 位置的属性，所以让组件把序号直接写在 data-fx 上。 */
+.memory-frame.is-current[data-fx="1"],
+.memory-player-frame.is-current[data-fx="1"] { animation-name: memoryPanRight; }
+.memory-frame.is-current[data-fx="2"],
+.memory-player-frame.is-current[data-fx="2"] { animation-name: memoryKenBurnsOut; }
+.memory-frame.is-current[data-fx="3"],
+.memory-player-frame.is-current[data-fx="3"] { animation-name: memoryRiseUp; }
+
+/* 交叉淡化的时长也错开一点：全部 800ms 会让每一次切换像节拍器。 */
+.memory-frames img[data-fx="1"] { transition-duration: 1150ms; }
+.memory-frames img[data-fx="3"] { transition-duration: 650ms; }
+
 @keyframes memoryKenBurnsIn {
   from { transform: scale(1.02) translate3d(0, 0, 0); }
-  to   { transform: scale(1.10) translate3d(-1.2%, -1.6%, 0); }
+  to   { transform: scale(1.12) translate3d(-1.4%, -1.8%, 0); }
 }
 @keyframes memoryKenBurnsOut {
-  from { transform: scale(1.10) translate3d(1.2%, 1.2%, 0); }
+  from { transform: scale(1.12) translate3d(1.4%, 1.2%, 0); }
   to   { transform: scale(1.02) translate3d(0, 0, 0); }
+}
+/* 横移：尺度不变，只平移——和推拉是两种明显不同的感觉。 */
+@keyframes memoryPanRight {
+  from { transform: scale(1.09) translate3d(-2.4%, 0, 0); }
+  to   { transform: scale(1.09) translate3d(2.4%, -0.6%, 0); }
+}
+/* 上升：画面缓缓抬起来一点，同时轻微推近。 */
+@keyframes memoryRiseUp {
+  from { transform: scale(1.05) translate3d(0, 2.6%, 0); }
+  to   { transform: scale(1.13) translate3d(0, -1.4%, 0); }
 }
 
 /* 只有压字的那一条给局部遮罩，照片本身不加任何全局滤镜（任务书三：照片保持原色）。 */
@@ -112,34 +141,44 @@
 
 /* 播放入口：只有图标，没有「配乐播放」四个字（用户 2026-09-16 第 2 条）。
    56px 的圆，远超 44px 的触达下限；焦点环走站点全局那一支。 */
-/* 播放键放右上角，**不是画面正中**。
-   2026-09-16 真机截图（390×844）实测：居中时这个 56px 的圆正好压在张年的嘴和下巴上。
-   「照片不遮脸」是这一轮验收的硬条件，而人脸在这份档案里几乎总是落在画面中上部
-   （站里既有的 object-position: 50% 38% 就是按这个规律定的），所以正中是最不该放东西的位置。
-   右上角是设计参考图里那个控件的位置，也是这类竖构图里最空的一块。 */
+/* 播放键放**右下角**（Teddy 2026-09-17 第 1 条：「播放按钮放右下角 不够精致」）。
+   先说不能放哪：**不能放正中**——2026-09-16 真机截图（390×844）实测，居中时这个圆正好压在
+   张年的嘴和下巴上；人脸在这份档案里几乎总是落在画面中上部（object-position: 50% 38% 就是
+   按这个规律定的）。所以正中和上半部都是不该放东西的地方，右下角是这类竖构图里最安全的一块。
+
+   「精致」落到三处具体改动，不是换个说法：
+   1. 实心白圆 -> 毛玻璃。白饼盖在照片上像个贴纸；半透明 + backdrop-filter 让它浮在画面上，
+      照片的颜色透上来，这是 iOS 控件的做法。
+   2. 56px -> 52px，阴影从 20px/.28 收到 14px/.20——它是次要控件，不该比题签还抢眼。
+   3. 加一圈 1px 的高光描边，在浅色照片上才不会糊成一团。
+   题签与日期因此右移让位（见 .memory-title / .memory-caption-line 的 right 值）。 */
 .memory-play {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  right: 14px;
+  bottom: 14px;
   display: grid;
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   place-items: center;
   padding: 0;
-  border: 0;
+  border: 1px solid rgb(255 255 255 / .38);
   border-radius: 50%;
-  background: rgb(255 255 255 / .92);
-  color: var(--home-ink);
-  box-shadow: 0 6px 20px rgb(20 18 16 / .28);
+  background: rgb(255 255 255 / .18);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgb(20 18 16 / .20);
   transition: transform 200ms var(--ease-out), background-color 200ms var(--ease-out);
 }
-.memory-play svg { width: 26px; height: 26px; margin-left: 3px; /* 三角形视觉居中 */ }
-@media (hover: hover) { .memory-play:hover { transform: scale(1.06); background: #fff; } }
+.memory-play svg { width: 24px; height: 24px; margin-left: 3px; /* 三角形视觉居中 */ }
+@media (hover: hover) { .memory-play:hover { transform: scale(1.06); background: rgb(255 255 255 / .3); } }
 .memory-play:active { transform: scale(.96); }
 
+/* right 给播放键让位：播放键占右下角 14px + 52px，再留 12px 呼吸，所以文字在 78px 处收住。
+   不让位的话题签会从播放键底下穿过去。 */
 .memory-caption-line {
   position: absolute;
-  right: 20px;
+  right: 78px;
   bottom: 52px;
   left: 20px;
   margin: 0;
@@ -151,7 +190,7 @@
 
 .memory-title {
   position: absolute;
-  right: 20px;
+  right: 78px; /* 同上：给右下角的播放键让位 */
   bottom: 18px;
   left: 20px;
   margin: 0;
@@ -163,10 +202,10 @@
   text-shadow: 0 1px 12px rgb(20 18 16 / .34);
 }
 
-/* 进度点：说明这一段有几个瞬间，也让人看出预览在动。不写数字（原则三）。 */
-.memory-dots { display: flex; gap: 5px; margin: 12px 2px 0; }
-.memory-dot { height: 2px; flex: 1; background: var(--home-line); border-radius: 2px; transition: background-color 300ms ease; }
-.memory-dot.is-on { background: var(--home-accent); }
+/* 照片下面原本有一排细横线当进度点，2026-09-17 按 Teddy 第 5 条去掉了
+   （「去掉图片轮播时最下方的横线间隔」）。它本来是想说明"这一段有几个瞬间"，
+   但照片本身在动，那排线只是多一道横向切分，把照片和下面的操作行隔开了。
+   去掉之后照片直接接到「读读这一天 / 换一段」那一行，整块更连贯。 */
 
 /* 照片下面那一行：左边「读读这一天」，右边「换一段」。
    「换一段」只在真的不止一段时才渲染（components/home-memory.tsx），所以这一行有时只有左边一项。 */
@@ -368,6 +407,29 @@
    `object-position` 偏上，理由和预览、以及站里既有的 .photo-strip 一致：人脸通常在画面中上部，
    横构图在这个竖长的舞台里会被上下裁，居中裁就容易把脸切掉。 */
 .memory-player-stage { position: relative; flex: 1; min-height: 0; }
+
+/* 一「幕」= 一屏。多数时候一幕就是一张竖照铺满；横照则 2–3 张上下叠起来一起占满一屏
+   （Teddy 2026-09-17 第 7 条：「iPhone 相册有的时候会有三张图片从上到下布满一屏，
+   有的是一张，反正就是多加点变化，结合图片比例」）。
+
+   为什么按比例分组而不是随机分：把一张竖照压成三分之一屏，人就被切成一条；
+   而一张横照独占竖屏，左右必然裁掉一大半。**横照叠起来、竖照独占，是这两种裁切里
+   各自最少的那一种**——所以这是画幅决定的，不是花样。分组逻辑见 components/home-memory.tsx 的 buildScenes。 */
+.memory-player-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 800ms ease-in-out;
+  pointer-events: none;
+}
+.memory-player-scene.is-current { opacity: 1; pointer-events: auto; }
+
+/* 一幕里每张照片各占等分的一条；单张的那一幕自然就是整屏。 */
+.memory-player-scene > * { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+
 .memory-player-stage img {
   position: absolute;
   inset: 0;
@@ -375,10 +437,13 @@
   height: 100%;
   object-fit: cover;
   object-position: 50% 38%;
-  opacity: 0;
-  transition: opacity 800ms ease-in-out;
 }
-.memory-player-frame.is-current { opacity: 1; }
+/* 播放器里也要有运镜（Teddy 2026-09-17 第 3 条：「点击播放按钮后没有运镜了，只有没点的时候有」）。
+   这一条之前**确实漏了**：Ken Burns 只挂在 .memory-frame（首页预览）上，
+   播放器这一行原本只有 `opacity: 1`，所以点开之后反而变成了纯淡入淡出的幻灯片——
+   沉浸的那个反而比预览还静。时长同样跟着 --memory-slide-ms 走（由组件传下来）。 */
+/* 具体的运镜规则和首页预览合并在一起写（见上面 .memory-frame.is-current 那一段），
+   免得两处各写一份、改了一处忘了另一处——播放器漏运镜就是这么漏的。 */
 
 .memory-player-caption {
   position: absolute;
@@ -440,7 +505,7 @@
   .home-sheet { width: min(980px, calc(100% - 64px)); }
   /* 竖照在宽屏上不要撑满版心：一张 4:5 的照片铺到 980px 宽就成了一堵墙。 */
   .memory-frames { max-width: 620px; margin-inline: auto; max-height: 68svh; }
-  .memory-dots, .memory-actions { max-width: 620px; margin-inline: auto; }
+  .memory-actions { max-width: 620px; margin-inline: auto; }
 }
 
 /* ── 减少动态 ──────────────────────────────────────────────────────────────── */
@@ -448,10 +513,11 @@
    交给 JS 停掉（components/home-memory.tsx 的 usePrefersReducedMotion），CSS 只负责去掉淡入淡出。 */
 @media (prefers-reduced-motion: reduce) {
   .memory-frames img, .memory-player-stage img { transition: none; }
-  .memory-play, .memory-dot, .memory-bar { transition: none; }
+  .memory-play, .memory-bar { transition: none; }
   /* Ken Burns 是 animation，不是 transition——全局那条 reduce 规则把时长压到 0.01ms 就够了，
      但这里写死 none 更清楚：要求减少动态的人不该看到任何推拉，静止在原始取景上。 */
   .memory-frame.is-current,
-  .memory-frame.is-current:nth-child(2n) { animation: none; transform: scale(1); }
-  .memory-player-frame.is-current { animation: none; transform: scale(1); }
+  .memory-player-frame.is-current,
+  .memory-frame.is-current[data-fx],
+  .memory-player-frame.is-current[data-fx] { animation: none; transform: scale(1); }
 }

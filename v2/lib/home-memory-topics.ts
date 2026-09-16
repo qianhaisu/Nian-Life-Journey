@@ -26,7 +26,16 @@
 /** 批次用的主题词表。`其他` 是兜底，不拿来做一段回忆。 */
 export type PhotoTopic = "玩水" | "睡觉" | "笑" | "吃饭" | "户外" | "玩玩具" | "抱着" | "其他";
 
-/** 一张照片的标注。四项缺一不可——导出时就已经按这条筛过了。 */
+/**
+ * 哪一种水。第二轮单独问的（prompt_version='media-water-v1'）。
+ *
+ * 为什么要第二轮：第一轮只有 water 布尔，够把「玩水」这个主题救回来，但挑不出片——
+ * 澡盆、泳池、河滩在那一层是同一个值。线上实测 218 张有水的照片里，
+ * **109 张是湖边河边、19 张是洗澡**，所以「玩水的日子」看起来才不像在玩水。
+ */
+export type WaterKind = "泳池" | "海边" | "湖边河边" | "洗澡" | "喷水戏水" | "说不准";
+
+/** 一张照片的标注。前四项缺一不可——导出时就已经按这条筛过了。 */
 export type PhotoTopicLabel = {
   topic: PhotoTopic;
   /** 画面里有没有水。**和 topic 互相独立**：在泳池里笑，topic 是「笑」，water 仍然是 true。 */
@@ -35,6 +44,13 @@ export type PhotoTopicLabel = {
   value: number;
   /** 对 topic 判断的把握，0–1。**不管 water**（water 是另一个问题）。 */
   confidence: number;
+  /**
+   * 哪一种水。**只有真的问过的照片才有这一项。**
+   * undefined 表示「没问过」，和「问过、判为说不准」是两回事，所以不填默认值。
+   */
+  waterKind?: WaterKind;
+  /** 是不是真的泡在水里游，而不是只站在旁边。同样只有问过才有。 */
+  swimming?: boolean;
 };
 
 export type PhotoTopicCache = {
@@ -55,6 +71,10 @@ const TOPICS: ReadonlySet<string> = new Set<PhotoTopic>([
   "玩水", "睡觉", "笑", "吃饭", "户外", "玩玩具", "抱着", "其他",
 ]);
 
+const WATER_KINDS: ReadonlySet<string> = new Set<WaterKind>([
+  "泳池", "海边", "湖边河边", "洗澡", "喷水戏水", "说不准",
+]);
+
 /**
  * 严格校验一条标注。**缺字段、类型不对、分数越界，一律当没有这条**，不用默认值补齐。
  *
@@ -69,7 +89,14 @@ function validLabel(raw: unknown): PhotoTopicLabel | undefined {
   if (typeof water !== "boolean") return undefined;
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) return undefined;
   if (typeof confidence !== "number" || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) return undefined;
-  return { topic: topic as PhotoTopic, water, value, confidence };
+  const label: PhotoTopicLabel = { topic: topic as PhotoTopic, water, value, confidence };
+  // 这两项是可选的：没问过就没有。问过但值不合法，也当没问过，不猜。
+  const { waterKind, swimming } = record;
+  if (typeof waterKind === "string" && WATER_KINDS.has(waterKind)) {
+    label.waterKind = waterKind as WaterKind;
+    if (typeof swimming === "boolean") label.swimming = swimming;
+  }
+  return label;
 }
 
 /** 缓存 → lookup。缓存本身不合格（缺 model / promptVersion / topics）时返回空 lookup。 */
