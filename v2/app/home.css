@@ -503,6 +503,10 @@
 /* ── 桌面 ──────────────────────────────────────────────────────────────────── */
 @media (min-width: 900px) {
   .home-sheet { width: min(980px, calc(100% - 64px)); }
+  /* 播放器在宽屏上也要收窄，理由和预览一样，但后果更严重：
+     一幕叠两张时，1440px 的屏会把每张压成 1440×450 的长条，
+     竖照在这种格子里会被裁穿人脸。收到和预览同一个宽度，版式才和手机上一致。 */
+  .memory-player-stage { width: min(620px, 100%); margin-inline: auto; }
   /* 竖照在宽屏上不要撑满版心：一张 4:5 的照片铺到 980px 宽就成了一堵墙。 */
   .memory-frames { max-width: 620px; margin-inline: auto; max-height: 68svh; }
   .memory-actions { max-width: 620px; margin-inline: auto; }
