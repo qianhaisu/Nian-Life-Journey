@@ -81,7 +81,8 @@ test("首页提醒区的可见标题与可访问名称一致：「每周提醒�
   const { HomeReminders } = await import("../components/home-reminders.tsx");
   const html = renderToStaticMarkup(React.createElement(HomeReminders, {
     storageScope: "p1",
-    reminders: [{ id: "r1", title: "合成提醒", whenText: "9 月 15 日", whenDay: "2026-09-15", sources: [] }],
+    rangeStart: "2026-09-09", rangeEnd: "2026-09-15",
+    reminders: [{ id: "r1", title: "合成提醒", whenText: "9 月 15 日", whenDay: "2026-09-15", actionable: true, sources: [] }],
   }));
   assert.match(html, /aria-labelledby="weekly-heading"/);
   assert.match(html, /<h2 class="weekly-heading" id="weekly-heading">每周提醒<\/h2>/);

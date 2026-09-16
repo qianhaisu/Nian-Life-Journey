@@ -3,6 +3,10 @@
 // 这个文件原本钉的是旧版便签（.home-note / 「这几天的提醒事项」/ 无内容时不画「＋」）。
 // 那一版已经被用户 2026-09-16 的第 4、5 条取代：标题统一成「每周提醒」，每条带一个真的复选框，
 // 来源收进独立的「查看来源」。测试跟着产品走，断言换成新的承诺——不是把旧断言删掉了事。
+//
+// 2026-09-17 又加了两条（同样是产品变了，测试跟着变）：
+//   · 已完成的关键事项（actionable: false）不画复选框，只画一个静态勾号；
+//   · 最下方一行小字斜体的开始/结束日期（rangeStart/rangeEnd，必填 props）。
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as React from "react";
@@ -10,8 +14,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 globalThis.React ??= React;
 const { HomeReminders } = await import("../components/home-reminders.tsx");
 
-const bare = (id, title) => ({ id, title, whenText: "时间待确认", sources: [] });
-const render = (props) => renderToStaticMarkup(React.createElement(HomeReminders, { storageScope: "p1", ...props }));
+const bare = (id, title) => ({ id, title, whenText: "时间待确认", actionable: true, sources: [] });
+const render = (props) => renderToStaticMarkup(React.createElement(HomeReminders, {
+  storageScope: "p1", rangeStart: "2026-09-10", rangeEnd: "2026-09-16", ...props,
+}));
 
 test("标题是「每周提醒」，旧名字一个都不出现", () => {
   const html = render({ reminders: [bare("r1", "带尿不湿")] });
@@ -75,4 +81,40 @@ test("statusLabel 有值时照常显示，不因为换了外壳就丢字", () =>
   const html = render({ reminders: [{ ...bare("r3", "带去打疫苗"), statusLabel: "待核实" }] });
   assert.match(html, /带去打疫苗/);
   assert.match(html, /weekly-status">.*待核实/);
+});
+
+// ── 2026-09-17 第 5 条：已完成的关键事项也可以列 ──────────────────────────────
+
+test("已完成的关键事项（actionable: false）不画复选框，只画一个静态勾号", () => {
+  const html = render({
+    reminders: [{ ...bare("r4", "打了流感疫苗"), actionable: false, statusLabel: "已完成" }],
+  });
+  assert.match(html, /打了流感疫苗/);
+  assert.match(html, /weekly-item--fact/, "应当带上事实行的样式类");
+  assert.match(html, /weekly-fact-mark/, "应当有一个静态勾号");
+  assert.doesNotMatch(html, /<input/, "已完成的事实不该有一个可以点的复选框");
+  assert.doesNotMatch(html, /<label/, "没有复选框，也就不需要 label for");
+});
+
+test("已完成的关键事项仍然可以展开查看来源，两种行共用同一份折叠层", () => {
+  const html = render({
+    reminders: [{
+      ...bare("r5", "打了流感疫苗"), actionable: false, statusLabel: "已完成",
+      sources: [{
+        kindLabel: "完成", roleText: "妈妈", toneLabel: "确认",
+        recordedOn: "2026-09-14", recordedOnLabel: "2026 年 9 月 14 日",
+        summary: "妈妈说已经打了。",
+      }],
+    }],
+  });
+  assert.match(html, /<details class="weekly-detail">/);
+  assert.match(html, /查看来源/);
+});
+
+test("最下方有一行小字斜体的开始/结束日期，用的是真实窗口边界", () => {
+  const html = render({ reminders: [], rangeStart: "2026-09-08", rangeEnd: "2026-09-14" });
+  assert.match(html, /class="weekly-range"/);
+  assert.match(html, /9 月 8 日/);
+  assert.match(html, /9 月 14 日/);
+  assert.match(html, /<time dateTime="2026-09-08"/, "日期要有机器可读的 datetime，不只是人读的字样");
 });

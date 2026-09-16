@@ -45,6 +45,12 @@ export type HomeReminder = {
   whenText: string;
   whenDay?: string;
   ageText?: string;
+  /**
+   * 这一条是不是「还要办的事」。true——原来的行为，画复选框，能勾能取消。
+   * false——2026-09-17 第 5 条新加的「已完成的关键事项」：一句事实，不给复选框
+   * （那个控件意味着「我确认这件事完成了」，而完成早已经由微信记录证实过）。
+   */
+  actionable: boolean;
   statusLabel?: string;
   note?: string;
   sources: HomeReminderSource[];
@@ -90,6 +96,20 @@ function SourceRow({ source }: { source: HomeReminderSource }) {
   </li>;
 }
 
+/** 「查看来源」折叠层。actionable / 事实两种行共用同一份，抽出来避免两处各写一份走偏。 */
+function DetailDisclosure({ reminder }: { reminder: HomeReminder }) {
+  if (!reminder.note && reminder.sources.length === 0) return null;
+  return <details className="weekly-detail">
+    <summary>查看来源</summary>
+    <div>
+      {reminder.note ? <p className="weekly-note">{reminder.note}</p> : null}
+      {reminder.sources.length > 0 ? <ul className="weekly-sources">
+        {reminder.sources.map((source) => <SourceRow key={`${reminder.id}-${source.kindLabel}-${source.recordedOn}`} source={source} />)}
+      </ul> : null}
+    </div>
+  </details>;
+}
+
 /**
  * 一条提醒。
  *
@@ -99,6 +119,9 @@ function SourceRow({ source }: { source: HomeReminderSource }) {
  *   1. `<input type="checkbox">` + `<label for>` —— 勾选。用原生控件而不是 div+onClick，
  *      键盘（空格）、读屏（"复选框 已勾选"）、移动端辅助功能全部免费拿到且行为正确。
  *   2. `<details>` —— 查看来源。它是 label 的**兄弟**，不在 label 里面，所以点它不会连带勾选。
+ *
+ * `reminder.actionable === false`（2026-09-17 第 5 条：已完成的关键事项）时**不画复选框**——
+ * 那是一句事实，不是一件要办的事；见 HomeReminder.actionable 的注释。
  */
 function Row({ reminder, checked, onToggle, habitId }: {
   reminder: HomeReminder;
@@ -107,7 +130,26 @@ function Row({ reminder, checked, onToggle, habitId }: {
   habitId?: string;
 }) {
   const inputId = `weekly-${reminder.id}`;
-  const hasDetail = Boolean(reminder.note) || reminder.sources.length > 0;
+  const label = <>
+    <span className="weekly-title">{reminder.title}</span>
+    <span className="weekly-when">
+      {" · "}
+      {reminder.whenDay ? <time dateTime={reminder.whenDay}>{reminder.whenText}</time> : reminder.whenText}
+      {reminder.ageText ? ` · ${reminder.ageText}` : null}
+    </span>
+    {reminder.statusLabel ? <span className="weekly-status">{" · "}{reminder.statusLabel}</span> : null}
+  </>;
+
+  if (!reminder.actionable) {
+    return <li className="weekly-item weekly-item--fact">
+      <div className="weekly-line">
+        <span className="weekly-fact-mark" aria-hidden="true">✓</span>
+        <p className="weekly-label">{label}</p>
+      </div>
+      <DetailDisclosure reminder={reminder} />
+    </li>;
+  }
+
   return <li className={checked ? "weekly-item is-checked" : "weekly-item"}>
     <div className="weekly-line">
       <input
@@ -118,25 +160,9 @@ function Row({ reminder, checked, onToggle, habitId }: {
         onChange={() => onToggle(reminder.id)}
         data-habit-id={habitId}
       />
-      <label className="weekly-label" htmlFor={inputId}>
-        <span className="weekly-title">{reminder.title}</span>
-        <span className="weekly-when">
-          {" · "}
-          {reminder.whenDay ? <time dateTime={reminder.whenDay}>{reminder.whenText}</time> : reminder.whenText}
-          {reminder.ageText ? ` · ${reminder.ageText}` : null}
-        </span>
-        {reminder.statusLabel ? <span className="weekly-status">{" · "}{reminder.statusLabel}</span> : null}
-      </label>
+      <label className="weekly-label" htmlFor={inputId}>{label}</label>
     </div>
-    {hasDetail ? <details className="weekly-detail">
-      <summary>查看来源</summary>
-      <div>
-        {reminder.note ? <p className="weekly-note">{reminder.note}</p> : null}
-        {reminder.sources.length > 0 ? <ul className="weekly-sources">
-          {reminder.sources.map((source) => <SourceRow key={`${reminder.id}-${source.kindLabel}-${source.recordedOn}`} source={source} />)}
-        </ul> : null}
-      </div>
-    </details> : null}
+    <DetailDisclosure reminder={reminder} />
   </li>;
 }
 
@@ -149,12 +175,25 @@ function Row({ reminder, checked, onToggle, habitId }: {
  * 但「真的没有」和「读不出来」是两回事：读不出来时 **app/page.tsx 根本不渲染这个组件**，
  * 因为那种情况下连"这一周没有事"都不能说（lib/home-feed.ts 的三种 unavailable）。
  */
-export function HomeReminders({ reminders, more = [], habitIds = [], storageScope }: {
+/** 「9 月 8 日」——不带年份，footer 是给自己在读的一句小字，不需要每次都报年份。 */
+function shortDate(day: string): string {
+  return `${Number(day.slice(5, 7))} 月 ${Number(day.slice(8, 10))} 日`;
+}
+
+export function HomeReminders({ reminders, more = [], habitIds = [], storageScope, rangeStart, rangeEnd }: {
   reminders: HomeReminder[];
   more?: HomeReminder[];
   habitIds?: string[];
   /** 档案标识，进存储键，避免不同档案/环境的勾选互相串（任务书第 5 条）。 */
   storageScope: string;
+  /**
+   * 「每周提醒」看的这一段窗口，开始和结束日期（ISO，含两端）。
+   * 2026-09-17 第 5 条：「每周提醒最下方用小字斜体写上开始结束日期」。
+   * 用的是 lib/home-reminder-window.ts 的 windowStart()——和实际筛选逻辑同一个函数算出来的，
+   * 不是页面自己重新推一遍规则，两边不会走出两套账。
+   */
+  rangeStart: string;
+  rangeEnd: string;
 }) {
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
   // 挂载后才读：SSR 没有 localStorage，初次渲染必须和服务端一致，否则 hydration 不匹配。
@@ -197,5 +236,12 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
       </ul>
     </details> : null}
     {reportable.length > 0 ? <HabitShownReporter ids={reportable} /> : null}
+    {/* 开始/结束日期，小字斜体（2026-09-17 第 5 条）。标题总画、这里也总画——留白本身也该说清楚
+        「看的是哪一段时间」，不只是有内容时才交代依据。 */}
+    <p className="weekly-range">
+      <time dateTime={rangeStart}>{shortDate(rangeStart)}</time>
+      {" — "}
+      <time dateTime={rangeEnd}>{shortDate(rangeEnd)}</time>
+    </p>
   </section>;
 }

@@ -58,12 +58,20 @@ import type { FamilyArchive } from "@/lib/family-archive";
 import type { EditorialMemory, MediaRef, MonthChapter } from "@/lib/memory-chapters";
 import { burstGroups, isSubjectChecked, type MediaPrivilege } from "@/lib/publication-moments";
 import { thumbnailSized } from "@/lib/media/hero";
-import { ageAtMonth, formatMonth } from "@/lib/time-signature";
+import { ageAtMonth, formatDay, formatMonth } from "@/lib/time-signature";
 import { moodFor, type MemoryMood } from "@/lib/home-memory-mood";
 import { NO_TOPICS, type PhotoTopicLabel, type PhotoTopicLookup } from "@/lib/home-memory-topics";
 
 export const MEMORY_MIN_SLIDES = 6;
-export const MEMORY_MAX_SLIDES = 12;
+/**
+ * 一段回忆最多取几张。
+ *
+ * **20，不是 12**：Teddy 2026-09-17 线上看完八段回忆后说「笑起来的时候做的最好。
+ * 每个故事总照片可以达到 20+，也可以用横屏分隔和竖屏分隔」——多图版式（buildScenes /
+ * pairSomePortraits，见 components/home-memory.tsx）本来就是按张数动态分幕的，
+ * 不需要因为张数变多而改版式逻辑，单纯把上限提高即可。
+ */
+export const MEMORY_MAX_SLIDES = 20;
 /**
  * 首页一共准备几段可切换的回忆。
  *
@@ -82,8 +90,14 @@ export const TOPIC_MIN_VALUE = 0.7;
 /** 主题判断的把握下限。**玩水不受这条约束**——water 是另一个问题，见 TOPIC_THEMES。 */
 export const TOPIC_MIN_CONFIDENCE = 0.6;
 
-/** 三种主题。每一种的标题与副标题粒度都不同，这正是「每段有单独主题」的意思。 */
-export type MemoryThemeKind = "day" | "topic" | "season";
+/**
+ * 四种主题。每一种的标题与副标题粒度都不同，这正是「每段有单独主题」的意思。
+ *
+ * `week`（最近一周）是 2026-09-17 加的第四种：Teddy 「至少加一个最近一周主题，
+ * 每周日更新」。它和 season 用的是同一套跨天选片逻辑（buildSpanMemory），
+ * 只是窗口固定成 7 天、锚定在最近一个周日——见 mostRecentSunday。
+ */
+export type MemoryThemeKind = "day" | "topic" | "season" | "week";
 
 export type HomeMemorySlide = {
   key: string;
@@ -463,12 +477,18 @@ function seasonOf(month: string): { key: string; label: string; year: number } |
   return { key: season.key, label: season.label, year: anchorYear };
 }
 
-function buildSeasonMemory(input: {
+/**
+ * 跨天主题的通用构造：季节和「最近一周」都是它——都是「一段日期事实 + 均匀铺开的照片」，
+ * 唯一的差别是窗口有多宽和叫什么名字。2026-09-17 加 week 主题时从 buildSeasonMemory
+ * 改名成这个通用版本，逻辑一行没变，只是把 `kind` 从写死的 "season" 变成了参数。
+ */
+function buildSpanMemory(input: {
+  kind: "season" | "week";
   key: string; title: string; subtitle: string;
   href?: string; linkLabel?: string;
   photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup;
 }): HomeMemory | undefined {
-  const { key, title, subtitle, href, linkLabel, photos, privilege, topics } = input;
+  const { kind, key, title, subtitle, href, linkLabel, photos, privilege, topics } = input;
   const pool = usable(photos, privilege);
   const ordered = [...pool].sort(byTime);
   const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics);
@@ -479,21 +499,59 @@ function buildSeasonMemory(input: {
   const days = new Set(picked.map(dayOf)).size;
   const scored = picked.filter((media) => topics(media.id)?.value !== undefined).length;
   return {
-    kind: "season",
+    kind,
     key,
     title,
     subtitle,
     href,
     linkLabel,
     slides: picked.map((media) => ({ key: `${key}|${media.id}`, media })),
-    coverIndex: coverIndexOf(picked, topics, true), // 同上，季节也是跨天的
+    coverIndex: coverIndexOf(picked, topics, true), // 跨天主题：封面必须是近期的
     durationSeconds: picked.length * SLIDE_SECONDS,
     mood: mood.mood,
     moodReason: mood.reason,
-    reason: `一个季节：主体核验通过 ${pool.length} 张，折叠后每天最多取 ${CROSS_DAY_PER_DAY_MAX} 张`
-      + `得到 ${reps.length} 张，取 ${picked.length} 张（其中 ${scored} 张有视觉价值分），`
+    reason: `${kind === "season" ? "一个季节" : "最近一周"}：主体核验通过 ${pool.length} 张，折叠后每天最多取`
+      + ` ${CROSS_DAY_PER_DAY_MAX} 张得到 ${reps.length} 张，取 ${picked.length} 张（其中 ${scored} 张有视觉价值分），`
       + `来自 ${days} 个不同的日子`,
   };
+}
+
+// ── 主题四：最近一周 ──────────────────────────────────────────────────────────
+
+/**
+ * 「每周日更新」的窗口锚点：**最近一个周日**（今天就是周日时取今天）。
+ *
+ * 这不是「过去 7 天」那种每天滚动的窗口（那是每周提醒用的口径，lib/home-reminder-window.ts）。
+ * 这里要的是 Teddy 说的「每周日更新」——一个**每周只翻新一次**的稳定窗口：
+ * 周一到周六，窗口停在上一个周日往前推 7 天不动；到了周日，窗口才跳到今天往前推 7 天。
+ * 这样「最近一周」这段回忆在一整周里看起来是同一段内容，不会每天悄悄换血。
+ */
+function mostRecentSunday(today: string): string {
+  const [y, m, d] = today.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() - date.getUTCDay()); // getUTCDay(): 0=周日…6=周六
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * `anchor` 往前数 `days` 天（含 anchor 本身）的起点。
+ *
+ * 不复用 lib/home-reminder-window.ts 的同名逻辑：那个文件明确写着「只回答一个问题」——
+ * 每周提醒的窗口口径，两个功能只是恰好都要「N 天窗口」这个日期算术，不该因此耦合起来。
+ */
+function daysBack(anchor: string, days: number): string {
+  const [y, m, d] = anchor.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() - (days - 1));
+  return date.toISOString().slice(0, 10);
+}
+
+/** 「9 月 8 日 — 9 月 14 日」；跨年时才带上年份，避免同一年里重复写两次「2026 年」。 */
+function weekSubtitle(weekStart: string, weekEnd: string): string {
+  const short = (day: string) => `${Number(day.slice(5, 7))} 月 ${Number(day.slice(8, 10))} 日`;
+  return weekStart.slice(0, 4) === weekEnd.slice(0, 4)
+    ? `${short(weekStart)} — ${short(weekEnd)}`
+    : `${formatDay(weekStart)} — ${formatDay(weekEnd)}`;
 }
 
 // ── 组装 ──────────────────────────────────────────────────────────────────────
@@ -576,7 +634,8 @@ export function selectHomeMemories(
   }
   const seasonMemories = [...seasonPhotos.entries()]
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([key, bucket]) => buildSeasonMemory({
+    .map(([key, bucket]) => buildSpanMemory({
+      kind: "season",
       key: `season:${key}`,
       title: `${bucket.year} 年的${bucket.label}`,
       subtitle: seasonSubtitle(bucket.label, bucket.year),
@@ -588,7 +647,25 @@ export function selectHomeMemories(
     }))
     .filter((memory): memory is HomeMemory => Boolean(memory));
 
-  const memories = interleaveKinds([dayMemories, topicMemories, seasonMemories], HOME_MEMORIES_MAX);
+  // 最近一周：窗口锚定在最近一个周日，「每周日更新」（Teddy 2026-09-17 第 4 条）。
+  // 没有 href——这一周横跨的日子太短，通常够不上任何一个已有的「翻到」去处。
+  const weekEnd = mostRecentSunday(today);
+  const weekStart = daysBack(weekEnd, 7);
+  const weekPhotos = dayEntries
+    .filter((entry) => entry.day >= weekStart && entry.day <= weekEnd)
+    .flatMap((entry) => entry.photos);
+  const weekMemory = buildSpanMemory({
+    kind: "week",
+    key: `week:${weekStart}`,
+    title: "最近一周",
+    subtitle: weekSubtitle(weekStart, weekEnd),
+    photos: weekPhotos,
+    privilege,
+    topics,
+  });
+  const weekMemories = weekMemory ? [weekMemory] : [];
+
+  const memories = interleaveKinds([weekMemories, dayMemories, topicMemories, seasonMemories], HOME_MEMORIES_MAX);
   if (memories.length === 0) {
     return {
       memories: [],

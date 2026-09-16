@@ -11,6 +11,13 @@
   --clay: #C2A88A;
   --sage-ink: #626F56;  /* 对 #F9F6F0 纸底 4.96 · 白 5.35 · #F3EEE6 卡底 4.63 */
   --clay-ink: #826544;  /* 对 #F9F6F0 纸底 5.00 · 白 5.39 · #F3EEE6 卡底 4.67 */
+  /* 2026-09-17 Teddy：「首页最上方年logo填充色和"读读这一天"button的颜色换成完全同一种」。
+     两处原本各自独立：顶部品牌标「年」用 --clay（#C2A88A，一个面色），首页「读读这一天」
+     用 app/home.css 的 --home-accent（#A85D43，一个字色）。**不能反过来**让「读读这一天」
+     改用 --clay——上面那段注释写得很清楚，#C2A88A 当字色对纸底只有 2.10:1，连 WCAG AA 正文
+     4.5:1 的门槛都过不了。所以统一到 --home-accent 这个已经验过对比度的值，此处只定义一次，
+     顶部品牌标和 home.css 都引用它，不在两处各写一份字面值。 */
+  --brand-accent: #A85D43;
   --shadow: 0 16px 40px rgba(138,121,102,.08);
   --shadow-hover: 0 24px 48px rgba(138,121,102,.15);
   --shadow-badge: 0 4px 12px rgba(138,121,102,.05);
@@ -72,7 +79,7 @@ time, .growth-chart strong, .portrait-facts strong { font-variant-numeric: tabul
 .site-header { position: relative; z-index: 20; border-bottom: 1px solid var(--color-border); background: rgb(249 246 240 / .94); animation: fadeInUp 1s var(--ease) both; }
 .header-inner { display: grid; grid-template-columns: auto 1fr; align-items: center; width: min(1400px, calc(100% - 32px)); min-height: 72px; margin-inline: auto; }
 .brand { display: inline-flex; min-width: 0; align-items: center; gap: 12px; min-height: 44px; }
-.brand-mark { display: grid; width: 48px; height: 48px; flex-shrink: 0; place-items: center; background: var(--clay); color: var(--color-primary); border-radius: 16px; font-size: 24px; font-weight: 800; transition: transform .3s var(--ease); }
+.brand-mark { display: grid; width: 48px; height: 48px; flex-shrink: 0; place-items: center; background: var(--brand-accent); color: #fff; border-radius: 16px; font-size: 24px; font-weight: 800; transition: transform .3s var(--ease); }
 .brand-mark:hover { transform: scale(1.05) rotate(-5deg); }
 .brand-copy { display: flex; min-width: 0; align-items: baseline; gap: 10px; line-height: 1.15; white-space: nowrap; }
 .brand-copy strong { overflow: hidden; color: var(--color-primary); font-size: clamp(.95rem, 2.4vw, 1.2rem); font-weight: 600; letter-spacing: .015em; text-overflow: ellipsis; }

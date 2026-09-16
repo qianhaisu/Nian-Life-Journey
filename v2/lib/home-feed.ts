@@ -1104,8 +1104,13 @@ export function reminderStateOf(item: UpcomingItem, today: string, supersededIds
  * 默认露出一条；有关键事项时最多两条。退场的进 retired 并带原因，其余的进 more 保持可达
  * （§6.6：用一个可展开摘要保持可达，默认布局不膨胀）。
  *
- * 露出次序：关键待核实 → 今天/之后 → 待核实 → 待定。**过期的一条都不默认露出**——那正是
- * 「把陈旧采购从首页移出」要解决的事——但它们仍然在 more 和 retired 里，一条都没丢。
+ * 露出次序：关键待核实 → 今天/之后 → 待核实 → 待定 → 已完成的关键事项。**过期的一条都不默认
+ * 露出**——那正是「把陈旧采购从首页移出」要解决的事——但它们仍然在 more 和 retired 里，一条都没丢。
+ *
+ * 2026-09-17 加了第五种：**已完成的关键事项**（isImportantReminder 为真的 done）。
+ * Teddy 原话「每周提醒不一定只能是待办事项，重要事项有意义也可以列」——所以这里不再是纯粹的
+ * 「还需要办的事」清单，也放一小类「这周真实发生过、值得被看见」的事实，但严格限定只要关键事项，
+ * 不放行普通杂事的完成记录（那不是"有意义"，是噪音）。
  */
 export function buildReminders(
   feed: UpcomingFeed | undefined,
@@ -1139,8 +1144,13 @@ export function buildReminders(
   // 落在窗口外的**不是过期、更不是完成**：它们只是不属于"本周"，在 /events 的完整待办清单里
   // 一条不少（components/upcoming-tasks.tsx）。所以它们进 retired 时带的是 out_of_window，
   // 和 expired 分开记——两者混成一句，就是把"这周没人再提"说成"这件事过去了"。
+  // Teddy 2026-09-17 第 5 条：「每周提醒不一定只能是待办事项，重要事项有意义也可以列」。
+  // 所以 done 状态**有条件地**放行——只要关键事项（isImportantReminder：接种、就诊这类），
+  // 不要普通杂事「买尿布，已完成」那种噪音。已完成的关键事项本身就是「有意义」的那一种：
+  // 它是这周真实发生过的事，不是一件还要家人办的事，只是恰好也值得被看见。
   const stillOpen = all.filter((reminder) =>
-    reminder.state === "active" || reminder.state === "needs_confirmation" || reminder.state === "tentative");
+    reminder.state === "active" || reminder.state === "needs_confirmation" || reminder.state === "tentative"
+    || (reminder.state === "done" && reminder.important));
   const showable: HomeReminder[] = [];
   for (const reminder of stillOpen) {
     const verdict = reminderInWindow(reminder.item, reminder.provenance, today);
@@ -1159,7 +1169,10 @@ export function buildReminders(
     if (reminder.important && reminder.state === "needs_confirmation") return 0;
     if (reminder.state === "active") return 1;
     if (reminder.state === "needs_confirmation") return 2;
-    return 3;
+    if (reminder.state === "tentative") return 3;
+    // 已完成的关键事项排在最后——它不是一件还要办的事，不该挤占还需要办理的那几条的位置，
+    // 但仍然值得在 more 里被看见（见 stillOpen 那条注释）。
+    return 4;
   };
   const ordered = [...showable].sort((a, b) =>
     rank(a) - rank(b)
@@ -1188,7 +1201,7 @@ export function buildReminders(
   const limit = displayable.some((reminder) => reminder.important) ? REMINDERS_MAX_SHOWN : REMINDERS_DEFAULT_SHOWN;
   const shown = displayable.slice(0, limit);
   const shownIds = new Set(shown.map((reminder) => reminder.id));
-  // `more` 只装**本周仍需办理、但没排进默认位**的那几条。
+  // `more` 装**本周仍需办理、或本周完成的关键事项，但没排进默认位**的那几条。
   //
   // 2026-09-16 修：这里原来是 `all.filter(不在 shown 里)`，也就是"其余全部"。改版之后那是个洞——
   // 落在 7 天窗口外的事项被 showable 挡住了默认位，却从 `more` 这个门原样回到首页。

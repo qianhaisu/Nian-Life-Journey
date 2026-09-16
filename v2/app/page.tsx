@@ -9,6 +9,7 @@ import { selectHomeMemories } from "@/lib/home-memory";
 import { topicLookupFrom } from "@/lib/home-memory-topics";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
 import { HOME_QUIET_STATES } from "@/lib/home-reminder-display";
+import { windowStart } from "@/lib/home-reminder-window";
 import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { formatDay, formatMonth } from "@/lib/time-signature";
@@ -86,9 +87,11 @@ function MemoryFallback({ feed, reason }: { feed: HomeFeed; reason?: string }) {
   </section>;
 }
 
-// 还算「本周仍需办理」的三种状态。过期、完成、取消、被替代都不在这里——它们没有被删，
-// 库里那一行一个字没动，只是不占首页这块地方。
-const LIVE_REMINDER_STATES = new Set<HomeReminderState>(["active", "needs_confirmation", "tentative"]);
+// 还留在首页这块地方的四种状态：三种「仍需办理」+ 一种「已完成的关键事项」（2026-09-17 第 5 条：
+// 「不一定只能是待办事项，重要事项有意义也可以列」，见 lib/home-feed.ts 的 stillOpen）。
+// 过期、普通杂事的完成、取消、被替代都不在这里——它们没有被删，库里那一行一个字没动，
+// 只是不占首页这块地方。
+const LIVE_REMINDER_STATES = new Set<HomeReminderState>(["active", "needs_confirmation", "tentative", "done"]);
 
 /**
  * 「每周提醒」。
@@ -108,11 +111,16 @@ function Reminders({ feed }: { feed: HomeFeed }) {
   const more = reminders.status === "ready"
     ? reminders.more.filter((reminder) => LIVE_REMINDER_STATES.has(reminder.state))
     : [];
+  // 用同一个 windowStart()（lib/home-reminder-window.ts）算窗口起点——它就是 reminderInWindow
+  // 内部真正拿来判定的那个函数，不是重新推一遍规则；这样页脚写的日期和实际筛选逻辑不会走两套账。
+  const rangeStart = windowStart(feed.clock.today);
   return <HomeReminders
     reminders={shown.map(toReminderView)}
     more={more.map(toReminderView)}
     habitIds={reminders.status === "ready" ? reminders.habitShownIds : []}
     storageScope={CANONICAL_PROFILE_ID}
+    rangeStart={rangeStart}
+    rangeEnd={feed.clock.today}
   />;
 }
 
@@ -123,6 +131,10 @@ function toReminderView(reminder: HomeReminder): HomeReminderView {
     title: reminder.title,
     whenText: reminder.deadlineLabel,
     whenDay: when.kind === "day" ? when.day : undefined,
+    // 已完成的关键事项（Teddy 2026-09-17 第 5 条）是一句事实，不是一件要办的事——
+    // 不给它一个可以点的复选框，那个控件意味着"我确认这件事完成了"，而完成早已经由
+    // 微信记录证实过，两者不该混在一起（任务书原话：手动勾选和微信推导出的 done 从不互相写入）。
+    actionable: reminder.state !== "done",
     statusLabel: HOME_QUIET_STATES.has(reminder.state) ? undefined : HOME_REMINDER_LABEL[reminder.state],
     note: reminder.detail,
     sources: provenanceRows(reminder),

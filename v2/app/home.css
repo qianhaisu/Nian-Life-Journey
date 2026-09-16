@@ -26,7 +26,9 @@
   /* 实测对比度（对纸底 #F9F6F0）：ink 13.6:1，muted 5.4:1，accent 4.9:1，三项都过 AA 正文。 */
   --home-ink: #282621;
   --home-muted: #6B6860;
-  --home-accent: #A85D43;
+  /* 2026-09-17：这个值现在也是顶部「年」logo 的填充色（app/globals.css 的 --brand-accent，
+     唯一定义处），两边引用同一个变量，不在这里重复写字面值——Teddy 要求两处「换成完全同一种」。 */
+  --home-accent: var(--brand-accent, #A85D43);
   --home-line: #E4DDD4;
   color: var(--home-ink);
   font-family: var(--home-sans);
@@ -49,6 +51,11 @@
   line-height: 1.35;
   letter-spacing: 0;
 }
+/* 「张年」的颜色和记忆页「往回翻翻，张年。」里的「张年」用同一个变量（--color-accent，
+   globals.css :root 定义，两页共享）——Teddy 2026-09-17 要求两处一致。
+   选择器只落在 .home-greeting 内部的 .keep-whole，不动全局 .keep-whole（globals.css 里
+   那个只管不断行，home-lead.tsx 另一处也在用，改了那个会连带影响不相关的地方）。 */
+.home-greeting .keep-whole { color: var(--color-accent); }
 
 /* ── 一、一段回忆 ───────────────────────────────────────────────────────────── */
 
@@ -306,6 +313,21 @@
 .weekly-item.is-checked .weekly-when,
 .weekly-item.is-checked .weekly-status { color: #8a857c; }
 
+/* 已完成的关键事项（2026-09-17 第 5 条）：一句事实，不是复选框——用一个静态的勾号，
+   尺寸和位置比着 .weekly-check 来，行高对得上，但不接受点击、不接受键盘焦点。 */
+.weekly-item--fact .weekly-label { cursor: default; }
+.weekly-fact-mark {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  margin: 11px 0 0;
+  place-items: center;
+  color: var(--home-accent);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 /* 查看来源：独立的折叠层，和勾选互不触发。 */
 .weekly-detail { margin: 0 0 4px 34px; }
 .weekly-detail > summary {
@@ -353,6 +375,11 @@
 .weekly-more > summary::-webkit-details-marker { display: none; }
 .weekly-more > summary::after { margin-left: 7px; content: "＋"; }
 .weekly-more[open] > summary::after { content: "－"; }
+
+/* 每周提醒最下方的日期范围（2026-09-17 第 5 条：「小字斜体写上开始结束日期」）。
+   这是给自己核对「看的是哪一段时间」的一句轻量注脚，不是内容，所以比正文小、比正文淡。 */
+.weekly-range { margin: 14px 0 0; color: var(--home-muted); font-size: 12px; font-style: italic; }
+.weekly-range time { color: inherit; font-style: inherit; }
 
 /* ── 沉浸播放器（portal 到 <body>，所以不在 .home-v2 作用域里）───────────────── */
 

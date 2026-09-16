@@ -242,7 +242,7 @@ test("跨天主题不写配文：不拿某一天的标题去概括一整季", ()
   assert.equal(season.slides.every((s) => s.caption === undefined), true);
 });
 
-test("一段回忆最多 12 张", () => {
+test("一段回忆最多 MEMORY_MAX_SLIDES 张（Teddy 2026-09-17：20+）", () => {
   const photos = moments("m", "2026-09-09", 30, 6);
   const memory = buildDayMemory({
     day: "2026-09-09", dateLabel: "d", photos, published: [story("e1", "2026-09-09", "标题")],
