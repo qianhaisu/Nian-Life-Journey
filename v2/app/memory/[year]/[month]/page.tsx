@@ -6,7 +6,7 @@ import { ArchiveExpander } from "@/components/archive-expander";
 import { DayAlbumLink } from "@/components/day-album";
 import { DayPhotos } from "@/components/day-photos";
 import { SnapshotSummary } from "@/components/snapshot-summary";
-import { DayHead, MonthMoment, dayLabel } from "@/components/month-moment";
+import { DayHead, MonthMoment } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
@@ -126,17 +126,11 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       </ol>
     </section> : null}
 
-    {composition.quietDays.length > 0 && (composition.chapter.length > 0 || composition.chronicle.length > 0) ? <p className="month-quiet-days serif">
-      {composition.quietDays.length > 8
-        ? `这个月其余日子留下的零散照片，收在下面「${albumLabel}」里。`
-        : `${composition.quietDays.map((day) => dayLabel(day.dateLabel, year)).join("、")}也留下了零散的照片，收在下面「${albumLabel}」里。`}
-    </p> : null}
-
-    {/* Open by default and addressable by id: "这个月的照片" is a place the reader is sent to from
-        the top of the page, and a link that lands on a collapsed accordion has not taken them
-        anywhere. What ships in the first render is still the same screenful the archive layer
-        always capped itself to (ARCHIVE_FIRST_SCREEN_MAX); the rest is behind ArchiveExpander. */}
-    {archivePhotoCount > 0 ? <details className="month-archive" id="month-photos" open>
+    {/* Folded by default: this section is deliverable photos with no story of their own, not
+        something every reader needs pushed open. Addressable by id so the top-of-page link
+        (chapter-meta, above) can still send a reader here — the browser opens a <details> its
+        target anchor lives inside even when it starts closed. */}
+    {archivePhotoCount > 0 ? <details className="month-archive" id="month-photos">
       <summary><span className="serif">{albumLabel}</span></summary>
       {/* B-3: ArchiveExpander owns the whole list, not just the folded tail. The first screen's days
           are a SELECTION (recency, and days that already carry words), so appending the rest after
