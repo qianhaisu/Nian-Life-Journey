@@ -134,8 +134,11 @@ function monotonicStage(current: ChatImportTask["currentStage"], requested: Chat
   return stageOrder.indexOf(current) > stageOrder.indexOf(requested) ? current : requested;
 }
 
-function objectKey(checksum: string) {
-  return `media/original/${checksum.replace(/^sha256:/, "")}.jpg`;
+// The extension follows the file's real format. JPEG keeps `.jpg` unconditionally: every original
+// already uploaded lives at that key, and changing it would leave those objects unfindable.
+function objectKey(checksum: string, mimeType?: string) {
+  const extension = mimeType === "image/png" ? "png" : "jpg";
+  return `media/original/${checksum.replace(/^sha256:/, "")}.${extension}`;
 }
 
 function derivativeKey(checksum: string, variant: "thumbnail" | "web") {
@@ -158,7 +161,11 @@ type StoredMediaObject = { key: string; variant: "original" | "thumbnail" | "web
 async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, originalStorage: HotStorage, derivativeStorage: HotStorage) {
   const sourceHash = await hashWechatFile(entry);
   if (sourceHash.checksum !== checksum || sourceHash.size !== entry.size) throw new Error("WECHAT_MEDIA_HASH_CHANGED");
-  const key = objectKey(checksum);
+  // The format mediaStatus sniffed from the bytes (image/jpeg or image/png since 2026-09-16), not an
+  // assumption: it decides the object key's extension, what the object is stored as, and what the
+  // asset row claims to be.
+  const sourceMimeType = entry.imageMimeType ?? "image/jpeg";
+  const key = objectKey(checksum, sourceMimeType);
   const existing = await originalStorage.verify(key, checksum);
   let originalUploaded = false;
   if (existing.exists) {
@@ -180,7 +187,7 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, orig
         actualChecksum = `sha256:${hash.digest("hex")}`;
       })();
       try {
-        await originalStorage.put({ key, body, mimeType: "image/jpeg", checksum, fileSize: entry.size });
+        await originalStorage.put({ key, body, mimeType: sourceMimeType, checksum, fileSize: entry.size });
       } catch (error) {
         await originalStorage.delete(key).catch(() => undefined);
         throw error;
@@ -200,7 +207,7 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, orig
   }
   const dimensions = await sourceImageMetadata(bytes);
   const derivativeObjects: StoredMediaObject[] = [];
-  const asset = { id: `media-asset:${checksum.slice("sha256:".length)}`, profileId: "", mediaType: "photo" as const, mimeType: "image/jpeg", checksum, createdAt: "" };
+  const asset = { id: `media-asset:${checksum.slice("sha256:".length)}`, profileId: "", mediaType: "photo" as const, mimeType: sourceMimeType, checksum, createdAt: "" };
   for (const derivative of await createDerivatives(asset, bytes)) {
     const derivativeChecksum = bytesChecksum(derivative.body);
     const derivativeObjectKey = derivativeKey(checksum, derivative.variant as "thumbnail" | "web");
@@ -225,7 +232,7 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, orig
     await originalStorage.delete(key).catch(() => undefined);
     throw new Error("WECHAT_MEDIA_UPLOAD_VERIFY_FAILED");
   }
-  return { objects: [{ key, variant: "original" as const, mimeType: "image/jpeg", size: verification.fileSize ?? sourceHash.size, width: dimensions.width, height: dimensions.height, uploaded: originalUploaded }, ...derivativeObjects] };
+  return { objects: [{ key, variant: "original" as const, mimeType: sourceMimeType, size: verification.fileSize ?? sourceHash.size, width: dimensions.width, height: dimensions.height, uploaded: originalUploaded }, ...derivativeObjects] };
 }
 
 // The original is always tagged "hot" (see uploadVerified's doc comment above); a derivative is
@@ -311,7 +318,7 @@ function buildBatchItems(
       const checksum = checksumFor(ref);
       if (ref.availability !== "present" || !checksum) continue;
       const entry = byPath.get(ref.relativePath);
-      if (!entry || entry.kind !== "jpeg") continue;
+      if (!entry || entry.kind !== "image") continue;
       const uploaded = uploadedByChecksum.get(checksum);
       if (!uploaded) continue;
       const assetId = `media-asset:${checksum.slice("sha256:".length)}`;
@@ -414,7 +421,7 @@ export async function runWechatImportWorker(options: WechatWorkerOptions): Promi
         const checksum = checksumFor(ref);
         if (ref.availability !== "present" || !checksum || uploadsByChecksum.has(checksum)) continue;
         const entry = byPath.get(ref.relativePath);
-        if (!entry || entry.kind !== "jpeg") continue;
+        if (!entry || entry.kind !== "image") continue;
         uploadsByChecksum.set(checksum, { entry, checksum });
       }
       const uploadedByChecksum = await uploadBatchMedia([...uploadsByChecksum.values()], originalStorage, derivativeStorage, mediaConcurrency);

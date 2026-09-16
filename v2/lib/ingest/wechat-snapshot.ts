@@ -8,7 +8,12 @@ import { parseWechatMarkdown } from "./wechat-markdown";
 import { isWeflowJson, parseWeflowJson } from "./wechat-weflow-json";
 import { sinceInstantMs } from "@/lib/timeline-dates";
 
-export type WechatSnapshotEntry = { relativePath: string; absolutePath: string; kind: "markdown" | "weflow-json" | "jpeg" | "other"; size: number; mtimeMs: number; contentDigest?: string };
+// `kind: "image"` covers every still image the importer accepts. It was "jpeg" until 2026-09-16,
+// when PNG was allowed (Teddy): the family's chats carry PNG screenshots and photos that had been
+// refused at the door — `mediaStatus` rejected them as `invalid`, so the message arrived with no
+// attachment at all. `imageMimeType` carries the format decided by content sniffing, so nothing
+// downstream has to assume image/jpeg (the upload, the asset row and the object key all used to).
+export type WechatSnapshotEntry = { relativePath: string; absolutePath: string; kind: "markdown" | "weflow-json" | "image" | "other"; size: number; mtimeMs: number; contentDigest?: string; imageMimeType?: string };
 export type WechatSnapshot = { rootFingerprint: string; fileCount: number; files: WechatSnapshotEntry[] };
 // `recordOrdinals`, when given, is an exact allowlist of `sourceLocator.recordOrdinal` values. It is
 // applied AFTER `since` and BEFORE the maxMessages slice, and that order is the whole point: applied
@@ -30,11 +35,13 @@ export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now
 // comparison has to be scoped by (lib/ingest/wechat-content-dedupe.ts). Empty when the export did
 // not carry one.
 export type WechatBundleLoad = { snapshot: WechatSnapshot; bundle: ChatImportBundle; selectedDocument: string; sessionKey: string; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number };
-export type WechatCapacityAudit = { fileCount: number; markdownFileCount: number; jpegFileCount: number; otherFileCount: number; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number; presentMediaCount: number; missingMediaCount: number; needsReviewMediaCount: number; invalidMediaCount: number; hashChangedMediaCount: number; deferredByLimitMediaCount: number; messageLimitReached: boolean; mediaLimitReached: boolean; maxMessages: number; maxMedia: number };
+export type WechatCapacityAudit = { fileCount: number; markdownFileCount: number; imageFileCount: number; otherFileCount: number; availableMessageCount: number; selectedMessageCount: number; availableMediaRefCount: number; selectedMediaRefCount: number; presentMediaCount: number; missingMediaCount: number; needsReviewMediaCount: number; invalidMediaCount: number; hashChangedMediaCount: number; deferredByLimitMediaCount: number; messageLimitReached: boolean; mediaLimitReached: boolean; maxMessages: number; maxMedia: number };
 
 const digest = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 const normalizeRelative = (value: string) => value.replaceAll("\\", "/");
-const isJpeg = (relativePath: string) => /\.(?:jpe?g)$/i.test(relativePath);
+// Extension only decides "worth opening"; the format that counts is sniffed from the bytes in
+// mediaStatus below, so a mislabelled file is still refused.
+const isImage = (relativePath: string) => /\.(?:jpe?g|png)$/i.test(relativePath);
 
 function inside(root: string, candidate: string) {
   const relativePath = path.relative(root, candidate);
@@ -89,7 +96,7 @@ async function walk(root: string, rootReal: string, directory: string, entries: 
     // WeFlow writes a .json transcript beside the .md one, and for four of the family's groups the
     // JSON is the only place their history exists. It is a transcript like the Markdown is, so it is
     // digested and drift-checked the same way.
-    const kind = /\.md$/i.test(relativePath) ? "markdown" : /\.json$/i.test(relativePath) ? "weflow-json" : isJpeg(relativePath) ? "jpeg" : "other";
+    const kind = /\.md$/i.test(relativePath) ? "markdown" : /\.json$/i.test(relativePath) ? "weflow-json" : isImage(relativePath) ? "image" : "other";
     const content = kind === "markdown" || kind === "weflow-json" ? await streamDigest(absolutePath) : undefined;
     entries.push({ relativePath, absolutePath, kind, size: info.size, mtimeMs: info.mtimeMs, contentDigest: content?.digest });
   }
@@ -119,10 +126,14 @@ async function mediaStatus(entry: WechatSnapshotEntry | undefined, limitReached:
   if (limitReached) return { availability: "deferred_by_limit" };
   try {
     const metadata = await sharp(entry.absolutePath).metadata();
-    if (metadata.format !== "jpeg") return { availability: "invalid" };
+    // PNG joined JPEG on 2026-09-16 (Teddy). Anything else is still refused rather than guessed at:
+    // the family's exports also carry .gif stickers and misnamed files, and an unsupported format
+    // that reached the uploader would be stored under a mime type nothing can render.
+    const mimeType = metadata.format === "jpeg" ? "image/jpeg" : metadata.format === "png" ? "image/png" : undefined;
+    if (!mimeType) return { availability: "invalid" };
     const hashed = await hashWechatFile(entry);
     if (hashed.size !== entry.size) return { availability: "hash_changed" };
-    return { checksum: hashed.checksum, availability: "present", mimeType: "image/jpeg", fileSize: hashed.size, width: metadata.width, height: metadata.height };
+    return { checksum: hashed.checksum, availability: "present", mimeType, fileSize: hashed.size, width: metadata.width, height: metadata.height };
   } catch {
     return { availability: "invalid" };
   }
@@ -199,11 +210,14 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   let hashedMedia = 0;
   for (const [relativePath] of refs) {
     const entry = byPath.get(relativePath);
-    if (!entry || entry.kind !== "jpeg") {
+    if (!entry || entry.kind !== "image") {
       media.set(relativePath, { availability: entry ? "invalid" : "missing" });
       continue;
     }
     const state = await mediaStatus(entry, hashedMedia >= maxMedia);
+    // Remember the sniffed format on the snapshot entry: the uploader reads bytes through this
+    // entry and must not assume image/jpeg (wechat-worker.ts's object key, asset row and derivatives).
+    if (state.mimeType) entry.imageMimeType = state.mimeType;
     media.set(relativePath, state);
     if (state.availability === "present") hashedMedia += 1;
   }
@@ -234,12 +248,12 @@ export async function auditWechatCapacity(sourceRoot: string, options: WechatBun
   const counts = new Map<"present" | "missing" | "needs_review" | "invalid" | "hash_changed" | "deferred_by_limit", number>();
   for (const ref of loaded.bundle.mediaRefs) counts.set(ref.availability, (counts.get(ref.availability) ?? 0) + 1);
   const markdownFileCount = loaded.snapshot.files.filter((file) => file.kind === "markdown").length;
-  const jpegFileCount = loaded.snapshot.files.filter((file) => file.kind === "jpeg").length;
+  const imageFileCount = loaded.snapshot.files.filter((file) => file.kind === "image").length;
   return {
     fileCount: loaded.snapshot.fileCount,
     markdownFileCount,
-    jpegFileCount,
-    otherFileCount: loaded.snapshot.fileCount - markdownFileCount - jpegFileCount,
+    imageFileCount,
+    otherFileCount: loaded.snapshot.fileCount - markdownFileCount - imageFileCount,
     availableMessageCount: loaded.availableMessageCount,
     selectedMessageCount: loaded.selectedMessageCount,
     availableMediaRefCount: loaded.availableMediaRefCount,
