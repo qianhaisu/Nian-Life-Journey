@@ -220,10 +220,29 @@ function pickSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLo
  *
  * 播放顺序仍然是时间顺序（那是一段回忆该有的样子），只有**起点**挪到最好的一张。
  */
-function coverIndexOf(picked: readonly MediaRef[], topics: PhotoTopicLookup): number {
+function coverIndexOf(
+  picked: readonly MediaRef[],
+  topics: PhotoTopicLookup,
+  preferRecent = false,
+): number {
   const better = byValue(topics);
-  let best = 0;
-  for (let i = 1; i < picked.length; i += 1) {
+  // 跨时间的主题只在**靠后那一段**里挑封面。
+  //
+  // 为什么不能单纯取价值分最高的：2026-09-17 改成"取最高分"之后，「睡着的样子」的封面
+  // 从出生当天的新生儿换成了……另一张新生儿。原因在价值分自己的口径里——
+  // 它奖励「孩子是主体且脸看得清、构图完整、光线正常」，而新生儿特写恰好满分：
+  // 脸占满画面、睡着不动所以不糊。一岁半的孩子睡在小床另一头，永远比不过。
+  // 于是一个跨越一生的主题，封面必然落在最早那几周，Teddy 说的
+  // 「都是特别小的时候拍的，没有近期的」就一直修不掉。
+  //
+  // 所以跨时间主题把候选限制在后 40%，再在里面取分最高的——**仍然是挑最好的一张，
+  // 只是先把"必须是近期的"这条当作硬条件**。播放顺序不受影响，还是从头按时间走。
+  // `ceil` 不是 `floor`：12 张时 floor(7.2)=7，窗口是后 5 张（41.7%），而第 7 张在一个
+  // 跨越一生的主题里往往还是最早那一段的照片，它的价值分又最高，于是封面照样落回新生儿。
+  // ceil(7.2)=8 才是真的"后 40%"。差一个下标，这条规则就整个不生效。
+  const from = preferRecent ? Math.min(picked.length - 1, Math.ceil(picked.length * 0.6)) : 0;
+  let best = from;
+  for (let i = from + 1; i < picked.length; i += 1) {
     if (better(picked[i], picked[best]) < 0) best = i;
   }
   return best;
@@ -383,7 +402,7 @@ function buildTopicMemory(input: {
       // 一个主题横跨很多个月，没有单一的去处——与其给一个「翻到 2026 年」这种对不上的链接，
       // 不如不给（原则八：标签必须跟着去处走）。
       slides: picked.map((media) => ({ key: `topic:${theme.key}|${media.id}`, media })),
-      coverIndex: coverIndexOf(picked, topics),
+      coverIndex: coverIndexOf(picked, topics, true), // 跨时间主题：封面必须是近期的
       durationSeconds: picked.length * SLIDE_SECONDS,
       mood: mood.mood,
       moodReason: mood.reason,
@@ -467,7 +486,7 @@ function buildSeasonMemory(input: {
     href,
     linkLabel,
     slides: picked.map((media) => ({ key: `${key}|${media.id}`, media })),
-    coverIndex: coverIndexOf(picked, topics),
+    coverIndex: coverIndexOf(picked, topics, true), // 同上，季节也是跨天的
     durationSeconds: picked.length * SLIDE_SECONDS,
     mood: mood.mood,
     moodReason: mood.reason,

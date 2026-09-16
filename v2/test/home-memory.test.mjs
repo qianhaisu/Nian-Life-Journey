@@ -351,6 +351,29 @@ test("封面取价值分最高的那一张，不是时间上最早的那一张",
   assert.deepEqual(times, [...times].sort(), "播放顺序仍然是时间顺序");
 });
 
+test("跨时间主题的封面来自靠后那一段——不能又是最小的时候", () => {
+  // 2026-09-17：把封面改成"取价值分最高的一张"之后，「睡着的样子」的封面
+  // 从出生当天的新生儿换成了**另一张新生儿**。价值分的口径奖励「脸看得清、构图完整」，
+  // 而新生儿特写恰好满分，所以跨越一生的主题里分最高的永远在最早那几周。
+  // 这个夹具照着那个形状写：最早那一段分最高，封面仍然必须落在靠后那一段。
+  const days = ["2025-02-04", "2025-03-11", "2025-04-08", "2025-05-13",
+    "2026-06-02", "2026-07-07", "2026-08-11", "2026-09-01"];
+  const months = [
+    monthOf("2025-02", days.slice(0, 4).map((d) => ({ day: d, photos: moments(`c${d}`, d, 3) }))),
+    monthOf("2026-06", days.slice(4).map((d) => ({ day: d, photos: moments(`c${d}`, d, 3) }))),
+  ];
+  const { memories } = selectHomeMemories(archiveOf(months), (id) => ({
+    topic: "睡觉", water: false, confidence: 0.95,
+    value: id.startsWith("c2025") ? 0.99 : 0.75, // 最早那一段分最高
+  }));
+  const sleep = memories.find((m) => m.title === "睡着的样子");
+  assert.ok(sleep, "应当有一段睡觉的回忆");
+  const coverYear = sleep.slides[sleep.coverIndex].media.takenAt.slice(0, 4);
+  assert.equal(coverYear, "2026", `封面不该来自最早那一段，实得 ${coverYear}`);
+  const times = sleep.slides.map((s) => s.media.takenAt);
+  assert.deepEqual(times, [...times].sort(), "播放顺序仍然是时间顺序");
+});
+
 test("空泳池不算「玩水的日子」——画面里得真的有这个孩子", () => {
   // 2026-09-17 查账本：45 张判为泳池的照片里 **21 张根本没有孩子**——酒店空泳池、
   // 只有水面、只有泳圈玩具，而它们的 value 照样 ≥ 0.7。价值分没兜住这一条，
