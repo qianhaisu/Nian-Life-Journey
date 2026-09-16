@@ -1,29 +1,36 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { HabitShownReporter } from "@/components/habit-shown-reporter";
 
-// 首页左栏下方那张轻便签：「这几天的提醒事项」（2026-09-14 用户：只写「这几天」读不出这块是什么）。2026-09-13 版式修复把它从一条通栏的色块收成一小块字——
-// 没有背景、没有大圆角、没有阴影，也没有右侧那个独立的「查看详情」按钮；整条自己就是展开入口，
-// 命中区域仍然 ≥44px，键盘可用（`<details>`/`<summary>` 原生行为）。
+// 首页第二部分：「每周提醒」（用户 2026-09-16 第 4 条：所有可见标题与可访问名称统一用这四个字，
+// 不再出现「给爸爸妈妈的每周提醒」「这几天的提醒事项」这些旧名字）。
 //
-// 原来那张完整的「近期待办」清单没有删：它仍然是 components/upcoming-tasks.tsx，在别处照常用。
+// 内容口径是「过去 7 天微信里提到的、仍需办理的事」，由 lib/home-reminder-window.ts 判定，
+// 这个组件**不自己筛**——它只负责把数据轨给的那几条摆出来，以及记住家人在这台设备上勾了哪几条。
 //
-// 这里的规矩来自共同规格第 6 节，每一条都是「页面会说错的一句话」：
+// ─────────────────────────────────────────────────────────────────────────────
+// 勾选：只存在这台设备上，而且只存 id
+// ─────────────────────────────────────────────────────────────────────────────
 //
-//   读不出来 ≠ 没有待办。数据轨说不可用（材料为空 / 没提取完 / 读失败）时，这一整块不渲染，
-//   绝不写「全部完成」「暂无待办」。判断在 app/page.tsx，那里三种「没有」分得清清楚楚。
+// 用户 2026-09-16 第 5 条要求真正可操作的复选框，并且明确了本轮的保存范围：
+// 「当前浏览器本地保存，刷新和重新打开后仍保留；不承诺跨设备同步。」
 //
-//   退场 ≠ 完成。首页只展示还有效的那几条；一条过期的临时采购是被移出首页，不是被划掉。
-//   所以这里没有删除线：完成状态由数据轨给 statusText，页面不自己按文字关键词判断。
+// 几条容易写错的，逐条写死在代码里：
 //
-//   时间不猜。没有期限的写「时间待确认」，不生成一个日期。
+//   · **键用稳定的事项 id + 档案标识**，不是数组下标、不是标题文字。下标会在列表变化时串位，
+//     标题会在数据轨改写文案时丢失勾选。
+//   · **本地存储里只放 id**，不放标题、不放任何聊天原文（任务书：「不要把聊天原文写入本地存储」）。
+//   · **首次加载不写库**。读是在 useEffect 里做的（SSR 没有 localStorage，直接读会 hydration 不一致），
+//     而且**永远不会在挂载时写一次空状态**——那会把已有的勾选覆盖成全未选，正是任务书点名要避免的。
+//   · localStorage 不可用（隐私模式、禁用站点数据）时整条链路静默降级：勾选仍然能点，只是不持久。
 //
-//   详情里保留的是已认可的来源摘要：谁提的、什么语气、哪天记下的、那句经审核的话，以及回到
-//   来源那一天的链接。技术元数据和未审核原文不出现。
+//   · 这份勾选是**家人手动勾的**，和微信记录推导出的 done / cancelled 是两回事，
+//     两者在代码里从不互相写入。勾一条从不伪造「微信里确认完成」的证据（任务书原话）。
 export type HomeReminderSource = {
-  // 「提出」「完成」「改期」「取消」——同一条事项的不同依据分行，不合成一句。
   kindLabel: string;
   roleText: string;
-  // 未确认的来源人物照实写，并且不做成人名的样子（upcoming-tasks.tsx 里同一条规矩）。
   roleUnconfirmed?: boolean;
   toneLabel: string;
   recordedOn: string;
@@ -35,84 +42,160 @@ export type HomeReminderSource = {
 export type HomeReminder = {
   id: string;
   title: string;
-  // 「9 月 15 日」「时间待确认」这类由数据轨给出的状态文字；页面不改写。
   whenText: string;
   whenDay?: string;
   ageText?: string;
-  // 「待确认」「已改期」等状态词，没有就不显示。
   statusLabel?: string;
   note?: string;
   sources: HomeReminderSource[];
 };
 
+/** 存储键的前缀。带版本号，将来格式变了可以换一版而不误读旧值。 */
+const STORAGE_PREFIX = "nianlife:weekly-checked:v1";
+
+const storageKey = (scope: string) => `${STORAGE_PREFIX}:${scope}`;
+
+/** 读已勾选的 id。任何异常都当作"没有勾过"，绝不因为存储坏了把页面打掉。 */
+function readChecked(scope: string): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(storageKey(scope));
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    // 只接受字符串数组。存进去的从来只有 id，读出别的形状就是坏数据，按空处理。
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((value): value is string => typeof value === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeChecked(scope: string, ids: Set<string>): void {
+  try {
+    window.localStorage.setItem(storageKey(scope), JSON.stringify([...ids]));
+  } catch {
+    // 存不下就只在这一次会话里生效。不提示、不报错——这不是家人需要处理的事。
+  }
+}
+
 function SourceRow({ source }: { source: HomeReminderSource }) {
-  return <li className="home-note-source">
-    <p className="home-note-source-head">
-      <span className="home-note-kind">{source.kindLabel}</span>
-      <span className={source.roleUnconfirmed ? "home-note-role home-note-role--unconfirmed" : "home-note-role"}>{source.roleText}</span>
+  return <li className="weekly-source">
+    <p className="weekly-source-head">
+      <span className="weekly-source-kind">{source.kindLabel}</span>
+      <span className={source.roleUnconfirmed ? "weekly-source-role weekly-source-role--unconfirmed" : "weekly-source-role"}>{source.roleText}</span>
       <span>{source.toneLabel}</span>
       <span>记录于 <time dateTime={source.recordedOn}>{source.recordedOnLabel}</time></span>
     </p>
-    <p className="home-note-summary">{source.summary}</p>
-    {source.link ? <p className="home-note-link"><Link href={source.link.href}>{source.link.label} <span aria-hidden="true">↗</span></Link></p> : null}
+    <p className="weekly-source-summary">{source.summary}</p>
+    {source.link ? <p className="weekly-source-link"><Link href={source.link.href}>{source.link.label} <span aria-hidden="true">↗</span></Link></p> : null}
   </li>;
 }
 
-// 一条便签的可见行：不管有没有能展开的内容，这一行都长一样。抽出来是因为下面两种壳
-// （<details><summary> 和普通 <p>）要包住同一行文字。
-function NoteLine({ reminder }: { reminder: HomeReminder }) {
-  return <>
-    {reminder.title}
-    <span className="home-note-when">
-      {" · "}
-      {reminder.whenDay ? <time dateTime={reminder.whenDay}>{reminder.whenText}</time> : reminder.whenText}
-      {reminder.ageText ? ` · ${reminder.ageText}` : null}
-    </span>
-    {reminder.statusLabel ? <span className="home-note-status">{" · "}{reminder.statusLabel}</span> : null}
-  </>;
-}
-
-// 一条便签：一行「事情 + 时间/必要状态」，确有内容可展开才是 <details>；没有就是普通一行。
-//
-// PAGE-0915-FULL-REMEDIATION-R1 A2：`.home-note > summary::after` 给每一个 <summary> 画一个
-// "＋"——这曾经是无条件的，`note` 和 `sources` 都为空时，这个"＋"点开只有一个空的展开层，
-// 对读的人来说是一个不会做任何事的按钮。展开控件只在真有内容时才出现；没有就画成不带
-// "＋"、不可点的普通一行，可见文字不变。
-function Note({ reminder, habitId }: { reminder: HomeReminder; habitId?: string }) {
+/**
+ * 一条提醒。
+ *
+ * 结构上刻意分成**两个互不重叠的交互**（任务书第 5 条：「点击复选框或事项标签切换状态；
+ * 查看来源使用独立交互，不能同时触发勾选」）：
+ *
+ *   1. `<input type="checkbox">` + `<label for>` —— 勾选。用原生控件而不是 div+onClick，
+ *      键盘（空格）、读屏（"复选框 已勾选"）、移动端辅助功能全部免费拿到且行为正确。
+ *   2. `<details>` —— 查看来源。它是 label 的**兄弟**，不在 label 里面，所以点它不会连带勾选。
+ */
+function Row({ reminder, checked, onToggle, habitId }: {
+  reminder: HomeReminder;
+  checked: boolean;
+  onToggle: (id: string) => void;
+  habitId?: string;
+}) {
+  const inputId = `weekly-${reminder.id}`;
   const hasDetail = Boolean(reminder.note) || reminder.sources.length > 0;
-  if (!hasDetail) return <p className="home-note home-note-plain"><NoteLine reminder={reminder} /></p>;
-  return <details className="home-note">
-    {/* data-habit-id 只出现在默认位上、且只出现在习惯类事项上（id 由数据轨的 habitShownIds 给定）。
-        折叠层里的那几条不带这个属性——「露出」数的是家人真的看见的那几天（§6.3）。 */}
-    <summary data-habit-id={habitId}><NoteLine reminder={reminder} /></summary>
-    <div className="home-note-detail">
-      {reminder.note ? <p>{reminder.note}</p> : null}
-      {reminder.sources.length > 0 ? <ul className="home-note-sources">
-        {reminder.sources.map((source) => <SourceRow key={`${reminder.id}-${source.kindLabel}-${source.recordedOn}`} source={source} />)}
-      </ul> : null}
+  return <li className={checked ? "weekly-item is-checked" : "weekly-item"}>
+    <div className="weekly-line">
+      <input
+        id={inputId}
+        type="checkbox"
+        className="weekly-check"
+        checked={checked}
+        onChange={() => onToggle(reminder.id)}
+        data-habit-id={habitId}
+      />
+      <label className="weekly-label" htmlFor={inputId}>
+        <span className="weekly-title">{reminder.title}</span>
+        <span className="weekly-when">
+          {" · "}
+          {reminder.whenDay ? <time dateTime={reminder.whenDay}>{reminder.whenText}</time> : reminder.whenText}
+          {reminder.ageText ? ` · ${reminder.ageText}` : null}
+        </span>
+        {reminder.statusLabel ? <span className="weekly-status">{" · "}{reminder.statusLabel}</span> : null}
+      </label>
     </div>
-  </details>;
+    {hasDetail ? <details className="weekly-detail">
+      <summary>查看来源</summary>
+      <div>
+        {reminder.note ? <p className="weekly-note">{reminder.note}</p> : null}
+        {reminder.sources.length > 0 ? <ul className="weekly-sources">
+          {reminder.sources.map((source) => <SourceRow key={`${reminder.id}-${source.kindLabel}-${source.recordedOn}`} source={source} />)}
+        </ul> : null}
+      </div>
+    </details> : null}
+  </li>;
 }
 
-export function HomeReminders({ reminders, more = [], habitIds = [] }: { reminders: HomeReminder[]; more?: HomeReminder[]; habitIds?: string[] }) {
-  // 一条都没有 → 整块收起。这是「没有有效提醒」的呈现，不是「全部完成」的说法。
-  if (reminders.length === 0 && more.length === 0) return null;
-  // 默认一条，确有需要最多两条（共同规格 §6.6）。
+/**
+ * 「每周提醒」整块。
+ *
+ * **标题总是画出来**，即使这一周一条都没有——任务书：「确实没有事项时，『每周提醒』标题下面留白。」
+ * 留白是一句真话（这一周没人在微信里提起要办的事），不是一块空卡片，也不写「全部完成」。
+ *
+ * 但「真的没有」和「读不出来」是两回事：读不出来时 **app/page.tsx 根本不渲染这个组件**，
+ * 因为那种情况下连"这一周没有事"都不能说（lib/home-feed.ts 的三种 unavailable）。
+ */
+export function HomeReminders({ reminders, more = [], habitIds = [], storageScope }: {
+  reminders: HomeReminder[];
+  more?: HomeReminder[];
+  habitIds?: string[];
+  /** 档案标识，进存储键，避免不同档案/环境的勾选互相串（任务书第 5 条）。 */
+  storageScope: string;
+}) {
+  const [checked, setChecked] = useState<Set<string>>(() => new Set());
+  // 挂载后才读：SSR 没有 localStorage，初次渲染必须和服务端一致，否则 hydration 不匹配。
+  // 这里**只读不写**——挂载时写一次会把已有勾选覆盖成空。
+  useEffect(() => { setChecked(readChecked(storageScope)); }, [storageScope]);
+
+  function toggle(id: string) {
+    setChecked((was) => {
+      const next = new Set(was);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      writeChecked(storageScope, next);
+      return next;
+    });
+  }
+
   const shown = reminders.slice(0, 2);
   const habits = new Set(habitIds);
-  // 实际画在默认位上的习惯类事项，才是可能被上报的那几条。
   const reportable = shown.map((reminder) => reminder.id).filter((id) => habits.has(id));
-  return <section className="home-notes" aria-label="这几天的提醒事项">
-    <p className="home-notes-label">这几天的提醒事项</p>
-    {shown.map((reminder) => <Note key={reminder.id} reminder={reminder} habitId={habits.has(reminder.id) ? reminder.id : undefined} />)}
-    {/* 超出两条的**有效**事项收在这里，默认布局不膨胀，但一条都不会因为放不下而消失（§6.6）。
-        标题不写数字：家人读的页面上不出现计数式描述（原则三）。过期的不在这里——它们已经退场，
-        不从折叠层再回到首页（页面侧的过滤在 app/page.tsx）。 */}
-    {more.length > 0 ? <details className="home-notes-more">
-      <summary>还记着的其他事</summary>
-      <div>{more.map((reminder) => <Note key={reminder.id} reminder={reminder} />)}</div>
+
+  return <section className="weekly" aria-labelledby="weekly-heading">
+    <h2 className="weekly-heading" id="weekly-heading">每周提醒</h2>
+    {shown.length > 0 ? <ul className="weekly-list">
+      {shown.map((reminder) => (
+        <Row
+          key={reminder.id}
+          reminder={reminder}
+          checked={checked.has(reminder.id)}
+          onToggle={toggle}
+          habitId={habits.has(reminder.id) ? reminder.id : undefined}
+        />
+      ))}
+    </ul> : null}
+    {/* 超出默认位的**本周**事项收在这里，一条都不会因为放不下而消失。标题不写数字（原则三）。 */}
+    {more.length > 0 ? <details className="weekly-more">
+      <summary>本周还记着的其他事</summary>
+      <ul className="weekly-list">
+        {more.map((reminder) => (
+          <Row key={reminder.id} reminder={reminder} checked={checked.has(reminder.id)} onToggle={toggle} />
+        ))}
+      </ul>
     </details> : null}
-    {/* 上报由浏览器在「真的进了视口 + 页面在前台」之后发起，不在服务端渲染时记。 */}
     {reportable.length > 0 ? <HabitShownReporter ids={reportable} /> : null}
   </section>;
 }

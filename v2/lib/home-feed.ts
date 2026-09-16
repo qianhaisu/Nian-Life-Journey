@@ -29,6 +29,7 @@ import { recentWindowStart } from "@/lib/home-recent-pick";
 import type { UpcomingFeed, UpcomingSources } from "@/lib/upcoming";
 import type { UpcomingItem, UpcomingWhen } from "@/lib/upcoming-contract";
 import { capHabitByShownDays, classifyFreshness, freshnessOf, isImportantItem, NO_HABIT_DISPLAY_LOG, type HabitDisplayLog } from "@/lib/upcoming-freshness";
+import { reminderInWindow } from "@/lib/home-reminder-window";
 import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 /** 契约版本。页面轨按这个字符串确认自己接的是哪一版；只做兼容新增时递增小版本号。 */
@@ -385,11 +386,13 @@ export type HomeRetiredReminder = {
    */
   status: UpcomingItem["status"];
   /**
-   * 为什么退场，两种，别混：
+   * 为什么退场，三种，别混：
    * - `expired`：日子过了，或无期限事项过了新鲜期。
    * - `habit_capped`：同一件习惯关注已经露出过两个不同日期了（§6.3）。**它没有过期。**
+   * - `out_of_window`：最近一次被提起早于 7 天窗口，或来源不是微信（2026-09-16）。
+   *   **它既没过期也没完成**，只是不属于"这一周"——完整清单里照常在。
    */
-  kind: "expired" | "habit_capped";
+  kind: "expired" | "habit_capped" | "out_of_window";
 };
 
 /**
@@ -1126,8 +1129,32 @@ export function buildReminders(
   const retired: HomeRetiredReminder[] = all
     .filter((reminder) => reminder.state === "expired")
     .map((reminder) => ({ id: reminder.id, title: reminder.title, reason: reminder.reason, status: reminder.item.status, kind: "expired" as const }));
-  const showable = all.filter((reminder) =>
+  // 「每周提醒」= 过去 7 天微信里提到的、仍需办理的事（用户 2026-09-16 裁定：严格 7 天）。
+  //
+  // 两道闸门是分开的，顺序也不能换：
+  //   1. `reminderStateOf` 先判**还需不需要办**（done/cancelled/superseded/过期都在这里出局）；
+  //   2. `reminderInWindow` 再判**是不是这 7 天里被提起的**，依据是最近一次提及（不是首次提出），
+  //      来源必须是微信里有人说的（档案核对提醒不算）。见 lib/home-reminder-window.ts。
+  //
+  // 落在窗口外的**不是过期、更不是完成**：它们只是不属于"本周"，在 /events 的完整待办清单里
+  // 一条不少（components/upcoming-tasks.tsx）。所以它们进 retired 时带的是 out_of_window，
+  // 和 expired 分开记——两者混成一句，就是把"这周没人再提"说成"这件事过去了"。
+  const stillOpen = all.filter((reminder) =>
     reminder.state === "active" || reminder.state === "needs_confirmation" || reminder.state === "tentative");
+  const showable: HomeReminder[] = [];
+  for (const reminder of stillOpen) {
+    const verdict = reminderInWindow(reminder.item, reminder.provenance, today);
+    if (verdict.inWindow) showable.push(reminder);
+    else {
+      retired.push({
+        id: reminder.id,
+        title: reminder.title,
+        reason: verdict.reason,
+        status: reminder.item.status,
+        kind: "out_of_window",
+      });
+    }
+  }
   const rank = (reminder: HomeReminder) => {
     if (reminder.important && reminder.state === "needs_confirmation") return 0;
     if (reminder.state === "active") return 1;
@@ -1161,7 +1188,16 @@ export function buildReminders(
   const limit = displayable.some((reminder) => reminder.important) ? REMINDERS_MAX_SHOWN : REMINDERS_DEFAULT_SHOWN;
   const shown = displayable.slice(0, limit);
   const shownIds = new Set(shown.map((reminder) => reminder.id));
-  const more = all.filter((reminder) => !shownIds.has(reminder.id));
+  // `more` 只装**本周仍需办理、但没排进默认位**的那几条。
+  //
+  // 2026-09-16 修：这里原来是 `all.filter(不在 shown 里)`，也就是"其余全部"。改版之后那是个洞——
+  // 落在 7 天窗口外的事项被 showable 挡住了默认位，却从 `more` 这个门原样回到首页。
+  // 本地实测（接生产 RDS）：默认位 0 条、`本周还记着的其他事` 里 4 条，全部是 8 月提出的旧事，
+  // 于是「每周提醒」下面挂着的其实是一份旧账——正是这一版要解决的问题。
+  //
+  // 过期的、超窗口的、习惯露出到顶的，全都已经在 `retired` 里逐条记着原因，一条都没丢；
+  // 完整历史待办由 components/upcoming-tasks.tsx 承载。首页只说这一周。
+  const more = displayable.filter((reminder) => !shownIds.has(reminder.id));
   // 只有真的进了默认位、且本身是习惯类的，才进这一组。
   const habitShownIds = shown
     .filter((reminder) => classifyFreshness(reminder.item) === "habit")

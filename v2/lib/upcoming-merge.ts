@@ -6,6 +6,7 @@
 // is the thin I/O layer over this file.
 import { createHash } from "node:crypto";
 import {
+  lastMentionFrom,
   statusNeedsEvidence,
   type UpcomingChange,
   type UpcomingCoverage,
@@ -205,6 +206,9 @@ export function upcomingFeedFrom({ runs, records, includePrivate = false }: Feed
       id: record.id, title: record.title, note: record.note, when: record.when, status: record.status,
       evidence: record.evidence, statusNote: record.statusNote, statusEvidence: record.statusEvidence,
       supersedes: record.supersedes?.length ? record.supersedes : undefined,
+      // 「最近一次又被提起」，给首页 7 天窗口用。规则在契约文件里（lastMentionFrom），
+      // 这里不另写一套——两份实现迟早会对「哪种变更算一次提及」产生分歧。
+      lastMentionedOn: lastMentionFrom(record.changes),
     }))),
     coverage,
     unreviewed: visible.filter((record) => record.reviewDecision === "needs_human_review").length,

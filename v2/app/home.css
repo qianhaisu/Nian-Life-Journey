@@ -1,220 +1,243 @@
-/* 首页（2026-09-13 定稿实现）。作用域只在 .home-v2 里，其他页面的版式不受影响。
+/* 首页（2026-09-16 改版）。整页只有两块：一段回忆，和每周提醒。
 
-   基准是本机那份唯一已确认稿 nianlife-home-v2.html（SHA-256 9a046b3b…f755cc），以及用户在它之上
-   追加的一条：删掉最底部的月份与「全部记忆」链接——它们和顶部的「记忆」是同一个入口。
-   稿子里的「首页设计预览」字样、假页面切换、写死的日期年龄和 data URL 照片都不进产品。
+   作用域：除了播放器和 .visually-hidden，所有规则都收在 .home-v2 里，其他页面的版式与字体
+   一个像素都不变。播放器（.memory-player）由 createPortal 挂到 <body> 上，**不在 .home-v2 里面**，
+   所以它的规则必须写在顶层——这不是疏忽，是 portal 的必然结果。
 
-   与稿子的差别，都是为了接上真站而不是为了好看：
-   - 顶部导航用站点已有的 SiteHeader（真路由 首页/记忆/张年），不在首页另做一套。
-   - 版心左右边距跟 header-inner 对齐（min(1400px, 100% - 64px)，窄屏 16px），否则品牌和正文
-     会差出四十几个像素；hero 自己再收到 1180px，稿子里照片与文字的比例才保持得住。
-   - 尺寸用视口媒体查询而不是容器查询：这一块本来就铺满视口，断点仍然是稿子的 1180 / 710 / 430。 */
+   字体（用户 2026-09-16 第 3 条）：
+   - 中文标题与短叙事配文 —— 霞鹜文楷常规字重（自托管，见 app/fonts-wenkai.css）。
+     只用 400：中文楷体的层级来自字号、颜色和留白，不来自合成粗体。
+   - 提醒、控件、导航 —— 系统黑体（苹方 / 思源黑体 / 雅黑）。它们是"要读清楚的功能文字"，
+     楷体在小字号上辨识度不如黑体，这一条在手机上尤其明显。
+   - 不动品牌标题：.site-header 在 .home-v2 之外，「年 + Life is about a dream」原样保留。 */
 
 .home-v2 {
-  /* 2026-09-16 视觉验收：首页所有可点的字（读读这一天 / 换张照片 / 翻到某月 / 回忆浮现里的
-     故事链接）都是 --home-sage，实测对纸底 3.63:1，达不到 AA 正文 4.5。与站点级 --sage-ink
-     取同一支，色相不变，只压深明度：4.96:1。--home-muted 同理，4.39 → 4.95。 */
-  --home-sage: var(--sage-ink);
-  --home-sage-soft: #edf0e7;
-  --home-clay: #c2a88a;
-  --home-blue: #537b95;
-  --home-red: #b26450;
-  --home-peach: #f3e9df;
-  --home-ink: #433e38;
-  --home-muted: #716a60;
+  /* 拉丁与数字先被 Nunito 接住（它带 unicode-range），汉字落到文楷上。
+     这个顺序 2026-09-16 用真浏览器验过，别凭直觉改：页面加载时实际请求了
+     lxgwwenkai-regular-subset-117 / 118（正好是题签「他说了打开」那几个字所在的分片），
+     document.fonts 里 6 个文楷 face 状态是 loaded——**汉字确实走到了文楷这一层**。
+     中途我一度以为 next/font 生成的 `Nunito Fallback`（local("Arial")、不带 unicode-range）
+     会把汉字截住，于是把文楷提到最前面；那个判断是错的，已经改回来——提到最前面会顺带把
+     拉丁字母也从 Nunito 抢过去，而这里并不需要。
+     顺带记一条教训：**用字宽做字体探针对中文无效**，任何中文字体都是一字一 em，
+     量出来永远一样宽；要证明字体有没有生效，看 woff2 请求和 document.fonts，不看宽度。 */
+  --home-serif: var(--font-nunito, "Nunito"), "LXGW WenKai", "Songti SC", "Noto Serif SC", serif;
+  --home-sans: var(--font-nunito, "Nunito"), -apple-system, "PingFang SC", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  /* 实测对比度（对纸底 #F9F6F0）：ink 13.6:1，muted 5.4:1，accent 4.9:1，三项都过 AA 正文。 */
+  --home-ink: #282621;
+  --home-muted: #6B6860;
+  --home-accent: #A85D43;
+  --home-line: #E4DDD4;
   color: var(--home-ink);
-  font-size: 15px;
+  font-family: var(--home-sans);
+  font-size: 16px;
   line-height: 1.75;
 }
 
 .home-sheet {
-  width: min(1400px, calc(100% - 32px));
+  width: min(880px, calc(100% - 32px));
   margin-inline: auto;
-  padding: 22px 0 40px;
+  padding: clamp(20px, 4vw, 36px) 0 clamp(48px, 8vw, 72px);
 }
 
-/* ── 版心与两栏（2026-09-13 版式修复 HOME-RELAYOUT）────────────────────────
-   1440 × 900、100% 缩放下：版心 1200px 居中 = 左 336 + 间隔 48 + 右 816。
-   照片在右，约占版心三分之二；左边只留题签、阅读入口和一张轻便签。
-   窄屏回到单列，顺序就是 DOM 顺序：照片 → 日期 → 题签/入口 → 便签。 */
-.home-sheet {
-  width: min(1200px, calc(100% - 40px));
-  margin-inline: auto;
-  padding: clamp(20px, 3vw, 32px) 0 40px;
-}
-.home-spread {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 22px;
-}
-
-/* ── 左栏：今天 / 题签 / 读读这一天 ── */
-.home-headline { min-width: 0; }
-.home-today {
-  margin: 0 0 14px;
-  color: var(--home-muted);
-  font-size: 12px;
-  letter-spacing: .03em;
-}
-.home-today time { color: inherit; font-weight: 400; }
-/* 题签：这一页唯一的主标题。最多两行——超出的部分不改写事实，用省略号收住，
-   完整标题仍然在「读读这一天」后面的事件页里（版式卡一·3）。
-   2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT 曾降成画册题签（18–21px、常规字重），宽屏上读起来像
-   加载出了问题。2026-09-15 PAGE-0915-HOME-BALANCE 恢复上一版有分量的题签：clamp(30px, 2.5vw,
-   36px)、约 500 字重，宋体维持不变（先看照片、后读题签这条没变，只是字重回来了）。 */
-.home-title {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin: 0 0 14px;
-  font-family: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif;
-  font-size: clamp(30px, 2.5vw, 36px);
-  font-weight: 500;
+/* 这一页的问候，也是唯一的 h1。手机 28px 起，不做概念图里那种压满屏的巨号字。 */
+.home-greeting {
+  margin: 0 0 clamp(18px, 3vw, 26px);
+  font-family: var(--home-serif);
+  font-size: clamp(28px, 7.2vw, 38px);
+  font-weight: 400;
   line-height: 1.35;
   letter-spacing: 0;
 }
-/* PAGE-0915-FULL-REMEDIATION-R1 A1：题签自己的日子。跟上面 .home-today（今天/现在几岁）刻意用
-   不一样的字号和位置——挨着题签、不挨着「今天」，读的人不会把这段旧故事看成今天发生的事。 */
-.home-story-when {
-  margin: 0 0 16px;
-  color: var(--home-muted);
-  font-size: 14px;
-}
-.home-story-when time { color: inherit; font-weight: 400; }
-.home-read {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 44px;
-  padding: 8px 0;
-  color: var(--home-sage);
-  font-size: 14px;
-}
-.home-read:hover { color: #5d6e53; }
 
-/* ── 右栏：照片。第一眼的东西 ──────────────────────────────────────────────
-   尺寸裁决（版式卡 e66c4dd）：**宽度优先，按原图比例自然高度**。不设固定比例、不设高度上下限。
-   816px 宽时竖照约 1088px 高、横照约 612px、宽横约 460px，三种都可接受；竖照允许正常纵向滚动
-   看完整张，不裁、不拉伸、也不为了塞进一屏缩回小图。
-   因此这里没有 aspect-ratio、没有 object-fit：`<img>` 就按自己的比例撑开，一个像素都没被切掉。 */
-.home-figure { margin: 0; min-width: 0; }
-.home-photo {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
+/* ── 一、一段回忆 ───────────────────────────────────────────────────────────── */
+
+.home-memory { margin: 0 0 clamp(44px, 7vw, 64px); }
+
+.memory-stage { position: relative; }
+
+/* 照片舞台。竖照占绝大多数（生产实测约 85%），所以按 4:5 立起来，并且给一个视口高度的上限，
+   保证题签和日期在手机第一屏里还读得到——2026-09-16 那次「题签被顶到底栏下面」就是这条没做。 */
+.memory-frames {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  max-height: min(72svh, 620px);
+  overflow: hidden;
   border-radius: 20px;
   background: var(--paper-dark);
-  overflow: hidden;
-  /* 2026-09-14：点照片进入这张照片所属的那一天的故事，不再是放大。 */
-  cursor: pointer;
-  line-height: 0;
 }
-.home-photo img {
-  display: block;
+.memory-frames img {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
-  /* PAGE-0915-FULL-REMEDIATION-R1 A3：换图时 img 重新挂载（home-lead.tsx 的 key），这条过渡负责
-     让它从「还没画出来」淡入到「画出来了」，而不是直接从 0 跳到 1 那种一闪。背景色
-     （.home-photo 的 --paper-dark）本身就是稳定的低成本占位，加载慢的时候看到的是这块颜色，
-     不是空白，也不会一直停在旧照片上。 */
-  transition: opacity 180ms ease-out;
+  height: 100%;
+  /* cover 而不是 contain：这是一块沉浸的画面，不是缩略图，留黑边会把它变成一个播放器控件。
+     object-position 偏上，因为人脸通常在画面上半部（和 .photo-strip 的既有约定一致）。 */
+  object-fit: cover;
+  object-position: 50% 38%;
+  opacity: 0;
+  transition: opacity 800ms ease-in-out;
 }
-.home-caption {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  /* 2026-09-15 起照片下方不再印日期，只剩「换张照片」，仍靠右。 */
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 10px 2px 0;
-  color: var(--home-muted);
+.memory-frame.is-current { opacity: 1; }
+
+/* 只有压字的那一条给局部遮罩，照片本身不加任何全局滤镜（任务书三：照片保持原色）。 */
+.memory-scrim {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 46%;
+  background: linear-gradient(to top, rgb(20 18 16 / .62), rgb(20 18 16 / .28) 46%, transparent);
+  pointer-events: none;
+}
+
+/* 播放入口：只有图标，没有「配乐播放」四个字（用户 2026-09-16 第 2 条）。
+   56px 的圆，远超 44px 的触达下限；焦点环走站点全局那一支。 */
+/* 播放键放右上角，**不是画面正中**。
+   2026-09-16 真机截图（390×844）实测：居中时这个 56px 的圆正好压在张年的嘴和下巴上。
+   「照片不遮脸」是这一轮验收的硬条件，而人脸在这份档案里几乎总是落在画面中上部
+   （站里既有的 object-position: 50% 38% 就是按这个规律定的），所以正中是最不该放东西的位置。
+   右上角是设计参考图里那个控件的位置，也是这类竖构图里最空的一块。 */
+.memory-play {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / .92);
+  color: var(--home-ink);
+  box-shadow: 0 6px 20px rgb(20 18 16 / .28);
+  transition: transform 200ms var(--ease-out), background-color 200ms var(--ease-out);
+}
+.memory-play svg { width: 26px; height: 26px; margin-left: 3px; /* 三角形视觉居中 */ }
+@media (hover: hover) { .memory-play:hover { transform: scale(1.06); background: #fff; } }
+.memory-play:active { transform: scale(.96); }
+
+.memory-caption-line {
+  position: absolute;
+  right: 20px;
+  bottom: 52px;
+  left: 20px;
+  margin: 0;
+  color: rgb(255 255 255 / .86);
   font-size: 13px;
+  letter-spacing: .02em;
 }
-.home-caption time { color: inherit; font-weight: 400; }
-.home-swap {
+.memory-caption-line time { color: inherit; font-weight: 400; }
+
+.memory-title {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  left: 20px;
+  margin: 0;
+  color: #fff;
+  font-family: var(--home-serif);
+  font-size: clamp(20px, 5.2vw, 26px);
+  font-weight: 400;
+  line-height: 1.4;
+  text-shadow: 0 1px 12px rgb(20 18 16 / .34);
+}
+
+/* 进度点：说明这一段有几个瞬间，也让人看出预览在动。不写数字（原则三）。 */
+.memory-dots { display: flex; gap: 5px; margin: 12px 2px 0; }
+.memory-dot { height: 2px; flex: 1; background: var(--home-line); border-radius: 2px; transition: background-color 300ms ease; }
+.memory-dot.is-on { background: var(--home-accent); }
+
+.memory-read { margin: 14px 0 0; }
+.memory-read a {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  color: var(--home-sage);
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-/* 引语（正文摘录已不在首页，这条留给将来仍会出现引语的地方）。 */
-.home-quote { color: var(--home-red); quotes: "「" "」"; }
-/* 标题里的强调片段。哪几个字、用哪一支，由 lib/title-emphasis.ts 的小词组规则决定（每题最多两段、
-   不超过一半），命中不了的标题就是默认文字色。
-   题签降到 18–21px 常规字重以后不再算「大字号」，门槛从 3:1 变成 4.5:1，所以三支颜色各压深一档
-   （同色相）：蓝 5.04、桃红 4.82、鼠尾草绿 4.94，均对 #F9F6F0。字重只到 600，不再用 800 去抢照片。 */
-.home-emphasis { font-weight: 600; }
-.home-emphasis--blue { color: #4a6e86; }
-.home-emphasis--rose { color: #a35845; }
-.home-emphasis--sage { color: #5f7056; }
-
-/* ── 轻便签：这几天 ──────────────────────────────────────────────────────
-   不是通栏色条，也不是卡片：左栏下方、和题签同一条左对齐线、最大 300px 的一小块字。
-   没有背景、没有大圆角、没有阴影，也没有右侧那个独立的「查看详情」按钮——整条自己就是
-   展开入口，命中区域仍然 ≥44px（版式卡一·轻便签）。 */
-/* 2026-09-16 视觉验收 ②：便签从左栏退到整页最后（见 app/page.tsx）。它和 .home-recall 现在是
-   页面末尾并排的两块安静文字，所以宽度取同一个值——原来一条 300px、一条 640px，两条错位的横线
-   上下叠着。 */
-.home-notes {
-  max-width: 640px;
-  margin-top: clamp(24px, 3vw, 32px);
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border);
-}
-.home-notes-label {
-  margin: 0 0 10px;
-  color: var(--home-muted);
-  font-size: 12px;
-  letter-spacing: .1em;
-}
-.home-note + .home-note { margin-top: 4px; }
-.home-note > summary {
-  display: block;
-  min-height: 44px;
-  padding: 8px 0;
-  color: var(--home-ink);
+  color: var(--home-accent);
   font-size: 15px;
-  line-height: 1.65;
+}
+@media (hover: hover) { .memory-read a:hover { color: var(--home-ink); } }
+
+/* 降级：没有合格回忆时用已有的真实封面与真实文字，不画空框、不写「暂无」。 */
+.home-memory--single .memory-single-photo { display: block; border-radius: 20px; overflow: hidden; background: var(--paper-dark); }
+.home-memory--single .memory-single-photo img { display: block; width: 100%; height: auto; }
+.home-memory--single .memory-caption-line { position: static; margin: 12px 0 0; color: var(--home-muted); }
+.home-memory--single .memory-title { position: static; margin: 6px 0 0; color: var(--home-ink); text-shadow: none; }
+.home-nothing { max-width: 34em; margin: 24px 0 0; color: var(--home-muted); font-size: 16px; line-height: 1.95; }
+
+/* ── 二、每周提醒 ───────────────────────────────────────────────────────────── */
+
+.weekly { margin: 0; padding-top: clamp(24px, 4vw, 32px); border-top: 1px solid var(--home-line); }
+
+.weekly-heading {
+  margin: 0 0 14px;
+  font-family: var(--home-serif);
+  font-size: clamp(20px, 4.6vw, 23px);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.weekly-list { margin: 0; padding: 0; list-style: none; }
+.weekly-item + .weekly-item { margin-top: 2px; }
+
+/* 一行 = 复选框 + 标签。两者是一个整体的点击区；「查看来源」是它下面另一个独立控件。 */
+.weekly-line { display: flex; align-items: flex-start; gap: 12px; }
+
+/* 原生 checkbox，只放大并换成陶土色，不自绘——自绘控件在读屏和移动端辅助功能上从来不划算。
+   44px 的触达由 .weekly-label 的 min-height 一起撑起来（勾选框本身是 22px 的视觉尺寸）。 */
+.weekly-check {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  margin: 11px 0 0;
+  accent-color: var(--home-accent);
+}
+
+.weekly-label {
+  min-height: 44px;
+  padding: 10px 0;
+  color: var(--home-ink);
+  font-size: 16px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.weekly-title { font-size: 16px; }
+.weekly-when { color: var(--home-muted); font-size: 14px; }
+.weekly-when time { color: inherit; font-weight: 400; }
+.weekly-status { color: var(--home-accent); font-size: 14px; }
+
+/* 勾上：加删除线、把颜色压淡一档，但**仍然读得清**，而且**留在原位**——
+   立刻隐藏或跳走就没法取消勾选了（用户 2026-09-16 第 5 条）。 */
+.weekly-item.is-checked .weekly-title {
+  color: var(--home-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--home-muted);
+}
+.weekly-item.is-checked .weekly-when,
+.weekly-item.is-checked .weekly-status { color: #8a857c; }
+
+/* 查看来源：独立的折叠层，和勾选互不触发。 */
+.weekly-detail { margin: 0 0 4px 34px; }
+.weekly-detail > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--home-muted);
+  font-size: 13px;
   cursor: pointer;
   list-style: none;
 }
-.home-note > summary::-webkit-details-marker { display: none; }
-.home-note > summary:hover { color: var(--home-sage); }
-.home-note > summary:focus-visible { outline: 2px solid var(--home-sage); outline-offset: 3px; }
-/* PAGE-0915-FULL-REMEDIATION-R1 A2：没有可展开内容的一条，长得跟上面一模一样，只是没有可点的
-   "＋"、没有 hover 变色——它是一句话，不是一个（假装能展开的）控件。 */
-.home-note-plain { margin: 0; min-height: 44px; padding: 8px 0; color: var(--home-ink); font-size: 15px; line-height: 1.65; }
-.home-note-when { color: var(--home-muted); }
-.home-note-when time { color: inherit; font-weight: 400; }
-.home-note-status { color: #977051; }
-/* 展开提示：克制，但看得见。展开后内容自然增高，不塞进固定高度。 */
-.home-note > summary::after {
-  margin-left: 6px;
-  color: var(--home-sage);
-  content: "＋";
-  font-size: 11px;
-}
-.home-note[open] > summary::after { content: "－"; }
-.home-note-detail {
-  padding: 2px 0 10px;
-  color: var(--home-muted);
-  font-size: 13.5px;
-  line-height: 1.8;
-}
-.home-note-detail > p { margin: 0 0 8px; }
-.home-note-sources { margin: 0; padding: 0; list-style: none; }
-.home-note-source { padding-left: 9px; border-left: 2px solid var(--color-border); }
-.home-note-source + .home-note-source { margin-top: 10px; }
-.home-note-source-head {
+.weekly-detail > summary::-webkit-details-marker { display: none; }
+.weekly-detail > summary::after { margin-left: 6px; content: "＋"; font-size: 11px; }
+.weekly-detail[open] > summary::after { content: "－"; }
+.weekly-note { margin: 0 0 8px; color: var(--home-muted); font-size: 14px; line-height: 1.8; }
+.weekly-sources { margin: 0; padding: 0; list-style: none; }
+.weekly-source { padding-left: 10px; border-left: 2px solid var(--home-line); }
+.weekly-source + .weekly-source { margin-top: 10px; }
+.weekly-source-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -223,143 +246,154 @@
   color: var(--home-muted);
   font-size: 12.5px;
 }
-.home-note-source-head > * + *::before { margin-right: 7px; color: var(--color-border); content: "·"; }
-.home-note-kind { color: var(--home-sage); }
-.home-note-role { color: var(--home-sage); }
-.home-note-role--unconfirmed { color: var(--home-muted); font-style: italic; }
-.home-note-summary { margin: 3px 0 0; color: var(--home-ink); font-size: 13.5px; line-height: 1.7; }
-.home-note-link { margin: 2px 0 0; }
-.home-note-link a {
+.weekly-source-head > * + *::before { margin-right: 7px; color: var(--home-line); content: "·"; }
+.weekly-source-kind, .weekly-source-role { color: var(--home-accent); }
+.weekly-source-role--unconfirmed { color: var(--home-muted); font-style: italic; }
+.weekly-source-summary { margin: 3px 0 0; color: var(--home-ink); font-size: 14px; line-height: 1.7; }
+.weekly-source-link { margin: 2px 0 0; }
+.weekly-source-link a { display: inline-flex; align-items: center; min-height: 44px; color: var(--home-accent); font-size: 13px; }
+
+.weekly-more { margin-top: 8px; }
+.weekly-more > summary {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: var(--home-sage);
-  font-size: 12px;
-}
-/* 其余有效事项：一个轻量入口，不写数字（原则三）。 */
-.home-notes-more { margin-top: 6px; }
-.home-notes-more > summary {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--home-sage);
-  font-size: 12px;
+  color: var(--home-accent);
+  font-size: 14px;
   cursor: pointer;
   list-style: none;
 }
-.home-notes-more > summary::-webkit-details-marker { display: none; }
-.home-notes-more > summary::after { margin-left: 7px; content: "＋"; }
-.home-notes-more[open] > summary::after { content: "－"; }
+.weekly-more > summary::-webkit-details-marker { display: none; }
+.weekly-more > summary::after { margin-left: 7px; content: "＋"; }
+.weekly-more[open] > summary::after { content: "－"; }
 
-/* 材料不足时的真话：不画空照片框，也不说「暂无」。 */
-.home-nothing {
-  max-width: 34em;
-  margin: 28px 0 0;
-  color: var(--home-muted);
-  font-size: 15px;
-  line-height: 1.95;
+/* ── 沉浸播放器（portal 到 <body>，所以不在 .home-v2 作用域里）───────────────── */
+
+.memory-player {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  background: #14120f;
+  color: #fff;
+  font-family: var(--font-nunito, "Nunito"), -apple-system, "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  outline: none;
 }
 
-/* PAGE-0915-FULL-REMEDIATION-R1 D3：回忆浮现——一句安静的话，跟 .home-notes 平级但不挤进
-   home-spread 的居中计算，也不是又一块卡片。 */
-.home-recall {
-  max-width: 640px;
-  margin: 20px 0 0;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border);
-  color: var(--home-muted);
-  font-size: 15px;
-  line-height: 1.75;
+.memory-player-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: max(14px, env(safe-area-inset-top)) 16px 10px;
 }
-.home-recall-label { color: var(--home-ink); }
-.home-recall a { color: var(--home-sage); }
-.home-recall a:hover { color: #5d6e53; }
-.home-recall-when time { color: inherit; font-weight: 400; }
+.memory-player-heading { flex: 1; min-width: 0; text-align: center; }
+.memory-player-heading h2 {
+  margin: 0;
+  font-family: var(--font-nunito, "Nunito"), "LXGW WenKai", "Songti SC", serif;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.memory-player-heading p { margin: 2px 0 0; color: rgb(255 255 255 / .62); font-size: 13px; }
+.memory-player-heading time { color: inherit; font-weight: 400; }
 
-/* ── 桌面两栏（2026-09-14 PAGE-QUEUE-0914-HOME-LAYOUT，2026-09-15 PAGE-0915-HOME-BALANCE 调整聚合方式）
-   版心和顶部导航同宽（min(1400px, 100% - 64px)），照片右缘贴着导航右缘。左栏约 30%，照片栏约 67%。
+.memory-player-close, .memory-player-mute {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / .12);
+  color: #fff;
+  font-size: 15px;
+}
+.memory-player-close svg, .memory-player-mute svg { width: 22px; height: 22px; }
 
-   2026-09-15 之前：左栏用 `justify-content: space-between` 把「日期+题签+入口」推到顶、「这几天的
-   事」推到底对齐照片说明行，两块散在左栏的上下两个角落；竖照又按视口高度限高，宽屏上看起来像一堵
-   接近通高的墙。用户判断：目标是「聚集与平衡」——左栏四项应该是同一个视觉块，整体跟照片垂直居中；
-   竖照应该像挂在墙上的画，四周有呼吸感，不是墙本身。
+/* 画面：contain，不裁。首页预览为了构图用 cover，播放器里这是"在看照片"，不该切掉边角。 */
+.memory-player-stage { position: relative; flex: 1; min-height: 0; }
+.memory-player-stage img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 800ms ease-in-out;
+}
+.memory-player-frame.is-current { opacity: 1; }
 
-   现在：`.home-aside` 改成 `justify-content: center` + `gap`，日期/题签/入口和便签变成一个连续的
-   块，中间留白由 gap 给（不再是「贴顶」和「贴底对齐说明行」两条分开的规则），整块在照片的高度里
-   居中；`--home-caption-h` 因此不再用来做 padding-bottom，只留给 `.home-caption` 自己算高度。
-   竖照（含接近方形的照片）限高约 75dvh、给了像素上限，横照不受这条限制，仍按列宽自然出高——方向
-   由 components/home-lead.tsx 算好写成 `.home-figure--portrait/landscape/square` 类名，CSS 选不出
-   一张 <img> 自己的长宽比。 */
+.memory-player-caption {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  left: 24px;
+  margin: 0;
+  font-family: var(--font-nunito, "Nunito"), "LXGW WenKai", "Songti SC", serif;
+  font-size: clamp(18px, 4.6vw, 22px);
+  line-height: 1.5;
+  text-align: center;
+  text-shadow: 0 2px 16px rgb(0 0 0 / .62);
+}
+
+.memory-player-progress { display: flex; gap: 4px; padding: 0 16px; }
+.memory-bar { height: 2px; flex: 1; background: rgb(255 255 255 / .22); border-radius: 2px; transition: background-color 300ms ease; }
+.memory-bar.is-on { background: rgb(255 255 255 / .85); }
+
+.memory-player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 14px 16px max(16px, env(safe-area-inset-bottom));
+}
+.memory-player-controls button {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #fff;
+}
+.memory-player-controls button svg { width: 24px; height: 24px; }
+.memory-player-controls button:disabled { opacity: .3; }
+.memory-player-toggle { background: rgb(255 255 255 / .14) !important; width: 60px !important; height: 60px !important; }
+.memory-player-toggle svg { width: 28px; height: 28px; }
+
+/* ── 只给读屏的文字 ─────────────────────────────────────────────────────────── */
+/* 站里原本没有这个工具类（2026-09-16 grep 确认），所以在这里定义一次。
+   用 clip-path + 1px 盒子，而不是 display:none —— 后者读屏也读不到。 */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── 桌面 ──────────────────────────────────────────────────────────────────── */
 @media (min-width: 900px) {
-  .home-v2 { --home-caption-h: 54px; }
-  .home-sheet {
-    width: min(1400px, calc(100% - 64px));
-    padding-block: 28px 32px;
-  }
-  .home-spread {
-    grid-template-columns: minmax(250px, 30%) minmax(0, 1fr);
-    column-gap: clamp(32px, 3%, 48px);
-    row-gap: 0;
-    align-items: stretch;
-  }
-  /* 行号也要写死：照片在 DOM 里排在前面，只给它 grid-column: 2 的话，自动放置不会回头，
-     左栏会被推到第二行去（实测：题签 y=1286，掉到照片下面）。 */
-  /* 左栏现在只有「题签 + 日期 + 读读这一天」一块（便签 2026-09-16 退到页末），整块在照片高度里
-     居中。原来那条 clamp(56px,6vw,72px) 的 gap 是用来隔开题签和便签的，便签走了以后它会在左栏
-     中间留一个和照片一样高的洞，所以一起去掉。 */
-  .home-aside {
-    grid-column: 1;
-    grid-row: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-width: 0;
-  }
-  .home-figure {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
-    width: fit-content;
-    max-width: 100%;
-  }
-  .home-photo img {
-    width: auto;
-    max-width: 100%;
-  }
-  /* 竖照与近方形照片：约 75dvh 限高，给了 420px 的地板和 780px 的天花板，原比例不裁不拉伸。
-     横照（.home-figure--landscape）不套这条，继续用列宽撑满——列宽本身已经够窄，横照的自然高度
-     很少会超过这个上限，不用另设规则。 */
-  .home-figure--portrait .home-photo img,
-  .home-figure--square .home-photo img {
-    max-height: clamp(420px, 75dvh, 780px);
-  }
-  .home-caption { min-height: var(--home-caption-h); padding: 6px 4px 0; }
+  .home-sheet { width: min(980px, calc(100% - 64px)); }
+  /* 竖照在宽屏上不要撑满版心：一张 4:5 的照片铺到 980px 宽就成了一堵墙。 */
+  .memory-frames { max-width: 620px; margin-inline: auto; max-height: 68svh; }
+  .memory-dots, .memory-read { max-width: 620px; margin-inline: auto; }
+  .memory-read { text-align: right; }
 }
 
-/* 窄屏：单列，左右留白 20px（.home-sheet 的 100% - 40px）。顺序照片 → 日期 → 题签 → 提醒，
-   间距是自然的段落距，不做上下顶底。照片不裁：特别高的竖照限高、居中，留出往下读的余地。 */
-@media (max-width: 899px) {
-  .home-spread { gap: 14px; }
-  .home-photo {
-    width: fit-content;
-    max-width: 100%;
-    margin-inline: auto;
-  }
-  /* 2026-09-16 视觉验收（390×844 实测）：原来的 72svh 让照片吃掉 608px，题签被顶到 y=769，
-     而固定底栏 .bottom-nav 从 784 开始——题签压在底栏下面，它下面那行「日期 · 当时几岁」
-     整个掉出首屏。等于手机上第一眼只有一张照片和半行字：原则一（不点任何东西能说出张年
-     最近怎么样）和原则二（同时可读什么时候和当时几岁）在最该成立的地方不成立。
-     所以限高不再用百分比，改成「视口高度减去下面这段必须读到的字」：
-     题签两行 ~65 + 日期行 ~23 + 说明行 ~54 + 段距 ~38 + 底栏 60 + 余量 ~100 ≈ 340px。
-     百分比在小屏（667）上会重新压上去，这个减法不会。 */
-  .home-photo img {
-    width: auto;
-    max-width: 100%;
-    max-height: max(240px, calc(100vh - 340px));
-    max-height: max(240px, calc(100svh - 340px));
-  }
-  .home-notes { max-width: none; }
-  /* 题签是这一页唯一的主标题，手机上却只有 19px——比正文 16px 大三个像素，读起来仍然像
-     「还没加载完」。桌面在 0915 已经恢复到 30–36px，手机这条当时漏了。 */
-  .home-title { font-size: clamp(22px, 6.2vw, 27px); }
+/* ── 减少动态 ──────────────────────────────────────────────────────────────── */
+/* 全局那条 prefers-reduced-motion 已经把 transition 压到 0.01ms；这里额外把预览的自动轮播
+   交给 JS 停掉（components/home-memory.tsx 的 usePrefersReducedMotion），CSS 只负责去掉淡入淡出。 */
+@media (prefers-reduced-motion: reduce) {
+  .memory-frames img, .memory-player-stage img { transition: none; }
+  .memory-play, .memory-dot, .memory-bar { transition: none; }
 }

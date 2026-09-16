@@ -73,11 +73,18 @@ test("首页主照片是指向这一对绑定所属故事的链接，有说清�
   assert.doesNotMatch(html, /<button[^>]*class="home-photo"/);
 });
 
-test("首页便签的标签说清这块是什么：「这几天的提醒事项」（可见文字与区域名称一致）", async () => {
+// 2026-09-16 改版：这一块原本断言旧便签「这几天的提醒事项」，以及「没有事项时整块不画」。
+// 两条都被用户的第 4、5 条取代了——标题统一成「每周提醒」，而且**没有事项时标题照画、下面留白**
+// （留白是一句真话，整块消失会让人以为这周的提醒还没读出来）。详细断言在 home-reminders.test.mjs，
+// 这里只留一条最小的名称一致性检查，免得两个文件重复维护同一组断言。
+test("首页提醒区的可见标题与可访问名称一致：「每周提醒」", async () => {
   const { HomeReminders } = await import("../components/home-reminders.tsx");
-  const html = renderToStaticMarkup(React.createElement(HomeReminders, { reminders: [{ id: "r1", title: "合成提醒", whenText: "9 月 15 日", whenDay: "2026-09-15", sources: [] }] }));
-  assert.match(html, /<section class="home-notes" aria-label="这几天的提醒事项"><p class="home-notes-label">这几天的提醒事项<\/p>/);
-  assert.equal(renderToStaticMarkup(React.createElement(HomeReminders, { reminders: [] })), "", "没有有效提醒时整块不画，不写成「全部完成」");
+  const html = renderToStaticMarkup(React.createElement(HomeReminders, {
+    storageScope: "p1",
+    reminders: [{ id: "r1", title: "合成提醒", whenText: "9 月 15 日", whenDay: "2026-09-15", sources: [] }],
+  }));
+  assert.match(html, /aria-labelledby="weekly-heading"/);
+  assert.match(html, /<h2 class="weekly-heading" id="weekly-heading">每周提醒<\/h2>/);
 });
 
 test("首页题签按规则局部着色，其余文字保持原样", () => {
@@ -165,20 +172,31 @@ test("home-lead.tsx：三个 Hook（useState ×2、useEffect）都在 `if (!slid
   assert.doesNotMatch(body.slice(0, firstHookIdx), /return/, "第一个 Hook 之前不该有提前返回");
 });
 
-test("app/home.css：桌面竖照/方照按约 75dvh 限高（带地板与天花板），横照不套这条、左栏整体居中而不是上下分推", () => {
+// 2026-09-16 改版：上一版这里钉的是 `.home-figure--portrait` 的 75dvh 限高和 `.home-aside`
+// 的整块居中——那是"一张大照片 + 左栏题签"的两栏首页，已经被「一段回忆 + 每周提醒」整个取代，
+// 那些类名在 app/home.css 里不再存在。断言跟着版式走，但**守的教训不变**：
+// 手机第一屏必须同时读得到照片、日期和题签（2026-09-16 那次题签被顶到底栏下面就是没守住），
+// 宽屏上竖照不能铺成一堵墙，照片本身不许加滤镜。
+test("app/home.css：回忆舞台限高保住第一屏的题签与日期，宽屏不铺成一堵墙，照片不加滤镜", () => {
   const css = fs.readFileSync(new URL("../app/home.css", import.meta.url), "utf8");
+  const stage = css.match(/\.memory-frames \{([^}]*)\}/);
+  assert.ok(stage, "找不到 .memory-frames 的规则");
+  // 限高用视口单位 + 像素天花板：纯百分比在小屏（667）上会把题签重新顶下去。
+  assert.match(stage[1], /max-height:\s*min\(72svh,\s*620px\)/, "手机上必须给舞台一个视口高度上限");
+  assert.match(stage[1], /aspect-ratio:\s*4 \/ 5/, "竖照占绝大多数，舞台按 4:5 立起来");
+
   const desktop = css.slice(css.indexOf("@media (min-width: 900px)"));
-  const heightRule = desktop.match(/\.home-figure--portrait \.home-photo img,\s*\n\s*\.home-figure--square \.home-photo img \{([^}]*)\}/);
-  assert.ok(heightRule, "找不到竖照/方照的限高规则");
-  assert.match(heightRule[1], /max-height:\s*clamp\(420px,\s*75dvh,\s*780px\)/);
-  assert.doesNotMatch(desktop, /\.home-figure--landscape[^,{]*\{[^}]*max-height/, "横照不应该被单独限高");
-  const asideRule = desktop.match(/\.home-aside \{([^}]*)\}/)[1];
-  assert.match(asideRule, /justify-content:\s*center/);
-  assert.doesNotMatch(asideRule, /space-between/);
-  // 2026-09-16 视觉验收 ②：便签退到页末以后左栏只剩题签一块，原来那条 clamp(56px,6vw,72px)
-  // 的 gap 是用来隔开题签和便签的，留着会在左栏中间留一个和照片一样高的洞，所以去掉了。
-  // 这条用例守的是「整块居中、不上下分推」，不是那个具体的 gap 值。
-  assert.doesNotMatch(asideRule, /gap:/);
+  assert.match(desktop, /\.memory-frames \{[^}]*max-width:\s*620px/, "宽屏上竖照要收窄，不能铺满版心");
+
+  // 原则/任务书：不给照片加全局滤镜，只有图上文字区域可以用局部遮罩（.memory-scrim）。
+  assert.doesNotMatch(css, /\.memory-frames img \{[^}]*filter:/, "照片保持原色，不许加滤镜");
+  assert.doesNotMatch(css, /\.memory-player-stage img \{[^}]*filter:/, "播放器里的照片同样不加滤镜");
+
+  // 播放入口只有图标，但命中区域不许缩水（≥44px）。
+  const play = css.match(/\.memory-play \{([^}]*)\}/);
+  assert.ok(play, "找不到 .memory-play");
+  assert.match(play[1], /width:\s*56px/);
+  assert.match(play[1], /height:\s*56px/);
 });
 
 // ── 原则五在年页/索引行上的落地（2026-09-16 视觉验收）──────────────────────────

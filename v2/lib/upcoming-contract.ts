@@ -51,7 +51,35 @@ export type UpcomingItem = {
   statusNote?: string;
   statusEvidence?: UpcomingEvidence;
   supersedes?: string[];
+  /**
+   * 最近一次**有人又提起这件事**的消息日（"YYYY-MM-DD"），没有就是 undefined。
+   *
+   * 2026-09-16 加，为了首页「每周提醒」的 7 天窗口。`evidence.day` 回答不了这个问题：
+   * 它是**第一次**提出的那天，而且 `pinnedRaisedOn` 只许它往早走（不许重放给事项续期），
+   * 所以它按设计永远不会前进。「最近一次提及」在 `upcoming_item_changes` 里。
+   *
+   * 只投影这一个日期，**不投影 changes 本身**：那些行带着 `quote`，是聊天原文，
+   * 页面一个字都不能拿到（lib/upcoming-provenance.ts 守的就是这条线）。
+   */
+  lastMentionedOn?: string;
 };
+
+/**
+ * 从变更记录里算「最近一次又被提起」。
+ *
+ * 只认 `restated` 和 `rescheduled`：这两种都表示**有人在消息里又说了这件事，而且它还要办**。
+ * `done` / `cancelled` 不算——那是"这件事结束了"的证据，不是"它还在本周待办里"的理由；
+ * 把它们算进来，一条上周做完的事会因为完成记录而显得"刚刚提过"。
+ */
+export function lastMentionFrom(changes: ReadonlyArray<Pick<UpcomingChange, "day" | "change">>): string | undefined {
+  let latest: string | undefined;
+  for (const change of changes) {
+    if (change.change !== "restated" && change.change !== "rescheduled") continue;
+    if (!isUpcomingDay(change.day)) continue;
+    if (!latest || change.day > latest) latest = change.day;
+  }
+  return latest;
+}
 
 /** One recorded change to an item, with the message that proves it. This is what stops a
  *  strikethrough from ever being a guess: `done` without a row here cannot be stored. */
@@ -158,6 +186,7 @@ export function toUpcomingItem(record: UpcomingItemRecord): UpcomingItem {
     statusNote: record.statusNote,
     statusEvidence: record.statusEvidence,
     supersedes: record.supersedes?.length ? record.supersedes : undefined,
+    lastMentionedOn: lastMentionFrom(record.changes),
   };
 }
 

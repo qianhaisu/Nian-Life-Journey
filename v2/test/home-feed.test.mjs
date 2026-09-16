@@ -330,7 +330,9 @@ test("过了日子又没有完成记录的事项不默认露出，但也不写�
   assert.equal(reminders.retired.length, 1);
   assert.equal(reminders.retired[0].status, "open", "库里那一行还是 open —— 退场不等于完成");
   assert.match(reminders.retired[0].reason, /没有完成记录/);
-  assert.equal(reminders.more.length, 1, "它仍然可达，一条都没丢");
+  // 2026-09-16：首页只说这一周，所以一条过期事项**连折叠层也不进**（进了就是旧账从另一个门回来）。
+  // 它没有丢：retired 里逐条记着原因，完整清单仍在 components/upcoming-tasks.tsx。
+  assert.equal(reminders.more.length, 0, "过期的不从折叠层回到首页");
 });
 
 test("区间看的是结束日：还盖着今天的计划不算过期", () => {
@@ -349,33 +351,85 @@ test("关键健康事项即使时间待确认也保留待核实摘要，不生�
   assert.equal(deadlineLabelOf(shot.when), "时间待确认", "不猜日期，也不生成一个医疗期限");
 });
 
+// 2026-09-16 起「每周提醒」只收过去 7 天里被提起的事（lib/home-reminder-window.ts），
+// 而 `item()` 的默认提出日是 2026-08-16 —— 那是**故意**留着的旧日子，别的用例靠它测
+// 48 小时临时事项的退场。所以这两个用例自己把日子挪进窗口：它们要测的是**排序和默认几条**，
+// 不是窗口本身（窗口有它自己的用例，在下面）。
+const IN_WINDOW = { eventId: "ev-w", day: "2026-09-10" };
+
 test("关键事项排在最前，默认最多两条，其余保持可达", () => {
   const items = [
-    item("eggs", { title: "买一样日用品" }),
-    item("cream", { title: "回家做一件当天的小事" }),
-    item("vax", { title: "去门诊核对一次接种记录" }),
-    item("today", { title: "今天要带的东西", when: { kind: "day", day: TODAY } }),
+    item("eggs", { title: "买一样日用品", evidence: IN_WINDOW }),
+    item("cream", { title: "回家做一件当天的小事", evidence: IN_WINDOW }),
+    item("vax", { title: "去门诊核对一次接种记录", evidence: IN_WINDOW }),
+    item("today", { title: "今天要带的东西", when: { kind: "day", day: TODAY }, evidence: IN_WINDOW }),
   ];
   const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
   assert.equal(reminders.shown.length, REMINDERS_MAX_SHOWN);
   assert.equal(reminders.shown[0].id, "vax", "关键待核实排第一");
   assert.equal(reminders.shown[1].id, "today");
-  assert.equal(reminders.shown.length + reminders.more.length, items.length, "露出的加折叠的等于全部，一条不丢");
+  // 2026-09-16：首页只承载「这一周仍需办理」的那几条，所以「一条不丢」的账要算上 retired——
+  // eggs / cream 是无期限临时事项，48 小时新鲜期到 09-12 已过，它们进的是 retired 而不是折叠层。
+  const accounted = reminders.shown.length + reminders.more.length + reminders.retired.length;
+  assert.equal(accounted, items.length, "露出的 + 折叠的 + 退场的 = 全部，一条不丢");
 });
 
 test("没有关键事项时默认只露一条", () => {
-  const items = [item("a", { when: { kind: "day", day: TODAY } }), item("b", { when: { kind: "day", day: "2026-09-20" } })];
+  const items = [
+    item("a", { when: { kind: "day", day: TODAY }, evidence: IN_WINDOW }),
+    item("b", { when: { kind: "day", day: "2026-09-20" }, evidence: IN_WINDOW }),
+  ];
   const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
   assert.equal(reminders.shown.length, 1);
   assert.equal(reminders.shown[0].id, "a", "先到的那天排前面");
 });
 
+// ── 每周提醒的 7 天窗口（2026-09-16，用户裁定「严格 7 天，今天就留白」）──────────
+//
+// 窗口本身的规则在 lib/home-reminder-window.ts 有独立用例（test/home-memory.test.mjs）。
+// 这两条钉的是它**接进 buildReminders 之后**的行为：落在窗口外的事项不显示，
+// 但它既没过期也没完成，退场理由必须说清是哪一种，而且仍然可达。
+
+test("最近一次提及早于 7 天窗口的事项不占首页，但记成 out_of_window，不是过期、不是完成", () => {
+  // 形状要挑对，否则测不到窗口：一条**没有日子的临时事项**在 48 小时后就先被保鲜判成 expired，
+  // 根本走不到窗口这一关。所以用一条日子还没到、因此确实没过期的事项，
+  // 它的提出日仍是默认的 2026-08-16（窗口外）——生产里「国庆去大湾区旅游」正是这个形状。
+  const old = item("old", { title: "下个月要办的一件事", when: { kind: "day", day: "2026-10-01" } });
+  const reminders = buildReminders({ status: "ready", items: [old] }, TODAY, undefined);
+  assert.equal(reminders.status, "ready");
+  assert.equal(reminders.shown.length, 0, "不属于这一周，就不占首页");
+  const retired = reminders.retired.find((entry) => entry.id === "old");
+  assert.ok(retired, "退场必须留下记录");
+  assert.equal(retired.kind, "out_of_window", "和 expired 分开：这不是过期，只是这周没人再提");
+  assert.equal(retired.status, "open", "库里那一行还是 open —— 退场不等于完成");
+  // 窗口外的事项**不进折叠层**：本地实测过这个洞——默认位 0 条，折叠层里却挂着 4 条 8 月的旧事。
+  assert.equal(reminders.more.length, 0, "窗口外的不从折叠层回到首页");
+  assert.equal(reminders.retired.length, 1, "但它在 retired 里有记录，没有被悄悄丢掉");
+});
+
+test("这一周又被提起的旧事回到首页：判窗口用最近一次提及，不是首次提出", () => {
+  // 8 月 16 日提出，9 月 10 日又被说了一次 —— 只看 evidence.day 会把它误判成窗口外。
+  // 同样给一个还没到的日子，把「保鲜」这一关排除掉，单测窗口这一关。
+  const restated = item("restated", {
+    title: "又被提起的一件事",
+    when: { kind: "day", day: "2026-09-20" },
+    lastMentionedOn: "2026-09-10",
+  });
+  const reminders = buildReminders({ status: "ready", items: [restated] }, TODAY, undefined);
+  assert.equal(reminders.shown.length, 1, "最近一次提及在窗口内，就该出现");
+  assert.equal(reminders.shown[0].id, "restated");
+});
+
 test("被取代的事项标成 superseded，不标成完成", () => {
-  const items = [item("old"), item("new", { supersedes: ["old"] })];
-  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
-  const old = [...reminders.shown, ...reminders.more].find((reminder) => reminder.id === "old");
-  assert.equal(old.state, "superseded");
-  assert.equal(old.item.status, "open", "库里没有被改成 done");
+  // 2026-09-16：改版后 superseded 不再进首页的折叠层（首页只放这一周仍需办理的），
+  // 所以这条规则直接对着判定函数测——要钉的本来就是「它是 superseded，不是 done」，
+  // 而不是「它出现在首页的哪个位置」。
+  const old = item("old");
+  const supersededIds = new Set(["old"]);
+  const state = reminderStateOf(old, TODAY, supersededIds);
+  assert.equal(state.state, "superseded");
+  assert.match(state.reason, /取代/);
+  assert.equal(old.status, "open", "库里没有被改成 done");
 });
 
 test("读不到 / 没跑完 / 读失败，三种都不说成「没有待办」", () => {
@@ -415,9 +469,13 @@ test("提醒的证据链：能落到具体记忆就落，落不到就退到那�
   // 生产上 18 条待办**没有一条**带 evidence.eventId —— upcoming-store 写进 evidence 的只有
   // { day }。1.0.0 只认 eventId，于是这个链接对每一条真实待办都是空的：一条追不回来源的待办
   // 违反原则八。这条用例守的就是那个洞。
-  const monthOnly = item("m", { evidence: { day: "2026-08-16" } });
-  const withEvent = item("e", { evidence: { eventId: "ev-1", day: "2026-08-16" } });
-  const none = item("n", { evidence: { eventId: "", day: "去年夏天" } });
+  // 2026-09-16：这条用例要看的是 evidence 怎么变成链接，所以得先让三条都进得了首页——
+  // 给一个还没到的日子（不过期），再给一个窗口内的「最近一次提及」（进 7 天窗口）。
+  // `evidence.day` 仍然停在 8 月，因为断言的正是「只有月份时要落到那个月」。
+  const live = { when: { kind: "day", day: "2026-09-20" }, lastMentionedOn: "2026-09-10" };
+  const monthOnly = item("m", { ...live, evidence: { day: "2026-08-16" } });
+  const withEvent = item("e", { ...live, evidence: { eventId: "ev-1", day: "2026-08-16" } });
+  const none = item("n", { ...live, evidence: { eventId: "", day: "去年夏天" } });
   const feed = buildReminders({ status: "ready", items: [monthOnly, withEvent, none] }, TODAY, undefined);
   const all = [...feed.shown, ...feed.more];
   const byId = new Map(all.map((reminder) => [reminder.id, reminder]));

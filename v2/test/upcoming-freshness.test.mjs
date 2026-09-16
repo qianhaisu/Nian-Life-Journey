@@ -75,8 +75,12 @@ test("形状三之二：有日子的关键事项过期也不默默丢失", () =>
   const reminders = buildReminders({ status: "ready", items: [checkup] }, TODAY, undefined);
   assert.equal(reminders.retired.length, 1, "它从默认位退下来");
   assert.equal(reminders.retired[0].status, "open", "没有被写成完成");
-  assert.equal(reminders.more.length, 1, "但它仍然在展开里，没有丢");
-  assert.equal(reminders.more[0].important, true, "而且标着关键事项");
+  // 2026-09-16 改版：首页只承载「这一周仍需办理」的事，所以过期的关键事项**连折叠层也不进**
+  // （进了就是旧账从另一个门回到首页）。它没有被丢掉，也没有被写成完成——
+  // retired 里逐条记着原因，完整清单仍在 components/upcoming-tasks.tsx。
+  assert.equal(reminders.more.length, 0, "过期的不从折叠层回到首页");
+  assert.equal(reminders.retired[0].kind, "expired", "退场理由照实记成过期，不含糊成别的");
+  assert.equal(isImportantItem(checkup), true, "它仍然是关键事项——退场与是否关键是两件事");
 });
 
 test("形状四：窗口还盖着今天的待定计划，既不过期、也不显示成「要做的」", () => {
@@ -175,7 +179,14 @@ test("每次首页读取都重跑有效性过滤：后台没动过库，过期�
       "三条陈旧的都退场了",
     );
     assert.ok(reminders.retired.every((reminder) => reminder.status === "open"), "而且一条都没有被写成完成");
-    assert.equal(reminders.shown.length + reminders.more.length, items.length, "露出的加折叠的等于全部");
+    // 2026-09-16 改版：首页只承载「这一周仍需办理」的事，过期的连折叠层也不进
+    // （进了就是旧账从另一个门爬回首页——正是这条用例要防的事）。
+    // 所以「一条都没丢」的账要算上 retired：露出的 + 折叠的 + 退场的 = 全部。
+    assert.equal(
+      reminders.shown.length + reminders.more.length + reminders.retired.length,
+      items.length,
+      "露出的 + 折叠的 + 退场的 = 全部",
+    );
   }
 });
 
@@ -234,7 +245,10 @@ test("露出过两个不同日期后，第三个自然日退出默认位", () =>
   assert.equal(capped[0].id, "h");
   assert.match(capped[0].reason, /2 个不同的日子/);
   assert.equal(reminders.shown.length, 0, "第三天它不再占默认位");
-  assert.equal(reminders.more.length, 1, "但仍然可达，一条都没丢");
+  // 2026-09-16 改版：被日期上限拦下的habit **也不进折叠层**——折叠层只装「本周仍需办理、
+  // 只是没排进默认位」的那几条。它没有丢：上面那三条断言已经证明 retired 里逐条记着原因和状态，
+  // 完整清单仍在 components/upcoming-tasks.tsx。
+  assert.equal(reminders.more.length, 0, "上限拦下的不从折叠层回到首页");
   // 同一天里它只用掉一个日子：如果今天也算露过，它应当放行。
   const alsoToday = logOf([["h", ["2026-09-11", "2026-09-12", TODAY]]]);
   assert.equal(buildReminders({ status: "ready", items: [habitOf("h")] }, TODAY, undefined, alsoToday).shown.length, 1);

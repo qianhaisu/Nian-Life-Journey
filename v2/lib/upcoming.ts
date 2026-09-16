@@ -101,6 +101,9 @@ export function normalizeUpcoming(raw: unknown): UpcomingItem | undefined {
     statusNote: statusNeedsEvidence(status) ? statusNote : undefined,
     statusEvidence: statusNeedsEvidence(status) ? statusEvidence : undefined,
     supersedes: supersedes?.length ? supersedes : undefined,
+    // 已经由数据轨算好（lib/upcoming-contract.ts lastMentionFrom）。这里只做和其他日期字段
+    // 同样的 fail-closed 校验：不是合法日历日就当没有，绝不放一个坏值进 7 天窗口的比较。
+    lastMentionedOn: isUpcomingDay(row.lastMentionedOn) ? row.lastMentionedOn : undefined,
   };
 }
 
