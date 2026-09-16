@@ -230,6 +230,20 @@ export function burstRepresentatives(photos: MediaRef[]): MediaRef[] {
     .filter((item): item is MediaRef => Boolean(item));
 }
 
+// 相册层的一张代表：和 burstRepresentatives 同样按连拍分组，但**永远不丢掉整组**。
+//
+// 2026-09-16 视觉验收（原则五「大部分内容是否默认不出现」）。线上实测三个月的相册接口：
+// 2026-07 587 张里有 440 张是某个 ≤90 秒连拍里的第二张及以后（75%），2026-08 是 68%，
+// 2025-11 是 31%。苏济往下滚的时候，四分之三看到的是同一个瞬间按了好几次快门。
+//
+// 和 burstRepresentatives 的区别只有一条：那一支服务阅读层，一组全是小图时**整组不出现**
+// （「A burst of only tiny images represents nothing」，那是它的本意）；相册层不能这样，
+// 相册的承诺是每一张都在，所以这里兜底到 group[0]，一组一定留下一张可点进去的入口。
+// 折叠掉的那些没有被丢弃：archiveDays 一个字没动，调用方在折叠发生时给出那一天的完整相册入口。
+export function burstLeads(photos: MediaRef[]): MediaRef[] {
+  return burstGroups(photos).map((group) => group.find(heroSized) ?? group.find(thumbnailSized) ?? group[0]);
+}
+
 // Trace entries a reader should see: the belt-and-braces placeholder gate plus the archive-count
 // sentence ("这一天留下了 N 张照片"), which describes the archive, not the child.
 export function readableEntries(entries: string[]): string[] {

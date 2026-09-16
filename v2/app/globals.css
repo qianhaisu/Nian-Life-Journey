@@ -547,6 +547,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .day-album-open { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-secondary); font: inherit; font-size: .92rem; cursor: pointer; transition: border-color 180ms var(--ease-out), color 180ms var(--ease-out); }
 .day-album-open::after { color: var(--color-accent); content: "→"; }
 .day-album-open:hover { border-color: var(--color-accent); color: var(--color-text); }
+/* 安静变体：月末相册里每一天都可能带这个入口，描边胶囊重复二十几次会变成页面上最响的元素。 */
+.day-album-open--quiet { padding: 8px 0; border: 0; border-radius: 0; background: none; font-size: .86rem; }
+.day-album-open--quiet::after { content: " →"; }
+.day-album-open--quiet:hover { color: var(--color-text); }
 .day-album-open[aria-busy="true"] { cursor: wait; opacity: .75; }
 .day-album-failed { color: var(--color-muted); font-size: .85rem; }
 @media (min-width: 760px) {

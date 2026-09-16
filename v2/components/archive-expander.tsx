@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { PhotoGallery } from "@/components/photo-viewer";
+import { DayAlbumLink } from "@/components/day-album";
+import { burstLeads } from "@/lib/publication-moments";
 import type { PhotoDay } from "@/lib/memory-chapters";
 import { fetchFullArchiveDays } from "@/lib/month-album-request";
 
@@ -75,12 +77,21 @@ export function ArchiveExpander({
   return (
     <>
       <ol className={state === "open" ? "archive-expanded" : undefined}>
-        {days.map((day) => (
-          <li className="month-day" key={day.day}>
-            <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} monthAgeLabel={monthAgeLabel} year={year} />
-            <PhotoGallery photos={day.photos} dateLabel={day.dateLabel} ageLabel={day.ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
-          </li>
-        ))}
+        {days.map((day) => {
+          // 2026-09-16（原则五）：一天里连着按的快门只铺一张，其余收进这一天自己的相册。
+          // 实测 2026-07 的相册 75% 是连拍冗余，2026-08 是 68%——铺开来读的是同一个瞬间的第
+          // 二、第三次快门，不是这个月的日子。折叠不丢东西：archiveDays 未变，接口仍然给整天，
+          // 下面那个「翻开这一天的相册」就是这一天的完整入口，点开即是全部。
+          const lead = burstLeads(day.photos);
+          const folded = day.photos.length - lead.length;
+          return (
+            <li className="month-day" key={day.day}>
+              <DayHead day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} monthAgeLabel={monthAgeLabel} year={year} />
+              <PhotoGallery photos={lead} dateLabel={day.dateLabel} ageLabel={day.ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
+              {folded > 0 ? <DayAlbumLink year={year} month={month} day={day.day} dateLabel={day.dateLabel} ageLabel={day.ageLabel} afterDayPhotos quiet /> : null}
+            </li>
+          );
+        })}
       </ol>
       {foldedDayCount > 0 && state !== "open" ? (
         <p className="chapter-meta archive-expand">

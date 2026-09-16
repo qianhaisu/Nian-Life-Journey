@@ -11,7 +11,7 @@ import { NO_HERO_MEDIA_ID } from "../lib/media/hero.ts";
 import { mediaPrivilegeOf } from "../lib/family-archive.ts";
 import {
   BURST_GAP_SECONDS, MOMENT_SUPPORTING_MAX,
-  buildMonthComposition, burstGroups, burstRepresentatives, chronicleAlbumDays, dayAlbumDays, dayAlbumFrom, readableEntries,
+  buildMonthComposition, burstGroups, burstLeads, burstRepresentatives, chronicleAlbumDays, dayAlbumDays, dayAlbumFrom, readableEntries,
 } from "../lib/publication-moments.ts";
 
 const BIRTH = "2025-01-03";
@@ -197,6 +197,35 @@ test("burst grouping is temporal redundancy only: one representative reads, ever
   // Gap just over the window starts a new group.
   const spaced = [photo("s0", "2026-08-27T08:00:00.000Z"), photo("s1", `2026-08-27T08:0${Math.floor((BURST_GAP_SECONDS + 30) / 60)}:${String((BURST_GAP_SECONDS + 30) % 60).padStart(2, "0")}.000Z`)];
   assert.equal(burstGroups(spaced.map((item) => ({ ...item, alt: "" }))).length, 2);
+});
+
+// 2026-09-16（原则五「大部分内容是否默认不出现」）：相册层的一张代表。线上实测 2026-07 的相册
+// 587 张里 440 张是 ≤90 秒连拍的第二张及以后（75%），2026-08 68%。铺开来读的是同一个瞬间按了
+// 好几次快门，不是这个月的日子。和 burstRepresentatives 的唯一区别：那一支服务阅读层，一组全是
+// 小图时整组不出现是它的本意；相册层不能少一组，所以兜底到 group[0]。
+test("burstLeads：一组连拍留一张；一组全是小图也要留一张（相册层不能整组消失）", () => {
+  const burst = [];
+  for (let n = 0; n < 8; n += 1) burst.push(photo(`b${n}`, `2026-08-27T08:00:${String(n * 5).padStart(2, "0")}.000Z`));
+  burst.push(photo("later", "2026-08-27T15:00:00.000Z"));
+  const leads = burstLeads(burst.map((item) => ({ ...item, alt: "" })));
+  assert.deepEqual(leads.map((item) => item.id), ["b0", "later"], "八连拍只铺第一张，另一组各自留一张");
+
+  // 一整组都太小：burstRepresentatives 会丢掉整组（阅读层的本意），burstLeads 不丢。
+  const tiny = [
+    { id: "t0", src: "/t0", width: 20, height: 20, alt: "", type: "photo", takenAt: "2026-08-27T09:00:00.000Z" },
+    { id: "t1", src: "/t1", width: 20, height: 20, alt: "", type: "photo", takenAt: "2026-08-27T09:00:10.000Z" },
+  ];
+  assert.equal(burstRepresentatives(tiny).length, 0, "阅读层：一组全是小图就整组不出现");
+  assert.deepEqual(burstLeads(tiny).map((item) => item.id), ["t0"], "相册层：仍要留一张，否则这一组无法抵达");
+});
+
+test("burstLeads 不改变 archiveDays：折叠只发生在渲染，库里那一天仍然是全的", () => {
+  const day = [];
+  for (let n = 0; n < 5; n += 1) day.push(photo(`d${n}`, `2026-08-27T08:00:${String(n * 5).padStart(2, "0")}.000Z`));
+  const input = day.map((item) => ({ ...item, alt: "" }));
+  const before = input.map((item) => item.id);
+  burstLeads(input);
+  assert.deepEqual(input.map((item) => item.id), before, "burstLeads 不得就地修改传进来的数组");
 });
 
 test("a trusted photo does NOT bind beside same-day trace text (T11 Part C, reversed 2026-09-10)", () => {

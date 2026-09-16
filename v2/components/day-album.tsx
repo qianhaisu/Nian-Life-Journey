@@ -19,7 +19,7 @@ import { fetchDayAlbum } from "@/lib/month-album-request";
 // Nothing is fetched until asked: the page ships only the button, and the album for that one day
 // comes from the server when the reader opens it — the month page does not grow by the size of its
 // album.
-export function DayAlbumLink({ year, month, day, dateLabel, ageLabel, afterDayPhotos = false }: {
+export function DayAlbumLink({ year, month, day, dateLabel, ageLabel, afterDayPhotos = false, quiet = false }: {
   year: string;
   month: string;
   day: string;
@@ -27,6 +27,10 @@ export function DayAlbumLink({ year, month, day, dateLabel, ageLabel, afterDayPh
   ageLabel?: string;
   // The day already shows its reviewed photographs right above; the album holds the rest of the day.
   afterDayPhotos?: boolean;
+  // 2026-09-16：月末相册里每一天都可能带一个入口（连拍折叠后 26/29 天都有）。描边胶囊重复
+  // 二十几次就成了这一页最吵的东西，所以那个位置用安静的文字链，胶囊留给「一段故事之后」
+  // 那种一页只出现几次的场合。行为、可达性、命中区域完全一样，只是不喊。
+  quiet?: boolean;
 }) {
   const [state, setState] = useState<"closed" | "loading" | "open" | "failed">("closed");
   const [album, setAlbum] = useState<PhotoDay | null>(null);
@@ -52,7 +56,7 @@ export function DayAlbumLink({ year, month, day, dateLabel, ageLabel, afterDayPh
   const label = afterDayPhotos ? "这一天相册里的其他照片" : "翻开这一天的相册";
   return <>
     <p className="day-album-entry">
-      <button ref={trigger} type="button" className="day-album-open" onClick={open} aria-haspopup="dialog" aria-busy={state === "loading"} data-day={day}>
+      <button ref={trigger} type="button" className={quiet ? "day-album-open day-album-open--quiet" : "day-album-open"} onClick={open} aria-haspopup="dialog" aria-busy={state === "loading"} data-day={day}>
         {state === "loading" ? "正在打开相册…" : label}
       </button>
       {state === "failed" ? <span className="day-album-failed" role="status">相册暂时没有打开，稍后再试。</span> : null}
