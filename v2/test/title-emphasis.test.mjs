@@ -180,3 +180,33 @@ test("app/home.css：桌面竖照/方照按约 75dvh 限高（带地板与天花
   // 这条用例守的是「整块居中、不上下分推」，不是那个具体的 gap 值。
   assert.doesNotMatch(asideRule, /gap:/);
 });
+
+// ── 原则五在年页/索引行上的落地（2026-09-16 视觉验收）──────────────────────────
+// 年页每月取 6 条（yearTitlesPerMonth），按 WEIGHT_RANK 排，高档不足 6 条时用 trace 补满，
+// 所以这几行本来就混着两种分量。`size="line"` 那一支原来连 weight 都不带，于是
+// 「小年年升入大班了」和一条普通日子是同一段 markup。这两条钉住：weight 传到了类名上，
+// 而且 CSS 真的把两种分量分开了（不是只加了个类名没人用）。
+test("年页的行条目带上自己的分量：memory-weight-* 必须出现在 .memory-line 上", async () => {
+  const React = (await import("react")).default;
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { EditorialMemory } = await import("../components/editorial-memory.tsx");
+  const line = (weight) => renderToStaticMarkup(React.createElement(EditorialMemory, {
+    memory: { id: "e1", title: "小年年升入大班了", excerpt: undefined, weight, signature: { day: "2026-07-23", dateLabel: "7 月 23 日", ageLabel: undefined }, lead: undefined },
+    size: "line",
+  }));
+  assert.match(line("highlight"), /class="memory-line memory-weight-highlight"/);
+  assert.match(line("trace"), /class="memory-line memory-weight-trace"/);
+  assert.match(line("highlight"), /小年年升入大班了/, "标题一个字都不该被改写");
+});
+
+test("globals.css：里程碑行和普通一天行不是同一个字号——原则五「一眼就能分辨」", () => {
+  const css = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const trace = css.match(/\.memory-line\.memory-weight-trace span \{([^}]*)\}/);
+  const high = css.match(/\.memory-line\.memory-weight-highlight span[^{]*\{([^}]*)\}|\.memory-line\.memory-weight-memory span,\s*\n\.memory-line\.memory-weight-highlight span,\s*\n\.memory-line\.memory-weight-chapter span \{([^}]*)\}/);
+  assert.ok(trace, "找不到 trace 行的样式");
+  assert.ok(high, "找不到高档行的样式");
+  const traceSize = Number((trace[1].match(/font-size:\s*([\d.]+)rem/) ?? [])[1]);
+  const highSize = Number(((high[1] ?? high[2]).match(/font-size:\s*([\d.]+)rem/) ?? [])[1]);
+  assert.ok(traceSize > 0 && highSize > 0, `字号没解析出来 trace=${traceSize} high=${highSize}`);
+  assert.ok(highSize > traceSize * 1.15, `高档行要明显更大：high=${highSize}rem trace=${traceSize}rem`);
+});

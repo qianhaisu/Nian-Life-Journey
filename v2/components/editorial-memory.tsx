@@ -23,7 +23,11 @@ import { orientationOf } from "@/lib/media/presentation";
 export function EditorialMemory({ memory, size = "entry", priority = false, showSignature = true, photos = "lead" }: { memory: Memory; size?: "lead" | "entry" | "line"; priority?: boolean; showSignature?: boolean; photos?: "lead" | "story" }) {
   const href = `/events/${memory.id}`;
   if (size === "line") {
-    return <li className="memory-line"><Link href={href}><time dateTime={memory.signature.day}>{memory.signature.dateLabel}</time><span className="serif">{memory.title}</span></Link></li>;
+    // 2026-09-16 视觉验收（原则五「一眼就能分辨」）：这一支原来连 weight 都不带，于是年页上一个月
+    // 的六行里，「小年年升入大班了」和「老师提醒尿不湿不多了」是**同一段 markup**——一张登记表。
+    // 年页每月取 6 条（yearTitlesPerMonth），按 WEIGHT_RANK 排，高档不足 6 条时用 trace 补满，
+    // 所以这几行里本来就混着两种分量，数据早就有，只是没传到样式上。
+    return <li className={`memory-line memory-weight-${memory.weight}`}><Link href={href}><time dateTime={memory.signature.day}>{memory.signature.dateLabel}</time><span className="serif">{memory.title}</span></Link></li>;
   }
   const copy = <div className="memory-copy">
     {showSignature ? <TimeSignature signature={memory.signature} /> : null}

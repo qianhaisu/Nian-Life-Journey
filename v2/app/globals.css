@@ -653,6 +653,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .memory-line a:hover { color: var(--color-accent); }
 .memory-line time { color: var(--color-muted); font-size: .78rem; white-space: nowrap; }
 .memory-line span { font-size: 1.1rem; }
+/* 原则五在年页上的落地（2026-09-16）：同一个月的几行不是等权的。
+   非 trace 的那几条是分档器判出来的「真正的变化或第一次」（一个月 1-4 条，见
+   scripts/t20c-grade-events.mjs 的 prompt），trace 是值得留着的普通一天。
+   分辨靠字号和墨色，不靠加边框、加色块、加图标——这一页仍然是一张纸上的目录。 */
+.memory-line.memory-weight-trace span { font-size: 1rem; color: var(--color-muted); }
+.memory-line.memory-weight-memory span,
+.memory-line.memory-weight-highlight span,
+.memory-line.memory-weight-chapter span { font-size: 1.32rem; font-weight: 500; line-height: 1.35; }
+.memory-line.memory-weight-trace a { min-height: 44px; padding: 6px 0; }
 
 /* Photos: each at its own proportions */
 .photo { position: relative; margin: 0; overflow: hidden; background: var(--paper-dark); }

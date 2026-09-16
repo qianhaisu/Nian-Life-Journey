@@ -251,7 +251,10 @@ export function planArtifacts(input: PlanInput): PersistencePlan {
       people: [], tags: contentTypes, contentTypes,
       mediaIds, sourceIds: sourceIds.slice(), growthRecordIds: [], careRecordIds: [],
       eventType: (outcome.eventType === "milestone" ? "milestone" : "moment") as LifeEvent["eventType"],
-      memoryWeight: "memory",
+      // 2026-09-16：这里原来写死 "memory"，于是这条路径在结构上就不可能产出 highlight/chapter，
+      // 无论判断层判了什么。上一行已经算出了 milestone 与否，用同一个信号，不再另立一个常量。
+      // 普通输出仍然是 "memory"（不是 trace）：这条路径产出的是写过的故事，不是当天痕迹。
+      memoryWeight: (outcome.eventType === "milestone" ? "highlight" : "memory") as LifeEvent["memoryWeight"],
       scopes: ["family"],
       // Only a linked, tier-permitted asset may be the hero. No media means no hero, never a
       // borrowed one — a text-only Memory is a complete Memory.

@@ -4,7 +4,12 @@
 // in-process right after writing events, instead of requiring a separate post-write step.
 // Three-tier classification — high/medium/low — of already-written life_events:
 //
-//   high   -> memoryWeight "memory" (milestone/chapter)
+//   high   -> memoryWeight "highlight" (milestone/chapter)
+//
+// 2026-09-16：这一行原来写的是 "memory"，也就是 trace < memory < highlight < chapter 四档尺里的
+// 第三档——注释说它是 milestone/chapter，写进库的却低两档。后果是生产里 chapter 和 highlight 各
+// 0 条，1,035 条 life_events 只落在 trace/memory 两档上，展示层那把四档尺顶上两格永远是空的。
+// 判断本身没问题（prompt 要求一个月 1-4 条 high，实测 21 个月共判出 42 条），落点写低了。
 //   medium -> memoryWeight "trace" (ordinary day — no change)
 //   low    -> content_quality_reviews decision "store_only" (not about the child, or too thin)
 //
@@ -123,7 +128,8 @@ export async function gradeMonthEvents(month, { dbUrl, apiKey, baseUrl, model, p
 
     let updated = 0;
     for (const { event, tier } of grades) {
-      const newWeight = tier === "high" ? "memory" : "trace";
+      // 2026-09-16：high 落到 "highlight"（四档尺的第二档），不再是 "memory"。见文件头的说明。
+      const newWeight = tier === "high" ? "highlight" : "trace";
       if (tier !== "low" && event.memory_weight !== newWeight) {
         await pool.query(`update life_events set memory_weight = $1 where id = $2`, [newWeight, event.id]);
         updated += 1;
