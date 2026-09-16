@@ -9942,3 +9942,74 @@ C 画面证据只做了 50/520：其余约 470 张可做，只读、不写库。
 **结论**：`/memory` 21 张等权白卡、年页一张登记表、原则五在索引层「未交付」，**根因不是「精度机制把人生挡在外面」（那是 09-04 的诊断），是放行之后写库时把分级信息丢掉了**。展示层已经会分轻重（`month-moment.tsx` 实测有效），判断层也在出结果，断在中间那一段。
 
 **下一件事**：等 Teddy 定 Organizer 这条线怎么走；①②（02bbb0e）按他的要求暂不部署。
+
+## 2026-09-16 中午 · 数据执行 · 更正授权来源误判；ECS 清理完成；JPEG 与视频两批清单已备（均未写入）
+
+**更正一：那条消息的处置是我的执行偏差。** 审核意见第五节写的是「那条已知重复消息保留，不删除」；
+随后的简短回复写「不保留」，我按后者执行了软删。**授权来源应以审核意见为准，软删不在授权范围内。**
+该行已恢复并保持在库（`wechat-message:canonical:56f57b30…`，微信在库 50,844）。事后核查还证明它**根本不是重复**：
+它指向的 `20260913_043341_5.mp4` 真实存在（0.63MB），库里没有任何资产等于该内容、也没有第二行引用同一文件。
+不再宣称「三项授权全部完成」。
+
+**更正二：交付状态按实际分四条**
+- PNG：**已端到端交付**（奶奶私聊 09-04 21:50 那张，公网 `?variant=web` 200 `image/webp` 99KB）。
+- 新增 189 条视频记录：**尚未完成可播放交付**（只有 `wechat/original` 引用，无 poster/preview，页面打不开）。
+- 9 个 JSON 视频附件：**尚未补挂**（现有脚本按正文链接定位，找不到 JSON content 里的路径）。
+- 去重修复 `93d8cd6`：**已 push、未上线**。实测线上运行 SHA = `e5118e5`（容器镜像与 `/api/health` 一致）。
+
+**更正三：237 个 `(unreadable)` 的措辞。** 只能记为「当前 sharp 无法解码，格式或损坏原因待确认」，
+不能认定全是不该补的图片。已有清点结果保留，本轮不重新全盘扫描。
+
+**每日任务的真实运行版本（已核实，非推定）**：计划任务 → `cmd /c v2\.data\daily-wechat-sync.cmd` →
+`cd /d …\v2` → `node .data\t20-run-env.mjs … -- scripts\nianlife-worker.mjs --since-days=3 --content-dedupe …`。
+worker 从工作区 import `lib/ingest/wechat-content-dedupe.ts`；`git status --porcelain v2/lib/ingest/` 为空，
+且该文件与 `93d8cd6` 版本逐字节相同（`git show 93d8cd6:… | diff -q`）→ **每日任务已在使用媒体链接身份修复**。
+
+**ECS 清理（Teddy 授权「按清单清理旧镜像和回滚容器」）**
+- 保护：运行容器 `nianlife-diag-web`(e5118e5)、`nianlife-caddy`；最近两个回滚容器
+  `pre-e5118e5-20260916-091651`(d3f1246)、`pre-d3f1246-20260916-091354`(61625ac)；三个镜像标签 + caddy 镜像；
+  两个证书/配置卷；待构建目录 `v2-deploy-93d8cd6`。以上清理后逐项复核仍在。
+- 删除：49 个已退出容器、59 个镜像标签、69 个部署目录/tar，随后 126 个悬空镜像（具名逐个 `docker rmi`，
+  **未使用 prune**；与保护容器引用的镜像 ID 交集为 0，事前核对）。清单落在 ECS `/home/ecs-user/cleanup-20260916/`。
+- 结果：剩余 **2,893MB → 24,168MB**（释放约 19.3GB）。数据卷、数据库、配置、凭据、证书、原始媒体、未完成任务产物均未触碰。
+- 更正一处估算：我按 unique size 预估「约 10.4GB」，第一步只释放 1.5GB——因为 `docker rmi <tag>` 只做 Untagged，
+  底层 layer 变成悬空镜像仍占盘；删悬空镜像后才真正释放。估算方法当时不对。
+
+**JPEG 关联清单（26 项，已备，未写入）** → `NianlifeOps/data-sync-2026-09-15/jpeg-link-plan.json`
+- 引用关系取自解析器本身：按 `document + recordOrdinal` 定位到消息，取该消息自己的 `mediaRefs`，
+  逐项固定 sourceId、会话标签、sessionKey、senderDigest、时刻、原始附件证据状态、relativePath、refIndex、
+  内容 sha256、assetId、mediaId。**不使用同秒/同日/同内容推断。**
+- 分类：确定可补 **26**、已有关联 **0**、存疑 **0**。预计新增 `media` 行 **26**、新增 `media_assets` 行 **0**
+  （26 个内容资产库里都已存在，派生图也都 ready）。
+- **补后是否可见（页面逻辑核实后的更正）**：月相册与当天分组的闸门是 `isPrivileged`（来源可信 或 已主体核验）。
+  26 项里来源可信 **13**（乳儿班 2109e1e8）、非可信 **13**（爸妈群 7 + 小群 6）、已主体核验 **0**。
+  → **补关联后会出现在页面的是 13 条，另 13 条不会**（除非另做主体核验）。此前「26 条都会从纯文字变成带图」的说法作废。
+- 本批只修「消息 ↔ 附件」的来源关系：不写 `media_binding approved`、不改 visibility、不动故事审核。
+- 回滚：删除这 26 个 `mediaId` 的 media 行，并从对应 `raw_sources.media_ids` 移除该 id（清单里逐项有 id）。
+
+**视频可播放交付方案（已备，未执行）**
+- 单位分开报：视频 `media` 行 **310**、去重资产 **306**；已有 poster+preview 的 **121** 行；
+  待处理资产 **188** 个（对应 189 行），原件合计约 **672MB**，按月分布见清单。
+  另有 9 个 JSON 视频**引用**（涉及 7 条消息）尚无 media 行，按内容哈希去重为 **7 个资产 / 32.7MB**，库中无同内容资产。
+- 来源可信度：待处理 188 个里 `trusted_group` **108**、`other` **80**。
+- **脚本的确切限制**：`scripts/attach-video-derivatives.mjs` 开头写明「Attach a poster and a browser-playable
+  preview to **ONE** already-imported video… deliberately for a single video at a time… **It is not a migration and
+  it must not become one**」；它不转码、不碰原件、`COMMIT=1` 才写、只接受 `MEDIA_ID/POSTER_PATH/PREVIEW_PATH`，
+  并有 trusted 来源校验（第 28、65 行）——`other` 那 80 个会被它拒绝。
+  `lib/media/processing.ts:16` 对 video 只产出占位 SVG poster，从不产出可播放 preview。
+- **执行环境（实测）**：本机**无 ffmpeg**；web 容器内**无**；**ECS 主机有 ffmpeg 6.1.1，含 libx264、libwebp、h264/hevc 解码器**。
+  → poster/preview 只能在 ECS 主机上产出，再交给 attach 脚本写库。
+- 批量需要放开的范围：把「一次一个」扩为「按显式名单串行循环」，并对 `other` 那 80 个决定是否放宽 trusted 校验
+  （或先做主体核验）。这两点都超出现有脚本的自我限定，需要明确授权。
+- 建议样本 1 个：`wechat-media:a8edc073…`（2026-07-24 10:46，1.14MB，主群，可信来源，非敏感场景）。
+  步骤：ECS 上 `ffmpeg -ss 1 -i <原件> -frames:v 1 -c:v libwebp poster.webp` + `ffmpeg -i <原件> -c copy -movflags +faststart preview.mp4`
+  → `MEDIA_ID=… POSTER_PATH=… PREVIEW_PATH=… COMMIT=1 node scripts/attach-video-derivatives.mjs`
+  → 公网验证 `?variant=poster` 200、`?variant=preview` 200 且支持 Range（206）。
+- 边界：串行、并发 1；失败即停；每个资产处理前核对原件 sha256 与 `media_assets.checksum` 一致；
+  临时文件放 ECS `/home/ecs-user/video-derivatives-<日期>/`，完成后保留回滚清单（脚本自带删除两条 location + 复位 media 行的语句）。
+  预计 188 个资产 ≈ 672MB 输入，`-c copy` 封装不转码，主要成本是 I/O 与上传。
+
+**自然触发**：现在 2026-09-16 10:45，任务下次触发 **23:30**，**尚未发生**。
+`ops-daily/logs` 里只有 09-16 00:10 那次**手动**运行（exit 0）。按要求不承诺自动醒来——到点后需要有人（或下一轮会话）去查这一轮日志。
+
+**下一件事**：Teddy 对「JPEG 26 条关联写入 / 视频样本 + 续批 / 由谁执行这次合并发布」一次确认后执行。
