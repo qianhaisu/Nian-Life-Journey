@@ -86,19 +86,23 @@ export default async function HomePage() {
       <div className="home-spread">
         {/* 这一版首页不再露出第二条「近况」入口（版式卡一·5）：recentFact 仍在契约里，
             对应记录在记忆页和事件页照常可达，只是不占首页这块地方。
-            便签作为左栏的一部分传给 HomeLead：左栏必须是一个 grid 单元，否则高照片会把它撑散。 */}
+            2026-09-16 视觉验收 ②：便签（这几天的提醒事项）**不再**作为 notes 传进左栏。
+            它原来紧挨着题签，是首页文字区里第二显眼的一块，而它的内容是写给家长的待办
+            （「核对接种记录」「给崽约体检」）。原则四的承诺是「你去生活，Nianlife 帮你把值得
+            留下的留下」；把「你还没做的两件事」摆在档案首页第二位，等于把承诺反过来说。
+            它没有被删——只是退到这一页的最后，在回忆浮现之后。完整清单仍在 upcoming-tasks。 */}
         {slides.length > 0
-          ? <HomeLead slides={slides} notes={<Reminders feed={feed} />} />
+          ? <HomeLead slides={slides} />
           : <div className="home-aside">
             <div className="home-headline">
               <p className="home-nothing">{feed.leadAbsence?.kind === "empty_material" ? "还没有一段整理好的记忆可以放在这里。" : "档案还是空的。等时间再走一会儿。"}</p>
             </div>
-            <Reminders feed={feed} />
           </div>}
       </div>
-      {/* D3：一句安静的话，不是又一块卡片——跟首页原有的"一张照片、一句题签、一处提醒"平级，
+      {/* D3：一句安静的话，不是又一块卡片——跟首页原有的"一张照片、一句题签"平级，
           不挤进 home-spread 的居中计算里（PAGE-0915-HOME-BALANCE 的左栏整体居中不受影响）。 */}
       <HomeRecall recall={recall} />
+      <Reminders feed={feed} />
     </div>
   </div>;
 }

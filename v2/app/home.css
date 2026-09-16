@@ -161,9 +161,12 @@
    不是通栏色条，也不是卡片：左栏下方、和题签同一条左对齐线、最大 300px 的一小块字。
    没有背景、没有大圆角、没有阴影，也没有右侧那个独立的「查看详情」按钮——整条自己就是
    展开入口，命中区域仍然 ≥44px（版式卡一·轻便签）。 */
+/* 2026-09-16 视觉验收 ②：便签从左栏退到整页最后（见 app/page.tsx）。它和 .home-recall 现在是
+   页面末尾并排的两块安静文字，所以宽度取同一个值——原来一条 300px、一条 640px，两条错位的横线
+   上下叠着。 */
 .home-notes {
-  max-width: 300px;
-  margin-top: 34px;
+  max-width: 640px;
+  margin-top: clamp(24px, 3vw, 32px);
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
 }
@@ -301,13 +304,15 @@
   }
   /* 行号也要写死：照片在 DOM 里排在前面，只给它 grid-column: 2 的话，自动放置不会回头，
      左栏会被推到第二行去（实测：题签 y=1286，掉到照片下面）。 */
+  /* 左栏现在只有「题签 + 日期 + 读读这一天」一块（便签 2026-09-16 退到页末），整块在照片高度里
+     居中。原来那条 clamp(56px,6vw,72px) 的 gap 是用来隔开题签和便签的，便签走了以后它会在左栏
+     中间留一个和照片一样高的洞，所以一起去掉。 */
   .home-aside {
     grid-column: 1;
     grid-row: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: clamp(56px, 6vw, 72px);
     min-width: 0;
   }
   .home-figure {
@@ -329,7 +334,6 @@
     max-height: clamp(420px, 75dvh, 780px);
   }
   .home-caption { min-height: var(--home-caption-h); padding: 6px 4px 0; }
-  .home-notes { margin-top: 0; }
 }
 
 /* 窄屏：单列，左右留白 20px（.home-sheet 的 100% - 40px）。顺序照片 → 日期 → 题签 → 提醒，
@@ -354,7 +358,7 @@
     max-height: max(240px, calc(100vh - 340px));
     max-height: max(240px, calc(100svh - 340px));
   }
-  .home-notes { max-width: none; margin-top: 26px; }
+  .home-notes { max-width: none; }
   /* 题签是这一页唯一的主标题，手机上却只有 19px——比正文 16px 大三个像素，读起来仍然像
      「还没加载完」。桌面在 0915 已经恢复到 30–36px，手机这条当时漏了。 */
   .home-title { font-size: clamp(22px, 6.2vw, 27px); }

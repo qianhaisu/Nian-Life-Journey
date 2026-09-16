@@ -175,5 +175,8 @@ test("app/home.css：桌面竖照/方照按约 75dvh 限高（带地板与天花
   const asideRule = desktop.match(/\.home-aside \{([^}]*)\}/)[1];
   assert.match(asideRule, /justify-content:\s*center/);
   assert.doesNotMatch(asideRule, /space-between/);
-  assert.match(asideRule, /gap:\s*clamp\(56px,\s*6vw,\s*72px\)/);
+  // 2026-09-16 视觉验收 ②：便签退到页末以后左栏只剩题签一块，原来那条 clamp(56px,6vw,72px)
+  // 的 gap 是用来隔开题签和便签的，留着会在左栏中间留一个和照片一样高的洞，所以去掉了。
+  // 这条用例守的是「整块居中、不上下分推」，不是那个具体的 gap 值。
+  assert.doesNotMatch(asideRule, /gap:/);
 });

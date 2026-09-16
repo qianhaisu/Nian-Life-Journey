@@ -845,3 +845,48 @@ test("UTC 写法的期中视觉评分本期也不生效", () => {
   assert.equal(buildHomeFeed(archive, { edition, quality: scored("2026-09-13T05:00:00Z") }).lead.photo.quality.source, "deterministic", "上海 13:00 写下的");
   assert.equal(buildHomeFeed(archive, { edition, quality: scored("2026-09-13T03:00:00Z") }).lead.photo.quality.source, "ai_vision", "上海 11:00 写下的");
 });
+
+// ── 近期优先（2026-09-16 视觉验收 ①）─────────────────────────────────────────
+// 验收当天线上首页轮到的是 2025-05-13 的照片，离今天 16 个月，原则一的检验句不过。
+// 但 60 天硬窗口正是 2026-09-14 被用户拿掉的东西（「换张照片」来回只有 3 张），所以这里钉住的
+// 是**分级**行为：窗内候选够多才收窄，撑不起就退回全库——09-14 那个失败形态不能回来。
+const photoStory = (id, day, mediaId) => ({
+  id,
+  title: `${day} 这一天`,
+  excerpt: undefined,
+  weight: "memory",
+  signature: { day, dateLabel: day, ageLabel: undefined },
+  lead: { id: mediaId, src: `/api/media/${mediaId}?variant=web`, width: 1600, height: 1200, alt: "照片", type: "photo" },
+});
+
+test("近期优先：窗内候选够多时，更早的照片不进本轮轮换，并写明原因", () => {
+  const edition = editionAt(new Date("2026-09-16T09:00:00+08:00"));
+  const recent = ["2026-07-01", "2026-07-11", "2026-07-21", "2026-08-01", "2026-08-11", "2026-08-21", "2026-09-01", "2026-09-11"]
+    .map((day, i) => photoStory(`r${i}`, day, `m-r${i}`));
+  const old = photoStory("old", "2025-05-13", "m-old");
+  const candidates = buildPhotoCandidates({ memories: [...recent, old], birthDay: BIRTH, today: "2026-09-16", edition });
+  const inRotation = candidates.filter((c) => c.cooldown);
+  assert.equal(inRotation.length, 8, "窗内 8 组都在轮换里");
+  assert.ok(!inRotation.some((c) => c.story.eventId === "old"), "16 个月前那张不该轮到");
+  const dropped = candidates.find((c) => c.story.eventId === "old");
+  assert.match(dropped?.reason ?? "", /近期优先：本轮用最近 90 天的窗口/);
+});
+
+test("近期优先：窗内撑不起一轮时退回全库——09-14 那个「来回只有 3 张」不能回来", () => {
+  const edition = editionAt(new Date("2026-09-16T09:00:00+08:00"));
+  const few = [photoStory("n1", "2026-09-01", "m-n1"), photoStory("n2", "2026-09-05", "m-n2")];
+  const older = ["2025-05-13", "2025-08-02", "2026-01-03", "2026-03-09"].map((day, i) => photoStory(`o${i}`, day, `m-o${i}`));
+  const candidates = buildPhotoCandidates({ memories: [...few, ...older], birthDay: BIRTH, today: "2026-09-16", edition });
+  const inRotation = candidates.filter((c) => c.cooldown);
+  assert.equal(inRotation.length, 6, "三个窗口都撑不起 8 组，池子就是全部 6 组，一张都没被窗口压掉");
+  assert.ok(inRotation.some((c) => c.story.eventId === "o0"), "2025-05 那张在这种情况下仍然要能轮到");
+});
+
+test("近期优先只按照片自己的日子收窄，不动别的门槛：窗内的每一组都还在", () => {
+  const edition = editionAt(new Date("2026-09-16T09:00:00+08:00"));
+  const days = ["2026-06-20", "2026-06-30", "2026-07-10", "2026-07-20", "2026-07-30", "2026-08-09", "2026-08-19", "2026-08-29", "2026-09-08"];
+  const memories = days.map((day, i) => photoStory(`w${i}`, day, `m-w${i}`));
+  const candidates = buildPhotoCandidates({ memories, birthDay: BIRTH, today: "2026-09-16", edition });
+  const inRotation = candidates.filter((c) => c.cooldown);
+  assert.equal(inRotation.length, days.length, "全部落在 90 天内，一组都不该少");
+});

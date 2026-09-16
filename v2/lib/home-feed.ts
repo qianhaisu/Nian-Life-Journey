@@ -459,6 +459,25 @@ export const HOME_CANDIDATE_WINDOW_DAYS = 60;
  */
 export const HOME_PHOTO_CANDIDATES_MAX = 12;
 /**
+ * 近期优先（2026-09-16 视觉验收 ①）。
+ *
+ * 验收当天线上首页轮到的是 2025-05-13 的照片和题签，离今天 16 个月。原则一的检验句是「第一次打开的
+ * 家人，不点任何东西，能否说出张年最近怎么样」——答案是不能：他只能说出这孩子四个月大时打疫苗没哭。
+ *
+ * 但 60 天窗口在 2026-09-14 **正是被用户拿掉的东西**（「换张照片」来回只有 3 张）：当时全库逐对获批
+ * 的 (故事, 照片) 只有 4 对，窗口一卡池子就空了，而新批准的配图多半属于更早的故事，硬窗口会让它们
+ * 永远进不了首页。那条判断没有错，不能直接推翻。
+ *
+ * 所以这里不是把窗口装回去，是**分级**：从窄到宽试，第一个「候选数撑得起一轮像样轮换」的窗口才用，
+ * 一个都撑不起就用全库——池子因此永远不会被窗口压到只剩几张，09-14 那个失败形态回不来。
+ *
+ * 这条和 §5.5 的冷却天数（同一张照片 14 天）天然互相拉扯：窗口越窄，一圈越短，同一张照片回来得越快。
+ * 生产此刻 90 天窗口内约 8 组 = 一圈约 2 天。两个目标不可能同时满到，`HOME_RECENT_MIN_POOL` 就是这
+ * 条刻度尺上的位置——调大它偏向冷却，调小它偏向新鲜。实际用了哪个窗口写进 `candidate.reason`。
+ */
+export const HOME_RECENT_WINDOWS_DAYS = [90, 180, 365] as const;
+export const HOME_RECENT_MIN_POOL = 8;
+/**
  * §5.5 的两个冷却天数。**它们是规格给的目标值，不是这段代码里的开关**——写在这里是为了让实际做到了
  * 多少能被对着一个数字讲清楚：
  *
@@ -815,6 +834,19 @@ export type BuildPhotoCandidatesInput = {
  *
  * 过滤顺序照 2026-09-13 `photoLedMoment` 的教训：先滤掉不合格的，再分连拍组，再选。
  */
+/**
+ * 从窄到宽试 HOME_RECENT_WINDOWS_DAYS，返回第一个「窗内候选数 ≥ HOME_RECENT_MIN_POOL」的窗口。
+ * 一个都撑不起就返回全部（`days: undefined`）——池子不会被窗口压到只剩几张（见常量处的说明）。
+ */
+function pickRecentWindow<T extends { photo: { day: string } }>(entries: T[], today: string): { days?: number; kept: T[] } {
+  for (const days of HOME_RECENT_WINDOWS_DAYS) {
+    const start = recentWindowStart(today, days);
+    const kept = entries.filter((entry) => entry.photo.day >= start);
+    if (kept.length >= HOME_RECENT_MIN_POOL) return { days, kept };
+  }
+  return { kept: entries };
+}
+
 export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhotoCandidate[] {
   const { memories, birthDay, today, edition, quality, photoKey, approvedAt } = input;
   type Pair = { photo: HomeFeedPhoto; story: HomeStoryRef; burst: string; key: string };
@@ -853,6 +885,7 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
   // 上一版我把资格过滤写在了去重之后，等于把那条教训又踩了一遍。
   const eligible: Pair[] = [];
   const pending: { entry: Pair; reason: string }[] = [];
+  const dropped: { entry: Pair; reason: string }[] = [];
   for (const entry of paired) {
     const at = approvedAt?.get(entry.key);
     if (at && isAtOrAfterEditionStart(at, edition.startedAt)) {
@@ -861,11 +894,19 @@ export function buildPhotoCandidates(input: BuildPhotoCandidatesInput): HomePhot
     }
     eligible.push(entry);
   }
+  // 近期优先：在「本期有资格」之后、连拍分组之前收窄——收窄的依据是照片自己的日子，同一组连拍是同一
+  // 时刻，整组要么都在窗口内要么都不在，不会出现上面那种「合格的被不合格的挤掉」的假阴性。
+  const windowed = pickRecentWindow(eligible, today);
+  for (const entry of eligible) {
+    if (!windowed.kept.includes(entry)) {
+      dropped.push({ entry, reason: `近期优先：本轮用最近 ${windowed.days ?? "全部"} 天的窗口（窗内 ${windowed.kept.length} 组），这一张更早` });
+    }
+  }
+
   // 连拍去重只在**本期有资格**的候选里做，所以一张本期还不能用的照片不可能占掉组里的名额。
   const seenBursts = new Set<string>();
   const pool: Pair[] = [];
-  const dropped: { entry: Pair; reason: string }[] = [];
-  for (const entry of eligible) {
+  for (const entry of windowed.kept) {
     if (seenBursts.has(entry.burst)) { dropped.push({ entry, reason: "同一时刻的连拍里已经取了一张" }); continue; }
     seenBursts.add(entry.burst);
     pool.push(entry);
