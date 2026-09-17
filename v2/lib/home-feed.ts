@@ -1040,6 +1040,26 @@ export function isImportantReminder(item: Pick<UpcomingItem, "title" | "note">):
 }
 
 /**
+ * 里程碑词表。**故意和 IMPORTANT_WORDS（lib/upcoming-freshness.ts）分开一份**，不是漏共用。
+ *
+ * IMPORTANT_WORDS 决定的是「保鲜期」——命中它的事项**永不按时钟过期**、且在待核实里排最前，
+ * 这两条语义只对"还没有结果、需要跟进"的医疗事项成立。「升班」这类里程碑不一样：
+ * 它已经发生过了，不需要"永不过期"（根本没有到期这回事），也不该抢占待核实的排位——
+ * 混进 IMPORTANT_WORDS 会让任何提到"升班"的未来待办都变成永不过期，那是这张词表管不到的事。
+ *
+ * 这张词表**只做一件事**：决定一条已完成（status='done'）的事项算不算「有意义，值得在每周提醒里
+ * 列出来」（Teddy 2026-09-17 第 2 条：「这个每周提醒不一定是这周发的话，可以是之前提到的这周要做
+ * 的重要事情」，举的例子是「张年升班了」）。刻意也短而具体，理由和 IMPORTANT_WORDS 一样：
+ * 宁可漏判一件真正的里程碑，也不要把普通杂事的完成记录当成"有意义的事"塞进每周提醒。
+ */
+const MILESTONE_WORDS = ["升班", "毕业", "转班", "开学"];
+
+function isMilestoneReminder(item: Pick<UpcomingItem, "title" | "note">): boolean {
+  const text = `${item.title}${item.note ?? ""}`;
+  return MILESTONE_WORDS.some((word) => text.includes(word));
+}
+
+/**
  * 一条事项的证据链去处。先找具体那段记忆，找不到就退到它被提起的那个月——但**说清楚是哪一种**，
  * 让页面能给出对得上的标签（原则八）。两者都没有时返回空，页面就不画一个去不了的链接。
  */
@@ -1150,7 +1170,9 @@ export function buildReminders(
   // 它是这周真实发生过的事，不是一件还要家人办的事，只是恰好也值得被看见。
   const stillOpen = all.filter((reminder) =>
     reminder.state === "active" || reminder.state === "needs_confirmation" || reminder.state === "tentative"
-    || (reminder.state === "done" && reminder.important));
+    // 2026-09-17 第 2 条又加了一种：done + 里程碑（isMilestoneReminder，独立词表，见上）。
+    // 「升班」这类事不是医疗，不该用 isImportantReminder 的门，但一样是"已完成、有意义"。
+    || (reminder.state === "done" && (reminder.important || isMilestoneReminder(reminder.item))));
   const showable: HomeReminder[] = [];
   for (const reminder of stillOpen) {
     const verdict = reminderInWindow(reminder.item, reminder.provenance, today);

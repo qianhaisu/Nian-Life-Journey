@@ -362,17 +362,24 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
             className={i === index ? "memory-player-scene is-current" : "memory-player-scene"}
             aria-hidden={i !== index}
           >
-            {/* 幕的外壳一直在（进度条和版式要它），但**照片只在临近时才挂**：
+            {/* 幕的外壳一直在（版式要它），但**照片只在临近时才挂**：
                 这就是那个「点开先黑屏 15 秒」的修法，见 isNear。 */}
             {item.items.map((entry, j) => (
-              <div key={entry.key}>
+              <div key={entry.key} className="memory-player-slot">
                 {isNear(i, index, scenes.length) ? <Image
                   className={i === index ? "memory-player-frame is-current" : "memory-player-frame"}
                   data-fx={(i + j) % 4}
                   src={entry.media.src}
                   alt={entry.media.alt}
-                  width={entry.media.width || 4}
-                  height={entry.media.height || 3}
+                  // fill 而不是 width/height：2026-09-17 线上截图看到播放器上下有大块留白——
+                  // 这两张照片本身没有问题，问题是 Next.js <Image> 不用 fill 时会按 width/height
+                  // 的原始长宽比给 <img> 算一个"内在框"，这个框不一定等于它外层 div 的实际大小
+                  // （尤其这里外层大小是 flex 算出来的、不是固定长宽比），于是我写的
+                  // position:absolute;inset:0 是相对那个内在框摆的，不是相对外层 div——
+                  // 图片因此偏出了外层的左上角，看起来像"图缩小了、周围露出了底色"。
+                  // fill 会让 Next.js 自己把 <img> 设成 position:absolute;inset:0;width:100%;height:100%，
+                  // 这正是我原本想要的效果，不用再猜内在框怎么算的。
+                  fill
                   sizes="100vw"
                   priority={i === 0}
                   unoptimized
@@ -383,13 +390,9 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
         ))}
         {caption ? <p className="memory-player-caption">{caption}</p> : null}
       </div>
-
-      {/* 进度条按**幕**走，不按张走——一幕叠了三张时，它仍然只前进一格。 */}
-      <div className="memory-player-progress" aria-hidden="true">
-        {scenes.map((item, i) => (
-          <span key={item.key} className={i <= index ? "memory-bar is-on" : "memory-bar"} />
-        ))}
-      </div>
+      {/* 底部进度条已去掉（Teddy 2026-09-17 第 3 条：「播放时底部也不要显示进度条」，
+          参照的是 iPhone 相册回忆——那里播放时也没有这一排。换到第几张仍然读屏可读，
+          见下面 visually-hidden 那句「第 N 幕，共 N 幕」。 */}
 
       <footer className="memory-player-controls">
         <button type="button" onClick={() => step(-1)} disabled={index === 0} aria-label="上一张"><PrevGlyph /></button>

@@ -66,7 +66,7 @@ h1, h2, h3 { scroll-margin-top: 88px; text-wrap: balance; }
 /* 不该被断开的一小段文字（现在只有张年的名字，见 components/home-lead.tsx）。 */
 .keep-whole { white-space: nowrap; }
 p { text-wrap: pretty; }
-time, .growth-chart strong, .portrait-facts strong { font-variant-numeric: tabular-nums; }
+time, .portrait-facts strong { font-variant-numeric: tabular-nums; }
 .serif { font-family: var(--font-heading); font-weight: 600; }
 .skip-link { position: fixed; top: 8px; left: 8px; z-index: 1000; padding: 10px 14px; background: var(--color-primary); color: var(--color-bg); border-radius: 8px; transform: translateY(-160%); }
 .skip-link:focus { transform: translateY(0); }
@@ -79,7 +79,11 @@ time, .growth-chart strong, .portrait-facts strong { font-variant-numeric: tabul
 .site-header { position: relative; z-index: 20; border-bottom: 1px solid var(--color-border); background: rgb(249 246 240 / .94); animation: fadeInUp 1s var(--ease) both; }
 .header-inner { display: grid; grid-template-columns: auto 1fr; align-items: center; width: min(1400px, calc(100% - 32px)); min-height: 72px; margin-inline: auto; }
 .brand { display: inline-flex; min-width: 0; align-items: center; gap: 12px; min-height: 44px; }
-.brand-mark { display: grid; width: 48px; height: 48px; flex-shrink: 0; place-items: center; background: var(--brand-accent); color: #fff; border-radius: 16px; font-size: 24px; font-weight: 800; transition: transform .3s var(--ease); }
+/* 2026-09-17 Teddy 第 1 条：「年 logo 改为无填充仅有现有颜色的边框」——去掉实心底色，
+   改成边框 + 同色文字。边框宽度算进 48×48 的盒子里（box-sizing 全站默认 border-box，
+   见下面通用规则），尺寸不用跟着改。字色和边框同一个 --brand-accent，对纸底 4.9:1，
+   早就核对过对比度（app/home.css 那条注释）。 */
+.brand-mark { display: grid; width: 48px; height: 48px; flex-shrink: 0; place-items: center; background: transparent; border: 2px solid var(--brand-accent); color: var(--brand-accent); border-radius: 16px; font-size: 24px; font-weight: 800; transition: transform .3s var(--ease); }
 .brand-mark:hover { transform: scale(1.05) rotate(-5deg); }
 .brand-copy { display: flex; min-width: 0; align-items: baseline; gap: 10px; line-height: 1.15; white-space: nowrap; }
 .brand-copy strong { overflow: hidden; color: var(--color-primary); font-size: clamp(.95rem, 2.4vw, 1.2rem); font-weight: 600; letter-spacing: .015em; text-overflow: ellipsis; }
@@ -124,19 +128,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    同时字号从 7.5rem 收到 5.5rem：原来 /memory 的第一屏整屏只有一句标语，一张照片都没有。 */
 .page-masthead h1, .about-masthead h1 { max-width: 12ch; margin: 18px 0 24px; font-size: clamp(3rem, 8vw, 5.5rem); letter-spacing: -.01em; line-height: 1.12; }
 .page-masthead > p, .about-masthead > p { max-width: 48ch; margin: 0; color: var(--color-muted); font-size: 1.05rem; }
-.chart-pair { display: grid; gap: 24px; margin-top: 56px; }
-.growth-chart { margin: 0; padding: 24px 0; border-top: 1px solid var(--color-primary); }
-.growth-chart figcaption { display: flex; justify-content: space-between; }
-.growth-chart figcaption span { font-weight: 700; }
-.growth-chart figcaption strong { color: var(--color-accent); font-family: var(--font-heading); font-size: 1.8rem; font-weight: 400; }
-.growth-chart svg { display: block; width: 100%; height: auto; margin-top: 18px; overflow: visible; }
-.chart-baseline { fill: none; stroke: var(--color-border); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.chart-line { fill: none; stroke: var(--color-accent); stroke-width: 1.25; vector-effect: non-scaling-stroke; }
-.chart-weight .chart-line { stroke: var(--color-secondary); }
-.chart-point { fill: var(--color-surface); stroke: var(--color-accent); stroke-width: 1.25; vector-effect: non-scaling-stroke; }
-.chart-weight .chart-point { stroke: var(--color-secondary); }
-.chart-value, .chart-date { fill: var(--color-muted); font-family: var(--font-body); font-size: 8px; }
-.chart-value { fill: var(--color-text); font-weight: 700; }
 .capture-form { display: grid; gap: 18px; margin-top: 32px; padding: 28px 0; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
 .capture-form label { display: grid; gap: 8px; color: var(--color-muted); font-size: .78rem; }
 .capture-form input, .capture-form select, .capture-form textarea { width: 100%; padding: 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text); }
@@ -846,81 +837,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 .detail-footer { padding: 40px 0 96px; }
 
-/* 张年 — 成长档案 (2026-09-12 rebuild).
-   Four parts, each with one source: 基本信息 (birth, age, portrait, measured height/weight),
-   家人关注的健康问题, 学会了什么, 解锁的体验. The four modules this replaced — 最近的生活节奏,
-   最近记下来的, 家人这阵子说, 档案最近记下的 — were four presentations of the archive's recent
-   memories, which is the front page's job, so their styles (.about-notes dl, .about-timeline,
-   .about-deeper, .about-earlier, .care-notes) went with them rather than being left dead. */
-.about-age { margin: 10px 0 0; color: var(--color-muted); font-size: 1.05rem; }
-.about-portrait { margin: 28px 0 0; }
-.about-portrait .photo { max-width: min(100%, 480px); border-radius: 50% 50% 32px 32px / 40% 40% 32px 32px; overflow: hidden; box-shadow: var(--shadow); }
-.about-portrait-date { margin: 10px 0 0; color: var(--color-muted); font-size: .78rem; }
-.note-meta { display: flex; align-items: baseline; gap: 12px; margin: 0; color: var(--color-muted); font-size: .78rem; }
-.note-meta time { color: inherit; font-size: inherit; }
-/* One part of the record. Every part is a heading, then its rows — that "every part" no longer
-   includes 健康记录: PAGE-0915-FULL-REMEDIATION-R1 (Teddy 已批准的产品决策 1) demotes it back to a
-   collapsed-by-default disclosure, so it reads as a secondary archive a family member opens on
-   purpose rather than a first-class block sitting level with 量过的身高体重. Nothing else here
-   changed — the 2026-09-13 rewrite's point (no hidden CURRENT/更早的时候 era split) still holds for
-   every other part. */
-.about-block { padding: clamp(36px, 5vw, 56px) 0 0; }
-.about-block > .section-mark { display: block; margin-bottom: 18px; }
-/* 健康记录 折叠：跟别的 .about-block 一样的外边距，summary 换成可点击的同款标题样式。 */
-.about-health-fold > summary {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 18px;
-  min-height: 44px;
-  cursor: pointer;
-  list-style: none;
-}
-.about-health-fold > summary::-webkit-details-marker { display: none; }
-.about-health-fold > summary::after { color: var(--color-secondary); content: "查看 ＋"; font-size: .78rem; letter-spacing: 0; }
-.about-health-fold[open] > summary::after { content: "收起 －"; }
-
-/* 量过的身高体重: the newest of each, each with the day IT was measured. */
-.measure-latest { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
-.measure-latest li { display: grid; grid-template-columns: 4.5rem auto; align-items: baseline; gap: 4px 16px; padding: 18px 0; border-bottom: 1px solid var(--color-border); }
-.measure-kind { color: var(--color-secondary); font-size: .78rem; font-weight: 700; letter-spacing: .06em; }
-.measure-value { font-family: var(--font-heading); font-size: 2rem; font-weight: 400; }
-.measure-when { grid-column: 2; color: var(--color-muted); font-size: .78rem; }
-
-/* 家人关注的健康问题: one group per issue, and inside it dated records only. There is deliberately
-   no current-status line anywhere in here — see lib/about-view.ts. */
-.health-group { padding: 22px 0 0; }
-.health-group + .health-group { margin-top: 6px; border-top: 1px solid var(--color-border); }
-.health-title { margin: 0 0 10px; font-size: 1.35rem; line-height: 1.4; }
-.health-lines { margin: 0; padding: 0; list-style: none; }
-.health-lines > li { padding: 12px 0; }
-.health-lines > li + li { border-top: 1px dashed var(--color-border); }
-.health-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; margin: 0 0 6px; color: var(--color-muted); font-size: .78rem; }
-.health-when time { color: var(--color-secondary); font-weight: 700; }
-.health-note { margin: 0; font-size: 1.05rem; line-height: 1.7; }
-.health-next { margin: 6px 0 0; color: var(--color-muted); font-size: .9rem; }
-
-/* 学会了什么: grouped by what kind of change it is, each note carrying its own day. */
-.learned-group { padding: 6px 0 18px; }
-.learned-group + .learned-group { border-top: 1px solid var(--color-border); padding-top: 18px; }
-.learned-kind { margin: 0 0 10px; color: var(--color-secondary); font-size: .78rem; font-weight: 700; letter-spacing: .06em; }
-.learned-notes { margin: 0; padding: 0; list-style: none; }
-.learned-notes > li + li { margin-top: 16px; }
-.learned-notes p.serif { margin: 0 0 4px; font-size: clamp(1.15rem, 2.8vw, 1.45rem); line-height: 1.5; }
-
-/* 解锁的体验: oldest first, one tap target per first, the story's own words as the claim. */
-.unlocked-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
-.unlocked-list a { display: grid; grid-template-columns: minmax(0, 1fr); align-items: baseline; gap: 2px 16px; min-height: 56px; padding: 13px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
-.unlocked-list a:hover { color: var(--color-accent); }
-.unlocked-list time { color: var(--color-secondary); font-size: .78rem; font-weight: 700; white-space: nowrap; }
-.unlocked-age { color: var(--color-muted); font-size: .78rem; white-space: nowrap; }
-.unlocked-title { font-size: 1.15rem; line-height: 1.5; }
-@media (min-width: 700px) {
-  .unlocked-list a { grid-template-columns: 9.5em 7em minmax(0, 1fr); }
-  .unlocked-title { grid-column: auto; }
-}
-.about-entries { padding: clamp(40px, 6vw, 64px) 0 96px; }
-
 /* 404 */
 .not-found { padding: clamp(64px, 12vw, 160px) 0; }
 .not-found h1 { margin: 12px 0 16px; font-size: clamp(2.2rem, 7vw, 4rem); line-height: 1.1; }
@@ -1070,7 +986,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .monthly-focus-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .monthly-focus-item { padding: 28px 28px 30px 0; }
   .monthly-focus-item:nth-child(even) { padding-right: 0; padding-left: 28px; border-left: 1px solid var(--color-border); }
-  .chart-pair { grid-template-columns: repeat(2, 1fr); }
   .capture-form-grid { grid-template-columns: 1fr 1fr; }
 }
 

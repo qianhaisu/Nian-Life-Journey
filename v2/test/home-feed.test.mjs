@@ -384,6 +384,29 @@ test("没有关键事项时默认只露一条", () => {
   assert.equal(reminders.shown[0].id, "a", "先到的那天排前面");
 });
 
+// 2026-09-17 第 2 条：「每周提醒不一定是这周发的话，可以是……这周要做的重要事情。
+// 还有这周张年升班了，也没有」——已完成的关键事项 / 里程碑也该列出来，但只限这两类，
+// 普通杂事的完成记录仍然是噪音，不列。
+test("已完成的关键事项（医疗类）也出现在每周提醒里，普通杂事的完成不出现", () => {
+  const items = [
+    item("vax-done", { title: "带去打了流感疫苗", status: "done", evidence: IN_WINDOW }),
+    item("errand-done", { title: "买了日用品", status: "done", evidence: IN_WINDOW }),
+  ];
+  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
+  const ids = [...reminders.shown, ...reminders.more].map((r) => r.id);
+  assert.ok(ids.includes("vax-done"), "已完成的关键事项应当出现");
+  assert.ok(!ids.includes("errand-done"), "普通杂事的完成不是「有意义的事」，不该出现");
+});
+
+test("已完成的里程碑（升班/毕业……）也出现，即使不是医疗类", () => {
+  const items = [item("levelup-done", { title: "张年顺利升班了", status: "done", evidence: IN_WINDOW })];
+  const reminders = buildReminders({ status: "ready", items }, TODAY, undefined);
+  const ids = [...reminders.shown, ...reminders.more].map((r) => r.id);
+  assert.ok(ids.includes("levelup-done"), "升班是里程碑，isImportantReminder 判不出来，但仍该出现");
+  const found = [...reminders.shown, ...reminders.more].find((r) => r.id === "levelup-done");
+  assert.equal(found.state, "done");
+});
+
 // ── 每周提醒的 7 天窗口（2026-09-16，用户裁定「严格 7 天，今天就留白」）──────────
 //
 // 窗口本身的规则在 lib/home-reminder-window.ts 有独立用例（test/home-memory.test.mjs）。

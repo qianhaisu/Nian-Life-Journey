@@ -261,64 +261,53 @@ test("一天都不合格时说明白原因，不编一段内容", () => {
   assert.equal(absence.kind, "no_qualified_theme");
 });
 
-test("四组主题都有多个候选时（week/day×3/topic×3/season×3），「笑」仍然轮得到", () => {
+test("四组主题候选数超过 HOME_MEMORIES_MAX 时（week/day×3/topic×7/season×4），「笑」仍然轮得到", () => {
   // 2026-09-17 线上真实发生过的回归：加了 week 主题之后没跟着调 HOME_MEMORIES_MAX，
   // week 在第 0 轮多占一格，把后面每轮 topic 组该出现的位置整体推后一格——
   // topic 组第三项「笑」因此被挤出九段之外（线上实测：八段回忆里 water/sleep 都在，笑没了）。
   //
   // 这条测试第一版只给了 day/season 各一个候选，凑不满 HOME_MEMORIES_MAX 就先撞到「没料了」，
   // 于是不管 MAX 设成 8 还是 9 都会通过——测的其实是空集合，不是排队顺序。
-  // 生产里 day 是每个月一段、season 是每个季节一段，本来就有好几个候选在排队，
-  // 这里照那个形状铺开：day 三个月、season 三个季节，topic 三项都给够本，才会真的撞到边界。
+  // Teddy 2026-09-17 又把 HOME_MEMORIES_MAX 从 9 放宽到 20——夹具的候选总数如果还停在 10，
+  // 20 顶得住任何排队顺序，这条测试会再次退化成"测空集合"。所以这一版把候选总量堆到
+  // 超过 20（week1 + day3 + topic7 + season4 = 15……不够，再加 day 到 8 个月 = 20，
+  // 刚好压着上限，真正验证"超过供给"时排队顺序仍然对——day 给够 8 个月、topic 七项全给上、
+  // season 四季全给上，让真实候选数超过 20，好过 20 之后的截断继续正确跳过供给不足的陷阱。
   const byPrefix = (rules) => (id) => rules.find(([p]) => id.startsWith(p))?.[1];
-  const water = { topic: "其他", water: true, waterKind: "泳池", childInFrame: true, swimming: true, value: 0.9, confidence: 0.9 };
-  const sleep = { topic: "睡觉", water: false, value: 0.9, confidence: 0.9 };
-  const laugh = { topic: "笑", water: false, value: 0.9, confidence: 0.9 };
-  const topics = byPrefix([["wtr", water], ["slp", sleep], ["lgh", laugh]]);
+  const topicLabel = (topic, water = false) => ({ topic, water, value: 0.9, confidence: 0.9 });
+  const topics = byPrefix([
+    ["wtr", { topic: "其他", water: true, waterKind: "泳池", childInFrame: true, swimming: true, value: 0.9, confidence: 0.9 }],
+    ["slp", topicLabel("睡觉")], ["lgh", topicLabel("笑")], ["eat", topicLabel("吃饭")],
+    ["out", topicLabel("户外")], ["toy", topicLabel("玩玩具")], ["hld", topicLabel("抱着")],
+  ]);
 
   const spread8 = (prefix, month) => ["01", "04", "08", "11", "15", "18", "22", "25"]
     .map((d) => ({ day: `${month}-${d}`, photos: moments(`${prefix}${d}`, `${month}-${d}`, 3) }));
 
+  const dayMonths = ["2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09"]
+    .map((m, i) => monthOf(m, [{ day: `${m}-10`, photos: moments(`d${i}`, `${m}-10`, 8) }],
+      [story(`e${i}`, `${m}-10`, `第 ${i + 1} 个月的一天`)]));
+
+  const topicMonth = monthOf("2025-10", [
+    ...spread8("wtr", "2025-10"), ...spread8("slp", "2025-10"), ...spread8("lgh", "2025-10"),
+    ...spread8("eat", "2025-10"), ...spread8("out", "2025-10"), ...spread8("toy", "2025-10"),
+    ...spread8("hld", "2025-10"),
+  ]);
+
+  // season：2026 年四季各给够本（每季至少 3 个不同日子），和 day/topic 的 2025 年日期不重叠。
+  const seasonDays = ({ prefix, days }) => days.map((d) => ({ day: d, photos: moments(`${prefix}${d.slice(5, 7)}${d.slice(8)}`, d, 4) }));
   const months = [
-    // day 主题：三个不同的月份各有一天带已发布记忆，天然铺开成三段（seenMonths 每月只取一天）。
-    monthOf("2025-02", [{ day: "2025-02-10", photos: moments("d1", "2025-02-10", 8) }],
-      [story("eA", "2025-02-10", "二月的一天")]),
-    monthOf("2025-03", [{ day: "2025-03-10", photos: moments("d2", "2025-03-10", 8) }],
-      [story("eB", "2025-03-10", "三月的一天")]),
-    monthOf("2025-04", [{ day: "2025-04-10", photos: moments("d3", "2025-04-10", 8) }],
-      [story("eC", "2025-04-10", "四月的一天")]),
-    // topic 三项各自的候选池，放在不产生 day/season 的月份（用 05 月），避免互相干扰。
-    monthOf("2025-05", [...spread8("wtr", "2025-05"), ...spread8("slp", "2025-05"), ...spread8("lgh", "2025-05")]),
-    // season：三个不同季节各给够本（每季至少 3 个不同日子，两两不同月，capPerDay=2 之后仍过 6 的下限）。
-    monthOf("2025-07", [ // 夏
-      { day: "2025-07-05", photos: moments("su1", "2025-07-05", 4) },
-      { day: "2025-07-15", photos: moments("su2", "2025-07-15", 4) },
-    ]),
-    monthOf("2025-08", [
-      { day: "2025-08-05", photos: moments("su3", "2025-08-05", 4) },
-      { day: "2025-08-15", photos: moments("su4", "2025-08-15", 4) },
-    ]),
-    monthOf("2025-09", [ // 秋
-      { day: "2025-09-05", photos: moments("au1", "2025-09-05", 4) },
-      { day: "2025-09-15", photos: moments("au2", "2025-09-15", 4) },
-    ]),
-    monthOf("2025-10", [
-      { day: "2025-10-05", photos: moments("au3", "2025-10-05", 4) },
-      { day: "2025-10-15", photos: moments("au4", "2025-10-15", 4) },
-    ]),
-    monthOf("2025-11", [ // 秋（同一季节继续，只是让候选更充足）
-      { day: "2025-11-05", photos: moments("au5", "2025-11-05", 4) },
-      { day: "2025-11-15", photos: moments("au6", "2025-11-15", 4) },
-    ]),
-    monthOf("2025-12", [ // 冬（跨年）
-      { day: "2025-12-05", photos: moments("wi1", "2025-12-05", 4) },
-      { day: "2025-12-15", photos: moments("wi2", "2025-12-15", 4) },
-    ]),
-    monthOf("2026-01", [
-      { day: "2026-01-05", photos: moments("wi3", "2026-01-05", 4) },
-      { day: "2026-01-15", photos: moments("wi4", "2026-01-15", 4) },
-    ]),
-    // week：2026-09-13 是周日（已验证），窗口 9/7—9/13 全部落在同一个月。
+    ...dayMonths,
+    topicMonth,
+    monthOf("2026-03", seasonDays({ prefix: "sp", days: ["2026-03-05", "2026-03-15"] })), // 春
+    monthOf("2026-04", seasonDays({ prefix: "sp", days: ["2026-04-05", "2026-04-15"] })),
+    monthOf("2026-06", seasonDays({ prefix: "su", days: ["2026-06-05", "2026-06-15"] })), // 夏
+    monthOf("2026-07", seasonDays({ prefix: "su", days: ["2026-07-05", "2026-07-15"] })),
+    monthOf("2025-11", seasonDays({ prefix: "au", days: ["2025-11-05", "2025-11-15"] })), // 秋
+    monthOf("2025-12", seasonDays({ prefix: "au", days: ["2025-12-05", "2025-12-15"] })),
+    monthOf("2026-01", seasonDays({ prefix: "wi", days: ["2026-01-05", "2026-01-15"] })), // 冬（跨年）
+    monthOf("2026-02", seasonDays({ prefix: "wi", days: ["2026-02-05", "2026-02-15"] })),
+    // week：2026-09-13 是周日（已验证），窗口 9/7—9/13 全部落在同一个月，且不撞 dayMonths（那批用的是每月 10 号）。
     monthOf("2026-09", [
       { day: "2026-09-07", photos: moments("wk1", "2026-09-07", 3) },
       { day: "2026-09-09", photos: moments("wk2", "2026-09-09", 3) },
@@ -331,13 +320,14 @@ test("四组主题都有多个候选时（week/day×3/topic×3/season×3），�
   const { memories } = selectHomeMemories(archive, topics);
 
   const kinds = new Set(memories.map((m) => m.kind));
-  assert.equal(memories.length, 9, `应当刚好填满 HOME_MEMORIES_MAX=9，实得 ${memories.length}`);
   assert.ok(kinds.has("week"), `应当有 week 主题，实得 kinds=${[...kinds].join("/")}`);
   assert.ok(kinds.has("day"), `应当有 day 主题，实得 kinds=${[...kinds].join("/")}`);
   assert.ok(kinds.has("season"), `应当有 season 主题，实得 kinds=${[...kinds].join("/")}`);
+  assert.ok(kinds.has("topic"), `应当有 topic 主题，实得 kinds=${[...kinds].join("/")}`);
   const titles = memories.map((m) => m.title);
   assert.ok(titles.includes("笑起来的时候"),
     `「笑」不该被 week 占的那一格挤出去，实得 ${titles.join(" / ")}`);
+  assert.ok(memories.length <= 20, `不能超过 HOME_MEMORIES_MAX=20，实得 ${memories.length}`);
 });
 
 // ── 主题：玩水 / 睡觉 / 笑 …… ─────────────────────────────────────────────────

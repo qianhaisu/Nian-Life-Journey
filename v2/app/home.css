@@ -485,10 +485,6 @@
   text-shadow: 0 2px 16px rgb(0 0 0 / .62);
 }
 
-.memory-player-progress { display: flex; gap: 4px; padding: 0 16px; }
-.memory-bar { height: 2px; flex: 1; background: rgb(255 255 255 / .22); border-radius: 2px; transition: background-color 300ms ease; }
-.memory-bar.is-on { background: rgb(255 255 255 / .85); }
-
 .memory-player-controls {
   display: flex;
   align-items: center;
@@ -544,7 +540,7 @@
    交给 JS 停掉（components/home-memory.tsx 的 usePrefersReducedMotion），CSS 只负责去掉淡入淡出。 */
 @media (prefers-reduced-motion: reduce) {
   .memory-frames img, .memory-player-stage img { transition: none; }
-  .memory-play, .memory-bar { transition: none; }
+  .memory-play { transition: none; }
   /* Ken Burns 是 animation，不是 transition——全局那条 reduce 规则把时长压到 0.01ms 就够了，
      但这里写死 none 更清楚：要求减少动态的人不该看到任何推拉，静止在原始取景上。 */
   .memory-frame.is-current,
