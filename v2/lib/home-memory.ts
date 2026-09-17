@@ -75,11 +75,16 @@ export const MEMORY_MAX_SLIDES = 20;
 /**
  * 首页一共准备几段可切换的回忆。
  *
- * **8 而不是 6**：下面 interleaveKinds 按 day / topic / season 轮流取，一轮各取一段，
- * 所以 6 段只轮得到前两个主题（玩水、睡觉）——Teddy 点名的第三个「笑」排在第三位，
- * 永远轮不到。2026-09-16 线上实测就是这个结果。8 段让它露面。
+ * **9，不是 8**：下面 interleaveKinds 按 week / day / topic / season 轮流取，一轮各取一段，
+ * 2026-09-16 算过「8 段才能轮到 topic 的第三项（笑）」是在只有 day/topic/season 三组时成立的——
+ * 2026-09-17 加了 week 这第四组之后，它会在第 0 轮多占一个位置，把后面所有轮次里 topic 该出现
+ * 的位置整体往后推了一格，8 段又只能轮到「笑」前面那个「睡觉」为止。线上实测就是这个结果
+ * （week 出现后「笑起来的时候」从八段里消失）。9 段补回那一格。
+ *
+ * week 大多数时候是空的（没有价值分数据支撑的一周直接不出这一段），这条算术按「week 恰好
+ * 有一段」的最坏情况留出余量——week 为空时，9 段只是比 8 段多轮到一段而已，不是回归。
  */
-export const HOME_MEMORIES_MAX = 8;
+export const HOME_MEMORIES_MAX = 9;
 /** 跨天主题里，同一天最多贡献几张——防止「一整季」变成「某个下午」。 */
 export const CROSS_DAY_PER_DAY_MAX = 2;
 export const SLIDE_SECONDS = 5;
