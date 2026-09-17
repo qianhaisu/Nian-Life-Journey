@@ -1,0 +1,187 @@
+/* 妈妈月报 — styles scoped entirely under .mr-page, loaded only by app/mom-reports/page.tsx (see
+   app/page.tsx importing ./home.css the same way). Nothing here reaches any other route.
+
+   Palette and type are deliberately NOT the rest of the site's tokens (--clay/--paper in
+   globals.css): this page follows the approved design
+   (docs/nianlife-zhangnian-design-2026-09-16.md) — warm paper white, ink, a deepened clay —
+   and LXGW WenKai for headings, the same self-hosted font app/fonts-wenkai.css already declares
+   for the home page's .home-v2 scope. Declaring it again here, scoped to .mr-serif, costs nothing
+   extra to download (font-face is global, only actual glyph use triggers a fetch) and changes
+   nothing for any other page. */
+
+.mr-page {
+  --mr-paper: #F5F3EC;
+  --mr-ink: #282621;
+  --mr-clay: #984D34;
+  /* Deepened for small text on the paper background — same reasoning as the site's own
+     --clay/--clay-ink split (globals.css): the panel colour and the readable-text colour are not
+     the same colour. ~4.9:1 against --mr-paper. */
+  --mr-clay-ink: #7A3D2A;
+  --mr-muted: #6B6459;
+  --mr-line: #D9D2C3;
+  --mr-panel: #EAE6DB;
+  --mr-display: 'LXGW WenKai', 'Songti SC', serif;
+  --mr-body: 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+
+  background: var(--mr-paper);
+  color: var(--mr-ink);
+  font-family: var(--mr-body);
+  font-size: 1rem;
+  line-height: 1.8;
+  padding-bottom: clamp(48px, 8vw, 96px);
+}
+
+.mr-page * { box-sizing: border-box; }
+.mr-page img { display: block; max-width: 100%; height: auto; }
+.mr-page a { color: inherit; }
+.mr-page ::selection { background: #dab29e; color: var(--mr-ink); }
+
+.mr-serif { font-family: var(--mr-display); font-weight: 400; }
+
+.mr-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.mr-wrap, .mr-hero, .mr-chapter-nav, .mr-section, .mr-footer { width: min(1120px, calc(100% - 32px)); margin-inline: auto; }
+
+.mr-section-heading { display: block; margin-bottom: 24px; }
+.mr-section-heading > span { display: block; margin-top: 6px; font-size: .8rem; color: var(--mr-muted); }
+.mr-source-note { margin-top: 16px; font-size: .8rem; line-height: 1.8; color: var(--mr-muted); }
+
+/* ---------- Hero ---------- */
+.mr-hero { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 20px; }
+.mr-hero-intro { display: flex; flex-direction: column; gap: 4px; }
+.mr-eyebrow { margin: 0; font-size: .78rem; letter-spacing: .04em; color: var(--mr-clay-ink); }
+.mr-hero-title { margin: 4px 0 0; font-size: clamp(2rem, 8vw, 2.6rem); line-height: 1.3; letter-spacing: -.02em; }
+.mr-hero-subtitle { margin-top: 6px; font-family: var(--mr-display); font-size: 1.15rem; line-height: 1.6; color: var(--mr-clay-ink); }
+.mr-hero-age { margin-top: 14px; font-size: .875rem; color: var(--mr-muted); }
+.mr-hero-age span { margin-left: 6px; }
+
+.mr-month-picker { margin-top: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.mr-month-picker label { font-size: .78rem; color: var(--mr-muted); }
+.mr-month-picker select { min-height: 44px; padding: 6px 28px 6px 4px; border: 0; border-bottom: 1px solid var(--mr-clay); background: transparent; font: inherit; font-size: 1rem; color: var(--mr-ink); border-radius: 0; }
+.mr-month-picker > span { font-size: .75rem; color: var(--mr-muted); }
+
+/* Natural fit only (Photo component's default): the box takes the photo's own aspect ratio, so a
+   portrait photo stands tall and nothing is cropped out from behind it — 「不遮脸」 rules out an
+   object-fit: cover box here even on desktop. max-height is a cap for an unusually tall frame, not
+   a crop (object-fit: contain never cuts the image). */
+.mr-hero-photo { margin: 0; }
+.mr-hero-photo .photo { border-radius: 4px; overflow: hidden; max-height: 640px; margin-inline: auto; }
+.mr-hero-photo img { width: 100%; height: auto; max-height: 640px; object-fit: contain; }
+.mr-hero-photo figcaption { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: .75rem; color: var(--mr-muted); }
+.mr-hero-photo-empty { margin: 0; padding: 48px 16px; text-align: center; background: var(--mr-panel); border-radius: 4px; color: var(--mr-muted); font-size: .9rem; }
+
+/* ---------- Chapter nav ---------- */
+.mr-chapter-nav { display: flex; gap: 20px; overflow-x: auto; margin-top: 32px; padding-block: 14px; border-block: 1px solid var(--mr-line); scrollbar-width: thin; }
+.mr-chapter-nav a { flex-shrink: 0; display: inline-flex; align-items: center; min-height: 44px; font-size: .85rem; white-space: nowrap; }
+.mr-chapter-nav a:hover { color: var(--mr-clay-ink); }
+
+/* ---------- Sections ---------- */
+.mr-section { margin-top: 56px; scroll-margin-top: 20px; }
+
+/* 本月情况总结 */
+.mr-summary-layout { display: block; }
+.mr-summary-lead { margin: 0; font-family: var(--mr-display); font-size: 1.5rem; line-height: 1.65; }
+.mr-summary-lead em { font-style: normal; color: var(--mr-clay-ink); }
+.mr-summary-copy { margin-top: 18px; font-size: 1rem; line-height: 1.95; max-width: 62ch; }
+
+.mr-aspects { display: grid; grid-template-columns: 1fr; column-gap: 40px; margin-top: 32px; padding: 0; }
+.mr-aspects > div { display: block; padding: 18px 0; border-top: 1px solid var(--mr-line); margin: 0; }
+.mr-aspects dt { font-family: var(--mr-display); font-size: 1.3rem; color: var(--mr-clay-ink); margin-bottom: 6px; }
+.mr-aspects dd { margin: 0; }
+.mr-aspects dd strong { display: block; font-weight: 500; font-size: 1rem; line-height: 1.7; }
+.mr-aspects dd span { display: block; margin-top: 6px; font-size: 1rem; line-height: 1.85; color: var(--mr-muted); }
+
+/* 一点点长大 */
+.mr-growth { background: var(--mr-panel); padding-block: 40px; }
+.mr-growth-layout { display: block; }
+.mr-growth-intro p { margin-top: 12px; font-size: 1rem; line-height: 1.9; color: #5e584e; }
+
+.mr-growth-chart { margin-top: 24px; }
+.mr-chart-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.mr-tablist { display: flex; gap: 4px; border: 1px solid #c3baaa; border-radius: 4px; padding: 3px; }
+.mr-tablist button { border: 0; background: transparent; min-height: 44px; min-width: 64px; font: inherit; font-size: .95rem; color: var(--mr-ink); border-radius: 2px; }
+.mr-tablist button.is-active { background: var(--mr-clay); color: #fff; }
+.mr-chart-latest { font-size: .82rem; color: var(--mr-muted); }
+.mr-chart-panel { padding-top: 18px; min-height: 220px; }
+.mr-chart-svg { width: 100%; height: auto; overflow: visible; }
+.mr-chart-baseline { stroke: #cdc5b6; stroke-width: 1; }
+.mr-chart-line { fill: none; stroke: var(--mr-clay); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.mr-chart-point { fill: var(--mr-panel); stroke: var(--mr-clay); stroke-width: 2; }
+.mr-chart-value { font-size: 12px; font-weight: 600; fill: var(--mr-clay-ink); text-anchor: middle; }
+.mr-chart-month { font-size: 11px; fill: var(--mr-muted); text-anchor: middle; }
+.mr-chart-empty { padding: 24px 0; color: var(--mr-muted); font-size: .9rem; }
+.mr-chart-caption { margin-top: 10px; font-size: .8rem; line-height: 1.8; color: var(--mr-muted); }
+
+.mr-measurement-detail { margin-top: 20px; border-top: 1px solid #cbc3b5; }
+.mr-measurement-detail summary { display: flex; align-items: center; gap: 10px; list-style: none; cursor: pointer; min-height: 48px; font-size: .85rem; }
+.mr-measurement-detail summary::-webkit-details-marker { display: none; }
+.mr-measurement-detail summary b { font-weight: 400; font-size: 1.1rem; transition: transform .16s ease-out; }
+.mr-measurement-detail[open] summary b { transform: rotate(45deg); }
+.mr-table-scroll { overflow-x: auto; }
+.mr-table-scroll table { width: 100%; margin-top: 8px; font-size: .85rem; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mr-table-scroll th, .mr-table-scroll td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #d0c7b7; }
+.mr-table-scroll th { font-weight: 600; }
+
+/* 睡眠旅程 */
+.mr-sleep-copy { display: block; margin-top: 12px; }
+.mr-sleep-copy > p { margin: 0; font-size: 1rem; line-height: 1.9; max-width: 60ch; }
+.mr-sleep-key { margin-top: 18px; display: flex; flex-direction: column; gap: 4px; }
+.mr-sleep-key > span { font-size: .78rem; color: var(--mr-muted); }
+.mr-sleep-key strong { font-size: 1rem; font-weight: 500; }
+.mr-sleep-key i { margin-inline: 8px; color: var(--mr-muted); }
+
+.mr-sleep-path { list-style: none; margin: 32px 0 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.mr-sleep-path li { position: relative; display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 16px; padding: 0 0 26px; font-size: .95rem; color: var(--mr-muted); min-height: 44px; }
+.mr-sleep-path li:not(:last-child)::before { content: ""; position: absolute; left: 6px; top: 8px; bottom: 0; width: 1px; background: #b6a896; }
+.mr-sleep-path li:last-child { padding-bottom: 0; }
+.mr-stage-dot { height: 13px; width: 13px; border-radius: 50%; background: var(--mr-paper); border: 1px solid #a0927f; position: relative; z-index: 1; }
+.mr-sleep-path li.is-current { color: var(--mr-clay-ink); }
+.mr-sleep-path li.is-current .mr-stage-dot { background: var(--mr-clay); border-color: var(--mr-clay); box-shadow: 0 0 0 5px #eadbd0; }
+.mr-sleep-path strong { font-weight: 500; grid-column: 2; }
+.mr-sleep-path small { grid-column: 3; font-size: .75rem; color: var(--mr-muted); }
+
+/* 健康与关注 */
+.mr-care-intro p { margin-top: 14px; font-size: 1rem; line-height: 1.9; color: #5e584e; max-width: 60ch; }
+.mr-care-list { margin-top: 24px; border-top: 1px solid var(--mr-line); }
+.mr-care-item { border-bottom: 1px solid var(--mr-line); }
+.mr-care-item summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; list-style: none; cursor: pointer; padding-block: 18px; min-height: 44px; }
+.mr-care-item summary::-webkit-details-marker { display: none; }
+.mr-care-item-title { flex: 1 1 200px; font-size: 1.02rem; font-weight: 500; }
+.mr-care-item-title small { display: block; margin-top: 4px; font-size: .8rem; font-weight: 400; color: var(--mr-muted); }
+.mr-pill { font-style: normal; font-size: .72rem; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.mr-pill-watch { background: color-mix(in srgb, var(--mr-clay) 14%, transparent); color: var(--mr-clay-ink); }
+.mr-pill-later { background: var(--mr-panel); color: var(--mr-muted); }
+.mr-pill-stable { background: color-mix(in srgb, var(--mr-clay) 8%, transparent); color: var(--mr-clay-ink); }
+.mr-pill-good { background: #dfe6da; color: #3f5a3a; }
+.mr-care-item summary > b { color: var(--mr-clay); font-size: 1.3rem; font-weight: 400; transition: transform .16s ease-out; }
+.mr-care-item[open] summary > b { transform: rotate(45deg); }
+.mr-care-detail { padding: 0 0 22px; font-size: 1rem; color: #5e584e; line-height: 1.9; }
+.mr-care-detail p + p { margin-top: 12px; }
+
+/* 下月关注 */
+.mr-next-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 24px; }
+.mr-next-notes article { padding-top: 16px; border-top: 1px solid #b9a58e; }
+.mr-next-notes h3 { margin: 0; font-size: 1.1rem; font-family: var(--mr-display); font-weight: 400; }
+.mr-next-notes p { margin-top: 10px; font-size: 1rem; line-height: 1.9; color: #5e584e; }
+
+/* 来源与署名 */
+.mr-footer { text-align: center; margin-top: 72px; }
+.mr-footer p { margin: 0; font-size: 1rem; color: var(--mr-muted); }
+.mr-footer-note { margin-top: 12px !important; font-size: 1rem !important; color: var(--mr-ink) !important; line-height: 1.8; max-width: 46ch; margin-inline: auto; }
+.mr-footer .mr-source-note { margin-top: 20px; }
+
+@media (min-width: 700px) {
+  .mr-hero { grid-template-columns: 38fr 62fr; align-items: center; gap: 32px; }
+  .mr-summary-layout { display: grid; grid-template-columns: 38fr 62fr; gap: 32px; }
+  .mr-aspects { grid-template-columns: 1fr 1fr; }
+  .mr-growth-layout { display: grid; grid-template-columns: 33fr 67fr; gap: 40px; align-items: start; }
+  .mr-care-item summary { flex-wrap: nowrap; }
+}
+
+@media (min-width: 960px) {
+  .mr-hero-title { font-size: 2.9rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mr-page * { transition: none !important; animation: none !important; }
+}

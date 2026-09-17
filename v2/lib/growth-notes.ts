@@ -5,7 +5,6 @@ import { isRecent, type RecencyReference } from "@/lib/time-truth";
 // Growth records split into two kinds of fact: what 张年 has started doing (a note a parent would
 // repeat to a grandparent) and what was measured (numbers that belong on a deeper page).
 export const OBSERVED_KINDS: GrowthKind[] = ["language", "motor", "social", "interest", "personality", "food", "sleep"];
-export const MEASURED_KINDS: GrowthKind[] = ["height", "weight"];
 
 // "最近…" is a claim about now; it is only used while the note is recent under lib/time-truth.ts.
 // An old note keeps its fact and gets the dated wording instead.
@@ -51,11 +50,3 @@ export function latestGrowthNote(records: GrowthRecord[], birthDay: string | und
   return note?.recent ? note : undefined;
 }
 
-export type Measurement = { id: string; kind: GrowthKind; value: number; unit: string; signature: TimeSignature };
-
-export function measurements(records: GrowthRecord[], kind: GrowthKind, birthDay?: string): Measurement[] {
-  return records
-    .filter((item) => item.kind === kind && item.visibility !== "private" && typeof item.value === "number")
-    .sort((a, b) => a.observedAt.localeCompare(b.observedAt))
-    .flatMap((item) => { const signature = timeSignatureFor(item.observedAt, birthDay); return signature ? [{ id: item.id, kind: item.kind, value: item.value as number, unit: item.unit ?? "", signature }] : []; });
-}

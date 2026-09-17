@@ -197,7 +197,7 @@ export function __resetOnDemandArchiveForTests(): void { onDemandArchive = undef
 export function invalidateOnDemandArchive(): void { onDemandArchive = undefined; }
 
 // The archive read for pages that are rendered on demand rather than prerendered
-// (lib/render-on-demand.ts: /, /memory, /about — they must never be built from the build's mock
+// (lib/render-on-demand.ts: /, /memory, /mom-reports — they must never be built from the build's mock
 // store). Those pages have no Next route cache any more, so without this every single request
 // would re-run loadFamilyArchive(), and that is a whole-store read: `getStore()` plus
 // `getAllEvents()` plus `getAllEventIdentities()`. Serving three readers is not a reason to read

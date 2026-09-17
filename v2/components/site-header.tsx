@@ -8,7 +8,7 @@ import { usePathname } from "next/navigation";
 const primary = [
   { href: "/", label: "首页", match: (path: string) => path === "/" },
   { href: "/memory", label: "记忆", match: (path: string) => path.startsWith("/memory") || path.startsWith("/events") },
-  { href: "/about", label: "张年", match: (path: string) => path.startsWith("/about") },
+  { href: "/mom-reports", label: "妈妈月报", match: (path: string) => path.startsWith("/mom-reports") },
 ];
 
 function NavLinks({ pathname }: { pathname: string }) {

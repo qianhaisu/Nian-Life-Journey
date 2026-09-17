@@ -29,4 +29,4 @@ export async function renderOnDemand(): Promise<void> {
 // The routes that call renderOnDemand() and read through loadFamilyArchiveOnDemand(). Named here
 // so app/api/internal/revalidate knows which incoming paths mean "the archive changed under the
 // on-demand pages" without either file guessing about the other.
-export const ON_DEMAND_ARCHIVE_PATHS: readonly string[] = ["/", "/memory", "/about"];
+export const ON_DEMAND_ARCHIVE_PATHS: readonly string[] = ["/", "/memory", "/mom-reports"];

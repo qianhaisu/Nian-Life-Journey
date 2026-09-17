@@ -37,8 +37,8 @@ export function archiveRefreshTargets(): RefreshTarget[] {
 }
 
 // A path the archive renders. Any of these arriving in a notice means the archive changed, and the
-// memoised read behind /, /memory, /about and /preview is dropped too — a month path alone used to
-// leave the /memory index up to 300s behind the month it links to.
+// memoised read behind /, /memory, /mom-reports and /preview is dropped too — a month path alone
+// used to leave the /memory index up to 300s behind the month it links to.
 export function isArchivePath(path: string): boolean {
   return MEMO_READERS.includes(path) || /^\/(memory|events|preview)(\/|$)/.test(path);
 }

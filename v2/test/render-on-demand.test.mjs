@@ -50,7 +50,7 @@ test("every paramless page that reads the archive is rendered on demand, never p
 test("the three known on-demand pages are actually wired to it", () => {
   // Named explicitly so deleting the call from one of them fails here even if the scan above is
   // later loosened.
-  for (const route of ["page.tsx", path.join("memory", "page.tsx"), path.join("about", "page.tsx")]) {
+  for (const route of ["page.tsx", path.join("memory", "page.tsx"), path.join("mom-reports", "page.tsx")]) {
     const source = readFileSync(path.join(appDir, route), "utf8");
     assert.ok(source.includes("renderOnDemand()"), `${route} must opt out of build-time prerendering`);
     // Either the memoised read itself, or lib/home-feed.ts's readHomeFeed() — which is a wrapper
@@ -114,7 +114,7 @@ test("a revalidate notification drops the memo, so the next read sees the new ar
   // always contains "/" and "/memory" — the whole point being that new content does not wait out a
   // cache window. Those routes have no Next route cache any more, and revalidatePath() cannot see
   // this memo at all, so before this the push reported success and changed nothing for 300s.
-  assert.deepEqual([...ON_DEMAND_ARCHIVE_PATHS], ["/", "/memory", "/about"]);
+  assert.deepEqual([...ON_DEMAND_ARCHIVE_PATHS], ["/", "/memory", "/mom-reports"]);
 });
 
 test("cache: filled, then notified, then the next read is fresh — and reuse still works in between", async () => {

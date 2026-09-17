@@ -380,41 +380,6 @@ export function latestLeadPhoto(chapters: YearChapter[]): MediaRef | undefined {
   return undefined;
 }
 
-// The same photo with the day it was taken, so a page can say when "now" was photographed instead
-// of letting an undated portrait imply the present.
-// The portrait on 张年's own page is the one picture the site claims is him. It used to be chosen
-// by size alone — the newest photograph large enough to fill the slot — and the newest large image
-// in a WeChat stream is as likely to be a forward or a screenshot as a photo of the child; on
-// 2026-09-04 it was neither him nor anyone's. Vouching is the gate here as everywhere: a memory's
-// own lead, or a picture the family's photo archive or a published memory stands behind. Nothing
-// vouched → no portrait. An empty slot is honest; a stranger's picture is not.
-export function latestPortrait(chapters: YearChapter[]): { photo: MediaRef; day: string; dateLabel: string } | undefined {
-  // 2026-09-11: this used to accept any hero-sized, vouched picture off a photographed day, on the
-  // strength of `media-quark-sha-` in its id — which says the row was imported from the family's own
-  // album and says NOTHING about who is in the frame. A white cat on a bench satisfied every one of
-  // those conditions. Renaming the predicate did not fix that; the slot was resting on it.
-  //
-  // So the source test is gone from here entirely, and the slot now draws only from a memory's own
-  // lead photograph. That is the one picture in this archive with a recorded reason to be about him
-  // (lib/media/story-binding.ts: written from its message, bound to its sentence, or opened and
-  // confirmed by a reviewer). A vouched day photo has no such record and may no longer stand in.
-  //
-  // The cost is stated rather than hidden: while no published story has an associated photograph,
-  // this returns undefined and /about shows no portrait. An empty slot is honest; the cat was not.
-  // Nothing here identifies a person — it only refuses to guess at one.
-  const isPortraitOriented = (photo: MediaRef) => Boolean(photo.width && photo.height && photo.width < photo.height);
-  let fallback: { photo: MediaRef; day: string; dateLabel: string } | undefined;
-
-  for (const year of chapters) for (const month of year.months) {
-    for (const memory of month.memories) {
-      if (!memory.lead) continue;
-      if (isPortraitOriented(memory.lead)) return { photo: memory.lead, day: memory.signature.day, dateLabel: memory.signature.dateLabel };
-      if (!fallback) fallback = { photo: memory.lead, day: memory.signature.day, dateLabel: memory.signature.dateLabel };
-    }
-  }
-  return fallback;
-}
-
 // A few of the archive's most recent written notices of ordinary days, for "who is he right now".
 // Purely display selection: the synthetic photo-count sentences some traces carry ("这一天留下了
 // 10 张照片。") describe the archive, not the child, and the pictures themselves already say it —
