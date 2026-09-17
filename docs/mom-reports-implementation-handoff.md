@@ -246,3 +246,12 @@ V1.3 页面自带的品牌 masthead（另一个"nianlife"字样+发布徽章）�
   本身的问题，如实记录以免误判为真实 bug。
 
 ### 13.2 提交与部署
+
+commit `1f14bde` 已 push 到 `origin/main`。部署走完 precheck（部署前线上 `a0eb249`，磁盘 7900MB，
+健康）→ upload（首次因网络中断 `Connection reset by peer` 失败，确认远端只留了一个不完整的
+`.tar` 残片、没有解压目录后，直接重跑 upload 成功，没有清理任何东西）→ build（`nianlife-web
+:1f14bde` 构建成功）→ swap（`SWAP_OK`，回滚点 `nianlife-diag-web-pre-1f14bde-20260917-131231`）
+→ verify（证书/跳转/首页/备案号均正常，`/api/health` 确认 `sha=1f14bde5c7f4f4c029f2421b4bf34e17
+bbb203b4`）。针对本轮六点反馈单独用 `curl` 核对生产环境：跳转导航栏、旧下月关注免责句、旧
+"来自苏静的记录"署名句在线上 HTML 里都搜不到了；新的单句页脚、hero 统计格的紧凑月份写法
+（`身高 · 2026-08`，中间会有一个 React 的空文本节点注释 `<!-- -->`，不影响显示）都已确认在线。
