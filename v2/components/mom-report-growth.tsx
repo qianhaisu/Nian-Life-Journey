@@ -15,12 +15,16 @@ const PLOT_TOP = 28;
 const PLOT_BOTTOM = 205;
 const GRID_ROWS = 4;
 
+// V1.3's own chart (index.html, hand-authored SVG for this exact dataset) gives the lowest point on
+// each line very little headroom below it and more room above — matched here with an asymmetric
+// pad so the two curves keep the same visual weight as the original instead of centering each
+// series in its own box.
 function scaleFor(values: number[]) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = Math.max(max - min, 1);
-  const paddedMin = min - span * 0.12;
-  const paddedMax = max + span * 0.18;
+  const paddedMin = min - span * 0.05;
+  const paddedMax = max + span * 0.28;
   return (value: number) => PLOT_BOTTOM - ((value - paddedMin) / (paddedMax - paddedMin)) * (PLOT_BOTTOM - PLOT_TOP);
 }
 
@@ -39,6 +43,14 @@ function buildLine(points: MomReportMeasurementPoint[], kind: "height" | "weight
   return { plotted, segments };
 }
 
+// Both series' value labels sit above their point by default (matching V1.3). When the two lines
+// pass close together at the same month, the default -11 offset makes the two numbers overlap —
+// real for this dataset's August point, where height and weight both near the top of their own
+// range at once. When that happens, the visually-higher point's label is pushed further up so the
+// two never share the same text baseline.
+const LABEL_OFFSET = 11;
+const COLLISION_THRESHOLD = 20;
+
 export function MomReportGrowth({ points, chartNote, measurementDetailId }: { points: MomReportMeasurementPoint[]; chartNote: string; measurementDetailId: string }) {
   const x = (index: number) => PLOT_LEFT + (index / Math.max(points.length - 1, 1)) * (PLOT_RIGHT - PLOT_LEFT);
   const height = buildLine(points, "height", x);
@@ -47,6 +59,13 @@ export function MomReportGrowth({ points, chartNote, measurementDetailId }: { po
   const desc = points
     .map((p) => `${formatMonth(p.month)}：身高 ${p.height ?? "未记录"}${typeof p.height === "number" ? " cm" : ""}，体重 ${p.weight ?? "未记录"}${typeof p.weight === "number" ? " kg" : ""}`)
     .join("；");
+  const labelOffset = (index: number, y: number) => {
+    const otherY = height?.plotted[index]?.y === y ? weight?.plotted[index]?.y : height?.plotted[index]?.y;
+    if (otherY !== undefined && Math.abs(otherY - y) < COLLISION_THRESHOLD) {
+      return y <= otherY ? LABEL_OFFSET + 7 : LABEL_OFFSET - 3;
+    }
+    return LABEL_OFFSET;
+  };
 
   return <div className="mr-growth-chart">
     <svg className="mr-chart-svg" viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`} role="img" aria-label={`张小年的身高与体重真实测量记录：${desc}`} preserveAspectRatio="xMidYMid meet">
@@ -54,11 +73,11 @@ export function MomReportGrowth({ points, chartNote, measurementDetailId }: { po
       <g className="mr-chart-months">{points.map((p, i) => <text key={p.month} x={x(i)} y={PLOT_BOTTOM + 22} textAnchor="middle">{formatMonth(p.month).replace(" 年 ", ".").replace(" 月", "")}</text>)}</g>
       {height ? <g className="mr-chart-height">
         {height.segments.map((seg, i) => <path key={i} d={seg.map((p, j) => `${j ? "L" : "M"} ${p.x} ${p.y}`).join(" ")} />)}
-        {height.plotted.map((p, i) => p && <g key={i}><circle cx={p.x} cy={p.y} r={5} /><text x={p.x} y={p.y - 11} textAnchor="middle">{p.value}</text></g>)}
+        {height.plotted.map((p, i) => p && <g key={i}><circle cx={p.x} cy={p.y} r={6} /><text x={p.x} y={p.y - labelOffset(i, p.y)} textAnchor="middle">{p.value}</text></g>)}
       </g> : null}
       {weight ? <g className="mr-chart-weight">
         {weight.segments.map((seg, i) => <path key={i} d={seg.map((p, j) => `${j ? "L" : "M"} ${p.x} ${p.y}`).join(" ")} />)}
-        {weight.plotted.map((p, i) => p && <g key={i}><circle cx={p.x} cy={p.y} r={5} /><text x={p.x} y={p.y + 18} textAnchor="middle">{p.value}</text></g>)}
+        {weight.plotted.map((p, i) => p && <g key={i}><circle cx={p.x} cy={p.y} r={6} /><text x={p.x} y={p.y - labelOffset(i, p.y)} textAnchor="middle">{p.value}</text></g>)}
       </g> : null}
     </svg>
     <div className="mr-chart-legend"><span className="mr-legend-height">蓝：身高 cm</span><span className="mr-legend-weight">绿：体重 kg</span></div>

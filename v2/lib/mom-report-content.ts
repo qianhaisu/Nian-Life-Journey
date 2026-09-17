@@ -90,8 +90,10 @@ export type MomReportContent = {
   heroBadge: string;
   heroImage: { src: string; width: number; height: number; alt: string };
   heroStats: { heightLabel: string; weightLabel: string; ageLabel: string };
-  summaryLead: string;
-  summaryEmphasis: string;
+  // V1.3's 本月情况总结 is ONE paragraph (index.html `.summary-card p`) — no separate large "lead"
+  // line above it. An earlier draft added one (borrowed from the discarded design.html proposal,
+  // which DID have a separate lead+emphasis treatment); removed for fidelity — the real page never
+  // had it, and the sentence it repeated is already the paragraph's own last sentence.
   summaryBody: string;
   tags: MomReportTag[];
   // Order fixed by Teddy's brief: 性格、健康、睡眠、饮食、运动、语言.
@@ -110,7 +112,11 @@ export type MomReportContent = {
   moments: { intro: string; items: MomReportMoment[] };
   foodGuide: MomReportFoodGuide;
   nextMonth: MomReportFocusItem[];
-  source: { author: string; curator: string; note: string; originLabel: string };
+  // V1.3's own literal footer (index.html `<footer>`) — one plain disclaimer line, no attribution
+  // sentence. An earlier draft added "这份月报，来自苏静的记录" and a founding-story sentence,
+  // borrowed from the discarded design.html proposal; Teddy asked for those removed for fidelity —
+  // V1.3 itself never said either, and this page is filed under "妈妈月报" already.
+  footerNote: string;
 };
 
 const IMG = "/mom-reports/2026-08";
@@ -122,8 +128,6 @@ const AUGUST_2026: MomReportContent = {
   heroBadge: "✨ 最近的张小年",
   heroImage: { src: `${IMG}/hero.jpg`, width: 958, height: 1704, alt: "张小年笑着向前走的近期照片" },
   heroStats: { heightLabel: "86 cm", weightLabel: "12.1 kg", ageLabel: "1 岁 7 个月" },
-  summaryLead: "每天都有一点新的变化，",
-  summaryEmphasis: "也还是一样可爱。",
   summaryBody:
     "8 月又长大了一点。夜间睡眠更稳定，开始进入自主入睡的新阶段；吃饭越来越喜欢自己来。这个月又经历了一轮流鼻涕和咳嗽，也开始偶尔叫“妈妈”、喜欢翻绘本了。每天都有一点新的变化，也还是一样可爱。",
   tags: [
@@ -353,12 +357,7 @@ const AUGUST_2026: MomReportContent = {
     { title: "绘本兴趣", note: "观察是否逐渐形成主动翻书、听读和互动兴趣。" },
     { title: "健康与儿保", note: "观察本轮呼吸道症状恢复；下次儿保现场看看长期大脚趾甲沟情况。" },
   ],
-  source: {
-    author: "苏静",
-    curator: "Nianlife",
-    note: "这份月报最早写于 2026 年 8 月，是这个小小网站最初的样子——记录留住当时，日子继续向前。",
-    originLabel: "2026 年 8 月月报 · V1.3",
-  },
+  footerNote: "家庭成长记录 · 健康内容仅用于日常观察，不替代专业医疗判断。",
 };
 
 // Keyed by "YYYY-MM". Only months with a real, reviewed 苏静月报 belong here — see the file header.

@@ -61,31 +61,18 @@ export default async function MomReportsPage({ searchParams }: { searchParams: S
           <h1 className="mr-serif mr-hero-title">{content.title}</h1>
           <p className="mr-hero-subtitle">{birthCompact ? `${birthCompact} 出生｜` : ""}{formatMonth(month)}{ageLabel ? `约 ${ageLabel}` : ""}</p>
           <div className="mr-hero-stats">
-            <div><strong>{content.heroStats.heightLabel}</strong><small>身高 · {formatMonth(month)}</small></div>
-            <div><strong>{content.heroStats.weightLabel}</strong><small>体重 · {formatMonth(month)}</small></div>
-            <div><strong>{ageLabel ?? content.heroStats.ageLabel}</strong><small>当时年龄 · {formatMonth(month)}</small></div>
+            <div><strong>{content.heroStats.heightLabel}</strong><small>身高 · {month}</small></div>
+            <div><strong>{content.heroStats.weightLabel}</strong><small>体重 · {month}</small></div>
+            <div><strong>{ageLabel ?? content.heroStats.ageLabel}</strong><small>当时年龄 · {month}</small></div>
           </div>
           <MomReportMonthPicker month={month} months={months} />
         </div>
       </div>
 
-      <nav className="mr-chapter-nav" aria-label="月报目录">
-        <a href="#mr-summary">本月的他</a>
-        <a href="#growth">一点点长大</a>
-        <a href="#sleep">睡眠旅程</a>
-        <a href="#care">健康与关注</a>
-        <a href="#moments">闪光时刻</a>
-        <a href="#food-guide">外出小抄</a>
-        <a href="#next-month">下月继续看</a>
-      </nav>
-
       <main id="mr-main">
         <section id="mr-summary" className="mr-section mr-card mr-summary" aria-labelledby="mr-summary-title">
           <h2 id="mr-summary-title" className="mr-serif">本月情况总结</h2>
-          <div className="mr-summary-layout">
-            <p className="mr-summary-lead">{content.summaryLead}<em>{content.summaryEmphasis}</em></p>
-            <p className="mr-summary-copy">{content.summaryBody}</p>
-          </div>
+          <p className="mr-summary-copy">{content.summaryBody}</p>
           <ul className="mr-tags">{content.tags.map((tag) => <li key={tag.label} className={`mr-tone-${tag.tone}`}>{tag.label}</li>)}</ul>
         </section>
 
@@ -138,13 +125,10 @@ export default async function MomReportsPage({ searchParams }: { searchParams: S
           <div className="mr-next-notes">
             {content.nextMonth.map((item) => <article key={item.title}><h3>{item.title}</h3><p>{item.note}</p></article>)}
           </div>
-          <p className="mr-source-note">历史月报当时留下的观察线索，不代表现在的待办。</p>
         </section>
 
         <footer className="mr-footer">
-          <p>这份月报，来自{content.source.author}的记录。</p>
-          <p className="mr-footer-note">{content.source.note}</p>
-          <p className="mr-source-note">{content.source.originLabel} · 整理呈现：{content.source.curator}</p>
+          <p>{content.footerNote}</p>
         </footer>
       </main>
     </div>

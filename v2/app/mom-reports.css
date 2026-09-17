@@ -85,19 +85,14 @@
 .mr-hero-title { margin: 0 0 8px; font-size: 2rem; line-height: 1; }
 .mr-hero-subtitle { margin: 0; color: #5f6e78; font-size: .95rem; }
 .mr-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
-.mr-hero-stats div { text-align: center; padding: 11px 5px; border-radius: 16px; background: #f7fafc; border: 1px solid var(--mr-line); }
-.mr-hero-stats strong { display: block; font-size: 1.05rem; }
-.mr-hero-stats small { display: block; font-size: .68rem; color: var(--mr-muted); }
+.mr-hero-stats div { text-align: center; padding: 11px 3px; border-radius: 16px; background: #f7fafc; border: 1px solid var(--mr-line); min-width: 0; }
+.mr-hero-stats strong { display: block; font-size: 1.05rem; white-space: nowrap; }
+.mr-hero-stats small { display: block; margin-top: 2px; font-size: .64rem; color: var(--mr-muted); white-space: nowrap; }
 
 .mr-month-picker { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .mr-month-picker label { font-size: .76rem; color: var(--mr-muted); }
 .mr-month-picker select { min-height: 44px; padding: 6px 24px 6px 4px; border: 0; border-bottom: 1px solid var(--mr-clay); background: transparent; font: inherit; font-size: .95rem; color: var(--mr-ink); border-radius: 0; }
 .mr-month-picker > span { font-size: .72rem; color: var(--mr-muted); }
-
-/* ---------- Chapter nav ---------- */
-.mr-chapter-nav { display: flex; gap: 16px; overflow-x: auto; margin-top: 22px; padding-block: 12px; border-block: 1px solid var(--mr-line); scrollbar-width: thin; }
-.mr-chapter-nav a { flex-shrink: 0; display: inline-flex; align-items: center; min-height: 44px; font-size: .82rem; white-space: nowrap; }
-.mr-chapter-nav a:hover { color: var(--mr-clay-ink); }
 
 /* ---------- Sections ---------- */
 .mr-section { margin-top: 20px; scroll-margin-top: 88px; }
@@ -113,12 +108,14 @@
 
 /* 基本概况 — one shared card holding a 2-column grid, matching V1.3's .mini-grid exactly. */
 .mr-aspects-card { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); }
-.mr-aspect { padding: 14px; border: 1px solid var(--mr-line); border-radius: 18px; background: #fff; }
+.mr-aspect { padding: 14px; border: 1px solid var(--mr-line); border-radius: 18px; background: #fff; min-width: 0; }
 .mr-aspect-top { display: flex; align-items: center; gap: 10px; }
 .mr-aspect-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 13px; background: var(--tone-soft); font-size: 1.1rem; flex-shrink: 0; }
 .mr-aspect h3 { margin: 0; font-size: .95rem; }
-.mr-aspect-lead { margin: 5px 0 0; font-size: .92rem; font-weight: 750; color: #4f5d66; }
-.mr-aspect-detail { margin: 3px 0 0; font-size: .82rem; color: var(--mr-muted); line-height: 1.55; }
+/* V1.3's own .metric p is 13px for both the lead and the detail line (`.fact-lead` only adds
+   font-weight, it inherits the same 13px) — matched exactly here for a flatter, denser card. */
+.mr-aspect-lead { margin: 6px 0 0; font-size: .8125rem; font-weight: 750; color: #4f5d66; line-height: 1.4; }
+.mr-aspect-detail { margin: 2px 0 0; font-size: .8125rem; color: var(--mr-muted); line-height: 1.4; }
 
 /* 生长发育曲线 */
 .mr-growth-card h2 { margin: 0 0 8px; font-size: 1.1rem; display: flex; align-items: center; gap: 6px; }
@@ -229,8 +226,6 @@
   .mr-hero-photo { height: 320px; }
   .mr-hero-panel { margin: -24px 10px 0; padding: 16px; }
   .mr-hero-title { font-size: 1.7rem; }
-  .mr-care-item { grid-template-columns: 40px 1fr; }
-  .mr-pill { grid-column: 2; justify-self: start; }
   .mr-sleep-key { grid-template-columns: 1fr; }
   .mr-sleep-labels { font-size: .6rem; }
   .mr-care-detail > div { grid-template-columns: 44px 1fr; }
