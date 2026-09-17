@@ -185,4 +185,15 @@ V1.3 页面自带的品牌 masthead（另一个"nianlife"字样+发布徽章）�
 
 本次改动文件：`v2/lib/mom-report-content.ts`、`v2/lib/mom-report-view.ts`、`v2/app/mom-reports/page.tsx`、`v2/app/mom-reports.css`、`v2/components/mom-report-growth.tsx`、`v2/components/mom-report-health.tsx`、`v2/components/mom-report-sleep.tsx`、`v2/components/mom-report-moments.tsx`（新）、`v2/components/mom-report-food-guide.tsx`（新）、`v2/test/mom-report.test.mjs`、`v2/public/mom-reports/2026-08/`（新，11 个图片文件）、本文档。
 
-提交前会先跑一遍 `git fetch` + `git status --short --branch` 确认没有跟其他并行 session 交叉，只暂存以上这些文件。推送后会重复第九节走过的同一套 `deploy-ecs-public.sh` 流程（precheck → upload → build → swap → verify）部署到 nianlife.cn，并在部署后实际打开页面核对，结果记在下面第 13 节。
+提交前跑了 `git fetch` + `git status --short --branch` 确认没有跟其他并行 session 交叉，只暂存了以上这些文件。commit `a0eb249` 已 push 到 `origin/main`。
+
+**已部署，已验证**：走完第九节同一套 `deploy-ecs-public.sh` 流程：
+
+- precheck：部署前线上是 `eb0e407`（另一个并行 session 的首页修复），磁盘 8437MB，健康。
+- upload → build（`nianlife-web:a0eb249` 构建成功）→ swap（`SWAP_OK`，容器健康，回滚点
+  `nianlife-diag-web-pre-a0eb249-20260917-122358`）→ verify（证书/跳转/首页/备案号均正常，
+  `/api/health` 确认 `sha=a0eb249375d4291ab411b577896c9652a37eac16`）。
+- 针对本次改动单独核对生产环境：`https://nianlife.cn/mom-reports` 200；hero 标题确认是
+  "张小年"（不是已废弃的"八月的张年"）；六条闪光时刻全部标"插画版"、页面里搜不到"家庭照片"
+  字样（确认误标已经改正，不是只在本机改对、线上还是旧的）；`hero.jpg`、
+  `moment-xiaoai.png`、`moment-pool.webp`、`food-bakery.jpg` 等新图片资源直接请求均 200。
