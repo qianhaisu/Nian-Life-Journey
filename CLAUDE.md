@@ -6,6 +6,21 @@
 
 给张年（Teddy 的孩子）做的数字人生档案网站。
 
+## 视觉解析与执行分工（长期规则，2026-09-17）
+
+Teddy 明确指定以下分工，适用于整个项目的新增功能、九月样板、所有历史月份及后续增量处理；后续任务提示词沿用这套规则。
+
+| 工作 | 负责方 |
+| --- | --- |
+| 完全重复、尺寸、候选分组 | 本地程序处理 |
+| 截图识别、场景动作比较、画面描述、选片与构图建议 | **DeepSeek v4.1 Flash** |
+| 调用编排、故事编辑、来源核对、疑难抽检、页面验收 | **Claude Code** |
+
+- 本地程序先处理可确定的重复与尺寸、缩小候选范围；场景和动作是否同质化交给 DeepSeek，不能把文件去重当作语义去重。
+- DeepSeek 统一使用 **v4.1 Flash**；当前项目 API model ID 为 `deepseek-flash`，复用 `v2/lib/organizer/deepseek-model.ts` 的统一约束。禁止静默切换 Pro 或改用 Claude 批量识图；调用异常应记录原因。请求与返回的模型标识都要留证，视觉批次按任务计划以真实图片验证能力，不能仅凭配置宣称验证成功。本条覆盖旧文档中的 Pro 模型建议。
+- 优先复用与当前图片、任务和规则匹配的有效解析结果，仅对缺失、变化或不合格的部分补调 DeepSeek；保留原模型与来源信息，不为统一模型名称重复付费识图，也不把旧结果改标成 DeepSeek。
+- Claude Code 编排调用、消费结构化结果、编辑故事和核对来源，并负责疑难抽检及真实页面验收；不能默认用自身模型重新逐张解析整批图片。视觉建议不自动等于人物确认或发布许可，继续遵循项目既有来源、可见性及授权规则。
+
 ## V1 / V2 边界
 
 - 根目录 `index.html` 是 V1：历史静态页面和视觉参考，**不要**把它重构成 React 或删除。
@@ -18,7 +33,7 @@ Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（Neon�
 
 - `v2/app`：页面、Server Action、Route Handler
 - `v2/lib/db`：Repository（默认走 PostgreSQL，JSON file store 保留仅供本地无凭据开发）
-- `v2/lib/organizer`：Organizer V2 **生产已开启**（`ORGANIZER_V2_ENABLED` 已在 Vercel 设置，2026-09-04 确认）。生产 provider 统一 DeepSeek（`AI_PROVIDER=deepseek`、`AI_MODEL=deepseek-v4-pro`）；Gemini / OpenAI-compatible 分支保留但不再维护，不要改、不要删、不要拿它们做对比实验
+- `v2/lib/organizer`：Organizer V2 **生产已开启**（`ORGANIZER_V2_ENABLED` 已在 Vercel 设置，2026-09-04 确认）。生产 provider 统一 DeepSeek（`AI_PROVIDER=deepseek`、`AI_MODEL=deepseek-flash`）；Gemini / OpenAI-compatible 分支保留但不再维护，不要改、不要删、不要拿它们做对比实验
 - `v2/lib/ingest`、`v2/tools/quark-connector`：Quark/WorkBuddy artifact 边界
 - `v2/lib/media`、`v2/lib/storage`、`v2/lib/archive`：媒体派生与存储
 
