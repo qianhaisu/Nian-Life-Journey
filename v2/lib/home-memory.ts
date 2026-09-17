@@ -175,10 +175,46 @@ const byValue = (topics: PhotoTopicLookup) => (a: MediaRef, b: MediaRef) => {
 };
 
 /**
- * 跨天主题：同一天最多留 perDay 张，避免某一天吃掉整段。
- * 留下的是那一天里**价值分最高**的几张，不是最早的几张。
+ * 从候选里选 `count` 张。`diversify` 关闭时就是纯按价值分取前 `count` 张；打开时，
+ * 每选一张都先看"这个话题目前选了几张"——选得少的话题优先，价值分只用来在同等
+ * 次数里排前后。capPerDay（同一天挑几张）和 pickSlides（一整段挑几张）都是
+ * "从一堆候选里选 N 张、要不要顾话题多样性"这同一个模式，抽成一个函数，不在两处各写一份。
  */
-function capPerDay(photos: readonly MediaRef[], perDay: number, topics: PhotoTopicLookup): MediaRef[] {
+function pickDiverse(candidates: readonly MediaRef[], count: number, topics: PhotoTopicLookup, diversify: boolean): MediaRef[] {
+  const pool = [...candidates];
+  const picked: MediaRef[] = [];
+  const topicCount = new Map<string, number>();
+  const rank = (a: MediaRef, b: MediaRef) => {
+    if (diversify) {
+      const ca = topicCount.get(topics(a.id)?.topic ?? "") ?? 0;
+      const cb = topicCount.get(topics(b.id)?.topic ?? "") ?? 0;
+      if (ca !== cb) return ca - cb;
+    }
+    return byValue(topics)(a, b);
+  };
+  for (let i = 0; i < count && pool.length > 0; i += 1) {
+    pool.sort(rank);
+    const best = pool.shift()!;
+    picked.push(best);
+    if (diversify) {
+      const t = topics(best.id)?.topic ?? "";
+      topicCount.set(t, (topicCount.get(t) ?? 0) + 1);
+    }
+  }
+  return picked;
+}
+
+/**
+ * 跨天主题：同一天最多留 perDay 张，避免某一天吃掉整段。
+ * 留下的是那一天里**价值分最高**的几张，不是最早的几张——除非 `diversify` 打开
+ * （Teddy 2026-09-17：「首页专题选片，同质化比较严重」）：那样的话，一天里如果拍了
+ * 好几种不同的事，这一天的名额会优先分给不同的话题，而不是把 perDay 个名额都给
+ * 同一件事里价值分最高的那几张（比如同一顿饭拍了两张，两张都很清楚，但那还是同一件事）。
+ *
+ * **只在跨天的"一段日子"主题（season/week）打开**；topic 主题（玩水/睡觉/笑……）
+ * 传 false——那里的候选本来就只有一个话题，diversify 无从谈起。
+ */
+function capPerDay(photos: readonly MediaRef[], perDay: number, topics: PhotoTopicLookup, diversify = false): MediaRef[] {
   const byDay = new Map<string, MediaRef[]>();
   for (const photo of photos) {
     const day = dayOf(photo);
@@ -187,7 +223,7 @@ function capPerDay(photos: readonly MediaRef[], perDay: number, topics: PhotoTop
     byDay.set(day, bucket);
   }
   const kept: MediaRef[] = [];
-  for (const list of byDay.values()) kept.push(...[...list].sort(byValue(topics)).slice(0, perDay));
+  for (const list of byDay.values()) kept.push(...pickDiverse(list, perDay, topics, diversify));
   return kept.sort(byTime);
 }
 
@@ -533,10 +569,12 @@ function buildSpanMemory(input: {
   const { kind, key, title, subtitle, href, linkLabel, photos, privilege, topics } = input;
   const pool = usable(photos, privilege);
   const ordered = [...pool].sort(byTime);
-  const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics);
+  // 两处都要 diversify: true——不只是最后"挑哪几张"要顾话题多样性，
+  // 更前面"每天先留哪 2 张"要是已经把某一天拍得最清楚的两张饭都留下来了，
+  // 后面 pickSlides 面对的候选池里那一天就只剩吃饭这一个话题可选，diversify 也救不回来。
+  const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics, true);
   if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
-  // diversify: true——季节/一周代表的是一段日子，不是一件反复发生的事。
   const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics, true);
   const mood = moodOf(picked, pool, []);
   const days = new Set(picked.map(dayOf)).size;

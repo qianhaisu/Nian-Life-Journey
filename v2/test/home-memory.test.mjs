@@ -443,6 +443,38 @@ test("跨时间主题的封面来自靠后那一段——不能又是最小的�
   assert.deepEqual(times, [...times].sort(), "播放顺序仍然是时间顺序");
 });
 
+test("季节/一周主题：同一天的名额也要顾话题多样性，不能两个都给同一件事", () => {
+  // 只在最后 pickSlides 那一步去重是不够的：如果某一天恰好把同一件事拍得格外清楚
+  // （比如同一顿饭拍了两张，两张价值分都很高），capPerDay 会在更早的一步就把
+  // 「这一天只有吃饭」焊死，pickSlides 拿到的候选池里那天已经没有别的话题可选了。
+  const day1 = [
+    photo("d1-eat-a", "2026-07-01 08:00:00", { }), photo("d1-eat-b", "2026-07-01 12:00:00", { }),
+    photo("d1-laugh", "2026-07-01 15:00:00", { }), photo("d1-out", "2026-07-01 17:00:00", { }),
+  ];
+  const labelOf = (id) => {
+    if (id === "d1-eat-a") return { topic: "吃饭", value: 0.95, confidence: 0.9, water: false };
+    if (id === "d1-eat-b") return { topic: "吃饭", value: 0.93, confidence: 0.9, water: false };
+    if (id === "d1-laugh") return { topic: "笑", value: 0.85, confidence: 0.9, water: false };
+    if (id === "d1-out") return { topic: "户外", value: 0.8, confidence: 0.9, water: false };
+    return { topic: "玩玩具", value: 0.8, confidence: 0.9, water: false }; // 其余陪衬的日子
+  };
+  const months = [monthOf("2026-07", [
+    { day: "2026-07-01", photos: day1 },
+    { day: "2026-07-08", photos: moments("d2", "2026-07-08", 2) },
+    { day: "2026-07-15", photos: moments("d3", "2026-07-15", 2) },
+    { day: "2026-07-22", photos: moments("d4", "2026-07-22", 2) },
+  ])];
+  const { memories } = selectHomeMemories(archiveOf(months), labelOf);
+  const summer = memories.find((m) => m.kind === "season");
+  assert.ok(summer, "应当有一个季节主题");
+  const day1Topics = summer.slides
+    .filter((s) => s.media.takenAt.startsWith("2026-07-01"))
+    .map((s) => labelOf(s.media.id).topic);
+  assert.equal(day1Topics.length, CROSS_DAY_PER_DAY_MAX, "7/1 这一天仍然只占 2 个名额");
+  assert.ok(new Set(day1Topics).size > 1,
+    `7/1 这一天的 2 个名额不该都给「吃饭」，实得 ${day1Topics.join("/")}`);
+});
+
 test("day 主题选片不能被一个话题占满——Teddy 2026-09-17：「吃的和喝奶的有好多」", () => {
   // 查过账本：那一周价值分最高的 30 张里「吃饭」占 11 张、「笑」占 12 张，其余话题挤不进来。
   // 这里搭一个同构的场景：30 张照片，「吃饭」14 张、价值分最高；其余 16 张分给五个话题，
