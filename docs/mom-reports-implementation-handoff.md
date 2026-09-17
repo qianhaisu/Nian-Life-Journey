@@ -67,26 +67,40 @@
 
 - **代码已完成**：路由、导航、内容模块、新组件、CSS、测试均已写完。
 - **本机检查已通过**：typecheck / lint / test / build 全绿，浏览器三宽度手动验收通过。
-- **已提交，未 push**：本地已 commit（`f0fdca3`，见下方提交记录），已 `git fetch` 确认与
-  `origin/main` 没有分叉、只是领先 1 个提交，可以直接 push、不需要处理冲突。push 这一步被
-  运行环境的 Auto Mode 分类器拦下（判定为 "Out-of-Place Publication"，把 `git push` 归类为需要
-  额外确认的发布类动作），不是仓库权限问题、也不是 CLAUDE.md 授权范围的问题——Teddy 的长期
-  授权（"push main 不需要反复询问"）在仓库层面是有效的，但这道拦截是工具运行时的独立一层，
-  需要 Teddy 自己执行 `git push origin main`，或在设置里给这个动作放行后由 Session 代执行。
-- **尚未部署**：push 之后 Vercel 是否自动构建、部署是否成功，需要 push 完成后另行确认。本轮
-  未执行任何手动部署或生产环境变量操作。
-- **第八节提到的那次意外**（`3273d25` 误吞掉本轮 globals.css 编辑、导致线上 `/about` 短暂无样式）
-  只有在这次的 commit 被 push 之后才会真正解决——在那之前，线上仍然是"新 CSS 已经上线、
-  旧页面代码还在用被删掉的类名"的中间状态。
+- **已 push**：`f0fdca3` + `49fe16d`（本文档的 push 状态更新）已推送到 `origin/main`。
+  `git push` 第一次被运行环境的 Auto Mode 分类器拦下（判定为 "Out-of-Place Publication"），
+  Teddy 确认后放行，第二次推送成功。
+- **已部署，已验证**：Teddy 授权后，通过 `v2/scripts/deploy-ecs-public.sh` 完整走完
+  precheck → upload → build → swap → verify。构建过程中读取了本机
+  `C:\Users\teddy\nianlife-rds.env`（既有的部署凭据文件，`NIANLIFE_ECS_HOST` /
+  `NIANLIFE_ECS_SSH_USER`）和 `C:\Users\teddy\Downloads\nianlife-prod-ecs.pem`，
+  两者都只在单次 shell 调用内临时使用、未写入任何文件、未打印到终端（中途有一次误操作把
+  ECS 公网 IP 写进了一个 scratchpad 临时文件，发现后已立即删除，值本身没有出现在对话里）。
+  - `swap` 后容器健康、`/api/health` 返回 `sha=49fe16dada15d69a78fbaf271fec3a0bd98af605`，
+    与本次提交一致；`verify` 确认证书、跳转、首页、备案号均正常。
+  - 回滚点：`nianlife-diag-web-pre-49fe16d-20260917-093304`（`bash v2/scripts/deploy-ecs-public.sh
+    rollback-app nianlife-diag-web-pre-49fe16d-20260917-093304`）。
+  - 部署过程中和另一个并行 session（当天在改首页播放器/回忆组件）发生过一次分钟级的部署时序
+    重叠——对方 swap 到 `3f5f13e` 后，我这边刚好也在同一时间窗口 swap 到 `49fe16d`，两边各覆盖
+    了对方一次；发现后互相在会话间确认了 `git log origin/main` 的真实顶端，对方随后重新 swap 到
+    `3f5f13e`（`49fe16d` 的下一个提交，包含我这次的全部改动）并稳定运行。**当前线上应为
+    `3f5f13e` 或更新**，已用浏览器实际打开 `https://nianlife.cn/mom-reports` 核对页面正常、
+    真实封面照片（2026-08-30 拍摄，当时 1 岁 7 个月）正常加载。
+  - 已实测确认「妈妈月报」在生产环境**有**一张真正经过审核的封面照片可用——不是本机 mock
+    数据下的空态，第十节原先的疑问已解决。
 
 ## 十、尚未验证事项
 
-1. **生产环境该月是否真的有一张合格封面照片**——本机 mock 数据没有,无法在本机验证这条路径在生产真实数据下的最终视觉效果，需要 push 部署后直接打开 `https://nianlife.cn/mom-reports` 确认。如果生产也没有合格封面，页面会诚实显示空态，这本身符合预期，但视觉上「大幅照片进首屏」这条design要求就无法在这一期里兑现，需要 Teddy 知晓并决定是否需要为 2026-08 单独补一次 subject-check 审核。
-2. 未使用真实生产数据库跑过端到端渲染（本地无 `DATABASE_URL` 凭据，遵守项目「本地无凭据开发」的既有约束，未尝试获取或绕过）。
-3. 本文档未包含任何家庭原文、儿童照片或健康记录的原始截图；健康记录的具体文字内容已经过审阅、公开展示（与线上此前的 V1 页面口径一致），未做额外脱敏处理。
+1. ~~生产环境该月是否真的有一张合格封面照片~~ ——已解决，见上，生产环境确实有。
+2. 未使用真实生产数据库跑过端到端渲染的是**开发环境**（本机无 `DATABASE_URL` 凭据，遵守项目
+   「本地无凭据开发」的既有约束，未尝试获取或绕过）；生产环境本身已经过上面的实际浏览器核对。
+3. 本文档未包含任何家庭原文、儿童照片或健康记录的原始截图；健康记录的具体文字内容已经过审阅、
+   公开展示（与线上此前的 V1 页面口径一致），未做额外脱敏处理。生产验证截图（含真实儿童照片）
+   保存在本机私有目录 `C:\Users\teddy\NianlifeOps\mom-reports-screenshots-2026-09-17\
+   production-live-verify.jpg`，未提交仓库、未上传第三方。
 
 ## 十一、提交记录
 
-本地 commit：`f0fdca3` "feat(妈妈月报): 用新页面替换旧张年页，导航第三项改名"，22 个文件，
-+929/-604 行，本文档随同一次提交写入。与 `origin/main` 的关系：领先 1 个提交，无分叉、
-无需 rebase。**尚未 push**，原因见第九节。
+- `f0fdca3` "feat(妈妈月报): 用新页面替换旧张年页，导航第三项改名"，22 个文件，+929/-604 行。
+- `49fe16d` "docs(妈妈月报): 更新交接文档的 push 状态说明"。
+- 两者已 push 到 `origin/main`，已部署到生产（见第九节），已实际验证。
