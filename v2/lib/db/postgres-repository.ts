@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import { TransactionRollbackError } from "drizzle-orm/errors";
 import { sql } from "drizzle-orm";
 import type { CareEpisode, ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportWarning, DailyTrace, LifeEvent, Media, MediaAsset, MediaLocation, MonthlySnapshot, OrganizerJob, OrganizerRun, RawSource, SourceMemoryLink, ConnectorState } from "@/lib/types";
@@ -229,8 +229,53 @@ async function refuseIfSharedWithProtected(tx: GuardTx, input: { operation: stri
 export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): Repository {
   const db = getDb(env);
 
+// 2026-09-17: permanent photo/video rejection list (Teddy: "永久删除…避免每天导入把它们重新导回来";
+// see schema.ts `mediaRejections`). Both ingest write paths call this before building any insert, so
+// a rejected checksum or media id can never be recreated by a resend or a rebackfill. An asset input
+// dropped for its checksum takes every media/location input that pointed at it down with it in the
+// same pass — never a dangling FK, never a media row with no asset behind it.
+async function loadMediaRejections(
+  runner: { select: () => any },
+  checksums: string[],
+  mediaIds: string[],
+): Promise<{ checksums: Set<string>; mediaIds: Set<string> }> {
+  if (!checksums.length && !mediaIds.length) return { checksums: new Set(), mediaIds: new Set() };
+  const conditions = [] as unknown[];
+  if (checksums.length) conditions.push(inArray(t.mediaRejections.checksum, checksums));
+  if (mediaIds.length) conditions.push(inArray(t.mediaRejections.mediaId, mediaIds));
+  const rows = (await runner.select().from(t.mediaRejections).where(or(...(conditions as never[])))) as Array<{ mediaId: string | null; checksum: string | null }>;
+  return {
+    checksums: new Set(rows.map((r) => r.checksum).filter((v): v is string => Boolean(v))),
+    mediaIds: new Set(rows.map((r) => r.mediaId).filter((v): v is string => Boolean(v))),
+  };
+}
+
+function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M extends { id: string; mediaAssetId?: string | null }, L extends { mediaAssetId: string }>(
+  rejected: { checksums: Set<string>; mediaIds: Set<string> },
+  assets: A[],
+  media: M[],
+  locations: L[],
+): { assets: A[]; media: M[]; locations: L[] } {
+  const rejectedAssetInputIds = new Set(
+    assets.filter((a) => { const cs = normalizeSha256(a.checksum ?? undefined); return cs && rejected.checksums.has(cs); }).map((a) => a.id),
+  );
+  return {
+    assets: assets.filter((a) => !rejectedAssetInputIds.has(a.id)),
+    media: media.filter((m) => !rejected.mediaIds.has(m.id) && !(m.mediaAssetId && rejectedAssetInputIds.has(m.mediaAssetId))),
+    locations: locations.filter((l) => !rejectedAssetInputIds.has(l.mediaAssetId)),
+  };
+}
+
+
   async function persistUpload(input: UploadPersistInput): Promise<UploadPersistResult> {
     return db.transaction(async (tx) => {
+      const rejectedInput = await loadMediaRejections(
+        tx,
+        [...new Set((input.assets ?? []).map((a) => normalizeSha256(a.checksum)).filter((v): v is string => Boolean(v)))],
+        [...new Set(input.media.map((m) => m.id))],
+      );
+      const { assets: rejectedFilteredAssets, media: rejectedFilteredMedia, locations: rejectedFilteredLocations } =
+        dropRejectedMedia(rejectedInput, input.assets ?? [], input.media, input.locations ?? []);
       const [sourceIdRow] = await tx.select().from(t.rawSources).where(eq(t.rawSources.id, input.source.id));
       if (sourceIdRow && input.source.provider && input.source.providerExternalId && (sourceIdRow.provider !== input.source.provider || sourceIdRow.providerExternalId !== input.source.providerExternalId)) throw new Error("RAW_SOURCE_ID_CONFLICT");
       const sourceRows = input.source.provider && input.source.providerExternalId
@@ -250,7 +295,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       const assetsByInputId = new Map<string, MediaAsset>();
       const createdAssetIds: string[] = [];
       const reusedAssetIds: string[] = [];
-      for (const assetInput of input.assets ?? []) {
+      for (const assetInput of rejectedFilteredAssets) {
         const asset = { ...assetInput, checksum: normalizeSha256(assetInput.checksum) };
         const [assetIdRow] = await tx.select().from(t.mediaAssets).where(eq(t.mediaAssets.id, asset.id));
         const [assetChecksumRow] = asset.checksum ? await tx.select().from(t.mediaAssets).where(eq(t.mediaAssets.checksum, asset.checksum)) : [undefined];
@@ -273,7 +318,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       }
 
       const mediaIds: string[] = [];
-      for (const mediaInput of input.media) {
+      for (const mediaInput of rejectedFilteredMedia) {
         const mappedAsset = mediaInput.mediaAssetId ? assetsByInputId.get(mediaInput.mediaAssetId) : undefined;
         const media = mappedAsset && mappedAsset.id !== mediaInput.mediaAssetId ? { ...mediaInput, mediaAssetId: mappedAsset.id } : mediaInput;
         const mediaRows = await tx.insert(t.media).values(media as any).onConflictDoNothing({ target: t.media.id }).returning();
@@ -286,7 +331,7 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
 
       const createdLocationIds: string[] = [];
       const reusedLocationIds: string[] = [];
-      for (const locationInput of input.locations ?? []) {
+      for (const locationInput of rejectedFilteredLocations) {
         const mappedAsset = assetsByInputId.get(locationInput.mediaAssetId);
         const location = mappedAsset && mappedAsset.id !== locationInput.mediaAssetId ? { ...locationInput, mediaAssetId: mappedAsset.id } : locationInput;
         const [locationIdRow] = await tx.select().from(t.mediaLocations).where(eq(t.mediaLocations.id, location.id));
@@ -317,6 +362,16 @@ export function createPostgresRepository(env: NodeJS.ProcessEnv = process.env): 
       for (const input of inputs) {
         if (!input.source.provider || !input.source.providerExternalId) throw new Error("CHAT_IMPORT_BATCH_REQUIRES_PROVIDER_IDENTITY");
       }
+
+      const rejectedBatch = await loadMediaRejections(
+        tx,
+        [...new Set(inputs.flatMap((i) => i.assets ?? []).map((a) => normalizeSha256(a.checksum)).filter((v): v is string => Boolean(v)))],
+        [...new Set(inputs.flatMap((i) => i.media).map((m) => m.id))],
+      );
+      inputs = inputs.map((i) => {
+        const filtered = dropRejectedMedia(rejectedBatch, i.assets ?? [], i.media, i.locations ?? []);
+        return { ...i, assets: filtered.assets, media: filtered.media, locations: filtered.locations };
+      });
 
       // --- RawSource: dedupe by (provider, providerExternalId), first occurrence in input order wins ---
       const sourceKey = (s: { provider?: string; providerExternalId?: string }) => `${s.provider} ${s.providerExternalId}`;

@@ -120,6 +120,13 @@
       "when": 1789303220433,
       "tag": "0016_habit_display_days",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789600390283,
+      "tag": "0017_happy_champions",
+      "breakpoints": true
     }
   ]
 }

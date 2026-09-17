@@ -91,6 +91,26 @@ export const mediaLocations = pgTable("media_locations", {
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => ({ providerRef: unique().on(table.provider, table.providerRef) }));
 
+// Permanent rejection list for photo/video ingest (2026-09-17, Teddy: "永久删除…不想再任何地方看到" +
+// "避免每天导入把它们重新导回来"). A row here means "never recreate this in `media`/`media_assets`
+// again" — checked by the ingest insert paths (persistUpload / persistChatImportBatch) BEFORE any
+// insert, not after. `mediaId` blocks a specific display-layer id (WeChat's id is deterministic from
+// messageId+ref.id, so a resend of the same message would otherwise resurrect the exact same row);
+// `checksum` blocks the underlying image bytes regardless of which provider/message brings them back
+// (a Quark re-scan, a different WeChat message forwarding the same photo). At least one must be set.
+export const mediaRejections = pgTable("media_rejections", {
+  id: text("id").primaryKey(),
+  mediaId: text("media_id"),
+  checksum: text("checksum"),
+  category: text("category").notNull(),
+  reasonCode: text("reason_code"),
+  rejectedBy: text("rejected_by").notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  byMediaId: uniqueIndex("media_rejections_media_id_unique").on(table.mediaId),
+  byChecksum: uniqueIndex("media_rejections_checksum_unique").on(table.checksum),
+}));
+
 // Display-layer records (src/thumbnailSrc/alt/...), distinct from MediaAsset/MediaLocation's
 // storage-provenance layer. Never had a table before this slice.
 export const media = pgTable("media", {
