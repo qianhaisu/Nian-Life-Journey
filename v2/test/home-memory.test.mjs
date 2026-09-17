@@ -443,6 +443,33 @@ test("跨时间主题的封面来自靠后那一段——不能又是最小的�
   assert.deepEqual(times, [...times].sort(), "播放顺序仍然是时间顺序");
 });
 
+test("day 主题选片不能被一个话题占满——Teddy 2026-09-17：「吃的和喝奶的有好多」", () => {
+  // 查过账本：那一周价值分最高的 30 张里「吃饭」占 11 张、「笑」占 12 张，其余话题挤不进来。
+  // 这里搭一个同构的场景：30 张照片，「吃饭」14 张、价值分最高；其余 16 张分给五个话题，
+  // 价值分略低但都过了 0.7 的门槛。纯按价值分选，MEMORY_MAX_SLIDES=20 张会几乎全是「吃饭」；
+  // 打开 diversify 之后，同一个话题不该占掉一半以上。
+  const topicOf = (id) => {
+    const n = Number(id.split("-")[1]);
+    if (n < 14) return { topic: "吃饭", value: 0.95, confidence: 0.9, water: false };
+    const others = ["笑", "户外", "玩玩具", "抱着", "睡觉"];
+    const which = others[n % others.length];
+    return { topic: which, value: 0.8, confidence: 0.9, water: false };
+  };
+  const photos = moments("m", "2026-09-09", 30, 6);
+  const memory = buildDayMemory({
+    day: "2026-09-09", dateLabel: "d", photos, published: [story("e1", "2026-09-09", "标题")],
+    privilege: { checked: new Set(photos.map((p) => p.id)) },
+    topics: (id) => topicOf(id),
+  });
+  const topicsPicked = memory.slides.map((s) => topicOf(s.media.id).topic);
+  const counts = {};
+  for (const t of topicsPicked) counts[t] = (counts[t] ?? 0) + 1;
+  assert.ok(counts["吃饭"] < memory.slides.length / 2,
+    `「吃饭」不该占掉一半以上，实得 ${JSON.stringify(counts)}（共 ${memory.slides.length} 张）`);
+  assert.ok(Object.keys(counts).length >= 4,
+    `应当出现至少 4 个不同话题，实得 ${Object.keys(counts).join("/")}`);
+});
+
 test("空泳池不算「玩水的日子」——画面里得真的有这个孩子", () => {
   // 2026-09-17 查账本：45 张判为泳池的照片里 **21 张根本没有孩子**——酒店空泳池、
   // 只有水面、只有泳圈玩具，而它们的 value 照样 ≥ 0.7。价值分没兜住这一条，

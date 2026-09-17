@@ -206,24 +206,59 @@ function capPerDay(photos: readonly MediaRef[], perDay: number, topics: PhotoTop
  *
  * 价值分不够用时（缓存缺失、这一批还没标过）退回 `spread` 沿时间均匀取——
  * 少一个依据就少说一句话，不拿「按时间取」冒充「挑了最好的」。
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * `diversify`：同一段回忆里不能被一个话题占满
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Teddy 2026-09-17：「首页专题选片，同质化比较严重，比如最近一周，吃的和喝奶的有好多。」
+ * 查过账本：那一周价值分最高的 30 张里，「吃饭」占 11 张、「笑」占 12 张——不是巧合，
+ * 是这个家庭那几天恰好拍了很多顿饭，而吃饭照片本身也容易拍得清楚（孩子坐定、脸朝前），
+ * 价值分天然就高。纯按价值分取，选出来的自然是同一个话题反复出现。
+ *
+ * 只对**跨话题的主题**（day / season / week）打开这个开关——它们代表的是"一天"或"一段
+ * 日子"，本来就该看见不同的事在发生。**topic 主题（玩水/睡觉/笑……）绝不能打开**：
+ * 那一段回忆的全部素材本来就是同一个 topic 标签（match 函数筛出来的），"多样化"在这里
+ * 无从谈起，也不该谈——玩水的日子就该全是玩水。
+ *
+ * 做法：跟第一步一样先分时间段，但段内候选按「这个话题在已选的里出现过几次」升序排、
+ * 出现次数相同再比价值分——多次出现同一个话题的候选会被排到后面，等其他话题选完了才轮到它。
  */
-function pickSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLookup): MediaRef[] {
+function pickSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLookup, diversify = false): MediaRef[] {
   if (reps.length <= max) return [...reps];
   const scored = reps.filter((media) => topics(media.id)?.value !== undefined);
   if (scored.length < max) return spread(reps, max);
 
-  // 一、按价值分留下前一半（至少留够 max 张，否则下一步没得挑）
-  const keep = Math.max(max, Math.ceil(scored.length / 2));
+  // 一、按价值分留下前一半（至少留够 max 张，否则下一步没得挑）。
+  // **diversify 打开时不砍这一刀**——「前一半」在 Teddy 举的例子里几乎全是「吃饭」和「笑」，
+  // 少数话题的照片在这一步就被切没了，第二步再怎么按话题次数排也没东西可选。
+  // 保留全部有价值分的候选，交给第二步的按话题去重来筛，而不是先按价值分筛一遍再去重。
+  const keep = diversify ? scored.length : Math.max(max, Math.ceil(scored.length / 2));
   const good = [...scored].sort(byValue(topics)).slice(0, keep).sort(byTime);
 
-  // 二、把这些按时间切成 max 段，每段取价值分最高的那一张
+  // 二、把这些按时间切成 max 段，每段取分最高的那一张——除非 diversify 打开，
+  //    这时优先取一个"目前选得还不够多"的话题，价值分只用来在同等话题次数里排前后。
   const picked: MediaRef[] = [];
   const taken = new Set<string>();
+  const topicCount = new Map<string, number>();
+  const rankWithinBucket = (a: MediaRef, b: MediaRef) => {
+    if (diversify) {
+      const ca = topicCount.get(topics(a.id)?.topic ?? "") ?? 0;
+      const cb = topicCount.get(topics(b.id)?.topic ?? "") ?? 0;
+      if (ca !== cb) return ca - cb;
+    }
+    return byValue(topics)(a, b);
+  };
   for (let i = 0; i < max; i += 1) {
     const from = Math.floor((i * good.length) / max);
     const to = Math.max(from + 1, Math.floor(((i + 1) * good.length) / max));
-    const best = good.slice(from, to).sort(byValue(topics)).find((media) => !taken.has(media.id));
-    if (best) { taken.add(best.id); picked.push(best); }
+    const best = good.slice(from, to).sort(rankWithinBucket).find((media) => !taken.has(media.id));
+    if (!best) continue;
+    taken.add(best.id); picked.push(best);
+    if (diversify) {
+      const t = topics(best.id)?.topic ?? "";
+      topicCount.set(t, (topicCount.get(t) ?? 0) + 1);
+    }
   }
   return picked.sort(byTime);
 }
@@ -308,7 +343,8 @@ export function buildDayMemory(input: {
   const reps = representatives(pool);
   if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
-  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
+  // diversify: true——一天里发生的事不止一种，不该被价值分最高的那一件事占满整段。
+  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics, true);
   const titles = published.map((memory) => memory.title);
   const captions = captionAt(picked.length, titles);
   const lead = published[0];
@@ -408,6 +444,8 @@ function buildTopicMemory(input: {
     const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics);
     if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
+    // 不传 diversify：这里的 pool 本来就只有同一个 topic 标签（match 筛出来的），
+    // "多样化" 在这里无从谈起——玩水的日子就该全是玩水，不需要也不该往里掺别的话题。
     const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
     // 跨天主题没有逐张可依据的文字，所以**一句配文都不写**。
     const mood = moodOf(picked, pool, []);
@@ -498,7 +536,8 @@ function buildSpanMemory(input: {
   const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics);
   if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
-  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
+  // diversify: true——季节/一周代表的是一段日子，不是一件反复发生的事。
+  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics, true);
   const mood = moodOf(picked, pool, []);
   const days = new Set(picked.map(dayOf)).size;
   const scored = picked.filter((media) => topics(media.id)?.value !== undefined).length;
