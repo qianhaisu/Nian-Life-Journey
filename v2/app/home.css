@@ -383,12 +383,20 @@
 
 /* ── 沉浸播放器（portal 到 <body>，所以不在 .home-v2 作用域里）───────────────── */
 
+/* 2026-09-17：Teddy 发了张真的 iPhone 相册回忆播放截图——照片边到边铺满整个屏幕，
+   标题和控件是**浮在照片上面的半透明层**，不是把屏幕切成"标题条 / 照片 / 控件条"三段。
+   我之前只当成一个尺寸 bug 来修（Next.js <Image> 的 fill 模式），但即使 fill 修好了，
+   .memory-player-head/.memory-player-controls 仍然是 flex 布局里占位的实体色块，
+   会把 .memory-player-stage 挤成一个变矮的方框——从 Teddy 手机上看仍然是"上下有黑边"，
+   只是黑边变窄了，不是消失了。
+
+   真正要改的是版式：不再用 flex-column 切三段，改成 stage **铺满整个屏幕**（position:absolute;
+   inset:0），head 和 controls 各自绝对定位悬浮在最上面和最下面，背景从实色改成往透明淡出的
+   渐变（scrim）——这样字和按钮下面能透出照片的颜色，和参考截图里的效果一致。 */
 .memory-player {
   position: fixed;
   inset: 0;
   z-index: 300;
-  display: flex;
-  flex-direction: column;
   background: #14120f;
   color: #fff;
   font-family: var(--font-nunito, "Nunito"), -apple-system, "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
@@ -396,10 +404,17 @@
 }
 
 .memory-player-head {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: max(14px, env(safe-area-inset-top)) 16px 10px;
+  padding: max(14px, env(safe-area-inset-top)) 16px 40px;
+  /* 往下淡出的黑色渐变——不是一整条实色，photo 要能从底下透出来。 */
+  background: linear-gradient(to bottom, rgb(0 0 0 / .55), rgb(0 0 0 / .22) 65%, transparent);
 }
 .memory-player-heading { flex: 1; min-width: 0; text-align: center; }
 .memory-player-heading h2 {
@@ -433,7 +448,8 @@
    所以这里和首页预览统一成 cover——播放器本来就该是沉浸的那一个。
    `object-position` 偏上，理由和预览、以及站里既有的 .photo-strip 一致：人脸通常在画面中上部，
    横构图在这个竖长的舞台里会被上下裁，居中裁就容易把脸切掉。 */
-.memory-player-stage { position: relative; flex: 1; min-height: 0; }
+/* 铺满整个屏幕——不再是 head/controls 之间"剩下的那一块"。见上面 .memory-player 的注释。 */
+.memory-player-stage { position: absolute; inset: 0; z-index: 1; }
 
 /* 一「幕」= 一屏。多数时候一幕就是一张竖照铺满；横照则 2–3 张上下叠起来一起占满一屏
    （Teddy 2026-09-17 第 7 条：「iPhone 相册有的时候会有三张图片从上到下布满一屏，
@@ -475,8 +491,11 @@
 .memory-player-caption {
   position: absolute;
   right: 24px;
-  bottom: 24px;
+  /* 悬浮的底部控件条现在盖在照片上而不是把照片往上挤，配文要往上让一段距离，
+     不然会被控件条的渐变压住——留出的量比控件条本身高一些，读起来才松快。 */
+  bottom: calc(112px + env(safe-area-inset-bottom));
   left: 24px;
+  z-index: 1;
   margin: 0;
   font-family: var(--font-nunito, "Nunito"), "LXGW WenKai", "Songti SC", serif;
   font-size: clamp(18px, 4.6vw, 22px);
@@ -486,11 +505,18 @@
 }
 
 .memory-player-controls {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 28px;
-  padding: 14px 16px max(16px, env(safe-area-inset-bottom));
+  padding: 24px 16px max(20px, env(safe-area-inset-bottom));
+  /* 往上淡出的黑色渐变，和顶部 head 是同一个做法，方向相反。 */
+  background: linear-gradient(to top, rgb(0 0 0 / .55), rgb(0 0 0 / .22) 65%, transparent);
 }
 .memory-player-controls button {
   display: grid;
