@@ -121,11 +121,11 @@
 .mr-growth-card h2 { margin: 0 0 8px; font-size: 1.1rem; display: flex; align-items: center; gap: 6px; }
 .mr-chart-svg { width: 100%; height: auto; overflow: visible; }
 .mr-chart-grid line { stroke: #edf0f2; stroke-width: 1; }
-.mr-chart-months text { fill: #87939b; font-size: 10px; text-anchor: middle; }
-.mr-chart-height path { fill: none; stroke: var(--mr-blue); stroke-width: 4; stroke-linecap: round; }
+.mr-chart-months text { fill: #87939b; font-size: 9px; }
+.mr-chart-height path { fill: none; stroke: var(--mr-blue); stroke-width: 5; stroke-linecap: round; }
 .mr-chart-height circle { fill: var(--mr-blue); }
 .mr-chart-height text { fill: #337fce; font-size: 11px; font-weight: 700; }
-.mr-chart-weight path { fill: none; stroke: var(--mr-green); stroke-width: 4; stroke-linecap: round; }
+.mr-chart-weight path { fill: none; stroke: var(--mr-green); stroke-width: 5; stroke-linecap: round; }
 .mr-chart-weight circle { fill: var(--mr-green); }
 .mr-chart-weight text { fill: #348c55; font-size: 11px; font-weight: 700; }
 .mr-chart-legend { display: flex; gap: 14px; margin-top: 8px; font-size: .74rem; }
