@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import "../mom-reports.css";
-import { Photo } from "@/components/photo";
 import { MomReportGrowth } from "@/components/mom-report-growth";
 import { MomReportHealth } from "@/components/mom-report-health";
 import { MomReportSleep } from "@/components/mom-report-sleep";
+import { MomReportMoments } from "@/components/mom-report-moments";
+import { MomReportFoodGuideEntry, MomReportFoodGuideSection } from "@/components/mom-report-food-guide";
 import { MomReportMonthPicker } from "@/components/mom-report-month-picker";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildMomReportView, resolveMomReportMonth } from "@/lib/mom-report-view";
@@ -21,13 +23,14 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
   const { month: requested } = await searchParams;
   const month = resolveMomReportMonth(firstParam(requested));
   const content = month ? MOM_REPORTS[month] : undefined;
-  return { title: content ? `${content.title} · 妈妈月报` : "妈妈月报" };
+  return { title: content ? `${formatMonth(month!)} · 妈妈月报` : "妈妈月报" };
 }
 
 // 妈妈月报 — replaces the retired 张年 page (see docs/mom-reports-implementation-handoff.md).
-// Real 苏静月报 text (lib/mom-report-content.ts) laid out around one real, deliverable cover photo
-// for the same month (lib/mom-report-view.ts). No organizer output, no generated summary — see the
-// content module's own header comment for why those are a different, separate thing.
+// 2026-09-17 §12: 苏静 asked for full V1.3 fidelity, both content AND visual language — every
+// section V1.3 had (闪光时刻, Outside Food Guide included), the same card/shadow/hero composition,
+// the same narrow single-column layout at every width. Only the base palette and heading font are
+// the site's own; V1.3's own five-tone system stays because it IS the content's organisation.
 export default async function MomReportsPage({ searchParams }: { searchParams: SearchParams }) {
   await renderOnDemand();
   const { month: requested } = await searchParams;
@@ -40,77 +43,110 @@ export default async function MomReportsPage({ searchParams }: { searchParams: S
       <p>这里还没有一份可以展示的月报。</p>
     </div>;
   }
-  const { content, cover, ageLabel, birthLabel, month, months } = view;
+  const { content, ageLabel, birthCompact, month, months } = view;
 
   return <div className="mr-page">
     <a className="skip-link" href="#mr-main">跳到月报正文</a>
-    <section className="mr-hero">
-      <div className="mr-hero-intro">
-        <p className="mr-eyebrow">妈妈月报 · {formatMonth(month)}</p>
-        <h1 className="mr-serif mr-hero-title">{content.title}</h1>
-        <p className="mr-hero-subtitle">{content.tagline}</p>
-        {ageLabel ? <p className="mr-hero-age">当时 {ageLabel}{birthLabel ? <span> · {birthLabel}出生</span> : null}</p> : null}
-        <MomReportMonthPicker month={month} months={months} />
+    <div className="mr-app">
+      <div className="mr-topbar">
+        <span className="mr-release">{content.release}</span>
       </div>
-      {cover ? <figure className="mr-hero-photo">
-        <Photo media={cover.photo} priority sizes="(max-width: 700px) 100vw, 760px" />
-        <figcaption>
-          <span>{formatMonth(month)}的张年</span>
-          {cover.dateLabel ? <time dateTime={cover.day}>{cover.dateLabel}{cover.ageLabel ? ` · 当时 ${cover.ageLabel}` : ""}</time> : null}
-        </figcaption>
-      </figure> : <p className="mr-hero-photo-empty">这个月还没有可以展示的照片。</p>}
-    </section>
 
-    <nav className="mr-chapter-nav" aria-label="月报目录">
-      <a href="#mr-summary">本月的他</a>
-      <a href="#growth">一点点长大</a>
-      <a href="#sleep">睡眠旅程</a>
-      <a href="#care">健康与关注</a>
-      <a href="#next-month">下月继续看</a>
-    </nav>
-
-    <main id="mr-main">
-      <section id="mr-summary" className="mr-section mr-summary" aria-labelledby="mr-summary-title">
-        <div className="mr-section-heading"><h2 id="mr-summary-title" className="mr-serif">本月情况总结</h2><span>把细小的变化，慢慢记下来。</span></div>
-        <div className="mr-summary-layout">
-          <p className="mr-summary-lead">{content.summaryLead}<em>{content.summaryEmphasis}</em></p>
-          <p className="mr-summary-copy">{content.summaryBody}</p>
-        </div>
-        <dl className="mr-aspects">
-          {content.aspects.map((aspect) => <div key={aspect.key}>
-            <dt>{aspect.label}</dt>
-            <dd><strong>{aspect.lead}</strong><span>{aspect.detail}</span></dd>
-          </div>)}
-        </dl>
-        <p className="mr-source-note">以上为 {formatMonth(month)}月报中的观察，保留当时的表达。</p>
-      </section>
-
-      <section id="growth" className="mr-section mr-growth" aria-labelledby="growth-title">
-        <div className="mr-growth-layout">
-          <div className="mr-growth-intro">
-            <h2 id="growth-title" className="mr-serif">一点点长大</h2>
-            <p>每一次测量，都是成长留下的刻度。</p>
+      <div className="mr-hero-wrap">
+        <figure className="mr-hero-photo">
+          <Image src={content.heroImage.src} alt={content.heroImage.alt} width={content.heroImage.width} height={content.heroImage.height} priority sizes="(max-width: 860px) 100vw, 860px" />
+          <figcaption className="mr-hero-badge">{content.heroBadge}</figcaption>
+        </figure>
+        <div className="mr-hero-panel">
+          <h1 className="mr-serif mr-hero-title">{content.title}</h1>
+          <p className="mr-hero-subtitle">{birthCompact ? `${birthCompact} 出生｜` : ""}{formatMonth(month)}{ageLabel ? `约 ${ageLabel}` : ""}</p>
+          <div className="mr-hero-stats">
+            <div><strong>{content.heroStats.heightLabel}</strong><small>身高 · {formatMonth(month)}</small></div>
+            <div><strong>{content.heroStats.weightLabel}</strong><small>体重 · {formatMonth(month)}</small></div>
+            <div><strong>{ageLabel ?? content.heroStats.ageLabel}</strong><small>当时年龄 · {formatMonth(month)}</small></div>
           </div>
-          <MomReportGrowth points={content.measurements} measurementDetailId="mr-measurement-detail" />
+          <MomReportMonthPicker month={month} months={months} />
         </div>
-      </section>
+      </div>
 
-      <MomReportSleep sleep={content.sleep} />
-      <MomReportHealth intro={content.health.intro} sourceNote={content.health.sourceNote} items={content.health.items} />
+      <nav className="mr-chapter-nav" aria-label="月报目录">
+        <a href="#mr-summary">本月的他</a>
+        <a href="#growth">一点点长大</a>
+        <a href="#sleep">睡眠旅程</a>
+        <a href="#care">健康与关注</a>
+        <a href="#moments">闪光时刻</a>
+        <a href="#food-guide">外出小抄</a>
+        <a href="#next-month">下月继续看</a>
+      </nav>
 
-      <section id="next-month" className="mr-section mr-next-month" aria-labelledby="next-title">
-        <div className="mr-section-heading"><h2 id="next-title" className="mr-serif">{formatMonth(month)}月报留下的下月关注</h2></div>
-        <div className="mr-next-notes">
-          {content.nextMonth.map((item) => <article key={item.title}><h3>{item.title}</h3><p>{item.note}</p></article>)}
+      <main id="mr-main">
+        <section id="mr-summary" className="mr-section mr-card mr-summary" aria-labelledby="mr-summary-title">
+          <h2 id="mr-summary-title" className="mr-serif">本月情况总结</h2>
+          <div className="mr-summary-layout">
+            <p className="mr-summary-lead">{content.summaryLead}<em>{content.summaryEmphasis}</em></p>
+            <p className="mr-summary-copy">{content.summaryBody}</p>
+          </div>
+          <ul className="mr-tags">{content.tags.map((tag) => <li key={tag.label} className={`mr-tone-${tag.tone}`}>{tag.label}</li>)}</ul>
+        </section>
+
+        <section id="basics" className="mr-section" aria-labelledby="aspects-title">
+          <div className="mr-section-heading"><h2 id="aspects-title">基本概况</h2><span>Basic Facts · 六个成长维度</span></div>
+          <div className="mr-card mr-aspects-card">
+            {content.aspects.map((aspect) => <div className={`mr-aspect mr-tone-${aspect.tone}`} key={aspect.key}>
+              <div className="mr-aspect-top"><span className="mr-aspect-icon" aria-hidden="true">{aspect.icon}</span><h3>{aspect.label}</h3></div>
+              <p className="mr-aspect-lead">{aspect.lead}</p>
+              <p className="mr-aspect-detail">{aspect.detail}</p>
+            </div>)}
+          </div>
+        </section>
+
+        <section id="growth" className="mr-section mr-card mr-growth-card" aria-labelledby="growth-title">
+          <h2 id="growth-title">📈 生长发育曲线</h2>
+          <MomReportGrowth points={content.measurements} chartNote={content.chartNote} measurementDetailId="mr-measurement-detail" />
+        </section>
+
+        <div className="mr-section">
+          <MomReportFoodGuideEntry heading={content.foodGuide.heading} entryNote={content.foodGuide.entryNote} />
         </div>
-        <p className="mr-source-note">历史月报当时留下的观察线索，不代表现在的待办。</p>
-      </section>
 
-      <footer className="mr-footer">
-        <p>这份月报，来自{content.source.author}的记录。</p>
-        <p className="mr-footer-note">{content.source.note}</p>
-        <p className="mr-source-note">{content.source.originLabel} · 整理呈现：{content.source.curator}</p>
-      </footer>
-    </main>
+        <section id="care" className="mr-section" aria-labelledby="care-title">
+          <div className="mr-section-heading"><h2 id="care-title">健康与关注</h2><span>Health &amp; Focus</span></div>
+          <p className="mr-section-note">{content.health.intro}</p>
+          <MomReportHealth sourceNote={content.health.sourceNote} items={content.health.items} />
+        </section>
+
+        <section id="sleep" className="mr-section mr-card mr-sleep-card" aria-labelledby="sleep-title">
+          <span className="mr-eyebrow">Sleep Journey</span>
+          <h2 id="sleep-title" className="mr-serif">{content.sleep.heading}</h2>
+          <MomReportSleep sleep={content.sleep} />
+        </section>
+
+        <section id="moments" className="mr-section" aria-labelledby="moments-title">
+          <div className="mr-section-heading"><h2 id="moments-title">闪光时刻</h2><span>Joy &amp; Love Moments</span></div>
+          <p className="mr-section-note">{content.moments.intro}</p>
+          <MomReportMoments items={content.moments.items} />
+        </section>
+
+        <section id="food-guide" className="mr-section mr-card mr-food-guide-card" aria-labelledby="food-guide-title">
+          <span className="mr-eyebrow">Outside Food Guide</span>
+          <h2 id="food-guide-title" className="mr-serif">{content.foodGuide.heading}</h2>
+          <MomReportFoodGuideSection {...content.foodGuide} />
+        </section>
+
+        <section id="next-month" className="mr-section" aria-labelledby="next-title">
+          <div className="mr-section-heading"><h2 id="next-title">下月重点关注</h2><span>Looking Ahead</span></div>
+          <div className="mr-next-notes">
+            {content.nextMonth.map((item) => <article key={item.title}><h3>{item.title}</h3><p>{item.note}</p></article>)}
+          </div>
+          <p className="mr-source-note">历史月报当时留下的观察线索，不代表现在的待办。</p>
+        </section>
+
+        <footer className="mr-footer">
+          <p>这份月报，来自{content.source.author}的记录。</p>
+          <p className="mr-footer-note">{content.source.note}</p>
+          <p className="mr-source-note">{content.source.originLabel} · 整理呈现：{content.source.curator}</p>
+        </footer>
+      </main>
+    </div>
   </div>;
 }

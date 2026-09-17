@@ -1,20 +1,15 @@
-// Assembles a /mom-reports page from two independent things, kept apart on purpose:
-//   - the curated real report text (lib/mom-report-content.ts) — never touched by archive state;
-//   - the cover photograph, which DOES come from the live archive, through the exact same
-//     vouching/deliverability gate every other family page uses (buildMonthComposition's `cover`,
-//     lib/publication-moments.ts) — so a mom report never ships a picture nothing stands behind.
+// Assembles a /mom-reports page from the curated real report content (lib/mom-report-content.ts).
+// The only thing this file reads from the live archive is 张年's birth date, to compute the age at
+// the report's own month the same way every other page does (lib/time-signature.ts's ageAtMonth) —
+// never hand-typed, so it stays correct if the birth date record is ever corrected.
 //
-// The two are allowed to disagree (docs/nianlife-zhangnian-design-2026-09-16.md: "月报数据与当前
-// 数据库可能不是同一组证据"). A month with real report text but no deliverable cover photo yet still
-// renders — honestly, without one — rather than borrowing a photo from a different month.
+// 2026-09-17: the cover photo and every other image in a report (闪光时刻, 外出小抄的实拍照片) are
+// now part of the curated content itself — 苏静 asked for full V1.3 fidelity, and the photo she
+// picked for August IS the content, not a stand-in a selection algorithm found. This file no longer
+// reaches into the archive's media/publication pipeline for a substitute cover.
 import type { FamilyArchive } from "@/lib/family-archive";
 import { listMomReportMonths, MOM_REPORTS, type MomReportContent } from "@/lib/mom-report-content";
-import { findMonth } from "@/lib/memory-chapters";
-import { buildMonthComposition } from "@/lib/publication-moments";
-import type { MediaRef } from "@/lib/memory-chapters";
-import { formatDay, timeSignatureFor } from "@/lib/time-signature";
-
-export type MomReportCover = { photo: MediaRef; day?: string; dateLabel?: string; ageLabel?: string };
+import { ageAtMonth, formatDay } from "@/lib/time-signature";
 
 export type MomReportView = {
   month: string;
@@ -22,7 +17,10 @@ export type MomReportView = {
   content: MomReportContent;
   ageLabel?: string;
   birthLabel?: string;
-  cover?: MomReportCover;
+  // "2025.01.03" — V1.3's own compact date punctuation for the hero subtitle line
+  // ("2025.01.03 出生｜2026年8月约 1岁7个月"), kept apart from birthLabel's "2025 年 1 月 3 日"
+  // (used everywhere else on the site) because that one line is the one place quoting V1.3 verbatim.
+  birthCompact?: string;
 };
 
 // The month a reader lands on with no `?month=` in the URL, or an unrecognised one: the newest real
@@ -35,25 +33,18 @@ export function resolveMomReportMonth(requested: string | undefined): string | u
   return months[months.length - 1];
 }
 
-export function buildMomReportView(archive: FamilyArchive, requested: string | undefined): MomReportView | undefined {
+export function buildMomReportView(archive: Pick<FamilyArchive, "birthDay">, requested: string | undefined): MomReportView | undefined {
   const month = resolveMomReportMonth(requested);
   if (!month) return undefined;
   const content = MOM_REPORTS[month];
-  const chapter = findMonth(archive.chapters, month);
-  let cover: MomReportCover | undefined;
-  if (chapter) {
-    const composition = buildMonthComposition(chapter, archive.privilege, archive.traceEvents, archive.birthDay);
-    if (composition.cover) {
-      const signature = timeSignatureFor(composition.cover.takenAt, archive.birthDay);
-      cover = { photo: composition.cover, day: signature?.day, dateLabel: signature?.dateLabel, ageLabel: signature?.ageLabel };
-    }
-  }
   return {
     month,
     months: listMomReportMonths(),
     content,
-    ageLabel: chapter?.ageLabel,
+    ageLabel: ageAtMonth(archive.birthDay, month),
     birthLabel: archive.birthDay ? formatDay(archive.birthDay) : undefined,
-    cover,
+    birthCompact: archive.birthDay?.replaceAll("-", "."),
   };
 }
+
+export type { MomReportContent };
