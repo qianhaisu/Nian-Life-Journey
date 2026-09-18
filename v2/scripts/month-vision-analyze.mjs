@@ -1,0 +1,322 @@
+#!/usr/bin/env node
+// Runs the month's visual analysis through DeepSeek v4.1 Flash and caches every result.
+//
+// Two layers, kept separate in the output because conflating them is how "21 images analysed"
+// silently became "21 images compared" in an earlier round:
+//   classification — every unique image gets media_kind (photo / screenshot / document / video frame)
+//                    and a plain description of what is visible. Single images get this too.
+//   comparison     — only groups holding two or more images get a recommended representative and a
+//                    list of which frames carry independent value. A single image has nothing to
+//                    compare against and is never counted as "compared".
+//
+// The cache is keyed by the sha-256 of the exact bytes sent to the model, so a hit provably refers
+// to the same picture. Results imported from an earlier round keep their own `source` and model
+// fields; nothing is relabelled to look like it came from this run.
+//
+// Model policy (CLAUDE.md): deepseek-flash only. A configured AI_MODEL naming anything else stops
+// the run before a request is sent, and a response reporting a different model is a hard failure.
+//
+// Usage: node scripts/month-vision-analyze.mjs --groups=<groups.json> --cache=<media dir>
+//        --vision-cache=<vision.json> --out=<results.json> [--chunk=5] [--max-failures=15] [--limit=N]
+
+import fs from "node:fs";
+import path from "node:path";
+
+const arg = (name, fallback) => {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : fallback;
+};
+const groupsPath = arg("groups");
+const mediaDir = arg("cache");
+const visionCachePath = arg("vision-cache");
+const outPath = arg("out");
+const chunkSize = Number(arg("chunk", "5"));
+const maxFailures = Number(arg("max-failures", "15"));
+const limit = Number(arg("limit", "0"));
+const concurrency = Number(arg("concurrency", "1"));
+if (!groupsPath || !mediaDir || !visionCachePath || !outPath) {
+  console.error("--groups, --cache, --vision-cache and --out are required");
+  process.exit(1);
+}
+
+const MODEL = "deepseek-flash";
+const env = {};
+for (const line of fs.readFileSync(path.join(process.cwd(), ".env.local"), "utf8").split(/\r?\n/)) {
+  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+  if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+}
+if (env.AI_MODEL && env.AI_MODEL.trim() !== MODEL) {
+  console.error(`MODEL_NOT_ALLOWED: AI_MODEL="${env.AI_MODEL}" is not ${MODEL}; nothing was sent.`);
+  process.exit(1);
+}
+const BASE = (env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
+
+const groups = JSON.parse(fs.readFileSync(groupsPath, "utf8"));
+const manifest = JSON.parse(fs.readFileSync(path.join(mediaDir, "_manifest.json"), "utf8"));
+const visionCache = fs.existsSync(visionCachePath) ? JSON.parse(fs.readFileSync(visionCachePath, "utf8")) : {};
+// Comparisons are cached per group so an interrupted run resumes instead of paying to compare the
+// same burst twice. The key carries the group's exact member list: change the grouping and the
+// cached comparison no longer applies, which is the behaviour we want.
+const comparisonCachePath = arg("comparison-cache", visionCachePath.replace(/\.json$/, "-comparisons.json"));
+const comparisonCache = fs.existsSync(comparisonCachePath)
+  ? JSON.parse(fs.readFileSync(comparisonCachePath, "utf8")) : {};
+const comparisonKey = (groupId, mediaIds) => `${groupId}::${mediaIds.join(",")}`;
+
+const CLASSIFY_RULES = [
+  "你在为一个家庭生活档案做照片初筛。下面每张图片前都标了编号。",
+  "对每一张图片，判断两件事：",
+  "1) media_kind：photo（真实拍摄的生活照）、screenshot（手机或电脑屏幕截图、聊天记录截图、网页截图）、document（文件、表格、证书、海报等以文字为主的拍摄件）、video_frame（视频截帧）。",
+  "2) description：用一到两句中文客观描述画面里实际看得见的内容——人物动作、姿势、手里和面前的物品、环境。",
+  "只描述画面里真实可见的东西。不要推测姓名、亲属关系、情绪原因、动作先后、是不是第一次，也不要描述没拍到的事。",
+].join("\n");
+
+const COMPARE_RULES = [
+  "这些图片拍摄时间相近，可能是同一场景的连拍。请再判断：",
+  "3) representative：给出最值得保留的那一张的编号，并在 representative_reason 里说明理由（考虑清晰度、脸部是否可见、表情、动作是否完整、画面信息是否丰富）。",
+  "4) distinct：列出除代表之外、仍然记录了明显不同的动作或信息、值得单独保留的图片编号；如果其余各张只是同一姿势同一动作的重复，就给空列表。",
+  "注意：同一个动作的连拍只留代表；但动作、互动或场景确实不同的，不要因为衣服相同或地点相同就判为重复。",
+].join("\n");
+
+const JSON_RULE = [
+  "最后单独输出一行 JSON，不要加代码块标记。",
+  "顶层是一个对象，含键 images，值是数组，每个元素含键 n（编号，整数）、media_kind（字符串）、description（字符串）。",
+];
+const JSON_RULE_COMPARE = JSON_RULE.concat([
+  "顶层还要含键 representative（整数编号）、representative_reason（字符串）、distinct（整数编号数组）。",
+]);
+
+const stats = { calls: 0, cacheHitImages: 0, analysedImages: 0, failures: 0, truncated: 0,
+  inputTokens: 0, outputTokens: 0 };
+const failures = [];
+const callLog = [];
+
+async function callModel(label, images, compare) {
+  const content = [];
+  images.forEach((img, i) => {
+    content.push({ type: "text", text: `图${i + 1}：` });
+    content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.base64 } });
+  });
+  const rules = compare ? `${CLASSIFY_RULES}\n${COMPARE_RULES}\n${JSON_RULE_COMPARE.join("\n")}`
+                        : `${CLASSIFY_RULES}\n${JSON_RULE.join("\n")}`;
+  content.push({ type: "text", text: rules });
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(`${BASE}/v1/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": env.DEEPSEEK_API_KEY,
+          "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: MODEL, max_tokens: 8000, messages: [{ role: "user", content }] }),
+      });
+      if (!response.ok) {
+        if (attempt === 3) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 160)}`);
+        continue;
+      }
+      const payload = await response.json();
+      if (payload.model && payload.model !== MODEL) {
+        throw new Error(`PROVIDER_MODEL_MISMATCH: requested ${MODEL}, answered ${payload.model}`);
+      }
+      const text = (payload.content ?? []).filter((c) => c.type === "text").map((c) => c.text).join("");
+      stats.calls += 1;
+      stats.inputTokens += payload.usage?.input_tokens ?? 0;
+      stats.outputTokens += payload.usage?.output_tokens ?? 0;
+      const truncated = payload.stop_reason === "max_tokens";
+      if (truncated) stats.truncated += 1;
+      callLog.push({ label, images: images.length, compare, requestedModel: MODEL,
+        returnedModel: payload.model ?? null, stopReason: payload.stop_reason, truncated,
+        usage: payload.usage, attempt });
+      return { text, truncated, stopReason: payload.stop_reason, usage: payload.usage,
+        returnedModel: payload.model ?? null };
+    } catch (error) {
+      if (attempt === 3) {
+        stats.failures += 1;
+        failures.push({ label, error: String(error.message ?? error) });
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function parseJson(text) {
+  const candidates = [...text.matchAll(/\{[\s\S]*\}/g)].map((m) => m[0]);
+  for (let i = candidates.length - 1; i >= 0; i -= 1) {
+    try {
+      const parsed = JSON.parse(candidates[i]);
+      if (parsed && Array.isArray(parsed.images)) return parsed;
+    } catch { /* try the next candidate */ }
+  }
+  // last resort: the largest brace-balanced slice
+  const start = text.indexOf("{");
+  if (start >= 0) {
+    for (let end = text.length; end > start; end -= 1) {
+      try {
+        const parsed = JSON.parse(text.slice(start, end));
+        if (parsed && Array.isArray(parsed.images)) return parsed;
+      } catch { /* keep shrinking */ }
+    }
+  }
+  return null;
+}
+
+const results = { generatedAt: new Date().toISOString(), month: groups.month, model: MODEL,
+  classification: {}, comparisons: [], chunkComparisons: [] };
+
+const toAnalyse = [];
+for (const group of groups.groups) {
+  for (const mediaId of group.mediaIds) {
+    const entry = manifest[mediaId];
+    if (!entry) continue;
+    if (!visionCache[entry.derivativeSha256]) toAnalyse.push({ mediaId, group: group.groupId });
+  }
+}
+console.log(`${groups.uniqueItems.length} unique images; ${toAnalyse.length} need classification, ` +
+  `${groups.uniqueItems.length - toAnalyse.length} served from cache`);
+
+const loadImage = (mediaId) => {
+  const entry = manifest[mediaId];
+  const buffer = fs.readFileSync(path.join(mediaDir, entry.file));
+  return { mediaId, base64: buffer.toString("base64"),
+    mediaType: entry.contentType?.startsWith("image/") ? entry.contentType : "image/jpeg",
+    sha: entry.derivativeSha256 };
+};
+
+let processedGroups = 0;
+let stopped = false;
+async function processGroup(group) {
+  const chunks = [];
+  for (let i = 0; i < group.mediaIds.length; i += chunkSize) chunks.push(group.mediaIds.slice(i, i + chunkSize));
+
+  const chunkReps = [];
+  for (const [chunkIndex, chunk] of chunks.entries()) {
+    const needed = chunk.filter((id) => !visionCache[manifest[id]?.derivativeSha256]);
+    const needsCompare = chunk.length > 1;
+    const cachedCompare = comparisonCache[comparisonKey(`${group.groupId}/c${chunkIndex}`, chunk)];
+    if (!needed.length && (!needsCompare || cachedCompare)) {
+      stats.cacheHitImages += chunk.length;
+      if (cachedCompare) {
+        results.chunkComparisons.push({ ...cachedCompare, fromCache: true });
+        if (cachedCompare.representative) chunkReps.push(cachedCompare.representative);
+      } else if (!needsCompare) {
+        chunkReps.push(chunk[0]);
+      }
+      continue;
+    }
+    // A chunk is sent whole whenever any of its images is missing, or whenever it needs a
+    // comparison: the model can only compare pictures it can see in the same request.
+    const images = chunk.map(loadImage);
+    const label = `${group.groupId}/c${chunkIndex + 1}`;
+    const answer = await callModel(label, images, needsCompare);
+    if (!answer) continue;
+    const parsed = parseJson(answer.text);
+    if (!parsed) {
+      stats.failures += 1;
+      failures.push({ label, error: "unparseable JSON", truncated: answer.truncated, stopReason: answer.stopReason });
+      continue;
+    }
+    if (answer.truncated) {
+      failures.push({ label, error: "stop_reason=max_tokens — result treated as incomplete", stopReason: answer.stopReason });
+      continue;
+    }
+    const byN = new Map((parsed.images ?? []).map((row) => [Number(row.n), row]));
+    chunk.forEach((mediaId, i) => {
+      const sha = manifest[mediaId].derivativeSha256;
+      // An image already classified by an earlier, accepted round keeps that result and its
+      // provenance. A multi-image group still has to be *sent* whole for the comparison, but being
+      // re-sent is not a reason to relabel a cached answer as this run's work.
+      if (visionCache[sha]) {
+        stats.cacheHitImages += 1;
+        return;
+      }
+      const row = byN.get(i + 1);
+      if (!row) {
+        failures.push({ label, mediaId, error: `model returned no entry for 图${i + 1}` });
+        return;
+      }
+      visionCache[sha] = {
+        mediaId, mediaKind: row.media_kind, description: row.description,
+        source: "deepseek-flash (this run)", model: MODEL, stopReason: answer.stopReason,
+        analysedAt: new Date().toISOString(), label,
+      };
+      stats.analysedImages += 1;
+    });
+    if (needsCompare && parsed.representative) {
+      const repIndex = Number(parsed.representative) - 1;
+      const repMediaId = chunk[repIndex] ?? null;
+      const record = {
+        groupId: group.groupId, chunkIndex, day: group.day, size: chunk.length,
+        mediaIds: chunk, representative: repMediaId, reason: parsed.representative_reason ?? null,
+        distinct: (parsed.distinct ?? []).map((n) => chunk[Number(n) - 1]).filter(Boolean),
+        stopReason: answer.stopReason, returnedModel: answer.returnedModel,
+      };
+      results.chunkComparisons.push(record);
+      comparisonCache[comparisonKey(`${group.groupId}/c${chunkIndex}`, chunk)] = record;
+      if (repMediaId) chunkReps.push(repMediaId);
+    } else if (!needsCompare) {
+      chunkReps.push(chunk[0]);
+    }
+  }
+
+  // second level: when a group needed more than one chunk, compare the chunk representatives
+  const repKey = comparisonKey(`${group.groupId}/rep`, chunkReps);
+  if (chunks.length > 1 && chunkReps.length > 1 && comparisonCache[repKey]) {
+    results.comparisons.push({ ...comparisonCache[repKey], fromCache: true });
+  } else if (chunks.length > 1 && chunkReps.length > 1) {
+    const images = chunkReps.map(loadImage);
+    const label = `${group.groupId}/rep`;
+    const answer = await callModel(label, images, true);
+    const parsed = answer ? parseJson(answer.text) : null;
+    if (parsed && !answer.truncated && parsed.representative) {
+      const record = {
+        groupId: group.groupId, day: group.day, level: "group (across chunks)",
+        mediaIds: chunkReps, representative: chunkReps[Number(parsed.representative) - 1] ?? null,
+        reason: parsed.representative_reason ?? null,
+        distinct: (parsed.distinct ?? []).map((n) => chunkReps[Number(n) - 1]).filter(Boolean),
+        stopReason: answer.stopReason, returnedModel: answer.returnedModel,
+      };
+      results.comparisons.push(record);
+      comparisonCache[repKey] = record;
+    } else if (answer) {
+      failures.push({ label, error: "group-level comparison unusable", stopReason: answer.stopReason });
+    }
+  } else if (chunks.length === 1 && group.size > 1) {
+    const chunk = results.chunkComparisons.find((c) => c.groupId === group.groupId && c.chunkIndex === 0);
+    if (chunk) {
+      results.comparisons.push({ groupId: group.groupId, day: group.day, level: "group (single chunk)",
+        mediaIds: chunk.mediaIds, representative: chunk.representative, reason: chunk.reason,
+        distinct: chunk.distinct, stopReason: chunk.stopReason, returnedModel: chunk.returnedModel });
+    }
+  }
+
+}
+
+// Groups are independent: each one's call only ever sees its own images, so running several at a
+// time changes throughput and nothing else. The shared caches are plain objects in this one
+// process, written to disk between waves, so there is no cross-process write to race on.
+const queue = limit ? groups.groups.slice(0, limit) : groups.groups;
+for (let i = 0; i < queue.length && !stopped; i += concurrency) {
+  await Promise.all(queue.slice(i, i + concurrency).map(async (group) => {
+    if (stopped) return;
+    await processGroup(group);
+    processedGroups += 1;
+  }));
+  if (stats.failures >= maxFailures) {
+    console.error(`STOP: ${stats.failures} failures reached the limit; nothing further was sent.`);
+    stopped = true;
+  }
+  fs.writeFileSync(visionCachePath, JSON.stringify(visionCache, null, 1));
+  fs.writeFileSync(comparisonCachePath, JSON.stringify(comparisonCache, null, 1));
+  console.log(`  groups ${processedGroups}/${queue.length} | calls ${stats.calls} | ` +
+    `new ${stats.analysedImages} | cached ${stats.cacheHitImages} | fail ${stats.failures}`);
+}
+
+results.classification = visionCache;
+results.stats = stats;
+results.failures = failures;
+results.callLog = callLog;
+fs.writeFileSync(visionCachePath, JSON.stringify(visionCache, null, 1));
+fs.writeFileSync(comparisonCachePath, JSON.stringify(comparisonCache, null, 1));
+fs.writeFileSync(outPath, JSON.stringify(results, null, 1));
+console.log(JSON.stringify(stats, null, 1));
+console.log(`comparisons: ${results.comparisons.length} group-level, ${results.chunkComparisons.length} chunk-level`);
+console.log(`failures: ${failures.length}`);
