@@ -10,6 +10,7 @@
 #   precheck                 只读：磁盘、当前容器、80/443 占用、两个域名的解析
 #   upload <sha>             git archive v2 → ~/v2-deploy-<short>（不构建）
 #   build <sha>              磁盘余量 ≥ MIN_FREE_MB 才构建 nianlife-web:<short>
+#   content-install <月> <文件>  装一个月的编辑稿：版本化文件 + 同文件系统内原子替换
 #   swap <short>             换 Web 容器；旧容器改名 nianlife-diag-web-pre-<short>-<时间> 保留
 #   caddy-up                 解析已指向 ECS_PUBLIC_IP 才启动 Caddy（自动申请证书）
 #   verify                   本机外部验证：跳转、证书、首页、健康检查的 SHA
@@ -25,6 +26,9 @@ MIN_FREE_MB="${MIN_FREE_MB:-3000}"
 MIN_FREE_AFTER_BUILD_MB="${MIN_FREE_AFTER_BUILD_MB:-1500}"
 CADDY_IMAGE="${CADDY_IMAGE:-caddy:2.10-alpine}"
 ENV_SOURCE="${ENV_SOURCE:-/home/ecs-user/.env.runtime.a56fee4}"
+# 编辑稿放在仓库外的私有目录，只读挂进容器。留空则完全是原来的行为（没有挂载）。
+CONTENT_HOST_DIR="${CONTENT_HOST_DIR:-/srv/nianlife-content}"
+CONTENT_MOUNT="${CONTENT_MOUNT:-$CONTENT_HOST_DIR:$CONTENT_HOST_DIR:ro}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 
@@ -79,17 +83,58 @@ if [ "$free" -lt "$min_after" ]; then echo "WARN: free ${free}MB < ${min_after}M
 EOF
     ;;
 
+  content-install)
+    # 一个月的编辑稿。版本化保存，校验通过后在同一文件系统内原子替换 current 软链。
+    month="${1:?usage: content-install <YYYY-MM> <local file>}"; src="${2:?usage: content-install <YYYY-MM> <local file>}"
+    [ -f "$src" ] || { echo "STOP: $src not found"; exit 2; }
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    scp -o BatchMode=yes -i "$ECS_KEY" "$src" "$ECS_SSH:/tmp/$month.$stamp.json.tmp"
+    remote "$month" "$stamp" "$CONTENT_HOST_DIR" <<'EOF'
+set -euo pipefail
+month="$1"; stamp="$2"; dir="$3"
+sudo mkdir -p "$dir/versions"
+tmp="/tmp/$month.$stamp.json.tmp"
+# 按加载器实际要求校验：schema、month、days 为非空数组，且每天都有必需字段。
+node -e '
+const fs=require("fs");
+const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+const bad=(m)=>{console.error("INVALID: "+m);process.exit(3);};
+if(d.schema!=="nianlife.month-content/1") bad("schema");
+if(d.month!==process.argv[2]) bad("month mismatch");
+if(!Array.isArray(d.days)||!d.days.length) bad("days");
+for(const x of d.days){
+  if(!x||typeof x!=="object") bad("day not an object");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(x.day||"")) bad("day key "+x.day);
+  if(!String(x.day).startsWith(process.argv[2]+"-")) bad("day outside month: "+x.day);
+  if(!["story","visual-description","text-only"].includes(x.kind)) bad("kind "+x.kind);
+  if(!Array.isArray(x.paragraphs)||!Array.isArray(x.firstScreenMediaIds)||!Array.isArray(x.expandedMediaIds)) bad("arrays on "+x.day);
+  const exp=new Set(x.expandedMediaIds);
+  if(!x.firstScreenMediaIds.every(i=>exp.has(i))) bad("first screen not a subset on "+x.day);
+}
+console.log("VALID days="+d.days.length+" cover="+(d.coverMediaId?"yes":"no")+" speakers="+Object.keys(d.speakerBySourceId||{}).length);
+' "$tmp" "$month"
+ver="$dir/versions/$month.$stamp.json"
+sudo cp "$tmp" "$ver"; rm -f "$tmp"
+sudo chmod 0644 "$ver"; sudo chmod 0755 "$dir" "$dir/versions"
+# 同一文件系统内的原子替换：先写同目录的临时软链，再 mv 覆盖。
+sudo ln -sfn "$ver" "$dir/.$month.json.new"
+sudo mv -T "$dir/.$month.json.new" "$dir/$month.json"
+ls -l "$dir/$month.json"; ls -1 "$dir/versions" | tail -5
+echo "CONTENT_VERSION=$month.$stamp.json"
+EOF
+    ;;
+
   swap)
     short="${1:?usage: swap <short>}"
-    remote "$short" "$ENV_SOURCE" <<'EOF'
+    scp -o BatchMode=yes -i "$ECS_KEY" "$SCRIPT_DIR/ecs-swap.sh" "$ECS_SSH:/home/ecs-user/ecs-swap.sh"
+    remote "$short" "$ENV_SOURCE" "$CONTENT_MOUNT" <<'EOF'
 set -euo pipefail
-short="$1"; env_src="$2"
+short="$1"; env_src="$2"; mount_spec="$3"
 ts=$(date +%Y%m%d-%H%M%S)
 run="/home/ecs-user/d04-runs/swap-$short-$ts"
-tmpl=/home/ecs-user/d04-runs/swap-a56fee4-20260915-082356/swap.sh
-mkdir -p "$run"; cp -p "$tmpl" "$run/swap.sh"
+mkdir -p "$run"; cp -p /home/ecs-user/ecs-swap.sh "$run/swap.sh"
 docker image inspect "nianlife-web:$short" >/dev/null
-bash "$run/swap.sh" "$env_src" "/home/ecs-user/.env.runtime.$short" "$short" "nianlife-diag-web-pre-$short-$ts" 2>&1 | tee "$run/swap.log"
+bash "$run/swap.sh" "$env_src" "/home/ecs-user/.env.runtime.$short" "$short" "nianlife-diag-web-pre-$short-$ts" 48 5 "$mount_spec" 2>&1 | tee "$run/swap.log"
 echo "ROLLBACK_CONTAINER=nianlife-diag-web-pre-$short-$ts"
 EOF
     ;;
