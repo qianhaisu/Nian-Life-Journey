@@ -222,6 +222,20 @@ export function createJsonRepository(): Repository {
     },
     // Local dev store is small — no need for the PostgreSQL backend's scoped query, just filter the
     // whole (already in-memory) store down to the requested month.
+    async getSourcesByIds(ids: string[]) {
+      const wanted = new Set(ids.filter(Boolean));
+      const store = await readStore();
+      const sources = store.rawSources.filter((source) => wanted.has(source.id) && !source.deletedAt);
+      const mediaIds = new Set(sources.flatMap((source) => source.mediaIds));
+      const media = store.media.filter((item) => mediaIds.has(item.id));
+      const assetIds = new Set(media.map((item) => item.mediaAssetId).filter(Boolean));
+      return {
+        sources, media,
+        mediaAssets: store.mediaAssets.filter((asset) => assetIds.has(asset.id)),
+        mediaLocations: store.mediaLocations.filter((location) => assetIds.has(location.mediaAssetId)),
+      };
+    },
+
     async getMonthArchive(month: string): Promise<MonthArchiveInput> {
       const store = await readStore();
       const media = store.media.filter((item) => calendarMonthOf(item.takenAt) === month);

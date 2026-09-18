@@ -41,6 +41,44 @@ export function hasGivenUp(video: { error: unknown; networkState: number }): boo
   return Boolean(video.error) || video.networkState === NETWORK_NO_SOURCE;
 }
 
+type FullscreenCapableElement = {
+  requestFullscreen?: () => Promise<void> | void;
+  webkitRequestFullscreen?: () => Promise<void> | void;
+  webkitEnterFullscreen?: () => Promise<void> | void;
+};
+
+/**
+ * Ask for fullscreen, using whichever interface this browser actually has.
+ *
+ * Three of them are in play and they are not interchangeable. Desktop and Android use the standard
+ * Element.requestFullscreen on the frame. iOS Safari refuses that on a div and exposes
+ * webkitEnterFullscreen on the <video> element itself, which is why the video is tried as well as
+ * its container. Older WebKit desktop keeps the webkit-prefixed name.
+ *
+ * Returns whether any of them was accepted, so a refusal can be shown rather than swallowed. It is
+ * deliberately NOT awaited before play(): the permission to go fullscreen and the permission to
+ * play both come from the same user gesture, and awaiting one spends the gesture before the other
+ * is asked for.
+ */
+export async function requestFullscreen(frame: unknown, video: unknown): Promise<boolean> {
+  const candidates: Array<() => Promise<void> | void> = [];
+  const frameEl = frame as FullscreenCapableElement | null;
+  const videoEl = video as FullscreenCapableElement | null;
+  if (frameEl?.requestFullscreen) candidates.push(() => frameEl.requestFullscreen!());
+  if (frameEl?.webkitRequestFullscreen) candidates.push(() => frameEl.webkitRequestFullscreen!());
+  if (videoEl?.webkitEnterFullscreen) candidates.push(() => videoEl.webkitEnterFullscreen!());
+  for (const ask of candidates) {
+    try {
+      await ask();
+      return true;
+    } catch {
+      // Refused (no user gesture, a policy, or an element this browser will not accept) — try the
+      // next interface before concluding anything.
+    }
+  }
+  return false;
+}
+
 // Keyed on the clip's id, so a frame that is handed a different clip gets a different element
 // rather than a reused one. The alternative — keeping the element and calling load() — leaves the
 // old resource's in-flight callbacks alive to land on the new clip, and 「这段视频暂时打不开」 from
@@ -52,6 +90,10 @@ export function VideoPlayer(props: { mediaId: string; alt: string; durationSecon
 
 function PlayableClip({ mediaId, alt, durationSeconds }: { mediaId: string; alt: string; durationSeconds?: number | null }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  // Set only when a fullscreen request was refused, so the reader is offered the button again
+  // instead of being left wondering why nothing filled the screen. Playback is never blocked on it.
+  const [fullscreenRefused, setFullscreenRefused] = useState(false);
   // Playback state is read back from the element's own events, never assumed from the click: a
   // play() that the browser refuses must not leave a button claiming the clip is running.
   const [playing, setPlaying] = useState(false);
@@ -87,6 +129,9 @@ function PlayableClip({ mediaId, alt, durationSeconds }: { mediaId: string; alt:
     event.stopPropagation();
     const video = ref.current;
     if (!video) return;
+    // Both requests are made inside this handler, while the user's gesture is still live. Play is
+    // started first and not awaited: fullscreen is the nicety, playing is the thing they asked for,
+    // and a browser that refuses fullscreen must still play the clip.
     const started = video.play() as Promise<void> | undefined;
     started?.catch(() => {
       // A refused play() is not proof the file is broken — it is often only a policy saying no.
@@ -95,10 +140,19 @@ function PlayableClip({ mediaId, alt, durationSeconds }: { mediaId: string; alt:
       setPlaying(false);
       askTheElement();
     });
+    void requestFullscreen(frameRef.current, video).then((accepted) => setFullscreenRefused(!accepted));
   }, [askTheElement]);
 
+  // Offered after a refusal, and after the reader leaves fullscreen and wants it back. Same two
+  // interfaces, same rule: a refusal is reported, never swallowed.
+  const goFullscreen = useCallback(async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    const accepted = await requestFullscreen(frameRef.current, ref.current);
+    setFullscreenRefused(!accepted);
+  }, []);
+
   return (
-    <div className="video-frame">
+    <div className="video-frame" ref={frameRef}>
       <video
         ref={ref}
         className="video-player"
@@ -118,6 +172,13 @@ function PlayableClip({ mediaId, alt, durationSeconds }: { mediaId: string; alt:
       >
         <source src={mediaDeliveryUrl(mediaId, "preview")} type="video/mp4" onError={handleSourceError} />
       </video>
+      {/* Playing, but the browser would not go fullscreen: the reader keeps an explicit way to ask
+          again rather than a clip that quietly stayed in its tile. */}
+      {playing && fullscreenRefused ? (
+        <button type="button" className="video-fullscreen" onClick={goFullscreen} aria-label={`全屏播放 ${alt}`}>
+          全屏
+        </button>
+      ) : null}
       {failed ? (
         <p className="video-unavailable">这段视频暂时打不开</p>
       ) : playing ? null : (

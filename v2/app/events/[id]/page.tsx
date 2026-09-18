@@ -13,6 +13,10 @@ import { storyLayout } from "@/lib/media/presentation";
 import { storyDisplayMedia } from "@/lib/media/story-binding";
 import type { NeighbourCandidate } from "@/lib/story-neighbours";
 import { formatMonth, timeSignatureFor } from "@/lib/time-signature";
+import { DayDetail } from "@/components/day-detail";
+import { readDay } from "@/lib/day-reading";
+import { dayForEventId, loadMonthContent } from "@/lib/month-content";
+import { shanghaiDay } from "@/lib/shanghai-time";
 
 // 2026-09-06 incident (docs/INCIDENT-2026-09-06-neon-egress.md §3.2): generateStaticParams used
 // to prerender every publishable event (651 and growing) on every build, each pulling the full
@@ -59,6 +63,37 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   // reader can open. The evidence disclosure below is provenance: what the day really left behind,
   // where an undeliverable picture keeps its existence (type, time) but is never drawn as a broken
   // frame. The rows themselves stay in the archive untouched.
+  // An old link into a day that has since been edited reads as that day, at its original URL.
+  //
+  // September merged 21 fragments into 13 days: 9/8 alone had four separate events saying
+  // overlapping halves of the same morning. Every one of those four URLs still exists — in a
+  // browser history, in a message — and each used to open its own fragment, so following two of
+  // them looked like two different days. They now open the same finished story, once.
+  const occurredDay = shanghaiDay(event.occurredAt);
+  const editedContent = occurredDay ? await loadMonthContent(occurredDay.slice(0, 7)) : null;
+  const editedDay = editedContent ? dayForEventId(editedContent, event.id) : null;
+  if (editedDay) {
+    const reading = await readDay(editedDay.day);
+    if (reading) {
+      const merged = (editedDay.eventIds ?? []).length;
+      return <DayDetail
+        day={reading.day}
+        dateLabel={reading.dateLabel}
+        ageLabel={reading.ageLabel}
+        title={reading.title}
+        paragraphs={reading.day.paragraphs}
+        photos={reading.photos}
+        sources={reading.sources}
+        sourceMedia={reading.sourceMedia}
+        speakerBySourceId={reading.content.speakerBySourceId}
+        deliverableIds={reading.sourceDeliverable}
+        monthHref={reading.monthHref}
+        monthLabel={reading.monthLabel}
+        mergedNote={merged > 1 ? "这一天原本分成几段记录，现在合成了一篇。" : undefined}
+      />;
+    }
+  }
+
   const deliverable = deliverableMediaIds({ media: eventMedia, mediaAssets, mediaLocations });
   const shownMedia = eventMedia.filter((item) => item.visibility !== "private" && deliverable.has(item.id));
   const signature = timeSignatureFor(event.occurredAt, birthDay);

@@ -26,6 +26,7 @@ export const getAllEventIdentities = repository.getAllEventIdentities.bind(repos
 export const getOrganizerWindowInput = repository.getOrganizerWindowInput.bind(repository);
 export const getEventDetail = repository.getEventDetail.bind(repository);
 export const getMonthArchive = repository.getMonthArchive.bind(repository);
+export const getSourcesByIds = repository.getSourcesByIds.bind(repository);
 export const listArchiveMonths = repository.listArchiveMonths.bind(repository);
 export const appendUpload = repository.appendUpload.bind(repository);
 export const persistUpload = repository.persistUpload.bind(repository);

@@ -956,6 +956,35 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         neighbours: storyNeighbours({ id: e.id, title: e.title, occurredAt: e.occurredAt }, readable),
       };
     },
+    async getSourcesByIds(ids: string[]) {
+      const wanted = [...new Set(ids)].filter(Boolean);
+      if (!wanted.length) return { sources: [], media: [], mediaAssets: [], mediaLocations: [] };
+      // Same id-scoped projection getEventDetail uses, for the same reason.
+      const sourceRows = await db.select({
+        id: t.rawSources.id, profileId: t.rawSources.profileId, contributorId: t.rawSources.contributorId,
+        sourceType: t.rawSources.sourceType, contentTypes: t.rawSources.contentTypes, capturedAt: t.rawSources.capturedAt,
+        text: t.rawSources.text, mediaIds: t.rawSources.mediaIds, sourceLabel: t.rawSources.sourceLabel,
+        visibility: t.rawSources.visibility, deletedAt: t.rawSources.deletedAt,
+      }).from(t.rawSources).where(inArray(t.rawSources.id, wanted));
+      const sources = guardRowCount(
+        (sourceRows as unknown as RawSource[]).filter((item) => !item.deletedAt), "getSourcesByIds.sources");
+      const mediaIds = [...new Set(sources.flatMap((source) => source.mediaIds))];
+      const mediaRows = mediaIds.length
+        ? await db.select().from(t.media).where(inArray(t.media.id, mediaIds))
+        : [];
+      const media = guardRowCount(mediaRows as unknown as Media[], "getSourcesByIds.media");
+      const assetIds = [...new Set(media.map((item) => item.mediaAssetId).filter((v): v is string => Boolean(v)))];
+      const [assetRows, locationRows] = await Promise.all([
+        assetIds.length ? db.select().from(t.mediaAssets).where(inArray(t.mediaAssets.id, assetIds)) : Promise.resolve([]),
+        assetIds.length ? db.select().from(t.mediaLocations).where(inArray(t.mediaLocations.mediaAssetId, assetIds)) : Promise.resolve([]),
+      ]);
+      return {
+        sources, media,
+        mediaAssets: assetRows as unknown as MediaAsset[],
+        mediaLocations: locationRows as unknown as MediaLocation[],
+      };
+    },
+
     async getMonthArchive(month: string) { return assembleMonthArchive(month); },
     async listArchiveMonths() {
       const [events, traces, media] = await Promise.all([

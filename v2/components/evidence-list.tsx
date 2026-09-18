@@ -3,12 +3,13 @@ import type { Contributor, Media, RawSource, SourceType } from "@/lib/types";
 import { presentableEvidenceText, presentableSourceLabel } from "@/lib/organizer/evidence-text";
 import { isThumbnailEligible } from "@/lib/media/hero";
 import { presentableAlt } from "@/lib/media/presentation";
+import { shanghaiClock } from "@/lib/shanghai-time";
 
 const TEXT_PREVIEW_LIMIT = 120;
 
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
-}
+// capturedAt is a real instant (timestamptz). Without an explicit zone this formatted in whatever
+// the server thinks local is — UTC on Vercel — so a message sent at 10:00 in Shanghai printed 02:00.
+const formatTime = (value: string) => shanghaiClock(value);
 
 function formatDuration(seconds?: number) {
   if (!seconds) return "";

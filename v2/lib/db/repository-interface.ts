@@ -218,6 +218,16 @@ export interface Repository extends ChatImportRepository {
   // doc comment for why getStore() cannot serve this: the archive-expander action needs one month
   // out of the whole profile's history on every click, not the whole history filtered client-side.
   getMonthArchive(month: string): Promise<MonthArchiveInput>;
+  /**
+   * The raw sources named by an explicit id list, with the media they carry.
+   *
+   * Bounded by the caller's list, never by a date range or a table scan: a day page hands over the
+   * ids its edited content already cites (a few dozen at most), and this reads exactly those rows.
+   * `text` is included because the material list renders it — that is the whole point of the
+   * section — but it is only ever the cited rows, never all of raw_sources (the 64 MB column that
+   * caused the 2026-09-06 egress incident when it was read unscoped).
+   */
+  getSourcesByIds(ids: string[]): Promise<{ sources: RawSource[]; media: Media[]; mediaAssets: MediaAsset[]; mediaLocations: MediaLocation[] }>;
   // Every "YYYY-MM" a month page could exist for — same existence rule as buildChapters
   // (lib/memory-chapters.ts): a life_event, a daily_trace, or a photographed media item landing in
   // that month. Used only by generateStaticParams (build-time, not a request path) so [year] and

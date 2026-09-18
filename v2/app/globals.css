@@ -489,6 +489,26 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    characters and every one of them shouted. Weight is reserved for what actually carries it — a
    published memory keeps its title type, so it still stands above an ordinary day (原则五). */
 .month-moment { padding: clamp(24px, 4vw, 36px) 0 clamp(16px, 3vw, 24px); border-bottom: 1px solid var(--color-border); }
+/* ---- 一天的详情页 ---- */
+/* The title is the day's own sentence, so it is sized to be read rather than to be a masthead: a
+   28-character Chinese title at the old h1 size wrapped to four lines on a 390px phone and left a
+   band of empty space under it. */
+.day-detail-title { margin: 8px 0 0; max-width: 22ch; font-size: clamp(1.5rem, 5.2vw, 2.1rem); line-height: 1.3; font-weight: 600; }
+.day-detail-when { display: flex; align-items: baseline; gap: 10px; margin: 0; color: var(--color-muted); font-size: .85rem; }
+.day-detail-when time { color: var(--color-secondary); font-weight: 700; }
+/* Prose measure comes from the column, and words break at word boundaries — no hyphenation and no
+   hand-inserted line breaks, so the same paragraph wraps correctly at 390px and at 1280px. */
+.day-detail .story-column p { line-height: 1.8; overflow-wrap: break-word; word-break: normal; hyphens: none; }
+.day-detail .story-column { max-width: 34em; }
+.day-detail-photos { margin-top: clamp(18px, 3vw, 26px); }
+.day-detail-merged { margin-top: 14px; color: var(--color-muted); font-size: .85rem; }
+/* One disclosure, and the long quotes inside it wrap instead of being cut at 120 characters. */
+.day-material .evidence-quote, .day-material .evidence-note { overflow-wrap: break-word; word-break: normal; white-space: pre-wrap; }
+.day-material .evidence-item { break-inside: avoid; }
+/* The refusal path: an explicit control, only after a fullscreen request was turned down. */
+.video-fullscreen { position: absolute; right: 8px; top: 8px; z-index: 2; padding: 4px 10px; border: 0; border-radius: 999px;
+  background: rgba(0,0,0,.55); color: #fff; font-size: .75rem; line-height: 1.6; cursor: pointer; }
+.video-fullscreen:hover { background: rgba(0,0,0,.72); }
 /* One edited day: a title, then prose, then that day's pictures. The list wrapper already spaces
    the days apart, so the entry itself carries no extra rule of its own. */
 .month-days--edited > ol { list-style: none; margin: 0; padding: 0; }

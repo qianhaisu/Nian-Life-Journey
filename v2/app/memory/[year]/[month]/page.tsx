@@ -96,9 +96,13 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
           ...entry,
           photos,
           firstScreenCount: firstScreen.length,
-          // Never a link to a page that does not exist, and never one for a day whose several
-          // original records were merged — pointing at one fragment would misdescribe the day.
-          eventHref: eventId && eventIds.has(eventId) ? `/events/${eventId}` : undefined,
+          // Every edited day now has an address. A day that kept a single original event keeps
+          // that URL (so an existing link stays the canonical one); a merged day and a day the
+          // Organizer never wrote an event for both point at the day's own page. Nothing points
+          // at a page that does not exist, and no day is left without a way in.
+          eventHref: eventId && eventIds.has(eventId)
+            ? `/events/${eventId}`
+            : `/memory/${year}/${monthSegment}/${entry.day.slice(8, 10)}`,
         };
       })
       .filter((entry) => entry.title || entry.paragraphs.length > 0 || entry.photos.length > 0);

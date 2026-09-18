@@ -31,6 +31,10 @@ export type MonthContentDay = {
   expandedMediaIds: string[];
   storyBoundMediaIds?: string[];
   eventId?: string | null;
+  /** Every original life_event merged into this day. An old /events/<id> link resolves through it. */
+  eventIds?: string[];
+  /** The raw sources this day's material section shows, already in time order. */
+  sourceIds?: string[];
 };
 
 export type MonthContent = {
@@ -40,6 +44,15 @@ export type MonthContent = {
   intro?: string;
   coverMediaId?: string;
   coverFocal?: { mobilePercent: number; desktopPercent: number };
+  /**
+   * How to name the person behind each source, keyed by source id.
+   *
+   * Keyed by SOURCE rather than by sender so the render path never handles a sender digest, and so
+   * no mapping table exists in the page at all — a label is looked up for the one row being drawn.
+   * Confirmed relations only (Teddy, 2026-09-18); everyone else keeps a stable anonymous label
+   * rather than being flattened into 「家庭」, which is what the empty contributors table produced.
+   */
+  speakerBySourceId?: Record<string, string>;
   days: MonthContentDay[];
 };
 
@@ -95,6 +108,8 @@ function isUsableDay(value: unknown, month: string): value is MonthContentDay {
   if (day.storyBoundMediaIds !== undefined && !isStringArray(day.storyBoundMediaIds)) return false;
   if (day.ageLabel !== undefined && !isNonEmptyString(day.ageLabel)) return false;
   if (day.eventId !== undefined && day.eventId !== null && !isNonEmptyString(day.eventId)) return false;
+  if (day.eventIds !== undefined && !isStringArray(day.eventIds) && !(Array.isArray(day.eventIds) && day.eventIds.length === 0)) return false;
+  if (day.sourceIds !== undefined && !isStringArray(day.sourceIds) && !(Array.isArray(day.sourceIds) && day.sourceIds.length === 0)) return false;
   // The first screen is meant to be the opening of the expanded set, not a second, different list.
   const expanded = new Set(day.expandedMediaIds);
   if (!day.firstScreenMediaIds.every((id) => expanded.has(id))) return false;
@@ -115,6 +130,11 @@ export function validateMonthContent(parsed: unknown, month: string): MonthConte
   if (doc.cardLine !== undefined && !isNonEmptyString(doc.cardLine)) return null;
   if (doc.intro !== undefined && !isNonEmptyString(doc.intro)) return null;
   if (doc.coverMediaId !== undefined && !isNonEmptyString(doc.coverMediaId)) return null;
+  if (doc.speakerBySourceId !== undefined) {
+    const map = doc.speakerBySourceId as Record<string, unknown>;
+    if (!map || typeof map !== "object" || Array.isArray(map)) return null;
+    if (!Object.values(map).every((label) => isNonEmptyString(label))) return null;
+  }
   return doc as unknown as MonthContent;
 }
 
@@ -141,6 +161,18 @@ export async function loadMonthContent(month: string, nowMs: number = Date.now()
   }
   cache.set(month, { at: nowMs, content });
   return content;
+}
+
+/** The edited day an old event id now reads as, if any. Old links keep working through this. */
+export function dayForEventId(content: MonthContent | null, eventId: string): MonthContentDay | null {
+  if (!content) return null;
+  return content.days.find((day) => (day.eventIds ?? []).includes(eventId) || day.eventId === eventId) ?? null;
+}
+
+/** The edited day for a calendar date, if any. */
+export function dayForDate(content: MonthContent | null, day: string): MonthContentDay | null {
+  if (!content) return null;
+  return content.days.find((entry) => entry.day === day) ?? null;
 }
 
 /**
