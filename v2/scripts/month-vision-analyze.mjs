@@ -31,8 +31,16 @@ const groupsPath = arg("groups");
 const mediaDir = arg("cache");
 const visionCachePath = arg("vision-cache");
 const outPath = arg("out");
-const chunkSize = Number(arg("chunk", "5"));
-const maxFailures = Number(arg("max-failures", "15"));
+// Default 4, not 5. Measured across the completed history-rollout months (2026-09-18): chunk-size-5
+// classify/compare calls truncated at 5.69% (21 of 369), every other size at 0% (0 of 1134, sizes
+// 1-4). A truncated call produces no result and the whole chunk is resent whole — that resend is the
+// literal duplicate call this default is chosen to avoid, not a guess at a "safer" number.
+const chunkSize = Number(arg("chunk", "4"));
+// Raised from 15 (2026-09-18, after 2026-03 tripped it): a month with unusually large bursts (2026-03
+// had chunks up to 19 images before splitting) can accumulate 15 truncations while still mostly
+// intact, and the retry pass below exists precisely to resolve truncations. The ceiling still exists
+// to catch a systemic failure (wrong key, model down) rather than ordinary truncation noise.
+const maxFailures = Number(arg("max-failures", "30"));
 const limit = Number(arg("limit", "0"));
 const concurrency = Number(arg("concurrency", "1"));
 // Names the run in each new result's `source`, so a cache that outlives one run (or is seeded from
@@ -91,19 +99,36 @@ const JSON_RULE_COMPARE = JSON_RULE.concat([
 ]);
 
 const stats = { calls: 0, cacheHitImages: 0, analysedImages: 0, failures: 0, truncated: 0,
-  inputTokens: 0, outputTokens: 0 };
+  inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, thinkingChars: 0, callsWithThinking: 0, httpRetries: 0 };
 const failures = [];
 const callLog = [];
 
+// What the provider's reply says about the call beyond the answer itself: prefix-cache hits, and how
+// much of the output was the model thinking rather than writing the JSON. Recorded per call so a
+// cost decision (e.g. whether thinking is worth a sample comparison) rests on measured numbers.
+function replyShape(payload) {
+  const blocks = payload.content ?? [];
+  const thinking = blocks.filter((c) => c.type === "thinking" || c.type === "redacted_thinking");
+  return {
+    cacheReadTokens: payload.usage?.cache_read_input_tokens ?? null,
+    thinkingBlocks: thinking.length,
+    thinkingChars: thinking.reduce((n, c) => n + String(c.thinking ?? c.data ?? "").length, 0),
+    textChars: blocks.filter((c) => c.type === "text").reduce((n, c) => n + String(c.text ?? "").length, 0),
+  };
+}
+
 async function callModel(label, images, compare) {
-  const content = [];
+  // Fixed instructions first, then the pictures. The rules, quality bar and output format are
+  // identical for every call of the same kind, so putting them ahead of the images gives the
+  // provider's prefix cache a shared opening to reuse; the numbered images, which change every call,
+  // come after. The wording of the rules is unchanged.
+  const rules = compare ? `${CLASSIFY_RULES}\n${COMPARE_RULES}\n${JSON_RULE_COMPARE.join("\n")}`
+                        : `${CLASSIFY_RULES}\n${JSON_RULE.join("\n")}`;
+  const content = [{ type: "text", text: rules }];
   images.forEach((img, i) => {
     content.push({ type: "text", text: `图${i + 1}：` });
     content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.base64 } });
   });
-  const rules = compare ? `${CLASSIFY_RULES}\n${COMPARE_RULES}\n${JSON_RULE_COMPARE.join("\n")}`
-                        : `${CLASSIFY_RULES}\n${JSON_RULE.join("\n")}`;
-  content.push({ type: "text", text: rules });
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
@@ -114,6 +139,7 @@ async function callModel(label, images, compare) {
         body: JSON.stringify({ model: MODEL, max_tokens: 8000, messages: [{ role: "user", content }] }),
       });
       if (!response.ok) {
+        stats.httpRetries += 1;
         if (attempt === 3) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 160)}`);
         continue;
       }
@@ -122,14 +148,18 @@ async function callModel(label, images, compare) {
         throw new Error(`PROVIDER_MODEL_MISMATCH: requested ${MODEL}, answered ${payload.model}`);
       }
       const text = (payload.content ?? []).filter((c) => c.type === "text").map((c) => c.text).join("");
+      const shape = replyShape(payload);
       stats.calls += 1;
       stats.inputTokens += payload.usage?.input_tokens ?? 0;
       stats.outputTokens += payload.usage?.output_tokens ?? 0;
+      stats.cacheReadTokens += shape.cacheReadTokens ?? 0;
+      stats.thinkingChars += shape.thinkingChars;
+      if (shape.thinkingBlocks) stats.callsWithThinking += 1;
       const truncated = payload.stop_reason === "max_tokens";
       if (truncated) stats.truncated += 1;
       callLog.push({ label, images: images.length, compare, requestedModel: MODEL,
         returnedModel: payload.model ?? null, stopReason: payload.stop_reason, truncated,
-        usage: payload.usage, attempt });
+        usage: payload.usage, attempt, ...shape, promptLayout: "rules-first" });
       return { text, truncated, stopReason: payload.stop_reason, usage: payload.usage,
         returnedModel: payload.model ?? null };
     } catch (error) {
@@ -327,7 +357,13 @@ const retries = Number(arg("retries", "2"));
 const groupComplete = (group) =>
   group.mediaIds.every((id) => !manifest[id] || visionCache[manifest[id].derivativeSha256]) &&
   (group.size < 2 || results.comparisons.some((c) => c.groupId === group.groupId && c.representative));
-for (let round = 1; round <= retries && !stopped; round += 1) {
+// Not gated on `stopped`: that flag means "the main pass stopped queuing NEW groups because
+// failures hit the ceiling", not "give up on the month". A group the main pass never even reached
+// (queued after the ceiling tripped) is exactly what `groupComplete` below calls incomplete, so
+// leaving it out of the retry pass silently dropped 2026-03's back third of the month — caught only
+// because month-curation-check.mjs's byte-coverage gate failed, not by anything in this script. The
+// retry pass is still bounded (`retries` rounds, only over what's actually incomplete).
+for (let round = 1; round <= retries; round += 1) {
   const pending = queue.filter((group) => !groupComplete(group));
   if (!pending.length) break;
   attemptSuffix = `#retry${round}`;

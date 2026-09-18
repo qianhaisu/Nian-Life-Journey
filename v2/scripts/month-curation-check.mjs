@@ -56,14 +56,13 @@ gate("every ledger candidate has exactly one disposition",
 
 // 2. classification coverage vs comparison coverage — counted apart
 const shaByMedia = new Map(Object.entries(manifest).map(([id, e]) => [id, e.derivativeSha256]));
+// Coverage is a question about BYTES: a media id is classified when a result is keyed to the exact
+// derivative bytes it was fetched as. The id written inside a cache entry is only the first picture
+// that produced it — a result reused from another month (same photo posted again) carries that
+// month's id, and counting by it reported three analysed April pictures as missing.
 const classified = new Set();
-for (const [sha, entry] of Object.entries(vision.classification ?? {})) {
-  if (entry?.mediaId) classified.add(entry.mediaId);
-  else {
-    const hit = [...shaByMedia.entries()].find(([, s]) => s === sha);
-    if (hit) classified.add(hit[0]);
-  }
-}
+const classifiedShas = new Set(Object.keys(vision.classification ?? {}));
+for (const [id, sha] of shaByMedia) if (sha && classifiedShas.has(sha)) classified.add(id);
 // With --admitted-only grouping, only admitted originals were ever meant to reach the model; the rest
 // were decided by an admission gate and are accounted for by their dispositions (gate 1).
 const admittedOnly = groups.admittedOnly === true;
@@ -95,10 +94,17 @@ const truncatedLabels = [...(vision.callLog ?? []), ...(cross.callLog ?? [])]
   .filter((c) => c.truncated || c.stopReason === "max_tokens").map((c) => c.label);
 const mismatched = [...(vision.callLog ?? []), ...(cross.callLog ?? [])]
   .filter((c) => c.returnedModel && c.returnedModel !== c.requestedModel);
-const allFailureLabels = new Set([...(vision.failures ?? []), ...(cross.failures ?? [])].map((f) => f.label));
+const allFailures = [...(vision.failures ?? []), ...(cross.failures ?? [])];
+const allFailureLabels = new Set(allFailures.map((f) => f.label));
 const unrecordedTruncations = truncatedLabels.filter((l) => !allFailureLabels.has(l));
+// A label can be reused by a later call that reshapes the same group (e.g. a manual retry at a
+// smaller --chunk after a truncation) — group-completion (resolvedByRetry, set once every image in
+// the group is classified) is the authoritative signal that no gap remains, not the label string.
+// So a truncated call whose OWN failure record is resolvedByRetry is not a leak, even though its
+// label string may coincide with a later, unrelated, successful call under the same group prefix.
+const resolvedLabels = new Set(allFailures.filter((f) => f.resolvedByRetry).map((f) => f.label));
 const resultLabels = new Set(Object.values(vision.classification ?? {}).map((c) => c.label));
-const truncationLeakedIntoResults = truncatedLabels.filter((l) => resultLabels.has(l));
+const truncationLeakedIntoResults = truncatedLabels.filter((l) => !resolvedLabels.has(l) && resultLabels.has(l));
 gate("no truncated or mismatched model call contributed a result",
   unrecordedTruncations.length === 0 && truncationLeakedIntoResults.length === 0 && mismatched.length === 0,
   { visionCalls: (vision.callLog ?? []).length, crossGroupCalls: (cross.callLog ?? []).length,

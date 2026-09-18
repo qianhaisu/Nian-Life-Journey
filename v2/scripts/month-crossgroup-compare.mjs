@@ -25,7 +25,10 @@ const groupsPath = arg("groups");
 const visionPath = arg("vision");
 const mediaDir = arg("cache");
 const outPath = arg("out");
-const chunkSize = Number(arg("chunk", "6"));
+// Default 5, not 6. Measured the same way as month-vision-analyze.mjs's chunk default (2026-09-18):
+// chunk-size-6 calls truncated at 10.62% (12 of 113), size 5 at 0% (0 of 17). Truncation forces a
+// whole-chunk resend, so this is chosen to cut that duplicate-call cost, not picked at random.
+const chunkSize = Number(arg("chunk", "5"));
 if (!groupsPath || !visionPath || !mediaDir || !outPath) {
   console.error("--groups, --vision, --cache and --out are required");
   process.exit(1);
@@ -114,7 +117,9 @@ for (const [day, reps] of [...byDay.entries()].sort()) {
     if (chunk.length < 2) continue;
     const label = `${day}/x${Math.floor(i / chunkSize) + 1}`;
     if (retryLabels && !retryLabels.has(label)) continue;
-    const content = [];
+    // The fixed instructions open every request (a shared prefix the provider can cache); the
+    // time-stamped pictures, which differ per call, follow. Wording unchanged.
+    const content = [{ type: "text", text: PROMPT }];
     chunk.forEach((r, idx) => {
       const entry = manifest[r.mediaId];
       const buffer = fs.readFileSync(path.join(mediaDir, entry.file));
@@ -123,7 +128,6 @@ for (const [day, reps] of [...byDay.entries()].sort()) {
         media_type: entry.contentType?.startsWith("image/") ? entry.contentType : "image/jpeg",
         data: buffer.toString("base64") } });
     });
-    content.push({ type: "text", text: PROMPT });
     let ok = false;
     for (let attempt = 1; attempt <= 3 && !ok; attempt += 1) {
       try {
@@ -139,8 +143,12 @@ for (const [day, reps] of [...byDay.entries()].sort()) {
         calls += 1;
         inputTokens += payload.usage?.input_tokens ?? 0;
         outputTokens += payload.usage?.output_tokens ?? 0;
+        const thinking = (payload.content ?? []).filter((c) => c.type === "thinking" || c.type === "redacted_thinking");
         callLog.push({ label, images: chunk.length, requestedModel: MODEL, returnedModel: payload.model ?? null,
-          stopReason: payload.stop_reason, usage: payload.usage });
+          stopReason: payload.stop_reason, usage: payload.usage, attempt,
+          cacheReadTokens: payload.usage?.cache_read_input_tokens ?? null, thinkingBlocks: thinking.length,
+          thinkingChars: thinking.reduce((n, c) => n + String(c.thinking ?? c.data ?? "").length, 0),
+          promptLayout: "rules-first" });
         if (payload.stop_reason === "max_tokens") {
           failures.push({ label, error: "stop_reason=max_tokens — treated as incomplete" });
           ok = true;

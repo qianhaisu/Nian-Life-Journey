@@ -89,16 +89,20 @@ for (const candidate of ranked) {
     const response = await fetch(`${BASE}/v1/messages`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": env.DEEPSEEK_API_KEY, "anthropic-version": "2023-06-01" },
+      // instructions first (shared by every candidate of the month, so the provider can reuse the prefix), then the picture
       body: JSON.stringify({ model: MODEL, max_tokens: 4000, messages: [{ role: "user", content: [
+        { type: "text", text: PROMPT },
         { type: "image", source: { type: "base64",
           media_type: entry.contentType?.startsWith("image/") ? entry.contentType : "image/jpeg",
           data: buffer.toString("base64") } },
-        { type: "text", text: PROMPT },
       ] }] }),
     });
     const payload = await response.json();
     if (payload.model && payload.model !== MODEL) throw new Error(`model mismatch ${payload.model}`);
-    callLog.push({ mediaId: candidate.mediaId, requestedModel: MODEL, returnedModel: payload.model ?? null,
+    const thinking = (payload.content ?? []).filter((c) => c.type === "thinking" || c.type === "redacted_thinking");
+    callLog.push({ mediaId: candidate.mediaId, requestedModel: MODEL, returnedModel: payload.model ?? null, promptLayout: "rules-first",
+      cacheReadTokens: payload.usage?.cache_read_input_tokens ?? null, thinkingBlocks: thinking.length,
+      thinkingChars: thinking.reduce((n, c) => n + String(c.thinking ?? c.data ?? "").length, 0),
       stopReason: payload.stop_reason, usage: payload.usage });
     const text = (payload.content ?? []).filter((c) => c.type === "text").map((c) => c.text).join("");
     let parsed = null;
