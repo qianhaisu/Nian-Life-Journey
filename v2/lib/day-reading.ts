@@ -3,7 +3,7 @@ import { getSourcesByIds } from "@/lib/db/repository";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { toMediaRef } from "@/lib/memory-chapters";
 import type { MediaRef } from "@/lib/memory-chapters";
-import { dayForDate, loadMonthContent, resolveMonthContentMedia, type MonthContent, type MonthContentDay } from "@/lib/month-content";
+import { dayForDate, gateMaterialMedia, loadMonthContent, resolveMonthContentMedia, type MonthContent, type MonthContentDay } from "@/lib/month-content";
 import { formatMonth } from "@/lib/time-signature";
 import type { Media, RawSource } from "@/lib/types";
 
@@ -72,7 +72,7 @@ export async function readDay(dayKey: string): Promise<DayReading | null> {
     ageLabel: ageLabelOn(dayKey, birthDay) ?? day.ageLabel,
     photos,
     sources,
-    sourceMedia: material.media.filter((item) => item.visibility !== "private"),
+    sourceMedia: gateMaterialMedia(material.media.filter((item) => item.visibility !== "private"), privilege.excluded),
     sourceDeliverable,
     monthHref: `/memory/${month.slice(0, 4)}/${month.slice(5, 7)}`,
     monthLabel: formatMonth(month),

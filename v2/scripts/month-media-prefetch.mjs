@@ -12,10 +12,15 @@
 // two must never be conflated when reporting "the file matches".
 //
 // Usage: node scripts/month-media-prefetch.mjs --ledger=<ledger.json> --cache=<dir> [--variant=web] [--concurrency=6]
+//        [--admitted-only]
+//
+// --admitted-only fetches only candidates that pass the admission gates (month-admission.mjs): the
+// others will never be shown or sent to the model, so their bytes are not needed.
 
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { admissionGate } from "./month-admission.mjs";
 
 const arg = (name, fallback) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -39,7 +44,9 @@ const safeName = (mediaId) => mediaId.replace(/[^a-zA-Z0-9]+/g, "_");
 const manifestPath = path.join(cacheDir, "_manifest.json");
 const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) : {};
 
+const admittedOnly = process.argv.includes("--admitted-only");
 const todo = ledger.candidates.filter((c) => {
+  if (admittedOnly && admissionGate(c) !== "admissible") return false;
   const entry = manifest[c.mediaId];
   return !(entry && fs.existsSync(path.join(cacheDir, entry.file)));
 });

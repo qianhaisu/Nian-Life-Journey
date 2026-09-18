@@ -39,6 +39,9 @@ const cross = crossPath && fs.existsSync(crossPath) ? JSON.parse(fs.readFileSync
 const manifest = JSON.parse(fs.readFileSync(path.join(mediaDir, "_manifest.json"), "utf8"));
 
 const classification = vision.classification ?? {};
+// Set by month-local-grouping.mjs --admitted-only: every unique original already carries its
+// admission verdict, and only the admitted ones were grouped and analysed.
+const admissionFirst = groups.admittedOnly === true;
 const visualOf = (mediaId) => classification[manifest[mediaId]?.derivativeSha256] ?? null;
 const ledgerById = new Map(ledger.candidates.map((c) => [c.mediaId, c]));
 const uniqueById = new Map(groups.uniqueItems.map((i) => [i.mediaId, i]));
@@ -141,6 +144,28 @@ for (const item of groups.uniqueItems) {
     visionSource: visual?.source ?? null,
     duplicateRowsFolded: item.duplicateRowCount ? item.duplicateRowCount - 1 : 0,
   };
+  if (admissionFirst && !item.admitted) {
+    // Decided before any model was asked (month-admission.mjs), so there is no visual result here
+    // and none is needed: a picture that fails a gate can never reach a page, whatever it shows.
+    const gate = item.admissionGate;
+    if (gate === "not-publishable") {
+      setDisposition(emitId, "excluded:not-publishable", "no deliverable derivative, or visibility is private", base);
+    } else if (gate === "store-only") {
+      setDisposition(emitId, "excluded:subject-store-only", led?.subjectCheck?.decision === "store_only"
+        ? "the latest media_subject_check for this media id says store_only; a trusted source does not override a reviewer who looked at the file"
+        : "a byte-identical row carrying these bytes is store_only, and no row holds its own approved subject check; an unreviewed twin may not carry bytes a reviewer withdrew", {
+        ...base, subjectCheck: led?.subjectCheck ?? null, byteVeto: Boolean(item.byteVeto),
+      });
+    } else if (gate === "subject-unverified") {
+      setDisposition(emitId, "pending:subject-unverified",
+        "source is not on the trusted list and media_subject_check has never approved this picture; not sent for visual analysis because the admission gate comes first", {
+          ...base, subjectCheck: led?.subjectCheck ?? null, topicScore: led?.topicReview?.worthinessScore ?? null, visuallyAnalysed: false,
+        });
+    } else {
+      setDisposition(emitId, "pending:not-analysed", `not admitted (${gate}); no visual result`, base);
+    }
+    continue;
+  }
   if (!visual) {
     setDisposition(emitId, "pending:not-analysed", "no visual result available for these bytes", base);
     continue;
@@ -266,6 +291,9 @@ const result = {
     crossGroup: "segments the vision model calls redundant keep the earliest and demote the rest to the expanded view",
     firstScreen: "the month page's first screen is a subset of the curated set; it never caps what an Event page may show",
     notSelected: "stays in the archive; no file, review decision or visibility is changed",
+    ...(admissionFirst ? {
+      admissionFirst: "admission gates ran before grouping and vision: only admitted unique originals were grouped, compared and described; a store_only on any byte-identical row vetoes the bytes unless the displayed row holds its own approved check",
+    } : {}),
   },
   counts: { ...counts, ledgerCandidates: ledger.candidates.length, uniqueOriginals: groups.uniqueItems.length, days: days.length },
   duplicateClusterSubstitutions: substitutions,

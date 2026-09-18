@@ -9,11 +9,18 @@
 // may treat a group as "already deduplicated" because this script drew a box around it.
 //
 // Usage: node scripts/month-local-grouping.mjs --ledger=<ledger.json> --cache=<dir> --out=<groups.json>
-//        [--window=90]
+//        [--window=90] [--admitted-only]
+//
+// --admitted-only (the history rollout, MEMORY-08): the admission gates run before grouping, so only
+// pictures a page could show are grouped and sent to the model. See month-admission.mjs for why the
+// order matters. Pictures that fail a gate still get a unique-original entry (and so a disposition
+// downstream); they are simply never put in front of the model, and need not be in the media cache.
+// Without the flag the September behaviour is unchanged.
 
 import fs from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
+import { admissionGate, clusterAdmission } from "./month-admission.mjs";
 
 const arg = (name, fallback) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -23,6 +30,7 @@ const ledgerPath = arg("ledger");
 const cacheDir = arg("cache");
 const outPath = arg("out");
 const windowSeconds = Number(arg("window", "90"));
+const admittedOnly = process.argv.includes("--admitted-only");
 if (!ledgerPath || !cacheDir || !outPath) {
   console.error("--ledger, --cache and --out are required");
   process.exit(1);
@@ -52,6 +60,18 @@ const items = [];
 let analysed = 0;
 for (const candidate of ledger.candidates) {
   const entry = manifest[candidate.mediaId];
+  if (!entry && admittedOnly && admissionGate(candidate) !== "admissible") {
+    // never going to a page, so never fetched: kept for dedupe and accounting only
+    items.push({
+      mediaId: candidate.mediaId, day: candidate.day, takenAtWallClock: candidate.takenAtWallClock,
+      type: candidate.assetMediaType ?? candidate.type, file: null, derivativeSha256: null,
+      originalChecksum: candidate.checksum ?? null, privileged: candidate.privileged,
+      trustedSource: candidate.trustedSource, subjectApproved: candidate.subjectApproved,
+      subjectCheck: candidate.subjectCheck, publishable: candidate.publishable,
+      sourceLabel: candidate.sourceLabel, rawSourceId: candidate.rawSourceId, notFetched: true,
+    });
+    continue;
+  }
   if (!entry) {
     items.push({ ...candidate, localError: "not in media cache" });
     continue;
@@ -140,6 +160,22 @@ for (const item of items) {
   seenOriginal.set(key, bucket);
 }
 for (const [, members] of seenOriginal) {
+  if (admittedOnly) {
+    const verdict = clusterAdmission(members, pickRepresentative);
+    const chosen = verdict.chosen;
+    const duplicateMediaIds = members.map((m) => m.mediaId).filter((id) => id !== chosen.mediaId);
+    if (verdict.admitted && !chosen.file) {
+      // an admissible picture must have real bytes to be analysed; say so rather than skip it
+      uniqueItems.push({ ...chosen, localError: "admissible but not in media cache", admitted: false,
+        admissionGate: "not-fetched", duplicateRowCount: members.length, duplicateMediaIds });
+      continue;
+    }
+    uniqueItems.push({ ...chosen, admitted: verdict.admitted,
+      admissionGate: verdict.admitted ? "admissible" : verdict.vetoed ? "store-only" : verdict.basis,
+      admissionBasis: verdict.basis, byteVeto: verdict.vetoed,
+      duplicateRowCount: members.length, duplicateMediaIds });
+    continue;
+  }
   const chosen = pickRepresentative(members);
   uniqueItems.push({ ...chosen, duplicateRowCount: members.length,
     duplicateMediaIds: members.map((m) => m.mediaId).filter((id) => id !== chosen.mediaId) });
@@ -149,6 +185,7 @@ for (const [, members] of seenOriginal) {
 const groups = [];
 const byDay = new Map();
 for (const item of uniqueItems) {
+  if (admittedOnly && !item.admitted) continue;
   const b = byDay.get(item.day) ?? [];
   b.push(item);
   byDay.set(item.day, b);
@@ -194,17 +231,28 @@ for (const [day, dayItems] of [...byDay.entries()].sort()) {
 const result = {
   generatedAt: new Date().toISOString(),
   month: ledger.month,
+  admittedOnly,
   method: {
     exactDuplicate: "sha-256 of the archived original (media_assets.checksum); derivative-byte matches reported separately",
     grouping: `same day, consecutive by media.taken_at, gap <= ${windowSeconds}s; 64-bit dHash distances recorded per group but never used as a gate`,
     quality: "sharp.stats() — deterministic, no model",
     boundary: "local signals narrow the candidate set only; they never decide sameness of action or whether a picture is worth keeping",
+    ...(admittedOnly ? { admission: "admission gates (publishable, not store_only incl. byte-identical twins, privileged) run before grouping; only admitted unique originals are grouped and sent to the model" } : {}),
   },
   counts: {
     ledgerCandidates: ledger.candidates.length,
     analysed,
     uniqueOriginals: uniqueItems.length,
-    duplicateRowsFolded: analysed - uniqueItems.length,
+    duplicateRowsFolded: admittedOnly
+      ? items.filter((i) => !i.localError).length - uniqueItems.length
+      : analysed - uniqueItems.length,
+    ...(admittedOnly ? {
+      admittedUnique: uniqueItems.filter((i) => i.admitted).length,
+      notAdmittedUnique: uniqueItems.filter((i) => !i.admitted).length,
+      notAdmittedByGate: uniqueItems.filter((i) => !i.admitted).reduce((acc, i) => {
+        acc[i.admissionGate] = (acc[i.admissionGate] ?? 0) + 1; return acc; }, {}),
+      notFetched: items.filter((i) => i.notFetched).length,
+    } : {}),
     localErrors: items.filter((i) => i.localError).length,
     exactDuplicateClusters: exactDuplicateClusters.length,
     exactDuplicateMedia: exactDuplicateClusters.reduce((n, c) => n + c.mediaIds.length, 0),

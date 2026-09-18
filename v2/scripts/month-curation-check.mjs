@@ -64,15 +64,21 @@ for (const [sha, entry] of Object.entries(vision.classification ?? {})) {
     if (hit) classified.add(hit[0]);
   }
 }
-const uniqueIds = new Set(groups.uniqueItems.map((i) => i.mediaId));
+// With --admitted-only grouping, only admitted originals were ever meant to reach the model; the rest
+// were decided by an admission gate and are accounted for by their dispositions (gate 1).
+const admittedOnly = groups.admittedOnly === true;
+const uniqueIds = new Set(groups.uniqueItems.filter((i) => !admittedOnly || i.admitted).map((i) => i.mediaId));
 const unclassified = [...uniqueIds].filter((id) => !classified.has(id));
 const comparedGroups = (vision.comparisons ?? []).filter((c) => c.representative);
 const comparedImages = new Set();
 for (const c of comparedGroups) for (const id of c.mediaIds ?? []) comparedImages.add(id);
 const multiGroups = groups.groups.filter((g) => g.size > 1);
-gate("classification covers every unique original",
+gate(admittedOnly ? "classification covers every admitted unique original" : "classification covers every unique original",
   unclassified.length === 0,
-  { uniqueOriginals: uniqueIds.size, classified: [...classified].filter((id) => uniqueIds.has(id)).length,
+  { uniqueOriginals: groups.uniqueItems.length,
+    ...(admittedOnly ? { admittedUniqueOriginals: uniqueIds.size,
+      notAdmittedNotAnalysed: groups.uniqueItems.length - uniqueIds.size } : {}),
+    classified: [...classified].filter((id) => uniqueIds.has(id)).length,
     missing: unclassified.length, missingIds: unclassified.slice(0, 10) });
 gate("group comparison covers every multi-image group",
   multiGroups.every((g) => comparedGroups.some((c) => c.groupId === g.groupId)),
@@ -173,6 +179,31 @@ gate("no media whose latest subject check is store_only appears in any display l
     examples: storeOnlyLeaks.slice(0, 10),
     note: "source trust does not override a store_only decision; buildMonthComposition subtracts the excluded set before any privilege check" });
 
+// 5c. the store_only veto across byte-identical rows, recomputed from the ledger's checksums rather
+// than from the grouping's cluster verdicts. A reader who sees a picture sees bytes, not a media id: if
+// any row carrying these bytes is store_only, the row on the page must hold its own approved check.
+const rowsByChecksum = new Map();
+for (const c of ledger.candidates) {
+  if (!c.checksum) continue;
+  const bucket = rowsByChecksum.get(c.checksum) ?? [];
+  bucket.push(c);
+  rowsByChecksum.set(c.checksum, bucket);
+}
+const twinLeaks = [];
+const shownIds = new Set(curation.days.flatMap((day) => [...day.monthPageExpanded, ...day.monthPageFirstScreen,
+  ...day.eventSupplementary, ...day.storyBoundSameDay]));
+for (const id of shownIds) {
+  const row = ledger.candidates.find((c) => c.mediaId === id);
+  if (!row?.checksum) continue;
+  const vetoedTwin = (rowsByChecksum.get(row.checksum) ?? [])
+    .some((c) => c.mediaId !== id && c.subjectCheck?.decision === "store_only");
+  if (vetoedTwin && row.subjectCheck?.decision !== "approved") {
+    twinLeaks.push({ id, ownDecision: row.subjectCheck?.decision ?? "never" });
+  }
+}
+gate("no displayed row carries bytes a reviewer withdrew under another id, unless it holds its own approved check",
+  twinLeaks.length === 0, { displayed: shownIds.size, leaks: twinLeaks.length, examples: twinLeaks.slice(0, 10) });
+
 // 6. nothing excluded or unverified leaks into a reading list
 const leaks = [];
 for (const day of curation.days) {
@@ -233,7 +264,11 @@ const summary = {
     visionCalls: (vision.callLog ?? []).length + (cross.callLog ?? []).length,
     visionInputTokens: (vision.stats?.inputTokens ?? 0) + (cross.stats?.inputTokens ?? 0),
     visionOutputTokens: (vision.stats?.outputTokens ?? 0) + (cross.stats?.outputTokens ?? 0),
-    cacheReusedImages: Object.values(vision.classification ?? {}).filter((c) => c.source && !c.source.includes("this run")).length,
+    // counted over this month's analysed originals only: a cache seeded from other rounds holds more
+    cacheReusedImages: [...uniqueIds].map((id) => (vision.classification ?? {})[shaByMedia.get(id)])
+      .filter((c) => c?.source && c.source !== (vision.runSource ?? "deepseek-flash (this run)")).length,
+    newlyAnalysedImages: [...uniqueIds].map((id) => (vision.classification ?? {})[shaByMedia.get(id)])
+      .filter((c) => c?.source && c.source === (vision.runSource ?? "deepseek-flash (this run)")).length,
   },
 };
 if (outPath) fs.writeFileSync(outPath, JSON.stringify(summary, null, 1));

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import type { MonthIndexEntry } from "@/lib/memory-index";
 import type { MediaRef } from "@/lib/memory-chapters";
@@ -8,7 +9,11 @@ import { productToday } from "@/lib/time-truth";
 // One month as a tappable card on /memory: a cropped cover photo, the month and age, and the first
 // line of the month's snapshot (or the first memory's title). No counts — the card is an invitation,
 // not a summary.
-export function MonthCard({ entry, blurb, cover }: { entry: MonthIndexEntry; blurb?: string; cover?: MediaRef }) {
+export function MonthCard({ entry, blurb, cover, coverFocal }: {
+  entry: MonthIndexEntry; blurb?: string; cover?: MediaRef;
+  /** Where an edited cover's crop sits, measured for that photograph in the real card at both widths. */
+  coverFocal?: { mobilePercent: number; desktopPercent: number };
+}) {
   const { chapter, href, preview, featured } = entry;
   // The month's face comes from `preview`, and only from `preview`.
   //
@@ -39,7 +44,15 @@ export function MonthCard({ entry, blurb, cover }: { entry: MonthIndexEntry; blu
   return (
     <Link href={href} className={`month-card scroll-reveal${compact ? " month-card--compact" : ""}`}>
       {coverPhoto ? (
-        <div className="month-card-photo">
+        <div
+          className="month-card-photo"
+          // Only an edited cover carries its own focal point; every other card keeps the stylesheet's
+          // 30% / 45%, which were measured on September's face and are not a rule for other photos.
+          style={cover && coverFocal ? {
+            "--card-focal-mobile": `${coverFocal.mobilePercent}%`,
+            "--card-focal-desktop": `${coverFocal.desktopPercent}%`,
+          } as CSSProperties : undefined}
+        >
           <Photo
             media={coverPhoto}
             variant="thumbnail"

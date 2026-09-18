@@ -84,6 +84,19 @@ const isNonEmptyString = (value: unknown): value is string =>
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => isNonEmptyString(item));
 
+const isPercent = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
+
+/**
+ * The cover's vertical focal point, measured for THIS month's photograph in the real card at both
+ * widths. It ends up inside a CSS value, so anything other than two plain percentages is refused.
+ */
+function isCoverFocal(value: unknown): value is { mobilePercent: number; desktopPercent: number } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const focal = value as Record<string, unknown>;
+  return isPercent(focal.mobilePercent) && isPercent(focal.desktopPercent);
+}
+
 /**
  * Is this one day usable as written?
  *
@@ -130,6 +143,7 @@ export function validateMonthContent(parsed: unknown, month: string): MonthConte
   if (doc.cardLine !== undefined && !isNonEmptyString(doc.cardLine)) return null;
   if (doc.intro !== undefined && !isNonEmptyString(doc.intro)) return null;
   if (doc.coverMediaId !== undefined && !isNonEmptyString(doc.coverMediaId)) return null;
+  if (doc.coverFocal !== undefined && !isCoverFocal(doc.coverFocal)) return null;
   if (doc.speakerBySourceId !== undefined) {
     const map = doc.speakerBySourceId as Record<string, unknown>;
     if (!map || typeof map !== "object" || Array.isArray(map)) return null;
@@ -200,4 +214,15 @@ export function resolveMonthContentMedia<T extends { id: string }>(
     if (media) out.push(media);
   }
   return out;
+}
+
+/**
+ * The pictures a day's material section may draw, out of those its cited messages carried.
+ *
+ * They reach the page by a different road from the photo area (raw_sources.media_ids rather than the
+ * curated list), so the veto the photo area applies is applied here as well: a reviewer's latest
+ * store_only takes a picture off every surface of the day, not only the one the curation fed.
+ */
+export function gateMaterialMedia<T extends { id: string }>(media: readonly T[], excluded?: ReadonlySet<string>): T[] {
+  return excluded?.size ? media.filter((item) => !excluded.has(item.id)) : [...media];
 }

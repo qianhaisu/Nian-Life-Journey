@@ -11,6 +11,9 @@
 #   upload <sha>             git archive v2 → ~/v2-deploy-<short>（不构建）
 #   build <sha>              磁盘余量 ≥ MIN_FREE_MB 才构建 nianlife-web:<short>
 #   content-install <月> <文件>  装一个月的编辑稿：版本化文件 + 同文件系统内原子替换
+#   content-rollback <月> <版本文件名>|--withdraw
+#                            撤回一个月的编辑稿：指回 versions/ 里的某个旧版本，或整月撤下（软链改名保留，
+#                            页面回到没有编辑稿时的原样）。不删除任何版本文件。
 #   swap <short>             换 Web 容器；旧容器改名 nianlife-diag-web-pre-<short>-<时间> 保留
 #   caddy-up                 解析已指向 ECS_PUBLIC_IP 才启动 Caddy（自动申请证书）
 #   verify                   本机外部验证：跳转、证书、首页、健康检查的 SHA
@@ -127,6 +130,33 @@ sudo ln -sfn "$ver" "$dir/.$month.json.new"
 sudo mv -T "$dir/.$month.json.new" "$dir/$month.json"
 ls -l "$dir/$month.json"; ls -1 "$dir/versions" | tail -5
 echo "CONTENT_VERSION=$month.$stamp.json"
+EOF
+    ;;
+
+  content-rollback)
+    # The way back from content-install, mechanised so it is not a hand-typed sudo line on release day.
+    # A named version must already sit in versions/ (nothing is uploaded here). --withdraw renames the
+    # month's link aside instead of deleting it, so the page falls back to its unedited layout and the
+    # link can be put back by hand. Call /api/internal/revalidate afterwards, as after an install.
+    month="${1:?usage: content-rollback <YYYY-MM> <version file>|--withdraw}"; target="${2:?usage: content-rollback <YYYY-MM> <version file>|--withdraw}"
+    [[ "$month" =~ ^[0-9]{4}-[0-9]{2}$ ]] || { echo "STOP: month must be YYYY-MM"; exit 2; }
+    remote "$month" "$target" "$CONTENT_HOST_DIR" "$(date +%Y%m%d-%H%M%S)" <<'EOF'
+set -euo pipefail
+month="$1"; target="$2"; dir="$3"; stamp="$4"
+[ -e "$dir/$month.json" ] || [ -L "$dir/$month.json" ] || { echo "STOP: $dir/$month.json does not exist"; exit 3; }
+echo "before: $(ls -l "$dir/$month.json")"
+if [ "$target" = "--withdraw" ]; then
+  sudo mv -T "$dir/$month.json" "$dir/.$month.json.withdrawn-$stamp"
+  echo "withdrawn: $month now has no edited content (link kept as .$month.json.withdrawn-$stamp)"
+else
+  case "$target" in */*|.*) echo "STOP: give a file name inside versions/, not a path"; exit 3;; esac
+  [ -f "$dir/versions/$target" ] || { echo "STOP: versions/$target not found"; exit 3; }
+  case "$target" in "$month".*) ;; *) echo "STOP: $target is not a version of $month"; exit 3;; esac
+  sudo ln -sfn "$dir/versions/$target" "$dir/.$month.json.new"
+  sudo mv -T "$dir/.$month.json.new" "$dir/$month.json"
+  echo "after: $(ls -l "$dir/$month.json")"
+fi
+ls -1 "$dir/versions" | grep "^$month\." | tail -5
 EOF
     ;;
 

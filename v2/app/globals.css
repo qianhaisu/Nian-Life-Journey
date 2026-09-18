@@ -898,13 +898,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* Crop mode (Photo fit="crop"): the card owns the height, the photo fills it. */
 .month-card-photo { position: relative; height: clamp(160px, 40vw, 240px); overflow: hidden; background: var(--card-soft); }
 .month-card-photo .photo-crop { position: absolute; inset: 0; }
-.month-card-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+.month-card-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% var(--card-focal-mobile, 30%); }
 /* The card is a wide letterbox, so the vertical focal point decides whether a chin survives the
    crop. 30% was measured against the phone card (a 400x200-ish box, MEMORY-02 R2.2); the desktop
    card is shorter relative to its width, and the same 30% rides too high there. Verified in the
-   real card container at 390px and 1280px, not on a mock. */
+   real card container at 390px and 1280px, not on a mock. An edited month whose cover is a different
+   photograph sets its own pair (--card-focal-mobile / --card-focal-desktop), measured the same way. */
 @media (min-width: 721px) {
-  .month-card-photo .photo-crop img { object-position: 50% 45%; }
+  .month-card-photo .photo-crop img { object-position: 50% var(--card-focal-desktop, 45%); }
 }
 .month-card-body { padding: 18px 22px 22px; }
 .month-card-label { display: block; font-size: 1.3rem; font-weight: 600; color: var(--color-text); }

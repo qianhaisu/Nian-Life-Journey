@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   MONTH_CONTENT_TTL_MS, invalidateMonthContent, loadMonthContent,
-  resolveMonthContentMedia, validateMonthContent,
+  gateMaterialMedia, resolveMonthContentMedia, validateMonthContent,
 } from "../lib/month-content.ts";
 
 const MONTH = "2026-09";
@@ -153,4 +153,31 @@ test("a curated id list never outvotes a later store_only, and never repeats a p
   );
   // a day whose every picture was withdrawn resolves to nothing, rather than to a substitute
   assert.deepEqual(resolveMonthContentMedia(["b"], available, excluded), []);
+});
+
+test("a cover focal point is two plain percentages, or the month is refused", () => {
+  // It ends up inside a CSS value on the /memory card, so it is checked like every other field.
+  assert.ok(validateMonthContent(doc({ coverFocal: { mobilePercent: 30, desktopPercent: 45 } }), MONTH));
+  assert.ok(validateMonthContent(doc({ coverFocal: { mobilePercent: 0, desktopPercent: 100, note: "measured" } }), MONTH));
+  for (const bad of [
+    { mobilePercent: "30%", desktopPercent: 45 },
+    { mobilePercent: 30 },
+    { mobilePercent: -1, desktopPercent: 45 },
+    { mobilePercent: 30, desktopPercent: 101 },
+    { mobilePercent: Number.NaN, desktopPercent: 45 },
+    [30, 45],
+    null,
+    "50% 30%",
+  ]) {
+    assert.equal(validateMonthContent(doc({ coverFocal: bad }), MONTH), null, JSON.stringify(bad));
+  }
+});
+
+test("the material section never draws a picture a reviewer withdrew", () => {
+  // Pictures in the material arrive through the cited messages, not the curated list, so the same
+  // store_only veto has to hold on that road too.
+  const carried = [{ id: "m1" }, { id: "withdrawn" }, { id: "m3" }];
+  assert.deepEqual(gateMaterialMedia(carried, new Set(["withdrawn"])).map((m) => m.id), ["m1", "m3"]);
+  assert.deepEqual(gateMaterialMedia(carried, undefined).map((m) => m.id), ["m1", "withdrawn", "m3"]);
+  assert.deepEqual(gateMaterialMedia(carried, new Set()).map((m) => m.id), ["m1", "withdrawn", "m3"]);
 });

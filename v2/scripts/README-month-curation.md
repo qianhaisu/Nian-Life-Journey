@@ -69,3 +69,32 @@ node scripts/month-cover-candidates.mjs --curation=$OPS/curation.json --vision=$
 - **已有分类不被覆盖**。多图组为了比较必须整组重发，但重发不是把旧轮结果改标成本轮的理由。
 - **截断即失败**。`stop_reason: max_tokens` 的调用不产出任何结果，并记入失败。
 - **有候选但全被排除的日期必须留在结果里**，写明原因——「那天没有能看的照片」和「那天不存在」是两件事。
+
+## 历史月份（MEMORY-08）用到的开关
+
+第一次把管线推到九月之前的全部历史月份，暴露出几件九月规模上看不见的事，对应加了开关。
+不带这些开关时行为与九月一致；唯一的默认变化是识图脚本会在同一进程里补跑截断的片段（`--retries=0` 可关闭）。
+
+```sh
+# 准入先于识图：只取、只分组、只送模型「页面可能展示」的候选
+node scripts/month-media-prefetch.mjs --ledger=$OPS/ledger.json --cache=$OPS/media-cache --admitted-only
+node scripts/month-local-grouping.mjs --ledger=... --cache=... --out=... --admitted-only
+# 新结果的 source 写明是哪一轮；截断的片段在同一进程、同样并发下补跑（默认两轮）
+node scripts/month-vision-analyze.mjs ... --concurrency=6 --run-label="MEMORY-08 2026-01" [--retries=2]
+# 跨组比较只补跑上一次失败的片段，原失败记录保留并标 resolvedByRetry
+node scripts/month-crossgroup-compare.mjs ... --retry-failed=$OPS/crossgroup.first-pass.json
+# 封面：只从主体审核 approved 的精选里挑；--ids 让编辑把能讲这个月的照片交给模型判断焦点
+node scripts/month-cover-candidates.mjs ... --ledger=$OPS/ledger.json [--ids=<id,id>]
+# 独立审计：再查页面实际读取的内容文件（含封面）与字节级孪生行
+node scripts/month-display-subject-audit.mjs --curation=... --month=... --content=<YYYY-MM.json> [--allow-empty]
+```
+
+- **准入先于识图**（`month-admission.mjs`）。老月份大部分照片来自不在信任名单、也从未做过主体核验的会话；
+  先识图再过门，会让模型描述几千张页面永远不会展示的照片。更要紧的是正确性：连拍整组比较时，
+  一张不能展示的帧可能被选成组长，其余能展示的帧就被判为「与组长重复」而全部落选。先过门，模型只在能展示的照片里选。
+  没过门的候选照样有去向（`excluded:*` / `pending:subject-unverified`），只是不送模型、不需要取字节。
+- **store_only 按字节否决**。同一张照片常以两个 media id 入库。一行被审阅者判为 store_only，
+  同一份字节的其他行只有**自己持有 approved** 才能上页面；未审阅的孪生行不能把撤回的字节带回来。
+  检查脚本与独立审计分别从台账 checksum 和数据库 checksum 复核这一条。
+- **截断会发生**。历史月份里，约 1–2% 的调用写满 8000 token 被截断。截断的调用照旧记为失败、不产出结果；
+  补跑用单独的标签（`#retryN`），所以截断调用的标签永远不会出现在结果里。

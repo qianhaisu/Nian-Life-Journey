@@ -18,6 +18,7 @@
 //
 // Usage: node scripts/month-vision-analyze.mjs --groups=<groups.json> --cache=<media dir>
 //        --vision-cache=<vision.json> --out=<results.json> [--chunk=5] [--max-failures=15] [--limit=N]
+//        [--concurrency=N] [--run-label=<text naming this round in each new result's source>] [--retries=2]
 
 import fs from "node:fs";
 import path from "node:path";
@@ -34,6 +35,10 @@ const chunkSize = Number(arg("chunk", "5"));
 const maxFailures = Number(arg("max-failures", "15"));
 const limit = Number(arg("limit", "0"));
 const concurrency = Number(arg("concurrency", "1"));
+// Names the run in each new result's `source`, so a cache that outlives one run (or is seeded from
+// another month's) still says which round produced each answer. Default keeps September's wording.
+const runLabel = arg("run-label", "this run");
+const sourceLabel = `deepseek-flash (${runLabel})`;
 if (!groupsPath || !mediaDir || !visionCachePath || !outPath) {
   console.error("--groups, --cache, --vision-cache and --out are required");
   process.exit(1);
@@ -159,7 +164,7 @@ function parseJson(text) {
   return null;
 }
 
-const results = { generatedAt: new Date().toISOString(), month: groups.month, model: MODEL,
+const results = { generatedAt: new Date().toISOString(), month: groups.month, model: MODEL, runSource: sourceLabel,
   classification: {}, comparisons: [], chunkComparisons: [] };
 
 const toAnalyse = [];
@@ -170,8 +175,9 @@ for (const group of groups.groups) {
     if (!visionCache[entry.derivativeSha256]) toAnalyse.push({ mediaId, group: group.groupId });
   }
 }
-console.log(`${groups.uniqueItems.length} unique images; ${toAnalyse.length} need classification, ` +
-  `${groups.uniqueItems.length - toAnalyse.length} served from cache`);
+const groupedImages = groups.groups.reduce((n, g) => n + g.mediaIds.length, 0);
+console.log(`${groupedImages} grouped images (of ${groups.uniqueItems.length} unique originals); ` +
+  `${toAnalyse.length} need classification, ${groupedImages - toAnalyse.length} served from cache`);
 
 const loadImage = (mediaId) => {
   const entry = manifest[mediaId];
@@ -183,6 +189,8 @@ const loadImage = (mediaId) => {
 
 let processedGroups = 0;
 let stopped = false;
+// "" on the first pass; "#retryN" when a group is sent again (see the retry pass below)
+let attemptSuffix = "";
 async function processGroup(group) {
   const chunks = [];
   for (let i = 0; i < group.mediaIds.length; i += chunkSize) chunks.push(group.mediaIds.slice(i, i + chunkSize));
@@ -205,7 +213,7 @@ async function processGroup(group) {
     // A chunk is sent whole whenever any of its images is missing, or whenever it needs a
     // comparison: the model can only compare pictures it can see in the same request.
     const images = chunk.map(loadImage);
-    const label = `${group.groupId}/c${chunkIndex + 1}`;
+    const label = `${group.groupId}/c${chunkIndex + 1}${attemptSuffix}`;
     const answer = await callModel(label, images, needsCompare);
     if (!answer) continue;
     const parsed = parseJson(answer.text);
@@ -235,7 +243,7 @@ async function processGroup(group) {
       }
       visionCache[sha] = {
         mediaId, mediaKind: row.media_kind, description: row.description,
-        source: "deepseek-flash (this run)", model: MODEL, stopReason: answer.stopReason,
+        source: sourceLabel, model: MODEL, stopReason: answer.stopReason,
         analysedAt: new Date().toISOString(), label,
       };
       stats.analysedImages += 1;
@@ -263,7 +271,7 @@ async function processGroup(group) {
     results.comparisons.push({ ...comparisonCache[repKey], fromCache: true });
   } else if (chunks.length > 1 && chunkReps.length > 1) {
     const images = chunkReps.map(loadImage);
-    const label = `${group.groupId}/rep`;
+    const label = `${group.groupId}/rep${attemptSuffix}`;
     const answer = await callModel(label, images, true);
     const parsed = answer ? parseJson(answer.text) : null;
     if (parsed && !answer.truncated && parsed.representative) {
@@ -309,6 +317,35 @@ for (let i = 0; i < queue.length && !stopped; i += concurrency) {
   console.log(`  groups ${processedGroups}/${queue.length} | calls ${stats.calls} | ` +
     `new ${stats.analysedImages} | cached ${stats.cacheHitImages} | fail ${stats.failures}`);
 }
+
+// Retry pass. A truncated or unparseable chunk leaves its pictures unclassified (and its group
+// uncompared). Instead of a second run, this same process sends only the groups still incomplete,
+// at the same concurrency, under a distinct label ("#retryN") so a truncated call's label can never
+// become a result's label. Cached pictures and cached comparisons are not re-sent. The earlier
+// failure stays on record, marked resolvedByRetry once its group is complete.
+const retries = Number(arg("retries", "2"));
+const groupComplete = (group) =>
+  group.mediaIds.every((id) => !manifest[id] || visionCache[manifest[id].derivativeSha256]) &&
+  (group.size < 2 || results.comparisons.some((c) => c.groupId === group.groupId && c.representative));
+for (let round = 1; round <= retries && !stopped; round += 1) {
+  const pending = queue.filter((group) => !groupComplete(group));
+  if (!pending.length) break;
+  attemptSuffix = `#retry${round}`;
+  console.log(`  retry ${round}: ${pending.length} incomplete group(s)`);
+  for (let i = 0; i < pending.length; i += concurrency) {
+    await Promise.all(pending.slice(i, i + concurrency).map((group) => processGroup(group)));
+    fs.writeFileSync(visionCachePath, JSON.stringify(visionCache, null, 1));
+    fs.writeFileSync(comparisonCachePath, JSON.stringify(comparisonCache, null, 1));
+  }
+}
+for (const failure of failures) {
+  const group = queue.find((g) => failure.label?.startsWith(`${g.groupId}/`));
+  if (group && groupComplete(group)) failure.resolvedByRetry = true;
+}
+// a retried group re-reads its cached chunk comparisons; keep one record per chunk and per group
+results.chunkComparisons = [...new Map(results.chunkComparisons.map((c) => [`${c.groupId}|${c.chunkIndex}`, c])).values()];
+results.comparisons = [...new Map(results.comparisons.map((c) => [c.groupId, c])).values()];
+stats.unresolvedFailures = failures.filter((x) => !x.resolvedByRetry).length;
 
 results.classification = visionCache;
 results.stats = stats;

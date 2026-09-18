@@ -35,7 +35,9 @@ export default async function MemoryPage() {
   // An edited month puts its own sentence and its own chosen face on the card. Both still pass the
   // gates the card already applied: the cover must be one of the pictures `preview` holds (i.e.
   // subject-checked and deliverable), and an unknown id simply leaves the card as it was.
-  const editedCards = new Map<string, { line?: string; cover?: (typeof media)[number] }>();
+  const editedCards = new Map<string, {
+    line?: string; cover?: (typeof media)[number]; coverFocal?: { mobilePercent: number; desktopPercent: number };
+  }>();
   const mediaById = new Map(media.map((item) => [item.id, item]));
   for (const year of index.years) {
     for (const month of year.months) {
@@ -49,7 +51,12 @@ export default async function MemoryPage() {
       const allowed = candidate
         && privilege.checked?.has(candidate.id)
         && !privilege.excluded?.has(candidate.id);
-      editedCards.set(month.chapter.month, { line: content.cardLine, cover: allowed ? candidate : undefined });
+      // The focal point belongs to the chosen photograph: it travels with the cover and is dropped with it.
+      editedCards.set(month.chapter.month, {
+        line: content.cardLine,
+        cover: allowed ? candidate : undefined,
+        coverFocal: allowed ? content.coverFocal : undefined,
+      });
     }
   }
 
@@ -99,6 +106,7 @@ export default async function MemoryPage() {
                     entry={month}
                     blurb={editedCards.get(month.chapter.month)?.line ?? snapshotBlurb.get(month.chapter.month)}
                     cover={editedCards.get(month.chapter.month)?.cover}
+                    coverFocal={editedCards.get(month.chapter.month)?.coverFocal}
                   />
                 ))}
               </div>

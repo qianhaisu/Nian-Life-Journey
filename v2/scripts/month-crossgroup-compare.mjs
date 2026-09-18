@@ -12,7 +12,7 @@
 // redundant moves down the reading order, it does not leave the archive.
 //
 // Usage: node scripts/month-crossgroup-compare.mjs --groups=<groups.json> --vision=<results.json>
-//        --cache=<media dir> --out=<crossgroup.json> [--chunk=6]
+//        --cache=<media dir> --out=<crossgroup.json> [--chunk=6] [--retry-failed=<earlier crossgroup.json>]
 
 import fs from "node:fs";
 import path from "node:path";
@@ -76,6 +76,21 @@ let calls = 0;
 let inputTokens = 0;
 let outputTokens = 0;
 
+// --retry-failed=<crossgroup.json of an earlier run>: keep every result that run produced and send
+// only the chunks it recorded as failures. Those failures stay in the record (marked resolved when the
+// retry succeeds): a truncated call is answered by a later one, never erased from the ledger.
+const retryPath = arg("retry-failed");
+const prior = retryPath ? JSON.parse(fs.readFileSync(retryPath, "utf8")) : null;
+const retryLabels = prior
+  ? new Set((prior.failures ?? []).filter((f) => !f.resolvedByRetry).map((f) => f.label)) : null;
+if (prior) {
+  results.push(...(prior.results ?? []));
+  callLog.push(...(prior.callLog ?? []));
+  calls = prior.stats?.calls ?? 0;
+  inputTokens = prior.stats?.inputTokens ?? 0;
+  outputTokens = prior.stats?.outputTokens ?? 0;
+}
+
 const byDay = new Map();
 for (const group of groups.groups) {
   const rep = repByGroup.get(group.groupId);
@@ -90,13 +105,15 @@ for (const group of groups.groups) {
 
 for (const [day, reps] of [...byDay.entries()].sort()) {
   if (reps.length < 2) {
-    results.push({ day, groupsCompared: reps.length, note: "fewer than two comparable groups; nothing to compare" });
+    if (!prior) results.push({ day, groupsCompared: reps.length, note: "fewer than two comparable groups; nothing to compare" });
     continue;
   }
   reps.sort((a, b) => (a.startedAt ?? "").localeCompare(b.startedAt ?? ""));
   for (let i = 0; i < reps.length; i += chunkSize) {
     const chunk = reps.slice(i, i + chunkSize);
     if (chunk.length < 2) continue;
+    const label = `${day}/x${Math.floor(i / chunkSize) + 1}`;
+    if (retryLabels && !retryLabels.has(label)) continue;
     const content = [];
     chunk.forEach((r, idx) => {
       const entry = manifest[r.mediaId];
@@ -107,7 +124,6 @@ for (const [day, reps] of [...byDay.entries()].sort()) {
         data: buffer.toString("base64") } });
     });
     content.push({ type: "text", text: PROMPT });
-    const label = `${day}/x${Math.floor(i / chunkSize) + 1}`;
     let ok = false;
     for (let attempt = 1; attempt <= 3 && !ok; attempt += 1) {
       try {
@@ -154,9 +170,14 @@ for (const [day, reps] of [...byDay.entries()].sort()) {
   console.log(`${day}: ${reps.length} group representatives compared`);
 }
 
+const priorFailures = (prior?.failures ?? []).map((f) => (retryLabels?.has(f.label) && !failures.some((x) => x.label === f.label)
+  ? { ...f, resolvedByRetry: true } : f));
+const allFailures = [...priorFailures, ...failures];
 fs.writeFileSync(outPath, JSON.stringify({
   generatedAt: new Date().toISOString(), month: groups.month, model: MODEL,
-  stats: { calls, inputTokens, outputTokens, failures: failures.length },
-  results, failures, callLog,
+  ...(prior ? { retriedFrom: retryPath, retriedLabels: [...retryLabels] } : {}),
+  stats: { calls, inputTokens, outputTokens, failures: allFailures.length,
+    unresolvedFailures: allFailures.filter((f) => !f.resolvedByRetry).length },
+  results, failures: allFailures, callLog,
 }, null, 1));
 console.log(`cross-group: ${calls} calls, ${results.length} comparisons, ${failures.length} failures`);

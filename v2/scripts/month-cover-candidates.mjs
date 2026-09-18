@@ -10,7 +10,8 @@
 // picture that failed the subject gate or the deliverability gate.
 //
 // Usage: node scripts/month-cover-candidates.mjs --curation=<c.json> --vision=<v.json>
-//        --groups=<g.json> --cache=<media dir> --out=<covers.json> [--top=8]
+//        --groups=<g.json> --cache=<media dir> --out=<covers.json> [--top=8] [--ledger=<l.json>]
+//        [--ids=<media id,media id,...>]
 
 import fs from "node:fs";
 import path from "node:path";
@@ -36,25 +37,41 @@ for (const line of fs.readFileSync(path.join(process.cwd(), ".env.local"), "utf8
 if (env.AI_MODEL && env.AI_MODEL.trim() !== MODEL) { console.error(`MODEL_NOT_ALLOWED: ${env.AI_MODEL}`); process.exit(1); }
 const BASE = (env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 
+// The /memory card only takes a cover whose latest media_subject_check is approved (app/memory/page.tsx:
+// `privilege.checked`). With --ledger, candidates the card would reject anyway are left out, so the
+// model's calls go to pictures that can actually become the cover.
+const ledgerPath = arg("ledger");
+const ledgerById = ledgerPath
+  ? new Map(JSON.parse(fs.readFileSync(ledgerPath, "utf8")).candidates.map((c) => [c.mediaId, c]))
+  : null;
 const itemById = new Map(groups.uniqueItems.map((i) => [i.mediaId, i]));
 const selected = [];
 for (const day of curation.days) {
   for (const s of day.selected) {
     const item = itemById.get(s.mediaId);
     if (!item) continue;
+    if (ledgerById && ledgerById.get(s.mediaId)?.subjectCheck?.decision !== "approved") continue;
+    // a video's poster is a single frame; it is not offered as a month's face
+    if (item.type === "video") continue;
     // a cover is a portrait-ish life photo that is sharp and not flat; these are local, deterministic
     // pre-filters that only shrink the list handed to the model
     selected.push({ ...s, day: day.day, stats: item.stats, aspect: item.aspect,
       width: item.derivativeWidth, height: item.derivativeHeight });
   }
 }
-const ranked = selected
-  .filter((s) => s.stats && s.stats.sharpness > 0.5 && s.stats.stdev > 40)
-  .sort((a, b) => (b.stats.sharpness * b.stats.entropy) - (a.stats.sharpness * a.stats.entropy))
-  .slice(0, top);
+// --ids lets the editor put forward the pictures that carry the month's story (read from the vision
+// descriptions); they still have to be in the curated set and pass the same gates above.
+const wantedIds = arg("ids") ? arg("ids").split(",").map((id) => id.trim()).filter(Boolean) : null;
+const ranked = wantedIds
+  ? wantedIds.map((id) => selected.find((s) => s.mediaId === id)).filter(Boolean)
+  : selected
+    .filter((s) => s.stats && s.stats.sharpness > 0.5 && s.stats.stdev > 40)
+    .sort((a, b) => (b.stats.sharpness * b.stats.entropy) - (a.stats.sharpness * a.stats.entropy))
+    .slice(0, top);
 
+const [coverYear, coverMonth] = String(curation.month).split("-").map(Number);
 const PROMPT = [
-  "这张照片可能被用作一个家庭档案「2026 年 9 月」月份卡片的封面。",
+  `这张照片可能被用作一个家庭档案「${coverYear} 年 ${coverMonth} 月」月份卡片的封面。`,
   "封面会被裁成横向的宽幅画框（手机约 2:1，桌面约 1.4:1），裁切时上下会被切掉一部分。",
   "请回答三件事：",
   "1) face_visible：画面里孩子的脸是否清楚可见（布尔值）。",
