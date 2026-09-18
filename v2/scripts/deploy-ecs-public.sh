@@ -95,24 +95,30 @@ month="$1"; stamp="$2"; dir="$3"
 sudo mkdir -p "$dir/versions"
 tmp="/tmp/$month.$stamp.json.tmp"
 # 按加载器实际要求校验：schema、month、days 为非空数组，且每天都有必需字段。
-node -e '
-const fs=require("fs");
-const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-const bad=(m)=>{console.error("INVALID: "+m);process.exit(3);};
-if(d.schema!=="nianlife.month-content/1") bad("schema");
-if(d.month!==process.argv[2]) bad("month mismatch");
-if(!Array.isArray(d.days)||!d.days.length) bad("days");
-for(const x of d.days){
-  if(!x||typeof x!=="object") bad("day not an object");
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(x.day||"")) bad("day key "+x.day);
-  if(!String(x.day).startsWith(process.argv[2]+"-")) bad("day outside month: "+x.day);
-  if(!["story","visual-description","text-only"].includes(x.kind)) bad("kind "+x.kind);
-  if(!Array.isArray(x.paragraphs)||!Array.isArray(x.firstScreenMediaIds)||!Array.isArray(x.expandedMediaIds)) bad("arrays on "+x.day);
-  const exp=new Set(x.expandedMediaIds);
-  if(!x.firstScreenMediaIds.every(i=>exp.has(i))) bad("first screen not a subset on "+x.day);
-}
-console.log("VALID days="+d.days.length+" cover="+(d.coverMediaId?"yes":"no")+" speakers="+Object.keys(d.speakerBySourceId||{}).length);
-' "$tmp" "$month"
+# 用宿主机的 python3（ECS 上没有装 node，node 只在容器里）。
+python3 - "$tmp" "$month" <<'PYEOF'
+import json, re, sys
+path, month = sys.argv[1], sys.argv[2]
+def bad(msg):
+    print("INVALID: " + msg); sys.exit(3)
+d = json.load(open(path, encoding="utf-8"))
+if d.get("schema") != "nianlife.month-content/1": bad("schema")
+if d.get("month") != month: bad("month mismatch")
+days = d.get("days")
+if not isinstance(days, list) or not days: bad("days")
+for x in days:
+    if not isinstance(x, dict): bad("day not an object")
+    k = x.get("day", "")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", k or ""): bad("day key " + str(k))
+    if not k.startswith(month + "-"): bad("day outside month: " + k)
+    if x.get("kind") not in ("story", "visual-description", "text-only"): bad("kind on " + k)
+    for f in ("paragraphs", "firstScreenMediaIds", "expandedMediaIds"):
+        if not isinstance(x.get(f), list): bad(f + " on " + k)
+    exp = set(x["expandedMediaIds"])
+    if not all(i in exp for i in x["firstScreenMediaIds"]): bad("first screen not a subset on " + k)
+print("VALID days=%d cover=%s speakers=%d" % (
+    len(days), "yes" if d.get("coverMediaId") else "no", len(d.get("speakerBySourceId") or {})))
+PYEOF
 ver="$dir/versions/$month.$stamp.json"
 sudo cp "$tmp" "$ver"; rm -f "$tmp"
 sudo chmod 0644 "$ver"; sudo chmod 0755 "$dir" "$dir/versions"
