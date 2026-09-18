@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { MonthIndexEntry } from "@/lib/memory-index";
+import type { MediaRef } from "@/lib/memory-chapters";
 import { Photo } from "@/components/photo";
 import { monthAgeQualifier } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
@@ -7,7 +8,7 @@ import { productToday } from "@/lib/time-truth";
 // One month as a tappable card on /memory: a cropped cover photo, the month and age, and the first
 // line of the month's snapshot (or the first memory's title). No counts — the card is an invitation,
 // not a summary.
-export function MonthCard({ entry, blurb }: { entry: MonthIndexEntry; blurb?: string }) {
+export function MonthCard({ entry, blurb, cover }: { entry: MonthIndexEntry; blurb?: string; cover?: MediaRef }) {
   const { chapter, href, preview, featured } = entry;
   // The month's face comes from `preview`, and only from `preview`.
   //
@@ -25,7 +26,10 @@ export function MonthCard({ entry, blurb }: { entry: MonthIndexEntry; blurb?: st
   // `preview` is already ordered cover-first and every entry in it is subject-checked, so taking its
   // head keeps the old preference (a checked story lead still sorts first, because `cover` prefers
   // it) while losing the bypass. No checked picture → no image area, not a guess.
-  const coverPhoto = preview[0];
+  // `cover` is an edited month's chosen face. The caller only passes one that already cleared the
+  // same gate `preview` is built behind (subject-checked, deliverable, not store_only), so this is a
+  // choice among pictures the card was allowed to show — not a way around the gate.
+  const coverPhoto = cover ?? preview[0];
   const cardBlurb = blurb ?? featured[0]?.title;
   // D1：没有封面照片的卡（通常是刚开始、内容还很少的当前月）不该占跟有照片的卡一样高的地方——
   // 网格默认把同一行的卡拉伸到等高（globals.css `.memory-month-grid`），没有照片区块的卡会被拉出

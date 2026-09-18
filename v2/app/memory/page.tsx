@@ -3,6 +3,7 @@ import { MonthCard } from "@/components/month-card";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildMemoryIndex } from "@/lib/memory-index";
 import { renderOnDemand } from "@/lib/render-on-demand";
+import { loadMonthContent } from "@/lib/month-content";
 import { YearNavHighlight } from "@/components/year-nav-highlight";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
@@ -18,7 +19,7 @@ export const metadata: Metadata = { title: "记忆" };
 export default async function MemoryPage() {
   // Never prerender this page from the build's mock store — see lib/render-on-demand.ts.
   await renderOnDemand();
-  const { chapters, privilege, snapshots } = await loadFamilyArchiveOnDemand();
+  const { chapters, media, privilege, snapshots } = await loadFamilyArchiveOnDemand();
   const index = buildMemoryIndex(chapters, undefined, privilege);
 
   // First readable line from each month's snapshot summary.
@@ -29,6 +30,27 @@ export default async function MemoryPage() {
       .map((l) => l.replace(/^-\s*/, "").trim())
       .find((l) => l.length > 0);
     if (firstLine) snapshotBlurb.set(s.month, firstLine);
+  }
+
+  // An edited month puts its own sentence and its own chosen face on the card. Both still pass the
+  // gates the card already applied: the cover must be one of the pictures `preview` holds (i.e.
+  // subject-checked and deliverable), and an unknown id simply leaves the card as it was.
+  const editedCards = new Map<string, { line?: string; cover?: (typeof media)[number] }>();
+  const mediaById = new Map(media.map((item) => [item.id, item]));
+  for (const year of index.years) {
+    for (const month of year.months) {
+      const content = await loadMonthContent(month.chapter.month);
+      if (!content) continue;
+      // The chosen cover has to clear the same bar `preview` is built behind, stated here rather
+      // than borrowed: deliverable and family-visible (it is in `media` at all), somebody opened the
+      // file and recorded that it is of this child (`checked`), and no later review took it back
+      // (`excluded`). A cover that fails any of these is dropped and the card keeps its own.
+      const candidate = content.coverMediaId ? mediaById.get(content.coverMediaId) : undefined;
+      const allowed = candidate
+        && privilege.checked?.has(candidate.id)
+        && !privilege.excluded?.has(candidate.id);
+      editedCards.set(month.chapter.month, { line: content.cardLine, cover: allowed ? candidate : undefined });
+    }
   }
 
   const newestYear = index.years[0]?.year;
@@ -75,7 +97,8 @@ export default async function MemoryPage() {
                   <MonthCard
                     key={month.chapter.month}
                     entry={month}
-                    blurb={snapshotBlurb.get(month.chapter.month)}
+                    blurb={editedCards.get(month.chapter.month)?.line ?? snapshotBlurb.get(month.chapter.month)}
+                    cover={editedCards.get(month.chapter.month)?.cover}
                   />
                 ))}
               </div>

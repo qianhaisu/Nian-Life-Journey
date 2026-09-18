@@ -489,6 +489,17 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    characters and every one of them shouted. Weight is reserved for what actually carries it — a
    published memory keeps its title type, so it still stands above an ordinary day (原则五). */
 .month-moment { padding: clamp(24px, 4vw, 36px) 0 clamp(16px, 3vw, 24px); border-bottom: 1px solid var(--color-border); }
+/* One edited day: a title, then prose, then that day's pictures. The list wrapper already spaces
+   the days apart, so the entry itself carries no extra rule of its own. */
+.month-days--edited > ol { list-style: none; margin: 0; padding: 0; }
+.month-days--edited .month-day { padding: 0; }
+.moment-day-entry { padding-top: clamp(20px, 3.5vw, 30px); }
+.day-entry-title { margin: 0 0 10px; font-size: clamp(1.15rem, 2.8vw, 1.45rem); font-weight: 600; line-height: 1.35; color: var(--color-text); }
+/* No max-width in ch here: the measure comes from the reading column, so the same paragraph wraps
+   on its own at 390px and at 1280px rather than being broken to fit a guess. */
+.day-entry-text { margin: 0 0 .7em; line-height: 1.75; color: var(--color-text); }
+.day-entry-text:last-of-type { margin-bottom: 0; }
+.moment-day-entry .day-photos { margin-top: 16px; }
 .moment-body { min-width: 0; }
 .moment-text { max-width: 34ch; }
 .moment-text p { margin: 0 0 10px; font-size: clamp(1.25rem, 3.2vw, 1.7rem); line-height: 1.5; }
@@ -868,6 +879,13 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-card-photo { position: relative; height: clamp(160px, 40vw, 240px); overflow: hidden; background: var(--card-soft); }
 .month-card-photo .photo-crop { position: absolute; inset: 0; }
 .month-card-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+/* The card is a wide letterbox, so the vertical focal point decides whether a chin survives the
+   crop. 30% was measured against the phone card (a 400x200-ish box, MEMORY-02 R2.2); the desktop
+   card is shorter relative to its width, and the same 30% rides too high there. Verified in the
+   real card container at 390px and 1280px, not on a mock. */
+@media (min-width: 721px) {
+  .month-card-photo .photo-crop img { object-position: 50% 45%; }
+}
 .month-card-body { padding: 18px 22px 22px; }
 .month-card-label { display: block; font-size: 1.3rem; font-weight: 600; color: var(--color-text); }
 .month-card-age { display: block; margin-top: 4px; color: var(--muted); font-size: .8rem; }

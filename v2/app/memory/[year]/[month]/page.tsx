@@ -8,6 +8,8 @@ import { DayPhotos } from "@/components/day-photos";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { DayHead, MonthMoment } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
+import { MonthDayEntry } from "@/components/month-day-entry";
+import { loadMonthContent, resolveMonthContentMedia } from "@/lib/month-content";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
@@ -53,11 +55,12 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const { year, month: monthSegment } = await params;
   if (!/^\d{4}$/.test(year) || !/^\d{2}$/.test(monthSegment)) notFound();
   const month = `${year}-${monthSegment}`;
-  const { chapters, store, snapshots, privilege, traceEvents, birthDay } = await loadFamilyArchive();
+  const { chapters, store, media, eventIdentities, snapshots, privilege, traceEvents, birthDay } = await loadFamilyArchive();
   const chapter = findMonth(chapters, month);
   if (!chapter) notFound();
 
   const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay);
+  const content = await loadMonthContent(month);
   const summary = snapshots.find((item) => item.month === month);
   const focusGoals = summary ? focusGoalsForSnapshot(store.monthlyFocusGoals, month) : [];
   const yearChapter = chapters.find((item) => item.year === year);
@@ -73,6 +76,65 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   // Emptiness is about the whole month, not one section: a month whose photographs all sit in day
   // groups has plenty to read even when 「这个月的照片」 is empty.
   const empty = composition.chapter.length === 0 && composition.chronicle.length === 0 && composition.quietDays.length === 0 && composition.totalPhotoCount === 0;
+
+  // An edited month reads as one column of days and nothing else: no story/chronicle split, no
+  // month-wide album, no per-day album link. Everything that month has to show is in the timeline,
+  // once. Months without edited content fall through to the original layout below, unchanged.
+  if (content) {
+    const available = new Map(media.map((item) => [item.id, item]));
+    const eventIds = new Set(eventIdentities.map((item) => item.id));
+    const entries = content.days
+      .slice()
+      .sort((a, b) => a.day.localeCompare(b.day))
+      .map((entry) => {
+        // The curated order is a proposal; these two gates decide. `available` is already
+        // deliverable and family-visible, `privilege.excluded` is the latest store_only.
+        const photos = resolveMonthContentMedia(entry.expandedMediaIds, available, privilege.excluded);
+        const firstScreen = resolveMonthContentMedia(entry.firstScreenMediaIds, available, privilege.excluded);
+        const eventId = (entry as { eventId?: string | null }).eventId ?? null;
+        return {
+          ...entry,
+          photos,
+          firstScreenCount: firstScreen.length,
+          // Never a link to a page that does not exist, and never one for a day whose several
+          // original records were merged — pointing at one fragment would misdescribe the day.
+          eventHref: eventId && eventIds.has(eventId) ? `/events/${eventId}` : undefined,
+        };
+      })
+      .filter((entry) => entry.title || entry.paragraphs.length > 0 || entry.photos.length > 0);
+
+    return <div className="month-page reading-wrap">
+      <header className="chapter-masthead">
+        <Link className="back-link" href={`/memory/${year}`}>← {year} 年</Link>
+        <h1 className="serif">{chapter.label}</h1>
+        {chapter.ageLabel ? <p className="chapter-age">{monthAgeQualifier(month, productToday())} {chapter.ageLabel}</p> : null}
+        {content.intro ? <p className="chapter-summary serif">{content.intro}</p> : null}
+      </header>
+
+      <section className="month-days month-days--edited" aria-labelledby="days-title">
+        <h2 id="days-title" className="section-mark">这个月的日子</h2>
+        <ol>
+          {entries.map((entry) => <li className="month-day" key={entry.day}>
+            <MonthDayEntry
+              day={entry.day}
+              dateLabel={`${Number(entry.day.slice(5, 7))} 月 ${Number(entry.day.slice(8, 10))} 日`}
+              ageLabel={entry.ageLabel}
+              monthAgeLabel={chapter.ageLabel}
+              year={year}
+              title={entry.title}
+              paragraphs={entry.paragraphs}
+              photos={entry.photos}
+              firstScreenCount={entry.firstScreenCount}
+              eventHref={entry.eventHref}
+            />
+          </li>)}
+        </ol>
+      </section>
+
+      {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}
+      {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`}>{item.shortLabel}</Link>)}</p></footer> : null}
+    </div>;
+  }
 
   return <div className="month-page reading-wrap">
     <header className="chapter-masthead">

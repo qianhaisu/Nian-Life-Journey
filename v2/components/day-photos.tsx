@@ -56,10 +56,12 @@ export function DayPhotos({
     <section className="day-photos" aria-label={`${dateLabel}的${kind}`}>
       <h3 className="section-mark">这一天的{kind}</h3>
       <PhotoGallery photos={shown} dateLabel={dateLabel} ageLabel={ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
-      {rest.length > 0 && !expanded ? (
+      {/* One control, in place, and it goes both ways. Expanding used to be one-way: a reader who
+          opened a 30-picture day had no way back except scrolling past all of it. */}
+      {rest.length > 0 ? (
         <p className="chapter-meta day-photos-expand">
-          <button className="text-link" onClick={() => setExpanded(true)}>
-            展开这一天的其他照片
+          <button className="text-link" onClick={() => setExpanded((open) => !open)}>
+            {expanded ? "收起这一天的照片" : "展开这一天的其他照片"}
           </button>
         </p>
       ) : null}
