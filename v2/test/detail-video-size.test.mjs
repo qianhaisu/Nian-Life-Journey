@@ -22,12 +22,12 @@ test("a clip without known dimensions gets no invented ratio (CSS falls back, no
   assert.deepEqual(videoFrameStyle({ width: 0, height: 0 }), {});
 });
 
-test("in the supporting strip a clip renders with --media-ar and keeps native controls and its poster", () => {
+test("in the supporting strip a clip keeps its aspect ratio and poster with a single initial play button", () => {
   const html = renderToStaticMarkup(React.createElement(PhotoGallery, { photos: [photo("p1"), photo("p2"), clip("v1")], heroIndex: 0, dateLabel: "2025年8月2日" }));
   const figure = html.match(/<figure class="photo photo-video[^"]*"[^>]*>/)?.[0] ?? "";
   assert.match(figure, /aspect-ratio:720 \/ 1280/);
   assert.match(figure, /--media-ar:720 \/ 1280/);
-  assert.match(html, /<video[^>]*controls/);
+  assert.doesNotMatch(html, /<video[^>]*controls/);
   assert.match(html, /poster="\/api\/media\/v1\?variant=poster"/);
 });
 

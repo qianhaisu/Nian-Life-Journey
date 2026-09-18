@@ -10,7 +10,7 @@ import { mediaDeliveryUrl } from "@/lib/media/paths";
 // a picture of a video is not a video — so this arrives together with the derivatives that make it
 // playable.
 //
-// Deliberately plain. Native controls, because the browser's own are the ones a phone already knows
+// Deliberately plain. Native controls after playback starts, because the browser's own are the ones a phone already knows
 // how to use, and because a custom bar is a lot of surface to maintain for a page with three
 // readers. `preload="metadata"` so a month full of days costs a few hundred bytes per video rather
 // than the file; the poster is what fills the frame until someone presses play. No autoplay: a
@@ -97,6 +97,7 @@ function PlayableClip({ mediaId, alt, durationSeconds }: { mediaId: string; alt:
   // Playback state is read back from the element's own events, never assumed from the click: a
   // play() that the browser refuses must not leave a button claiming the clip is running.
   const [playing, setPlaying] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
   const [failed, setFailed] = useState(false);
 
   const askTheElement = useCallback(() => {
@@ -156,13 +157,13 @@ function PlayableClip({ mediaId, alt, durationSeconds }: { mediaId: string; alt:
       <video
         ref={ref}
         className="video-player"
-        controls
+        controls={hasStarted}
         preload="metadata"
         playsInline
         poster={mediaDeliveryUrl(mediaId, "poster")}
         aria-label={alt}
         data-duration={durationSeconds ?? undefined}
-        onPlay={() => setPlaying(true)}
+        onPlay={() => { setPlaying(true); setHasStarted(true); }}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
         onError={askTheElement}
@@ -181,11 +182,9 @@ function PlayableClip({ mediaId, alt, durationSeconds }: { mediaId: string; alt:
       ) : null}
       {failed ? (
         <p className="video-unavailable">这段视频暂时打不开</p>
-      ) : playing ? null : (
-        // The layer reserves the strip along the bottom for the browser's own bar and centres the
-        // button in what is left, so the hit area can be a comfortable size without ever landing on
-        // the scrubber. It passes the pointer through everywhere except the button itself, which
-        // leaves Chrome's own click-on-the-picture behaviour intact.
+      ) : hasStarted ? null : (
+        // Only one initial play affordance: native controls are enabled after the first play event,
+        // when this layer is removed. Pausing/ending then uses native controls without a second icon.
         <span className="video-play-layer">
           <button type="button" className="video-play" onClick={startPlaying} aria-label={`播放 ${alt}`}>
             {/* The disc is the mark; the button around it is the target, and is the larger of the

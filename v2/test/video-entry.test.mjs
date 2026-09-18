@@ -64,13 +64,13 @@ test("a group of only photographs keeps the heading it always had", () => {
   assert.doesNotMatch(html, /视频/);
 });
 
-test("the clip offers a real button with a name, and the native controls are still there", () => {
+test("the unplayed clip offers one play button without competing native controls", () => {
   const html = renderToStaticMarkup(React.createElement(VideoPlayer, { mediaId: "wechat-media:d3d2d2df", alt: "2025 年 11 月 · 一段视频" }));
   // A real <button>: focusable and operable from a keyboard without anything added for it.
   assert.match(html, /<button type="button" class="video-play"[^>]*aria-label="播放 2025 年 11 月 · 一段视频"/);
-  // The native bar is not replaced. The scrubber, the volume and the overflow menu stay the
-  // browser's, and the clip still plays where it sits.
-  assert.match(html, /<video[^>]*controls/);
+  // Native controls must not compete with the initial button; browser tests verify they appear
+  // after playback and remain available when paused.
+  assert.doesNotMatch(html, /<video[^>]*controls/);
   assert.match(html, /playsInline/i);
   assert.match(html, /variant=poster/);
   assert.match(html, /<source src="\/api\/media\/wechat-media:d3d2d2df\?variant=preview" type="video\/mp4"/);

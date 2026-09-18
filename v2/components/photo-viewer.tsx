@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { orientationOf, aspectRatioOf } from "@/lib/media/presentation";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
@@ -53,11 +54,15 @@ export function ViewerModal({
   onClose: () => void;
 }) {
   const reelRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [currentIndex, setCurrentIndex] = useState(startIndex);
   const [zoomed, setZoomed] = useState(false);
   const lastClickMs = useRef(0);
 
   useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    dialog?.showModal();
     const reel = reelRef.current;
     if (reel) reel.scrollTo({ left: startIndex * reel.offsetWidth, behavior: "instant" as ScrollBehavior });
     const prevOverflow = document.body.style.overflow;
@@ -68,6 +73,8 @@ export function ViewerModal({
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("popstate", handlePop);
+      dialog?.close();
+      previousFocus?.focus({ preventScroll: true });
     };
   }, [startIndex, onClose]);
 
@@ -99,8 +106,11 @@ export function ViewerModal({
     lastClickMs.current = now;
   }, []);
 
-  return (
-    <div className="photo-viewer" role="dialog" aria-modal="true" aria-label="照片查看器">
+  // Escape animated/transformed ancestors. The native modal also makes the page underneath inert.
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <dialog ref={dialogRef} className="photo-viewer" aria-modal="true" aria-label="照片查看器"
+      onCancel={(event) => { event.preventDefault(); closeViaUI(); }}>
       <header className="viewer-header">
         <button className="viewer-close" onClick={closeViaUI} aria-label="关闭" autoFocus>✕</button>
         <p className="viewer-caption">
@@ -122,10 +132,14 @@ export function ViewerModal({
           </div>
         ))}
       </div>
-      {photos.length > 1 ? (
-        <footer className="viewer-nav">{currentIndex + 1} / {photos.length}</footer>
-      ) : null}
-    </div>
+      <footer className="viewer-nav">
+        <button type="button" disabled={currentIndex === 0} aria-label="上一张"
+          onClick={() => reelRef.current?.scrollTo({ left: (currentIndex - 1) * reelRef.current.offsetWidth, behavior: "smooth" })}>‹</button>
+        <span aria-live="polite">{currentIndex + 1} / {photos.length}</span>
+        <button type="button" disabled={currentIndex === photos.length - 1} aria-label="下一张"
+          onClick={() => reelRef.current?.scrollTo({ left: (currentIndex + 1) * reelRef.current.offsetWidth, behavior: "smooth" })}>›</button>
+      </footer>
+    </dialog>, document.body
   );
 }
 
