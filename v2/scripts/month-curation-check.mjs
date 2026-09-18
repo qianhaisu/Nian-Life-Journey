@@ -154,6 +154,25 @@ for (const day of curation.days) {
 gate("first screen is a subset of the expanded set, and the Event lists partition it exactly",
   consistency.length === 0, { days: curation.days.length, problems: consistency });
 
+// 5b. the store_only veto, checked from the ledger rather than from the curation's own filter.
+// This is still not independent enough to be the proof — see month-display-subject-audit.mjs, which
+// recomputes the latest decision straight from the database — but it catches the case where the
+// curation and the ledger disagree.
+const storeOnlyFromLedger = new Set(ledger.candidates
+  .filter((c) => c.subjectCheck?.decision === "store_only").map((c) => c.mediaId));
+const storeOnlyLeaks = [];
+for (const day of curation.days) {
+  for (const id of [...day.monthPageExpanded, ...day.monthPageFirstScreen,
+                    ...day.eventSupplementary, ...day.storyBoundSameDay]) {
+    if (storeOnlyFromLedger.has(id)) storeOnlyLeaks.push({ day: day.day, id });
+  }
+}
+gate("no media whose latest subject check is store_only appears in any display list",
+  storeOnlyLeaks.length === 0,
+  { storeOnlyInMonth: storeOnlyFromLedger.size, leaks: storeOnlyLeaks.length,
+    examples: storeOnlyLeaks.slice(0, 10),
+    note: "source trust does not override a store_only decision; buildMonthComposition subtracts the excluded set before any privilege check" });
+
 // 6. nothing excluded or unverified leaks into a reading list
 const leaks = [];
 for (const day of curation.days) {
@@ -209,6 +228,7 @@ const summary = {
     pending: Object.entries(curation.counts).filter(([k]) => k.startsWith("pending")).reduce((n, [, v]) => n + v, 0),
     notSelectedSameBurst: Object.entries(curation.counts).filter(([k]) => k.startsWith("not-selected")).reduce((n, [, v]) => n + v, 0),
     excluded: Object.entries(curation.counts).filter(([k]) => k.startsWith("excluded")).reduce((n, [, v]) => n + v, 0),
+    excludedStoreOnly: curation.counts["excluded:subject-store-only"] ?? 0,
     duplicateRowsFoldedCount: curation.counts["duplicate-row"] ?? 0,
     visionCalls: (vision.callLog ?? []).length + (cross.callLog ?? []).length,
     visionInputTokens: (vision.stats?.inputTokens ?? 0) + (cross.stats?.inputTokens ?? 0),

@@ -77,12 +77,41 @@ const dispositions = new Map();
 const setDisposition = (mediaId, disposition, reason, extra = {}) =>
   dispositions.set(mediaId, { mediaId, disposition, reason, ...extra });
 
+// A media id may be substituted for another only when it earns admission on its own. An `approved`
+// row is such a decision; "nobody has looked at this one yet" is not, and using an unreviewed twin
+// to carry bytes a reviewer rejected under a sibling id would launder that rejection. September has
+// two clusters of exactly that shape (both duplicate video rows), and neither is substituted.
+const latestDecision = (mediaId) => ledgerById.get(mediaId)?.subjectCheck?.decision ?? null;
+const admissibleOnItsOwn = (mediaId) => {
+  const led = ledgerById.get(mediaId);
+  return Boolean(led && led.publishable && led.privileged && latestDecision(mediaId) === "approved");
+};
+const substitutions = [];
+const substituteFor = new Map();
+
 // 1) duplicate rows folded into their representative — recorded, never dropped
 for (const cluster of groups.exactDuplicateClusters) {
-  const kept = uniqueById.has(cluster.representative) ? cluster.representative
+  let kept = uniqueById.has(cluster.representative) ? cluster.representative
     : cluster.mediaIds.find((id) => uniqueById.has(id)) ?? cluster.representative;
+  if (latestDecision(kept) === "store_only") {
+    const substitute = cluster.mediaIds.find((id) => id !== kept && admissibleOnItsOwn(id));
+    substitutions.push({
+      checksum: cluster.checksum, excludedRepresentative: kept,
+      substitute: substitute ?? null,
+      clusterDecisions: cluster.mediaIds.map((id) => ({ mediaId: id, latestDecision: latestDecision(id) })),
+      outcome: substitute
+        ? "replaced by a cluster member holding its own approved subject check"
+        : "no cluster member holds its own approved subject check, so the whole cluster stays out of every display list",
+    });
+    if (substitute) {
+      substituteFor.set(kept, substitute);
+      kept = substitute;
+    }
+  }
   for (const id of cluster.mediaIds) {
     if (id === kept) continue;
+    // the vetoed representative is excluded by name in the pass below, not folded away as a duplicate
+    if (substituteFor.has(id)) continue;
     setDisposition(id, "duplicate-row", "byte-identical original already represented by another row",
       { identity: "original checksum", checksum: cluster.checksum, representedBy: kept });
   }
@@ -91,8 +120,20 @@ for (const cluster of groups.exactDuplicateClusters) {
 // 2) every unique original
 for (const item of groups.uniqueItems) {
   if (dispositions.has(item.mediaId)) continue;
-  const led = ledgerById.get(item.mediaId);
-  const visual = visualOf(item.mediaId);
+  // When a cluster's representative was vetoed and a sibling earned admission on its own, the
+  // sibling carries the (identical) bytes from here on: same group, same visual result, its own
+  // review record. The vetoed id is recorded as excluded rather than quietly folded away.
+  const substitute = substituteFor.get(item.mediaId);
+  if (substitute) {
+    setDisposition(item.mediaId, "excluded:subject-store-only",
+      "the latest media_subject_check for this media id says store_only; these bytes stay in the lists under a sibling id that holds its own approved check", {
+        day: item.day, takenAt: item.takenAtWallClock, groupId: groupOf.get(item.mediaId)?.groupId ?? null,
+        subjectCheck: ledgerById.get(item.mediaId)?.subjectCheck ?? null, substitutedBy: substitute,
+      });
+  }
+  const emitId = substitute ?? item.mediaId;
+  const led = ledgerById.get(emitId);
+  const visual = visualOf(emitId);
   const group = groupOf.get(item.mediaId);
   const base = {
     day: item.day, takenAt: item.takenAtWallClock, groupId: group?.groupId ?? null,
@@ -101,36 +142,49 @@ for (const item of groups.uniqueItems) {
     duplicateRowsFolded: item.duplicateRowCount ? item.duplicateRowCount - 1 : 0,
   };
   if (!visual) {
-    setDisposition(item.mediaId, "pending:not-analysed", "no visual result available for these bytes", base);
+    setDisposition(emitId, "pending:not-analysed", "no visual result available for these bytes", base);
     continue;
   }
   if (!led?.publishable) {
-    setDisposition(item.mediaId, "excluded:not-publishable",
+    setDisposition(emitId, "excluded:not-publishable",
       "no deliverable derivative, or visibility is private", base);
     continue;
   }
+  // A reviewer's latest `store_only` is a veto, and it is applied BEFORE anything about the source.
+  // This mirrors buildMonthComposition(), where the excluded set (excludedPhotoIdsFrom) is subtracted
+  // at the top, before isPrivileged is asked anywhere below it. Source trust says who took a picture,
+  // never what is in it, so it cannot answer a reviewer who opened the file and said "not a life
+  // photo of this child". Getting this order wrong put 29 store_only pictures into September's
+  // reading lists, all 29 of them admitted purely by source trust.
+  if (led.subjectCheck?.decision === "store_only") {
+    setDisposition(emitId, "excluded:subject-store-only",
+      "the latest media_subject_check for this media id says store_only; a trusted source does not override a reviewer who looked at the file", {
+        ...base, subjectCheck: led.subjectCheck, trustedSource: led.trustedSource,
+      });
+    continue;
+  }
   if (visual.mediaKind && visual.mediaKind !== "photo" && visual.mediaKind !== "video_frame") {
-    setDisposition(item.mediaId, `excluded:${visual.mediaKind}`,
+    setDisposition(emitId, `excluded:${visual.mediaKind}`,
       `the vision model classified these bytes as ${visual.mediaKind}, not a life photograph; the file stays in the source material`, base);
     continue;
   }
   if (!led.privileged) {
-    setDisposition(item.mediaId, "pending:subject-unverified",
+    setDisposition(emitId, "pending:subject-unverified",
       "source is not on the trusted list and media_subject_check has never approved this picture; a topic score, a high resolution or a particular group is not a subject approval", {
         ...base, subjectCheck: led.subjectCheck, topicScore: led.topicReview?.worthinessScore ?? null,
       });
     continue;
   }
-  const rep = group ? repOfGroup.get(group.groupId) : item.mediaId;
+  const rep = group ? repOfGroup.get(group.groupId) : emitId;
   const distinct = group ? (distinctOfGroup.get(group.groupId) ?? new Set()) : new Set();
   if (group && group.size > 1 && rep && rep !== item.mediaId && !distinct.has(item.mediaId)) {
-    setDisposition(item.mediaId, "not-selected:same-burst",
+    setDisposition(emitId, "not-selected:same-burst",
       "the vision model judged this frame to repeat the same action as the group's representative",
       { ...base, representedBy: rep, groupReason: reasonOfGroup.get(group.groupId) ?? null });
     continue;
   }
   if (demotedByCrossGroup.has(item.mediaId)) {
-    setDisposition(item.mediaId, "expand-only:cross-group-redundant",
+    setDisposition(emitId, "expand-only:cross-group-redundant",
       "the vision model judged this segment to repeat an earlier segment of the same day; kept for the expanded view",
       { ...base, representedBy: demotedByCrossGroup.get(item.mediaId) });
     continue;
@@ -140,12 +194,12 @@ for (const item of groups.uniqueItems) {
     // the curated set — it is simply not the group's lead. This matters because a WeChat batch sent
     // in one second lands in one time-proximity group while holding entirely different scenes; only
     // the model's comparison separates "another angle of the same second" from "a different moment".
-    setDisposition(item.mediaId, "selected:distinct",
+    setDisposition(emitId, "selected:distinct",
       "the vision model judged this frame to carry information the group's lead does not",
       { ...base, groupLead: rep });
     continue;
   }
-  setDisposition(item.mediaId, group && group.size > 1 ? "selected:lead" : "selected:only-frame",
+  setDisposition(emitId, group && group.size > 1 ? "selected:lead" : "selected:only-frame",
     group && group.size > 1
       ? "the vision model's representative for this group" : "the only frame of this moment",
     { ...base, groupReason: reasonOfGroup.get(group?.groupId) ?? null });
@@ -204,7 +258,9 @@ const result = {
   dataCutoff: ledger.generatedAt,
   firstScreenPerDay,
   rules: {
-    selectable: "publishable AND privileged (trusted source or media_subject_check approved) AND classified as a photograph",
+    selectable: "NOT vetoed by a latest media_subject_check of store_only, AND publishable, AND privileged (trusted source or media_subject_check approved), AND classified as a photograph",
+    storeOnlyVeto: "a latest store_only decision removes the media id from every display list and cannot be overridden by source trust; this matches buildMonthComposition(), which subtracts excludedPhotoIdsFrom() before any privilege check",
+    unreviewed: "no subject check, or a latest needs_human_review, is NOT an exclusion — production deliberately keeps unreviewed pictures where they are rather than narrowing the album to the reviewed set",
     burst: "the vision model names each group's lead and says which other frames carry information the lead does not; those stay in the curated set, the rest map to the lead and are not selected",
     grouping: "time proximity opens a group, so a batch of photos sent to WeChat in the same second starts as one group even when the scenes differ; the model's comparison, not the clock, decides what is actually a repeat",
     crossGroup: "segments the vision model calls redundant keep the earliest and demote the rest to the expanded view",
@@ -212,6 +268,7 @@ const result = {
     notSelected: "stays in the archive; no file, review decision or visibility is changed",
   },
   counts: { ...counts, ledgerCandidates: ledger.candidates.length, uniqueOriginals: groups.uniqueItems.length, days: days.length },
+  duplicateClusterSubstitutions: substitutions,
   days,
   dispositions: [...dispositions.values()],
 };
