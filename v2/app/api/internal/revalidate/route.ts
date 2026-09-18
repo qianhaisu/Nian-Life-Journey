@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { parseRefreshRequest } from "@/lib/archive-refresh";
 import { invalidateOnDemandArchive } from "@/lib/family-archive";
+import { invalidateMonthContent } from "@/lib/month-content";
 
 function authorized(request: Request) {
   const expected = process.env.INGESTION_TOKEN;
@@ -28,11 +29,19 @@ export async function POST(request: Request) {
   // revalidatePath cannot reach the pages that are rendered on demand — they have no route cache,
   // and the 300s archive memo they read through is module state Next knows nothing about. Any path
   // the archive renders clears it: a month path alone used to leave the /memory index behind.
-  if (parsed.clearsArchiveMemo) invalidateOnDemandArchive();
+  if (parsed.clearsArchiveMemo) {
+    invalidateOnDemandArchive();
+    // The edited-month files are read through a memo of the same shape and for the same reason, so
+    // they go stale the same way. Cleared on the same signal: a correction to a month's words, or a
+    // withdrawn edit, has to be visible on the next request rather than up to 300s later — and an
+    // absent file that was remembered as "no content" must be re-checked once one appears.
+    invalidateMonthContent();
+  }
   return NextResponse.json({
     scope: parsed.scope,
     revalidated: parsed.targets.map((target) => target.type ? `${target.path} (${target.type})` : target.path),
     clearedArchiveMemo: parsed.clearsArchiveMemo,
+    clearedMonthContent: parsed.clearsArchiveMemo,
     at: new Date().toISOString(),
   });
 }

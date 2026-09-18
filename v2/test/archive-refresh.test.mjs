@@ -79,6 +79,11 @@ test("the route applies the parsed targets, with the pattern type, and clears th
   const route = readFileSync(path.join(appDir, "api", "internal", "revalidate", "route.ts"), "utf8");
   assert.ok(route.includes("parseRefreshRequest("), "the route must not keep its own copy of the body rules");
   assert.ok(/revalidatePath\(target\.path, target\.type\)/.test(route), "pattern targets must be revalidated with their type");
-  assert.ok(/if \(parsed\.clearsArchiveMemo\) invalidateOnDemandArchive\(\)/.test(route));
+  // The same signal has to clear BOTH in-process memos. The archive memo was always here; the
+  // edited-month files are read through a memo of the same shape, so a correction (or a withdrawn
+  // edit) that only cleared one of them would still be served from the other.
+  assert.ok(/parsed\.clearsArchiveMemo/.test(route), "the memo clearing must hang off the parse, not off a local rule");
+  assert.ok(/invalidateOnDemandArchive\(\)/.test(route), "the archive memo must be cleared");
+  assert.ok(/invalidateMonthContent\(\)/.test(route), "the edited-month memo must be cleared on the same signal");
   assert.ok(/authorized\(request\)/.test(route), "the notice stays behind the ingestion token");
 });

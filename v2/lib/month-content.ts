@@ -1,4 +1,3 @@
-import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -7,12 +6,15 @@ import path from "node:path";
 // Why it lives outside: the text is this child's life (quoted messages, names, what he ate, when he
 // was ill), and the media lists name specific pictures. None of that belongs in git, and none of it
 // may sit under `public/`, where the web server would hand it to anyone who guessed the path. So the
-// file is read at request time from a directory the operator points at with MONTH_CONTENT_DIR, by
-// server-only code, and nothing about it reaches the client except the rendered page.
+// file is read at request time from a directory the operator points at with MONTH_CONTENT_DIR, and
+// nothing about it reaches the client except the rendered page. What keeps it server-side is the
+// `node:fs` import: pulling this module into a client component fails the build, which is the same
+// guard the rest of lib/ relies on (this repo has no `server-only` dependency).
 //
-// Absent directory, absent file, or malformed JSON all mean the same thing: this month has no
-// edited content, the page renders exactly as it did before. That is the fallback for every month
-// except the ones that have been through the curation and story steps — currently 2026-09 only.
+// Absent directory, absent file, or a file that fails validation all mean the same thing: this month
+// has no edited content, and the page renders exactly as it did before. That fallback is the whole
+// safety story, so validation has to be real — see isUsableDay. A file that is merely *shaped* like
+// content (`{schema, month, days: [null]}`) used to pass and then throw inside the page.
 //
 // This does NOT decide what may be shown. The ids below are a reading ORDER, chosen when the file
 // was written; whether each picture may still appear is re-decided on every render against the live
@@ -28,6 +30,7 @@ export type MonthContentDay = {
   firstScreenMediaIds: string[];
   expandedMediaIds: string[];
   storyBoundMediaIds?: string[];
+  eventId?: string | null;
 };
 
 export type MonthContent = {
@@ -41,34 +44,103 @@ export type MonthContent = {
 };
 
 const SCHEMA = "nianlife.month-content/1";
-const cache = new Map<string, MonthContent | null>();
+const KINDS = new Set(["story", "visual-description", "text-only"]);
+
+/**
+ * How long a content file is trusted without re-reading it.
+ *
+ * The same 300s the archive memo uses, and for the same reason: a page render must not pay a disk
+ * read per request, but an edit made to a file has to become visible on its own within a window a
+ * person would wait through, not only after a restart. `invalidateMonthContent()` is the fast path —
+ * the refresh endpoint calls it so a correction shows up on the next request instead of in five
+ * minutes.
+ */
+export const MONTH_CONTENT_TTL_MS = 300_000;
+
+type CacheEntry = { at: number; content: MonthContent | null };
+let cache = new Map<string, CacheEntry>();
+
+/** Drops every cached month, including the remembered absences. */
+export function invalidateMonthContent(): void {
+  cache = new Map();
+}
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => isNonEmptyString(item));
+
+/**
+ * Is this one day usable as written?
+ *
+ * Every field the page reads is checked, because the page reads them without guarding: it maps over
+ * `paragraphs`, takes `.length` of the media arrays, and slices `day` for the date label. A single
+ * malformed day takes the whole month down to the old layout rather than rendering a broken one —
+ * a month that half-renders is harder to notice than a month that renders as it did last week.
+ */
+function isUsableDay(value: unknown, month: string): value is MonthContentDay {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const day = value as Record<string, unknown>;
+  if (!isNonEmptyString(day.day)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day.day)) return false;
+  // A day from another month would sort into this month's timeline and print the wrong date.
+  if (!day.day.startsWith(`${month}-`)) return false;
+  if (Number.isNaN(Date.parse(`${day.day}T00:00:00Z`))) return false;
+  if (!isNonEmptyString(day.kind) || !KINDS.has(day.kind)) return false;
+  if (!(day.title === null || isNonEmptyString(day.title))) return false;
+  if (!isStringArray(day.paragraphs)) return false;
+  if (!isStringArray(day.firstScreenMediaIds)) return false;
+  if (!isStringArray(day.expandedMediaIds)) return false;
+  if (day.storyBoundMediaIds !== undefined && !isStringArray(day.storyBoundMediaIds)) return false;
+  if (day.ageLabel !== undefined && !isNonEmptyString(day.ageLabel)) return false;
+  if (day.eventId !== undefined && day.eventId !== null && !isNonEmptyString(day.eventId)) return false;
+  // The first screen is meant to be the opening of the expanded set, not a second, different list.
+  const expanded = new Set(day.expandedMediaIds);
+  if (!day.firstScreenMediaIds.every((id) => expanded.has(id))) return false;
+  // A day with neither words nor pictures would render as an empty dated block.
+  if (day.title === null && day.paragraphs.length === 0 && day.expandedMediaIds.length === 0) return false;
+  return true;
+}
+
+/** Is this file usable as a month? Returns the content, or null with nothing half-accepted. */
+export function validateMonthContent(parsed: unknown, month: string): MonthContent | null {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const doc = parsed as Record<string, unknown>;
+  if (doc.schema !== SCHEMA) return null;
+  if (doc.month !== month) return null;
+  if (!Array.isArray(doc.days) || doc.days.length === 0) return null;
+  if (!doc.days.every((day) => isUsableDay(day, month))) return null;
+  if (new Set((doc.days as MonthContentDay[]).map((day) => day.day)).size !== doc.days.length) return null;
+  if (doc.cardLine !== undefined && !isNonEmptyString(doc.cardLine)) return null;
+  if (doc.intro !== undefined && !isNonEmptyString(doc.intro)) return null;
+  if (doc.coverMediaId !== undefined && !isNonEmptyString(doc.coverMediaId)) return null;
+  return doc as unknown as MonthContent;
+}
 
 function isMonth(value: string): boolean {
   return /^\d{4}-\d{2}$/.test(value);
 }
 
 /** The edited content for one month, or null when there is none. Never throws. */
-export async function loadMonthContent(month: string): Promise<MonthContent | null> {
+export async function loadMonthContent(month: string, nowMs: number = Date.now()): Promise<MonthContent | null> {
   if (!isMonth(month)) return null;
-  if (cache.has(month)) return cache.get(month) ?? null;
+  const held = cache.get(month);
+  if (held && nowMs - held.at < MONTH_CONTENT_TTL_MS) return held.content;
   const dir = process.env.MONTH_CONTENT_DIR?.trim();
   if (!dir) {
-    cache.set(month, null);
+    cache.set(month, { at: nowMs, content: null });
     return null;
   }
+  let content: MonthContent | null = null;
   try {
     const raw = await readFile(path.join(dir, `${month}.json`), "utf8");
-    const parsed = JSON.parse(raw) as MonthContent;
-    // A file whose shape changed under us is treated as absent rather than rendered half-understood.
-    const usable = parsed?.schema === SCHEMA && parsed.month === month && Array.isArray(parsed.days)
-      ? parsed
-      : null;
-    cache.set(month, usable);
-    return usable;
+    content = validateMonthContent(JSON.parse(raw), month);
   } catch {
-    cache.set(month, null);
-    return null;
+    content = null;
   }
+  cache.set(month, { at: nowMs, content });
+  return content;
 }
 
 /**
