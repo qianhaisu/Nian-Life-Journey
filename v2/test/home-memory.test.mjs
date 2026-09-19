@@ -132,7 +132,7 @@ test("配文只用当天已发布标题原文，且不压在第一张和最后�
 
 // ── 主题：季节与年 ────────────────────────────────────────────────────────────
 
-test("三种主题混在一起，且「换一段」换到的多半是另一种主题", () => {
+test("首页保留跨日主题与季节，并交替展示", () => {
   // 季节要凑得出一段，就得有足够多的不同日子：每天封顶 CROSS_DAY_PER_DAY_MAX 张，
   // 所以一季至少要 3 个日子。生产里一季有 24–42 个，这里照那个形状写。
   const months = [
@@ -153,12 +153,11 @@ test("三种主题混在一起，且「换一段」换到的多半是另一种�
     archiveOf(months),
     () => ({ topic: "睡觉", water: true, value: 0.9, confidence: 0.9 }),
   );
-  assert.ok(memories.length >= 3, `应当有多段，实得 ${memories.length}`);
+  assert.ok(memories.length >= 2, `应当有多段，实得 ${memories.length}`);
   const kinds = new Set(memories.map((m) => m.kind));
-  assert.equal(kinds.size, 3, `天/主题/季节三种都该出现，实得 ${[...kinds].join("/")}`);
+  assert.deepEqual([...kinds].sort(), ["season", "topic"]);
   // 相邻两段不应是同一种主题（轮流取的直接后果）
   assert.notEqual(memories[0].kind, memories[1].kind, "第一段和第二段应当是不同主题");
-  assert.notEqual(memories[1].kind, memories[2].kind, "第二段和第三段也应当不同");
 });
 
 // 跨天主题的夹具必须摊到**足够多的不同日子**：每天封顶 CROSS_DAY_PER_DAY_MAX 张，
@@ -321,7 +320,7 @@ test("四组主题候选数超过 HOME_MEMORIES_MAX 时（week/day×3/topic×7/s
 
   const kinds = new Set(memories.map((m) => m.kind));
   assert.ok(kinds.has("week"), `应当有 week 主题，实得 kinds=${[...kinds].join("/")}`);
-  assert.ok(kinds.has("day"), `应当有 day 主题，实得 kinds=${[...kinds].join("/")}`);
+  assert.ok(!kinds.has("day"), `不应有 day 主题，实得 kinds=${[...kinds].join("/")}`);
   assert.ok(kinds.has("season"), `应当有 season 主题，实得 kinds=${[...kinds].join("/")}`);
   assert.ok(kinds.has("topic"), `应当有 topic 主题，实得 kinds=${[...kinds].join("/")}`);
   const titles = memories.map((m) => m.title);
@@ -688,4 +687,16 @@ test("lastMentionFrom 只认 restated / rescheduled，不把完成当成一次�
     { day: "2026-09-08", change: "rescheduled" },
   ]), "2026-09-08");
   assert.equal(lastMentionFrom([]), undefined);
+});
+
+
+test("homepage excludes single-day stories and single-day topics", () => {
+  const day = "2026-09-09";
+  const archive = archiveOf([monthOf("2026-09", [
+    { day, photos: moments("single", day, 12) },
+  ], [story("single-story", day, "A day")])]);
+  const result = selectHomeMemories(archive,
+    () => ({ topic: "睡觉", water: false, value: 0.9, confidence: 0.9 }));
+  assert.equal(result.memories.length, 0);
+  assert.equal(result.absence.kind, "no_qualified_theme");
 });

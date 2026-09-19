@@ -337,10 +337,6 @@ function coverIndexOf(
   return best;
 }
 
-function memoriesOn(month: MonthChapter, day: string): EditorialMemory[] {
-  return month.memories.filter((memory) => memory.signature.day === day);
-}
-
 /** 至多两句配文，放在约三分之一与三分之二处；开头与结尾那张不压字。 */
 function captionAt(slideCount: number, titles: readonly string[]): Map<number, string> {
   const spots = new Map<number, string>();
@@ -642,11 +638,11 @@ type DayEntry = { day: string; month: MonthChapter; photos: readonly MediaRef[] 
 /**
  * 选出首页可以切换的那几段回忆，**三种主题混在一起**。
  *
- * 顺序：按 day / topic / season 轮流取（interleave），所以「换一段」按下去换到的多半是
+ * 顺序：按 week / topic / season 轮流取（interleave），所以「换一段」按下去换到的多半是
  * 另一种主题，而不是同一种主题的另一个日期。全程确定，无随机。
  *
  * `topics` 读不到时（缓存缺失）**主题回忆一段都不出**——不知道画面里是什么，就不能说
- * 这是一段玩水的回忆；天与季节照常，因为它们的依据是日期事实。
+ * 这是一段玩水的回忆；周与季节照常，因为它们的依据是日期事实。
  */
 export function selectHomeMemories(
   archive: FamilyArchive,
@@ -675,27 +671,6 @@ export function selectHomeMemories(
   }
   if (scannedDays === 0) {
     return { memories: [], absence: { kind: "empty_archive", reason: "档案里还没有一天带照片的记录" } };
-  }
-
-  // 天主题：按月份铺开，避免六段全挤在同一周。
-  const dayMemories: HomeMemory[] = [];
-  const seenMonths = new Set<string>();
-  for (const entry of dayEntries) {
-    const month = entry.day.slice(0, 7);
-    if (seenMonths.has(month)) continue; // 每个月最多出一天，天然铺开
-    const dayInfo = entry.month.photoDays.find((d) => d.day === entry.day);
-    const memory = buildDayMemory({
-      day: entry.day,
-      dateLabel: dayInfo?.dateLabel ?? entry.day,
-      ageLabel: dayInfo?.ageLabel,
-      photos: entry.photos,
-      published: memoriesOn(entry.month, entry.day),
-      privilege,
-      topics,
-    });
-    if (!memory) continue;
-    seenMonths.add(month);
-    dayMemories.push(memory);
   }
 
   // 主题回忆：玩水 / 睡觉 / 笑 …… 从**全部照片**里找，不限于某一天或某一季。
@@ -746,7 +721,13 @@ export function selectHomeMemories(
   });
   const weekMemories = weekMemory ? [weekMemory] : [];
 
-  const memories = interleaveKinds([weekMemories, dayMemories, topicMemories, seasonMemories], HOME_MEMORIES_MAX);
+  // 首页只展示跨日回忆，以最终展示照片的日期为准。
+  const spansMultipleDays = (memory: HomeMemory) =>
+    new Set(memory.slides.map((slide) => dayOf(slide.media)).filter(Boolean)).size > 1;
+  const memories = interleaveKinds(
+    [weekMemories, topicMemories, seasonMemories].map((group) => group.filter(spansMultipleDays)),
+    HOME_MEMORIES_MAX,
+  );
   if (memories.length === 0) {
     return {
       memories: [],
