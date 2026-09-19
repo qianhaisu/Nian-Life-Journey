@@ -20,7 +20,7 @@
 #   rollback-app <容器名>    把保留的旧 Web 容器改回 nianlife-diag-web 并启动
 #   rollback-caddy           停 Caddy（保留容器与证书卷），80/443 回到关闭状态
 #
-# 不删除任何镜像、容器、卷或文件。
+# 成功切换后自动保留最近两版回滚，清理更早容器及无引用镜像/缓存；不删除数据卷或内容。
 set -euo pipefail
 
 : "${ECS_SSH:?set ECS_SSH=ecs-user@host}"
@@ -73,6 +73,8 @@ EOF
     remote "$sha" "$short" "$MIN_FREE_MB" "$MIN_FREE_AFTER_BUILD_MB" <<'EOF'
 set -euo pipefail
 sha="$1"; short="$2"; min_before="$3"; min_after="$4"
+exec 9>/home/ecs-user/.nianlife-deploy.lock
+flock -n 9 || { echo "STOP: another deployment is active"; exit 9; }
 free=$(df -B1M --output=avail / | tail -1 | tr -d ' ')
 echo "free_mb_before=$free"
 if [ "$free" -lt "$min_before" ]; then echo "STOP: free ${free}MB < ${min_before}MB, not building"; exit 3; fi
@@ -82,7 +84,7 @@ docker build --build-arg NIANLIFE_BUILD_SHA="$sha" -t "nianlife-web:$short" . > 
 tail -2 "/home/ecs-user/build-$short.log"
 free=$(df -B1M --output=avail / | tail -1 | tr -d ' ')
 echo "free_mb_after=$free"
-if [ "$free" -lt "$min_after" ]; then echo "WARN: free ${free}MB < ${min_after}MB; stop before caddy-up and ask for cleanup approval"; exit 5; fi
+if [ "$free" -lt "$min_after" ]; then echo "WARN: free ${free}MB < ${min_after}MB; stop and apply docs/ecs-retention-policy.md before proceeding"; exit 5; fi
 EOF
     ;;
 
@@ -163,15 +165,22 @@ EOF
   swap)
     short="${1:?usage: swap <short>}"
     scp -o BatchMode=yes -i "$ECS_KEY" "$SCRIPT_DIR/ecs-swap.sh" "$ECS_SSH:/home/ecs-user/ecs-swap.sh"
+    scp -o BatchMode=yes -i "$ECS_KEY" "$SCRIPT_DIR/ecs-retention.py" "$ECS_SSH:/home/ecs-user/ecs-retention.py"
     remote "$short" "$ENV_SOURCE" "$CONTENT_MOUNT" <<'EOF'
 set -euo pipefail
 short="$1"; env_src="$2"; mount_spec="$3"
+exec 9>/home/ecs-user/.nianlife-deploy.lock
+flock -n 9 || { echo "STOP: another deployment is active"; exit 9; }
 ts=$(date +%Y%m%d-%H%M%S)
 run="/home/ecs-user/d04-runs/swap-$short-$ts"
 mkdir -p "$run"; cp -p /home/ecs-user/ecs-swap.sh "$run/swap.sh"
 docker image inspect "nianlife-web:$short" >/dev/null
 bash "$run/swap.sh" "$env_src" "/home/ecs-user/.env.runtime.$short" "$short" "nianlife-diag-web-pre-$short-$ts" 48 5 "$mount_spec" 2>&1 | tee "$run/swap.log"
 echo "ROLLBACK_CONTAINER=nianlife-diag-web-pre-$short-$ts"
+if ! python3 /home/ecs-user/ecs-retention.py --apply 2>&1 | tee "$run/retention.log"; then
+  echo "RETENTION_FAILED: new release is running; maintenance is incomplete (do not roll back automatically)"
+  exit 10
+fi
 EOF
     ;;
 
@@ -219,6 +228,8 @@ EOF
     remote "$name" <<'EOF'
 set -euo pipefail
 name="$1"
+exec 9>/home/ecs-user/.nianlife-deploy.lock
+flock -n 9 || { echo "STOP: another deployment is active"; exit 9; }
 docker inspect "$name" --format 'restoring {{.Name}} image={{.Config.Image}}'
 failed="nianlife-diag-web-failed-$(date +%Y%m%d-%H%M%S)"
 docker stop nianlife-diag-web && docker rename nianlife-diag-web "$failed"
