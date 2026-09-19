@@ -27,6 +27,7 @@ COPY . .
 # DB connections are lazy (v2/lib/db/client.ts) — the build never opens one, so no
 # DATABASE_URL or other runtime secret is needed at this stage.
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NIANLIFE_BUILD_SHA=
 RUN npm run build
 
 # ---- runner: minimal production image, non-root ----
@@ -37,8 +38,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 # The commit this image was built from, reported by /api/health so a measurement can prove which
-# code it is looking at. Declared in the runner stage only, so changing it never invalidates the
-# cached dependency install or the build. Pass --build-arg NIANLIFE_BUILD_SHA=$(git rev-parse HEAD).
+# code it is looking at. Also used by the builder as deploymentId; dependency installation
+# remains cached. Pass --build-arg NIANLIFE_BUILD_SHA=$(git rev-parse HEAD).
 ARG NIANLIFE_BUILD_SHA=
 ENV NIANLIFE_BUILD_SHA=$NIANLIFE_BUILD_SHA
 

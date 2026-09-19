@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Keep client asset requests tied to the deployed release (including ECS builds).
+  deploymentId: process.env.NIANLIFE_BUILD_SHA || process.env.VERCEL_GIT_COMMIT_SHA,
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // Standalone output is the ECS container's runtime — see Dockerfile. Does not affect
   // Vercel builds, which ignore this field.
