@@ -36,11 +36,9 @@ V1 是现有的静态单页产品参考和历史资料。V2 是全新、长期�
 
 - `brainstorming`：需求澄清、方案比较和设计决策。来源：`iurysza/agent-skills`；目标：`.github/skills/brainstorming/`。
 - `frontend-design`：界面与交互实现。来源：`exiao/skills`；目标：`.github/skills/frontend-design/`。
-- `anti-ai-design`：避免通用化、模板化视觉设计。来源：`huyhoangnhh98/anti-ai-design`；目标：`.github/skills/anti-ai-design/`。
-- `web-design-guidelines`：交付前的 UI、可访问性和响应式检查。来源：`vercel-labs/agent-skills`；目标：`.github/skills/web-design-guidelines/`。
 - `react-best-practices`：React/Next.js 工程、性能和实现审查。来源：`vercel-labs/agent-skills`；目标：`.github/skills/react-best-practices/`。
 
-当前已安装并核验 `brainstorming`；其余四个 Skill 待网络恢复后补齐，不创建空目录或伪造内容。
+当前已安装 `brainstorming`、`frontend-design`、`react-best-practices`，另有 `impeccable`、`quarkclouddrive`、`ui-ux-pro-max`；`anti-ai-design` 与 `web-design-guidelines` 已于 2026-09-19 移除。
 
 ## 交付前检查
 
