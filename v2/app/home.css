@@ -77,6 +77,17 @@
 }
 .home-answer-source:hover { color: var(--home-accent); }
 
+/* 核心词：句子里被「」框起来的词和外语词（判定规则见 lib/home-answer.ts splitAnswerParts）。
+   陶土色 + 一条淡的荧光笔底色——不加粗：NianRound 只有 Regular 一个字重，合成粗体会把圆头
+   笔画糊在一起（app/fonts.css 顶部那条 2026-09-13 实测记录）。所以强调靠颜色和底色，不靠字重。
+   box-decoration-break: clone 让核心词跨行折断时两截都带底色。 */
+.home-answer-core {
+  color: var(--home-accent);
+  background: linear-gradient(transparent 62%, rgb(168 93 67 / .16) 62%);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
 /* ── 一、一段回忆 ───────────────────────────────────────────────────────────── */
 
 .home-memory { margin: 0 0 clamp(44px, 7vw, 64px); }
@@ -577,14 +588,49 @@
 
 /* ── 桌面 ──────────────────────────────────────────────────────────────────── */
 @media (min-width: 900px) {
-  .home-sheet { width: min(980px, calc(100% - 64px)); }
+  /* 桌面端首屏（2026-09-19 Teddy 桌面验收：文字放到图的左边再大一些，参照 taito.ai 首页）。
+     taito 的骨架：左栏文字垂直居中——大标题 → 说明 → 出处；右栏一张大图；整个首屏撑满一屏；
+     下面的东西在折线以下。这里照那个骨架，但**照片不铺满**：本文件原来的注释记着，竖照在宽屏上
+     铺到版心宽就成了一堵墙、还会裁穿人脸。所以照片列的宽度不是写死的，而是从「视口高度上限 ×
+     4:5」推出来的——屏越矮照片越窄，永远保持 4:5，且首屏一定装得下。 */
+  .home-sheet {
+    --home-photo-h: min(calc(100svh - 190px), 760px);
+    --home-photo-w: max(400px, calc(var(--home-photo-h) * 0.8));
+    width: min(1360px, calc(100% - 96px));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--home-photo-w);
+    column-gap: clamp(56px, 6.5vw, 120px);
+    align-items: center;
+    padding-top: clamp(28px, 4vh, 56px);
+  }
+  .home-lede { grid-column: 1; }
+  .home-memory { grid-column: 2; margin: 0; }
+  .weekly { grid-column: 1 / -1; margin-top: clamp(48px, 8vh, 96px); }
+
+  /* 左栏的字号比手机大一整档。标题 taito 是 60px；这里的汉字圆体视觉更重，取 clamp(46, 4.4vw, 66)。 */
+  .home-greeting {
+    margin: 0 0 clamp(22px, 3.4vh, 36px);
+    font-size: clamp(46px, 4.4vw, 66px);
+    line-height: 1.22;
+  }
+  .home-answer {
+    margin: 0;
+    font-size: clamp(23px, 2.05vw, 30px);
+    line-height: 1.7;
+  }
+  .home-answer-source {
+    margin-top: clamp(18px, 2.6vh, 28px);
+    font-size: 15px;
+    letter-spacing: 0.02em;
+  }
+
   /* 播放器在宽屏上也要收窄，理由和预览一样，但后果更严重：
      一幕叠两张时，1440px 的屏会把每张压成 1440×450 的长条，
      竖照在这种格子里会被裁穿人脸。收到和预览同一个宽度，版式才和手机上一致。 */
   .memory-player-stage { width: min(620px, 100%); margin-inline: auto; }
-  /* 竖照在宽屏上不要撑满版心：一张 4:5 的照片铺到 980px 宽就成了一堵墙。 */
-  .memory-frames { max-width: 620px; margin-inline: auto; max-height: 68svh; }
-  .memory-actions { max-width: 620px; margin-inline: auto; }
+  /* 照片列：宽度已经由网格给定，高度上限与之同源（--home-photo-h），不再另立一个 68svh。 */
+  .memory-frames { max-width: none; max-height: var(--home-photo-h); margin-inline: 0; }
+  .memory-actions { max-width: none; margin-inline: 0; }
 }
 
 /* ── 减少动态 ──────────────────────────────────────────────────────────────── */

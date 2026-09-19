@@ -46,8 +46,12 @@ export default async function HomePage() {
     <div className="home-sheet">
       {/* 这一页的 h1 是这句问候，不是照片上的题签：页面回答的问题是「最近怎么样」，
           那段回忆是答案的一部分（原则一）。题签因此降成 h2，标题层级和阅读顺序一致。 */}
-      <h1 className="home-greeting">最近怎么样，<span className="keep-whole">张年</span></h1>
-      <RecentAnswer archive={archive} today={feed.clock.today} />
+      {/* 问候 + 答案是一个整体（桌面端并成照片左边的文字栏，参照 taito.ai 首页的左文右图骨架；
+          手机上它就是照片上方的两个块，和之前一样）。 */}
+      <div className="home-lede">
+        <h1 className="home-greeting">最近怎么样，<span className="keep-whole">张年</span></h1>
+        <RecentAnswer archive={archive} today={feed.clock.today} />
+      </div>
       {memories.length > 0
         ? <HomeMemory memories={memories} />
         : <MemoryFallback feed={feed} reason={absence?.reason} />}
@@ -68,7 +72,9 @@ function RecentAnswer({ archive, today }: { archive: FamilyArchive; today: strin
   const answer = selectHomeAnswer(archive.snapshots, today, archive.birthDay);
   if (!answer) return null;
   return <p className="home-answer">
-    {answer.line}
+    {answer.parts.map((part, i) => part.core
+      ? <span key={i} className="home-answer-core">{part.text}</span>
+      : part.text)}
     <Link className="home-answer-source" href={answer.href}>
       {answer.sourceLabel}<span aria-hidden="true"> ↗</span>
     </Link>

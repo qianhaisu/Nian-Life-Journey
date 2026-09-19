@@ -186,8 +186,15 @@ test("app/home.css：回忆舞台限高保住第一屏的题签与日期，宽�
   assert.match(stage[1], /max-height:\s*min\(72svh,\s*620px\)/, "手机上必须给舞台一个视口高度上限");
   assert.match(stage[1], /aspect-ratio:\s*4 \/ 5/, "竖照占绝大多数，舞台按 4:5 立起来");
 
+  // 宽屏上竖照不能铺满版心。守的是这条意图，不是某个具体数字：2026-09-19 桌面首屏改成
+  // 「左文右图」两栏（参照 taito.ai），照片宽度不再是写死的 620px，而是照片列的网格宽度——
+  // 它由视口高度上限 ×4:5 推出（--home-photo-w），所以屏越矮照片越窄、永远不会撑满 1360 的版心。
+  // 这里钉两件事：① 列宽必须是这个有上限的变量，不是 1fr；② 照片的高度上限与列宽同源。
   const desktop = css.slice(css.indexOf("@media (min-width: 900px)"));
-  assert.match(desktop, /\.memory-frames \{[^}]*max-width:\s*620px/, "宽屏上竖照要收窄，不能铺满版心");
+  assert.match(desktop, /--home-photo-h:\s*min\(calc\(100svh - \d+px\),\s*\d+px\)/, "照片高度上限必须同时受视口高度和像素天花板约束");
+  assert.match(desktop, /--home-photo-w:\s*max\(\d+px,\s*calc\(var\(--home-photo-h\) \* 0\.8\)\)/, "照片列宽必须由高度上限按 4:5 推出");
+  assert.match(desktop, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--home-photo-w\)/, "照片列必须用有上限的列宽，不能是 1fr（那样会铺成一堵墙）");
+  assert.match(desktop, /\.memory-frames \{[^}]*max-height:\s*var\(--home-photo-h\)/, "宽屏照片高度上限与列宽同源");
 
   // 原则/任务书：不给照片加全局滤镜，只有图上文字区域可以用局部遮罩（.memory-scrim）。
   assert.doesNotMatch(css, /\.memory-frames img \{[^}]*filter:/, "照片保持原色，不许加滤镜");

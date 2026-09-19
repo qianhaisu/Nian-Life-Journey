@@ -11,9 +11,38 @@ import { ageAtMonth, formatMonth, monthAgeQualifier } from "@/lib/time-signature
  *
  * 取哪个月：优先当前日历月，没有就退到有 summary 的最新一个月。
  */
+export type HomeAnswerPart = { text: string; core: boolean };
+
+/**
+ * 把答案句拆成「普通」与「核心词」两种片段，页面只给核心词上色。
+ *
+ * 核心词的判定是**确定性规则，不猜**：家人写「他说了什么」时自己就会用 `「」` 把那个词框出来，
+ * 外语词（cold、hot）也是一样的被引述对象——这两类正是这句话真正在说的东西。
+ * 既不是 AI 抽关键词，也不靠词表；句子里没有这两种标记时整句都是普通片段，宁可不上色，
+ * 也不替作者挑一个「重点」（原则八：内容归家人）。
+ *
+ * 拆分是无损的：所有片段的 text 拼回去必须逐字等于原句。
+ */
+const CORE_TOKEN = /「[^」]+」|[A-Za-z][A-Za-z'’-]*/g;
+
+export function splitAnswerParts(line: string): HomeAnswerPart[] {
+  const parts: HomeAnswerPart[] = [];
+  let cursor = 0;
+  for (const match of line.matchAll(CORE_TOKEN)) {
+    const start = match.index ?? 0;
+    if (start > cursor) parts.push({ text: line.slice(cursor, start), core: false });
+    parts.push({ text: match[0], core: true });
+    cursor = start + match[0].length;
+  }
+  if (cursor < line.length) parts.push({ text: line.slice(cursor), core: false });
+  return parts;
+}
+
 export type HomeAnswer = {
   /** 月度快照 summary 的第一行可读行，原文照抄。 */
   line: string;
+  /** 同一句拆成普通/核心词片段，拼回去逐字等于 line。 */
+  parts: HomeAnswerPart[];
   /** "2026-09" */
   month: string;
   /** 「2026 年 9 月 · 现在 1 岁 8 个月」——出处，供链接文案用。 */
@@ -53,6 +82,7 @@ export function selectHomeAnswer(
   const [year, month] = snapshot.month.split("-");
   return {
     line,
+    parts: splitAnswerParts(line),
     month: snapshot.month,
     sourceLabel: `${formatMonth(snapshot.month)}${clock}`,
     href: `/memory/${year}/${month}`,
