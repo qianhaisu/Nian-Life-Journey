@@ -78,15 +78,9 @@
 .home-answer-source:hover { color: var(--home-accent); }
 
 /* 核心词：句子里被「」框起来的词和外语词（判定规则见 lib/home-answer.ts splitAnswerParts）。
-   陶土色 + 一条淡的荧光笔底色——不加粗：NianRound 只有 Regular 一个字重，合成粗体会把圆头
-   笔画糊在一起（app/fonts.css 顶部那条 2026-09-13 实测记录）。所以强调靠颜色和底色，不靠字重。
-   box-decoration-break: clone 让核心词跨行折断时两截都带底色。 */
-.home-answer-core {
-  color: var(--home-accent);
-  background: linear-gradient(transparent 62%, rgb(168 93 67 / .16) 62%);
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
+   只上颜色（陶土色），不加底色、不加下划线、不加粗：Teddy 2026-09-19 明确不要下划线效果；
+   NianRound 也只有 Regular 一个字重，合成粗体会把圆头笔画糊在一起（app/fonts.css 顶部记录）。 */
+.home-answer-core { color: var(--home-accent); }
 
 /* ── 一、一段回忆 ───────────────────────────────────────────────────────────── */
 
@@ -588,34 +582,50 @@
 
 /* ── 桌面 ──────────────────────────────────────────────────────────────────── */
 @media (min-width: 900px) {
-  /* 桌面端首屏（2026-09-19 Teddy 桌面验收：文字放到图的左边再大一些，参照 taito.ai 首页）。
-     taito 的骨架：左栏文字垂直居中——大标题 → 说明 → 出处；右栏一张大图；整个首屏撑满一屏；
-     下面的东西在折线以下。这里照那个骨架，但**照片不铺满**：本文件原来的注释记着，竖照在宽屏上
-     铺到版心宽就成了一堵墙、还会裁穿人脸。所以照片列的宽度不是写死的，而是从「视口高度上限 ×
-     4:5」推出来的——屏越矮照片越窄，永远保持 4:5，且首屏一定装得下。 */
+  /* 桌面端首屏（2026-09-19 Teddy 桌面验收两轮：文字放到图的左边；图文比例照 taito.ai 首页）。
+
+     第一版我只抄了「左文右图」这个骨架，比例是错的：照片做成 568×710 的竖长条、只占宽 39%。
+     taito 实测（1440×900）：右图约 777×721——**占宽 54%、占高 80%、近方形（约 1.08:1）**，
+     左栏约占宽 38%，两者之间一条细竖线；标题与说明字号约 3:1。照片是这一屏的主角，不是配图。
+
+     竖照裁成近方形会不会裁穿人脸？.memory-frames img 的 object-position 是 50% 38%（人脸通常在
+     画面上半部，见上面注释），4:5 的竖照裁到 1.1:1 保留约七成画面，脸留在里面。
+     另外给了一个上限：照片列宽 = min(60%, 照片高 × 1.12)。矮屏（720 高）上照片高只有 530，
+     再按 60% 去撑会变成 1.3:1 的扁条、竖照被裁得太狠，所以宽度跟着高度收，多出来的宽度还给文字栏。 */
   .home-sheet {
-    --home-photo-h: min(calc(100svh - 190px), 760px);
-    --home-photo-w: max(400px, calc(var(--home-photo-h) * 0.8));
-    width: min(1360px, calc(100% - 96px));
+    --home-photo-h: min(calc(100svh - 190px), 860px);
+    --home-gap: clamp(40px, 4vw, 64px);
+    width: min(1680px, calc(100% - 80px));
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--home-photo-w);
-    column-gap: clamp(56px, 6.5vw, 120px);
+    grid-template-columns: minmax(0, 1fr) min(60%, calc(var(--home-photo-h) * 1.12));
+    column-gap: var(--home-gap);
     align-items: center;
-    padding-top: clamp(28px, 4vh, 56px);
+    padding-top: clamp(28px, 4vh, 48px);
   }
-  .home-lede { grid-column: 1; }
+  /* 左栏：垂直居中；右边缘一条细竖线（taito 的分隔），线画在两栏间隙的正中。 */
+  .home-lede { grid-column: 1; position: relative; }
+  .home-lede::after {
+    content: "";
+    position: absolute;
+    top: -8vh;
+    bottom: -8vh;
+    right: calc(var(--home-gap) / -2);
+    width: 1px;
+    background: var(--home-line);
+  }
   .home-memory { grid-column: 2; margin: 0; }
   .weekly { grid-column: 1 / -1; margin-top: clamp(48px, 8vh, 96px); }
 
-  /* 左栏的字号比手机大一整档。标题 taito 是 60px；这里的汉字圆体视觉更重，取 clamp(46, 4.4vw, 66)。 */
+  /* 字号：taito 标题 60px、说明 20px（3:1）。汉字圆体视觉更重，标题取 clamp(46, 4.3vw, 64)；
+     说明比手机大一档但不再压过标题——上一版 30px 的答案句在变窄的左栏里会折成四行。 */
   .home-greeting {
     margin: 0 0 clamp(22px, 3.4vh, 36px);
-    font-size: clamp(46px, 4.4vw, 66px);
+    font-size: clamp(46px, 4.3vw, 64px);
     line-height: 1.22;
   }
   .home-answer {
     margin: 0;
-    font-size: clamp(23px, 2.05vw, 30px);
+    font-size: clamp(22px, 1.85vw, 27px);
     line-height: 1.7;
   }
   .home-answer-source {
@@ -628,8 +638,15 @@
      一幕叠两张时，1440px 的屏会把每张压成 1440×450 的长条，
      竖照在这种格子里会被裁穿人脸。收到和预览同一个宽度，版式才和手机上一致。 */
   .memory-player-stage { width: min(620px, 100%); margin-inline: auto; }
-  /* 照片列：宽度已经由网格给定，高度上限与之同源（--home-photo-h），不再另立一个 68svh。 */
-  .memory-frames { max-width: none; max-height: var(--home-photo-h); margin-inline: 0; }
+  /* 照片：填满照片列、高度取 --home-photo-h（不再是 4:5 的竖长条）。 */
+  .memory-frames {
+    aspect-ratio: auto;
+    width: 100%;
+    height: var(--home-photo-h);
+    max-width: none;
+    max-height: none;
+    margin-inline: 0;
+  }
   .memory-actions { max-width: none; margin-inline: 0; }
 }
 
