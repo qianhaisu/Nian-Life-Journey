@@ -647,6 +647,10 @@
     max-height: none;
     margin-inline: 0;
   }
+  /* 取景点上移：手机上照片是 4:5 竖构图，50% 38% 刚好；桌面裁成 1.1:1 后，同一个取景点会把
+     孩子的头顶顶到画面上沿（2026-09-19 私有站 1440x900 / 1280x720 都看到了头发贴边）。
+     人脸在竖照里偏上，裁掉的应该是下半部的桌面和餐盘，不是头顶。 */
+  .memory-frames img { object-position: 50% 20%; }
   .memory-actions { max-width: none; margin-inline: 0; }
 }
 
