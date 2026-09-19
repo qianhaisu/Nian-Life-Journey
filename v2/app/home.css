@@ -80,7 +80,9 @@
 /* 核心词：句子里被「」框起来的词和外语词（判定规则见 lib/home-answer.ts splitAnswerParts）。
    只上颜色（陶土色），不加底色、不加下划线、不加粗：Teddy 2026-09-19 明确不要下划线效果；
    NianRound 也只有 Regular 一个字重，合成粗体会把圆头笔画糊在一起（app/fonts.css 顶部记录）。 */
-.home-answer-core { color: var(--home-accent); }
+/* nowrap：核心词整体不断行。收窄的文字栏里「「粥粥，粥粥」」曾被劈成「「粥粥，粥 / 粥」」
+   （2026-09-19 私有站看到）。核心词都很短（引号里的一个词、一个外语词），不会撑出栏。 */
+.home-answer-core { color: var(--home-accent); white-space: nowrap; }
 
 /* ── 一、一段回忆 ───────────────────────────────────────────────────────────── */
 
@@ -610,10 +612,15 @@
 
   /* 字号：taito 标题 60px、说明 20px（3:1）。汉字圆体视觉更重，标题取 clamp(46, 4.3vw, 64)；
      说明比手机大一档但不再压过标题——上一版 30px 的答案句在变窄的左栏里会折成四行。 */
+  /* 字号：taito 标题 60px。版心收回到和页眉同宽（1400）之后，文字栏在 1920 宽屏上只有约 496px，
+     66px 的「最近怎么样，」装不下、被劈成「最近怎么 / 样，张年」。所以上限收到 60px、用 4.1vw 跟着
+     栏宽走（1024 宽时文字栏只有约 343px，需要能小到 38px）。word-break: keep-all 让 CJK 不在字中间断，
+     只在标点后面断——万一还是装不下，也是「最近怎么样，/ 张年」这种读得通的断法。 */
   .home-greeting {
     margin: 0 0 clamp(22px, 3.4vh, 36px);
-    font-size: clamp(46px, 4.3vw, 64px);
+    font-size: clamp(38px, 4.1vw, 60px);
     line-height: 1.22;
+    word-break: keep-all;
   }
   .home-answer {
     margin: 0;

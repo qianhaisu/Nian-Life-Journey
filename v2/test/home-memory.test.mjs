@@ -352,7 +352,10 @@ test("主题回忆：泳池的照片聚成「玩水的日子」，横跨很多�
   assert.equal(water.href, undefined, "一个主题横跨很多个月，没有对得上的单一去处");
   assert.equal(water.dateTime, undefined, "跨天主题没有单一日期");
   assert.ok(water.slides.every((s) => s.caption === undefined), "跨天主题不写配文");
-  assert.match(water.subtitle, /个日子/);
+  // 原则三：不写计数式描述。以前这里断言副标题含「N 个日子」——那个数字对家人没有意义，还违反原则三
+  // （2026-09-19 Teddy 桌面验收，第一段回忆变成「玩水的日子」后图上露出「5 个日子」）。
+  assert.doesNotMatch(water.subtitle, /\d+\s*个日子/, "副标题不写计数");
+  assert.match(water.subtitle, /当时|2026 年 \d+ 月/, "副标题读得出时间（原则二）");
 });
 
 test("「玩水」不看 topic 判成了什么——在泳池里笑，两段回忆都该成立", () => {

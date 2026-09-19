@@ -485,7 +485,7 @@ function buildTopicMemory(input: {
       kind: "topic",
       key: `topic:${theme.key}`,
       title: theme.title,
-      subtitle: spanSubtitle(pool, birthDay, days),
+      subtitle: spanSubtitle(pool, birthDay),
       // 一个主题横跨很多个月，没有单一的去处——与其给一个「翻到 2026 年」这种对不上的链接，
       // 不如不给（原则八：标签必须跟着去处走）。
       slides: picked.map((media) => ({ key: `topic:${theme.key}|${media.id}`, media })),
@@ -506,14 +506,20 @@ function buildTopicMemory(input: {
     ?? attempt(theme.match, "放宽口径");
 }
 
-/** 「当时 6 个月 — 1 岁 7 个月 · 12 个日子」。跨很多个月的主题用两个时钟（原则二）。 */
-function spanSubtitle(photos: readonly MediaRef[], birthDay: string | undefined, days: number): string {
+/**
+ * 「当时 6 个月 — 1 岁 7 个月」。跨很多个月的主题用两个时钟（原则二）。
+ *
+ * 以前后面还跟一句「· 12 个日子」。2026-09-19 Teddy 桌面验收删掉「最近一周」之后，第一段回忆变成
+ * 「玩水的日子」，图上赫然出现「5 个日子」——一个计数式描述，原则三明确禁止（检验句：随机截一个
+ * 普通浏览页面，是否出现计数式描述），而且这个数字对家人没有意义：「5 个日子」是什么？它以前只是
+ * 没露出来：首位一直是没有这个后缀的「最近一周」。
+ */
+function spanSubtitle(photos: readonly MediaRef[], birthDay: string | undefined): string {
   const months = [...new Set(photos.map(monthOfMedia))].filter(Boolean).sort();
-  if (months.length === 0) return `${days} 个日子`;
+  if (months.length === 0) return "";
   const first = months[0];
   const last = months[months.length - 1];
-  const span = ageSpan(birthDay, first, last) ?? `${formatMonth(first)} — ${formatMonth(last)}`;
-  return `${span} · ${days} 个日子`;
+  return ageSpan(birthDay, first, last) ?? `${formatMonth(first)} — ${formatMonth(last)}`;
 }
 
 /**
