@@ -40,6 +40,9 @@ COVER_SLICE_SIZE = 500
 REPO = Path(__file__).resolve().parents[2]
 OUT_DIR = REPO / "v2" / "public" / "fonts" / "nian-round"
 CSS_PATH = REPO / "v2" / "app" / "fonts.css"
+# 补充层（extra）：这个站真实用到、但不在 text-* 常用字里的字。见 extra_codepoints()。
+EXTRA_PATH = REPO / "v2" / "scripts" / "data" / "round-font-extra.txt"
+EXTRA_NAME = "nian-round-extra-00.woff2"
 
 sys.path.insert(0, str(FONT_TOOLS))
 from fontTools import subset  # noqa: E402
@@ -145,7 +148,80 @@ def face(name: str, codes: list[int]) -> str:
     )
 
 
+def extra_codepoints(cmap: set[int], covered: set[int]) -> list[int]:
+    """补充层的字。
+
+    为什么需要它：cover-NN 是按码位切的大片（每片约 100 KB），而 text-NN 只有 3,807 个常用字。
+    这个站是一个真实家庭写的档案，里面有常用字之外的字——2026-09-19 在私有站上量到：6 月页 913 个
+    不同的字里，9 个生僻字各自拖下了一整片 cover，约 0.9 MB 换 11 个字形；21 个月的内容文件里
+    共有 93 个这样的字，分散在 22 个 cover 分片里。所以把它们并成**一个**小分片，写在所有 text-*
+    的后面（后写的先接管码位），一页里出现再多这样的字也只取这一片。
+
+    字表在 scripts/data/round-font-extra.txt，每行一个 U+ 码位。只记码位，不记文字。
+    已经被 text-* 覆盖的、字体本身没有的，都会被滤掉——文件里多写几个不会出错。
+    """
+    if not EXTRA_PATH.exists():
+        return []
+    codes: set[int] = set()
+    for line in EXTRA_PATH.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line.upper().startswith("U+"):
+            codes.add(int(line[2:], 16))
+    return sorted(code for code in codes if code in cmap and code not in covered and code > 0x2E7F)
+
+
+def text_covered(css: str) -> set[int]:
+    """从现有 fonts.css 读出所有 text-* 片覆盖的码位（extra_only 用，免得重算词频）。"""
+    covered: set[int] = set()
+    for match in re.finditer(r"@font-face\s*\{([^}]*)\}", css):
+        body = match.group(1)
+        if "nian-round-text-" not in body:
+            continue
+        for part in re.search(r"unicode-range:\s*([^;]+);", body).group(1).split(","):
+            lo, _, hi = part.strip().lstrip("Uu+").partition("-")
+            covered.update(range(int(lo, 16), int(hi or lo, 16) + 1))
+    return covered
+
+
+def extra_only() -> None:
+    """只新增/更新补充分片，并补丁 fonts.css——**不碰**原有的 cover-* / text-*。
+
+    完整重建（main）会删光所有分片、按当天仓库语料重排常用字，3.3 MB 的二进制都会变；
+    而补充层只是一片小文件，没必要为它把 37 片全部重来。
+    """
+    if not SOURCE_TTF.exists():
+        raise SystemExit(f"源字体不在：{SOURCE_TTF}")
+    css = CSS_PATH.read_text(encoding="utf-8")
+    cmap = {code for code in TTFont(SOURCE_TTF).getBestCmap() if code > 0x2E7F}
+    extra = extra_codepoints(cmap, text_covered(css))
+    if not extra:
+        raise SystemExit("补充字表为空或全部已被覆盖，什么也没做")
+    size = build_slice(extra, OUT_DIR / EXTRA_NAME)
+    # 已经有这一片就先去掉旧的，再追加到最后（后写的先接管码位，所以必须在所有 text-* 之后）。
+    old = re.compile(r"@font-face\s*\{[^}]*" + re.escape(EXTRA_NAME) + r"[^}]*\}\n?")
+    css = old.sub("", css).rstrip("\n") + "\n" + face(EXTRA_NAME, extra) + "\n"
+    # 只数真正的 face 块（行首的 `@font-face {`）：头部注释里写着「@font-face 里写 font-weight…」，
+    # 直接数子串会多出一个（2026-09-19 第一次跑就多算成了 39）。
+    faces = len(re.findall(r"^@font-face \{", css, flags=re.MULTILINE))
+    total = sum(path.stat().st_size for path in OUT_DIR.glob("nian-round-*.woff2"))
+    css = re.sub(r"合计 \d+ 片 [\d.]+ MB", f"合计 {faces} 片 {total / 1024 / 1024:.2f} MB", css, count=1)
+    if "extra-00" not in css.split("*/", 1)[0]:
+        marker = "生僻字才会去取 cover-*。\n"
+        css = css.replace(
+            marker,
+            marker
+            + "   第三层 extra-00 是这个站真实用到、却不在常用字里的字（scripts/data/round-font-extra.txt），\n"
+            + "   写在最后：一页里出现再多这样的字，也只取这一片，而不是每个字各拖一整片 cover。\n",
+            1,
+        )
+    CSS_PATH.write_text(css, encoding="utf-8")
+    print(f"{EXTRA_NAME}: {len(extra)} 字 {size / 1024:.1f} KB；fonts.css 共 {faces} 片")
+
+
 def main() -> None:
+    if "--extra-only" in sys.argv:
+        extra_only()
+        return
     if not SOURCE_TTF.exists():
         raise SystemExit(f"源字体不在：{SOURCE_TTF}")
     cmap = {code for code in TTFont(SOURCE_TTF).getBestCmap() if code > 0x2E7F}
@@ -191,6 +267,13 @@ def main() -> None:
         total += size
         faces.append(face(name, chunk))
         print(f"{name}: {len(chunk)} 字 {size / 1024:.1f} KB")
+    # 第三层：补充分片，必须在所有 text-* 之后（后写的先接管码位）。
+    extra = extra_codepoints(cmap, set(priority))
+    if extra:
+        size = build_slice(extra, OUT_DIR / EXTRA_NAME)
+        total += size
+        faces.append(face(EXTRA_NAME, extra))
+        print(f"{EXTRA_NAME}: {len(extra)} 字 {size / 1024:.1f} KB")
     header = (
         "/* NianRound —— 站点自托管中文圆体，由 v2/scripts/build-round-font.py 生成，不要手改。\n"
         "\n"

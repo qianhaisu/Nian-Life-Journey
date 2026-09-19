@@ -7,7 +7,9 @@
 
    两层：cover-NN 按码位覆盖全部 13000 个汉字与中文标点；text-NN 是 3807 个常用字，
    按词频排，写在后面因而优先命中。一页中文通常只取到前几片 text-*，生僻字才会去取 cover-*。
-   合计 37 片 3.30 MB。拉丁字母和数字不在分片里——它们仍然走 Nunito。
+   第三层 extra-00 是这个站真实用到、却不在常用字里的字（scripts/data/round-font-extra.txt），
+   写在最后：一页里出现再多这样的字，也只取这一片，而不是每个字各拖一整片 cover。
+   合计 38 片 3.32 MB。拉丁字母和数字不在分片里——它们仍然走 Nunito。
    单一字重（ChillRoundF 只有 Regular）。@font-face 里写 `font-weight: 400 900`，是为了让浏览器把
    任何字重的请求都匹配到这一份字形，而**不去合成粗体**：合成粗体对这种圆头笔画是灾难——
    80px 的「往回翻翻，张年。」实测糊成一团，「翻」字里的笔画直接粘在一起（2026-09-13 /memory 实测）。
@@ -309,4 +311,12 @@
   font-display: swap;
   src: url('/fonts/nian-round/nian-round-text-10.woff2') format('woff2');
   unicode-range: U+65CF,U+8BC5,U+7E82,U+9189,U+7F6A,U+67DE,U+5EA7;
+}
+@font-face {
+  font-family: 'NianRound';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/nian-round/nian-round-extra-00.woff2') format('woff2');
+  unicode-range: U+3297,U+4F7C,U+533E,U+5345,U+5366,U+53E8,U+53FD,U+549A,U+54A7,U+54AA,U+54BF,U+54D2,U+5520,U+5570,U+5594,U+55BD,U+55D1,U+55DD,U+55E6,U+55E8,U+55F7,U+561F,U+565C,U+5712,U+5932,U+5955,U+5AE6,U+5DC5,U+5F35,U+5FEA,U+63A1,U+6525,U+6777,U+6787,U+68F9,U+6984,U+6A44,U+6A58,U+6A90,U+6C90,U+6DAE,U+6DC7,U+6EFF,U+6F09,U+6F47,U+7096,U+7116,U+74A8,U+778C,U+77F6,U+8037,U+80B4,U+817C,U+82D5,U+82E3,U+8360,U+8378,U+8393,U+83B4,U+8585,U+870A,U+8737,U+8783,U+8913,U+8941,U+898B,U+8DC4,U+8DF7,U+8E09,U+8E39,U+905B,U+94DB,U+9542,U+956F,U+9968,U+9984,U+998A,U+9AFB,U+9B5A,U+9CC4-9CC5,U+9CD5,U+9E2C,U+9E49,U+9E66;
 }
