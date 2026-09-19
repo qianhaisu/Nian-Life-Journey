@@ -1,7 +1,7 @@
 # PAGE-0919-SHADCN — 接入 shadcn/ui
 
 - line: page
-- status: submitted
+- status: accepted
 - round: 1
 - authorization: Teddy 明确要求“你来干吧 尽量避开妈妈月报的改动 做完发布”；本轮由 Codex 直接实现、检查、push 并发布，覆盖旧执行分工。
 - branch: main（按本轮用户指令；不创建分支、不切换旧页面分支）
@@ -9,7 +9,7 @@
 - base_sha: c9c16bcae7c181bd22ab77f3c69149d12ecf3051
 - depends_on: none（Teddy 已允许 Codex 直接实现）
 - merge_order: 单执行者在当前 main 串行完成；无数据线任务、无分支合并
-- target_sha: 检查通过后的本任务提交，交付时填写，不预造 SHA
+- target_sha: f9e51636b2ed1707b9e2bd3a31b4621ea650eff3
 - eta: 接单后 30 分钟内提交首轮证据；当前未接单，不承诺完成时间
 - next_check: 执行通道恢复或 Teddy 裁决时；本卡不创建后台调度
 - push_policy: 检查通过后精确提交并 push 当前分支，包含任务文档；用户指令覆盖旧文档的禁止纯文档 push 条款
@@ -53,3 +53,5 @@ Teddy 后续明确授权 Codex 直接实现并发布，旧执行通道阻塞已�
 typecheck、lint、生产构建通过；全量测试 1360 项，1349 通过、11 跳过；新增 test:ui 在 390/1280 宽度验证组件样式、无月报样式泄漏和 Dialog 键盘交互通过。真实线上首页、记忆、月报已完成发布前截图与指标采集；注入新 CSS 后月报全部采样元素的布局和样式在两种宽度下逐项一致。日志和私人截图仅在本机临时目录 nianlife-shadcn-20260919。
 
 部署前实测基线：nianlife-web:7a5c14b，health healthy，worker false，/srv/nianlife-content 只读挂载保留；既有运行配置文件与容器环境逐项一致。发布待代码提交/push 后进行。
+
+发布完成：f9e5163 已 push main 并上线，健康 SHA 一致；首页 Button 在手机/桌面切换成功。妈妈月报手机/桌面整页截图 SHA-256 与发布前相同。回滚点和完整验证见 docs/shadcn-release-2026-09-19.md。本轮已结束，无后台执行任务。
