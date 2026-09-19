@@ -170,6 +170,33 @@ def extra_codepoints(cmap: set[int], covered: set[int]) -> list[int]:
     return sorted(code for code in codes if code in cmap and code not in covered and code > 0x2E7F)
 
 
+def claimed_codepoints(cmap: set[int]) -> list[int]:
+    """extra-00 在 unicode-range 里**认领**、但字体本身没有字形的码位。
+
+    为什么要认领一个没有字形的码位：cover-NN 的 unicode-range 是「首码位–末码位」的整段区间，
+    不把字体没有的洞挖掉（挖出来要 47 KB CSS，见 main() 里的注释）。代价是：页面上出现一个字体
+    根本没有的字，浏览器仍会去取覆盖它的那一整片 cover（约 100 KB），下完才发现没有字形、退回系统字体。
+    最后一片 cover-25 是 U+9E6B–2F8D2，一个跨度把 emoji 区和 U+FE0F（emoji 后面的变体选择符）全罩住了，
+    所以只要页面上有一个 emoji，就白白多下一片。
+
+    由 extra-00 认领这些码位：浏览器会去取更小的 extra-00（~22 KB），同样发现没有字形、同样退回系统
+    字体——观感一模一样，少下约 80 KB。后写的先接管，所以 extra-00 必须在 cover-* 之后（它在最后）。
+
+    认领两类：字表里请求了、但字体没有的码位；以及 U+1F000–1FFFF 里字体没有字形的空隙
+    （字体在这个区间里有 80 个真字形，整块认领会把它们抢走，所以只认领空隙）。
+    """
+    lacking: set[int] = set()
+    if EXTRA_PATH.exists():
+        for line in EXTRA_PATH.read_text(encoding="utf-8").splitlines():
+            line = line.split("#", 1)[0].strip()
+            if line.upper().startswith("U+"):
+                code = int(line[2:], 16)
+                if code > 0x2E7F and code not in cmap:
+                    lacking.add(code)
+    lacking.update(code for code in range(0x1F000, 0x20000) if code not in cmap)
+    return sorted(lacking)
+
+
 def text_covered(css: str) -> set[int]:
     """从现有 fonts.css 读出所有 text-* 片覆盖的码位（extra_only 用，免得重算词频）。"""
     covered: set[int] = set()
@@ -199,7 +226,7 @@ def extra_only() -> None:
     size = build_slice(extra, OUT_DIR / EXTRA_NAME)
     # 已经有这一片就先去掉旧的，再追加到最后（后写的先接管码位，所以必须在所有 text-* 之后）。
     old = re.compile(r"@font-face\s*\{[^}]*" + re.escape(EXTRA_NAME) + r"[^}]*\}\n?")
-    css = old.sub("", css).rstrip("\n") + "\n" + face(EXTRA_NAME, extra) + "\n"
+    css = old.sub("", css).rstrip("\n") + "\n" + face(EXTRA_NAME, sorted({*extra, *claimed_codepoints(cmap)})) + "\n"
     # 只数真正的 face 块（行首的 `@font-face {`）：头部注释里写着「@font-face 里写 font-weight…」，
     # 直接数子串会多出一个（2026-09-19 第一次跑就多算成了 39）。
     faces = len(re.findall(r"^@font-face \{", css, flags=re.MULTILINE))
@@ -272,7 +299,7 @@ def main() -> None:
     if extra:
         size = build_slice(extra, OUT_DIR / EXTRA_NAME)
         total += size
-        faces.append(face(EXTRA_NAME, extra))
+        faces.append(face(EXTRA_NAME, sorted({*extra, *claimed_codepoints(cmap)})))
         print(f"{EXTRA_NAME}: {len(extra)} 字 {size / 1024:.1f} KB")
     header = (
         "/* NianRound —— 站点自托管中文圆体，由 v2/scripts/build-round-font.py 生成，不要手改。\n"
