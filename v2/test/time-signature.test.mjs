@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ageBetween, ageInMonth, ageOn, birthDayOf, formatAge, formatDay, formatMonth, ageAtMonth, ageSpan, timeSignatureFor, currentAge, monthAgeQualifier } from "../lib/time-signature.ts";
+import { ageBetween, ageInMonth, ageOn, birthDayOf, formatAge, formatDay, formatMonth, ageAtMonth, ageSpan, timeSignatureFor, currentAge, monthAgeQualifier, monthAgeLine } from "../lib/time-signature.ts";
 import { profile } from "../lib/mock-data.ts";
 import { CANONICAL_PROFILE_ID } from "../lib/db/config.ts";
 
@@ -125,4 +125,15 @@ test("monthAgeQualifier：只有今天所在的那个日历月读「现在」，
   assert.equal(monthAgeQualifier("2026-08", "2026-09-15"), "当时");
   assert.equal(monthAgeQualifier("2027-01", "2026-09-15"), "当时", "未来月份也不是现在");
   assert.equal(monthAgeQualifier("2026-09", "2026-09-01"), "现在", "月初也算这个月");
+});
+
+// 2026-09-19 私有站最终验收：2025 年 1 月页眉写着「当时 出生的那个月」——读不通，而且是全站最有分量的一页。
+// 出生那个月的年龄标签本身就是一句话，不该再套「当时」。
+test("monthAgeLine：出生那个月不套限定词，其余月份照旧「当时/现在」", () => {
+  assert.equal(monthAgeLine("2025-01", "2026-09-19", "出生的那个月"), "出生的那个月");
+  assert.equal(monthAgeLine("2025-02", "2026-09-19", "1 个月"), "当时 1 个月");
+  assert.equal(monthAgeLine("2026-06", "2026-09-19", "1 岁 5 个月"), "当时 1 岁 5 个月");
+  assert.equal(monthAgeLine("2026-09", "2026-09-19", "1 岁 8 个月"), "现在 1 岁 8 个月", "当前月读「现在」");
+  assert.equal(monthAgeLine("2026-06", "2026-09-19", undefined), undefined, "没有年龄标签就没有这一行");
+  assert.equal(monthAgeLine("2026-06", "2026-09-19", ""), undefined);
 });

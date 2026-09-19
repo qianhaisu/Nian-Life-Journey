@@ -17,7 +17,7 @@ import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { findMonth } from "@/lib/memory-chapters";
 import { buildMonthComposition, chronicleAlbumDays, dayAlbumDays } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
-import { formatMonth, monthAgeQualifier } from "@/lib/time-signature";
+import { formatMonth, monthAgeLine } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
 
 export const revalidate = 300;
@@ -60,6 +60,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const chapter = findMonth(chapters, month);
   if (!chapter) notFound();
 
+  const ageLine = monthAgeLine(month, productToday(), chapter.ageLabel);
   const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay);
   const content = await loadMonthContent(month);
   const summary = snapshots.find((item) => item.month === month);
@@ -124,7 +125,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       <header className="chapter-masthead">
         <Link className="back-link" href={`/memory/${year}`}>← {year} 年</Link>
         <h1 className="serif">{chapter.label}</h1>
-        {chapter.ageLabel ? <p className="chapter-age">{monthAgeQualifier(month, productToday())} {chapter.ageLabel}</p> : null}
+        {ageLine ? <p className="chapter-age">{ageLine}</p> : null}
         {content.intro ? <p className="chapter-summary serif">{content.intro}</p> : null}
       </header>
 
@@ -169,7 +170,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       {/* 「月份章节」同上：结构名，不是家人的话，而且下一行就是「2026 年 9 月」。 */}
       <h1 className="serif">{chapter.label}</h1>
       {/* B1：当前月读「现在」，翻回去的历史月份读「当时」（monthAgeQualifier，lib/time-signature.ts）。 */}
-      {chapter.ageLabel ? <p className="chapter-age">{monthAgeQualifier(month, productToday())} {chapter.ageLabel}</p> : null}
+      {ageLine ? <p className="chapter-age">{ageLine}</p> : null}
       {summary?.summary ? <SnapshotSummary text={summary.summary} className="chapter-summary serif" /> : null}
       {!summary && composition.narration ? <p className="chapter-narration serif">{composition.narration}</p> : null}
       {/* No standfirst any more: 「这个月记下 N 天。」 was a count standing in for the month (原则三,

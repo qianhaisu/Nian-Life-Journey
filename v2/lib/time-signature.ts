@@ -137,3 +137,12 @@ export function currentAge(birthDay: string | undefined, today: Date = new Date(
 export function monthAgeQualifier(month: string, today: string): "现在" | "当时" {
   return month === today.slice(0, 7) ? "现在" : "当时";
 }
+
+// 月页页眉那一行：「当时 1 岁 5 个月」。出生那个月的年龄标签是「出生的那个月」（ageAtMonth），
+// 接在「当时」后面会读成「当时 出生的那个月」——句子不通，而且出现在全站最有分量的一页（2025 年 1 月，
+// 「他出生了」）。这种时候不加限定词，让标签自己成句。lib/home-memory.ts 的 ageSpan 早就处理了同一个
+// 坑，月页页眉当时没跟上（2026-09-19 私有站最终验收看到）。
+export function monthAgeLine(month: string, today: string, ageLabel: string | undefined): string | undefined {
+  if (!ageLabel) return undefined;
+  return ageLabel.startsWith("出生") ? ageLabel : `${monthAgeQualifier(month, today)} ${ageLabel}`;
+}
