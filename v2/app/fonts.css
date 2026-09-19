@@ -54,7 +54,7 @@
   font-weight: 400 900;
   font-display: swap;
   src: url('/fonts/nian-round/nian-round-cover-04.woff2') format('woff2');
-  unicode-range: U+5658-59A9;
+  unicode-range: U+5658-56AF,U+56B1-59A9;
 }
 @font-face {
   font-family: 'NianRound';
@@ -62,7 +62,7 @@
   font-weight: 400 900;
   font-display: swap;
   src: url('/fonts/nian-round/nian-round-cover-05.woff2') format('woff2');
-  unicode-range: U+59AA-5D1B;
+  unicode-range: U+59AA-5C7F,U+5C81-5D1B;
 }
 @font-face {
   font-family: 'NianRound';
@@ -78,7 +78,7 @@
   font-weight: 400 900;
   font-display: swap;
   src: url('/fonts/nian-round/nian-round-cover-07.woff2') format('woff2');
-  unicode-range: U+6096-63A5;
+  unicode-range: U+6096-633A,U+633C-63A5;
 }
 @font-face {
   font-family: 'NianRound';
@@ -222,7 +222,7 @@
   font-weight: 400 900;
   font-display: swap;
   src: url('/fonts/nian-round/nian-round-cover-25.woff2') format('woff2');
-  unicode-range: U+9E6B-2F8D2;
+  unicode-range: U+9E6B-FE0E,U+FE10-1EFFF,U+1F110-1F129,U+1F130-1F149,U+1F150-1F169,U+1F250-1F251,U+20000-2F8D2;
 }
 @font-face {
   font-family: 'NianRound';
@@ -318,5 +318,5 @@
   font-weight: 400 900;
   font-display: swap;
   src: url('/fonts/nian-round/nian-round-extra-00.woff2') format('woff2');
-  unicode-range: U+3297,U+4F7C,U+533E,U+5345,U+5366,U+53E8,U+53FD,U+549A,U+54A7,U+54AA,U+54BF,U+54D2,U+5520,U+5570,U+5594,U+55BD,U+55D1,U+55DD,U+55E6,U+55E8,U+55F7,U+561F,U+565C,U+56B0,U+5712,U+5932,U+5955,U+5AE6,U+5C80,U+5DC5,U+5F35,U+5FEA,U+633B,U+63A1,U+6525,U+6777,U+6787,U+68F9,U+6984,U+6A44,U+6A58,U+6A90,U+6C90,U+6DAE,U+6DC7,U+6EFF,U+6F09,U+6F47,U+7096,U+7116,U+74A8,U+778C,U+77F6,U+8037,U+80B4,U+817C,U+82D5,U+82E3,U+8360,U+8378,U+8393,U+83B4,U+8585,U+870A,U+8737,U+8783,U+8913,U+8941,U+898B,U+8DC4,U+8DF7,U+8E09,U+8E39,U+905B,U+94DB,U+9542,U+956F,U+9968,U+9984,U+998A,U+9AFB,U+9B5A,U+9CC4-9CC5,U+9CD5,U+9E2C,U+9E49,U+9E66,U+FE0F,U+1F000-1F10F,U+1F12A-1F12F,U+1F14A-1F14F,U+1F16A-1F24F,U+1F252-1FFFF;
+  unicode-range: U+3297,U+4F7C,U+533E,U+5345,U+5366,U+53E8,U+53FD,U+549A,U+54A7,U+54AA,U+54BF,U+54D2,U+5520,U+5570,U+5594,U+55BD,U+55D1,U+55DD,U+55E6,U+55E8,U+55F7,U+561F,U+565C,U+5712,U+5932,U+5955,U+5AE6,U+5DC5,U+5F35,U+5FEA,U+63A1,U+6525,U+6777,U+6787,U+68F9,U+6984,U+6A44,U+6A58,U+6A90,U+6C90,U+6DAE,U+6DC7,U+6EFF,U+6F09,U+6F47,U+7096,U+7116,U+74A8,U+778C,U+77F6,U+8037,U+80B4,U+817C,U+82D5,U+82E3,U+8360,U+8378,U+8393,U+83B4,U+8585,U+870A,U+8737,U+8783,U+8913,U+8941,U+898B,U+8DC4,U+8DF7,U+8E09,U+8E39,U+905B,U+94DB,U+9542,U+956F,U+9968,U+9984,U+998A,U+9AFB,U+9B5A,U+9CC4-9CC5,U+9CD5,U+9E2C,U+9E49,U+9E66;
 }

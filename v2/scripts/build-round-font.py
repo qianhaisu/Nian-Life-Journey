@@ -170,31 +170,59 @@ def extra_codepoints(cmap: set[int], covered: set[int]) -> list[int]:
     return sorted(code for code in codes if code in cmap and code not in covered and code > 0x2E7F)
 
 
-def claimed_codepoints(cmap: set[int]) -> list[int]:
-    """extra-00 在 unicode-range 里**认领**、但字体本身没有字形的码位。
+def hole_codepoints(cmap: set[int]) -> set[int]:
+    """要从 cover-* 的 unicode-range 里**挖掉**的码位：站里用过、但字体本身没有字形的。
 
-    为什么要认领一个没有字形的码位：cover-NN 的 unicode-range 是「首码位–末码位」的整段区间，
-    不把字体没有的洞挖掉（挖出来要 47 KB CSS，见 main() 里的注释）。代价是：页面上出现一个字体
-    根本没有的字，浏览器仍会去取覆盖它的那一整片 cover（约 100 KB），下完才发现没有字形、退回系统字体。
-    最后一片 cover-25 是 U+9E6B–2F8D2，一个跨度把 emoji 区和 U+FE0F（emoji 后面的变体选择符）全罩住了，
-    所以只要页面上有一个 emoji，就白白多下一片。
+    为什么要挖：cover-NN 的 unicode-range 写成「首码位–末码位」的整段区间（不挖洞是为了省 CSS 体积，
+    见 main() 里的注释）。代价是页面上出现一个字体根本没有的字时，浏览器仍会去取覆盖它的那一整片
+    cover（约 100 KB），下完才发现没有字形、再退回系统字体。最后一片 cover-25 是 U+9E6B–2F8D2，
+    一个跨度把 emoji 区和 U+FE0F（emoji 后面的变体选择符）全罩住了，页面上有一个 emoji 就白白多下一片。
 
-    由 extra-00 认领这些码位：浏览器会去取更小的 extra-00（~22 KB），同样发现没有字形、同样退回系统
-    字体——观感一模一样，少下约 80 KB。后写的先接管，所以 extra-00 必须在 cover-* 之后（它在最后）。
+    （我先试过让 extra-00「认领」这些码位——没用：Chrome 对同一个 font-family 的多个 face，遇到前一个
+    没有字形就会继续试更早声明的 face，所以 extra-00 和 cover-* 两个都会被取。只有把码位从 cover 的
+    range 里挖掉，浏览器才不会去取。挖掉之后这些字直接落到 font-family 后面的字体，观感与之前一样。）
 
-    认领两类：字表里请求了、但字体没有的码位；以及 U+1F000–1FFFF 里字体没有字形的空隙
-    （字体在这个区间里有 80 个真字形，整块认领会把它们抢走，所以只认领空隙）。
+    挖两类：字表里请求过、但字体没有的码位；U+1F000–1FFFF 里字体没有字形的空隙（字体在这个区间有 80
+    个真字形，整块挖掉会让它们失去覆盖，所以只挖空隙）。
     """
-    lacking: set[int] = set()
+    holes: set[int] = set()
     if EXTRA_PATH.exists():
         for line in EXTRA_PATH.read_text(encoding="utf-8").splitlines():
             line = line.split("#", 1)[0].strip()
             if line.upper().startswith("U+"):
                 code = int(line[2:], 16)
                 if code > 0x2E7F and code not in cmap:
-                    lacking.add(code)
-    lacking.update(code for code in range(0x1F000, 0x20000) if code not in cmap)
-    return sorted(lacking)
+                    holes.add(code)
+    holes.update(code for code in range(0x1F000, 0x20000) if code not in cmap)
+    return holes
+
+
+def parse_ranges(value: str) -> list[tuple[int, int]]:
+    """把 CSS 的 unicode-range 值（`U+4E00-9FFF,U+3000`）解析成 (lo, hi) 列表。"""
+    ranges: list[tuple[int, int]] = []
+    for part in value.split(","):
+        lo, _, hi = part.strip().lstrip("Uu+").partition("-")
+        ranges.append((int(lo, 16), int(hi or lo, 16)))
+    return ranges
+
+
+def format_ranges(ranges: list[tuple[int, int]]) -> str:
+    return ",".join(f"U+{lo:X}" if lo == hi else f"U+{lo:X}-{hi:X}" for lo, hi in ranges)
+
+
+def punch_holes(ranges: list[tuple[int, int]], holes: set[int]) -> list[tuple[int, int]]:
+    """从区间列表里挖掉一批码位，返回剩下的区间。只有落在区间内的洞才会切开它，其余原样。"""
+    out: list[tuple[int, int]] = []
+    for lo, hi in ranges:
+        inside = sorted(code for code in holes if lo <= code <= hi)
+        cursor = lo
+        for code in inside:
+            if code > cursor:
+                out.append((cursor, code - 1))
+            cursor = code + 1
+        if cursor <= hi:
+            out.append((cursor, hi))
+    return out
 
 
 def text_covered(css: str) -> set[int]:
@@ -224,9 +252,23 @@ def extra_only() -> None:
     if not extra:
         raise SystemExit("补充字表为空或全部已被覆盖，什么也没做")
     size = build_slice(extra, OUT_DIR / EXTRA_NAME)
+
+    # 把每个 cover-* 的 unicode-range 里字体没有的码位挖掉（见 hole_codepoints）。只改 CSS 里的区间
+    # 文字，不动任何 woff2；重复跑结果相同（挖过的洞再挖一次不变）。
+    holes = hole_codepoints(cmap)
+
+    def repunch(match: re.Match[str]) -> str:
+        return match.group(1) + format_ranges(punch_holes(parse_ranges(match.group(2)), holes)) + match.group(3)
+
+    css = re.sub(
+        r"(nian-round-cover-\d+\.woff2'\) format\('woff2'\);\s*unicode-range:\s*)([^;]+)(;)",
+        repunch,
+        css,
+    )
+
     # 已经有这一片就先去掉旧的，再追加到最后（后写的先接管码位，所以必须在所有 text-* 之后）。
     old = re.compile(r"@font-face\s*\{[^}]*" + re.escape(EXTRA_NAME) + r"[^}]*\}\n?")
-    css = old.sub("", css).rstrip("\n") + "\n" + face(EXTRA_NAME, sorted({*extra, *claimed_codepoints(cmap)})) + "\n"
+    css = old.sub("", css).rstrip("\n") + "\n" + face(EXTRA_NAME, extra) + "\n"
     # 只数真正的 face 块（行首的 `@font-face {`）：头部注释里写着「@font-face 里写 font-weight…」，
     # 直接数子串会多出一个（2026-09-19 第一次跑就多算成了 39）。
     faces = len(re.findall(r"^@font-face \{", css, flags=re.MULTILINE))
@@ -299,7 +341,7 @@ def main() -> None:
     if extra:
         size = build_slice(extra, OUT_DIR / EXTRA_NAME)
         total += size
-        faces.append(face(EXTRA_NAME, sorted({*extra, *claimed_codepoints(cmap)})))
+        faces.append(face(EXTRA_NAME, extra))
         print(f"{EXTRA_NAME}: {len(extra)} 字 {size / 1024:.1f} KB")
     header = (
         "/* NianRound —— 站点自托管中文圆体，由 v2/scripts/build-round-font.py 生成，不要手改。\n"
