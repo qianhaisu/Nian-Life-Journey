@@ -1,0 +1,54 @@
+/* shadcn/ui coexists with the established site CSS, including mom-reports.
+   No global Preflight, no unprefixed theme variables or utility classes.
+   Utilities are deliberately unlayered: existing element rules are unlayered too. */
+@import "tailwindcss/theme.css" layer(theme) prefix(ui);
+@import "tailwindcss/utilities.css" prefix(ui) source(none);
+@source "../components";
+@source ".";
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-text);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-text);
+  --color-primary: var(--brand-accent);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--paper-dark);
+  --color-secondary-foreground: var(--color-text);
+  --color-muted: var(--paper-dark);
+  --color-muted-foreground: var(--color-muted);
+  --color-accent: var(--paper-dark);
+  --color-accent-foreground: var(--color-text);
+  --color-destructive: var(--danger);
+  --color-border: var(--color-border);
+  --color-input: var(--color-border);
+  --color-ring: var(--brand-accent);
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+}
+
+/* Minimal reset only for owned elements; it also works inside Radix portals.
+   :where keeps specificity below the component's utilities and caller classes. */
+:where([data-nl-ui]) {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0 solid var(--color-border);
+  font: inherit;
+  color: inherit;
+}
+:where(button[data-nl-ui]) { background: transparent; cursor: pointer; }
+:where(button[data-nl-ui]:disabled) { cursor: not-allowed; }
+:where([data-nl-ui][data-slot="dialog-content"]) {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-nl-ui] { transition: none !important; animation: none !important; }
+}

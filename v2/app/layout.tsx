@@ -8,6 +8,7 @@ import "./fonts.css";
 // .home-v2 作用域内的规则，所以其他页面的字体一个像素都不变（见 fonts-wenkai.css 顶部）。
 import "./fonts-wenkai.css";
 import "./globals.css";
+import "./shadcn.css";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HomeMemory as HomeMemoryData } from "@/lib/home-memory";
 import { MEMORY_TIMING } from "@/lib/home-memory";
 import { pickTrack } from "@/lib/home-memory-mood";
+import { Button } from "@/components/ui/button";
 
 // 首页第一部分：**几段各有主题的回忆**，一次呈现一段，可以换。
 //
@@ -115,9 +116,9 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
         : <span />}
       {/* 只有真的不止一段时才出现——一段时它点了也没有别的可换。 */}
       {total > 1
-        ? <button type="button" className="memory-switch" onClick={onSwitch} aria-label="换一段回忆">
+        ? <Button type="button" variant="outline" className="memory-switch" onClick={onSwitch} aria-label="换一段回忆">
           换一段 <SwitchGlyph />
-        </button>
+        </Button>
         : null}
     </div>
 

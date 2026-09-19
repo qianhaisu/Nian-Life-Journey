@@ -1,13 +1,13 @@
 # PAGE-0919-SHADCN — 接入 shadcn/ui
 
 - line: page
-- status: blocked
+- status: submitted
 - round: 1
-- authorization: Teddy 本轮明确要求“引入 shadcn”；允许接入依赖、配置与组件。未授权生产部署。
+- authorization: Teddy 明确要求“你来干吧 尽量避开妈妈月报的改动 做完发布”；本轮由 Codex 直接实现、检查、push 并发布，覆盖旧执行分工。
 - branch: main（按本轮用户指令；不创建分支、不切换旧页面分支）
 - workspace: C:\Users\teddy\Documents\Nianlife
 - base_sha: c9c16bcae7c181bd22ab77f3c69149d12ecf3051
-- depends_on: 可用的 Claude Code 页面执行会话，或 Teddy 明确允许 Codex 直接实现
+- depends_on: none（Teddy 已允许 Codex 直接实现）
 - merge_order: 单执行者在当前 main 串行完成；无数据线任务、无分支合并
 - target_sha: 检查通过后的本任务提交，交付时填写，不预造 SHA
 - eta: 接单后 30 分钟内提交首轮证据；当前未接单，不承诺完成时间
@@ -29,6 +29,7 @@
 - v2/components/ui/**、v2/lib/utils.ts（若存在先检查，不覆盖既有内容）
 - v2/app/shadcn.css、v2/app/layout.tsx、v2/app/globals.css（仅必要接线/隔离）
 - v2/postcss.config.mjs、v2/tsconfig.json（仅必要配置）
+- v2/components/home-memory.tsx（仅将“换一段”接入 Button）；v2/test/shadcn*（组件验证）
 - docs/shadcn-integration.md、本任务卡
 
 ## 验收与交付
@@ -37,10 +38,18 @@
 - 验证 Button 变体/禁用态/焦点，Input 与 Label 关联，Dialog 打开、Tab 焦点约束、Escape 关闭与焦点返回。
 - 390×844、1280×800 核对首页/记忆/月报的字体、配色、尺寸、横向溢出；声明使用的本地数据与线上数据区别。截图只存本机，不提交家庭信息。
 - 交付文件路径、commit SHA、push 结果、组件验收证据、未验证项。不得以构建成功冒充页面验收。
-- 保护当前所有无关改动；不得 git add -A、reset、清理工作区、强推、建分支、部署、访问生产数据库或改动数据。
+- 保护当前所有无关改动；不得 git add -A、reset、清理工作区、强推、建分支、改动生产数据。允许按既有部署脚本发布并核对运行版本及回滚点，保留生产配置和内容挂载。
 
 ## 当前阻塞证据
 
 2026-09-19：Codex 通过 Windows computer-use 打开既有 Claude 应用，页面相关会话“妈妈月报页面改造”显示 Remote Control disconnected，并提示执行该会话的 Claude Code 已离线。未发送唤醒消息、无 ACK、未开始实现。任务文件不是已接通证明。
 
 官方参考：https://ui.shadcn.com/docs/installation/next 、https://ui.shadcn.com/docs/installation/manual
+
+## 本轮实施与检查
+
+Teddy 后续明确授权 Codex 直接实现并发布，旧执行通道阻塞已解除。代码加入 5 个基础组件、独立 ui 前缀主题与组件级重置；首页仅“换一段”接入 Button。妈妈月报源码零改动，既有依赖版本未升级。
+
+typecheck、lint、生产构建通过；全量测试 1360 项，1349 通过、11 跳过；新增 test:ui 在 390/1280 宽度验证组件样式、无月报样式泄漏和 Dialog 键盘交互通过。真实线上首页、记忆、月报已完成发布前截图与指标采集；注入新 CSS 后月报全部采样元素的布局和样式在两种宽度下逐项一致。日志和私人截图仅在本机临时目录 nianlife-shadcn-20260919。
+
+部署前实测基线：nianlife-web:7a5c14b，health healthy，worker false，/srv/nianlife-content 只读挂载保留；既有运行配置文件与容器环境逐项一致。发布待代码提交/push 后进行。
