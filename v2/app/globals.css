@@ -511,10 +511,34 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .video-fullscreen:hover { background: rgba(0,0,0,.72); }
 /* One edited day: a title, then prose, then that day's pictures. The list wrapper already spaces
    the days apart, so the entry itself carries no extra rule of its own. */
-.month-days--edited > ol { list-style: none; margin: 0; padding: 0; }
+.month-days--edited ol { list-style: none; margin: 0; padding: 0; }
 .month-days--edited .month-day { padding: 0; }
 .moment-day-entry { padding-top: clamp(20px, 3.5vw, 30px); }
 .day-entry-title { margin: 0 0 10px; font-size: clamp(1.15rem, 2.8vw, 1.45rem); font-weight: 600; line-height: 1.35; color: var(--color-text); }
+
+/* ── 一个月里的层级与分段（原则五 + 2026-09-19 全站验收）────────────────────────────
+   之前：出生那个月和平常的六月同一个模板、同一个字号，26 屏全是一样的块，读到一半不知道在哪。
+   现在：几天领头（lib/month-day-weight.ts，靠「写了多少、拍了多少」的代理信号，手写 emphasis 可覆盖），
+   领头的日子标题更大、上方留白更多、一张大图领着；其余的日子保持原样，只是照片挪到标题下面。
+   整个月再按 1–7 / 8–14 / 15–21 / 22–月底 分成四块，每块一个安静的标记，顶上一排可以跳。 */
+.moment-day-lead { padding-top: clamp(40px, 7vw, 68px); }
+.moment-day-lead .day-entry-title { margin-bottom: 14px; font-size: clamp(1.55rem, 4.6vw, 2.15rem); line-height: 1.28; }
+.moment-day-lead .day-lead-photo { margin: 6px 0 18px; }
+.moment-day-lead .day-photos { margin-top: 20px; }
+/* 标题下面紧跟着的缩略图带，和后面的文字之间留一点气口。 */
+.moment-day-entry:not(.moment-day-lead) .moment-body > .day-photos { margin: 4px 0 14px; }
+
+.month-week { scroll-margin-top: 88px; }
+.month-week > ol { margin-top: 4px; }
+.week-mark { margin: clamp(36px, 6vw, 56px) 0 0; padding-top: 14px; border-top: 1px solid var(--color-border); font-size: .78rem; letter-spacing: .1em; color: var(--color-muted); }
+.month-week:first-of-type .week-mark { margin-top: 20px; }
+
+.month-jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.month-jump a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--color-border); border-radius: 999px; font-size: .86rem; color: var(--color-secondary); text-decoration: none; }
+.month-jump a:hover { border-color: var(--color-secondary); color: var(--color-text); }
+/* 月份大标题：验收时页面上最大的元素是一个日历数字（桌面约 88px）——最该被读的是张年的这个月，
+   不是「2026 年 9 月」这几个字。只压月页，年页、记忆页的同名类不动。 */
+.month-page .chapter-masthead h1 { font-size: clamp(2.3rem, 6.4vw, 3.6rem); }
 /* No max-width in ch here: the measure comes from the reading column, so the same paragraph wraps
    on its own at 390px and at 1280px rather than being broken to fit a guess. */
 .day-entry-text { margin: 0 0 .7em; line-height: 1.75; color: var(--color-text); }
@@ -1083,4 +1107,20 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    spare is spent on air and on pictures at their own proportions, not on a sidebar. */
 @media (min-width: 720px) {
   .home-lead .memory-lead .memory-copy p { max-width: 34em; }
+}
+
+/* ── 只给读屏的文字 ─────────────────────────────────────────────────────────── */
+/* 原来只定义在 app/home.css 里（首页专属样式表），月页的 DayPhotos 也要用它把重复的
+   「这一天的照片」标题藏起来、却留给读屏——那里拿不到 home.css。所以提到全局，只此一份。
+   用 clip-path + 1px 盒子，而不是 display:none —— 后者读屏也读不到。 */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

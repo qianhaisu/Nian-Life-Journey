@@ -38,11 +38,19 @@ export function DayPhotos({
   dateLabel,
   ageLabel,
   previewCount = DAY_GROUP_PREVIEW_MAX,
+  quietLabel = false,
 }: {
   photos: MediaRef[];
   dateLabel: string;
   ageLabel?: string;
   previewCount?: number;
+  /**
+   * The strip sits directly under its own day's title, so 「这一天的照片」 would only repeat what the
+   * pictures already say — and repeated once per day it became wallpaper (2026-09-19 acceptance:
+   * 14–26 times on a month page). The heading stays in the DOM for screen readers and for the
+   * section's accessible name; it is just not drawn.
+   */
+  quietLabel?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (photos.length === 0) return null;
@@ -54,7 +62,7 @@ export function DayPhotos({
 
   return (
     <section className="day-photos" aria-label={`${dateLabel}的${kind}`}>
-      <h3 className="section-mark">这一天的{kind}</h3>
+      <h3 className={quietLabel ? "section-mark visually-hidden" : "section-mark"}>这一天的{kind}</h3>
       <PhotoGallery photos={shown} dateLabel={dateLabel} ageLabel={ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
       {/* One control, in place, and it goes both ways. Expanding used to be one-way: a reader who
           opened a 30-picture day had no way back except scrolling past all of it. */}

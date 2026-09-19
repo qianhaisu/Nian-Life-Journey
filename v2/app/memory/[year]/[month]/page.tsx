@@ -9,6 +9,7 @@ import { SnapshotSummary } from "@/components/snapshot-summary";
 import { DayHead, MonthMoment } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { MonthDayEntry } from "@/components/month-day-entry";
+import { groupIntoWeeks, pickLeadDays } from "@/lib/month-day-weight";
 import { loadMonthContent, resolveMonthContentMedia } from "@/lib/month-content";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
@@ -107,6 +108,17 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       })
       .filter((entry) => entry.title || entry.paragraphs.length > 0 || entry.photos.length > 0);
 
+    // 原则五：哪几天领头、按周分块（lib/month-day-weight.ts）。领头靠的是「家人写了多少、拍了多少」这个
+    // 代理信号，不是真正的重要性——内容文件里没有里程碑标记；某一天手写 emphasis 就压过它。
+    const leadDays = pickLeadDays(entries.map((entry) => ({
+      day: entry.day,
+      paragraphs: entry.paragraphs,
+      photoCount: entry.photos.length,
+      storyBound: (entry.storyBoundMediaIds?.length ?? 0) > 0,
+      emphasis: entry.emphasis,
+    })));
+    const weeks = groupIntoWeeks(entries);
+
     return <div className="month-page reading-wrap">
       <header className="chapter-masthead">
         <Link className="back-link" href={`/memory/${year}`}>← {year} 年</Link>
@@ -115,24 +127,34 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         {content.intro ? <p className="chapter-summary serif">{content.intro}</p> : null}
       </header>
 
+      {/* 一个月有二十多天、手机上是二十多屏，读到一半不知道自己在哪、也没法跳。这里给一排「跳到某一段」——
+          只有真的分成了两块以上才出现，不为一个只有几天的月份摆一个没用的控件。 */}
+      {weeks.length > 1 ? <nav className="month-jump" aria-label="跳到这个月的某一段">
+        {weeks.map((week) => <a key={week.id} href={`#${week.id}`}>{week.label}</a>)}
+      </nav> : null}
+
       <section className="month-days month-days--edited" aria-labelledby="days-title">
         <h2 id="days-title" className="section-mark">这个月的日子</h2>
-        <ol>
-          {entries.map((entry) => <li className="month-day" key={entry.day}>
-            <MonthDayEntry
-              day={entry.day}
-              dateLabel={`${Number(entry.day.slice(5, 7))} 月 ${Number(entry.day.slice(8, 10))} 日`}
-              ageLabel={entry.ageLabel}
-              monthAgeLabel={chapter.ageLabel}
-              year={year}
-              title={entry.title}
-              paragraphs={entry.paragraphs}
-              photos={entry.photos}
-              firstScreenCount={entry.firstScreenCount}
-              eventHref={entry.eventHref}
-            />
-          </li>)}
-        </ol>
+        {weeks.map((week) => <div className="month-week" id={week.id} key={week.id}>
+          {weeks.length > 1 ? <p className="week-mark">{week.label}</p> : null}
+          <ol>
+            {week.entries.map((entry) => <li className="month-day" key={entry.day}>
+              <MonthDayEntry
+                day={entry.day}
+                dateLabel={`${Number(entry.day.slice(5, 7))} 月 ${Number(entry.day.slice(8, 10))} 日`}
+                ageLabel={entry.ageLabel}
+                monthAgeLabel={chapter.ageLabel}
+                year={year}
+                title={entry.title}
+                paragraphs={entry.paragraphs}
+                photos={entry.photos}
+                firstScreenCount={entry.firstScreenCount}
+                eventHref={entry.eventHref}
+                lead={leadDays.has(entry.day)}
+              />
+            </li>)}
+          </ol>
+        </div>)}
       </section>
 
       {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}

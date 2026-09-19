@@ -35,6 +35,14 @@ export type MonthContentDay = {
   eventIds?: string[];
   /** The raw sources this day's material section shows, already in time order. */
   sourceIds?: string[];
+  /**
+   * A hand-written hint that this day is (or is not) one to pause on: "lead" lifts it, "quiet" keeps it
+   * down. Optional and NOT validated on purpose — a stray value is ignored by the page
+   * (lib/month-day-weight.ts only honours the exact strings), whereas failing validation would drop
+   * the whole month back to the old layout over a cosmetic hint. No content file writes it yet; until
+   * someone marks real milestones the page falls back to a richness proxy (see that file).
+   */
+  emphasis?: "lead" | "quiet";
 };
 
 export type MonthContent = {
