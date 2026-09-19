@@ -582,7 +582,12 @@
   .home-sheet {
     --home-photo-h: min(calc(100svh - 190px), 860px);
     --home-gap: clamp(40px, 4vw, 64px);
-    width: min(1680px, calc(100% - 80px));
+    /* 版心宽度**必须和页眉一致**（.header-inner 在 globals.css：min(1400px, calc(100% - 64px))）。
+       Teddy 2026-09-19：「我只是让你调整比例，没让你总宽度加宽」——我上一版擅自放宽到 1680，
+       结果内容左缘在 x≈101、页眉 logo 在 x≈247，右边同理，两边对不齐。改回同一个宽度之后，
+       左栏的左缘就是 logo 的左缘、照片的右缘就是导航的右缘，不用任何额外对齐代码。
+       要改这个宽度，先改页眉，别只改这里。 */
+    width: min(1400px, calc(100% - 64px));
     display: grid;
     grid-template-columns: minmax(0, 1fr) min(60%, calc(var(--home-photo-h) * 1.12));
     column-gap: var(--home-gap);

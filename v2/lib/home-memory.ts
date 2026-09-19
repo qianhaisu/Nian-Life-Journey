@@ -58,7 +58,7 @@ import type { FamilyArchive } from "@/lib/family-archive";
 import type { EditorialMemory, MediaRef, MonthChapter } from "@/lib/memory-chapters";
 import { burstGroups, isSubjectChecked, type MediaPrivilege } from "@/lib/publication-moments";
 import { thumbnailSized } from "@/lib/media/hero";
-import { ageAtMonth, ageOn, formatDay, formatMonth, monthAgeQualifier } from "@/lib/time-signature";
+import { ageAtMonth, formatMonth } from "@/lib/time-signature";
 import { moodFor, type MemoryMood } from "@/lib/home-memory-mood";
 import { NO_TOPICS, type PhotoTopicLabel, type PhotoTopicLookup } from "@/lib/home-memory-topics";
 
@@ -81,7 +81,7 @@ export const MEMORY_MAX_SLIDES = 20;
  * 素材质量由更前面的门槛把关（主体核验 + 价值分 ≥ 0.7），这里只管"最多摆几段"，
  * 放宽到 20 不会放松那些门槛。
  *
- * 20 同时也彻底盖过了 week 那一格的挤占问题——不用再像 8→9 那样精算差一格。
+ * 20 同时也彻底盖过了「多一个主题占一格」的挤占问题——不用再像 8→9 那样精算差一格。（week 主题已删除，见 MemoryThemeKind。）
  */
 export const HOME_MEMORIES_MAX = 20;
 /** 跨天主题里，同一天最多贡献几张——防止「一整季」变成「某个下午」。 */
@@ -95,13 +95,12 @@ export const TOPIC_MIN_VALUE = 0.7;
 export const TOPIC_MIN_CONFIDENCE = 0.6;
 
 /**
- * 四种主题。每一种的标题与副标题粒度都不同，这正是「每段有单独主题」的意思。
+ * 三种主题。每一种的标题与副标题粒度都不同，这正是「每段有单独主题」的意思。
  *
- * `week`（最近一周）是 2026-09-17 加的第四种：Teddy 「至少加一个最近一周主题，
- * 每周日更新」。它和 season 用的是同一套跨天选片逻辑（buildSpanMemory），
- * 只是窗口固定成 7 天、锚定在最近一个周日——见 mostRecentSunday。
+ * 曾经有过第四种 `week`（最近一周，2026-09-17 Teddy「每周日更新」），2026-09-19 Teddy 桌面验收
+ * 时明确要求「去掉最近一周的首页回忆」，整条已删除（窗口函数、副标题、组装都不在了）。
  */
-export type MemoryThemeKind = "day" | "topic" | "season" | "week";
+export type MemoryThemeKind = "day" | "topic" | "season";
 
 export type HomeMemorySlide = {
   key: string;
@@ -211,7 +210,7 @@ function pickDiverse(candidates: readonly MediaRef[], count: number, topics: Pho
  * 好几种不同的事，这一天的名额会优先分给不同的话题，而不是把 perDay 个名额都给
  * 同一件事里价值分最高的那几张（比如同一顿饭拍了两张，两张都很清楚，但那还是同一件事）。
  *
- * **只在跨天的"一段日子"主题（season/week）打开**；topic 主题（玩水/睡觉/笑……）
+ * **只在跨天的"一段日子"主题（season）打开**；topic 主题（玩水/睡觉/笑……）
  * 传 false——那里的候选本来就只有一个话题，diversify 无从谈起。
  */
 function capPerDay(photos: readonly MediaRef[], perDay: number, topics: PhotoTopicLookup, diversify = false): MediaRef[] {
@@ -252,7 +251,7 @@ function capPerDay(photos: readonly MediaRef[], perDay: number, topics: PhotoTop
  * 是这个家庭那几天恰好拍了很多顿饭，而吃饭照片本身也容易拍得清楚（孩子坐定、脸朝前），
  * 价值分天然就高。纯按价值分取，选出来的自然是同一个话题反复出现。
  *
- * 只对**跨话题的主题**（day / season / week）打开这个开关——它们代表的是"一天"或"一段
+ * 只对**跨话题的主题**（day / season）打开这个开关——它们代表的是"一天"或"一段
  * 日子"，本来就该看见不同的事在发生。**topic 主题（玩水/睡觉/笑……）绝不能打开**：
  * 那一段回忆的全部素材本来就是同一个 topic 标签（match 函数筛出来的），"多样化"在这里
  * 无从谈起，也不该谈——玩水的日子就该全是玩水。
@@ -553,11 +552,11 @@ function seasonOf(month: string): { key: string; label: string; year: number } |
 
 /**
  * 跨天主题的通用构造：季节和「最近一周」都是它——都是「一段日期事实 + 均匀铺开的照片」，
- * 唯一的差别是窗口有多宽和叫什么名字。2026-09-17 加 week 主题时从 buildSeasonMemory
+ * 唯一的差别是窗口有多宽和叫什么名字。2026-09-17 加过 week 主题（已于 2026-09-19 删除）时从 buildSeasonMemory
  * 改名成这个通用版本，逻辑一行没变，只是把 `kind` 从写死的 "season" 变成了参数。
  */
 function buildSpanMemory(input: {
-  kind: "season" | "week";
+  kind: "season";
   key: string; title: string; subtitle: string;
   href?: string; linkLabel?: string;
   photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup;
@@ -593,70 +592,12 @@ function buildSpanMemory(input: {
   };
 }
 
-// ── 主题四：最近一周 ──────────────────────────────────────────────────────────
-
-/**
- * 「每周日更新」的窗口锚点：**最近一个周日**（今天就是周日时取今天）。
- *
- * 这不是「过去 7 天」那种每天滚动的窗口（那是每周提醒用的口径，lib/home-reminder-window.ts）。
- * 这里要的是 Teddy 说的「每周日更新」——一个**每周只翻新一次**的稳定窗口：
- * 周一到周六，窗口停在上一个周日往前推 7 天不动；到了周日，窗口才跳到今天往前推 7 天。
- * 这样「最近一周」这段回忆在一整周里看起来是同一段内容，不会每天悄悄换血。
- */
-function mostRecentSunday(today: string): string {
-  const [y, m, d] = today.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  date.setUTCDate(date.getUTCDate() - date.getUTCDay()); // getUTCDay(): 0=周日…6=周六
-  return date.toISOString().slice(0, 10);
-}
-
-/**
- * `anchor` 往前数 `days` 天（含 anchor 本身）的起点。
- *
- * 不复用 lib/home-reminder-window.ts 的同名逻辑：那个文件明确写着「只回答一个问题」——
- * 每周提醒的窗口口径，两个功能只是恰好都要「N 天窗口」这个日期算术，不该因此耦合起来。
- */
-function daysBack(anchor: string, days: number): string {
-  const [y, m, d] = anchor.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  date.setUTCDate(date.getUTCDate() - (days - 1));
-  return date.toISOString().slice(0, 10);
-}
-
-/**
- * 「9 月 8 日 — 9 月 14 日 · 现在 1 岁 8 个月」；跨年时才带上年份，避免同一年里重复写两次「2026 年」。
- *
- * 首页 hero 恒为跨日聚合（见 selectHomeMemories 的 spansMultipleDays），所以在补上第二个时钟之前，
- * 全站访问量最高的那个日期结构上不可能带年龄（原则二，2026-09-19 验收）。
- *
- * 年龄**从区间两端的日子算，不从月龄算**，并在两端一致时收成一个——这是 lib/home-view.ts
- * buildOverview 已经踩过的坑：用月龄算区间，线上出现过「2026 年 9 月 1 日 — 3 日 · 当时 1 岁 8 个月」
- * 压在一篇写着「当时 1 岁 7 个月」的 9 月 1 日故事上面，同一屏自相矛盾（他 3 号生日）。一周窗口同样
- * 会跨生日，所以同样按天算、跨生日就两个都写。
- *
- * 「当时」还是「现在」不在这里另立新词，走 monthAgeQualifier 那一条口径：窗口结束那天落在当前
- * 日历月就读「现在」。出生当天/当月的措辞接在后面不通（「现在 出生的那天」），这种时候只留日期。
- */
-function weekSubtitle(weekStart: string, weekEnd: string, birthDay: string | undefined, today: string): string {
-  const short = (day: string) => `${Number(day.slice(5, 7))} 月 ${Number(day.slice(8, 10))} 日`;
-  const span = weekStart.slice(0, 4) === weekEnd.slice(0, 4)
-    ? `${short(weekStart)} — ${short(weekEnd)}`
-    : `${formatDay(weekStart)} — ${formatDay(weekEnd)}`;
-  const from = ageOn(birthDay, weekStart);
-  const to = ageOn(birthDay, weekEnd);
-  if (!from || !to || from.startsWith("出生") || to.startsWith("出生")) return span;
-  const qualifier = monthAgeQualifier(weekEnd.slice(0, 7), today);
-  return from === to ? `${span} · ${qualifier} ${from}` : `${span} · ${qualifier} ${from} — ${to}`;
-}
-
 // ── 组装 ──────────────────────────────────────────────────────────────────────
-
-type DayEntry = { day: string; month: MonthChapter; photos: readonly MediaRef[] };
 
 /**
  * 选出首页可以切换的那几段回忆，**三种主题混在一起**。
  *
- * 顺序：按 week / topic / season 轮流取（interleave），所以「换一段」按下去换到的多半是
+ * 顺序：按 topic / season 轮流取（interleave），所以「换一段」按下去换到的多半是
  * 另一种主题，而不是同一种主题的另一个日期。全程确定，无随机。
  *
  * `topics` 读不到时（缓存缺失）**主题回忆一段都不出**——不知道画面里是什么，就不能说
@@ -669,7 +610,6 @@ export function selectHomeMemories(
   const { chapters, privilege, birthDay } = archive;
   const today = archive.time.today;
 
-  const dayEntries: DayEntry[] = [];
   const byMonth = new Map<string, MediaRef[]>();
   const allPhotos: MediaRef[] = [];
   let scannedDays = 0;
@@ -679,7 +619,6 @@ export function selectHomeMemories(
       for (const photoDay of month.photoDays) {
         if (photoDay.day > today) continue;
         scannedDays += 1;
-        dayEntries.push({ day: photoDay.day, month, photos: photoDay.photos });
         const bucket = byMonth.get(month.month) ?? [];
         bucket.push(...photoDay.photos);
         byMonth.set(month.month, bucket);
@@ -721,29 +660,11 @@ export function selectHomeMemories(
     }))
     .filter((memory): memory is HomeMemory => Boolean(memory));
 
-  // 最近一周：窗口锚定在最近一个周日，「每周日更新」（Teddy 2026-09-17 第 4 条）。
-  // 没有 href——这一周横跨的日子太短，通常够不上任何一个已有的「翻到」去处。
-  const weekEnd = mostRecentSunday(today);
-  const weekStart = daysBack(weekEnd, 7);
-  const weekPhotos = dayEntries
-    .filter((entry) => entry.day >= weekStart && entry.day <= weekEnd)
-    .flatMap((entry) => entry.photos);
-  const weekMemory = buildSpanMemory({
-    kind: "week",
-    key: `week:${weekStart}`,
-    title: "最近一周",
-    subtitle: weekSubtitle(weekStart, weekEnd, birthDay, today),
-    photos: weekPhotos,
-    privilege,
-    topics,
-  });
-  const weekMemories = weekMemory ? [weekMemory] : [];
-
   // 首页只展示跨日回忆，以最终展示照片的日期为准。
   const spansMultipleDays = (memory: HomeMemory) =>
     new Set(memory.slides.map((slide) => dayOf(slide.media)).filter(Boolean)).size > 1;
   const memories = interleaveKinds(
-    [weekMemories, topicMemories, seasonMemories].map((group) => group.filter(spansMultipleDays)),
+    [topicMemories, seasonMemories].map((group) => group.filter(spansMultipleDays)),
     HOME_MEMORIES_MAX,
   );
   if (memories.length === 0) {
@@ -766,7 +687,7 @@ function seasonSubtitle(label: string, year: number, birthDay: string | undefine
   const span = season.key === "winter"
     ? `${year} 年 12 月 — 次年 2 月`
     : `${year} 年 ${months[0]} 月 — ${months[months.length - 1]} 月`;
-  // 一个季节跨的是整月，所以这里用月龄（ageSpan）而不是 weekSubtitle 那种按天算——
+  // 一个季节跨的是整月，所以这里用月龄（ageSpan）而不是按天算——
   // 季节两端本来就不是具体的某一天，按天算会凭空精确到一个并不存在的日期。
   const first = `${year}-${String(months[0]).padStart(2, "0")}`;
   const last = season.key === "winter"

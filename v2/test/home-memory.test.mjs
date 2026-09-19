@@ -163,7 +163,7 @@ test("首页保留跨日主题与季节，并交替展示", () => {
 // 跨天主题的夹具必须摊到**足够多的不同日子**：每天封顶 CROSS_DAY_PER_DAY_MAX 张，
 // 所以「两天各 6 张」只能凑出 4 张，达不到 6 个瞬间的下限——那是上限在正常工作，不是 bug。
 // 生产里一季有 24–42 个不同的日子，这里照那个形状写。
-test("季节主题：标题是日期事实，副标题是月份跨度，不写「当时几岁」", () => {
+test("季节主题：标题是日期事实，副标题是月份跨度 + 两端月龄（原则二，2026-09-19 补）", () => {
   const months = [
     monthOf("2026-07", [
       { day: "2026-07-05", photos: moments("a", "2026-07-05", 4) },
@@ -179,6 +179,8 @@ test("季节主题：标题是日期事实，副标题是月份跨度，不写�
   assert.ok(summer, "应当有一个季节主题");
   assert.equal(summer.title, "2026 年的夏天");
   assert.match(summer.subtitle, /6 月 — 8 月/);
+  // 2026-09-19：季节副标题补上第二个时钟。夹具出生日 2025-01-03，2026 年夏天 6–8 月 = 1 岁 5 个月到 1 岁 7 个月。
+  assert.match(summer.subtitle, /当时 1 岁 5 个月 — 1 岁 7 个月/, "季节跨整月，用月龄不用按天算");
   assert.equal(summer.dateTime, undefined, "跨天主题没有单一日期");
   assert.equal(summer.linkLabel, "翻到 2026 年");
 });
@@ -260,9 +262,9 @@ test("一天都不合格时说明白原因，不编一段内容", () => {
   assert.equal(absence.kind, "no_qualified_theme");
 });
 
-test("四组主题候选数超过 HOME_MEMORIES_MAX 时（week/day×3/topic×7/season×4），「笑」仍然轮得到", () => {
+test("主题候选数超过 HOME_MEMORIES_MAX 时（day/topic×7/season×4），「笑」仍然轮得到", () => {
   // 2026-09-17 线上真实发生过的回归：加了 week 主题之后没跟着调 HOME_MEMORIES_MAX，
-  // week 在第 0 轮多占一格，把后面每轮 topic 组该出现的位置整体推后一格——
+  // week 在第 0 轮多占一格，把后面每轮 topic 组该出现的位置整体推后一格——（week 已于 2026-09-19 删除，这条测试仍守「候选超过上限时排队顺序正确」这个目的）
   // topic 组第三项「笑」因此被挤出九段之外（线上实测：八段回忆里 water/sleep 都在，笑没了）。
   //
   // 这条测试第一版只给了 day/season 各一个候选，凑不满 HOME_MEMORIES_MAX 就先撞到「没料了」，
@@ -306,69 +308,20 @@ test("四组主题候选数超过 HOME_MEMORIES_MAX 时（week/day×3/topic×7/s
     monthOf("2025-12", seasonDays({ prefix: "au", days: ["2025-12-05", "2025-12-15"] })),
     monthOf("2026-01", seasonDays({ prefix: "wi", days: ["2026-01-05", "2026-01-15"] })), // 冬（跨年）
     monthOf("2026-02", seasonDays({ prefix: "wi", days: ["2026-02-05", "2026-02-15"] })),
-    // week：2026-09-13 是周日（已验证），窗口 9/7—9/13 全部落在同一个月，且不撞 dayMonths（那批用的是每月 10 号）。
-    monthOf("2026-09", [
-      { day: "2026-09-07", photos: moments("wk1", "2026-09-07", 3) },
-      { day: "2026-09-09", photos: moments("wk2", "2026-09-09", 3) },
-      { day: "2026-09-11", photos: moments("wk3", "2026-09-11", 3) },
-      { day: "2026-09-13", photos: moments("wk4", "2026-09-13", 3) },
-    ]),
   ];
 
   const archive = { ...archiveOf(months), time: { today: "2026-09-13" } };
   const { memories } = selectHomeMemories(archive, topics);
 
   const kinds = new Set(memories.map((m) => m.kind));
-  assert.ok(kinds.has("week"), `应当有 week 主题，实得 kinds=${[...kinds].join("/")}`);
+  assert.ok(!kinds.has("week"), `week 主题已删除（Teddy 2026-09-19），实得 kinds=${[...kinds].join("/")}`);
   assert.ok(!kinds.has("day"), `不应有 day 主题，实得 kinds=${[...kinds].join("/")}`);
   assert.ok(kinds.has("season"), `应当有 season 主题，实得 kinds=${[...kinds].join("/")}`);
   assert.ok(kinds.has("topic"), `应当有 topic 主题，实得 kinds=${[...kinds].join("/")}`);
   const titles = memories.map((m) => m.title);
   assert.ok(titles.includes("笑起来的时候"),
-    `「笑」不该被 week 占的那一格挤出去，实得 ${titles.join(" / ")}`);
+    `「笑」不该被别的主题占的那一格挤出去，实得 ${titles.join(" / ")}`);
   assert.ok(memories.length <= 20, `不能超过 HOME_MEMORIES_MAX=20，实得 ${memories.length}`);
-});
-
-// ── 「最近一周」的第二个时钟（原则二） ──────────────────────────────────────────
-
-// 2026-09-19 全站验收：首页 hero 恒为跨日聚合，而 week 的副标题当时只有日期区间，
-// 所以全站访问量最高的那个日期结构上不可能带年龄。补上之后这两条锁住它，
-// 尤其是跨生日那条——lib/home-view.ts buildOverview 记着线上出过的事故正是用月龄算区间，
-// 在一屏里和按天算的故事年龄互相矛盾。夹具出生日 2025-01-03，所以每月 3 号长一个月。
-const weekMonth = (month, days) => monthOf(month, days.map((day) => ({ day, photos: moments(`wk${day.slice(8)}`, day, 3) })));
-
-test("最近一周带上第二个时钟，两端同龄时收成一个", () => {
-  // 2026-09-13 是周日，窗口 9/7—9/13 不跨 3 号，两端都是 1 岁 8 个月。
-  const archive = {
-    ...archiveOf([weekMonth("2026-09", ["2026-09-07", "2026-09-09", "2026-09-11", "2026-09-13"])]),
-    time: { today: "2026-09-13" },
-  };
-  const week = selectHomeMemories(archive).memories.find((m) => m.kind === "week");
-  assert.ok(week, "应当有 week 主题");
-  assert.equal(week.subtitle, "9 月 7 日 — 9 月 13 日 · 现在 1 岁 8 个月");
-});
-
-test("最近一周跨生日时两端都写，不收成一个也不用月龄糊过去", () => {
-  // 2026-09-06 是周日，窗口 8/31—9/6 跨过 9 月 3 日那个月纪念日：
-  // 8/31 还是 1 岁 7 个月，9/6 已经是 1 岁 8 个月。区间必须照实说，这正是 home-view 那次事故的形状。
-  const archive = {
-    ...archiveOf([
-      weekMonth("2026-08", ["2026-08-31"]),
-      weekMonth("2026-09", ["2026-09-02", "2026-09-04", "2026-09-06"]),
-    ]),
-    time: { today: "2026-09-06" },
-  };
-  const week = selectHomeMemories(archive).memories.find((m) => m.kind === "week");
-  assert.ok(week, "应当有 week 主题");
-  assert.equal(week.subtitle, "8 月 31 日 — 9 月 6 日 · 现在 1 岁 7 个月 — 1 岁 8 个月");
-});
-
-test("没有出生日期时只留日期区间，不猜年龄", () => {
-  const base = archiveOf([weekMonth("2026-09", ["2026-09-07", "2026-09-09", "2026-09-11", "2026-09-13"])]);
-  const archive = { ...base, birthDay: undefined, time: { today: "2026-09-13" } };
-  const week = selectHomeMemories(archive).memories.find((m) => m.kind === "week");
-  assert.ok(week, "应当有 week 主题");
-  assert.equal(week.subtitle, "9 月 7 日 — 9 月 13 日");
 });
 
 // ── 主题：玩水 / 睡觉 / 笑 …… ─────────────────────────────────────────────────
