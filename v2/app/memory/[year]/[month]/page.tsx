@@ -9,7 +9,7 @@ import { SnapshotSummary } from "@/components/snapshot-summary";
 import { DayHead, MonthMoment } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { MonthDayEntry } from "@/components/month-day-entry";
-import { groupIntoWeeks, pickLeadDays } from "@/lib/month-day-weight";
+import { groupIntoWeeks, pickLeadDays, pickLeadPhoto } from "@/lib/month-day-weight";
 import { loadMonthContent, resolveMonthContentMedia } from "@/lib/month-content";
 import { loadFamilyArchive } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
@@ -116,6 +116,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       photoCount: entry.photos.length,
       storyBound: (entry.storyBoundMediaIds?.length ?? 0) > 0,
       emphasis: entry.emphasis,
+      leadable: Boolean(pickLeadPhoto(entry.photos)),
     })));
     const weeks = groupIntoWeeks(entries);
 

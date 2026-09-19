@@ -32,7 +32,33 @@ export type DayWeightInput = {
   storyBound?: boolean;
   /** 内容文件里手写的强调，只认精确的 "lead" / "quiet"，别的值当没写。 */
   emphasis?: unknown;
+  /**
+   * 这一天有没有一张够清晰、配得上当领头大图的照片（pickLeadPhoto 有结果）。默认 true；
+   * 明确为 false 时这一天不领头——不管代理分多高，也不管有没有手写 lead。
+   */
+  leadable?: boolean;
 };
+
+/**
+ * 领头大图的原图宽度下限（像素）。大图在手机上约 358 CSS 像素宽、2x 屏要 700+ 设备像素，
+ * 640 是「拉伸不超过约 1.1 倍」的底线。2026-09-19 私有站真数据：2026-06 里 6/25、6/26 的领头图
+ * 原图只有 157×210（微信小缩略图），被拉到 358×479，放大 2.3 倍，明显糊。原图就这么小，
+ * 怎么处理都糊，所以这样的日子干脆不领头。
+ *
+ * 用的是 MediaRef.width（**原图**宽度：实测 810 / 1282 / 3024……），不是页面上 <img> 的
+ * naturalWidth（那是缩略图的 480，没有区分度）。宽度缺失按不合格处理：验不了就不当门面。
+ */
+export const LEAD_PHOTO_MIN_WIDTH = 640;
+
+/** 一张照片够不够当领头大图：是静态照片（不是视频），且原图宽度达标。 */
+export function isLeadPhoto(item: { type?: string; width?: number | null }): boolean {
+  return item.type !== "video" && Number(item.width) >= LEAD_PHOTO_MIN_WIDTH;
+}
+
+/** 从一天的照片里挑领头大图：按原有顺序取第一张达标的静态照片；没有就是 undefined。 */
+export function pickLeadPhoto<T extends { type?: string; width?: number | null }>(photos: readonly T[]): T | undefined {
+  return photos.find(isLeadPhoto);
+}
 
 /** 一个月最多抬几天。再多，「一眼分辨」就没有意义了——什么都突出就等于什么都没突出。 */
 export const LEAD_DAYS_MAX = 4;
@@ -57,13 +83,16 @@ export function dayRichness(input: DayWeightInput): number {
  * 哪几天被抬高。返回日期集合。
  *
  * 规则：
- *   1. 手写 `emphasis: "quiet"` 的天永远不抬；手写 `"lead"` 的天（且有照片）一定抬，不占名额之外的限制；
+ *   1. 手写 `emphasis: "quiet"` 的天永远不抬；手写 `"lead"` 的天（且有可当大图的照片）一定抬；
  *   2. 其余天按代理分从高到低补满名额，名额 = clamp(round(天数 × 14%), 1, 4)；
- *   3. 没有照片的天不会被代理信号抬（没有大图可以领）。同分按日期先后，保证确定。
+ *   3. 没有照片、或没有一张够清晰的照片（LEAD_PHOTO_MIN_WIDTH）的天不会被抬——没有大图可以领，
+ *      手写 lead 也一样；
+ *   4. 代理信号选出的领头日之间至少隔一天（手写的不受限）。同分按日期先后，保证确定。
  */
 export function pickLeadDays(days: readonly DayWeightInput[]): Set<string> {
   const lead = new Set<string>();
-  const withPhoto = days.filter((day) => day.photoCount > 0);
+  // 有照片、且照片里有一张配得上当大图的，才有资格领头。
+  const withPhoto = days.filter((day) => day.photoCount > 0 && day.leadable !== false);
 
   for (const day of withPhoto) if (day.emphasis === "lead") lead.add(day.day);
 
@@ -76,9 +105,16 @@ export function pickLeadDays(days: readonly DayWeightInput[]): Set<string> {
   for (const item of ranked) {
     // 手写 lead 已经占满或超过名额时直接停：手写的不被名额挤掉，也不再补代理信号的。
     if (lead.size >= quota) break;
+    // 代理信号选出来的领头日之间至少隔一天：2026-06 第一版选出 6/23、6/25、6/26、6/29，三天挤在
+    // 四天里，层级节奏没有散开。相邻的不选，取下一个分高的。手写 lead 不受这条限制——那是人的判断。
+    if ([...lead].some((other) => daysApart(other, item.day) <= 1)) continue;
     lead.add(item.day);
   }
   return lead;
+}
+
+function daysApart(a: string, b: string): number {
+  return Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
 }
 
 // ── 按周分块 ──────────────────────────────────────────────────────────────────

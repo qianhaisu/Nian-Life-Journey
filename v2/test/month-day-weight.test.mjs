@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pickLeadDays, groupIntoWeeks, dayRichness, LEAD_DAYS_MAX } from "../lib/month-day-weight.ts";
+import { pickLeadDays, groupIntoWeeks, dayRichness, pickLeadPhoto, isLeadPhoto, LEAD_DAYS_MAX, LEAD_PHOTO_MIN_WIDTH } from "../lib/month-day-weight.ts";
 
 // 2026-09-19 全站验收，原则五：出生那个月和平常的六月同一个模板、同一个字号。
 // 内容文件里没有「里程碑」标记（全部 21 个月都是编辑过的内容，kind 在有的月里 31/31 全是 story），
@@ -62,7 +62,8 @@ test("同分按日期先后，结果是确定的", () => {
   const a = pickLeadDays(month(29));
   const b = pickLeadDays(month(29));
   assert.deepEqual([...a].sort(), [...b].sort());
-  assert.deepEqual([...a].sort(), ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04"], "全部同分时取最早的几天");
+  // 全部同分时按日期先后取，但领头日之间至少隔一天，所以是 1、3、5、7 号而不是 1、2、3、4 号。
+  assert.deepEqual([...a].sort(), ["2026-06-01", "2026-06-03", "2026-06-05", "2026-06-07"]);
 });
 
 test("代理分：照片、字数各有封顶，绑定过故事的加分", () => {
@@ -99,4 +100,57 @@ test("没有日子的那一块不出现，日子不重不漏", () => {
   assert.deepEqual(groups.map((g) => g.id), ["week-1", "week-4"]);
   assert.equal(groups.flatMap((g) => g.entries).length, 3);
   assert.deepEqual(groupIntoWeeks([]), []);
+});
+
+// ── 领头图的分辨率门槛 与 相邻日子 ─────────────────────────────────────────────
+// 2026-09-19 私有站真数据：2026-06 里 6/25、6/26 的领头图原图只有 157×210（微信小缩略图），
+// 被拉到 358×479 放大 2.3 倍，明显糊；而且领头的 6/23、6/25、6/26、6/29 三天挤在四天里。
+
+test("领头大图必须是静态照片、原图宽度达标；宽度缺失按不合格", () => {
+  assert.ok(isLeadPhoto({ type: "photo", width: LEAD_PHOTO_MIN_WIDTH }), "刚好达标算合格");
+  assert.ok(!isLeadPhoto({ type: "photo", width: LEAD_PHOTO_MIN_WIDTH - 1 }));
+  assert.ok(!isLeadPhoto({ type: "photo", width: 157 }), "157 宽的微信小缩略图");
+  assert.ok(!isLeadPhoto({ type: "video", width: 3000 }), "视频不当领头大图");
+  assert.ok(!isLeadPhoto({ type: "photo" }), "没有宽度验不了，就不当门面");
+  assert.ok(!isLeadPhoto({ type: "photo", width: null }));
+  assert.ok(!isLeadPhoto({ type: "photo", width: 0 }));
+});
+
+test("挑领头图：按原顺序取第一张达标的，不是简单取第一张", () => {
+  const photos = [
+    { id: "tiny", type: "photo", width: 157 },
+    { id: "clip", type: "video", width: 1920 },
+    { id: "good", type: "photo", width: 1282 },
+    { id: "also-good", type: "photo", width: 3024 },
+  ];
+  assert.equal(pickLeadPhoto(photos).id, "good");
+  assert.equal(pickLeadPhoto([photos[0], photos[1]]), undefined, "一张达标的都没有就是 undefined");
+});
+
+test("没有可当大图的照片时不领头——代理分再高、手写 lead 也一样", () => {
+  const days = month(29, (d) => {
+    if (d === 5) return { photoCount: 12, paragraphs: text(400), leadable: false };
+    if (d === 8) return { emphasis: "lead", leadable: false };
+    return {};
+  });
+  const lead = pickLeadDays(days);
+  assert.ok(!lead.has("2026-06-05"), "分最高但没有可当大图的照片");
+  assert.ok(!lead.has("2026-06-08"), "手写 lead 也不能让一张 157 宽的小图当门面");
+});
+
+test("代理信号选出的领头日之间至少隔一天，不再三天挤在四天里", () => {
+  // 复现 2026-06 第一版的形状：23、25、26、29 号分最高。
+  const days = month(30, (d) => ([23, 25, 26, 29].includes(d) ? { photoCount: 12, paragraphs: text(400) } : {}));
+  const lead = [...pickLeadDays(days)].sort();
+  for (let i = 1; i < lead.length; i++) {
+    const gap = Number(lead[i].slice(8)) - Number(lead[i - 1].slice(8));
+    assert.ok(gap >= 2, `${lead[i - 1]} 与 ${lead[i]} 相邻`);
+  }
+  assert.ok(lead.includes("2026-06-23") && lead.includes("2026-06-25") && !lead.includes("2026-06-26"), "25 与 26 相邻时只留分高的靠前一个，26 让位");
+});
+
+test("手写 lead 不受相邻限制——那是人的判断", () => {
+  const days = month(29, (d) => (d === 10 || d === 11 ? { emphasis: "lead" } : {}));
+  const lead = pickLeadDays(days);
+  assert.ok(lead.has("2026-06-10") && lead.has("2026-06-11"));
 });

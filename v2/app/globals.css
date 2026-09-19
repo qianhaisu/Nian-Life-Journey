@@ -533,8 +533,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .week-mark { margin: clamp(36px, 6vw, 56px) 0 0; padding-top: 14px; border-top: 1px solid var(--color-border); font-size: .78rem; letter-spacing: .1em; color: var(--color-muted); }
 .month-week:first-of-type .week-mark { margin-top: 20px; }
 
-.month-jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
-.month-jump a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--color-border); border-radius: 999px; font-size: .86rem; color: var(--color-secondary); text-decoration: none; }
+.month-jump { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.month-jump a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 999px; font-size: .78rem; white-space: nowrap; color: var(--color-secondary); text-decoration: none; }
 .month-jump a:hover { border-color: var(--color-secondary); color: var(--color-text); }
 /* 月份大标题：验收时页面上最大的元素是一个日历数字（桌面约 88px）——最该被读的是张年的这个月，
    不是「2026 年 9 月」这几个字。只压月页，年页、记忆页的同名类不动。 */

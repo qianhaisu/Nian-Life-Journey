@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DayHead } from "@/components/month-moment";
 import { DayPhotos } from "@/components/day-photos";
 import { PhotoGallery } from "@/components/photo-viewer";
+import { pickLeadPhoto } from "@/lib/month-day-weight";
 import type { MediaRef } from "@/lib/memory-chapters";
 
 // One day of an edited month: its date, one title, one piece of writing, then that day's pictures.
@@ -50,22 +51,25 @@ export function MonthDayEntry({
   /** This day opens on one large photograph and a larger title. */
   lead?: boolean;
 }) {
-  // A lead day is led by a photograph, not a clip: prefer the first still, fall back to whatever is first.
-  const leadPhoto = lead ? (photos.find((item) => item.type !== "video") ?? photos[0]) : undefined;
+  // A lead day is led by a photograph that can carry a large frame: a still whose ORIGINAL is wide enough
+  // (pickLeadPhoto). Not any first photo — a 157px WeChat thumbnail stretched over a phone-wide frame is
+  // the blurry mess this replaced. With no such photograph the day simply is not a lead day.
+  const leadPhoto = lead ? pickLeadPhoto(photos) : undefined;
+  const isLead = Boolean(leadPhoto);
   const rest = leadPhoto ? photos.filter((item) => item !== leadPhoto) : photos;
   const previewCount = Math.max(1, Math.min(firstScreenCount, photos.length));
   // The rest of a lead day's pictures: at least a small strip's worth, never the whole day.
   const restPreview = Math.max(3, previewCount - 1);
 
   return (
-    <article className={lead ? "month-moment moment-day-entry moment-day-lead" : "month-moment moment-day-entry"}>
+    <article className={isLead ? "month-moment moment-day-entry moment-day-lead" : "month-moment moment-day-entry"}>
       <DayHead day={day} dateLabel={dateLabel} ageLabel={ageLabel} monthAgeLabel={monthAgeLabel} year={year} />
       <div className="moment-body">
         {title ? <h3 className="serif day-entry-title">{title}</h3> : null}
         {leadPhoto ? (
           <PhotoGallery photos={[leadPhoto]} heroIndex={0} heroClassName="moment-hero day-lead-photo" dateLabel={dateLabel} ageLabel={ageLabel} />
         ) : null}
-        {!lead && photos.length > 0 ? (
+        {!isLead && photos.length > 0 ? (
           <DayPhotos photos={photos} dateLabel={dateLabel} ageLabel={ageLabel} previewCount={previewCount} quietLabel />
         ) : null}
         {/* Paragraphs are paragraphs. Nothing here inserts a line break to make a line land a
@@ -77,7 +81,7 @@ export function MonthDayEntry({
           <p className="chapter-meta"><Link className="text-link" href={eventHref}>读这一天的原记录 →</Link></p>
         ) : null}
       </div>
-      {lead && rest.length > 0 ? (
+      {isLead && rest.length > 0 ? (
         <DayPhotos photos={rest} dateLabel={dateLabel} ageLabel={ageLabel} previewCount={Math.min(restPreview, rest.length)} />
       ) : null}
     </article>
