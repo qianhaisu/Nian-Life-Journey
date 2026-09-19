@@ -329,6 +329,48 @@ test("四组主题候选数超过 HOME_MEMORIES_MAX 时（week/day×3/topic×7/s
   assert.ok(memories.length <= 20, `不能超过 HOME_MEMORIES_MAX=20，实得 ${memories.length}`);
 });
 
+// ── 「最近一周」的第二个时钟（原则二） ──────────────────────────────────────────
+
+// 2026-09-19 全站验收：首页 hero 恒为跨日聚合，而 week 的副标题当时只有日期区间，
+// 所以全站访问量最高的那个日期结构上不可能带年龄。补上之后这两条锁住它，
+// 尤其是跨生日那条——lib/home-view.ts buildOverview 记着线上出过的事故正是用月龄算区间，
+// 在一屏里和按天算的故事年龄互相矛盾。夹具出生日 2025-01-03，所以每月 3 号长一个月。
+const weekMonth = (month, days) => monthOf(month, days.map((day) => ({ day, photos: moments(`wk${day.slice(8)}`, day, 3) })));
+
+test("最近一周带上第二个时钟，两端同龄时收成一个", () => {
+  // 2026-09-13 是周日，窗口 9/7—9/13 不跨 3 号，两端都是 1 岁 8 个月。
+  const archive = {
+    ...archiveOf([weekMonth("2026-09", ["2026-09-07", "2026-09-09", "2026-09-11", "2026-09-13"])]),
+    time: { today: "2026-09-13" },
+  };
+  const week = selectHomeMemories(archive).memories.find((m) => m.kind === "week");
+  assert.ok(week, "应当有 week 主题");
+  assert.equal(week.subtitle, "9 月 7 日 — 9 月 13 日 · 现在 1 岁 8 个月");
+});
+
+test("最近一周跨生日时两端都写，不收成一个也不用月龄糊过去", () => {
+  // 2026-09-06 是周日，窗口 8/31—9/6 跨过 9 月 3 日那个月纪念日：
+  // 8/31 还是 1 岁 7 个月，9/6 已经是 1 岁 8 个月。区间必须照实说，这正是 home-view 那次事故的形状。
+  const archive = {
+    ...archiveOf([
+      weekMonth("2026-08", ["2026-08-31"]),
+      weekMonth("2026-09", ["2026-09-02", "2026-09-04", "2026-09-06"]),
+    ]),
+    time: { today: "2026-09-06" },
+  };
+  const week = selectHomeMemories(archive).memories.find((m) => m.kind === "week");
+  assert.ok(week, "应当有 week 主题");
+  assert.equal(week.subtitle, "8 月 31 日 — 9 月 6 日 · 现在 1 岁 7 个月 — 1 岁 8 个月");
+});
+
+test("没有出生日期时只留日期区间，不猜年龄", () => {
+  const base = archiveOf([weekMonth("2026-09", ["2026-09-07", "2026-09-09", "2026-09-11", "2026-09-13"])]);
+  const archive = { ...base, birthDay: undefined, time: { today: "2026-09-13" } };
+  const week = selectHomeMemories(archive).memories.find((m) => m.kind === "week");
+  assert.ok(week, "应当有 week 主题");
+  assert.equal(week.subtitle, "9 月 7 日 — 9 月 13 日");
+});
+
 // ── 主题：玩水 / 睡觉 / 笑 …… ─────────────────────────────────────────────────
 
 /** 一个假的标注 lookup。生产里这份数据来自逐张看过的视觉标注缓存。 */

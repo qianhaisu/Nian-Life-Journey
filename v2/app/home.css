@@ -57,6 +57,26 @@
    那个只管不断行，home-lead.tsx 另一处也在用，改了那个会连带影响不相关的地方）。 */
 .home-greeting .keep-whole { color: var(--color-accent); }
 
+/* 标题下面那句答案（原则一）。比标题小、比正文沉，是"被回答了"的语气，不是又一个标题。
+   月份链接另起一行、降一号字、去掉下划线——它是出处，不是号召点击的按钮，
+   不能把首屏第一个视觉重音从那句话本身抢走。 */
+.home-answer {
+  margin: calc(-1 * clamp(8px, 1.4vw, 12px)) 0 clamp(20px, 3.4vw, 30px);
+  font-family: var(--home-serif);
+  font-size: clamp(17px, 4.1vw, 20px);
+  line-height: 1.7;
+  color: var(--home-ink);
+}
+.home-answer-source {
+  display: block;
+  margin-top: 6px;
+  font-size: clamp(13px, 3.1vw, 14px);
+  line-height: 1.5;
+  color: var(--home-muted);
+  text-decoration: none;
+}
+.home-answer-source:hover { color: var(--home-accent); }
+
 /* ── 一、一段回忆 ───────────────────────────────────────────────────────────── */
 
 .home-memory { margin: 0 0 clamp(44px, 7vw, 64px); }
@@ -263,14 +283,20 @@
 
 /* ── 二、每周提醒 ───────────────────────────────────────────────────────────── */
 
-.weekly { margin: 0; padding-top: clamp(24px, 4vw, 32px); border-top: 1px solid var(--home-line); }
+/* 2026-09-19 全站验收，原则四 + peak-end：功能一个字没动（Teddy 2026-09-16 明确要的），
+   但它是首页最后一块地方——苏静是来看儿子的，页面不该以一份行政清单收尾、还跟那段回忆
+   平起平坐。所以这里只改分量：跟上面拉开更大的距离，标题从正文级的衬线标题降成一行安静的
+   小字，读起来是「附带一提」，不是第二章。触达区（.weekly-label 的 44px）一格没动。 */
+.weekly { margin: 0; padding-top: clamp(40px, 6.5vw, 56px); border-top: 1px solid var(--home-line); }
 
 .weekly-heading {
-  margin: 0 0 14px;
-  font-family: var(--home-serif);
-  font-size: clamp(20px, 4.6vw, 23px);
+  margin: 0 0 12px;
+  font-family: var(--home-sans);
+  font-size: clamp(13px, 3.1vw, 14px);
   font-weight: 400;
-  line-height: 1.4;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+  color: var(--home-muted);
 }
 
 .weekly-list { margin: 0; padding: 0; list-style: none; }

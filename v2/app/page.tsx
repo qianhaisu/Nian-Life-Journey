@@ -13,6 +13,8 @@ import { windowStart } from "@/lib/home-reminder-window";
 import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { formatDay, formatMonth } from "@/lib/time-signature";
+import { selectHomeAnswer } from "@/lib/home-answer";
+import type { FamilyArchive } from "@/lib/family-archive";
 import "./home.css";
 
 // 首页（2026-09-16 改版）。整页只有两件事：
@@ -45,12 +47,32 @@ export default async function HomePage() {
       {/* 这一页的 h1 是这句问候，不是照片上的题签：页面回答的问题是「最近怎么样」，
           那段回忆是答案的一部分（原则一）。题签因此降成 h2，标题层级和阅读顺序一致。 */}
       <h1 className="home-greeting">最近怎么样，<span className="keep-whole">张年</span></h1>
+      <RecentAnswer archive={archive} today={feed.clock.today} />
       {memories.length > 0
         ? <HomeMemory memories={memories} />
         : <MemoryFallback feed={feed} reason={absence?.reason} />}
       <Reminders feed={feed} />
     </div>
   </div>;
+}
+
+/**
+ * 标题问「最近怎么样，张年」，这一句就是答案本身（原则一）。取句规则与出处标签见
+ * lib/home-answer.ts，那里也记着为什么月份必须写出来。
+ *
+ * **零新增数据库读取**：snapshots 就在首页已经做过的那次 loadFamilyArchiveOnDemand() 里
+ * （lib/family-archive.ts:177），这里只是消费已经读到内存的东西。CLAUDE.md 渲染路径那条
+ * $87 出站流量的规矩不允许在这里多加一次读，这一段也确实没有加。
+ */
+function RecentAnswer({ archive, today }: { archive: FamilyArchive; today: string }) {
+  const answer = selectHomeAnswer(archive.snapshots, today, archive.birthDay);
+  if (!answer) return null;
+  return <p className="home-answer">
+    {answer.line}
+    <Link className="home-answer-source" href={answer.href}>
+      {answer.sourceLabel}<span aria-hidden="true"> ↗</span>
+    </Link>
+  </p>;
 }
 
 // 没有合格回忆时的降级：**用已有的真实封面或真实文字**，不画空框、不写「暂无」

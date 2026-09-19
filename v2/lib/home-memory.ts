@@ -58,7 +58,7 @@ import type { FamilyArchive } from "@/lib/family-archive";
 import type { EditorialMemory, MediaRef, MonthChapter } from "@/lib/memory-chapters";
 import { burstGroups, isSubjectChecked, type MediaPrivilege } from "@/lib/publication-moments";
 import { thumbnailSized } from "@/lib/media/hero";
-import { ageAtMonth, formatDay, formatMonth } from "@/lib/time-signature";
+import { ageAtMonth, ageOn, formatDay, formatMonth, monthAgeQualifier } from "@/lib/time-signature";
 import { moodFor, type MemoryMood } from "@/lib/home-memory-mood";
 import { NO_TOPICS, type PhotoTopicLabel, type PhotoTopicLookup } from "@/lib/home-memory-topics";
 
@@ -623,12 +623,30 @@ function daysBack(anchor: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** 「9 月 8 日 — 9 月 14 日」；跨年时才带上年份，避免同一年里重复写两次「2026 年」。 */
-function weekSubtitle(weekStart: string, weekEnd: string): string {
+/**
+ * 「9 月 8 日 — 9 月 14 日 · 现在 1 岁 8 个月」；跨年时才带上年份，避免同一年里重复写两次「2026 年」。
+ *
+ * 首页 hero 恒为跨日聚合（见 selectHomeMemories 的 spansMultipleDays），所以在补上第二个时钟之前，
+ * 全站访问量最高的那个日期结构上不可能带年龄（原则二，2026-09-19 验收）。
+ *
+ * 年龄**从区间两端的日子算，不从月龄算**，并在两端一致时收成一个——这是 lib/home-view.ts
+ * buildOverview 已经踩过的坑：用月龄算区间，线上出现过「2026 年 9 月 1 日 — 3 日 · 当时 1 岁 8 个月」
+ * 压在一篇写着「当时 1 岁 7 个月」的 9 月 1 日故事上面，同一屏自相矛盾（他 3 号生日）。一周窗口同样
+ * 会跨生日，所以同样按天算、跨生日就两个都写。
+ *
+ * 「当时」还是「现在」不在这里另立新词，走 monthAgeQualifier 那一条口径：窗口结束那天落在当前
+ * 日历月就读「现在」。出生当天/当月的措辞接在后面不通（「现在 出生的那天」），这种时候只留日期。
+ */
+function weekSubtitle(weekStart: string, weekEnd: string, birthDay: string | undefined, today: string): string {
   const short = (day: string) => `${Number(day.slice(5, 7))} 月 ${Number(day.slice(8, 10))} 日`;
-  return weekStart.slice(0, 4) === weekEnd.slice(0, 4)
+  const span = weekStart.slice(0, 4) === weekEnd.slice(0, 4)
     ? `${short(weekStart)} — ${short(weekEnd)}`
     : `${formatDay(weekStart)} — ${formatDay(weekEnd)}`;
+  const from = ageOn(birthDay, weekStart);
+  const to = ageOn(birthDay, weekEnd);
+  if (!from || !to || from.startsWith("出生") || to.startsWith("出生")) return span;
+  const qualifier = monthAgeQualifier(weekEnd.slice(0, 7), today);
+  return from === to ? `${span} · ${qualifier} ${from}` : `${span} · ${qualifier} ${from} — ${to}`;
 }
 
 // ── 组装 ──────────────────────────────────────────────────────────────────────
@@ -694,7 +712,7 @@ export function selectHomeMemories(
       kind: "season",
       key: `season:${key}`,
       title: `${bucket.year} 年的${bucket.label}`,
-      subtitle: seasonSubtitle(bucket.label, bucket.year),
+      subtitle: seasonSubtitle(bucket.label, bucket.year, birthDay),
       href: `/memory/${bucket.year}`,
       linkLabel: `翻到 ${bucket.year} 年`,
       photos: bucket.photos,
@@ -714,7 +732,7 @@ export function selectHomeMemories(
     kind: "week",
     key: `week:${weekStart}`,
     title: "最近一周",
-    subtitle: weekSubtitle(weekStart, weekEnd),
+    subtitle: weekSubtitle(weekStart, weekEnd, birthDay, today),
     photos: weekPhotos,
     privilege,
     topics,
@@ -741,13 +759,21 @@ export function selectHomeMemories(
 }
 
 /** 「6 月 — 8 月」；冬天跨年，所以写成「12 月 — 次年 2 月」。 */
-function seasonSubtitle(label: string, year: number): string {
+function seasonSubtitle(label: string, year: number, birthDay: string | undefined): string {
   const season = SEASONS.find((item) => item.label === label);
   if (!season) return `${year} 年`;
   const months = season.months;
-  return season.key === "winter"
+  const span = season.key === "winter"
     ? `${year} 年 12 月 — 次年 2 月`
     : `${year} 年 ${months[0]} 月 — ${months[months.length - 1]} 月`;
+  // 一个季节跨的是整月，所以这里用月龄（ageSpan）而不是 weekSubtitle 那种按天算——
+  // 季节两端本来就不是具体的某一天，按天算会凭空精确到一个并不存在的日期。
+  const first = `${year}-${String(months[0]).padStart(2, "0")}`;
+  const last = season.key === "winter"
+    ? `${year + 1}-02`
+    : `${year}-${String(months[months.length - 1]).padStart(2, "0")}`;
+  const age = ageSpan(birthDay, first, last);
+  return age ? `${span} · ${age}` : span;
 }
 
 /** 三种主题轮流取，所以「换一段」换到的多半是另一种主题。 */
