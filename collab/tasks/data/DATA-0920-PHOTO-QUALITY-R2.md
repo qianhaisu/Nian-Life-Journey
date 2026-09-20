@@ -77,3 +77,13 @@
 - risks:
   - 2026-03/06/04 的日常记录会明显变少（517→228、380→155、453→287）；25 个日页将没有照片
   - 门槛是 160 这条线本身是产品判断，代码上改一个常量即可调整；本轮按既有 THUMBNAIL_MIN_SIDE 取值
+
+## Commander review — 2026-09-20T22:34:59.7296467+08:00
+- status: accepted_for_release_preparation; production deployment awaiting Teddy confirmation under AGENTS.md.
+- verified: implementation 1402d33; task receipt 3b012b6; origin/main verified at 3b012b6 before this review note.
+- independent check: node --import tsx --test test/media-quality.test.mjs — exit 0, 17 passed; inspected runtime diff and source-material/publication callers.
+- worker checks: typecheck/lint/full suite/build reported exit 0; full suite 1497 total, 1486 pass, 11 skipped.
+- scope: 1312 currently referenced photos below native-size floor; target day 12 images -> 5 after excluding 7, sample included. No production deployment or data mutations performed.
+- limits: cross-asset original recovery unverified; no exhaustive visual review of every full-size image. Report wording corrected to avoid claiming irrecoverability or universal blur coverage.
+- audit note: worker-authored wall-clock times in ACK/RESULT include future times inconsistent with observed local file timestamps. Use Git timestamps and this commander observation for chronology.
+- prior unrelated dirty files preserved. HEALTH commit 376e0a2 is separate and touches only its report, offline script, and test; not part of the photo implementation review.
