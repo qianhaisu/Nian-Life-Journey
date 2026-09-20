@@ -336,3 +336,45 @@ test("ingestQuarkFile, with MEDIA_STORAGE_PROVIDER=oss really set, writes deriva
     else process.env.MEDIA_STORAGE_PROVIDER = previousEnv;
   }
 });
+
+// 2026-09-20 incident regression. Every photograph on nianlife.cn stopped loading for ~2.5 hours,
+// and the cause was not in the image pipeline at all: readers who walked away mid-download left
+// OSS reads running with nothing draining them, each holding a socket out of the SDK's default
+// 50-socket, no-timeout pool. Fifty of those and the pool was gone — 458 further reads queued
+// behind them, measured as 46 established OSS sockets with up to 5 MB sitting unread in their
+// receive buffers and zero bytes per second leaving the machine. The three tests below guard the
+// two halves of the fix: the signal that cancels a read immediately, and the bounded pool that
+// reclaims one if the signal ever fails to.
+function signalCapturingClient(result) {
+  const calls = [];
+  const client = { send: async (command, options) => { calls.push({ command, options }); return result; } };
+  return { storage: new OssStorage(getOssConfig(FULL_ENV), Promise.resolve(client)), calls };
+}
+
+test("OssStorage.getStream hands the caller's AbortSignal to the SDK, so a reader who leaves cancels the OSS read", async () => {
+  const { storage, calls } = signalCapturingClient({ Body: { transformToWebStream: () => new ReadableStream() } });
+  const controller = new AbortController();
+  await storage.getStream("media/derivatives/asset-1/web.webp", controller.signal);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command.constructor.name, "GetObjectCommand");
+  assert.equal(calls[0].options?.abortSignal, controller.signal, "the request's signal must reach send(); without it the socket is never released");
+});
+
+test("OssStorage.getRange hands the caller's AbortSignal to the SDK — video scrubbing abandons ranges constantly", async () => {
+  const { storage, calls } = signalCapturingClient({ Body: { transformToWebStream: () => new ReadableStream() } });
+  const controller = new AbortController();
+  await storage.getRange("media/derivatives/asset-1/preview.mp4", 0, 1023, controller.signal);
+  assert.equal(calls[0].command.input.Range, "bytes=0-1023");
+  assert.equal(calls[0].options?.abortSignal, controller.signal);
+});
+
+test("the real OSS client is built with a bounded, reclaimable connection pool, not the SDK's 50-sockets-and-no-timeout default", async () => {
+  const storage = new OssStorage(getOssConfig(FULL_ENV));
+  const client = await storage.client;
+  const handler = client.config.requestHandler;
+  const resolved = await (handler.configProvider ?? handler.config);
+  assert.ok(resolved.httpsAgent.maxSockets > 50, `maxSockets must exceed the SDK default of 50, got ${resolved.httpsAgent.maxSockets}`);
+  assert.ok(Number.isFinite(resolved.httpsAgent.maxSockets), "maxSockets must stay bounded — Infinity trades this outage for memory exhaustion");
+  assert.ok(resolved.requestTimeout > 0, "a socket nothing reads from must eventually be reclaimed; the SDK sets no timeout at all");
+  assert.ok(resolved.connectionTimeout > 0, "connecting to OSS must not be able to hang forever either");
+});

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import type { MediaLocation } from "@/lib/types";
 import type { HotStorage, HotStorageInput } from "./storage-types";
-import { safeKey } from "./storage-types";
+import { MEDIA_STORAGE_POOL, safeKey } from "./storage-types";
 
 // Phase 3B1 (docs/migration-C-readiness.md follow-up): the OSS tier for media the app has not
 // yet moved off R2. Talks to Alibaba Cloud OSS through its S3-compatible API — the same
@@ -31,7 +31,7 @@ export function getOssConfig(env: NodeJS.ProcessEnv = process.env): OssConfig {
   };
 }
 
-export type OssSendableClient = { send(command: unknown): Promise<unknown> };
+export type OssSendableClient = { send(command: unknown, options?: { abortSignal?: AbortSignal }): Promise<unknown> };
 
 export class OssStorage implements HotStorage {
   private readonly config: OssConfig;
@@ -43,7 +43,7 @@ export class OssStorage implements HotStorage {
   // asserting on the actual command the SDK would send, not a hand-rolled stand-in for it.
   constructor(config = getOssConfig(), client?: Promise<OssSendableClient>) {
     this.config = config;
-    this.client = client ?? import("@aws-sdk/client-s3").then(({ S3Client }) => new S3Client({
+    this.client = client ?? Promise.all([import("@aws-sdk/client-s3"), import("@smithy/node-http-handler"), import("node:https")]).then(([{ S3Client }, { NodeHttpHandler }, https]) => new S3Client({
       endpoint: config.endpoint,
       region: config.region,
       // Unlike R2 (see R2HotStorage's forcePathStyle: true), Alibaba Cloud OSS's S3-compatible
@@ -52,6 +52,12 @@ export class OssStorage implements HotStorage {
       // class must never set forcePathStyle: true.
       forcePathStyle: false,
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.accessKeySecret },
+      // See MEDIA_STORAGE_POOL for why the SDK defaults are not survivable for media delivery.
+      requestHandler: new NodeHttpHandler({
+        connectionTimeout: MEDIA_STORAGE_POOL.connectionTimeoutMs,
+        requestTimeout: MEDIA_STORAGE_POOL.requestTimeoutMs,
+        httpsAgent: new https.Agent({ keepAlive: true, maxSockets: MEDIA_STORAGE_POOL.maxSockets, timeout: MEDIA_STORAGE_POOL.requestTimeoutMs }),
+      }),
     }));
   }
 
@@ -64,28 +70,28 @@ export class OssStorage implements HotStorage {
     return { providerRef: key, mimeType: input.mimeType, fileSize, checksum: input.checksum };
   }
 
-  async get(key: string) {
+  async get(key: string, signal?: AbortSignal) {
     try {
       const { GetObjectCommand } = await import("@aws-sdk/client-s3");
-      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })) as { Body?: { transformToByteArray?: () => Promise<Uint8Array> } };
+      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) }), { abortSignal: signal }) as { Body?: { transformToByteArray?: () => Promise<Uint8Array> } };
       if (!result.Body) return null;
       return result.Body.transformToByteArray ? result.Body.transformToByteArray() : null;
     } catch { return null; }
   }
 
-  async getStream(key: string) {
+  async getStream(key: string, signal?: AbortSignal) {
     try {
       const { GetObjectCommand } = await import("@aws-sdk/client-s3");
-      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })) as { Body?: { transformToWebStream?: () => ReadableStream<Uint8Array> } };
+      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) }), { abortSignal: signal }) as { Body?: { transformToWebStream?: () => ReadableStream<Uint8Array> } };
       if (!result.Body?.transformToWebStream) return null;
       return result.Body.transformToWebStream();
     } catch { return null; }
   }
 
-  async getRange(key: string, start: number, end: number) {
+  async getRange(key: string, start: number, end: number, signal?: AbortSignal) {
     try {
       const { GetObjectCommand } = await import("@aws-sdk/client-s3");
-      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key), Range: `bytes=${start}-${end}` })) as { Body?: { transformToWebStream?: () => ReadableStream<Uint8Array> } };
+      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key), Range: `bytes=${start}-${end}` }), { abortSignal: signal }) as { Body?: { transformToWebStream?: () => ReadableStream<Uint8Array> } };
       if (!result.Body?.transformToWebStream) return null;
       return result.Body.transformToWebStream();
     } catch { return null; }

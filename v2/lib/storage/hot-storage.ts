@@ -6,13 +6,19 @@ import { pipeline } from "node:stream/promises";
 import type { MediaAsset, MediaLocation, MediaProvider, MediaVariant } from "@/lib/types";
 import { getOssConfig, OssStorage } from "./oss-storage";
 import type { HotStorage, HotStorageInput } from "./storage-types";
-import { safeKey } from "./storage-types";
+import { MEDIA_STORAGE_POOL, safeKey } from "./storage-types";
 
 // Re-exported so every existing `import { type HotStorage } from "@/lib/storage/hot-storage"`
 // (and the sibling Hot*Object/Body/Verification types) keeps working unchanged — the interface
 // itself moved to storage-types.ts only so oss-storage.ts could depend on it without a circular
 // import back into this file.
 export type { HotStorage, HotStorageObject, HotStorageBody, HotStorageInput, HotStorageVerification } from "./storage-types";
+
+function abortable(stream: ReturnType<typeof createReadStream>, signal?: AbortSignal) {
+  if (signal?.aborted) { stream.destroy(); return null; }
+  signal?.addEventListener("abort", () => stream.destroy(), { once: true });
+  return Readable.toWeb(stream) as ReadableStream<Uint8Array>;
+}
 
 // The local adapter is intentionally credential-free and is also the staging
 // implementation used by the development repository.
@@ -28,23 +34,26 @@ export class LocalHotStorage implements HotStorage {
     return { providerRef: key, mimeType: input.mimeType, fileSize: input.fileSize ?? (input.body instanceof Uint8Array ? input.body.byteLength : undefined), checksum: input.checksum };
   }
 
-  async get(key: string) {
-    try { return await fs.readFile(path.join(this.root, safeKey(key))); }
+  async get(key: string, signal?: AbortSignal) {
+    try { return await fs.readFile(path.join(this.root, safeKey(key)), { signal }); }
     catch { return null; }
   }
 
-  async getStream(key: string) {
+  // Local disk has no connection pool to exhaust, so the signal here is not about the 2026-09-20
+  // incident — it closes the file descriptor of a read the reader walked away from instead of
+  // leaving it to the stream's own cancel path.
+  async getStream(key: string, signal?: AbortSignal) {
     try {
       await fs.access(path.join(this.root, safeKey(key)));
-      return Readable.toWeb(createReadStream(path.join(this.root, safeKey(key)))) as ReadableStream<Uint8Array>;
+      return abortable(createReadStream(path.join(this.root, safeKey(key))), signal);
     } catch { return null; }
   }
 
-  async getRange(key: string, start: number, end: number) {
+  async getRange(key: string, start: number, end: number, signal?: AbortSignal) {
     try {
       const target = path.join(this.root, safeKey(key));
       await fs.access(target);
-      return Readable.toWeb(createReadStream(target, { start, end })) as ReadableStream<Uint8Array>;
+      return abortable(createReadStream(target, { start, end }), signal);
     } catch { return null; }
   }
 
@@ -78,17 +87,27 @@ export function getR2Config(env: NodeJS.ProcessEnv = process.env): R2Config {
 
 export class R2HotStorage implements HotStorage {
   private readonly config: R2Config;
-  private readonly client: Promise<{ send(command: unknown): Promise<unknown> }>;
+  private readonly client: Promise<{ send(command: unknown, options?: { abortSignal?: AbortSignal }): Promise<unknown> }>;
 
   constructor(config = getR2Config()) {
     this.config = config;
     const proxyUrl = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
-    this.client = Promise.all([import("@aws-sdk/client-s3"), import("@smithy/node-http-handler"), import("https-proxy-agent")]).then(([{ S3Client }, { NodeHttpHandler }, { HttpsProxyAgent }]) => new S3Client({
+    this.client = Promise.all([import("@aws-sdk/client-s3"), import("@smithy/node-http-handler"), import("https-proxy-agent"), import("node:https")]).then(([{ S3Client }, { NodeHttpHandler }, { HttpsProxyAgent }, https]) => new S3Client({
       endpoint: config.endpoint,
       region: "auto",
       forcePathStyle: true,
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
-      requestHandler: proxyUrl ? new NodeHttpHandler({ httpsAgent: new HttpsProxyAgent(proxyUrl) }) : undefined,
+      // Same pool guards as OssStorage — same SDK, same 2026-09-20 failure mode. The proxy agent
+      // (Teddy's machine sets HTTP_PROXY; ECS does not) carries the same socket ceiling, so a
+      // proxied run is bounded and reclaimable too, not left on the SDK's 50-and-no-timeout
+      // defaults. See MEDIA_STORAGE_POOL in storage-types.ts.
+      requestHandler: new NodeHttpHandler({
+        connectionTimeout: MEDIA_STORAGE_POOL.connectionTimeoutMs,
+        requestTimeout: MEDIA_STORAGE_POOL.requestTimeoutMs,
+        httpsAgent: proxyUrl
+          ? new HttpsProxyAgent(proxyUrl, { keepAlive: true, maxSockets: MEDIA_STORAGE_POOL.maxSockets, timeout: MEDIA_STORAGE_POOL.requestTimeoutMs })
+          : new https.Agent({ keepAlive: true, maxSockets: MEDIA_STORAGE_POOL.maxSockets, timeout: MEDIA_STORAGE_POOL.requestTimeoutMs }),
+      }),
     }));
   }
 
@@ -101,19 +120,19 @@ export class R2HotStorage implements HotStorage {
     return { providerRef: key, mimeType: input.mimeType, fileSize, checksum: input.checksum };
   }
 
-  async get(key: string) {
+  async get(key: string, signal?: AbortSignal) {
     try {
       const { GetObjectCommand } = await import("@aws-sdk/client-s3");
-      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })) as { Body?: { transformToByteArray?: () => Promise<Uint8Array> } };
+      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) }), { abortSignal: signal }) as { Body?: { transformToByteArray?: () => Promise<Uint8Array> } };
       if (!result.Body) return null;
       return result.Body.transformToByteArray ? result.Body.transformToByteArray() : null;
     } catch { return null; }
   }
 
-  async getStream(key: string) {
+  async getStream(key: string, signal?: AbortSignal) {
     try {
       const { GetObjectCommand } = await import("@aws-sdk/client-s3");
-      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) })) as { Body?: { transformToWebStream?: () => ReadableStream<Uint8Array> } };
+      const result = await (await this.client).send(new GetObjectCommand({ Bucket: this.config.bucket, Key: safeKey(key) }), { abortSignal: signal }) as { Body?: { transformToWebStream?: () => ReadableStream<Uint8Array> } };
       if (!result.Body?.transformToWebStream) return null;
       return result.Body.transformToWebStream();
     } catch { return null; }

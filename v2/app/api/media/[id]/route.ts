@@ -32,6 +32,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // matters on a cache MISS (first view of a photo), since a cache HIT is already served by the
   // CDN before this code runs. Which backend that origin actually is comes from this location's
   // own `provider`, never from a single fixed instance (see getStorageForProvider's doc comment).
+  //
+  // Every read below is handed `request.signal` (2026-09-20 incident). A reader who navigates away
+  // or loses signal mid-download aborts this request; without that signal the upstream storage read
+  // kept running and its socket was never returned to the connection pool. Fifty of those exhausted
+  // the pool and every photograph on the site stopped loading. See MEDIA_STORAGE_POOL in
+  // lib/storage/storage-types.ts for the matching ceiling and reclaim timeout.
   const storage = getStorageForProvider(location.provider);
 
   // Range, and why it is not optional now that a video can be played here (2026-09-10). A browser
@@ -57,23 +63,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         "Accept-Ranges": "bytes",
         ...cacheHeaders,
       };
-      const ranged = storage.getRange ? await storage.getRange(location.providerRef, start, end) : null;
+      const ranged = storage.getRange ? await storage.getRange(location.providerRef, start, end, request.signal) : null;
       if (ranged) return new NextResponse(ranged, { status: 206, headers: rangeHeaders });
       // A backend without a ranged read still answers correctly, just less efficiently.
-      const whole = await storage.get(location.providerRef);
+      const whole = await storage.get(location.providerRef, request.signal);
       if (whole) return new NextResponse(whole.slice(start, end + 1) as BodyInit, { status: 206, headers: rangeHeaders });
       return new NextResponse("Media derivative is not ready", { status: 404, headers: NOT_CACHEABLE });
     }
   }
 
-  const stream = await storage.getStream(location.providerRef);
+  const stream = await storage.getStream(location.providerRef, request.signal);
   if (stream) {
     const headers: Record<string, string> = { "Content-Type": contentType, "Accept-Ranges": "bytes", ...cacheHeaders };
     if (location.fileSize) headers["Content-Length"] = String(location.fileSize);
     return new NextResponse(stream, { headers });
   }
 
-  const data = await storage.get(location.providerRef);
+  const data = await storage.get(location.providerRef, request.signal);
   if (!data) return new NextResponse("Media derivative is not ready", { status: 404, headers: NOT_CACHEABLE });
   return new NextResponse(data as BodyInit, { headers: { "Content-Type": contentType, "Content-Length": String(data.byteLength), "Accept-Ranges": "bytes", ...cacheHeaders } });
 }
