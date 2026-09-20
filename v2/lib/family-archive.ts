@@ -183,8 +183,31 @@ export const ON_DEMAND_ARCHIVE_TTL_MS = 300_000;
 
 let onDemandArchive: { at: number; archive: Promise<FamilyArchive> } | undefined;
 
-// Test-only: the memo below is module state, so a test that exercises it must be able to clear it.
-export function __resetOnDemandArchiveForTests(): void { onDemandArchive = undefined; }
+/**
+ * How long an ISR page may reuse one archive read. Short on purpose — see below.
+ *
+ * Measured 2026-09-20 against the production database: one loadFamilyArchive() ships **38.1 MB**
+ * (content_quality_reviews 20,323 rows / 14.0 MB, media 11,554 rows / 9.1 MB, media_locations
+ * 59,131 rows / 8.9 MB, and seven smaller reads). Server-side execution is milliseconds; it is
+ * bytes on a wire, and it is the whole reason a cold day page took 4.3–5.0 s.
+ *
+ * Until now only the on-demand pages memoised it, so every ISR render paid the 38 MB again: a
+ * month has 31 day pages, and walking through one month could read the archive thirty-one times.
+ *
+ * Why this is NOT simply ON_DEMAND_ARCHIVE_TTL_MS. The on-demand pages have no Next route cache at
+ * all, so their 300 s memo IS their whole staleness budget. An ISR page already has a 300 s route
+ * cache in front of it, and stacking another 300 s under it would make the worst case 600 s — a
+ * different product promise than those pages document, which is exactly why they were left
+ * reading directly. 30 s makes the worst case 330 s instead of 300 s (a tenth more, not double)
+ * while collapsing a burst of renders into one read. And it is a backstop, not the mechanism:
+ * every write POSTs /api/internal/revalidate, which drops this memo outright.
+ */
+export const ISR_ARCHIVE_TTL_MS = 30_000;
+
+let isrArchive: { at: number; archive: Promise<FamilyArchive> } | undefined;
+
+// Test-only: the memos below are module state, so a test that exercises them must be able to clear them.
+export function __resetOnDemandArchiveForTests(): void { onDemandArchive = undefined; isrArchive = undefined; }
 
 // Drop the memo so the next request re-reads the archive.
 //
@@ -194,7 +217,11 @@ export function __resetOnDemandArchiveForTests(): void { onDemandArchive = undef
 // nothing left to clear there — and it cannot see this memo at all, which is plain module state.
 // The result was a push that reported success and changed nothing for up to five minutes. This is
 // the other half of that notification: same trigger, the layer that actually holds the data.
-export function invalidateOnDemandArchive(): void { onDemandArchive = undefined; }
+// Clears BOTH memos — the on-demand one and the ISR one (ISR_ARCHIVE_TTL_MS). Its name predates
+// the second; a write that makes the on-demand pages stale makes the ISR pages stale by the same
+// act, and leaving either behind would be the "reported success and changed nothing" bug this
+// function exists to prevent.
+export function invalidateOnDemandArchive(): void { onDemandArchive = undefined; isrArchive = undefined; }
 
 // The archive read for pages that are rendered on demand rather than prerendered
 // (lib/render-on-demand.ts: /, /memory, /mom-reports — they must never be built from the build's mock
@@ -220,6 +247,25 @@ export function loadFamilyArchiveOnDemand(
     archive.catch(() => { if (onDemandArchive?.archive === archive) onDemandArchive = undefined; });
   }
   return onDemandArchive.archive;
+}
+
+/**
+ * The archive read for ISR pages (year, month, day). Same memo shape as loadFamilyArchiveOnDemand
+ * — the promise is memoised, so concurrent cold renders share one read rather than each starting
+ * their own 38 MB one — but on the much shorter ISR_ARCHIVE_TTL_MS, for the reason documented
+ * there. A rejected read is evicted immediately so a transient database error cannot be pinned in
+ * front of the site.
+ */
+export function loadFamilyArchiveForIsr(
+  load: () => Promise<FamilyArchive> = loadFamilyArchive,
+  nowMs: number = Date.now(),
+): Promise<FamilyArchive> {
+  if (!isrArchive || nowMs - isrArchive.at >= ISR_ARCHIVE_TTL_MS) {
+    const archive = load();
+    isrArchive = { at: nowMs, archive };
+    archive.catch(() => { if (isrArchive?.archive === archive) isrArchive = undefined; });
+  }
+  return isrArchive.archive;
 }
 
 export async function loadFamilyArchive(): Promise<FamilyArchive> {

@@ -11,7 +11,7 @@ import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { MonthDayEntry } from "@/components/month-day-entry";
 import { groupIntoWeeks, pickLeadDays, pickLeadPhoto } from "@/lib/month-day-weight";
 import { loadMonthContent, resolveMonthContentMedia } from "@/lib/month-content";
-import { loadFamilyArchive } from "@/lib/family-archive";
+import { loadFamilyArchiveForIsr } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { findMonth } from "@/lib/memory-chapters";
@@ -56,7 +56,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const { year, month: monthSegment } = await params;
   if (!/^\d{4}$/.test(year) || !/^\d{2}$/.test(monthSegment)) notFound();
   const month = `${year}-${monthSegment}`;
-  const { chapters, store, media, eventIdentities, snapshots, privilege, traceEvents, birthDay } = await loadFamilyArchive();
+  const { chapters, store, media, eventIdentities, snapshots, privilege, traceEvents, birthDay } = await loadFamilyArchiveForIsr();
   const chapter = findMonth(chapters, month);
   if (!chapter) notFound();
 

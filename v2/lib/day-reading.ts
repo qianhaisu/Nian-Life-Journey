@@ -1,4 +1,4 @@
-import { loadFamilyArchive } from "@/lib/family-archive";
+import { loadFamilyArchiveForIsr } from "@/lib/family-archive";
 import { getSourcesByIds } from "@/lib/db/repository";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { toMediaRef } from "@/lib/memory-chapters";
@@ -49,7 +49,7 @@ export async function readDay(dayKey: string): Promise<DayReading | null> {
   const day = dayForDate(content, dayKey);
   if (!content || !day) return null;
 
-  const { media, privilege, birthDay } = await loadFamilyArchive();
+  const { media, privilege, birthDay } = await loadFamilyArchiveForIsr();
   const available = new Map(media.map((item) => [item.id, item]));
   const title = day.title ?? dateLabelOf(dayKey);
   // The curated order is a proposal; deliverability and the latest store_only decide, on every

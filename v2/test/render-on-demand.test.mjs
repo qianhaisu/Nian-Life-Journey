@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ON_DEMAND_ARCHIVE_TTL_MS, __resetOnDemandArchiveForTests, invalidateOnDemandArchive, loadFamilyArchiveOnDemand } from "../lib/family-archive.ts";
+import { ISR_ARCHIVE_TTL_MS, ON_DEMAND_ARCHIVE_TTL_MS, __resetOnDemandArchiveForTests, invalidateOnDemandArchive, loadFamilyArchiveForIsr, loadFamilyArchiveOnDemand } from "../lib/family-archive.ts";
 import { ON_DEMAND_ARCHIVE_PATHS } from "../lib/render-on-demand.ts";
 
 const appDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "app");
@@ -147,4 +147,31 @@ test("cache: a failed read still evicts itself, notification or not", async () =
   assert.equal(recovered.generation, "back");
   assert.equal(reads, 2, "the failure was not held in front of the site until the window lapsed");
   __resetOnDemandArchiveForTests();
+});
+
+// 2026-09-20: the ISR pages (year, month, day) used to call loadFamilyArchive() directly, so every
+// cold render paid the whole-archive read again — measured at 38.1 MB against production, and the
+// reason a cold day page took 4.3–5.0 s. They now share a memo on a much shorter TTL. Same three
+// properties the on-demand memo is held to, asserted separately because the TTL differs on purpose.
+test("the ISR archive read is memoised on its own short TTL, and a publish drops it", async () => {
+  const archive = (tag) => async () => ({ tag });
+  __resetOnDemandArchiveForTests();
+
+  const first = await loadFamilyArchiveForIsr(archive("a"), 1_000);
+  const second = await loadFamilyArchiveForIsr(archive("b"), 1_000 + ISR_ARCHIVE_TTL_MS - 1);
+  assert.equal(second.tag, "a", "a render inside the window must reuse the read, not start another 38 MB one");
+
+  const third = await loadFamilyArchiveForIsr(archive("c"), 1_000 + ISR_ARCHIVE_TTL_MS);
+  assert.equal(third.tag, "c", "the TTL must actually expire");
+
+  // The TTL is the backstop; the publish notice is the mechanism. invalidateOnDemandArchive() has
+  // to clear BOTH memos or a publish refreshes the on-demand pages and leaves the months behind.
+  invalidateOnDemandArchive();
+  const afterPublish = await loadFamilyArchiveForIsr(archive("d"), 1_000 + ISR_ARCHIVE_TTL_MS);
+  assert.equal(afterPublish.tag, "d", "a publish must drop the ISR memo immediately, not wait out its TTL");
+});
+
+test("the ISR TTL stays well under the on-demand one, so an ISR page's route cache plus memo is not double its promise", () => {
+  assert.ok(ISR_ARCHIVE_TTL_MS < ON_DEMAND_ARCHIVE_TTL_MS / 2,
+    `stacking this under a 300s route cache is only defensible while it stays small; got ${ISR_ARCHIVE_TTL_MS}ms`);
 });

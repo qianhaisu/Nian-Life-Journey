@@ -32,7 +32,9 @@ test("scope archive reaches every ISR route that renders the archive — found b
     const source = readFileSync(file, "utf8");
     if (!/^export const revalidate\s*=/m.test(source)) continue;
     // getEventDetail is reached through react's cache() wrapper on the event page, so match the name.
-    if (!/loadFamilyArchive\(|\bgetEventDetail\b/.test(source)) continue;
+    // loadFamilyArchiveForIsr is the memoised ISR read (2026-09-20) — same archive, so a page that
+    // reaches it must still be in the refresh list.
+    if (!/loadFamilyArchive(ForIsr)?\(|\bgetEventDetail\b/.test(source)) continue;
     isr.push("/" + path.relative(appDir, path.dirname(file)).split(path.sep).join("/"));
   }
   assert.deepEqual([...isr].sort(), [...ARCHIVE_ISR_ROUTES].sort());

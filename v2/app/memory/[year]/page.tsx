@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArchiveNav } from "@/components/archive-nav";
 import { EditorialMemory } from "@/components/editorial-memory";
 import { PhotoStrip } from "@/components/media-sequence";
-import { loadFamilyArchive } from "@/lib/family-archive";
+import { loadFamilyArchiveForIsr } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { buildMemoryIndex, buildYearView } from "@/lib/memory-index";
@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: { params: Promise<{ year: str
 export default async function YearPage({ params }: { params: Promise<{ year: string }> }) {
   const { year } = await params;
   if (!/^\d{4}$/.test(year)) notFound();
-  const { chapters, privilege } = await loadFamilyArchive();
+  const { chapters, privilege } = await loadFamilyArchiveForIsr();
   const chapter = chapters.find((item) => item.year === year);
   if (!chapter) notFound();
 
