@@ -4,6 +4,7 @@
 // 全部合成数据；群 ID 为虚构值，不使用真实会话标识。
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   messageIdentity,
   contentFingerprint,
@@ -13,6 +14,8 @@ import {
   parseMarkdownExport,
   unescapeMarkdown,
   classifyDivergence,
+  buildMessageIndex,
+  verifyCitations,
 } from "../scripts/health-audit/wechat-export-dedupe.mjs";
 
 const CONV_A = "wxid:10000000001@chatroom.example";
@@ -354,4 +357,76 @@ test("R3e 空输入与无标题输入不抛错，返回空数组", () => {
   assert.deepEqual(parseMarkdownExport(""), []);
   assert.deepEqual(parseMarkdownExport("没有任何标题行\n只是正文"), []);
   assert.deepEqual(parseMarkdownExport(null), []);
+});
+
+// ── R4：引用核验。独立审核证明，只看「字段非空 / 格式合法」的校验器挡不住
+// 「不存在的消息身份」和「非空但错误的正文」这两类破坏。下面五个用例就是照着它们写的。
+const sha1 = (t) => createHash("sha1").update(String(t ?? ""), "utf8").digest("hex");
+
+const CITE_SRC = [
+  {
+    conversationId: CONV_A,
+    messages: [
+      { platformMessageId: "p100", createTime: "2026-02-01 09:00:00", content: "第一条" },
+      { platformMessageId: "p101", createTime: "2026-02-01 09:00:30", content: "第二条" },
+      { localId: 7, createTime: "2026-02-01 09:01:00", content: "只有本地号" },
+      { createTime: "2026-02-01 09:02:00", content: "完全没有 ID" },
+    ],
+  },
+  {
+    conversationId: CONV_B,
+    // 另一个会话里**同样用 p100**：索引必须按会话隔离，不能跨会话命中
+    messages: [{ platformMessageId: "p100", createTime: "2026-02-01 09:00:00", content: "别的会话" }],
+  },
+];
+
+test("R4a 索引按会话隔离，同一 ID 在不同会话里各是各的", () => {
+  const idx = buildMessageIndex(CITE_SRC);
+  assert.equal(idx.get(`${CONV_A}::p100`).content, "第一条");
+  assert.equal(idx.get(`${CONV_B}::p100`).content, "别的会话");
+  assert.equal(idx.get(`${CONV_A}::local:7`).content, "只有本地号");
+  assert.equal(idx.size, 4, "没有 ID 的那条不进索引——它无法被引用定位");
+});
+
+test("R4b 引用真实存在且正文未变时全部通过", () => {
+  const idx = buildMessageIndex(CITE_SRC);
+  const r = verifyCitations(idx, [
+    { ref: "F-1", conversationId: CONV_A, id: "p100", contentSha1: sha1("第一条") },
+    { ref: "F-2", conversationId: CONV_A, id: "p101", contentSha1: sha1("第二条") },
+  ], sha1);
+  assert.equal(r.ok, true);
+  assert.equal(r.resolved, 2);
+});
+
+test("R4c 格式合法但不存在的消息身份必须被抓出来", () => {
+  const idx = buildMessageIndex(CITE_SRC);
+  const r = verifyCitations(idx, [
+    { ref: "F-3", conversationId: CONV_A, id: "9999999999999999999", contentSha1: sha1("x") },
+  ], sha1);
+  assert.equal(r.ok, false, "凭空捏造的消息 ID 不能通过核验");
+  assert.equal(r.missing.length, 1);
+  assert.equal(r.resolved, 0);
+});
+
+test("R4d 消息存在但正文被换成另一段**非空**内容，同样必须被抓出来", () => {
+  const idx = buildMessageIndex(CITE_SRC);
+  const r = verifyCitations(idx, [
+    { ref: "F-4", conversationId: CONV_A, id: "p100", contentSha1: sha1("一段看起来很正常的错内容") },
+  ], sha1);
+  assert.equal(r.ok, false, "非空 ≠ 正确；只有回原件比对才挡得住");
+  assert.equal(r.contentMismatch.length, 1);
+  assert.equal(r.missing.length, 0, "这一类不是「找不到」，要和缺失分开报");
+});
+
+test("R4e 跨会话不得误命中；没有哈希函数则拒绝核验", () => {
+  const idx = buildMessageIndex(CITE_SRC);
+  const r = verifyCitations(idx, [
+    { ref: "F-5", conversationId: CONV_B, id: "p101", contentSha1: sha1("第二条") },
+  ], sha1);
+  assert.equal(r.ok, false, "p101 只存在于 CONV_A，不能被 CONV_B 的引用命中");
+  assert.equal(r.missing.length, 1);
+  assert.throws(() => verifyCitations(idx, [], null),
+    /需要哈希函数/, "没有哈希函数就无从判断正文是否被改过，必须拒绝而不是假装通过");
+  assert.throws(() => buildMessageIndex([{ conversationId: "", messages: [] }]),
+    /需要会话身份/);
 });

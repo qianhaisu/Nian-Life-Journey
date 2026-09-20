@@ -331,3 +331,75 @@ export function countDistinctMessages(selection) {
   }
   return { identified: seen.size, unidentified, total: seen.size + unidentified };
 }
+
+/**
+ * 建立「消息身份 → 消息」的索引，供引用核验使用。
+ *
+ * 键是 `${conversationId}::${id}`，**不含时间**——引用方通常只记得会话和消息 ID，
+ * 不该要求它同时记住导出器的时间字符串。这与 messageIdentity 的 key 是两套用途：
+ * 那一套用于去重（时间参与，因为同 ID 不同时间要能看出差异），这一套用于定位。
+ *
+ * @param {Array<{conversationId:string, messages:Array}>} sources
+ * @returns {Map<string, object>}
+ */
+export function buildMessageIndex(sources) {
+  const index = new Map();
+  for (const s of sources ?? []) {
+    const conv = s?.conversationId;
+    if (conv == null || String(conv).trim() === "") {
+      throw new Error("buildMessageIndex 需要会话身份");
+    }
+    for (const m of s.messages ?? []) {
+      const ident = messageIdentity(m, conv);
+      if (!ident) continue; // 无 ID 的消息无法被引用定位，这是事实，不编造
+      index.set(`${conv}::${ident.id}`, m);
+    }
+  }
+  return index;
+}
+
+/**
+ * 核验一批引用是否真的指向导出里存在的消息，并且引用者记下的正文没有被改过。
+ *
+ * 之所以要有这个函数：只检查「字段非空」「格式合法」的校验器挡不住两类错误——
+ * ① 引用了一个格式合法但**根本不存在**的消息 ID；
+ * ② 消息存在，但引用者存下来的正文被换成了另一段**非空的错内容**。
+ * 两者都只有回到导出原件重新比对才会暴露，所以这里要求引用自带 `contentSha1`，
+ * 由调用方用同一个哈希函数算出真实正文的值来比。
+ *
+ * 不做的事：不猜、不修、不丢。对不上的原样返回，由调用方决定怎么处理。
+ *
+ * @param {Map<string, object>} index buildMessageIndex 的结果
+ * @param {Array<{ref:string, conversationId:string, id:string, contentSha1?:string}>} citations
+ * @param {(text:string)=>string} hash 与引用方生成 contentSha1 时同一个哈希函数
+ * @returns {{ok:boolean, resolved:number,
+ *            missing:Array<{ref:string,key:string}>,
+ *            contentMismatch:Array<{ref:string,key:string}>}}
+ */
+export function verifyCitations(index, citations, hash) {
+  if (typeof hash !== "function") {
+    throw new Error("verifyCitations 需要哈希函数：没有它就无法判断正文是否被改过");
+  }
+  const missing = [];
+  const contentMismatch = [];
+  let resolved = 0;
+  for (const c of citations ?? []) {
+    const key = `${c?.conversationId}::${c?.id}`;
+    const m = index.get(key);
+    if (!m) {
+      missing.push({ ref: c?.ref ?? key, key });
+      continue;
+    }
+    if (c?.contentSha1 != null && hash(m.content ?? "") !== c.contentSha1) {
+      contentMismatch.push({ ref: c?.ref ?? key, key });
+      continue;
+    }
+    resolved += 1;
+  }
+  return {
+    ok: missing.length === 0 && contentMismatch.length === 0,
+    resolved,
+    missing,
+    contentMismatch,
+  };
+}
