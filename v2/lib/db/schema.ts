@@ -544,3 +544,28 @@ export const habitDisplayDays = pgTable("habit_display_days", {
   byIdentity: uniqueIndex("habit_display_days_identity_idx").on(table.profileId, table.itemId, table.shownDay),
   byProfileItem: index("habit_display_days_item_idx").on(table.profileId, table.itemId),
 }));
+
+// 家人在首页「每周提醒」上打的勾。
+//
+// 2026-09-20 Teddy：「提醒事项我打勾之后结果没保存，过段时间重新打开又是没打勾的状态了。」
+// 原来的实现只写这台浏览器的 localStorage（2026-09-16 定的范围，当时明说不承诺跨设备）。
+// 那份存储在微信内置浏览器、iOS 的跨站跟踪限制、清缓存之后都会消失，换台设备更是从零开始——
+// 「过段时间又变回没打勾」正是它的正常表现，不是 bug。勾选要活下来，就得放在服务端。
+//
+// 为什么单独一张表，不往 upcoming_items 上加一列：
+//   · 勾选是**家人手动说的**「这件事我处理了」，而 upcoming_items.status 的 done/cancelled 必须
+//     有微信里的原话作证据（见 upcomingItemChanges 的注释：「A `done` row cannot exist without
+//     one」）。两者混进同一列，就等于让一次点击伪造出一条证据。
+//   · 取消打勾就是删掉这一行。事项本身一个字都不会因此改变。
+//
+// 没有指向 upcoming_items 的外键：重新提取有可能让一条事项换个 id 重新出现，而那不该把家人
+// 已经打过的勾连带删掉。留着孤儿行的代价只是几十字节。
+export const upcomingChecks = pgTable("upcoming_checks", {
+  profileId: text("profile_id").notNull().references(() => profiles.id),
+  itemId: text("item_id").notNull(),
+  /** 打勾那一刻这条事项的标题。只为排查用：若将来发现勾莫名消失，能看出是不是标题被改写换了 id。 */
+  titleAtCheck: text("title_at_check"),
+  checkedAt: timestamp("checked_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => ({
+  byIdentity: uniqueIndex("upcoming_checks_identity_idx").on(table.profileId, table.itemId),
+}));

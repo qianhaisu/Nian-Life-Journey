@@ -11,11 +11,18 @@ import { HabitShownReporter } from "@/components/habit-shown-reporter";
 // 这个组件**不自己筛**——它只负责把数据轨给的那几条摆出来，以及记住家人在这台设备上勾了哪几条。
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// 勾选：只存在这台设备上，而且只存 id
+// 勾选：存在服务端，本机存一份副本兜底
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// 用户 2026-09-16 第 5 条要求真正可操作的复选框，并且明确了本轮的保存范围：
-// 「当前浏览器本地保存，刷新和重新打开后仍保留；不承诺跨设备同步。」
+// 2026-09-16 第 5 条最初只要求「当前浏览器本地保存」。2026-09-20 Teddy 报了实际后果：
+// 「打勾之后结果没保存，过段时间重新打开又是没打勾的状态了。」——localStorage 在微信内置浏览器、
+// iOS 的跨站跟踪限制、清缓存之后都会被清掉，换台设备更是从零开始。所以勾选改为写服务端
+// （/api/upcoming/checks → upcoming_checks 表），本机那份降级成离线兜底：
+//
+//   · **服务端是准的**。挂载后拉一次（no-store，绕开首页 5 分钟的 ISR 缓存）。
+//   · **先画后传**。点一下立刻变样子，请求在后台发；失败了把本机那份留着，下次进来再合并上去。
+//   · **合并，不覆盖**。本机存的勾第一次上传时只会「补上」，绝不用一份空的本地状态去清空服务端——
+//     一台刚清过缓存的手机不该把电脑上勾过的都抹掉。
 //
 // 几条容易写错的，逐条写死在代码里：
 //
@@ -197,16 +204,52 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
 }) {
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
   // 挂载后才读：SSR 没有 localStorage，初次渲染必须和服务端一致，否则 hydration 不匹配。
-  // 这里**只读不写**——挂载时写一次会把已有勾选覆盖成空。
-  useEffect(() => { setChecked(readChecked(storageScope)); }, [storageScope]);
+  // 顺序是「先画本机存的（瞬间），再用服务端的覆盖（准的）」——离线或接口挂了也还是老样子能用。
+  // 这里**只读不写本机**——挂载时写一次会把已有勾选覆盖成空。
+  useEffect(() => {
+    const local = readChecked(storageScope);
+    if (local.size) setChecked(local);
+    let alive = true;
+    (async () => {
+      try {
+        // 本机存过的勾先并上去（只补不删），再以服务端的结果为准。
+        const res = local.size
+          ? await fetch("/api/upcoming/checks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ merge: [...local] }) })
+          : await fetch("/api/upcoming/checks", { cache: "no-store" });
+        if (!res.ok) return;
+        const body = (await res.json()) as { ids?: unknown };
+        if (!alive || !Array.isArray(body.ids)) return;
+        const server = new Set(body.ids.filter((id): id is string => typeof id === "string"));
+        setChecked(server);
+        writeChecked(storageScope, server);
+      } catch {
+        // 离线、接口 503：保持本机那份，不清空、不报错。下次进来再同步。
+      }
+    })();
+    return () => { alive = false; };
+  }, [storageScope]);
 
   function toggle(id: string) {
     setChecked((was) => {
       const next = new Set(was);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      const nowChecked = !next.has(id);
+      if (nowChecked) next.add(id); else next.delete(id);
       writeChecked(storageScope, next);
+      // 先画后传：勾的反馈必须是即时的，网络慢不该让复选框卡住。传失败也不回滚——本机这份还在，
+      // 下次打开会作为待合并的勾再交一次。
+      void fetch("/api/upcoming/checks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, checked: nowChecked, title: titleOf(id) }),
+        keepalive: true,
+      }).catch(() => {});
       return next;
     });
+  }
+
+  // 打勾时一并把当时的标题交上去，纯排查用（见 schema.ts upcomingChecks.titleAtCheck）。
+  function titleOf(id: string): string | undefined {
+    return [...reminders, ...more].find((reminder) => reminder.id === id)?.title;
   }
 
   const shown = reminders.slice(0, 2);

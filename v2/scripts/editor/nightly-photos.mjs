@@ -16,8 +16,8 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { shanghaiToday, addDays } from "./plan.mjs";
-import { classifyPhotos } from "./photo-classify.mjs";
-import { decidePhoto, pickPhotos, batchLooksBroken, mergeDayMedia, PROMPT_VERSION, POLICY_VERSION, LOOKBACK_DAYS } from "./photos-plan.mjs";
+import { classifyPhotos, chooseLead } from "./photo-classify.mjs";
+import { decidePhoto, pickPhotos, batchLooksBroken, mergeDayMedia, applyLead, PROMPT_VERSION, POLICY_VERSION, LOOKBACK_DAYS } from "./photos-plan.mjs";
 
 const OPS = process.env.NIANLIFE_OPS_DIR ?? "C:/Users/teddy/NianlifeOps/ops-daily";
 const ED = path.join(OPS, "editor");
@@ -186,6 +186,23 @@ async function main() {
         else if (!cur.days.some((d) => d.day === day)) digest.notes.push(`${day} 有已放行照片，但这天还没有故事，等故事写好后再并入`);
       }
       if (!added.length) continue;
+      // 5b) 配图：照片是按时间并进去的，第一张只是「这天最早拍的」。让 DeepSeek 按这一天的标题挑封面。
+      for (const a of added) {
+        const entry = cur.days.find((d) => d.day === a.day);
+        if (!entry?.title) continue;
+        const pool = entry.expandedMediaIds.slice(0, 12);
+        const files = [];
+        for (const id of pool) {
+          const f = path.join(TMP, `lead-${id.slice(-16)}.webp`);
+          try { if (await download(id, f)) files.push({ id, file: f }); } catch {}
+        }
+        let picked = null;
+        try { picked = await chooseLead(entry, files); } catch {}
+        for (const f of files) { try { fs.rmSync(f.file); } catch {} }
+        if (!picked) { digest.notes.push(`${a.day} 没能挑出配图，保持原样`); continue; }
+        const applied = applyLead(cur, a.day, picked.id);
+        if (applied) { cur = applied.content; a.lead = picked.why || "已换"; say(`${a.day} 配图 → ${picked.id.slice(-8)}（${picked.why}）`); }
+      }
       const out = path.join(PH, `${month}.candidate.json`);
       fs.writeFileSync(out, JSON.stringify({ ...cur, generatedAt: new Date().toISOString() }, null, 1), "utf8");
       if (!WRITE) { digest.added.push(...added.map((a) => ({ ...a, published: false }))); say(`dry-run：${month} 将并入 ${added.map((a) => `${a.day}+${a.n}`).join(" ")}`); continue; }
@@ -207,7 +224,7 @@ async function main() {
 function writeDigest(d) {
   const L = [`# 夜间照片 ${d.today}${d.write ? "" : "（dry-run，未写库）"}`, "",
     `处理 ${d.considered} 张，下载成功 ${d.downloaded}：放行 ${d.approved}，不上页面 ${d.storeOnly}，留给人 ${d.held}，识别出错 ${d.errors}`, ""];
-  if (d.added.length) L.push("## 并入照片区", ...d.added.map((a) => `- ${a.day} +${a.n}${a.published ? ` 已发布 ${a.version}` : "（未发布）"}`), "");
+  if (d.added.length) L.push("## 并入照片区", ...d.added.map((a) => `- ${a.day} +${a.n}${a.lead ? `，配图已换（${a.lead}）` : ""}${a.published ? ` 已发布 ${a.version}` : "（未发布）"}`), "");
   if (d.notes.length) L.push("## 备注", ...d.notes.map((n) => `- ${n}`), "");
   if (d.model) L.push(`模型 ${d.model}，tokens in ${d.inputTokens} out ${d.outputTokens}`);
   fs.mkdirSync(path.join(ED, "digests"), { recursive: true });

@@ -50,3 +50,18 @@ test("batchLooksBroken：样本够而一张不放行 → 不可信", () => {
   assert.equal(batchLooksBroken(Array.from({ length: 50 }, () => ({ error: "x" }))).broken, true);
   assert.equal(batchLooksBroken([life, life]).broken, false);
 });
+
+import { applyLead } from "../scripts/editor/photos-plan.mjs";
+test("applyLead：把选中的那张挪到最前，一张都不少", () => {
+  const c = { days: [{ day: "2026-09-18", expandedMediaIds: ["a", "b", "c", "d"], firstScreenMediaIds: ["a", "b"] }] };
+  const r = applyLead(c, "2026-09-18", "c");
+  assert.deepEqual(r.content.days[0].expandedMediaIds, ["c", "a", "b", "d"]);
+  assert.deepEqual(r.content.days[0].firstScreenMediaIds, ["c", "a"]);
+  assert.deepEqual(c.days[0].expandedMediaIds, ["a", "b", "c", "d"], "不改入参");
+});
+test("applyLead：已经在最前 / 不在这一天 / 没这天 → null", () => {
+  const c = { days: [{ day: "2026-09-18", expandedMediaIds: ["a", "b"], firstScreenMediaIds: ["a"] }] };
+  assert.equal(applyLead(c, "2026-09-18", "a"), null);
+  assert.equal(applyLead(c, "2026-09-18", "zz"), null);
+  assert.equal(applyLead(c, "2026-09-19", "a"), null);
+});

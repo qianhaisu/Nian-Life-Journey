@@ -74,6 +74,31 @@ export function spread(ids, n) {
 }
 
 /**
+ * 把某一天的配图（第一张）换成 leadId。
+ *
+ * 为什么需要这个：月页上「被抬起来的那一天」用的大图，是 lib/month-day-weight.ts 的 pickLeadPhoto——
+ * 它取 expandedMediaIds 里第一张合格的照片。而照片是按拍摄时间并进去的，第一张只是「这天最早拍的」，
+ * 和这天的故事讲的是什么毫无关系。2026-09-18 就是这样：标题写「防空警报响起，小年抱住小脑袋趴下」，
+ * 配图却是早上坐在玩具车里的一张（Teddy 2026-09-20 指出）。选哪张交给 DeepSeek（CLAUDE.md 的分工：
+ * 选片与构图建议归 DeepSeek），这里只负责把它挪到最前面。
+ *
+ * 只挪位置，不删不加：这一天的照片一张都不会因为换封面而消失。
+ */
+export function applyLead(content, day, leadId) {
+  const at = content.days.findIndex((d) => d.day === day);
+  if (at < 0) return null;
+  const cur = content.days[at];
+  if (!cur.expandedMediaIds.includes(leadId)) return null;
+  if (cur.expandedMediaIds[0] === leadId && cur.firstScreenMediaIds[0] === leadId) return null;
+  const next = JSON.parse(JSON.stringify(content));
+  const d = next.days[at];
+  d.expandedMediaIds = [leadId, ...cur.expandedMediaIds.filter((id) => id !== leadId)];
+  const first = cur.firstScreenMediaIds.filter((id) => id !== leadId);
+  d.firstScreenMediaIds = [leadId, ...first].slice(0, Math.max(1, cur.firstScreenMediaIds.length || FIRST_SCREEN));
+  return { content: next };
+}
+
+/**
  * 把新放行的照片并进某一天的照片区。只加不删、不改已有顺序：人（或之前的流程）挑过的照片原样保留。
  * @param {object} content   月内容（不改入参）
  * @param {string} day
