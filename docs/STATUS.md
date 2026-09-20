@@ -11067,3 +11067,21 @@ Teddy 问：为什么到现在还没有 9/17–19 的数据？之前说修好了
 1. **线上多了什么**：月页 9/18 一天。
 2. **没做到 / blocker**：夜间「写草稿」等令牌；照片审批链仍手工；9/19 等 9/20 晚同步；每周提醒的待办提取同样要模型，并入夜间步骤。
 3. **下一件**：Teddy 跑 `claude setup-token`；然后我把夜间编排（找未覆盖日 → 组材料 → 无头 Claude 写草稿 → validate-day → append-day → content-install → 留账）接成计划任务。
+
+### 2026-09-20 · Claude Code · 更正：无头 Claude 在本机可以跑，之前的 403 是我自己清掉代理造成的
+
+**上一节「B 的硬阻塞：无头 claude -p 夜里跑不了（403）」与「需要 Teddy 跑 claude setup-token」这两条结论是错的，作废。**
+
+- 本机全局设置 `HTTP_PROXY=HTTPS_PROXY=http://127.0.0.1:7994`（人在国内，访问 Anthropic 走它）。我的每一次测试脚本都带着 `unset HTTP_PROXY` /
+  `$env:HTTP_PROXY=$null` / `set HTTP_PROXY=`（照搬了给 curl 访问本地隧道用的习惯）——清掉代理 = 从国内 IP 直连 Anthropic = `403 Request not allowed`。
+  三种环境的 403（当前会话、清了会话变量、独立计划任务）全是同一个原因。
+- 保留代理重测：交互 shell 里 `claude -p` → `result=OK`；**一个真实的、脱离会话的计划任务**里（计划任务环境自带同样的 HTTP_PROXY）→ `result=OK`，
+  **不需要任何令牌**，CLI 自己的 Max 订阅登录就够。
+- Teddy 因此白跑了一次 `claude setup-token` 并存了 `NianlifeOps\ops-daily\claude-token.env`（1 年有效期、scope 仅 user:inference）。它现在**没有用处**，
+  已把 ACL 收紧为仅本人 + SYSTEM；建议删除，并在 claude.ai 的账号设置里撤销该令牌。
+- 教训已记入记忆：调用 Claude/Anthropic/DeepSeek 时保留代理，本地回环用 `NO_PROXY='*'` 逐命令绕过，不要全局清除。
+- **夜间通路的一个真实依赖**：计划任务能跑，前提是 23:30 时本机代理（127.0.0.1:7994 的那个程序）在运行。它没开，夜间就会 403——与令牌无关。
+
+1. **线上多了什么**：无（本条是更正）。
+2. **没做到 / blocker**：无头 Claude 已验证可用，B 的模型步骤不再被授权卡住；夜间编排尚未接。
+3. **下一件**：接夜间编排（找未覆盖日 → 组材料 → 无头 Claude 写草稿 → validate-day → append-day → content-install → 留账），并把每周提醒的待办提取并入。
