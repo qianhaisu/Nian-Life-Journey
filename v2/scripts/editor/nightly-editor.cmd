@@ -13,8 +13,17 @@ cd /d C:\Users\teddy\Documents\Nianlife\v2
 if not exist C:\Users\teddy\NianlifeOps\ops-daily\logs mkdir C:\Users\teddy\NianlifeOps\ops-daily\logs
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss"') do set STAMP=%%i
 set PATH=%PATH%;C:\Users\teddy\AppData\Roaming\npm;C:\Program Files\nodejs;C:\Windows\System32\OpenSSH
-rem Publishing stays OFF until Teddy has spot-checked several nights of drafts. To turn it on, change the next line to: set NIANLIFE_EDITOR_PUBLISH=1
-set NIANLIFE_EDITOR_PUBLISH=0
+rem Publishing turned ON 2026-09-20 at Teddy's explicit instruction (before any multi-night spot check).
+rem To turn it off again, change the next line to: set NIANLIFE_EDITOR_PUBLISH=0
+set NIANLIFE_EDITOR_PUBLISH=1
 "C:\Program Files\nodejs\node.exe" --import tsx scripts\editor\nightly-editor.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\editor-%STAMP%.log 2>&1
 echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\editor-%STAMP%.log
-exit /b %ERRORLEVEL%
+set EDITOR_EXIT=%ERRORLEVEL%
+rem Weekly reminders (added 2026-09-20): extract new todos with DeepSeek, then auto-approve them (Teddy chose
+rem full automation). Independent of the month editor above: either can fail without stopping the other.
+rem Needs the DB tunnel + env, so it goes through t20-run-env.mjs like the WeChat sync does.
+"C:\Program Files\nodejs\node.exe" --env-file=.env.local .data\t20-run-env.mjs -- scripts\editor\nightly-reminders.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\reminders-%STAMP%.log 2>&1
+echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\reminders-%STAMP%.log
+set REMINDERS_EXIT=%ERRORLEVEL%
+if not "%EDITOR_EXIT%"=="0" exit /b %EDITOR_EXIT%
+exit /b %REMINDERS_EXIT%
