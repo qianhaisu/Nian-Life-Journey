@@ -121,3 +121,18 @@ R3 审核卡当时的“待确认”现由本卡授权覆盖。其缺陷、证�
 7. `verifyCitations` 用 `Map.set` 覆盖同身份不同内容，且缺哈希也返回 ok。
 
 **范围**：不扩词、不重读 597、不补 606 条未知时间、不重做处方核对、不追逐指南年度。
+
+## 补正交付（执行会话回填，2026-09-21）
+
+**状态：已提交审核**（不是审核通过；不进入 HEALTH-02）。
+
+| 项 | 值 |
+|---|---|
+| 补正 ACK 提交 | `2606ba0` |
+| **补正交付提交** | **`8383ded`**（`origin/main` 一致） |
+| 基线 | `085bc14` |
+| 改动路径 | `docs/health-tracking-batch-01-r4-fix-report-2026-09-21.md`（新增 141 行）、`v2/scripts/health-audit/wechat-export-dedupe.mjs`、`v2/test/health-audit-wechat-dedupe.test.mjs` |
+| 私有输出 | `C:\Users\teddy\NianlifeOps\health-tracking\2026-09-20\run-20260920-r4-fix\`（首次 R4 及旧审核目录逐一核对未被改动） |
+| 逐项证据 | 见[补正回执](health-tracking-batch-01-r4-fix-report-2026-09-21.md)第一、二节 |
+| 检查 | eslint 0 ／ typecheck 0 ／ 目标测试 **37/37** ／ 全仓 **1,507 项 0 失败 11 跳过** ／ build 0 ／ 私有验证器 **正例 19/19、反例 50/50 生效** ／ 全内容重建 **idempotent** |
+| 未解决项 | 回执第五节 7 条（召回开放、646/664 发生时间未知、单人核对未经医生、汇总稿上游缺失、3 条摘要级证据、09-19 后无记录及当前观察缺口、Markdown 会话无消息级 ID） |
