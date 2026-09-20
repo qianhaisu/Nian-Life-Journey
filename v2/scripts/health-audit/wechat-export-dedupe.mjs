@@ -96,34 +96,52 @@ export function classifyDivergence(aMessage, bMessage) {
  * }}
  */
 export function compareExports(aMessages, bMessages, conversationId) {
+  // 同一份导出里可能出现同键不同内容（撤回后重编辑、导出器重复写入）。
+  // 用 Map<key, 消息数组> 而不是 Map<key, 消息>，否则后写的会**悄悄覆盖**前一个版本，
+  // 导致「对方少了一个版本」也被判成 identical。
   const index = (msgs) => {
     const map = new Map();
     let unidentified = 0;
     for (const m of msgs) {
       const ident = messageIdentity(m, conversationId);
       if (!ident) { unidentified += 1; continue; }
-      map.set(ident.key, m);
+      if (!map.has(ident.key)) map.set(ident.key, []);
+      map.get(ident.key).push(m);
     }
     return { map, unidentified };
   };
   const a = index(aMessages);
   const b = index(bMessages);
+  const versions = (side, k) => new Set((side.map.get(k) ?? []).map(contentFingerprint));
 
   const divergences = [];
   let shared = 0;
-  for (const [k, bm] of b.map) {
-    const am = a.map.get(k);
-    if (am === undefined) continue;
+  // b 的每一个版本都必须在 a 里找得到，否则就是 a 缺版本
+  for (const [k, bms] of b.map) {
+    if (!a.map.has(k)) continue;
     shared += 1;
-    if (contentFingerprint(am) !== contentFingerprint(bm)) {
-      divergences.push({ key: k, kind: classifyDivergence(am, bm) });
-    }
+    const av = versions(a, k);
+    const bv = versions(b, k);
+    const missingInA = [...bv].filter((fp) => !av.has(fp));
+    const missingInB = [...av].filter((fp) => !bv.has(fp));
+    if (missingInA.length === 0 && missingInB.length === 0) continue;
+    // 只有「双方各恰好一个版本」时才谈附件落盘那种版本升级；多版本一律按内容改动处理
+    const kind = (av.size === 1 && bv.size === 1)
+      ? classifyDivergence(a.map.get(k)[0], bms[0])
+      : "content_changed";
+    divergences.push({
+      key: k, kind,
+      versionsInA: av.size, versionsInB: bv.size,
+      versionsMissingInA: missingInA.length, versionsMissingInB: missingInB.length,
+    });
   }
   const aOnly = a.map.size - shared;
   const bOnly = b.map.size - shared;
   const contentChanged = divergences.filter((d) => d.kind === "content_changed");
   // a 侧附件更全 = a 严格更完整，这种分歧不阻止「a 包含 b」，但要留版本说明
   const resolvedInB = divergences.filter((d) => d.kind === "attachment_resolved_in_b");
+  // a 里缺了 b 有的版本 → a 不可能包含 b，无论差异属于哪一类
+  const aMissesVersion = divergences.some((d) => d.versionsMissingInA > 0 && d.kind !== "attachment_resolved_in_a");
   const base = {
     shared, aOnly, bOnly,
     aUnidentified: a.unidentified, bUnidentified: b.unidentified,
@@ -134,8 +152,8 @@ export function compareExports(aMessages, bMessages, conversationId) {
   if (shared === 0 && a.map.size + b.map.size > 0) {
     return { ...base, verdict: "disjoint", containmentProvable: false };
   }
-  // 真正的内容改动：不能当成同一条消息悄悄合并
-  if (contentChanged.length > 0 || resolvedInB.length > 0) {
+  // 真正的内容改动、或 a 缺了 b 的某个版本：不能当成同一条消息悄悄合并
+  if (contentChanged.length > 0 || resolvedInB.length > 0 || aMissesVersion) {
     return { ...base, verdict: "content_divergent", containmentProvable: false };
   }
   // 无法识别身份的消息 = 无法证明它已经在对方那份里 → 不允许判包含
@@ -165,14 +183,30 @@ export function selectCanonical(exports_) {
   }
 
   for (const [convKey, group] of groups) {
-    // 规则 5：格式优先
+    // 规则 5：格式优先，**但只对已证明是同批格式副本的 Markdown 生效**。
+    // 「同一会话已有 JSON」不等于那份 JSON 覆盖了 Markdown 的全部消息——
+    // Markdown 可能来自另一次导出、含 JSON 没有的独有消息（不同时间窗、增量导出）。
+    // 证明不了包含就保留为 canonical，交人工，绝不因为格式就丢内容。
     const json = group.filter((e) => e.format === "json");
     if (json.length > 0) {
       for (const e of group) {
         if (e.format === "json") continue;
-        e.status = "secondary_format";
-        e.canonical = false;
-        e.reason = "同一会话已有 JSON 导出，Markdown 不重复计数";
+        // 必须是「JSON 包含 Markdown」这个方向；反向包含说明 Markdown 更全，不能压制它
+        const covering = json.find((j) => {
+          const cmp = compareExports(j.messages, e.messages, convKey);
+          return cmp.containmentProvable
+            && (cmp.verdict === "a_contains_b" || cmp.verdict === "identical");
+        });
+        if (covering) {
+          e.status = "secondary_format";
+          e.canonical = false;
+          e.supersededBy = covering.dir;
+          e.reason = `全部消息均可在同会话的 JSON 导出 ${covering.dir} 中定位，判为同批格式副本，不重复计数`;
+        } else {
+          e.status = "format_variant_unverified";
+          e.reason = "同会话虽有 JSON 导出，但**未能证明**本 Markdown 的消息已被完整包含"
+            + "（可能是不同导出批次或含独有消息），保留待人工判定，不按格式副本压制";
+        }
       }
     }
 

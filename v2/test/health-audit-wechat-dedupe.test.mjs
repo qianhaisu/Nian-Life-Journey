@@ -223,3 +223,49 @@ test("被压制那份附件较旧时，超集自己不能被反向比较标成�
   assert.equal(sel.find((e) => e.dir === "旧导出").status, "superseded");
   assert.equal(countDistinctMessages(sel).identified, 35);
 });
+
+// ---- R2：Codex 复现的两条丢版本路径 ----
+
+test("F4a 同一份导出内同键两个版本，不得被 Map 覆盖后误判 identical", () => {
+  const newer = { platformMessageId: "1", createTime: 10, content: "新内容", type: "t", senderUsername: "u" };
+  const older = { platformMessageId: "1", createTime: 10, content: "旧内容", type: "t", senderUsername: "u" };
+  const A = [newer];
+  const B = [older, newer];
+  const cmp = compareExports(A, B, CONV_A);
+  assert.notEqual(cmp.verdict, "identical", "A 缺了 B 的旧版本，不能判 identical");
+  assert.equal(cmp.containmentProvable, false, "A 不包含 B");
+  assert.equal(cmp.divergences[0].versionsInB, 2);
+  assert.equal(cmp.divergences[0].versionsMissingInA, 1);
+
+  const sel = selectCanonical([
+    { dir: "少版本", file: "a.json", format: "json", wxid: "10000000010@chatroom.example", messages: A },
+    { dir: "多版本", file: "b.json", format: "json", wxid: "10000000010@chatroom.example", messages: B },
+  ]);
+  assert.ok(sel.every((e) => e.canonical), "证明不了包含，两份都保留");
+});
+
+test("F4b Markdown 含 JSON 没有的独有消息时，不得因格式被压制", () => {
+  const shared = run(20);
+  const jsonExport = shared;
+  const mdExport = [...shared, msg(999, 77777, "只在 Markdown 里的一条")];
+  const sel = selectCanonical([
+    { dir: "导出JSON", file: "a.json", format: "json", wxid: "10000000011@chatroom.example", messages: jsonExport },
+    { dir: "导出MD", file: "b.md", format: "md", wxid: "10000000011@chatroom.example", messages: mdExport },
+  ]);
+  const md = sel.find((e) => e.format === "md");
+  assert.equal(md.status, "format_variant_unverified");
+  assert.equal(md.canonical, true, "有独有消息就不能当格式副本丢掉");
+  assert.equal(countDistinctMessages(sel).identified, 21, "独有消息必须计入");
+});
+
+test("F4b 已证明被 JSON 完整包含的 Markdown，才降为 secondary_format", () => {
+  const full = run(30);
+  const sel = selectCanonical([
+    { dir: "导出JSON", file: "a.json", format: "json", wxid: "10000000012@chatroom.example", messages: full },
+    { dir: "导出MD", file: "b.md", format: "md", wxid: "10000000012@chatroom.example", messages: full.slice(0, 10) },
+  ]);
+  const md = sel.find((e) => e.format === "md");
+  assert.equal(md.status, "secondary_format");
+  assert.equal(md.supersededBy, "导出JSON");
+  assert.equal(countDistinctMessages(sel).identified, 30);
+});
