@@ -160,7 +160,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       </section>
 
       {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}
-      {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`}>{item.shortLabel}</Link>)}</p></footer> : null}
+      {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`} prefetch={false}>{item.shortLabel}</Link>)}</p></footer> : null}
     </div>;
   }
 
@@ -241,6 +241,6 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
     {/* No 「·」 between the months: the separator is the space around each link now (.other-years in
         globals.css), which is also what keeps a wrapped second row from beginning with a stranded
         one. */}
-    {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`}>{item.shortLabel}</Link>)}</p></footer> : null}
+    {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`} prefetch={false}>{item.shortLabel}</Link>)}</p></footer> : null}
   </div>;
 }

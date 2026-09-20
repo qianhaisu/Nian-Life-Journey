@@ -40,7 +40,7 @@ export function HomeCluster({ items }: { items: { id: string; photo: MediaRef }[
   return <section className="home-cluster reading-wrap" aria-label={single ? "最近的一张照片" : "最近的照片"}>
     <div className="home-cluster-grid" data-count={items.length} style={singleMax ? { "--cluster-single-max": singleMax } as CSSProperties : undefined}>
       {items.map(({ id, photo }) => (
-        <Link key={id} href={`/events/${id}`} className="cluster-item">
+        <Link key={id} href={`/events/${id}`} className="cluster-item" prefetch={false}>
           <Photo media={photo} variant="thumbnail" sizes={single ? "(max-width: 720px) 100vw, 480px" : "(max-width: 720px) 50vw, 360px"} />
         </Link>
       ))}

@@ -77,8 +77,17 @@ export function MonthDayEntry({
         {paragraphs.map((text, index) => (
           <p className="serif day-entry-text" key={index}>{text}</p>
         ))}
+        {/* prefetch={false} (2026-09-20). A month page carries one of these per day — twenty-odd
+            links, all in the viewport as the reader scrolls. Next's default prefetch turns each one
+            into a real server render of that day's page, and a cold day render measured 4.3–5.0 s
+            against production. Opening one month therefore fired twenty-plus of them in the
+            background: the reader's photographs queued behind the pile (image p50 reached 12 s
+            measured in a real browser), and clicking 妈妈月报 took 15.2 s because its own request
+            waited its turn. Nobody opens twenty days at once, so the work was almost entirely
+            wasted. Clicking a day still costs that day's render, exactly as before — the prefetch
+            never made the click faster than the cache does (a warm day RSC is 10 ms). */}
         {eventHref ? (
-          <p className="chapter-meta"><Link className="text-link" href={eventHref}>读这一天的原记录 →</Link></p>
+          <p className="chapter-meta"><Link className="text-link" href={eventHref} prefetch={false}>读这一天的原记录 →</Link></p>
         ) : null}
       </div>
       {isLead && rest.length > 0 ? (

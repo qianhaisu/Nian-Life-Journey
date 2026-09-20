@@ -55,14 +55,14 @@ export default async function YearPage({ params }: { params: Promise<{ year: str
     </header>
     {view.months.map((month) => <section className="year-month" key={month.chapter.month} aria-labelledby={`month-${month.chapter.month}`}>
       <header className="month-anchor">
-        <h2 id={`month-${month.chapter.month}`} className="serif"><Link href={month.href}>{month.chapter.shortLabel}</Link></h2>
+        <h2 id={`month-${month.chapter.month}`} className="serif"><Link href={month.href} prefetch={false}>{month.chapter.shortLabel}</Link></h2>
         {/* B1：当前月读「现在」，历史月份读「当时」。 */}
         {month.chapter.ageLabel ? <p>{monthAgeQualifier(month.chapter.month, today)} {month.chapter.ageLabel}</p> : null}
       </header>
       {month.preview.length > 0 ? <PhotoStrip photos={month.preview} /> : null}
       {month.titles.length > 0 ? <ul className="memory-lines">{month.titles.map((memory) => <EditorialMemory memory={memory} size="line" key={memory.id} />)}</ul> : null}
       {/* One way into the month, worded without the archive's counts (原则三, 2026-09-13). */}
-      <p className="chapter-meta"><Link className="text-link" href={month.href}>{month.hiddenMemoryCount > 0 ? "翻看整个月的其他记忆" : "翻看整个月"}</Link></p>
+      <p className="chapter-meta"><Link className="text-link" href={month.href} prefetch={false}>{month.hiddenMemoryCount > 0 ? "翻看整个月的其他记忆" : "翻看整个月"}</Link></p>
     </section>)}
     <ArchiveNav nav={nav} current={year} />
   </div>;
