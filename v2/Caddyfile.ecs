@@ -47,6 +47,24 @@ nianlife.cn {
 		}
 	}
 
+	# 唯一的写入口子：家人在首页「每周提醒」上打的勾（2026-09-20）。
+	#
+	# 为什么非开不可：勾原本只存浏览器的 localStorage，微信内置浏览器和 iOS 清掉它之后勾就没了
+	# ——Teddy 2026-09-20：「打了勾没保存，过段时间重新打开又是没打勾的状态。」勾要活下来就得写
+	# 服务端，而写请求是 POST，会被下面那条只读规则拦成 405。这一点在私有站验收时没暴露，因为
+	# 隧道是直连容器的，根本没经过 Caddy。
+	#
+	# 口子有多窄：**只有这一条路径、只有 POST**。它背后只能动 upcoming_checks 一张表（加一行或
+	# 删一行），既改不了事项内容，也改不了 upcoming_items.status——那一列要有微信原话作证据。
+	# 最坏情况是外人把家里的待办勾上或取消，读不到任何多余的东西。Server Action 的 POST、
+	# 其余所有路径的写方法，仍然一律 405。
+	@familyWrite {
+		method POST
+		path /api/upcoming/checks
+	}
+	handle @familyWrite {
+		reverse_proxy 127.0.0.1:3000
+	}
 	@notRead not method GET HEAD
 	handle @notRead {
 		header Allow "GET, HEAD"

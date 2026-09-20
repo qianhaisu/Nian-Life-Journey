@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HabitShownReporter } from "@/components/habit-shown-reporter";
 
 // 首页第二部分：「每周提醒」（用户 2026-09-16 第 4 条：所有可见标题与可访问名称统一用这四个字，
@@ -203,6 +203,16 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
   rangeEnd: string;
 }) {
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
+  /**
+   * 挂载之后家人自己点过的那几条，以及点成了什么。
+   *
+   * 为什么需要它：挂载时要向服务端读一次准确状态，而那次读取可能在家人点了之后才回来。直接
+   * `setChecked(服务端结果)` 会把刚点的那一下抹掉——手机上就是「点了一下又弹回去」。
+   * 2026-09-20 在生产上实测到了这一幕（私有站因为响应快没看见）。
+   * 所以服务端结果回来时，要把家人自己点过的这几条再盖回去：本人此刻的意图优先于一份出发时
+   * 就已经过时的快照。
+   */
+  const myToggles = useRef<Map<string, boolean>>(new Map());
   // 挂载后才读：SSR 没有 localStorage，初次渲染必须和服务端一致，否则 hydration 不匹配。
   // 顺序是「先画本机存的（瞬间），再用服务端的覆盖（准的）」——离线或接口挂了也还是老样子能用。
   // 这里**只读不写本机**——挂载时写一次会把已有勾选覆盖成空。
@@ -220,6 +230,8 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
         const body = (await res.json()) as { ids?: unknown };
         if (!alive || !Array.isArray(body.ids)) return;
         const server = new Set(body.ids.filter((id): id is string => typeof id === "string"));
+        // 家人在这次读取往返期间点过的，以他点的为准（见 myToggles 的注释）。
+        for (const [id, want] of myToggles.current) { if (want) server.add(id); else server.delete(id); }
         setChecked(server);
         writeChecked(storageScope, server);
       } catch {
@@ -234,6 +246,7 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
       const next = new Set(was);
       const nowChecked = !next.has(id);
       if (nowChecked) next.add(id); else next.delete(id);
+      myToggles.current.set(id, nowChecked);
       writeChecked(storageScope, next);
       // 先画后传：勾的反馈必须是即时的，网络慢不该让复选框卡住。传失败也不回滚——本机这份还在，
       // 下次打开会作为待合并的勾再交一次。
