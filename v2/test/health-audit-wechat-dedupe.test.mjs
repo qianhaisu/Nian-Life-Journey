@@ -10,6 +10,8 @@ import {
   compareExports,
   selectCanonical,
   countDistinctMessages,
+  parseMarkdownExport,
+  unescapeMarkdown,
   classifyDivergence,
 } from "../scripts/health-audit/wechat-export-dedupe.mjs";
 
@@ -268,4 +270,88 @@ test("F4b 已证明被 JSON 完整包含的 Markdown，才降为 secondary_forma
   assert.equal(md.status, "secondary_format");
   assert.equal(md.supersededBy, "导出JSON");
   assert.equal(countDistinctMessages(sel).identified, 30);
+});
+
+// ---------------------------------------------------------------------------
+// R3：Markdown 导出的真实解析。
+// 背景：盘点脚本一度用 {localId: i+1, createTime: 0, content: ""} 伪造 Markdown
+// 消息去比对，结论与真实内容无关。解析必须真解析，且不得编造 ID。
+// ---------------------------------------------------------------------------
+
+const MD_SAMPLE = [
+  "# 会话记录",
+  "会话ID: `10000000020@chatroom.example`",
+  "",
+  "## 2026-01-02 08:00:00 甲",
+  "第一条正文",
+  "",
+  "## 2026-01-02 08:00:05 乙",
+  "第二条第一行",
+  "第二条第二行",
+  "",
+  "## 2026-01-02 08:00:09 甲",
+  "带转义的内容 \- 破折号 \[方括号\] \. 句点",
+].join("\n");
+
+test("R3a Markdown 解析出真实条数、时间、发送人与多行正文", () => {
+  const msgs = parseMarkdownExport(MD_SAMPLE);
+  assert.equal(msgs.length, 3);
+  assert.equal(msgs[0].createTime, "2026-01-02 08:00:00");
+  assert.equal(msgs[0].senderDisplayName, "甲");
+  assert.equal(msgs[0].content, "第一条正文");
+  assert.equal(msgs[1].content, "第二条第一行\n第二条第二行", "多行正文必须完整保留");
+  assert.equal(msgs[2].content, "带转义的内容 - 破折号 [方括号] . 句点", "转义必须还原");
+});
+
+test("R3b 解析不编造 ID —— Markdown 消息在会话内一律无法识别身份", () => {
+  const msgs = parseMarkdownExport(MD_SAMPLE);
+  for (const m of msgs) {
+    assert.equal(m.localId, undefined, "不得编造 localId");
+    assert.equal(m.platformMessageId, undefined, "不得编造 platformMessageId");
+    assert.equal(messageIdentity(m, "10000000020@chatroom.example"), null);
+  }
+  const sel = selectCanonical([
+    { dir: "仅MD", file: "a.md", format: "md",
+      wxid: "10000000020@chatroom.example", messages: msgs },
+  ]);
+  // 只有一份导出时它就是规范输入；但消息全部不可识别，必须如实计入 unidentified
+  assert.equal(sel[0].canonical, true);
+  const c = countDistinctMessages(sel);
+  assert.equal(c.identified, 0);
+  assert.equal(c.unidentified, 3);
+  assert.equal(c.total, 3, "不可识别的消息不能被悄悄丢掉");
+});
+
+test("R3c 真实 Markdown 喂进比较时，无 ID 即无法证明被包含（绝不因此丢内容）", () => {
+  const json = [
+    { platformMessageId: "p1", createTime: "2026-01-02 08:00:00", content: "第一条正文" },
+    { platformMessageId: "p2", createTime: "2026-01-02 08:00:05",
+      content: "第二条第一行\n第二条第二行" },
+  ];
+  const md = parseMarkdownExport(MD_SAMPLE);
+  const sel = selectCanonical([
+    { dir: "导出JSON", file: "a.json", format: "json",
+      wxid: "10000000021@chatroom.example", messages: json },
+    { dir: "导出MD", file: "b.md", format: "md",
+      wxid: "10000000021@chatroom.example", messages: md },
+  ]);
+  const m = sel.find((e) => e.format === "md");
+  assert.equal(m.status, "format_variant_unverified");
+  assert.equal(m.canonical, true, "证明不了包含就必须保留，不能按格式副本压制");
+});
+
+test("R3d 转义还原是内容比较的前提，否则同一条消息会被判成两条", () => {
+  assert.equal(unescapeMarkdown("a \- b"), "a - b");
+  assert.equal(unescapeMarkdown("\[x\]"), "[x]");
+  assert.equal(unescapeMarkdown("无转义"), "无转义");
+  const raw = { createTime: "t", content: "a \- b" };
+  const parsed = parseMarkdownExport("## 2026-01-02 08:00:00 甲\na \- b")[0];
+  assert.notEqual(contentFingerprint(raw), contentFingerprint(parsed),
+    "未还原转义的内容指纹与还原后不同——这正是必须在解析阶段还原的原因");
+});
+
+test("R3e 空输入与无标题输入不抛错，返回空数组", () => {
+  assert.deepEqual(parseMarkdownExport(""), []);
+  assert.deepEqual(parseMarkdownExport("没有任何标题行\n只是正文"), []);
+  assert.deepEqual(parseMarkdownExport(null), []);
 });

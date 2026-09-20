@@ -19,6 +19,55 @@
 //
 // 纯函数，不读盘、不联网，供导入与盘点复用。
 
+/**
+ * WeFlow Markdown 导出的消息解析。
+ *
+ * 之所以放在这里：盘点脚本一度用 `{localId: i+1, createTime: 0, content: ""}`
+ * 伪造 Markdown 消息去喂 compareExports，得到的「包含/不包含」结论与真实内容无关。
+ * 要比就得比真内容，所以解析必须和去重规则放在同一处，且是纯函数。
+ *
+ * 格式：`## YYYY-MM-DD HH:MM:SS <发送人>` 起一条消息，其后各行是正文，直到下一个标题。
+ * 导出器会对 Markdown 特殊字符转义（`\-`、`\[` 等），比较前必须还原，否则同一条消息
+ * 在两份导出里会因转义差异被判成不同内容。
+ *
+ * **Markdown 没有消息级 ID**：本函数不编造 localId。没有 ID 的消息在 messageIdentity
+ * 里返回 null，于是无法证明「已被另一份完整包含」——这是事实，不是缺陷。
+ *
+ * @param {string} text 整份 .md 的内容
+ * @returns {Array<{createTime:string, senderDisplayName:string, senderUsername:string,
+ *                  content:string, sourceLine:number}>}
+ */
+export function parseMarkdownExport(text) {
+  const lines = String(text ?? "").split(/\r?\n/);
+  const header = /^## (\d{4})\\?-(\d{2})\\?-(\d{2}) (\d{2}):(\d{2}):(\d{2}) (.*)$/;
+  const messages = [];
+  let cur = null;
+  for (let i = 0; i < lines.length; i += 1) {
+    const h = header.exec(lines[i]);
+    if (h) {
+      if (cur) messages.push(cur);
+      const who = unescapeMarkdown(h[7]).trim();
+      cur = {
+        createTime: `${h[1]}-${h[2]}-${h[3]} ${h[4]}:${h[5]}:${h[6]}`,
+        senderDisplayName: who,
+        senderUsername: who,
+        content: "",
+        sourceLine: i + 1,
+      };
+    } else if (cur) {
+      cur.content += `${lines[i]}\n`;
+    }
+  }
+  if (cur) messages.push(cur);
+  for (const m of messages) m.content = unescapeMarkdown(m.content).trim();
+  return messages;
+}
+
+/** 还原 WeFlow Markdown 导出的反斜杠转义。 */
+export function unescapeMarkdown(s) {
+  return String(s ?? "").replace(/\\([\\`*_{}\[\]()#+\-.!>])/g, "$1");
+}
+
 /** 空串、纯空白、"null"/"undefined" 字面量都不算有效 ID。 */
 function usableId(value) {
   if (value == null) return null;
