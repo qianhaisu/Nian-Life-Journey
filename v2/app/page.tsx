@@ -49,7 +49,7 @@ export default async function HomePage() {
       {/* 问候 + 答案是一个整体（桌面端并成照片左边的文字栏，参照 taito.ai 首页的左文右图骨架；
           手机上它就是照片上方的两个块，和之前一样）。 */}
       <div className="home-lede">
-        <h1 className="home-greeting">最近怎么样，<span className="keep-whole">张年</span></h1>
+        <h1 className="home-greeting"><span className="greeting-ask">最近怎么样，</span><span className="keep-whole">张年</span></h1>
         <RecentAnswer archive={archive} today={feed.clock.today} />
       </div>
       {memories.length > 0

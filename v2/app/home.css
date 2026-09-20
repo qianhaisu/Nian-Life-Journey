@@ -46,11 +46,14 @@
 .home-greeting {
   margin: 0 0 clamp(18px, 3vw, 26px);
   font-family: var(--home-serif);
-  font-size: clamp(28px, 7.2vw, 38px);
+  /* 2026-09-20 Teddy：「最近怎么样，」换行「张年」，这句话字体再大一些。手机原来是 28–38px 一行，
+     现在拆成两行、放到 36–46px：「最近怎么样，」6 个字在 390 宽的版心（358px）里 46px 也只占 276px。 */
+  font-size: clamp(36px, 10.4vw, 46px);
   font-weight: 400;
-  line-height: 1.35;
+  line-height: 1.22;
   letter-spacing: 0;
 }
+.home-greeting .greeting-ask { display: block; }
 /* 「张年」的颜色和记忆页「往回翻翻，张年。」里的「张年」用同一个变量（--color-accent，
    globals.css :root 定义，两页共享）——Teddy 2026-09-17 要求两处一致。
    选择器只落在 .home-greeting 内部的 .keep-whole，不动全局 .keep-whole（globals.css 里
@@ -62,7 +65,10 @@
    不能把首屏第一个视觉重音从那句话本身抢走。 */
 .home-answer {
   margin: calc(-1 * clamp(8px, 1.4vw, 12px)) 0 clamp(20px, 3.4vw, 30px);
-  font-family: var(--home-serif);
+  /* 用页面上已有的黑体（提醒、控件本来就用它；中文走系统字体，不下载任何字体文件）。
+     原来用文楷：新增这一句多出几十个不同的汉字，散落进更多文楷分片，首页字体 404KB→649KB（+61%），
+     Teddy 2026-09-20 裁定「答案句改用页面已有的字体」。标题仍是文楷。 */
+  font-family: var(--home-sans);
   font-size: clamp(17px, 4.1vw, 20px);
   line-height: 1.7;
   color: var(--home-ink);
@@ -618,8 +624,11 @@
      只在标点后面断——万一还是装不下，也是「最近怎么样，/ 张年」这种读得通的断法。 */
   .home-greeting {
     margin: 0 0 clamp(22px, 3.4vh, 36px);
-    font-size: clamp(38px, 4.1vw, 60px);
-    line-height: 1.22;
+    /* 2026-09-20：两行版（「最近怎么样，」/「张年」），字号可以比一行版大得多——只需要装下 6 个字而不是 8 个。
+       文字栏宽度 ≈ 版心 − 照片列 − 间距：1024→343、1280→571、1440→519、1920→496px，
+       所以上限 80px（480 宽）在最窄的 1920 也装得下，1024 用 5.3vw≈54px（326）。 */
+    font-size: clamp(40px, 5.3vw, 80px);
+    line-height: 1.16;
     word-break: keep-all;
   }
   .home-answer {
