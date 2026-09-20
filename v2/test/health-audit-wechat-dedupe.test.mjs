@@ -382,9 +382,9 @@ const CITE_SRC = [
 
 test("R4a 索引按会话隔离，同一 ID 在不同会话里各是各的", () => {
   const idx = buildMessageIndex(CITE_SRC);
-  assert.equal(idx.get(`${CONV_A}::p100`).content, "第一条");
-  assert.equal(idx.get(`${CONV_B}::p100`).content, "别的会话");
-  assert.equal(idx.get(`${CONV_A}::local:7`).content, "只有本地号");
+  assert.equal(idx.get(`${CONV_A}::p100`)[0].content, "第一条");
+  assert.equal(idx.get(`${CONV_B}::p100`)[0].content, "别的会话");
+  assert.equal(idx.get(`${CONV_A}::local:7`)[0].content, "只有本地号");
   assert.equal(idx.size, 4, "没有 ID 的那条不进索引——它无法被引用定位");
 });
 
@@ -429,4 +429,56 @@ test("R4e 跨会话不得误命中；没有哈希函数则拒绝核验", () => {
     /需要哈希函数/, "没有哈希函数就无从判断正文是否被改过，必须拒绝而不是假装通过");
   assert.throws(() => buildMessageIndex([{ conversationId: "", messages: [] }]),
     /需要会话身份/);
+});
+
+// ── R4-fix：同身份不同内容不得靠输入顺序「覆盖」，缺哈希不得冒充正文已核。
+// 独立审核用合成反例证明：旧实现 Map.set 覆盖后，反转输入顺序就反转保留内容，
+// 引用碰巧指向最后一版即得到 ok=true，且没有任何歧义结果。
+const V1_MSG = { platformMessageId: "px", createTime: "2026-03-01 10:00:00", content: "版本甲", type: 1 };
+const V2_MSG = { platformMessageId: "px", createTime: "2026-03-01 10:00:00", content: "版本乙", type: 1 };
+const conflictSrc = (a, b) => [{ conversationId: CONV_A, messages: [a, b] }];
+
+test("R4f-a 同会话同 ID 不同内容：两版都保留，且与输入顺序无关", () => {
+  const fwd = buildMessageIndex(conflictSrc(V1_MSG, V2_MSG)).get(`${CONV_A}::px`);
+  const rev = buildMessageIndex(conflictSrc(V2_MSG, V1_MSG)).get(`${CONV_A}::px`);
+  assert.equal(fwd.length, 2);
+  assert.equal(rev.length, 2);
+  assert.deepEqual(new Set(fwd.map((m) => m.content)), new Set(rev.map((m) => m.content)));
+});
+
+test("R4f-b 内容完全相同的重复只留一份", () => {
+  const idx = buildMessageIndex(conflictSrc(V1_MSG, { ...V1_MSG }));
+  assert.equal(idx.get(`${CONV_A}::px`).length, 1);
+});
+
+test("R4f-c 有歧义又没带哈希：报 ambiguous，且不论输入顺序都不通过", () => {
+  const cite = [{ ref: "F-9", conversationId: CONV_A, id: "px" }];
+  for (const [a, b] of [[V1_MSG, V2_MSG], [V2_MSG, V1_MSG]]) {
+    const r = verifyCitations(buildMessageIndex(conflictSrc(a, b)), cite, sha1);
+    assert.equal(r.ok, false, "不能挑一版说通过");
+    assert.equal(r.ambiguous.length, 1);
+    assert.equal(r.ambiguous[0].variants, 2);
+  }
+});
+
+test("R4f-d 带哈希时可消歧：命中其中一版即通过；一版也没命中则 contentMismatch", () => {
+  const idx = buildMessageIndex(conflictSrc(V1_MSG, V2_MSG));
+  const hitA = verifyCitations(idx, [{ ref: "a", conversationId: CONV_A, id: "px", contentSha1: sha1("版本甲") }], sha1);
+  const hitB = verifyCitations(idx, [{ ref: "b", conversationId: CONV_A, id: "px", contentSha1: sha1("版本乙") }], sha1);
+  assert.equal(hitA.ok && hitB.ok, true);
+  assert.equal(hitA.verified, true);
+  const none = verifyCitations(idx, [{ ref: "c", conversationId: CONV_A, id: "px", contentSha1: sha1("第三版") }], sha1);
+  assert.equal(none.ok, false);
+  assert.equal(none.contentMismatch.length, 1);
+});
+
+test("R4f-e 没带哈希只核了定位：ok 但 verified 为 false，并列入 unchecked", () => {
+  const idx = buildMessageIndex(CITE_SRC);
+  const r = verifyCitations(idx, [{ ref: "u", conversationId: CONV_A, id: "p100" }], sha1);
+  assert.equal(r.ok, true);
+  assert.equal(r.verified, false, "定位到了，但正文没核，不能称已核");
+  assert.equal(r.unchecked.length, 1);
+  const full = verifyCitations(idx, [
+    { ref: "v", conversationId: CONV_A, id: "p100", contentSha1: sha1("第一条") }], sha1);
+  assert.equal(full.verified, true);
 });

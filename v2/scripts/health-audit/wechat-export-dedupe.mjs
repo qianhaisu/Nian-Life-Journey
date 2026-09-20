@@ -339,8 +339,12 @@ export function countDistinctMessages(selection) {
  * 不该要求它同时记住导出器的时间字符串。这与 messageIdentity 的 key 是两套用途：
  * 那一套用于去重（时间参与，因为同 ID 不同时间要能看出差异），这一套用于定位。
  *
+ * 值是**内容互异的版本数组**：同会话同 ID 若出现不同内容（如两份导出对同一条消息的
+ * 附件落盘程度不同），两版都保留，按首次出现的顺序；内容完全相同的重复只留一份。
+ * 不再用 Map.set 覆盖——那样会让输入顺序决定保留哪一版，且引用碰巧指向最后一版就「通过」。
+ *
  * @param {Array<{conversationId:string, messages:Array}>} sources
- * @returns {Map<string, object>}
+ * @returns {Map<string, Array<object>>}
  */
 export function buildMessageIndex(sources) {
   const index = new Map();
@@ -352,7 +356,11 @@ export function buildMessageIndex(sources) {
     for (const m of s.messages ?? []) {
       const ident = messageIdentity(m, conv);
       if (!ident) continue; // 无 ID 的消息无法被引用定位，这是事实，不编造
-      index.set(`${conv}::${ident.id}`, m);
+      const key = `${conv}::${ident.id}`;
+      const variants = index.get(key) ?? [];
+      const fp = contentFingerprint(m);
+      if (!variants.some((v) => contentFingerprint(v) === fp)) variants.push(m);
+      index.set(key, variants);
     }
   }
   return index;
@@ -369,12 +377,20 @@ export function buildMessageIndex(sources) {
  *
  * 不做的事：不猜、不修、不丢。对不上的原样返回，由调用方决定怎么处理。
  *
- * @param {Map<string, object>} index buildMessageIndex 的结果
+ * 三个容易被误读成「通过」的情形，这里都单独报：
+ * - 同 ID 有多个内容版本、引用又没带哈希：**歧义**（ambiguous），不能挑一版说通过；
+ *   带了哈希且恰好命中其中一版，则视为已消歧；哈希一个也没命中算 contentMismatch。
+ * - 引用没带哈希：只核了**定位**，正文没核——列入 unchecked，`verified` 为 false。
+ * - `ok` 只表示「全部找到、没有歧义、没有正文不符」；要宣称正文也核过，看 `verified`。
+ *
+ * @param {Map<string, Array<object>>} index buildMessageIndex 的结果
  * @param {Array<{ref:string, conversationId:string, id:string, contentSha1?:string}>} citations
  * @param {(text:string)=>string} hash 与引用方生成 contentSha1 时同一个哈希函数
- * @returns {{ok:boolean, resolved:number,
+ * @returns {{ok:boolean, verified:boolean, resolved:number,
  *            missing:Array<{ref:string,key:string}>,
- *            contentMismatch:Array<{ref:string,key:string}>}}
+ *            contentMismatch:Array<{ref:string,key:string}>,
+ *            ambiguous:Array<{ref:string,key:string,variants:number}>,
+ *            unchecked:Array<{ref:string,key:string}>}}
  */
 export function verifyCitations(index, citations, hash) {
   if (typeof hash !== "function") {
@@ -382,24 +398,41 @@ export function verifyCitations(index, citations, hash) {
   }
   const missing = [];
   const contentMismatch = [];
+  const ambiguous = [];
+  const unchecked = [];
   let resolved = 0;
   for (const c of citations ?? []) {
     const key = `${c?.conversationId}::${c?.id}`;
-    const m = index.get(key);
-    if (!m) {
-      missing.push({ ref: c?.ref ?? key, key });
+    const ref = c?.ref ?? key;
+    const variants = index.get(key);
+    if (!variants || variants.length === 0) {
+      missing.push({ ref, key });
       continue;
     }
-    if (c?.contentSha1 != null && hash(m.content ?? "") !== c.contentSha1) {
-      contentMismatch.push({ ref: c?.ref ?? key, key });
+    if (c?.contentSha1 == null) {
+      if (variants.length > 1) {
+        ambiguous.push({ ref, key, variants: variants.length });
+        continue;
+      }
+      unchecked.push({ ref, key });
+      resolved += 1;
+      continue;
+    }
+    const hits = variants.filter((v) => hash(v.content ?? "") === c.contentSha1);
+    if (hits.length === 0) {
+      contentMismatch.push({ ref, key });
       continue;
     }
     resolved += 1;
   }
+  const ok = missing.length === 0 && contentMismatch.length === 0 && ambiguous.length === 0;
   return {
-    ok: missing.length === 0 && contentMismatch.length === 0,
+    ok,
+    verified: ok && unchecked.length === 0,
     resolved,
     missing,
     contentMismatch,
+    ambiguous,
+    unchecked,
   };
 }
