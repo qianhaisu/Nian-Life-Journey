@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import * as t from "@/lib/db/schema";
-import { getStorageForProvider } from "@/lib/storage/hot-storage";
+import { getStorageForProvider, resolveReadPreference } from "@/lib/storage/hot-storage";
 import type { MediaProvider } from "@/lib/types";
 
 // Which build is answering. 2026-09-13: a scan taken right after a deploy read the same 242/327
@@ -40,11 +40,23 @@ function buildInfo() {
 async function mediaProbe(): Promise<{ reachable: boolean; provider: string | null; latencyMs: number | null; error?: string }> {
   const startedAt = Date.now();
   try {
-    const [row] = await getDb()
-      .select({ provider: t.mediaLocations.provider, providerRef: t.mediaLocations.providerRef })
-      .from(t.mediaLocations)
-      .where(and(eq(t.mediaLocations.status, "ready"), eq(t.mediaLocations.variant, "web")))
-      .limit(1);
+    // Probe the tier the site actually serves from, not whichever row comes back first. The
+    // database holds both "oss" and "hot" rows for most photographs and selectLocation() picks by
+    // resolveReadPreference(); a bare `limit 1` picked a "hot" row on the first deploy of this
+    // probe and reported the site unreachable while every photograph was loading fine — "hot"
+    // resolves to local disk in this deployment and those bytes live in OSS. A probe that cries
+    // wolf is worse than no probe.
+    const preference = resolveReadPreference();
+    const ready = and(eq(t.mediaLocations.status, "ready"), eq(t.mediaLocations.variant, "web"));
+    const pick = async (provider?: string) => {
+      const [found] = await getDb()
+        .select({ provider: t.mediaLocations.provider, providerRef: t.mediaLocations.providerRef })
+        .from(t.mediaLocations)
+        .where(provider ? and(ready, eq(t.mediaLocations.provider, provider)) : ready)
+        .limit(1);
+      return found;
+    };
+    const row = (await pick(preference)) ?? (await pick());
     if (!row) return { reachable: false, provider: null, latencyMs: null, error: "no ready web derivative to probe" };
 
     const storage = getStorageForProvider(row.provider as MediaProvider);
