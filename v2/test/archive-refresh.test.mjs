@@ -34,7 +34,12 @@ test("scope archive reaches every ISR route that renders the archive — found b
     // getEventDetail is reached through react's cache() wrapper on the event page, so match the name.
     // loadFamilyArchiveForIsr is the memoised ISR read (2026-09-20) — same archive, so a page that
     // reaches it must still be in the refresh list.
-    if (!/loadFamilyArchive(ForIsr)?\(|\bgetEventDetail\b/.test(source)) continue;
+    //
+    // readDay is matched for the same reason, and it is the case that got away: the day page reads
+    // the archive through lib/day-reading.ts rather than calling loadFamilyArchive itself, so a
+    // matcher that only looked for the direct call declared the day route "not an archive page"
+    // and it sat outside ARCHIVE_ISR_ROUTES with a 300s route cache. A helper is still a read.
+    if (!/loadFamilyArchive(ForIsr)?\(|\bgetEventDetail\b|\breadDay\b/.test(source)) continue;
     isr.push("/" + path.relative(appDir, path.dirname(file)).split(path.sep).join("/"));
   }
   assert.deepEqual([...isr].sort(), [...ARCHIVE_ISR_ROUTES].sort());

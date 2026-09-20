@@ -23,7 +23,15 @@ export type RefreshTarget = { path: string; type?: "page" };
 
 // Every ISR route rendered from the archive. A dynamic route listed with type "page" makes Next
 // revalidate every concrete path under it (revalidatePath("/memory/[year]/[month]", "page")).
-export const ARCHIVE_ISR_ROUTES: readonly string[] = ["/memory/[year]", "/memory/[year]/[month]", "/events/[id]"];
+// /memory/[year]/[month]/[day] was missing until 2026-09-20. It has had `export const
+// revalidate = 300` all along and it renders the archive — just indirectly, through readDay() in
+// lib/day-reading.ts rather than a loadFamilyArchive() call sitting in its own page.tsx, which is
+// exactly why the scanning guard in test/archive-refresh.test.mjs could not see it either. A
+// publish therefore refreshed the month page and left the day pages behind it serving the past for
+// up to five minutes — the failure this whole file exists to prevent, on the page a reader lands
+// on when they follow 「读这一天的原记录」. The guard's matcher now knows readDay reaches the
+// archive, so a future page that reads it through a helper cannot go missing the same way.
+export const ARCHIVE_ISR_ROUTES: readonly string[] = ["/memory/[year]", "/memory/[year]/[month]", "/memory/[year]/[month]/[day]", "/events/[id]"];
 
 // Pages rendered on demand that read the archive through the shared memo. /preview is the private
 // preview surface; it reads the same memo, so it is cleared by the same notice.
