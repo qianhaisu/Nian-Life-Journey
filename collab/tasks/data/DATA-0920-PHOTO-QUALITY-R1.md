@@ -1,0 +1,20 @@
+# DATA-0920-PHOTO-QUALITY-R1
+- status: queued
+- line: data (existing Claude Code session: nianlife.cn 性能和图片显示问题)
+- repository: C:\Users\teddy\Documents\Nianlife
+- branch: main; do not create or switch branches/worktrees
+- base_sha: 4bdc08312e92144295fc3c553a987701c48f1f0c; recheck current HEAD before writes, concurrent HEALTH task owns its paths
+- depends_on: none
+- merge_order: single worker on current main; no branch merge
+- authorization: Teddy 2026-09-20 requests uniform removal from display of blurry photos like https://nianlife.cn/memory/2025/07/24 (screenshot image 3/12).
+- reference: C:\Users\teddy\AppData\Local\Temp\codex-clipboard-fc08c11e-50cf-4805-af90-4b4a31441443.png
+- objective: trace exact sample media; distinguish low-quality original from upscaled thumbnail or delivery bug; audit all currently displayed photos and prepare reversible display exclusion for confirmed similar quality.
+- allowed_paths: v2/scripts/photo-quality-*.mjs; v2/lib/media-quality*.ts; v2/test/media-quality*.test.*; existing media selection/delivery files only if required, report exact paths before editing; this task ACK/status; docs/photo-quality-cleanup-2026-09-20.md (sanitized); private evidence C:\Users\teddy\NianlifeOps\photo-quality-2026-09-20\.
+- existing_input: v2/data/photo-quality.json is untracked preexisting deterministic sharp.stats cache (1937 entries); inspect read-only, do not overwrite or commit private media identifiers. lib/home-photo-quality.ts is a different AI homepage cache; do not conflate.
+- acceptance: record exact sample ID privately and source/delivered dimensions; audit coverage total/scanned/failed/uncertain and candidate counts; review candidates visually, never mass-remove by single sharpness threshold; use higher-quality authorized original where available; confirmed bad photos excluded consistently in date album/home/memory/month selections; preserve originals, source linkage, stories and history; include reversible manifest and rollback.
+- execution: first ACK with actual repo/head/current occupancy and ETA; then read-only diagnosis and bounded local scan using existing authorized local/read-only media access. No new external model calls. Prepare minimal implementation and tests if needed, but no production write/deploy. If broader paths needed, report them with evidence for Codex assignment.
+- required_evidence: private manifest/contact sheets; sanitized root cause and coverage; exact code paths/SHA; typecheck/lint/tests/build exits; live read-only URL checks; explicit unverified items. Never claim deployed from push.
+- push_policy: after checks, exact-stage only task changes and push current main per Teddy; Git/build operations serialized with active HEALTH worker, do not touch its files or locks.
+- forbidden: hard delete, database writes, deploy/restart, new branches, bulk subject approval, new model costs, raw family data or credentials in Git/logs, changes to HEALTH work.
+- eta: ACK promptly, first evidence in 15 minutes; report concrete blockers rather than guessing.
+- result: C:\Users\teddy\NianlifeOps\photo-quality-2026-09-20\RESULT.md
