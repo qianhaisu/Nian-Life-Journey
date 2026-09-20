@@ -21,6 +21,32 @@
 # /api/internal/* 另外整段 404：organizer-worker 的 GET 等同 POST，内部接口不对公网开放。
 # 图片、视频的 Range 请求是 GET，照常转发。
 nianlife.cn {
+	# 访问日志（2026-09-20 加）。事故当天全站图片打不开约 2.5 小时，排查时发现这里根本没有
+	# 访问日志，还原不出请求量——当时误以为"6 小时只有 9 个图片请求"，其实那是从 Caddy 自己的
+	# 运行日志里 grep 出来的错误行。没有它就只能 ssh 进容器的网络命名空间去数 socket。
+	#
+	# 落在 /data（已有的具名卷 nianlife-caddy-data）而不是容器内的临时路径：容器重建后日志还在，
+	# 也不会把镜像层撑大。加日志只需 scp + `caddy reload`，不重建容器，证书不受影响。
+	#
+	# 隐私：来访 IP 按 /16 打码。读者只有家里三个人，"谁在什么时候看了哪张孩子的照片"不该留成
+	# 一份可检索的记录；而要回答"每秒多少个图片请求、哪条路径在超时"，打码后的日志完全够用。
+	# Cookie 与 Authorization 由 Caddy 默认抹除，这里再去掉 User-Agent。
+	log {
+		output file /data/log/access.log {
+			roll_size 20MiB
+			roll_keep 5
+			roll_keep_for 720h
+		}
+		format filter {
+			wrap json
+			fields {
+				request>remote_ip ip_mask 16 32
+				request>client_ip ip_mask 16 32
+				request>headers>User-Agent delete
+			}
+		}
+	}
+
 	@notRead not method GET HEAD
 	handle @notRead {
 		header Allow "GET, HEAD"

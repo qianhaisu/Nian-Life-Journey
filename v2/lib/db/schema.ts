@@ -89,7 +89,18 @@ export const mediaLocations = pgTable("media_locations", {
   sourceUpdatedAt: timestamp("source_updated_at", { mode: "string" }),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
-}, (table) => ({ providerRef: unique().on(table.provider, table.providerRef) }));
+}, (table) => ({
+  providerRef: unique().on(table.provider, table.providerRef),
+  // Every photograph on the site is one getMediaForDelivery() call, and that call joins this table
+  // on media_asset_id. Without this index Postgres had no choice but a sequential scan of the whole
+  // table for ONE photo: measured 2026-09-20 on production, 59,131 rows and 2,761 shared buffers
+  // (~21 MB of buffer traffic) at 16.3 ms — per image. A month page references ~214 of them, so
+  // opening one cost roughly 4.6 GB of buffer traffic and 3.5 s of database time, and the next page
+  // the reader opened had to queue its own query behind all of it. That is what made navigation
+  // stall for seconds after a month page. Noted as a known one-line fix on 2026-09-12 and left
+  // unapplied; the table has grown since.
+  byAsset: index("media_locations_media_asset_idx").on(table.mediaAssetId),
+}));
 
 // Permanent rejection list for photo/video ingest (2026-09-17, Teddy: "永久删除…不想再任何地方看到" +
 // "避免每天导入把它们重新导回来"). A row here means "never recreate this in `media`/`media_assets`

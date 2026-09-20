@@ -127,6 +127,13 @@
       "when": 1789600390283,
       "tag": "0017_happy_champions",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789885863535,
+      "tag": "0018_colorful_triton",
+      "breakpoints": true
     }
   ]
 }

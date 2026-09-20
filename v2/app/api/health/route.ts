@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import * as t from "@/lib/db/schema";
+import { getStorageForProvider } from "@/lib/storage/hot-storage";
+import type { MediaProvider } from "@/lib/types";
 
 // Which build is answering. 2026-09-13: a scan taken right after a deploy read the same 242/327
 // as before the change and was nearly reported as "the fix did not ship" — nothing on the site
@@ -17,6 +19,51 @@ function buildInfo() {
   return { sha: process.env.NIANLIFE_BUILD_SHA?.trim() || null, id };
 }
 
+/**
+ * Can the site actually serve a photograph right now?
+ *
+ * Why this exists (2026-09-20). For about 2.5 hours every photograph on nianlife.cn timed out
+ * while this endpoint kept answering `ok: true` and Docker kept the container marked healthy — the
+ * check counted Postgres rows and never touched object storage, which was the half that was
+ * broken. Counting rows says the archive still knows about 11,554 photos; it says nothing about
+ * whether one of them can be delivered.
+ *
+ * It reads one byte of one real derivative, through the same getStorageForProvider() routing the
+ * delivery route uses, so it fails exactly when delivery fails.
+ *
+ * It deliberately does NOT affect `ok`. Docker's HEALTHCHECK marks the container unhealthy on a
+ * non-2xx here (see Dockerfile), and scripts/deploy-ecs-public.sh's swap waits for healthy before
+ * finishing — so letting a transient object-storage blip fail this response would turn a storage
+ * hiccup into a blocked or rolled-back deploy. `ok` stays a statement about the database; `media`
+ * is a separate reading for whoever is looking.
+ */
+async function mediaProbe(): Promise<{ reachable: boolean; provider: string | null; latencyMs: number | null; error?: string }> {
+  const startedAt = Date.now();
+  try {
+    const [row] = await getDb()
+      .select({ provider: t.mediaLocations.provider, providerRef: t.mediaLocations.providerRef })
+      .from(t.mediaLocations)
+      .where(and(eq(t.mediaLocations.status, "ready"), eq(t.mediaLocations.variant, "web")))
+      .limit(1);
+    if (!row) return { reachable: false, provider: null, latencyMs: null, error: "no ready web derivative to probe" };
+
+    const storage = getStorageForProvider(row.provider as MediaProvider);
+    // One byte, not the whole object — this runs every 30s and a web derivative averages 120 KB.
+    // A backend with no ranged read falls back to a full fetch, which is why the timeout is here.
+    const signal = AbortSignal.timeout(Number(process.env.HEALTH_MEDIA_TIMEOUT_MS ?? 3000));
+    const bytes = storage.getRange
+      ? await storage.getRange(row.providerRef, 0, 0, signal)
+      : await storage.getStream(row.providerRef, signal);
+    if (!bytes) return { reachable: false, provider: row.provider, latencyMs: Date.now() - startedAt, error: "object storage returned nothing" };
+    // Draining matters: an unread stream is a checked-out socket, which is the very leak that
+    // caused the outage this probe exists to catch.
+    await new Response(bytes).arrayBuffer();
+    return { reachable: true, provider: row.provider, latencyMs: Date.now() - startedAt };
+  } catch (error) {
+    return { reachable: false, provider: null, latencyMs: Date.now() - startedAt, error: error instanceof Error ? error.message : "unknown" };
+  }
+}
+
 // Minimal connectivity probe for Cowork's巡检, not a full readiness contract. Never cacheable —
 // a stale "ok" is worse than a slow real check.
 export async function GET() {
@@ -25,8 +72,9 @@ export async function GET() {
   try {
     const [{ count: rawSourceCount }] = await getDb().select({ count: sql<number>`count(*)` }).from(t.rawSources);
     const [{ count: mediaCount }] = await getDb().select({ count: sql<number>`count(*)` }).from(t.media);
+    const media = await mediaProbe();
     return NextResponse.json(
-      { ok: true, db: "connected", rawSourceCount: Number(rawSourceCount), mediaCount: Number(mediaCount), latencyMs: Date.now() - startedAt, build },
+      { ok: true, db: "connected", media, rawSourceCount: Number(rawSourceCount), mediaCount: Number(mediaCount), latencyMs: Date.now() - startedAt, build },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

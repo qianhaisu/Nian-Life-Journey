@@ -1,0 +1,1 @@
+CREATE INDEX "media_locations_media_asset_idx" ON "media_locations" USING btree ("media_asset_id");
