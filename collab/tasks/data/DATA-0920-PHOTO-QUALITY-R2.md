@@ -46,7 +46,8 @@
   - npm test: exit 0；tests 1497 / pass 1486 / fail 0 / skipped 11（新增 17 例全绿，既有
     test/media-deliverability.test.mjs 7 例未受影响）
   - npm run build: exit 0
-- push: main（见下方 commit）
+- commit: 1402d33e2740f5a72da0009b1c0e008f72be120f
+- push: main → origin/main 1402d33（376e0a2..1402d33）。push 不等于部署：线上仍是旧版本，未验证。
 - observable_result: **线上未验证**。本轮不部署、不写库；闸门效果要等发布后才能在 nianlife.cn 上确认。
   可复核产物：C:\Users\teddy\NianlifeOps\photo-quality-2026-09-20\（RESULT.md、manifest.json 1,312 张
   dry-run 清单、audit/displayed/focus/impact.json、sheets/ 联系表）。
