@@ -1,5 +1,5 @@
 # DATA-0920-PHOTO-QUALITY-RELEASE
-- status: submitted
+- status: accepted
 - user_authorization: Teddy explicitly replied 确认 to Codex's request to deploy the 1312-photo display filter; production release is now authorized. No further confirmation needed within this scope.
 - repository/branch: C:\Users\teddy\Documents\Nianlife, current main; no new branch/worktree.
 - release_sha: 946b1e3 (resolve full SHA and deploy exactly this reviewed snapshot, use git archive/clean committed source, NEVER package dirty worktree).
@@ -35,7 +35,7 @@
   ECS 的 build/swap/cleanup 全部走既有部署锁，不并行清理。
 
 ## Submission
-- released_at: 2026-09-20 22:56:47 +0800（容器 StartedAt 实测）；报告完成 2026-09-20 23:2x +0800
+- released_at: 2026-09-20 22:56:47 +0800（容器 StartedAt 实测）；发布记录提交 2026-09-20 23:12:51 +0800（Git 8b84414 committer time；替换未核实的时间占位符）
 - prior_sha: 5160a603edda047dd4798c8ecac856199e4faa32
 - released_sha: 946b1e3938fded0a3755ecd1508de0493b941242（`/api/health` 与容器 env 均为全串一致）
 - 运行时差异仅 2 文件：v2/lib/media-quality.ts（新增）、v2/lib/media/deliverability.ts；
@@ -80,3 +80,14 @@
   - withheldMediaCount 现把这 1,312 张计入；该字段当前无任何页面渲染，故无家人可见数字失真。
 - 时间记录更正：R1/R2 回执里的 21:47 / 00:38 是估计值而非时钟读数，已在 RELEASE 卡 ACK 中声明；
   本轮所有时间取自 `date` 与容器 StartedAt 实测。
+## Commander acceptance
+- reviewed_at: 2026-09-20T23:14:19.1640923+08:00
+- verdict: accepted; production release complete, retention complete. Release SHA remains 946b1e3938fded0a3755ecd1508de0493b941242.
+- Independent public health check confirms correct SHA, DB connected and media reachable.
+- Independently fetched sample: 5 img elements, flagged sample absent, all 23 paragraph elements exactly equal to pre-release HTML.
+- Independently compared baseline/post media sets against manifest: exactly 1312 removals, no manifest mismatch, zero fetch failures. All 21 content hashes unchanged.
+- Reviewed retention evidence: current 946b1e3, rollback 5160a60 and 6fe6435; cleanup successful. Disk total/used/available: 41882943488/9447682048/30499524608 bytes.
+- Worker narrow viewport check reported successful image loading. Commander browser channel timed out; desktop-width and physical-phone checks are not claimed.
+- Known editorial consequence: 15 dates retain text without photos; 8 still refer to photos. Preserve historical wording and original files; no editorial rewrite or source deletion in this task.
+- Scope remains low native resolution. Normal-resolution optical blur and cross-asset original recovery are not established by this release.
+- Private independent review: C:\Users\teddy\NianlifeOps\photo-quality-2026-09-20\release\COMMANDER-REVIEW.md.
