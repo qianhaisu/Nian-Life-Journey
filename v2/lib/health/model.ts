@@ -39,14 +39,20 @@ export type Ref = { kind: EntityKind; id: string };
 export type Content = Record<string, unknown>;
 
 export interface EntityVersion { version: number; hash: string; content: Content; runId: string; at: string }
-export interface Entity { kind: EntityKind; id: string; identity: "strong" | "weak"; versions: EntityVersion[] }
-export interface Link { id: string; from: Ref; to: Ref; role: LinkRole; basis?: string; runId: string }
+export interface Entity { kind: EntityKind; id: string; identity: "strong" | "weak"; versions: EntityVersion[]; aliases?: string[] }
+// toVersion: version of the `to` entity the link was derived from. A later source revision never silently replaces it.
+export interface Link { id: string; from: Ref; to: Ref; role: LinkRole; basis?: string; runId: string; toVersion?: number }
 
+// reqHash = hash of the normalized request; the same id with a different request is refused.
 export type Correction =
-  | { id: string; type: "field"; ref: Ref; field: string; before: unknown; after: unknown; author: string; at: string; reason: string; baseVersion: number }
-  | { id: string; type: "link"; linkId: string; beforeRole: LinkRole; afterRole: LinkRole | "removed"; author: string; at: string; reason: string };
+  | { id: string; type: "field"; ref: Ref; field: string; before: unknown; after: unknown; author: string; at: string; reason: string; baseVersion: number; reqHash: string }
+  | { id: string; type: "link"; linkId: string; beforeRole: LinkRole; afterRole: LinkRole | "removed"; author: string; at: string; reason: string; reqHash: string }
+  // A correction that pre-dates the ledger and is ALREADY folded into the imported values. Kept as history only:
+  // it never changes the effective content, and its author is never invented (`unrecorded`, plus the recorded method).
+  | { id: string; type: "historical"; ref: Ref; field: string; before: unknown; after: unknown; author: string; at: string; reason: string; method: string; status: string; targets: Ref[]; reqHash: string };
 
-export interface AnalysisSnapshot { refs: { ref: Ref; effHash: string }[]; episodes: { id: string; membershipHash: string }[]; evidence: { id: string; version: string }[] }
+// hash = closure hash: the entity plus everything it depends on (members, sources at their bound versions, encounters, facts)
+export interface AnalysisSnapshot { refs: { ref: Ref; hash: string }[]; episodes: { id: string; hash: string }[]; evidence: { id: string; version: string }[] }
 export interface AnalysisVersion { version: number; at: string; author: string; body: Content; conditions: string[]; reassessWhen: string[]; snapshot: AnalysisSnapshot }
 export interface Analysis { id: string; versions: AnalysisVersion[] }
 export interface EvidenceEntry { id: string; version: string; status: "valid" | "withdrawn" }
@@ -59,13 +65,15 @@ export interface Ledger {
   entities: Record<string, Entity>; // key `${kind}:${id}`
   links: Record<string, Link>;
   corrections: Correction[];
+  // Same-slot weak/strong messages whose text differs: both kept, never merged, listed for review. Key = sorted pair.
+  ambiguities: Record<string, { a: string; b: string; reason: string }>;
   analyses: Record<string, Analysis>;
   evidence: Record<string, EvidenceEntry>;
   runs: RunRecord[]; // operational log; excluded from businessDigest
 }
 
 export function emptyLedger(): Ledger {
-  return { schema: 1, revision: 0, entities: {}, links: {}, corrections: [], analyses: {}, evidence: {}, runs: [] };
+  return { schema: 1, revision: 0, entities: {}, links: {}, corrections: [], ambiguities: {}, analyses: {}, evidence: {}, runs: [] };
 }
 
 export const entityKey = (kind: EntityKind, id: string) => `${kind}:${id}`;
@@ -83,7 +91,7 @@ export function cloneLedger(ledger: Ledger): Ledger { return structuredClone(led
 
 /** Hash of business content only: entities, links, corrections, analyses, evidence. Not runs, not revision. */
 export function businessDigest(ledger: Ledger): string {
-  const entities = Object.fromEntries(Object.entries(ledger.entities).map(([k, e]) => [k, { i: e.identity, v: e.versions.map((v) => v.hash) }]));
-  const links = Object.fromEntries(Object.entries(ledger.links).map(([k, l]) => [k, { r: l.role, b: l.basis ?? null }]));
-  return hashOf({ e: entities, l: links, c: ledger.corrections, a: ledger.analyses, v: ledger.evidence });
+  const entities = Object.fromEntries(Object.entries(ledger.entities).map(([k, e]) => [k, { i: e.identity, v: e.versions.map((v) => v.hash), al: [...(e.aliases ?? [])].sort() }]));
+  const links = Object.fromEntries(Object.entries(ledger.links).map(([k, l]) => [k, { r: l.role, b: l.basis ?? null, tv: l.toVersion ?? null }]));
+  return hashOf({ e: entities, l: links, c: ledger.corrections, m: ledger.ambiguities, a: ledger.analyses, v: ledger.evidence });
 }

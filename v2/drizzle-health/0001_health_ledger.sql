@@ -10,6 +10,7 @@ CREATE TABLE health_entities (
   kind text NOT NULL CHECK (kind IN ('source','observation','canonical_fact','encounter','episode')),
   id text NOT NULL,
   identity text NOT NULL CHECK (identity IN ('strong','weak')),
+  aliases text[] NOT NULL DEFAULT '{}', -- weak identities adopted by this strong one (R1)
   raw_source_id text,                 -- optional soft reference to raw_sources.id (no FK: health rows must not pin story rows)
   PRIMARY KEY (kind, id)
 );
@@ -33,6 +34,7 @@ CREATE TABLE health_links (
   from_kind text NOT NULL, from_id text NOT NULL,
   to_kind text NOT NULL, to_id text NOT NULL,
   basis text,
+  to_version integer,                 -- version of the target the link was derived from (sources keep their bound version)
   run_id text NOT NULL,
   FOREIGN KEY (from_kind, from_id) REFERENCES health_entities (kind, id),
   FOREIGN KEY (to_kind, to_id) REFERENCES health_entities (kind, id)
@@ -41,12 +43,18 @@ CREATE INDEX health_links_to_idx ON health_links (to_kind, to_id, role);
 
 CREATE TABLE health_corrections (
   id text PRIMARY KEY,                -- caller-supplied, idempotent
-  type text NOT NULL CHECK (type IN ('field','link')),
+  type text NOT NULL CHECK (type IN ('field','link','historical')), -- historical = pre-ledger history, never changes effective content
+  req_hash text NOT NULL,             -- normalized request; same id + different hash is refused
+  method text, status text, targets jsonb,
   kind text, entity_id text, field text, link_id text REFERENCES health_links (id),
   before_value jsonb, after_value jsonb, before_role text, after_role text,
   base_version integer,
   author text NOT NULL, reason text NOT NULL, at timestamptz NOT NULL,
   seq bigserial NOT NULL              -- history order; latest seq per (entity, field)/(link) is current
+);
+
+CREATE TABLE health_ambiguities (
+  a text NOT NULL, b text NOT NULL, reason text NOT NULL, PRIMARY KEY (a, b)   -- sorted pair; same-slot weak/strong messages with different text, both kept
 );
 
 CREATE TABLE health_analyses (

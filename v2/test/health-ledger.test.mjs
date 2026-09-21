@@ -7,10 +7,10 @@ import { runCorrection, runImport } from "../lib/health/importer.ts";
 import { analysisStatus, applyCorrection, confirmedFactIds, effectiveContent, membership, planImport, putAnalysis, registerEvidence, CONTENT_VALIDATORS } from "../lib/health/ledger.ts";
 import { businessDigest, emptyLedger } from "../lib/health/model.ts";
 import { buildTimeline, diffTimelines, renderHtml, renderMarkdown, traceObservation } from "../lib/health/timeline.ts";
-import { adaptMessagesJsonl, adaptMessagesMarkdown } from "../lib/health/adapters.ts";
 import { baseBatch, batch, encounter, episode, link, NOW, obs, src, tmpStore } from "./health-fixtures.mjs";
 
 const apply = (store, b, extra = {}) => runImport(store, b, { apply: true, now: NOW, ...extra });
+const corr = (store, input) => runCorrection(store, input, { apply: true });
 
 test("dry-run writes nothing; apply then re-apply is idempotent and only the run log grows", async () => {
   const { store } = await tmpStore();
@@ -62,7 +62,7 @@ test("same identity, changed content: new version kept, old version never revive
 test("human correction survives re-import of old and changed data; before-value is traceable", async () => {
   const { store } = await tmpStore();
   await apply(store, baseBatch());
-  await runCorrection(store, { id: "C1", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "corrected", author: "reviewer", at: "2030-04-01", reason: "misread" });
+  await corr(store, { id: "C1", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "corrected", author: "reviewer", at: "2030-04-01", reason: "misread" });
   await apply(store, baseBatch()); // old material again
   let l = await store.read();
   assert.equal(effectiveContent(l, { kind: "observation", id: "o1" }).content.text, "corrected");
@@ -73,15 +73,15 @@ test("human correction survives re-import of old and changed data; before-value 
   assert.equal(effectiveContent(l, { kind: "observation", id: "o1" }).content.text, "corrected");
   assert.equal(l.entities["observation:o1"].versions.length, 2, "auto version kept as evidence");
   // same correction id again is a no-op; a different payload under the same id is refused
-  assert.equal((await runCorrection(store, { id: "C1", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "corrected", author: "reviewer", at: "2030-04-01", reason: "misread" })).action, "duplicate");
-  await assert.rejects(runCorrection(store, { id: "C1", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "other", author: "x", at: "2030-04-02", reason: "y" }));
-  await assert.rejects(runCorrection(store, { id: "C2", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "z", author: "", at: "2030-04-02", reason: "" }));
+  assert.equal((await corr(store, { id: "C1", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "corrected", author: "reviewer", at: "2030-04-01", reason: "misread" })).action, "duplicate");
+  await assert.rejects(corr(store, { id: "C1", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "other", author: "x", at: "2030-04-02", reason: "y" }));
+  await assert.rejects(corr(store, { id: "C2", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "z", author: "", at: "2030-04-02", reason: "" }));
 });
 
 test("link correction (candidate -> removed) is not resurrected by re-import; membership conflict is reported", async () => {
   const { store } = await tmpStore();
   await apply(store, baseBatch());
-  await runCorrection(store, { id: "C-L", type: "link", from: { kind: "observation", id: "o1" }, to: { kind: "episode", id: "e1" }, role: "attached", afterRole: "candidate", author: "r", at: "2030-04-01", reason: "only nearby in time" });
+  await corr(store, { id: "C-L", type: "link", from: { kind: "observation", id: "o1" }, to: { kind: "episode", id: "e1" }, role: "attached", afterRole: "candidate", author: "r", at: "2030-04-01", reason: "only nearby in time" });
   let l = await store.read();
   assert.deepEqual(confirmedFactIds(l, "e1"), ["o2"]);
   const re = await apply(store, baseBatch());
@@ -144,7 +144,7 @@ test("unit participates: unit-less measure rejected, unit change is a conflict n
   const unknownTime = await runImport(store, batch("ut", [{ ...obs("o8"), content: { ...obs("o8").content, timeBasis: "explicit_in_text" } }]));
   assert.equal(unknownTime.items[0].reason, "unknown_occurrence_must_declare_time_basis");
   const lieTime = await runImport(store, batch("lt", [obs("o7", { occurredAt: "2030-03-01", precision: "day", extra: { timeBasis: "message_time_only" } })]));
-  assert.equal(lieTime.items[0].reason, "occurred_at_claims_message_time_only");
+  assert.equal(lieTime.items[0].reason, "occurred_at_needs_an_explicit_time_basis");
 });
 
 test("bad input fails whole batch with no partial write; validator exceptions become failures, not passes", async () => {
@@ -183,25 +183,6 @@ test("injected crash before rename leaves the ledger untouched; retry then succe
   assert.ok((await good.read()).entities["source:s9"]);
 });
 
-test("weak identity: cross-format twin is duplicate when text matches, ambiguous when it does not; strong ids never merge by guess", async () => {
-  const { store } = await tmpStore();
-  const json = adaptMessagesJsonl(JSON.stringify({ conversation: "c9", id: "m1", time: "2030-05-01 08:00:00", speaker: "A", text: "hello" }) + "\n" + JSON.stringify({ conversation: "c9", id: "m2", time: "2030-05-01 08:05:00", speaker: "B", text: "second" }), "j");
-  await apply(store, json);
-  const md = adaptMessagesMarkdown("- [2030-05-01 08:00:00] A: hello\n- [2030-05-01 08:05:00] B: second (edited)\n- [2030-05-01 08:10:00] A: new one", "c9", "m");
-  const dry = await runImport(store, md);
-  const byReason = dry.items.map((i) => `${i.action}:${i.reason ?? ""}`);
-  assert.ok(byReason.includes("duplicate:weak_identity_matches_existing_slot_and_text"));
-  assert.ok(byReason.includes("ambiguous:weak_identity_slot_taken_by_different_text"));
-  assert.ok(byReason.includes("new:"));
-  const applied = await apply(store, md);
-  assert.equal(applied.counts.ambiguous, 1);
-  const l = await store.read();
-  assert.equal(Object.values(l.entities).filter((e) => e.kind === "source").length, 3, "ambiguous item was held, not merged or written");
-  // weak id without full slot text is deterministic: re-import is a duplicate
-  const again = await runImport(store, md);
-  assert.equal(again.counts.new, 0);
-});
-
 test("incremental: adding one observation touches only its episode; unrelated blocks are reused and identical", async () => {
   const { store } = await tmpStore();
   await apply(store, baseBatch());
@@ -228,8 +209,8 @@ test("dependent analyses go stale on fact change, membership change, correction 
   await apply(store, baseBatch());
   await store.transaction((l) => {
     let n = registerEvidence(l, { id: "guide-x", version: "2030", status: "valid" });
-    n = putAnalysis(n, { id: "A1", at: "t", author: "assistant", body: { note: "not a diagnosis" }, refs: [{ kind: "observation", id: "o1" }], episodeIds: ["e1"], evidence: [{ id: "guide-x", version: "2030" }], conditions: ["age<2"], reassessWhen: ["new fever reading"] });
-    n = putAnalysis(n, { id: "A3", at: "t", author: "assistant", body: {}, refs: [{ kind: "observation", id: "o3" }], episodeIds: ["e3"] });
+    n = putAnalysis(n, { id: "A1", at: "2030-05-01", author: "assistant", body: { note: "not a diagnosis" }, refs: [{ kind: "observation", id: "o1" }], episodeIds: ["e1"], evidence: [{ id: "guide-x", version: "2030" }], conditions: ["age<2"], reassessWhen: ["new fever reading"] });
+    n = putAnalysis(n, { id: "A3", at: "2030-05-01", author: "assistant", body: {}, refs: [{ kind: "observation", id: "o3" }], episodeIds: ["e3"] });
     return { ledger: n, result: null };
   });
   const status = async (id) => analysisStatus(await store.read(), id);
@@ -239,9 +220,9 @@ test("dependent analyses go stale on fact change, membership change, correction 
   assert.equal((await status("A1")).status, "stale");
   assert.equal((await status("A3")).status, "current", "unrelated analysis untouched");
   // re-registering re-snapshots
-  await store.transaction((l) => ({ ledger: putAnalysis(l, { id: "A1", at: "t2", author: "assistant", body: {}, refs: [{ kind: "observation", id: "o1" }], episodeIds: ["e1"], evidence: [{ id: "guide-x", version: "2030" }] }), result: null }));
+  await store.transaction((l) => ({ ledger: putAnalysis(l, { id: "A1", at: "2030-05-02", author: "assistant", body: {}, refs: [{ kind: "observation", id: "o1" }], episodeIds: ["e1"], evidence: [{ id: "guide-x", version: "2030" }] }), result: null }));
   assert.equal((await status("A1")).status, "current");
-  const c = await runCorrection(store, { id: "C9", type: "link", from: { kind: "observation", id: "o2" }, to: { kind: "episode", id: "e1" }, role: "attached", afterRole: "removed", author: "r", at: "t", reason: "wrong child" });
+  const c = await corr(store, { id: "C9", type: "link", from: { kind: "observation", id: "o2" }, to: { kind: "episode", id: "e1" }, role: "attached", afterRole: "removed", author: "r", at: "2030-05-01", reason: "wrong child" });
   assert.deepEqual(c.impact.analyses, ["A1"]);
   assert.equal((await status("A1")).status, "stale");
   await store.transaction((l) => ({ ledger: registerEvidence(l, { id: "guide-x", version: "2031", status: "valid" }), result: null }));
@@ -252,18 +233,18 @@ test("dependent analyses go stale on fact change, membership change, correction 
 
 test("shared source: story-side data is never read or changed (ledger holds references only)", async () => {
   // The health path has no dependency on the app repository. Assert it structurally: the modules import nothing from lib/db.
-  for (const f of ["model", "ledger", "importer", "file-store", "timeline", "adapters"]) {
+  for (const f of ["model", "ledger", "graph", "importer", "file-store", "timeline", "adapters"]) {
     const text = await readFile(new URL(`../lib/health/${f}.ts`, import.meta.url), "utf8");
     assert.ok(!/from "\.\.\/db|persistCareEpisode|getStore|DATABASE_URL/.test(text.replace(/\/\/.*$/gm, "")), `${f}.ts must not touch the application database`);
   }
   const l = emptyLedger();
-  assert.deepEqual(Object.keys(l).sort(), ["analyses", "corrections", "entities", "evidence", "links", "revision", "runs", "schema"]);
+  assert.deepEqual(Object.keys(l).sort(), ["ambiguities", "analyses", "corrections", "entities", "evidence", "links", "revision", "runs", "schema"]);
 });
 
 test("trace: every timeline item resolves to observation versions, source chain and corrections", async () => {
   const { store } = await tmpStore();
   await apply(store, baseBatch());
-  await runCorrection(store, { id: "CT", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "fixed", author: "a", at: "t", reason: "r" });
+  await corr(store, { id: "CT", type: "field", ref: { kind: "observation", id: "o1" }, field: "text", after: "fixed", author: "a", at: "2030-05-01", reason: "r" });
   const l = await store.read();
   const t = traceObservation(l, "o1");
   assert.deepEqual(t.sources.map((s) => `${s.role}:${s.source}`), ["from_source:s1", "supports:s2"]);

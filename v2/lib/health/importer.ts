@@ -15,6 +15,7 @@ export interface ImportReport {
   links: Plan["links"];
   impact: Impact;
   rejected: boolean;
+  needsReview: boolean;
   digestBefore: string;
   digestAfter: string;
 }
@@ -23,7 +24,7 @@ export async function runImport(store: HealthFileStore, batch: Batch, opts: { ap
   const validators = opts.validators ?? CONTENT_VALIDATORS;
   const now = opts.now ?? (() => new Date().toISOString());
   const strip = (plan: Plan, mode: ImportReport["mode"], applied: boolean, before: string, after: string): ImportReport =>
-    ({ mode, applied, batchId: plan.batchId, counts: plan.counts, items: plan.items, links: plan.links, impact: plan.impact, rejected: plan.rejected, digestBefore: before, digestAfter: after });
+    ({ mode, applied, batchId: plan.batchId, counts: plan.counts, items: plan.items, links: plan.links, impact: plan.impact, rejected: plan.rejected, needsReview: plan.needsReview, digestBefore: before, digestAfter: after });
   if (!opts.apply) {
     const ledger = await store.read();
     const plan = planImport(ledger, batch, validators);
@@ -39,9 +40,14 @@ export async function runImport(store: HealthFileStore, batch: Batch, opts: { ap
   });
 }
 
-export async function runCorrection(store: HealthFileStore, input: CorrectionInput) {
+/** Dry-run by default: runs the same validation as an apply and stops before persisting. */
+export async function runCorrection(store: HealthFileStore, input: CorrectionInput, opts: { apply?: boolean } = {}) {
+  if (!opts.apply) {
+    const r = applyCorrection(await store.read(), input);
+    return { applied: false, action: r.action, impact: r.impact };
+  }
   return store.transaction((ledger) => {
     const r = applyCorrection(ledger, input);
-    return { ledger: r.action === "duplicate" ? ledger : r.ledger, result: { action: r.action, impact: r.impact } };
+    return { ledger: r.action === "duplicate" ? ledger : r.ledger, result: { applied: r.action === "new", action: r.action, impact: r.impact } };
   });
 }
