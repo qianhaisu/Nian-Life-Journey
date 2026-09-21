@@ -11284,4 +11284,10 @@ ISR 页前面已经有 300 秒路由缓存，再叠 300 秒会让最坏情况变
    这是把 38MB 真正降下来的唯一路径。
 
 
-NIGHT-RELATIONS-20260921 ACK: 2026-09-21 执行开始 - 修复外婆/外公/爷爷人物注册表缺失
+---
+
+## NIGHT-RELATIONS-20260921 (2026-09-21 23:50)
+
+1. **本轮线上多了什么**: 代码已 push (d425cf1)，DB 新增 12,517 条作战部队群消息（raw_sources: 53836→66353），外婆/外公/爷爷/雪姨映射已修复——**尚未部署，需 Teddy 确认后执行 `deploy-ecs-public.sh swap`**
+2. **没做到什么 / 最大的已知 blocker**: ECS 生产部署被分类器软阻塞；需 Teddy 回复"go ahead and deploy to ECS / 47.99.243.155"后执行 upload+build+swap+verify
+3. **下一件事**: Teddy 确认部署 → deploy swap → 浏览器验收 → ECS retention 清理
