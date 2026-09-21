@@ -202,10 +202,16 @@ function NoteForm({ onLost, say, onSaved, onOpen }: Props) {
   const [frozen, setFrozen] = useState<Record<string, unknown> | null>(null);
 
   const submit = async (confirmUnusualTemp = false) => {
+    const wasUnknown = frozen !== null; // a frozen request only survives while its earlier outcome is still unknown
     const body = frozen ?? { type: "note", entryId, text, when: whenPayload(w), symptoms: symPayload(sym), confirmUnusualTemp };
     setFrozen(body); setPhase("saving"); setErr(null);
     const r = await api("POST", "entries", body);
-    if (r.status === 401) { setFrozen(null); setPhase("edit"); setErr({ msg: "登录已过期，这次没有保存。重新登录后你填的内容还在，点“重试保存”即可。" }); onLost(); return; }
+    if (r.status === 401) {
+      // 401 only proves THIS attempt did not run. It cannot turn an earlier unknown outcome into "not saved": keep the request + ID frozen.
+      if (wasUnknown) setErr({ msg: "登录已过期，这次重试没有执行。上一次提交的结果仍然不确定（可能已经保存）。重新登录后点“重试保存”，会用同一份内容原样重放，不会重复。", uncertain: true });
+      else { setFrozen(null); setErr({ msg: "登录已过期，这次没有保存。重新登录后你填的内容还在，点“重试保存”即可。" }); }
+      setPhase("edit"); onLost(); return;
+    }
     if (r.ok) { setFrozen(null); setSaved(r.json.record); setPhase("done"); onSaved(); say(r.json.duplicate ? "这一次提交已经保存过了，没有重复保存" : "已保存"); return; }
     setPhase("edit");
     if (isUncertain(r)) { setErr({ msg: UNCERTAIN, uncertain: true }); return; }
@@ -267,11 +273,16 @@ function VisitForm({ onLost, say, onSaved, onOpen }: Props) {
   const pickDept = (x: string) => { const v = dept === x ? "" : x; setDept(v); if (v !== "其他") setDeptOther(""); };
   const submit = async () => {
     // a hidden "other" text is never sent: it only counts while 其他 is the chosen option
+    const wasUnknown = frozen !== null;
     const req = frozen ?? { payload: { type: "visit", entryId, hospital, hospitalOther: hospital === "其他" ? hospitalOther : "", department: dept, departmentOther: dept === "其他" ? deptOther : "", note, visitDate: dateOn ? date : "" }, files: picks.map((p) => p.file) };
     setFrozen(req); setPhase("saving"); setErr(""); setUncertain(false);
     const form = new FormData(); form.set("payload", JSON.stringify(req.payload)); for (const f of req.files) form.append("files", f, f.name);
     const r = await api("POST", "entries", req.payload, form);
-    if (r.status === 401) { setFrozen(null); setPhase("edit"); setErr("登录已过期，这次没有保存。重新登录后你填的内容和图片还在，点“重试保存”即可。"); onLost(); return; }
+    if (r.status === 401) {
+      if (wasUnknown) { setUncertain(true); setErr("登录已过期，这次重试没有执行。上一次提交的结果仍然不确定（可能已经保存）。重新登录后点“重试保存”，会用同一份内容原样重放，不会重复。"); }
+      else { setFrozen(null); setErr("登录已过期，这次没有保存。重新登录后你填的内容和图片还在，点“重试保存”即可。"); }
+      setPhase("edit"); onLost(); return;
+    }
     if (r.ok) { setFrozen(null); setSaved(r.json.record); setPhase("done"); onSaved(); say(r.json.duplicate ? "这一次提交已经保存过了，没有重复保存" : "已保存"); return; }
     setPhase("edit");
     if (isUncertain(r)) { setUncertain(true); setErr(UNCERTAIN); return; }
@@ -363,10 +374,15 @@ function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: (
   const rec = d?.record;
 
   const send = async (tag: string, path: string, make: () => Record<string, unknown>, okMsg: string) => {
-    const p = pending.current?.tag === tag ? pending.current : (pending.current = { tag, path, body: make() });
+    const wasUnknown = pending.current?.tag === tag;
+    const p = wasUnknown ? pending.current! : (pending.current = { tag, path, body: make() });
     setBusy(true); setMsg(""); setUncertain(false);
     const r = await api("POST", `entries/${encodeURIComponent(id)}/${p.path}`, p.body); setBusy(false);
-    if (r.status === 401) { pending.current = null; setMsg("登录已过期，这次没有保存。重新登录后你的改动还在，再点一次保存即可。"); onLost(); return false; }
+    if (r.status === 401) {
+      if (wasUnknown) { setUncertain(true); setMsg("登录已过期，这次重试没有执行。上一次操作的结果仍然不确定（可能已经生效）。重新登录后再点一次，会原样重放同一次操作，不会重复。"); }
+      else { pending.current = null; setMsg("登录已过期，这次没有保存。重新登录后你的改动还在，再点一次保存即可。"); }
+      onLost(); return false;
+    }
     if (r.ok) { pending.current = null; setD({ record: r.json.record, history: r.json.history }); setEdit(null); setConflict(null); setReason(""); setNeedsConfirm(false); onChanged(); say(r.json.duplicate ? "这次操作已经生效过了，没有重复" : okMsg); return true; }
     if (isUncertain(r)) { setUncertain(true); setMsg(UNCERTAIN_ACTION); return false; } // keep the frozen request for an identical replay
     pending.current = null;
