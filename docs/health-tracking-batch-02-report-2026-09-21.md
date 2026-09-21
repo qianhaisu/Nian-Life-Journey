@@ -99,3 +99,7 @@ node --import tsx scripts/health-import/cli.mjs timeline --ledger <目录> --as-
 ## 9. 边界
 
 未连生产、未写业务库、未迁移、未部署、无外部模型调用；真实健康原文与私有产物不入 Git；`.env*`、`persistCareEpisode`、既有故事与媒体代码未改动；其他会话的未提交改动未纳入本批。
+
+## 10. 提交
+
+ACK 基线 `cae393d`；代码与测试交付 `3b144bb`（已 push main）；本回执随后由一个仅改文档的提交补记此 SHA。状态：已提交审核，等待 Codex；未进入 HEALTH-03/04，未部署。
