@@ -4,7 +4,7 @@
 # 这份脚本原来只存在于 ECS 上（d04-runs/swap-a56fee4-.../swap.sh），现在纳入仓库，
 # 好处是它跟着发布一起被审阅和版本化。逻辑与那一版逐字相同，只加了一个可选参数：
 #
-#   HEALTH_MOUNTS（第 8 个参数，空格分隔）—— 健康模块的私有数据。只允许 :ro 挂载，唯一可写的是
+#   HEALTH_MOUNTS（第 8 个参数，逗号分隔）—— 健康模块的私有数据。只允许 :ro 挂载，唯一可写的是
 #   /srv/nianlife-health/record（爸妈手记的账本）。同一时刻只能有一个运行中的容器挂着可写的 record：
 #   切换是"先停旧容器、再起新容器"，起新容器之前和之后都会检查，不满足就回滚。数据目录在容器之外，
 #   换容器、回滚都不会覆盖它。
@@ -16,6 +16,7 @@
 # env 文件仍然必须与源逐字节相同：要改运行时变量，就换一个新的源文件，而不是就地改目标。
 set -euo pipefail
 SRC="$1"; TARGET="$2"; SHORT="$3"; ROLLBACK_NAME="$4"; POLL_N="${5:-48}"; POLL_S="${6:-5}"; MOUNT_SPEC="${7:-}"; HEALTH_MOUNTS="${8:-}"
+HEALTH_MOUNTS="${HEALTH_MOUNTS//,/ }"   # ssh 会把带空格的参数拆开，所以传进来时用逗号分隔
 if [ -e "$TARGET" ]; then cmp -s "$SRC" "$TARGET" || { echo "STOP: $TARGET differs from $SRC"; exit 3; }; else cp -n -p "$SRC" "$TARGET"; fi
 cmp -s "$SRC" "$TARGET" || { echo "STOP: copied env does not match source"; exit 3; }
 rollback() {
