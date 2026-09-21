@@ -5,6 +5,7 @@
 //   HEALTH_PAGE_MATERIALS        reviewed follow-up materials file (JSON)
 //   HEALTH_PAGE_DERIVED          private derived layer (JSON): records found in review but not in the accepted ledger (recovery statements)
 //   HEALTH_PAGE_ANALYSES         per-episode medical-assistance analyses (JSON, append-only versions); only an adopted version whose dependency snapshot still matches counts as reviewed
+//   HEALTH_PAGE_EVIDENCE         local medical-evidence register (JSON) next to the saved texts that were read; analyses are bound to its entries and are held for re-review when an entry or its text is missing/changed
 //   HEALTH_PAGE_MATERIAL_ROOT    directory the materials' `source.file` paths are relative to; each source file's SHA-256 is re-checked on read
 // Each path must be absolute and resolve (links followed) outside the repository; a bad one is reported by NAME only and that input
 // is treated as not connected. The page model is cached in memory until one of the underlying files changes (mtime/size), so a
@@ -19,9 +20,10 @@ import { isInside, resolveThroughLinks } from "../record/paths";
 import type { HealthRecordService } from "../record/service";
 import { wallOf } from "../record/service";
 import { isAnalysisFile, type AnalysisFile } from "./analysis";
+import { evidenceResolverFromFile } from "./evidence";
 import { buildHealthPage, type DerivedFile, type HealthPage, type IntervalFile, type MaterialsFile } from "./model";
 
-export interface PageSourcesConfig { historyLedgerDir: string | null; originalRoots: string[]; intervalsFile: string | null; materialsFile: string | null; derivedFile?: string | null; analysesFile?: string | null; materialRoot?: string | null; problems: string[] }
+export interface PageSourcesConfig { historyLedgerDir: string | null; originalRoots: string[]; intervalsFile: string | null; materialsFile: string | null; derivedFile?: string | null; analysesFile?: string | null; evidenceFile?: string | null; materialRoot?: string | null; problems: string[] }
 
 export function loadPageSourcesConfig(repo: string, env: Record<string, string | undefined> = process.env): PageSourcesConfig {
   const problems: string[] = [];
@@ -39,7 +41,7 @@ export function loadPageSourcesConfig(repo: string, env: Record<string, string |
     if (!path.isAbsolute(r)) { problems.push("HEALTH_HISTORY_ORIGINAL_ROOTS entries must be absolute"); continue; }
     try { const real = resolveThroughLinks(r); if (isInside(real, repo)) problems.push("HEALTH_HISTORY_ORIGINAL_ROOTS entry resolves inside the repository"); else roots.push(real); } catch { problems.push("HEALTH_HISTORY_ORIGINAL_ROOTS entry could not be resolved"); }
   }
-  return { historyLedgerDir: one("HEALTH_HISTORY_LEDGER"), originalRoots: roots, intervalsFile: one("HEALTH_PAGE_INTERVALS"), materialsFile: one("HEALTH_PAGE_MATERIALS"), derivedFile: one("HEALTH_PAGE_DERIVED"), analysesFile: one("HEALTH_PAGE_ANALYSES"), materialRoot: one("HEALTH_PAGE_MATERIAL_ROOT"), problems };
+  return { historyLedgerDir: one("HEALTH_HISTORY_LEDGER"), originalRoots: roots, intervalsFile: one("HEALTH_PAGE_INTERVALS"), materialsFile: one("HEALTH_PAGE_MATERIALS"), derivedFile: one("HEALTH_PAGE_DERIVED"), analysesFile: one("HEALTH_PAGE_ANALYSES"), evidenceFile: one("HEALTH_PAGE_EVIDENCE"), materialRoot: one("HEALTH_PAGE_MATERIAL_ROOT"), problems };
 }
 
 async function sigOf(file: string | null) { if (!file) return "-"; try { const s = await stat(file); return `${s.mtimeMs}:${s.size}`; } catch { return "missing"; } }
@@ -66,17 +68,25 @@ export class HealthPageService {
   async page(): Promise<HealthPage> {
     const nowWall = wallOf(this.now(), false);
     const rec = await this.records.ledgerSignature();
-    const sig = [rec, await sigOf(this.cfg.historyLedgerDir && path.join(this.cfg.historyLedgerDir, "ledger.json")), await sigOf(this.cfg.intervalsFile), await sigOf(this.cfg.materialsFile), await sigOf(this.cfg.derivedFile ?? null), await sigOf(this.cfg.analysesFile ?? null), await this.materialSourceSig()].join("|");
+    const sig = [rec, await sigOf(this.cfg.historyLedgerDir && path.join(this.cfg.historyLedgerDir, "ledger.json")), await sigOf(this.cfg.intervalsFile), await sigOf(this.cfg.materialsFile), await sigOf(this.cfg.derivedFile ?? null), await sigOf(this.cfg.analysesFile ?? null), await this.evidenceSig(), await this.materialSourceSig()].join("|");
     if (this.cache && this.cache.sig === sig && this.cache.day === nowWall.slice(0, 10)) return this.cache.page;
     const [history, record, intervals, materials, derived, analyses] = await Promise.all([
       this.historyLedger(), this.records.readLedger(), readJson(this.cfg.intervalsFile, isIntervals), readJson(this.cfg.materialsFile, isMaterials), readJson(this.cfg.derivedFile ?? null, isDerived), readJson<AnalysisFile>(this.cfg.analysesFile ?? null, isAnalysisFile),
     ]);
     const hashes = await this.materialSourceHashes(materials);
-    const page = buildHealthPage({ history, record, intervals, materials, derived, analyses, now: nowWall, materialSourceHash: materials && this.cfg.materialRoot ? (file) => hashes.get(file) : undefined /* no root configured: the model reports "not verified" */ });
+    const page = buildHealthPage({ history, record, intervals, materials, derived, analyses, evidence: evidenceResolverFromFile(this.cfg.evidenceFile), now: nowWall, materialSourceHash: materials && this.cfg.materialRoot ? (file) => hashes.get(file) : undefined /* no root configured: the model reports "not verified" */ });
     this.cache = { sig, day: nowWall.slice(0, 10), page, history };
     return page;
   }
 
+  /** Signature of the evidence register and of every saved text it names, so a changed/removed text shows up on the next read. */
+  private async evidenceSig(): Promise<string> {
+    const f = this.cfg.evidenceFile; if (!f) return "-";
+    let names: string[] = [];
+    try { const v = JSON.parse(await readFile(f, "utf8")); names = (v.sources ?? []).map((x: { localText?: string }) => x.localText).filter((x: unknown): x is string => typeof x === "string"); } catch { /* unreadable register: the resolver reports every id */ }
+    const sigs = await Promise.all(names.map((n) => sigOf(path.resolve(path.dirname(f), n))));
+    return `${await sigOf(f)}:${sigs.join(",")}`;
+  }
   /** Source files of the follow-up materials, resolved under HEALTH_PAGE_MATERIAL_ROOT only (never outside it). */
   private materialPath(file: string): string | null {
     const root = this.cfg.materialRoot; if (!root) return null;

@@ -5,15 +5,35 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { applyCorrection, applyPlan, effectiveHash, planImport } from "../lib/health/ledger.ts";
-import { emptyLedger } from "../lib/health/model.ts";
+import { emptyLedger, hashOf as _hash } from "../lib/health/model.ts";
 import { HealthFileStore } from "../lib/health/file-store.ts";
-import { buildHealthPage, categoryOf } from "../lib/health/page/model.ts";
-import { AnalysisRefused, addDraft, adopt, emptyAnalyses, reject, stateOf, submit } from "../lib/health/page/analysis.ts";
-import { computeImpact, makeBaseline } from "../lib/health/page/impact.ts";
+import { buildHealthPage as _build, categoryOf } from "../lib/health/page/model.ts";
+import { AnalysisRefused, addDraft as _addDraft, adopt as _adopt, emptyAnalyses, reject, stateOf as _stateOf, submit as _submit } from "../lib/health/page/analysis.ts";
+import { evidenceResolverFromFile } from "../lib/health/page/evidence.ts";
+import { computeImpact as _impact, makeBaseline } from "../lib/health/page/impact.ts";
 import { main } from "../scripts/health-import/cli.mjs";
 
 const NOW = "2026-09-21T10:00";
+// local medical-evidence register with the saved texts that were "read" (synthetic): the analyses are bound to these entries
+const EVDIR = mkdtempSync(path.join(os.tmpdir(), "health-evidence-"));
+const shaHex = (b) => createHash("sha256").update(b).digest("hex");
+const REG = path.join(EVDIR, "register.json");
+function writeRegister(over = {}) {
+  const t1 = "synthetic guideline text one", t2 = "synthetic guideline text two";
+  writeFileSync(path.join(EVDIR, "t1.txt"), t1); writeFileSync(path.join(EVDIR, "t2.txt"), t2);
+  writeFileSync(REG, JSON.stringify({ schema: 1, sources: [{ id: "EV-1", title: "T1", version: "2026", localText: "t1.txt", textSha256: shaHex(t1) }, { id: "EV-2", title: "T2", version: "2026", localText: "t2.txt", textSha256: shaHex(t2) }], ...over }));
+}
+writeRegister();
+const EV = () => evidenceResolverFromFile(REG);
+const addDraft = (f, L, a) => _addDraft(f, L, { evidence: EV(), ...a });
+const submit = (f, L, a) => _submit(f, L, { evidence: EV(), ...a });
+const adopt = (f, L, a) => _adopt(f, L, { evidence: EV(), ...a });
+const stateOf = (L, v) => _stateOf(L, v, EV());
+const buildHealthPage = (i) => _build({ evidence: EV(), ...i });
+const computeImpact = (s, an, base, asOf) => _impact(s, an, base, asOf, EV());
 const obs = (id, recordedAt, text, links = [], extra = {}) => ({ kind: "observation", id, content: { role: "observation", recordedAt, occurredAt: null, occurredPrecision: null, timeBasis: "message_time_only", text, speaker: "妈妈", factKind: "symptom_report", reviewStatus: "claude_full_read_r4", ...extra }, links });
 const later = (L, id, items, at = "2026-09-22T00:00:00.000Z") => applyPlan(L, planImport(L, { batchId: id, items }), { runId: id, at });
 
@@ -25,20 +45,23 @@ function base() {
     { kind: "episode", id: "EP-Y", content: { title: "2026-05 急性鼻窦炎", start: "2026-05-23", declaredEnd: "end_unknown" } },
     obs("O4", "2026-07-12 19:58:37", "37.8", [{ role: "attached", to: { kind: "episode", id: "EP-X" } }]),
     obs("O5", "2026-07-26 11:13:06", "7月10日左右开始流鼻涕，这两天一直没有减轻", [{ role: "attached", to: { kind: "episode", id: "EP-X" } }]),
+    obs("O10", "2026-05-25 09:00:00", "鼻塞一周了", [{ role: "attached", to: { kind: "episode", id: "EP-Y" } }]),
+    obs("O11", "2026-06-01 10:00:00", "偶尔咳嗽"),
+    obs("O12", "2026-06-02 10:00:00", "今天挺好"),
   ] };
   const plan = planImport(emptyLedger(), batch);
   assert.equal(plan.rejected, false, JSON.stringify(plan.items.filter((i) => i.action === "rejected")));
   return applyPlan(emptyLedger(), plan, { runId: "r1", at: "2026-09-20T00:00:00.000Z" });
 }
 const body = (over = {}) => ({
-  dataAsOf: "2026-07-26", summary: ["7月中旬起流涕，7月26日医院诊断为急性支气管炎；这是一次以呼吸道症状为主的病程。"],
+  dataAsOf: "2026-07-26", episodeLastRecord: "2026-07-26", summary: ["7月中旬起流涕，7月26日医院诊断为急性支气管炎；这是一次以呼吸道症状为主的病程。"],
   layers: [{ level: "doctor", text: "7/26 呼吸内科诊断急性支气管炎。" }, { level: "parent", text: "家长自述鼻涕、咳嗽没有继续减轻。" }, { level: "inferred", text: "症状约两周未缓解，符合需要复诊评估的情形。" }],
   uncertain: ["结束日期没有记录"], impact: "复诊时带上这段时间的观察记录。", currentStatus: "截至 7 月 26 日的资料，结束未知，不代表现在的状态。",
   measures: [
-    { id: "c1", group: "care", kind: "care", text: "继续记录咳嗽与夜间睡眠", conditions: ["仍有咳嗽时"], reassessWhen: ["咳嗽变频繁"] },
-    { id: "v1", group: "visit", kind: "conditional", text: "呼吸明显费力时立刻就医", conditions: ["出现呼吸费力"], reassessWhen: [] },
+    { id: "c1", group: "care", kind: "care", text: "继续记录咳嗽与夜间睡眠", conditions: ["仍有咳嗽时"], reassessWhen: ["咳嗽变频繁"], evidenceIds: ["EV-1"] },
+    { id: "v1", group: "visit", kind: "conditional", text: "呼吸明显费力时立刻就医", conditions: ["出现呼吸费力"], reassessWhen: [], evidenceIds: ["EV-2"] },
   ],
-  factRefs: [{ ledger: "history", ref: { kind: "canonical_fact", id: "CF1" }, note: "诊断" }], evidenceIds: ["EV-1"], ...over });
+  factRefs: [{ ledger: "history", ref: { kind: "canonical_fact", id: "CF1" }, note: "诊断" }], evidenceIds: ["EV-1", "EV-2"], ...over });
 const page = (H, an) => buildHealthPage({ history: H, record: null, intervals: null, materials: null, analyses: an, now: NOW });
 const ep = (p, id) => p.episodes.find((e) => e.id === id);
 const ledgers = (H) => ({ history: H, record: null });
@@ -67,9 +90,9 @@ test("A1 版本生命周期：草稿/待审核不进页面；采用后总结与�
   assert.equal(categoryOf("发热 + 呼吸道感染（与烫伤期重叠但诊断不同）"), "resp", "与烫伤重叠的呼吸道病程只归呼吸道一类"); assert.equal(categoryOf("暖风机烫伤及其复查"), "burn");
   // content rules
   const bad = (over) => assert.throws(() => addDraft(emptyAnalyses(), L, { episodeId: "EP-X", author: "x", at: "t", body: body(over) }), (e) => e.code === "invalid_body");
-  bad({ measures: [{ id: "c1", group: "care", kind: "care", text: "每次喂 5ml", conditions: ["发热"], reassessWhen: [] }] });
-  bad({ measures: [{ id: "c1", group: "care", kind: "care", text: "复诊", conditions: ["x"], reassessWhen: [], date: "2026-10-01" }] });
-  bad({ measures: [{ id: "c1", group: "care", kind: "care", text: "观察", conditions: [], reassessWhen: [] }] });
+  bad({ measures: [{ id: "c1", group: "care", kind: "care", text: "每次喂 5ml", conditions: ["发热"], reassessWhen: [], evidenceIds: ["EV-1"] }] });
+  bad({ measures: [{ id: "c1", group: "care", kind: "care", text: "复诊", conditions: ["x"], reassessWhen: [], evidenceIds: ["EV-1"], date: "2026-10-01" }] });
+  bad({ measures: [{ id: "c1", group: "care", kind: "care", text: "观察", conditions: [], reassessWhen: [], evidenceIds: ["EV-1"] }] });
   bad({ currentStatus: "已康复" });
   assert.throws(() => addDraft(emptyAnalyses(), L, { episodeId: "EP-Q", author: "x", at: "t", body: body() }), (e) => e.code === "unknown_episode");
 });
@@ -164,7 +187,7 @@ test("A5 命令入口：默认预览不写文件；采用需要 --apply 与执�
     const hist = path.join(dir, "history"), files = { an: path.join(dir, "analyses.json"), body: path.join(dir, "body.json"), base: path.join(dir, "baseline.json") };
     await new HealthFileStore(hist).transaction(() => ({ ledger: base(), result: null }));
     await writeFile(files.body, JSON.stringify(body()));
-    const run = async (...a) => { const out = []; const o = console.log, e = console.error; console.log = (x) => out.push(x); console.error = (x) => out.push(x); try { return { code: await main(["--ledger", hist, ...a]), out: out.join("\n") }; } finally { console.log = o; console.error = e; } };
+    const run = async (...a) => { a = [...a, "--evidence", REG]; const out = []; const o = console.log, e = console.error; console.log = (x) => out.push(x); console.error = (x) => out.push(x); try { return { code: await main(["--ledger", hist, ...a]), out: out.join("\n") }; } finally { console.log = o; console.error = e; } };
     const A = ["--analyses", files.an];
     let r = await run("analysis", "draft", ...A, "--episode", "EP-X", "--body", files.body, "--author", "执行者");
     assert.equal(r.code, 0); assert.match(r.out, /dry-run/);
@@ -187,4 +210,113 @@ test("A5 命令入口：默认预览不写文件；采用需要 --apply 与执�
     r = await run("impact", "--baseline", files.base, ...A);
     assert.equal(r.code, 3, "已提交待审的分析依据的事实已变：仍要重新分析");
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+// ================= HEALTH-M01-A-R1 =================
+const adoptedFile = (H, bodyOver = {}) => {
+  const L = ledgers(H);
+  let f = addDraft(emptyAnalyses(), L, { episodeId: "EP-X", author: "执行者", at: "t1", body: body(bodyOver) }).file;
+  f = submit(f, L, { id: "AV-EP-X-1", by: "执行者", at: "t2" });
+  return { f, L };
+};
+
+test("R1B-1 被审核的正文必须与提交时一致：提交后替换正文/快照、不存在或未绑定的证据都不能采用，也不能作为有效分析显示；正常对照可采用", () => {
+  const H = base(), L = ledgers(H);
+  // evidence that does not exist cannot even become a draft; a measure may only cite evidence the version cites
+  assert.throws(() => addDraft(emptyAnalyses(), L, { episodeId: "EP-X", author: "x", at: "t", body: body({ evidenceIds: ["EV-1", "EV-2", "EV-DOES-NOT-EXIST"] }) }), (e) => e.code === "evidence_invalid" && /EV-DOES-NOT-EXIST/.test(e.reasons.join()));
+  assert.throws(() => addDraft(emptyAnalyses(), L, { episodeId: "EP-X", author: "x", at: "t", body: body({ evidenceIds: ["EV-1"] }) }), (e) => e.code === "invalid_body", "措施引用了本版没有的证据 EV-2");
+  const { f } = adoptedFile(H);
+  // after submission the stored summary is replaced without touching bodyHash: adoption refused
+  const t1 = structuredClone(f); t1.versions[0].body.summary = ["换成了另一段没有经过审核的文字。"];
+  assert.throws(() => adopt(t1, L, { id: "AV-EP-X-1", by: "审核人", at: "t3", basis: "核对" }), (e) => e.code === "integrity_failed" && /哈希不一致/.test(e.reasons.join()));
+  // replaced body AND recomputed bodyHash but with an evidence id that was never bound
+  const t2 = structuredClone(f); t2.versions[0].body.evidenceIds = ["EV-1", "EV-2", "EV-DOES-NOT-EXIST"]; t2.versions[0].bodyHash = _hash(t2.versions[0].body);
+  assert.throws(() => adopt(t2, L, { id: "AV-EP-X-1", by: "审核人", at: "t3", basis: "核对" }), (e) => e.code === "integrity_failed");
+  const t3 = structuredClone(f); t3.versions[0].snapshot.evidence = [];
+  assert.throws(() => adopt(t3, L, { id: "AV-EP-X-1", by: "审核人", at: "t3", basis: "核对" }), (e) => e.code === "integrity_failed", "快照被清空");
+  // normal control
+  const ok = adopt(f, L, { id: "AV-EP-X-1", by: "审核人", at: "t3", basis: "对照事实包与证据登记" });
+  assert.equal(ep(page(H, ok), "EP-X").summary.analysis.review, null);
+  // a version tampered AFTER adoption is not shown as a valid analysis: content withheld, history kept, measures gone
+  const tam = structuredClone(ok); tam.versions[0].body.impact = "改过的影响说明";
+  const p = page(H, tam), e = ep(p, "EP-X");
+  assert.equal(e.summary.analysis, null); assert.match(e.summary.review, /不能作为有效分析/);
+  assert.ok(!p.followUp.care.concat(p.followUp.visit).some((m) => m.id.startsWith("AV-EP-X-1")));
+  assert.equal(tam.versions.length, 1, "历史保留");
+  assert.equal(stateOf(L, tam.versions[0]).shown, "invalid");
+});
+
+test("R1B-2 医学证据登记变化：已采用后证据缺失/被修订/撤回/已读正文变了，分析与措施保留文字并待核；恢复后回到有效", () => {
+  const H = base(), L = ledgers(H);
+  const { f } = adoptedFile(H);
+  const ok = adopt(f, L, { id: "AV-EP-X-1", by: "审核人", at: "t3", basis: "核对" });
+  assert.equal(ep(page(H, ok), "EP-X").summary.analysis.review, null);
+  const T1 = "synthetic guideline text one", T2 = "synthetic guideline text two";
+  const src = (id, extra = {}) => ({ id, title: id, version: "2026", localText: id === "EV-1" ? "t1.txt" : "t2.txt", textSha256: shaHex(id === "EV-1" ? T1 : T2), ...extra });
+  const check = (label, rx) => {
+    const p = page(H, ok), a = ep(p, "EP-X").summary.analysis;
+    assert.match(a.review, rx, label); assert.equal(a.paragraphs[0], body().summary[0], "文字保留供追溯");
+    assert.ok(p.followUp.care.concat(p.followUp.visit).filter((m) => m.id.startsWith("AV-EP-X-1")).every((m) => /待重新核对/.test(m.review)), `${label}：措施同步待核`);
+    assert.equal(p.followUp.status, "stale");
+  };
+  writeFileSync(path.join(EVDIR, "t1.txt"), "the saved text was silently edited"); check("已读正文变了", /医学证据 EV-1.*不一致/);
+  writeRegister(); assert.equal(ep(page(H, ok), "EP-X").summary.analysis.review, null, "恢复后有效");
+  writeRegister({ sources: [src("EV-2")] }); check("证据不在登记里", /EV-1.*不在证据登记/);
+  writeRegister({ sources: [src("EV-1", { status: "withdrawn" }), src("EV-2")] }); check("被撤回", /EV-1.*撤回/);
+  writeRegister({ sources: [src("EV-1", { version: "2027 修订版" }), src("EV-2")] }); check("登记内容被修订", /EV-1.*被修订/);
+  writeRegister();
+  // a register that is not connected at all never counts as verified
+  const p = _build({ history: H, record: null, intervals: null, materials: null, analyses: ok, now: NOW });
+  assert.match(ep(p, "EP-X").summary.analysis.review, /登记没有接通/);
+  // and a changed saved text blocks adoption of a version still waiting
+  writeFileSync(path.join(EVDIR, "t2.txt"), "edited while waiting");
+  assert.throws(() => adopt(f, L, { id: "AV-EP-X-1", by: "审核人", at: "t3", basis: "核对" }), (e) => e.code === "evidence_invalid");
+  writeRegister();
+});
+
+test("R1B-3 跨病程/未挂靠的实际引用进入可失效快照；dataAsOf 覆盖所有引用；没引用的无关更正不影响", () => {
+  const H = base(), L = ledgers(H);
+  const cited = [{ ledger: "history", ref: { kind: "canonical_fact", id: "CF1" } }, { ledger: "history", ref: { kind: "episode", id: "EP-Y" }, note: "5 月那一段" }, { ledger: "history", ref: { kind: "observation", id: "O11" }, note: "6/1 未挂靠" }];
+  const { f } = adoptedFile(H, { factRefs: cited });
+  const ok = adopt(f, L, { id: "AV-EP-X-1", by: "审核人", at: "t3", basis: "核对" });
+  assert.equal(ep(page(H, ok), "EP-X").summary.analysis.review, null);
+  // another episode that this reading cites is corrected (a member of it): this analysis is held
+  const H1 = corr(H, { kind: "observation", id: "O10" }, "text", "鼻塞已经好了", "c-o10");
+  assert.match(ep(page(H1, ok), "EP-X").summary.analysis.review, /病程 EP-Y/);
+  // an unattached record that it cites is corrected
+  const H2 = corr(H, { kind: "observation", id: "O11" }, "text", "没有咳嗽", "c-o11");
+  assert.match(ep(page(H2, ok), "EP-X").summary.analysis.review, /O11/);
+  // control: a record it does not cite is corrected -> unchanged
+  const H3 = corr(H, { kind: "observation", id: "O12" }, "text", "今天有点鼻塞", "c-o12");
+  assert.equal(ep(page(H3, ok), "EP-X").summary.analysis.review, null);
+  // the data date has to cover the newest cited record (other episodes included) and may be later than the episode's own last record
+  assert.throws(() => addDraft(emptyAnalyses(), L, { episodeId: "EP-X", author: "x", at: "t", body: body({ dataAsOf: "2026-05-30", episodeLastRecord: "2026-05-25", factRefs: cited }) }), (e) => e.code === "invalid_body" && /dataAsOf/.test(e.reasons.join()));
+  assert.throws(() => addDraft(emptyAnalyses(), L, { episodeId: "EP-X", author: "x", at: "t", body: body({ episodeLastRecord: "2026-08-01" }) }), (e) => e.code === "invalid_body");
+  const wide = addDraft(emptyAnalyses(), L, { episodeId: "EP-X", author: "x", at: "t", body: body({ dataAsOf: "2026-07-30", episodeLastRecord: "2026-07-26", factRefs: cited }) });
+  assert.equal(wide.created, true);
+});
+
+test("R1C 待完成的复核不被新草稿和新基线遮住：已采用 v1 → 更正 → 起草 v2 → 存新基线，impact 仍报 v1 过期；采用 v2 后清空", () => {
+  const H = base(), L = ledgers(H);
+  const { f } = adoptedFile(H);
+  let file = adopt(f, L, { id: "AV-EP-X-1", by: "审核人", at: "t3", basis: "核对" });
+  const H2 = corr(H, { kind: "canonical_fact", id: "CF1" }, "value", "复核后更正的诊断", "c-cf1");
+  const L2 = ledgers(H2);
+  file = addDraft(file, L2, { episodeId: "EP-X", author: "执行者", at: "t4", body: body({ impact: "按更正后的诊断重写的影响说明" }) }).file;
+  assert.equal(file.versions.length, 2);
+  const newBase = makeBaseline(L2, "2026-09-23T00:00:00Z"); // the import baseline moves forward
+  const imp = computeImpact(L2, file, newBase, NOW);
+  assert.deepEqual(imp.affectedEpisodes.map((a) => a.episodeId), ["EP-X"], "基线前移、最新草稿有效，也不能隐去正在展示的 v1 的待核");
+  const rows = imp.affectedEpisodes[0].analyses;
+  assert.deepEqual(rows.map((r) => [r.role, r.id, r.shown]), [["displayed", "AV-EP-X-1", "expired"], ["pending", "AV-EP-X-2", "draft"]]);
+  assert.match(imp.affectedEpisodes[0].reasons.join(), /正在展示的已采用分析 AV-EP-X-1/);
+  assert.match(ep(page(H2, file), "EP-X").summary.analysis.review, /待重新核对/, "页面同样显示 v1 待核");
+  // a waiting version that itself became stale is reported too
+  const H3 = corr(H2, { kind: "encounter", id: "E1" }, "dept", "耳鼻喉科", "c-e1");
+  assert.ok(computeImpact(ledgers(H3), file, makeBaseline(ledgers(H3), "x"), NOW).affectedEpisodes[0].reasons.some((r) => /待审核的分析 AV-EP-X-2/.test(r)));
+  // finishing the review clears it: submit + adopt v2 on the current facts
+  file = adopt(submit(file, L2, { id: "AV-EP-X-2", by: "执行者", at: "t5" }), L2, { id: "AV-EP-X-2", by: "审核人", at: "t6", basis: "对照更正后的事实" });
+  assert.deepEqual(computeImpact(L2, file, newBase, NOW).affectedEpisodes, []);
+  assert.equal(ep(page(H2, file), "EP-X").summary.analysis.review, null);
+  assert.deepEqual(file.versions.map((v) => v.events.at(-1).status), ["superseded", "adopted"]);
 });

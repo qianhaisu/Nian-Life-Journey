@@ -6,7 +6,7 @@ import { Graph, effectiveContent } from "../graph";
 import { effectiveHash } from "../ledger";
 import { entityKey, hashOf, type Ledger } from "../model";
 import { buildTimeline } from "../timeline";
-import { stateOf, versionsOf, type AnalysisFile } from "./analysis";
+import { adoptedOf, stateOf, waitingOf, type AnalysisFile, type EvidenceResolver } from "./analysis";
 import { exclusionReason } from "./model";
 
 const KINDS = new Set(["observation", "canonical_fact", "encounter", "episode", "source"]);
@@ -24,7 +24,7 @@ export interface ChangedEntity { ledger: "history" | "record"; key: string; chan
 export interface Lead { ledger: "history" | "record"; id: string; date: string | null; clip: string; from: string; near: { episodeId: string; title: string; gapDays: number }[]; hasReportImages: boolean; action: string }
 export interface Impact {
   baselineAt: string; changed: ChangedEntity[];
-  affectedEpisodes: { episodeId: string; title: string; reasons: string[]; changedMembers: string[]; analysis: { id: string; shown: string; reasons: string[] } | null }[];
+  affectedEpisodes: { episodeId: string; title: string; reasons: string[]; changedMembers: string[]; analysis: { id: string; shown: string; reasons: string[] } | null; analyses: { role: "displayed" | "pending"; id: string; shown: string; reasons: string[] }[] }[];
   attachedNew: { ledger: "history"; id: string; episodeId: string }[];
   leads: Lead[];
   excluded: Record<string, string[]>;
@@ -36,7 +36,7 @@ const clean = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim();
 const gap = (a: string, b: string) => Math.round(Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000);
 const NEAR_DAYS = 14;
 
-export function computeImpact(s: Sides, analyses: AnalysisFile | null, base: Baseline | null, asOf: string): Impact {
+export function computeImpact(s: Sides, analyses: AnalysisFile | null, base: Baseline | null, asOf: string, evidence?: EvidenceResolver): Impact {
   const H = s.history;
   const changed: ChangedEntity[] = [];
   for (const [name, L] of [["history", H], ["record", s.record]] as const) {
@@ -61,10 +61,15 @@ export function computeImpact(s: Sides, analyses: AnalysisFile | null, base: Bas
     if (base && base.episodes[b.episodeId] === undefined) reasons.push("底账里新出现的病程");
     else if (base && base.episodes[b.episodeId] !== now) reasons.push("这一病程的成员、就诊、医院事实、来源或更正与基线不同");
     const members = g!.dependenciesOf(entityKey("episode", b.episodeId)).filter((k) => changedHist.has(k) && k !== entityKey("episode", b.episodeId));
-    const mine = analyses ? versionsOf(analyses, b.episodeId).filter((v) => ["draft", "pending_review", "adopted"].includes(v.events[v.events.length - 1].status)).pop() : undefined;
-    const st = mine ? stateOf(s, mine, g!) : null;
-    if (st?.shown === "expired") reasons.push(`已有的分析 ${st.id} 依据的事实已变，需要重新分析`);
-    if (reasons.length) affected.push({ episodeId: b.episodeId, title: clean(b.title), reasons, changedMembers: members.sort(), analysis: st ? { id: st.id, shown: st.shown, reasons: st.reasons } : null });
+    // the adopted version on display and the version waiting for review are judged separately: a newer draft (or a newer baseline) never hides an overdue re-review
+    const shownV = analyses ? adoptedOf(analyses, b.episodeId) : null, waitV = analyses ? waitingOf(analyses, b.episodeId) : null;
+    const states = [shownV && { role: "displayed" as const, st: stateOf(s, shownV, evidence, g!) }, waitV && { role: "pending" as const, st: stateOf(s, waitV, evidence, g!) }].filter((x): x is NonNullable<typeof x> => !!x);
+    for (const x of states) {
+      if (x.st.shown === "expired") reasons.push(x.role === "displayed" ? `正在展示的已采用分析 ${x.st.id} 依据的事实或医学证据已变，需要重新分析${waitV && waitV.id !== x.st.id ? `（较新的 ${waitV.id} 还没有采用）` : ""}` : `待审核的分析 ${x.st.id} 依据的事实或医学证据已变，需要重新起草`);
+      if (x.st.shown === "invalid") reasons.push(`${x.role === "displayed" ? "正在展示的已采用" : "待审核的"}分析 ${x.st.id} 的正文或证据绑定与审核时不一致，不能作为有效分析`);
+    }
+    const st = states[0]?.st ?? null;
+    if (reasons.length) affected.push({ episodeId: b.episodeId, title: clean(b.title), reasons, changedMembers: members.sort(), analysis: st ? { id: st.id, shown: st.shown, reasons: st.reasons } : null, analyses: states.map((x) => ({ role: x.role, id: x.st.id, shown: x.st.shown, reasons: x.st.reasons })) });
   }
 
   const leads: Lead[] = [];

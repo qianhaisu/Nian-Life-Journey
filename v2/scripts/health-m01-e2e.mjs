@@ -22,7 +22,7 @@ const before = Object.fromEntries(files.map((f) => [f, sha(f)]));
 
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT), "-H", "127.0.0.1"], {
   env: { ...process.env, NEXT_DIST_DIR: process.env.NEXT_DIST_DIR ?? ".next-hm1", HEALTH_RECORD_ROOT: REC, HEALTH_RECORD_SESSION_SECRET: randomUUID() + randomUUID(), HEALTH_RECORD_MOM_PASSWORD: MOM, HEALTH_RECORD_DAD_PASSWORD: `dad-${randomUUID()}`, HEALTH_RECORD_COOKIE_SECURE: "0",
-    HEALTH_HISTORY_LEDGER: path.join(DATA, "history-ledger"), HEALTH_PAGE_INTERVALS: path.join(DATA, "intervals.json"), HEALTH_PAGE_MATERIALS: path.join(DATA, "materials.json"), HEALTH_PAGE_DERIVED: path.join(DATA, "derived.json"), HEALTH_PAGE_ANALYSES: path.join(DATA, "analyses-preview.json"), HEALTH_PAGE_MATERIAL_ROOT: MATROOT },
+    HEALTH_HISTORY_LEDGER: path.join(DATA, "history-ledger"), HEALTH_PAGE_INTERVALS: path.join(DATA, "intervals.json"), HEALTH_PAGE_MATERIALS: path.join(DATA, "materials.json"), HEALTH_PAGE_DERIVED: path.join(DATA, "derived.json"), HEALTH_PAGE_ANALYSES: path.join(DATA, "analyses-preview.json"), HEALTH_PAGE_EVIDENCE: path.join(DATA, "evidence", "register.json"), HEALTH_PAGE_MATERIAL_ROOT: MATROOT },
   stdio: ["ignore", "pipe", "pipe"],
 });
 let log = ""; server.stdout.on("data", (d) => (log += d)); server.stderr.on("data", (d) => (log += d));
@@ -50,7 +50,7 @@ try {
   await page.waitForSelector("#ep-EP-E .hp-read");
   const txt = await ep.locator(".hp-sum").innerText();
   check("手机：最近病程展开后出现病程总结、四层来源（医生/家长/汇总稿转述/辅助推断）和不确定项", /急性喘息性支气管炎/.test(txt) && /医生诊断\/病历：/.test(txt) && /家长报告：/.test(txt) && /汇总稿转述：/.test(txt) && /辅助推断：/.test(txt) && /不能确定：/.test(txt));
-  check("手机：写明截至资料日期，历史状态不冒充今天；标明不是医生意见与采用记录", /截至 9月19日 的资料/.test(txt) && /今天（9 月 21 日）的状态没有记录/.test(txt) && /不是医生的诊断或意见/.test(txt) && /已采用：预览副本/.test(txt));
+  check("手机：写明截至资料日期，历史状态不冒充今天；标明不是医生意见与采用记录", /截至 9月20日 的资料/.test(txt) && /今天（9 月 21 日）的状态没有记录/.test(txt) && /不是医生的诊断或意见/.test(txt) && /已采用：预览副本/.test(txt));
   await ep.locator(".hp-sum").screenshot({ path: path.join(OUT, "m01-ep-e-phone.png") });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   check("手机：没有横向溢出", !overflow);
@@ -58,7 +58,7 @@ try {
   await page.evaluate(() => { for (const d of document.querySelectorAll("details.hp-grp")) d.open = true; });
   const care = await page.locator("#g-care .hp-it").allInnerTexts(), visit = await page.locator("#g-visit .hp-it").allInnerTexts();
   check("手机：「观察与护理」出现本病程的措施，带适用前提", care.some((t) => /随访期内每天留意咳嗽/.test(t) && /适用前提/.test(t)) && care.some((t) => /安静状态下数满 1 分钟/.test(t)), `${care.length} 项`);
-  check("手机：「就医安排」出现条件性警示与下次问医生的问题，且没有剂量", visit.some((t) => /呼吸明显费力/.test(t)) && visit.some((t) => /下次见医生时问/.test(t)) && !visit.concat(care).some((t) => /\d+(\.\d+)?\s*(mg|毫克|ml|毫升)/.test(t)));
+  check("手机：「就医安排」出现条件性警示与下次问医生的问题，且没有剂量", visit.some((t) => /^立即行动/.test(t.trim()) && /呼吸明显费力/.test(t)) && visit.some((t) => /当天联系医生/.test(t)) && !visit.some((t) => /当天去看医生或急诊/.test(t)) && visit.some((t) => /下次见医生时问/.test(t)) && !visit.concat(care).some((t) => /\d+(\.\d+)?\s*(mg|毫克|ml|毫升)/.test(t)));
   check("措施逐条带病程标签；没有出现预约或吃药提醒", (await page.locator("#g-visit .hp-it .chip.ep").count()) >= 5);
   await page.locator("#g-care").scrollIntoViewIfNeeded(); await page.locator("#g-care").screenshot({ path: path.join(OUT, "m01-measures-phone.png") });
   const cats = await page.evaluate(() => ({ cat: [...document.querySelectorAll("details.hp-cat > summary")].map((s) => s.innerText.replace(/\s+/g, " ").trim()) }));

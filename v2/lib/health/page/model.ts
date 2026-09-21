@@ -10,7 +10,7 @@ import { effectiveContent, Graph } from "../graph";
 import { effectiveHash } from "../ledger";
 import { entityKey, hashOf, type Content, type Ledger, type Ref } from "../model";
 import { buildTimeline, type EncounterView, type FactView, type SourceRef } from "../timeline";
-import { LAYER_LABEL, adoptedOf, snapshotProblems, type AnalysisFile } from "./analysis";
+import { LAYER_LABEL, adoptedOf, reviewReasons, versionProblems, type AnalysisFile, type EvidenceResolver } from "./analysis";
 
 // ---------- reviewed inputs ----------
 export interface ReviewedRef { ref: Ref; ledger: "history" | "record"; hash: string; note?: string }
@@ -107,6 +107,8 @@ export interface PageInputs {
   derived?: DerivedFile | null;
   /** adopted per-episode analyses (private file); only an adopted version with an unchanged dependency snapshot counts as reviewed */
   analyses?: AnalysisFile | null;
+  /** local medical-evidence register lookup; without it an adopted analysis can never be verified (shown as needing re-review) */
+  evidence?: EvidenceResolver;
   /** current SHA-256 of a materials source file, when it can be read (undefined = could not be checked) */
   materialSourceHash?: (file: string) => string | undefined;
   now: string; // Shanghai wall clock YYYY-MM-DDTHH:mm
@@ -340,6 +342,7 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
   // ----- episodes -----
   const changedEps = new Map<string, string>();
   const analysisWhy = new Map<string, string[]>();
+  const withheld = new Set<string>();
   const graphH = H ? new Graph(H) : null;
   const daysApart = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000;
   const episodes: PageEpisode[] = (tl?.blocks ?? []).map((b) => {
@@ -354,12 +357,17 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
     const stamp = inp.intervals?.episodeStamps?.[b.episodeId];
     const closureNow = graphH!.closureHash({ kind: "episode", id: b.episodeId });
     // an adopted analysis whose dependency snapshot still matches is itself a review of the episode at this exact state
-    const av = inp.analyses ? adoptedOf(inp.analyses, b.episodeId) : null;
-    const aWhy = av ? snapshotProblems({ history: H, record: R }, av, graphH!) : [];
+    const avAll = inp.analyses ? adoptedOf(inp.analyses, b.episodeId) : null;
+    const prob = avAll ? versionProblems({ history: H, record: R }, avAll, inp.evidence, graphH!) : null;
+    // a version whose stored body/snapshot no longer matches what was reviewed (or whose structure is broken) is not a valid analysis: its content is withheld, history kept
+    const invalid = !!prob && prob.integrity.length > 0;
+    const av = invalid ? null : avAll;
+    const aWhy = prob && !invalid ? reviewReasons(prob) : [];
     const stale0 = inp.intervals ? (stamp === undefined ? "这一病程的要点还没有记录核对时的底账版本" : stamp !== closureNow ? "这一病程关联的医院事实、就诊、来源或成员在核对之后有变化" : null) : null;
     const stampProblem = av && !aWhy.length ? null : stale0;
     if (stampProblem) changedEps.set(b.episodeId, stampProblem);
-    else if (av && aWhy.length) changedEps.set(b.episodeId, "医学分析读到的事实在采用之后有变化");
+    else if (av && aWhy.length) changedEps.set(b.episodeId, "医学分析读到的事实或依据的医学证据在采用之后有变化");
+    if (invalid) { changedEps.set(b.episodeId, "医学分析的正文或证据绑定与审核时不一致"); withheld.add(b.episodeId); }
     if (av && aWhy.length) analysisWhy.set(b.episodeId, aWhy);
     for (const x of b.encounters) if (day(x.date)) { const v = visitOf(H!, x); course.push({ date: day(x.date)!, text: `${x.kindLabel}：${v.dept || v.hospital}${v.diagnoses.length ? `，${v.diagnoses.join("；")}` : ""}` }); }
     course.sort((a, c) => (a.date < c.date ? -1 : a.date > c.date ? 1 : 0));
@@ -385,7 +393,8 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
         analysis,
         // an interval that lost its evidence also puts the episode's summary points (which rest on the same records) under review
         review: [pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间因依据变化正在待重新核对` : "", stampProblem ?? ""].filter(Boolean).length
-          ? `待重新核对：${[pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间的依据变化` : "", stampProblem ?? ""].filter(Boolean).join("；")}。下面的要点可能受影响，先按旧底账原样保留。` : null,
+          ? `待重新核对：${[pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间的依据变化` : "", stampProblem ?? ""].filter(Boolean).join("；")}。下面的要点可能受影响，先按旧底账原样保留。${invalid ? `　另外，这一病程采用过的医学分析，其正文或证据绑定与审核时不一致（${prob!.integrity.join("；")}），不能作为有效分析，内容不显示，历史已保留。` : ""}`
+          : invalid ? `待重新核对：这一病程采用过的医学分析，其正文或证据绑定与审核时不一致（${prob!.integrity.join("；")}），不能作为有效分析，内容不显示，历史已保留。` : null,
       },
       visits: b.encounters.map((x) => visitOf(H!, x)).sort((a, c) => a.date.localeCompare(c.date)),
     };
@@ -404,7 +413,7 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
   const aItems: { group: "care" | "visit"; item: FollowUpItem }[] = [];
   let analysisAsOf: string | null = null;
   for (const b of tl?.blocks ?? []) {
-    const av = inp.analyses ? adoptedOf(inp.analyses, b.episodeId) : null;
+    const av = inp.analyses && !withheld.has(b.episodeId) ? adoptedOf(inp.analyses, b.episodeId) : null;
     if (!av) continue;
     if (!analysisAsOf || av.body.dataAsOf > analysisAsOf) analysisAsOf = av.body.dataAsOf;
     const why = [...(analysisWhy.get(b.episodeId) ?? []), ...(pendingByEp.has(b.episodeId) ? ["这一病程有区间待重新核对"] : [])];

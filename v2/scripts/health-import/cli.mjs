@@ -20,7 +20,8 @@
 //   impact   --ledger HISTORY_DIR [--record-ledger DIR] --baseline FILE [--analyses FILE] [--as-of ISO] [--out DIR]
 //      (HEALTH-M01-A) read-only preview of what changed since the baseline: affected episodes, new records that belong to no episode
 //      (leads for a person, never auto-attached), excluded records with reasons, new raw sources awaiting fact extraction.
-//   analysis list|draft|submit|adopt|reject --ledger HISTORY_DIR [--record-ledger DIR] --analyses FILE   (HEALTH-M01-A; writes only with --apply)
+//   analysis list|draft|submit|adopt|reject --ledger HISTORY_DIR [--record-ledger DIR] --analyses FILE --evidence REGISTER.json   (HEALTH-M01-A; writes only with --apply)
+//      --evidence: the local medical-evidence register (also for impact and page): an id that does not resolve, or an entry / saved text that changed, blocks adoption and holds a shown analysis for re-review
 //      draft   --episode ID --body FILE --author NAME [--at ISO]     append a version bound to the episode's dependency snapshot
 //      submit  --id AV-… --by NAME [--at ISO]                        draft -> pending review
 //      adopt   --id AV-… --by NAME --basis TEXT [--at ISO]           re-compares the snapshot now; refused (exit 3) if the facts changed
@@ -38,6 +39,7 @@ import { runCorrection, runImport } from "../../lib/health/importer.ts";
 import { Graph, analysisStatus, effectiveContent, effectiveHash } from "../../lib/health/ledger.ts";
 import { buildHealthPage } from "../../lib/health/page/model.ts";
 import { AnalysisRefused, addDraft, adopt, emptyAnalyses, isAnalysisFile, reject, stateOf, submit } from "../../lib/health/page/analysis.ts";
+import { evidenceResolverFromFile } from "../../lib/health/page/evidence.ts";
 import { computeImpact, makeBaseline } from "../../lib/health/page/impact.ts";
 import { hashOf } from "../../lib/health/model.ts";
 import { Graph as DepGraph } from "../../lib/health/graph.ts";
@@ -170,7 +172,7 @@ export async function main(argv) {
     const materials = args.materials ? readJson(args.materials, "--materials") : null;
     const rootDir = args["material-root"] ? assertOutsideRepo(String(args["material-root"]), "--material-root") : null;
     const materialSourceHash = materials && rootDir ? (file) => { try { return createHash("sha256").update(readFileSync(path.resolve(rootDir, file))).digest("hex"); } catch { return undefined; } } : undefined;
-    const page = buildHealthPage({ history, record, intervals: args.intervals ? readJson(args.intervals, "--intervals") : null, materials, derived: args.derived ? readJson(args.derived, "--derived") : null, analyses: args.analyses ? readJson(args.analyses, "--analyses") : null, materialSourceHash, now: asOf });
+    const page = buildHealthPage({ history, record, intervals: args.intervals ? readJson(args.intervals, "--intervals") : null, materials, derived: args.derived ? readJson(args.derived, "--derived") : null, analyses: args.analyses ? readJson(args.analyses, "--analyses") : null, evidence: evidenceResolverFromFile(args.evidence ? assertOutsideRepo(String(args.evidence), "--evidence") : null), materialSourceHash, now: asOf });
     const impact = { asOf: page.asOf, nodes: page.nodes.length, bands: page.bands.map((b) => ({ id: b.id, kind: b.kind, start: b.start, end: b.end, status: b.status, reasons: b.statusReasons })), pendingIntervals: page.pendingIntervals, followUp: { status: page.followUp.status, reason: page.followUp.staleReason }, reminders: page.reminders.length };
     writeOut(path.join(String(args.out), "page-model.json"), JSON.stringify(page, null, 1), "--out");
     writeOut(path.join(String(args.out), "impact.json"), JSON.stringify(impact, null, 1), "--out");
@@ -182,6 +184,8 @@ export async function main(argv) {
     const record = args["record-ledger"] ? await new HealthFileStore(assertOutsideRepo(String(args["record-ledger"]), "--record-ledger")).read() : null;
     const readJ = (f, label) => { try { return JSON.parse(readFileSync(assertOutsideRepo(String(f), label), "utf8")); } catch { throw new Error(`cannot read ${label} as JSON`); } };
     const nowIso = args.at ? String(args.at) : new Date().toISOString();
+    // medical evidence is resolved from the local register (--evidence FILE); without it nothing can be drafted, submitted or adopted and shown analyses read as unverifiable
+    const evidence = evidenceResolverFromFile(args.evidence ? assertOutsideRepo(String(args.evidence), "--evidence") : null);
     const sides = { history, record };
     if (cmd === "baseline") {
       const b = makeBaseline(sides, nowIso);
@@ -192,7 +196,7 @@ export async function main(argv) {
     if (cmd === "impact") {
       const base = args.baseline ? readJ(args.baseline, "--baseline") : null;
       const analyses = args.analyses ? readJ(args.analyses, "--analyses") : null;
-      const imp = computeImpact(sides, analyses && isAnalysisFile(analyses) ? analyses : null, base, String(args["as-of"] ?? nowIso.slice(0, 16)));
+      const imp = computeImpact(sides, analyses && isAnalysisFile(analyses) ? analyses : null, base, String(args["as-of"] ?? nowIso.slice(0, 16)), evidence);
       if (args.out) writeOut(path.join(String(args.out), `impact-${imp.digest}.json`), JSON.stringify(imp, null, 1), "--out");
       console.log(JSON.stringify({ digest: imp.digest, changed: imp.changed.length, affectedEpisodes: imp.affectedEpisodes.map((a) => ({ id: a.episodeId, reasons: a.reasons })), attachedNew: imp.attachedNew.length, leads: imp.leads.length, excluded: Object.fromEntries(Object.entries(imp.excluded).map(([k, v]) => [k, v.length])), newSources: imp.newSources }, null, 1));
       return imp.affectedEpisodes.length || imp.leads.length ? 3 : 0;
@@ -203,17 +207,17 @@ export async function main(argv) {
     try { cur = readJ(file, "--analyses"); } catch (e) { if (existsSync(file)) throw e; }
     if (!isAnalysisFile(cur)) throw new Error("--analyses is not an analyses file");
     if (sub === "list") {
-      console.log(JSON.stringify(cur.versions.map((v) => { const st = stateOf(sides, v); return { id: v.id, episode: v.episodeId, seq: v.seq, shown: st.shown, recorded: st.recorded, reasons: st.reasons, by: st.last.by, at: st.last.at }; }), null, 1));
+      console.log(JSON.stringify(cur.versions.map((v) => { const st = stateOf(sides, v, evidence); return { id: v.id, episode: v.episodeId, seq: v.seq, shown: st.shown, recorded: st.recorded, reasons: st.reasons, by: st.last.by, at: st.last.at }; }), null, 1));
       return 0;
     }
     try {
       let next, note = {};
       if (sub === "draft") {
         const body = readJ(args.body, "--body");
-        const r = addDraft(cur, sides, { episodeId: String(args.episode), author: String(args.author ?? ""), at: nowIso, body });
+        const r = addDraft(cur, sides, { episodeId: String(args.episode), author: String(args.author ?? ""), at: nowIso, body, evidence });
         next = r.file; note = { id: r.version.id, created: r.created };
-      } else if (sub === "submit") { next = submit(cur, sides, { id: String(args.id), by: String(args.by ?? ""), at: nowIso }); note = { id: args.id }; }
-      else if (sub === "adopt") { next = adopt(cur, sides, { id: String(args.id), by: String(args.by ?? ""), at: nowIso, basis: String(args.basis ?? "") }); note = { id: args.id }; }
+      } else if (sub === "submit") { next = submit(cur, sides, { id: String(args.id), by: String(args.by ?? ""), at: nowIso, evidence }); note = { id: args.id }; }
+      else if (sub === "adopt") { next = adopt(cur, sides, { id: String(args.id), by: String(args.by ?? ""), at: nowIso, basis: String(args.basis ?? ""), evidence }); note = { id: args.id }; }
       else if (sub === "reject") { next = reject(cur, { id: String(args.id), by: String(args.by ?? ""), at: nowIso, basis: String(args.basis ?? "") }); note = { id: args.id }; }
       else throw new Error(`unknown analysis subcommand ${sub}`);
       if (args.apply) writeOut(file, JSON.stringify(next, null, 1), "--analyses");
@@ -222,7 +226,7 @@ export async function main(argv) {
     } catch (e) {
       if (!(e instanceof AnalysisRefused)) throw e;
       console.error(JSON.stringify({ refused: e.code, reasons: e.reasons }));
-      return e.code === "dependency_changed" ? 3 : 2;
+      return e.code === "dependency_changed" || e.code === "evidence_invalid" ? 3 : 2;
     }
   }
   if (cmd === "analyses") {
