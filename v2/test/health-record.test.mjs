@@ -7,14 +7,13 @@ import path from "node:path";
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import sharp from "sharp";
 import { loadHealthRecordConfig } from "../lib/health/record/config.ts";
-import { issueSession } from "../lib/health/record/auth.ts";
 import { createHealthRecordHandler } from "../lib/health/record/http.ts";
 import { HealthFileStore } from "../lib/health/file-store.ts";
 import { runImport } from "../lib/health/importer.ts";
 import { businessDigest } from "../lib/health/model.ts";
 
 const ORIGIN = "http://health.test";
-const ENV = (root) => ({ HEALTH_RECORD_ROOT: root, HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw" });
+const ENV = (root) => ({ HEALTH_RECORD_ROOT: root });
 const uid = (() => { let n = 0; return () => `req${String(++n).padStart(6, "0")}${"x".repeat(12)}`; })();
 const T0 = Date.parse("2026-09-21T10:00:00+08:00");
 
@@ -22,7 +21,7 @@ async function setup(over = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "health-record-test-"));
   const clock = { now: T0 };
   const flags = { ledgerFail: false, originalFail: false };
-  const conf = loadHealthRecordConfig({ ...ENV(root), HEALTH_RECORD_COOKIE_SECURE: "0" }, over.cwd ?? "/elsewhere");
+  const conf = loadHealthRecordConfig({ ...ENV(root) }, over.cwd ?? "/elsewhere");
   assert.ok(conf.ok, conf.reason);
   const handle = createHealthRecordHandler(() => conf, () => ({
     now: () => clock.now,
@@ -30,7 +29,7 @@ async function setup(over = {}) {
     originalsHooks: { failWrite: () => flags.originalFail },
   }));
   const call = async (method, p, { body, files, cookie, origin = ORIGIN, headers = {} } = {}) => {
-    const h = { ...headers }; if (origin) h.origin = origin; if (cookie) h.cookie = cookie;
+    const h = { ...headers }; if (origin) h.origin = origin; if (cookie) h["x-health-entry-by"] = cookie; // "cookie" now carries the declared entry person (mom | dad); there is no session
     let payload;
     if (files) { const f = new FormData(); f.set("payload", JSON.stringify(body ?? {})); for (const x of files) f.append("files", new File([x.data], x.name, { type: x.type ?? "image/jpeg" })); payload = f; }
     else if (body !== undefined) { h["content-type"] = "application/json"; payload = JSON.stringify(body); }
@@ -38,58 +37,51 @@ async function setup(over = {}) {
     const type = res.headers.get("content-type") ?? "";
     return { status: res.status, headers: res.headers, json: type.includes("json") ? await res.json() : null, buf: type.includes("json") ? null : Buffer.from(await res.arrayBuffer()) };
   };
-  const login = async (who) => { const r = await call("POST", "session", { body: { who, password: who === "mom" ? "mom-synthetic-pw" : "dad-synthetic-pw" } }); assert.equal(r.status, 200); return r.headers.get("set-cookie").split(";")[0]; };
+  const login = async (who) => who; // no health login any more: the entry person is just declared per request
   return { root, clock, flags, conf, handle, call, login, cleanup: () => rm(root, { recursive: true, force: true }), ...over };
 }
 const jpeg = (w = 80, h = 100, rgb = { r: 200, g: 120, b: 90 }, orientation) => { let s = sharp({ create: { width: w, height: h, channels: 3, background: rgb } }); if (orientation) s = s.withMetadata({ orientation }); return s.jpeg().toBuffer(); };
 const nowStr = (ms) => new Date(ms + 8 * 3600_000).toISOString().slice(0, 16);
 const noteBody = (over = {}) => ({ type: "note", entryId: uid(), text: "夜里咳嗽", when: { mode: "unknown" }, symptoms: {}, ...over });
 
-// ============ 1 未认证 / 作者不可伪造 / 跨来源写入 ============
-test("1 未认证访问被拒；作者取自会话；跨来源与篡改会话被拒；未配置即关闭", async () => {
+// ============ 1 没有健康登录 / 录入人自报 / 跨来源写入 ============
+test("1 没有健康登录：读开放、写要同源和录入人；录入人取自请求头（自报，不是验证）；跨来源被拒；未配置即关闭", async () => {
   const s = await setup();
   try {
     const mom = await s.login("mom");
     const made = await s.call("POST", "entries", { cookie: mom, body: noteBody({ author: "爸爸", speaker: "爸爸", who: "dad" }) });
     assert.equal(made.status, 200);
     const id = made.json.record.id;
-    assert.equal(made.json.record.author, "妈妈", "作者来自会话，请求里自报的作者被忽略");
-    // 图片先存好，后面检查原件也要授权
+    assert.equal(made.json.record.author, "妈妈", "录入人来自请求头选择，请求体里自报的作者被忽略");
     const img = await jpeg();
     const v = await s.call("POST", "entries", { cookie: mom, body: { type: "visit", entryId: uid(), note: "x", hospital: "浙一" }, files: [{ name: "a.jpg", data: img }] });
     const sha = v.json.record.images[0].sha256;
-
-    for (const [m, p, body] of [["GET", "entries"], ["GET", `entries/${id}`], ["GET", `originals/${sha}`], ["GET", `originals/${sha}?thumb=1`], ["POST", "entries", noteBody()], ["POST", `entries/${id}/corrections`, { requestId: uid(), expectedRevision: 1, edit: { text: "x" } }], ["POST", `entries/${id}/attribution`, { requestId: uid(), expectedRevision: 1, action: "void" }]]) {
-      const r = await s.call(m, p, { body });
-      assert.equal(r.status, 401, `${m} ${p} 未登录应 401`);
+    // reads are open (no login), still uncacheable
+    for (const p of ["entries", `entries/${id}`, `originals/${sha}`, `originals/${sha}?thumb=1`, "reminders"]) {
+      const r = await s.call("GET", p);
+      assert.equal(r.status, 200, `GET ${p} 不需要登录`);
       assert.match(r.headers.get("cache-control"), /no-store/);
     }
-    assert.equal((await s.call("POST", "session", { body: { who: "mom", password: "wrong-password" } })).status, 401);
-    assert.equal((await s.call("POST", "session", { body: { who: "mom", password: "dad-synthetic-pw" } })).status, 401, "爸爸的密码不能登录妈妈");
-    // 跨来源 / 缺 Origin 的写入
+    assert.equal((await s.call("POST", "session", { body: { who: "mom", password: "x" } })).status, 400, "没有登录入口了（写请求也要先选录入人）");
+    // writes need a declared entry person: without it nothing runs
+    for (const [p, body] of [["entries", noteBody()], [`entries/${id}/corrections`, { requestId: uid(), expectedRevision: 1, edit: { text: "x" } }], [`entries/${id}/attribution`, { requestId: uid(), expectedRevision: 1, action: "void" }]]) {
+      const r = await s.call("POST", p, { body });
+      assert.equal(r.status, 400, `POST ${p} 没有录入人应 400`); assert.equal(r.json.code, "entry_by_required");
+    }
+    assert.equal((await s.call("POST", "entries", { cookie: "someone-else", body: noteBody() })).status, 400, "录入人只能是妈妈或爸爸");
+    const before = (await s.call("GET", "entries?limit=50")).json.items.length;
+    assert.equal(before, 2, "没有录入人的写入没有产生记录");
+    // cross-origin / missing Origin writes are still refused
     assert.equal((await s.call("POST", "entries", { cookie: mom, origin: "http://evil.example", body: noteBody() })).status, 403);
     assert.equal((await s.call("POST", "entries", { cookie: mom, origin: null, body: noteBody() })).status, 403);
     assert.equal((await s.call("POST", "entries", { cookie: mom, headers: { "sec-fetch-site": "cross-site" }, body: noteBody() })).status, 403);
-    // 篡改 / 过期 / 伪造会话
-    assert.equal((await s.call("GET", "entries", { cookie: mom.slice(0, -3) + "abc" })).status, 401);
-    const expired = issueSession(s.conf.config, "mom", Date.now() - 10 * 3600_000).token;
-    assert.equal((await s.call("GET", "entries", { cookie: `hr_session=${expired}` })).status, 401);
-    const forgedBody = Buffer.from(JSON.stringify({ w: "dad", exp: 9999999999 })).toString("base64url");
-    assert.equal((await s.call("GET", "entries", { cookie: `hr_session=${forgedBody}.AAAA` })).status, 401);
-    // Cookie 属性
-    const lr = await s.call("POST", "session", { body: { who: "dad", password: "dad-synthetic-pw" } });
-    assert.match(lr.headers.get("set-cookie"), /HttpOnly/); assert.match(lr.headers.get("set-cookie"), /SameSite=Strict/);
-    // 原件：只服务已提交记录引用的图片，不接受路径
-    assert.equal((await s.call("GET", `originals/${"a".repeat(64)}`, { cookie: mom })).status, 404);
-    assert.equal((await s.call("GET", "originals/..%2f..%2fledger%2fledger.json", { cookie: mom })).status, 404);
-    assert.equal((await s.call("GET", `originals/${sha}`, { cookie: mom })).status, 200);
-    // 暴力尝试被刹车
-    for (let i = 0; i < 5; i++) await s.call("POST", "session", { body: { who: "mom", password: `bad-${i}-bad-bad` } });
-    assert.equal((await s.call("POST", "session", { body: { who: "mom", password: "mom-synthetic-pw" } })).status, 429);
-    // 配置缺失 / 位置不安全 = 关闭，不回退
+    // originals: only images referenced by committed records, never a path
+    assert.equal((await s.call("GET", `originals/${"a".repeat(64)}`)).status, 404);
+    assert.equal((await s.call("GET", "originals/..%2f..%2fledger%2fledger.json")).status, 404);
+    // no configuration / unsafe location = off, no fallback
     const off = createHealthRecordHandler(() => loadHealthRecordConfig({}));
     assert.equal((await off(new Request(`${ORIGIN}/api/health-record/entries`), ["entries"])).status, 404);
-    for (const env of [{ ...ENV("/x"), HEALTH_RECORD_ROOT: "relative/dir" }, { ...ENV(s.root), HEALTH_RECORD_SESSION_SECRET: "short" }, { ...ENV(s.root), HEALTH_RECORD_DAD_PASSWORD: "mom-synthetic-pw" }, ENV(path.join(process.cwd(), "public", "hr"))]) assert.equal(loadHealthRecordConfig(env).ok, false);
+    for (const env of [{ ...ENV("/x"), HEALTH_RECORD_ROOT: "relative/dir" }, ENV(path.join(process.cwd(), "public", "hr"))]) assert.equal(loadHealthRecordConfig(env).ok, false);
   } finally { await s.cleanup(); }
 });
 

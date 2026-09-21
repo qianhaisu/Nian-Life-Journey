@@ -37,7 +37,7 @@ const Xp = () => <span className="hp-xp"><Icon kind="down" /><em /></span>;
 
 type Sel = { type: "node"; id: string } | { type: "band"; id: string } | { type: "rt" } | null;
 
-export function HealthView({ page, who }: { page: HealthPage; who: string }) {
+export function HealthView({ page }: { page: HealthPage }) {
   return <div className="hp">
     <div className="hp-head"><h1 className="hp-h1">健康</h1><Link className="hp-btn" href="/health/record">＋ 记一笔</Link></div>
     <JumpBar />
@@ -47,7 +47,7 @@ export function HealthView({ page, who }: { page: HealthPage; who: string }) {
     <div className="hp-narrow">
       <section className="hp-part" id="hp-s2" aria-labelledby="hp-t2"><h2 id="hp-t2">病程分析</h2><Episodes page={page} /></section>
       <section className="hp-part" id="hp-s3" aria-labelledby="hp-t3"><h2 id="hp-t3">后续措施</h2><FollowUp page={page} /></section>
-      <p className="hp-disc">辅助整理，不是诊断，不能代替医生。当前登录：{who}。</p>
+      <p className="hp-disc">辅助整理，不是诊断，不能代替医生。</p>
     </div>
   </div>;
 }

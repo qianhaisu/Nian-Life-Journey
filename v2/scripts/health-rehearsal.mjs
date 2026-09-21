@@ -1,7 +1,7 @@
 // Health module incremental rehearsal (launch check). Everything is SYNTHETIC and lives in a fresh temp directory:
 // no real ledger, original, analysis or credential is read, and nothing here can reach the live data. Every review record it
 // writes is labelled 演练 (rehearsal). Run from v2/:  node --import tsx scripts/health-rehearsal.mjs [outDir]
-//   1 a parent note (through the real HTTP handler, login included) and a WeChat increment arrive: new content and unassigned leads are
+//   1 a parent note (through the real HTTP handler; the entry person is only declared, there is no health login) and a WeChat increment arrive: new content and unassigned leads are
 //     visible, excluded records are not, and replaying the same inputs adds nothing
 //   2 a cited fact is corrected: the analysis that rests on it is held for re-review
 //   3 a synthetic new analysis version goes draft -> submit -> adopt -> the page updates, the unrelated episode does not change
@@ -67,7 +67,7 @@ try {
   writeFileSync(analysesFile, JSON.stringify(an));
 
   const recRoot = path.join(dir, "record-root");
-  const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: recRoot, HEALTH_RECORD_SESSION_SECRET: "r".repeat(48), HEALTH_RECORD_MOM_PASSWORD: "rehearsal-mom-pw", HEALTH_RECORD_DAD_PASSWORD: "rehearsal-dad-pw" }, "/elsewhere");
+  const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: recRoot, }, "/elsewhere");
   if (!conf.ok) throw new Error(conf.reason);
   let now = NOW;
   const sources = { historyLedgerDir: histDir, originalRoots: [], intervalsFile: null, materialsFile: null, derivedFile: null, analysesFile, evidenceFile: REG, problems: [] };
@@ -75,7 +75,7 @@ try {
   const records = new HealthRecordService(recRoot, { repo: conf.config.repo, now: () => now });
   const pages = new HealthPageService(records, sources, () => now);
   const call = async (method, p, { cookie, body: b } = {}) => {
-    const h = { origin: ORIGIN, host: "rehearsal.invalid" }; if (cookie) h.cookie = cookie; if (b) h["content-type"] = "application/json";
+    const h = { origin: ORIGIN, host: "rehearsal.invalid" }; if (cookie) h["x-health-entry-by"] = cookie; if (b) h["content-type"] = "application/json";
     const res = await handle(new Request(`${ORIGIN}/api/health-record/${p}`, { method, headers: h, body: b ? JSON.stringify(b) : undefined }), p.split("/"));
     return { status: res.status, headers: res.headers, json: JSON.parse(Buffer.from(await res.arrayBuffer()).toString("utf8") || "{}") };
   };
@@ -85,10 +85,9 @@ try {
 
   // ---------- 1 increment ----------
   check("演练前：两个合成病程都有已采用的分析", !!ep(before, "EP-R1").summary.analysis && !!ep(before, "EP-R2").summary.analysis && ep(before, "EP-R1").summary.analysis.review === null);
-  check("未登录：写入被拒绝，不读不写", (await call("POST", "entries", { body: { type: "note", entryId: "x".repeat(30), text: "x" } })).status === 401);
-  const login = await call("POST", "session", { body: { who: "mom", password: "rehearsal-mom-pw" } });
-  const cookie = login.headers.get("set-cookie")?.split(";")[0];
-  check("妈妈登录（合成密码）成功", login.status === 200 && !!cookie);
+  check("没有录入人：写入被拒绝，不写任何账本", (await call("POST", "entries", { body: { type: "note", entryId: "x".repeat(30), text: "x" } })).status === 400);
+  const cookie = "mom"; // declared entry person (not an authenticated identity)
+  check("选择录入人“妈妈”后可写入", (await call("GET", "reminders")).status === 200);
   const note = { type: "note", entryId: `rh${"0".repeat(20)}note1`, text: "演练：今天又咳了几声", when: { mode: "date", date: "2026-09-21", precision: "day" }, symptoms: { temperature: "37.9" } };
   const n1 = await call("POST", "entries", { cookie, body: note });
   const n2 = await call("POST", "entries", { cookie, body: note });

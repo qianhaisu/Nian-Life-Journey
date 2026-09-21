@@ -18,7 +18,7 @@
 #   caddy-up                 解析已指向 ECS_PUBLIC_IP 才启动 Caddy（自动申请证书）
 #   verify                   本机外部验证：跳转、证书、首页、健康检查的 SHA
 #   health-data-install <本地目录>  健康模块私有数据装到 /srv/nianlife-health（只换只读部分，绝不碰 record/）
-#   health-env <短SHA>       用本机私有密钥文件（HEALTH_SECRETS_FILE）在 ECS 上生成新的运行时 env 源文件（不回显）
+#   health-env <短SHA>       在 ECS 上生成新的运行时 env 源文件（现有 env + 健康数据路径；没有健康账号/密码，不回显）
 #   health-backup            /srv/nianlife-health → 带逐文件 SHA-256 清单的压缩包（HEALTH_BACKUP_DIR），只增不删
 #   health-restore-check <包> 解到隔离临时目录核对清单并解析各账本，不动线上数据
 #   caddy-reload             校验并热加载 Caddyfile.ecs（原地覆盖以保持挂载，旧版留 .prev-<时间>）
@@ -258,16 +258,12 @@ EOF
     ;;
 
   health-env)
-    short="${1:?usage: health-env <short sha>}"; : "${HEALTH_SECRETS_FILE:?set HEALTH_SECRETS_FILE (local private file with the three HEALTH_RECORD_* secrets)}"
-    [ -f "$HEALTH_SECRETS_FILE" ] || { echo "STOP: secrets file not found"; exit 2; }
-    scp -o BatchMode=yes -i "$ECS_KEY" "$HEALTH_SECRETS_FILE" "$ECS_SSH:/home/ecs-user/.health-secrets.tmp"
+    short="${1:?usage: health-env <short sha>}"
     remote "$short" "$ENV_SOURCE" "$HEALTH_HOST_DIR" <<'EOF'
 set -euo pipefail
-short="$1"; base="$2"; dir="$3"; out="/home/ecs-user/.env.runtime.health-$short"; sec=/home/ecs-user/.health-secrets.tmp
-trap 'rm -f "$sec"' EXIT
+short="$1"; base="$2"; dir="$3"; out="/home/ecs-user/.env.runtime.health-$short"
 [ -f "$base" ] || { echo "STOP: base env $base not found"; exit 3; }
 [ ! -e "$out" ] || { echo "STOP: $out already exists (env sources are immutable; use a new name)"; exit 3; }
-for k in HEALTH_RECORD_SESSION_SECRET HEALTH_RECORD_MOM_PASSWORD HEALTH_RECORD_DAD_PASSWORD; do grep -q "^$k=." "$sec" || { echo "STOP: $k missing in secrets file"; exit 3; }; done
 umask 077
 {
   cat "$base"; echo
@@ -279,7 +275,6 @@ umask 077
   echo "HEALTH_PAGE_ANALYSES=$dir/analyses/analyses.json"
   echo "HEALTH_PAGE_EVIDENCE=$dir/evidence/register.json"
   echo "HEALTH_PAGE_MATERIAL_ROOT=$dir/material-root"
-  cat "$sec"
 } > "$out"
 if [ -f "$dir/pagedata/original-root-map.txt" ]; then echo "HEALTH_HISTORY_ORIGINAL_ROOT_MAP=$(cat "$dir/pagedata/original-root-map.txt")" >> "$out"; fi
 echo "wrote $out (health variables: $(grep -c '^HEALTH_' "$out"), total lines: $(grep -c . "$out"); values not shown)"

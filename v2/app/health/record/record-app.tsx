@@ -1,5 +1,5 @@
 "use client";
-// 爸妈手记 / 就医 / 已记录（HEALTH-03 r2）。所有数据来自 /api/health-record（服务端校验会话）。
+// 爸妈手记 / 就医 / 已记录（HEALTH-03 r2）。所有数据来自 /api/health-record。没有健康登录：“妈妈 / 爸爸”只是录入人选择（随写入请求带上），不是经过验证的账号。
 // 未提交的草稿只留在内存；保存只有在服务端持久提交成功后才提示“已保存”，失败保留全部输入。
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryEntry, RecordView, Symptoms } from "@/lib/health/record/service";
@@ -27,12 +27,18 @@ const UNCERTAIN = "刚才没有收到结果，不确定有没有保存。点“�
 /** No response at all, a gateway error, or an unexplained server error: the request may or may not have been committed. */
 const isUncertain = (r: { status: number; json: { code?: string } | null }) => r.status === 0 || r.status >= 502 || (r.status === 500 && (!r.json?.code || r.json.code === "server_error"));
 
+/** The declared entry person (sent with every request; the server records it as declared, it is not an authenticated identity). */
+let ENTRY_BY: "mom" | "dad" | "" = "";
 async function api(method: string, path: string, body?: unknown, form?: FormData) {
   try {
-    const res = await fetch(`/api/health-record/${path}`, { method, credentials: "same-origin", headers: body !== undefined && !form ? { "content-type": "application/json" } : undefined, body: form ?? (body !== undefined ? JSON.stringify(body) : undefined) });
+    const headers: Record<string, string> = {};
+    if (body !== undefined && !form) headers["content-type"] = "application/json";
+    if (ENTRY_BY) headers["x-health-entry-by"] = ENTRY_BY;
+    const res = await fetch(`/api/health-record/${path}`, { method, credentials: "same-origin", headers, body: form ?? (body !== undefined ? JSON.stringify(body) : undefined) });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let json: any = null; try { json = await res.json(); } catch { /* non-JSON */ }
-    return { status: res.status, ok: res.ok && !!json?.ok, json };
+    // the server asks for a declared entry person: treat it like the old "lost" state so the chooser comes back with the draft kept
+    return { status: json?.code === "entry_by_required" ? 401 : res.status, ok: res.ok && !!json?.ok, json };
   } catch {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { status: 0, ok: false, json: { message: "网络不通，你填的内容还在，请检查网络后重试。" } as any };
@@ -80,18 +86,21 @@ const Tags = ({ r }: { r: RecordView }) => (
 
 /**
  * Drafts (typed text, chosen photos, the frozen in-flight request) live in <Workspace>, which is never unmounted while the
- * page is open: switching tabs only hides a pane, and a lost session (401) only hides the whole workspace behind the login.
- * Signing in again as the SAME parent brings the drafts back; a different parent gets a fresh workspace, and an explicit
- * logout drops them, so one parent's half-typed record is never handed to the other. Drafts stay in memory only.
+ * page is open: switching tabs only hides a pane. Choosing the SAME entry person again brings the drafts back; a different
+ * entry person gets a fresh workspace, and an explicit switch drops them, so one person's half-typed record is never handed to the other.
+ * Drafts stay in memory only.
  */
 const LABEL = { mom: "妈妈", dad: "爸爸" } as const;
-export function RecordApp({ initialWho }: { initialWho: Who | null }) {
-  const [who, setWho] = useState<Who | null>(initialWho);
-  const [owner, setOwner] = useState<"mom" | "dad" | null>(initialWho?.who ?? null);
+const REMEMBER = "hr-entry-by";
+export function RecordApp() {
+  const [who, setWho] = useState<Who | null>(null);
+  const [owner, setOwner] = useState<"mom" | "dad" | null>(null);
   const [epoch, setEpoch] = useState(0);
   const lost = useCallback(() => { setWho(null); }, []);
-  const onLogin = (w: Who) => { if (w.who !== owner) { setOwner(w.who); setEpoch((e) => e + 1); } setWho(w); };
-  const logout = async () => { await api("DELETE", "session"); setOwner(null); setEpoch((e) => e + 1); setWho(null); };
+  const onLogin = (w: Who) => { ENTRY_BY = w.who; try { localStorage.setItem(REMEMBER, w.who); } catch { /* not available */ } if (w.who !== owner) { setOwner(w.who); setEpoch((e) => e + 1); } setWho(w); };
+  const logout = () => { ENTRY_BY = ""; try { localStorage.removeItem(REMEMBER); } catch { /* not available */ } setOwner(null); setEpoch((e) => e + 1); setWho(null); };
+  // remembered choice on this device (a convenience only; the entry person can be switched at any time)
+  useEffect(() => { try { const v = localStorage.getItem(REMEMBER); if (v === "mom" || v === "dad") { ENTRY_BY = v; setOwner(v); setWho({ who: v, label: LABEL[v] }); } } catch { /* not available */ } }, []);
   return (
     <>
       {owner ? <div hidden={!who}><Workspace key={`${owner}-${epoch}`} label={LABEL[owner]} onLost={lost} onLogout={logout} /></div> : null}
@@ -110,7 +119,7 @@ function Workspace({ label, onLost: lost, onLogout }: { label: string; onLost: (
   return (
     <div className="hr-app">
       <header className="top"><h1>健康记录<small>给张年记一笔 · 由家长录入</small></h1>
-        <div className="who"><a className="btn ghost" style={{ minHeight: 36, padding: "4px 8px", textDecoration: "none" }} href="/health">返回健康</a><span>{label}</span><button className="btn ghost" style={{ minHeight: 36, padding: "4px 8px" }} onClick={onLogout}>退出</button></div></header>
+        <div className="who"><a className="btn ghost" style={{ minHeight: 36, padding: "4px 8px", textDecoration: "none" }} href="/health">返回健康</a><span>{label}</span><button className="btn ghost" style={{ minHeight: 36, padding: "4px 8px" }} onClick={onLogout}>换录入人</button></div></header>
       {toast ? <div className="toast" role="status">{toast}</div> : null}
       <main id="hr-view">
         <div hidden={tab !== "note"}><NoteForm onLost={lost} say={say} onSaved={() => setListVersion((v) => v + 1)} onOpen={(id) => { setTab("hist"); setOpenId(id); }} /></div>
@@ -125,21 +134,15 @@ function Workspace({ label, onLost: lost, onLogout }: { label: string; onLost: (
 
 function Login({ onDone, draftOwner }: { onDone: (w: Who) => void; draftOwner: "mom" | "dad" | null }) {
   const [who, setWhoSel] = useState<"mom" | "dad" | "">("");
-  const [pw, setPw] = useState(""); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   return (
-    <form className="login" onSubmit={async (e) => {
-      e.preventDefault(); if (!who) { setErr("请先选择妈妈或爸爸。"); return; }
-      setBusy(true); const r = await api("POST", "session", { who, password: pw }); setBusy(false);
-      if (r.ok) onDone({ who: r.json.who, label: r.json.label }); else setErr(r.json?.message ?? "登录失败。");
-    }}>
-      <h1>健康记录</h1><p className="hint">只有妈妈和爸爸可以进入。<a href="/health">返回健康</a></p>
-      {draftOwner ? <div className="note" role="status">{who && who !== draftOwner ? `${LABEL[draftOwner]}还有没提交的内容，只有${LABEL[draftOwner]}重新登录才会恢复，不会带给你。` : `你填到一半的内容还保留着，登录后继续。`}</div> : null}
-      <label className="f">我是</label>
-      <div className="seg two" role="group" aria-label="我是">{([["mom", "妈妈"], ["dad", "爸爸"]] as const).map(([k, l]) => <button type="button" key={k} data-who={k} aria-pressed={who === k} onClick={() => setWhoSel(k)}>{l}</button>)}</div>
-      <label className="f" htmlFor="hr-pw">密码</label>
-      <input id="hr-pw" type="password" autoComplete="current-password" value={pw} onChange={(e) => { setPw(e.target.value); setErr(""); }} />
+    <form className="login" onSubmit={(e) => { e.preventDefault(); if (!who) { setErr("请先选择录入人：妈妈或爸爸。"); return; } onDone({ who, label: LABEL[who] }); }}>
+      <h1>健康记录</h1><p className="hint">选择这次是谁在录入。这只是记录“谁填的”，不是账号验证。<a href="/health">返回健康</a></p>
+      {draftOwner ? <div className="note" role="status">{who && who !== draftOwner ? `${LABEL[draftOwner]}还有没提交的内容，只有选回${LABEL[draftOwner]}才会恢复，不会带给你。` : `你填到一半的内容还保留着，选择后继续。`}</div> : null}
+      <label className="f">录入人</label>
+      <div className="seg two" role="group" aria-label="录入人">{([["mom", "妈妈"], ["dad", "爸爸"]] as const).map(([k, l]) => <button type="button" key={k} data-who={k} aria-pressed={who === k} onClick={() => { setWhoSel(k); setErr(""); }}>{l}</button>)}</div>
       {err ? <div className="err" role="alert">{err}</div> : null}
-      <div className="actions"><button className="btn block" type="submit" disabled={busy}>进入</button></div>
+      <div className="actions"><button className="btn block" type="submit">开始记录</button></div>
     </form>
   );
 }
@@ -208,8 +211,8 @@ function NoteForm({ onLost, say, onSaved, onOpen }: Props) {
     const r = await api("POST", "entries", body);
     if (r.status === 401) {
       // 401 only proves THIS attempt did not run. It cannot turn an earlier unknown outcome into "not saved": keep the request + ID frozen.
-      if (wasUnknown) setErr({ msg: "登录已过期，这次重试没有执行。上一次提交的结果仍然不确定（可能已经保存）。重新登录后点“重试保存”，会用同一份内容原样重放，不会重复。", uncertain: true });
-      else { setFrozen(null); setErr({ msg: "登录已过期，这次没有保存。重新登录后你填的内容还在，点“重试保存”即可。" }); }
+      if (wasUnknown) setErr({ msg: "没有选择录入人，这次重试没有执行。上一次提交的结果仍然不确定（可能已经保存）。重新选择录入人后点“重试保存”，会用同一份内容原样重放，不会重复。", uncertain: true });
+      else { setFrozen(null); setErr({ msg: "没有选择录入人，这次没有保存。重新选择录入人后你填的内容还在，点“重试保存”即可。" }); }
       setPhase("edit"); onLost(); return;
     }
     if (r.ok) { setFrozen(null); setSaved(r.json.record); setPhase("done"); onSaved(); say(r.json.duplicate ? "这一次提交已经保存过了，没有重复保存" : "已保存"); return; }
@@ -279,8 +282,8 @@ function VisitForm({ onLost, say, onSaved, onOpen }: Props) {
     const form = new FormData(); form.set("payload", JSON.stringify(req.payload)); for (const f of req.files) form.append("files", f, f.name);
     const r = await api("POST", "entries", req.payload, form);
     if (r.status === 401) {
-      if (wasUnknown) { setUncertain(true); setErr("登录已过期，这次重试没有执行。上一次提交的结果仍然不确定（可能已经保存）。重新登录后点“重试保存”，会用同一份内容原样重放，不会重复。"); }
-      else { setFrozen(null); setErr("登录已过期，这次没有保存。重新登录后你填的内容和图片还在，点“重试保存”即可。"); }
+      if (wasUnknown) { setUncertain(true); setErr("没有选择录入人，这次重试没有执行。上一次提交的结果仍然不确定（可能已经保存）。重新选择录入人后点“重试保存”，会用同一份内容原样重放，不会重复。"); }
+      else { setFrozen(null); setErr("没有选择录入人，这次没有保存。重新选择录入人后你填的内容和图片还在，点“重试保存”即可。"); }
       setPhase("edit"); onLost(); return;
     }
     if (r.ok) { setFrozen(null); setSaved(r.json.record); setPhase("done"); onSaved(); say(r.json.duplicate ? "这一次提交已经保存过了，没有重复保存" : "已保存"); return; }
@@ -379,8 +382,8 @@ function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: (
     setBusy(true); setMsg(""); setUncertain(false);
     const r = await api("POST", `entries/${encodeURIComponent(id)}/${p.path}`, p.body); setBusy(false);
     if (r.status === 401) {
-      if (wasUnknown) { setUncertain(true); setMsg("登录已过期，这次重试没有执行。上一次操作的结果仍然不确定（可能已经生效）。重新登录后再点一次，会原样重放同一次操作，不会重复。"); }
-      else { pending.current = null; setMsg("登录已过期，这次没有保存。重新登录后你的改动还在，再点一次保存即可。"); }
+      if (wasUnknown) { setUncertain(true); setMsg("没有选择录入人，这次重试没有执行。上一次操作的结果仍然不确定（可能已经生效）。重新选择录入人后再点一次，会原样重放同一次操作，不会重复。"); }
+      else { pending.current = null; setMsg("没有选择录入人，这次没有保存。重新选择录入人后你的改动还在，再点一次保存即可。"); }
       onLost(); return false;
     }
     if (r.ok) { pending.current = null; setD({ record: r.json.record, history: r.json.history }); setEdit(null); setConflict(null); setReason(""); setNeedsConfirm(false); onChanged(); say(r.json.duplicate ? "这次操作已经生效过了，没有重复" : okMsg); return true; }

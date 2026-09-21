@@ -65,20 +65,13 @@ nianlife.cn {
 	handle @familyWrite {
 		reverse_proxy 127.0.0.1:3000
 	}
-	# 健康页（2026-09-21 上线）的写入口，同样只开精确路径和方法：登录/退出（session）、爸妈手记与就医材料
-	# （entries）、更正和归属（entries/<id>/corrections|attribution）。这些接口在应用里都要求爸爸或妈妈的登录会话
-	# （登录本身有失败次数刹车），写请求还要求同源；没有会话时返回 401，不读、不写任何账本。
+	# 健康页（2026-09-21 上线）的写入口，同样只开精确路径和方法：爸妈手记与就医材料（entries）、更正和归属
+	# （entries/<id>/corrections|attribution）。健康模块没有独立登录（Teddy 2026-09-21：病历数据允许公开访问）；
+	# 应用里写请求要求同源 Origin 和“录入人”（妈妈/爸爸，自报，不是验证过的身份），并有输入校验、防重复和账本写锁。
 	# 其余 /api/health-record/* 只有 GET（读）经过；请求体上限 45MB，略高于应用自己的图片总量上限 40MB。
-	@healthSession {
-		method POST DELETE
-		path /api/health-record/session
-	}
 	@healthWrite {
 		method POST
 		path_regexp ^/api/health-record/entries(/[^/]+/(corrections|attribution))?$
-	}
-	handle @healthSession {
-		reverse_proxy 127.0.0.1:3000
 	}
 	handle @healthWrite {
 		request_body {

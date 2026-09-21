@@ -126,7 +126,7 @@ test("3 更新入口：新增 / 更正 / 撤销后页面随之变化；重放不
   const f = await fixture();
   try {
     const root = path.join(f.dir, "record-root");
-    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root, HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw", HEALTH_RECORD_COOKIE_SECURE: "0" }, "/elsewhere");
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root,  }, "/elsewhere");
     assert.ok(conf.ok);
     let now = T0;
     const records = new HealthRecordService(root, { repo: conf.config.repo, now: () => now });
@@ -159,17 +159,18 @@ test("4 访问保护：提醒与医院原件都要登录；原件只从允许的
   const f = await fixture();
   try {
     const root = path.join(f.dir, "record-root");
-    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root, HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw", HEALTH_RECORD_COOKIE_SECURE: "0" }, "/elsewhere");
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root,  }, "/elsewhere");
     const handle = createHealthRecordHandler(() => conf, () => ({ now: () => T0 }), () => ({ historyLedgerDir: f.histDir, originalRoots: [f.allowed], intervalsFile: path.join(f.dir, "intervals.json"), materialsFile: path.join(f.dir, "materials.json"), problems: [] }));
     const call = async (method, p, { cookie, body } = {}) => {
-      const h = { origin: ORIGIN }; if (cookie) h.cookie = cookie; if (body) h["content-type"] = "application/json";
+      const h = { origin: ORIGIN }; if (cookie) h["x-health-entry-by"] = cookie; if (body) h["content-type"] = "application/json";
       const res = await handle(new Request(`${ORIGIN}/api/health-record/${p}`, { method, headers: h, body: body ? JSON.stringify(body) : undefined }), p.split("/").map(decodeURIComponent));
       return { status: res.status, headers: res.headers, text: Buffer.from(await res.arrayBuffer()) };
     };
-    assert.equal((await call("GET", "reminders")).status, 401);
-    assert.equal((await call("GET", "history-originals/doc%3A1")).status, 401);
-    const login = await call("POST", "session", { body: { who: "mom", password: "mom-synthetic-pw" } });
-    const cookie = login.headers.get("set-cookie").split(";")[0];
+    // no health login: reads are open, the answer is still uncacheable
+    const anon = await call("GET", "reminders");
+    assert.equal(anon.status, 200);
+    assert.equal((await call("GET", "history-originals/doc%3A1")).status, 200);
+    const cookie = undefined;
     const r = await call("GET", "reminders", { cookie });
     assert.equal(r.status, 200);
     assert.deepEqual(JSON.parse(r.text).items.map((x) => x.id), ["E2"]);
@@ -232,7 +233,7 @@ test("R1-A 手记的睡眠、鼻音等有效字段不丢；无就诊号的医院
   const f = await fixture();
   try {
     const root = path.join(f.dir, "rec-root");
-    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root, HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw" }, "/elsewhere");
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root,  }, "/elsewhere");
     const records = new HealthRecordService(root, { repo: conf.config.repo, now: () => T0 });
     const made = await records.createNote("mom", { entryId: uid(), text: "夜里不好睡", when: { mode: "date", date: "2026-09-20", precision: "day" }, symptoms: { nasalVoice: true, sleep: ["夜醒多"], nose: "清鼻涕" } });
     const p = buildHealthPage({ history: f.history, record: await records.readLedger(), intervals: f.intervals, materials: f.materials, now: NOW });
@@ -278,7 +279,7 @@ test("R1-B 服务层：来源文件被改写后，重新读取即标待核；越
     const m = { ...f.materials, items: f.materials.items.map((x) => ({ ...x, source: { ...x.source, file: "plan.md", sha256: sha(Buffer.from("plan v1")) } })) };
     await writeFile(path.join(f.dir, "materials.json"), JSON.stringify(m));
     const root = path.join(f.dir, "rec-root2");
-    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root, HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw" }, "/elsewhere");
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root,  }, "/elsewhere");
     const mk = () => new HealthPageService(new HealthRecordService(root, { repo: conf.config.repo, now: () => T0 }), { historyLedgerDir: f.histDir, originalRoots: [], intervalsFile: path.join(f.dir, "intervals.json"), materialsFile: path.join(f.dir, "materials.json"), materialRoot: matRoot, problems: [] }, () => T0);
     const svc = mk();
     assert.equal((await svc.page()).followUp.status, "current");
@@ -403,7 +404,7 @@ test("R1F-2b 来源核验缺失、不可读、哈希无效时不标 current；�
     assert.equal(ok.followUp.status, "current"); assert.ok([...ok.followUp.care, ...ok.followUp.visit].every((m) => m.review === null));
     // 5 the service without HEALTH_PAGE_MATERIAL_ROOT, using a valid 64-hex hash whose source file cannot be read
     const root = path.join(f.dir, "rec-root-x");
-    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root, HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw" }, "/elsewhere");
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root,  }, "/elsewhere");
     const mk = (materialRoot) => new HealthPageService(new HealthRecordService(root, { repo: conf.config.repo, now: () => T0 }), { historyLedgerDir: f.histDir, originalRoots: [], intervalsFile: path.join(f.dir, "intervals.json"), materialsFile: path.join(f.dir, "materials.json"), materialRoot, problems: [] }, () => T0);
     const noRoot = await mk(null).page();
     assert.equal(noRoot.followUp.status, "stale"); assert.ok(noRoot.followUp.care.every((m) => /来源核验没有配置/.test(m.review)));
@@ -420,7 +421,7 @@ test("4b 部署时的原件目录映射：账本记录的根目录不改，映�
   try {
     const served = path.join(f.dir, "served"); await mkdir(path.join(served, "hosp"), { recursive: true });
     await writeFile(path.join(served, "hosp", "a.jpg"), f.good);
-    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: path.join(f.dir, "rr"), HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw" }, "/elsewhere");
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: path.join(f.dir, "rr"),  }, "/elsewhere");
     const svc = (cfg) => new HealthPageService(new HealthRecordService(path.join(f.dir, "rr"), { repo: conf.config.repo, now: () => T0 }), { historyLedgerDir: f.histDir, intervalsFile: null, materialsFile: null, problems: [], ...cfg }, () => T0);
     // the recorded root (f.allowed) is NOT served directly any more; only the mapped server directory is
     const mapped = svc({ originalRoots: [served], originalRootMap: [{ from: f.allowed, to: served }] });
