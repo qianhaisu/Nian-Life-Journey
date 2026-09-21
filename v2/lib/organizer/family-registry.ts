@@ -80,24 +80,15 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       // and are NOT counted — a placeholder matching a placeholder proves nothing. The mapping is a
       // bijection in both directions across every overlapping message.
       //
-      // Scoped to conversations where this person is proven. The same plain digest also sits on
-      // 118 messages in 小雪微信群 (conversation:e6adbcaf…); whether that is the same person is not
-      // something this file may infer, so those stay unnamed.
-      //
-      // 👶🏻张小年成长主力作战部队 (conversation:4f8670546dd34b592448554d) added 2026-09-21: Teddy
-      // confirmed 雪姨=hxx. in NIGHT-RELATIONS-20260921. The group has only 4 participants —
-      // Ted (father), 阿静 (mother), hxx. (nanny), system messages — so hxx. in this context
-      // is unambiguously 雪姨. As of 2026-09-21 this conversation is not yet imported; the scope
-      // entry is added now so rows resolve correctly when the import runs.
+      // Scoped to the nursery class group's JSON conversation, the one it was proven in. The same
+      // plain digest also sits on 118 messages in 小雪微信群 (conversation:e6adbcaf…); whether that
+      // is the same person is not something this file may infer, so those stay unnamed.
       sourceParticipantDigest: senderDigestForDisplayName("hxx."),
       displayName: "hxx.",
       canonicalPersonId: "person-xueyi",
       relationshipToSubject: "nanny",
       narrativeLabel: "雪姨",
-      conversationIds: [
-        DAYCARE_CONVERSATION,
-        "conversation:4f8670546dd34b592448554d", // 👶🏻张小年成长主力作战部队 JSON
-      ],
+      conversationIds: [DAYCARE_CONVERSATION],
     },
     {
       // Teddy, 2026-09-04: 陈亚萍 is 张年's grandmother. This supersedes the earlier "low value"
@@ -188,48 +179,6 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
         "conversation:8778e74dea416b9fc8ab6651", // 张小年小群 md, post-fix id
         "conversation:d016ea9b700f45190ee50221", // 张小年小群 md, pre-fix id
       ],
-    },
-    {
-      // Teddy, 2026-09-21 (NIGHT-RELATIONS-20260921): 鹿城  筱薇 is 张年's maternal grandmother
-      // (外婆). The display name contains a double space between 鹿城 and 筱薇 — that is the exact
-      // spelling WeFlow exports and must be preserved; a single space hashes to a different digest.
-      //
-      // She speaks across multiple family groups: 472 messages in DB as of 2026-09-21, of which
-      // 282 in 亲爱的爸爸妈妈 (conversation:77348fd4…) and 102 in the daycare class group
-      // (DAYCARE_CONVERSATION). No conversationIds scope — she is a named family member whose
-      // display name is distinctive enough that a collision with an unrelated account is implausible.
-      sourceParticipantDigest: senderDigestForDisplayName("鹿城  筱薇"),
-      displayName: "鹿城  筱薇",
-      canonicalPersonId: "person-waipo",
-      relationshipToSubject: "maternal_grandmother",
-      narrativeLabel: "外婆",
-    },
-    {
-      // Teddy, confirmed 2026-09-12 session (stored in project memory), reconfirmed by context
-      // 2026-09-21: 老苏 is 张年's maternal grandfather (外公). He is 苏静's father.
-      //
-      // 1,243 messages in DB as of 2026-09-21 across 12 conversations: 467 in 亲爱的爸爸妈妈,
-      // 238 in 老苏家 (conversation:c9882c6d…), 224 in the daycare class group, 111 in each of the
-      // two 老苏家 alternate ids, and small counts elsewhere. Global mapping — 老苏 is specific
-      // enough as a name and appears consistently as 外公 across all measured contexts.
-      sourceParticipantDigest: senderDigestForDisplayName("老苏"),
-      displayName: "老苏",
-      canonicalPersonId: "person-laos",
-      relationshipToSubject: "maternal_grandfather",
-      narrativeLabel: "外公",
-    },
-    {
-      // Teddy, confirmed 2026-09-12 session (stored in project memory), reconfirmed by context
-      // 2026-09-21: 张存华 is 张年's paternal grandfather (爷爷). He is 张永滕's father.
-      //
-      // 572 messages in DB as of 2026-09-21: 477 in 亲爱的爸爸妈妈 (conversation:77348fd4…),
-      // 86 in the daycare class group, and small counts elsewhere. Global mapping — 张存华 is a
-      // full three-character name and specific enough that collision is implausible.
-      sourceParticipantDigest: senderDigestForDisplayName("张存华"),
-      displayName: "张存华",
-      canonicalPersonId: "person-zhangcunhua",
-      relationshipToSubject: "paternal_grandfather",
-      narrativeLabel: "爷爷",
     },
     // The nursery's own accounts, one per class plus the centre and its after-hours desk. Teddy,
     // 2026-09-04: a teacher's words are to read as 老师, never as a family member's. They share one
