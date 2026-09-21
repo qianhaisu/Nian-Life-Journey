@@ -22,6 +22,11 @@ const newId = () => { const a = new Uint8Array(18); crypto.getRandomValues(a); r
 const md = (s: string) => { const d = new Date(s.slice(0, 10) + "T00:00"); return `${d.getMonth() + 1}月${d.getDate()}日`; };
 const mdt = (s: string) => `${md(s)} ${s.slice(11, 16)}`;
 
+const UNCERTAIN_ACTION = "刚才没有收到结果，不确定有没有生效。再点一次会重放同一次操作，不会重复；也可以放弃这次操作，看看记录现在的样子。";
+const UNCERTAIN = "刚才没有收到结果，不确定有没有保存。点“重试”会用同一份内容再提交一次，不会重复；如果想改内容，可以放弃这次，改完作为新记录保存。";
+/** No response at all, a gateway error, or an unexplained server error: the request may or may not have been committed. */
+const isUncertain = (r: { status: number; json: { code?: string } | null }) => r.status === 0 || r.status >= 502 || (r.status === 500 && (!r.json?.code || r.json.code === "server_error"));
+
 async function api(method: string, path: string, body?: unknown, form?: FormData) {
   try {
     const res = await fetch(`/api/health-record/${path}`, { method, credentials: "same-origin", headers: body !== undefined && !form ? { "content-type": "application/json" } : undefined, body: form ?? (body !== undefined ? JSON.stringify(body) : undefined) });
@@ -73,34 +78,52 @@ const Tags = ({ r }: { r: RecordView }) => (
   </div>
 );
 
+/**
+ * Drafts (typed text, chosen photos, the frozen in-flight request) live in <Workspace>, which is never unmounted while the
+ * page is open: switching tabs only hides a pane, and a lost session (401) only hides the whole workspace behind the login.
+ * Signing in again as the SAME parent brings the drafts back; a different parent gets a fresh workspace, and an explicit
+ * logout drops them, so one parent's half-typed record is never handed to the other. Drafts stay in memory only.
+ */
+const LABEL = { mom: "妈妈", dad: "爸爸" } as const;
 export function RecordApp({ initialWho }: { initialWho: Who | null }) {
   const [who, setWho] = useState<Who | null>(initialWho);
+  const [owner, setOwner] = useState<"mom" | "dad" | null>(initialWho?.who ?? null);
+  const [epoch, setEpoch] = useState(0);
+  const lost = useCallback(() => { setWho(null); }, []);
+  const onLogin = (w: Who) => { if (w.who !== owner) { setOwner(w.who); setEpoch((e) => e + 1); } setWho(w); };
+  const logout = async () => { await api("DELETE", "session"); setOwner(null); setEpoch((e) => e + 1); setWho(null); };
+  return (
+    <>
+      {owner ? <div hidden={!who}><Workspace key={`${owner}-${epoch}`} label={LABEL[owner]} onLost={lost} onLogout={logout} /></div> : null}
+      {!who ? <Login onDone={onLogin} draftOwner={owner} /> : null}
+    </>
+  );
+}
+
+function Workspace({ label, onLost: lost, onLogout }: { label: string; onLost: () => void; onLogout: () => void }) {
   const [tab, setTab] = useState<"note" | "visit" | "hist">("note");
   const [toast, setToast] = useState("");
   const [listVersion, setListVersion] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const say = useCallback((m: string) => { setToast(m); if (toastTimer.current) clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(""), 3200); }, []);
-  const lost = useCallback(() => { setWho(null); }, []);
-
-  if (!who) return <Login onDone={setWho} />;
   return (
     <div className="hr-app">
       <header className="top"><h1>健康记录<small>给张年记一笔 · 由家长录入</small></h1>
-        <div className="who"><span>{who.label}</span><button className="btn ghost" style={{ minHeight: 36, padding: "4px 8px" }} onClick={async () => { await api("DELETE", "session"); setWho(null); }}>退出</button></div></header>
+        <div className="who"><span>{label}</span><button className="btn ghost" style={{ minHeight: 36, padding: "4px 8px" }} onClick={onLogout}>退出</button></div></header>
       {toast ? <div className="toast" role="status">{toast}</div> : null}
       <main id="hr-view">
-        {tab === "note" ? <NoteForm onLost={lost} say={say} onSaved={() => setListVersion((v) => v + 1)} onOpen={(id) => { setTab("hist"); setOpenId(id); }} /> : null}
-        {tab === "visit" ? <VisitForm onLost={lost} say={say} onSaved={() => setListVersion((v) => v + 1)} onOpen={(id) => { setTab("hist"); setOpenId(id); }} /> : null}
-        {tab === "hist" ? <History version={listVersion} openId={openId} setOpenId={setOpenId} onLost={lost} say={say} onChanged={() => setListVersion((v) => v + 1)} /> : null}
+        <div hidden={tab !== "note"}><NoteForm onLost={lost} say={say} onSaved={() => setListVersion((v) => v + 1)} onOpen={(id) => { setTab("hist"); setOpenId(id); }} /></div>
+        <div hidden={tab !== "visit"}><VisitForm onLost={lost} say={say} onSaved={() => setListVersion((v) => v + 1)} onOpen={(id) => { setTab("hist"); setOpenId(id); }} /></div>
+        <div hidden={tab !== "hist"}><History version={listVersion} openId={openId} setOpenId={setOpenId} onLost={lost} say={say} onChanged={() => setListVersion((v) => v + 1)} /></div>
       </main>
       <nav className="tabs" aria-label="主要功能"><div>{([["note", "✏️", "爸妈手记"], ["visit", "🏥", "就医"], ["hist", "🗂️", "已记录"]] as const).map(([k, ic, l]) => (
-        <button key={k} data-tab={k} aria-current={tab === k ? "page" : undefined} onClick={() => { setTab(k); setOpenId(null); setToast(""); }}><span className="ic" aria-hidden="true">{ic}</span>{l}</button>))}</div></nav>
+        <button key={k} data-tab={k} aria-current={tab === k ? "page" : undefined} onClick={() => { setTab(k); setToast(""); }}><span className="ic" aria-hidden="true">{ic}</span>{l}</button>))}</div></nav>
     </div>
   );
 }
 
-function Login({ onDone }: { onDone: (w: Who) => void }) {
+function Login({ onDone, draftOwner }: { onDone: (w: Who) => void; draftOwner: "mom" | "dad" | null }) {
   const [who, setWhoSel] = useState<"mom" | "dad" | "">("");
   const [pw, setPw] = useState(""); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   return (
@@ -110,6 +133,7 @@ function Login({ onDone }: { onDone: (w: Who) => void }) {
       if (r.ok) onDone({ who: r.json.who, label: r.json.label }); else setErr(r.json?.message ?? "登录失败。");
     }}>
       <h1>健康记录</h1><p className="hint">只有妈妈和爸爸可以进入。</p>
+      {draftOwner ? <div className="note" role="status">{who && who !== draftOwner ? `${LABEL[draftOwner]}还有没提交的内容，只有${LABEL[draftOwner]}重新登录才会恢复，不会带给你。` : `你填到一半的内容还保留着，登录后继续。`}</div> : null}
       <label className="f">我是</label>
       <div className="seg two" role="group" aria-label="我是">{([["mom", "妈妈"], ["dad", "爸爸"]] as const).map(([k, l]) => <button type="button" key={k} data-who={k} aria-pressed={who === k} onClick={() => setWhoSel(k)}>{l}</button>)}</div>
       <label className="f" htmlFor="hr-pw">密码</label>
@@ -171,19 +195,26 @@ function NoteForm({ onLost, say, onSaved, onOpen }: Props) {
   const [text, setText] = useState(""); const [w, setW] = useState<WhenState>(blankWhen);
   const [more, setMore] = useState(false); const [sym, setSym] = useState<SymState>(blankSym);
   const [phase, setPhase] = useState<"edit" | "saving" | "done">("edit");
-  const [err, setErr] = useState<{ msg: string; needsConfirm?: boolean } | null>(null);
+  const [err, setErr] = useState<{ msg: string; needsConfirm?: boolean; uncertain?: boolean } | null>(null);
   const [saved, setSaved] = useState<RecordView | null>(null);
+  // The complete request is frozen when it is sent (ID + content + the "刚刚" time). While the outcome is unknown the form is
+  // locked and a retry replays exactly this request, so a lost response can never turn into a different record.
+  const [frozen, setFrozen] = useState<Record<string, unknown> | null>(null);
 
   const submit = async (confirmUnusualTemp = false) => {
-    setPhase("saving"); setErr(null);
-    const r = await api("POST", "entries", { type: "note", entryId, text, when: whenPayload(w), symptoms: symPayload(sym), confirmUnusualTemp });
-    if (r.status === 401) { onLost(); return; }
-    if (r.ok) { setSaved(r.json.record); setPhase("done"); onSaved(); say(r.json.duplicate ? "这一次提交已经保存过了，没有重复保存" : "已保存"); return; }
+    const body = frozen ?? { type: "note", entryId, text, when: whenPayload(w), symptoms: symPayload(sym), confirmUnusualTemp };
+    setFrozen(body); setPhase("saving"); setErr(null);
+    const r = await api("POST", "entries", body);
+    if (r.status === 401) { setFrozen(null); setPhase("edit"); setErr({ msg: "登录已过期，这次没有保存。重新登录后你填的内容还在，点“重试保存”即可。" }); onLost(); return; }
+    if (r.ok) { setFrozen(null); setSaved(r.json.record); setPhase("done"); onSaved(); say(r.json.duplicate ? "这一次提交已经保存过了，没有重复保存" : "已保存"); return; }
     setPhase("edit");
+    if (isUncertain(r)) { setErr({ msg: UNCERTAIN, uncertain: true }); return; }
+    setFrozen(null);
     if (r.json?.code === "temperature_needs_confirmation") { setMore(true); setErr({ msg: r.json.message, needsConfirm: true }); return; }
     if (r.json?.code === "invalid_temperature") setMore(true);
     setErr({ msg: r.json?.message ?? "没有保存成功，你填的内容还在。" });
   };
+  const asNew = () => { setFrozen(null); setEntryId(newId()); setErr(null); };
 
   if (phase === "done" && saved) return (
     <div className="card"><div className="ok"><b>已保存。</b></div><Tags r={saved} /><p style={{ fontWeight: 600 }}><Summary r={saved} /></p><p className="hint">{occurredLine(saved)}</p>
@@ -193,12 +224,14 @@ function NoteForm({ onLost, say, onSaved, onOpen }: Props) {
   return (
     <>
       <h2>今天怎么样？</h2><p className="hint">一句话就够。下面的都可以不填——没填只表示没记，不代表正常。</p>
-      {err ? <div className="err" role="alert"><b>{err.needsConfirm ? "请核对体温。" : "没保存成功。"}</b> {err.msg}{err.needsConfirm ? <div className="actions"><button className="btn" onClick={() => submit(true)}>确认无误，保存</button></div> : <div className="hint">你写的内容都还在，重试不会重复保存。</div>}</div> : null}
+      {err ? <div className="err" role="alert"><b>{err.needsConfirm ? "请核对体温。" : err.uncertain ? "结果不确定。" : "没保存成功。"}</b> {err.msg}{err.needsConfirm ? <div className="actions"><button className="btn" onClick={() => submit(true)}>确认无误，保存</button></div> : err.uncertain ? <div className="actions"><button className="btn sec" onClick={asNew}>放弃这次，改内容后作为新记录</button></div> : <div className="hint">你写的内容都还在，重试不会重复保存。</div>}</div> : null}
+      <fieldset className="frozen" disabled={!!frozen}>
       <label className="f" htmlFor="hr-text">发生了什么？</label>
       <textarea id="hr-text" value={text} onChange={(e) => setText(e.target.value)} placeholder="例如：中午吃得少，摸着有点烫……" />
       <WhenPicker w={w} set={setW} label="发生在什么时候？" note />
       <details className="more" open={more}><summary onClick={(e) => { e.preventDefault(); setMore(!more); }}>再补充一点<span className="hint" style={{ fontWeight: 500, marginLeft: 8 }}>可不填</span></summary>
         <div className="inner"><SymptomFields v={sym} set={(v) => { setSym(v); if (err?.needsConfirm) setErr(null); }} /></div></details>
+      </fieldset>
       <div className="actions"><button className="btn block" disabled={phase === "saving"} onClick={() => submit(false)}>{phase === "saving" ? "保存中…" : err && !err.needsConfirm ? "重试保存" : "保存"}</button></div>
     </>
   );
@@ -214,7 +247,9 @@ function VisitForm({ onLost, say, onSaved, onOpen }: Props) {
   const [picks, setPicks] = useState<Pick[]>([]); const [note, setNote] = useState("");
   const [dateOn, setDateOn] = useState(false); const [date, setDate] = useState("");
   const [phase, setPhase] = useState<"edit" | "saving" | "done">("edit");
-  const [err, setErr] = useState(""); const [saved, setSaved] = useState<RecordView | null>(null);
+  const [err, setErr] = useState(""); const [uncertain, setUncertain] = useState(false); const [saved, setSaved] = useState<RecordView | null>(null);
+  // frozen = the complete in-flight request (payload + the exact files); see NoteForm.
+  const [frozen, setFrozen] = useState<{ payload: Record<string, unknown>; files: File[] } | null>(null);
   const urls = useRef<string[]>([]);
   useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), []);
 
@@ -228,29 +263,36 @@ function VisitForm({ onLost, say, onSaved, onOpen }: Props) {
     }
     setPicks([...picks, ...add]); setErr(msg);
   };
+  const pickHospital = (x: string) => { const v = hospital === x ? "" : x; setHospital(v); if (v !== "其他") setHospitalOther(""); };
+  const pickDept = (x: string) => { const v = dept === x ? "" : x; setDept(v); if (v !== "其他") setDeptOther(""); };
   const submit = async () => {
-    setPhase("saving"); setErr("");
-    const payload = { type: "visit", entryId, hospital, hospitalOther, department: dept, departmentOther: deptOther, note, visitDate: dateOn ? date : "" };
-    const form = new FormData(); form.set("payload", JSON.stringify(payload)); for (const p of picks) form.append("files", p.file, p.file.name);
-    const r = await api("POST", "entries", payload, form);
-    if (r.status === 401) { onLost(); return; }
-    if (r.ok) { setSaved(r.json.record); setPhase("done"); onSaved(); say(r.json.duplicate ? "这一次提交已经保存过了，没有重复保存" : "已保存"); return; }
-    setPhase("edit"); setErr(r.json?.message ?? "没有保存成功，你填的内容和图片都还在。");
+    // a hidden "other" text is never sent: it only counts while 其他 is the chosen option
+    const req = frozen ?? { payload: { type: "visit", entryId, hospital, hospitalOther: hospital === "其他" ? hospitalOther : "", department: dept, departmentOther: dept === "其他" ? deptOther : "", note, visitDate: dateOn ? date : "" }, files: picks.map((p) => p.file) };
+    setFrozen(req); setPhase("saving"); setErr(""); setUncertain(false);
+    const form = new FormData(); form.set("payload", JSON.stringify(req.payload)); for (const f of req.files) form.append("files", f, f.name);
+    const r = await api("POST", "entries", req.payload, form);
+    if (r.status === 401) { setFrozen(null); setPhase("edit"); setErr("登录已过期，这次没有保存。重新登录后你填的内容和图片还在，点“重试保存”即可。"); onLost(); return; }
+    if (r.ok) { setFrozen(null); setSaved(r.json.record); setPhase("done"); onSaved(); say(r.json.duplicate ? "这一次提交已经保存过了，没有重复保存" : "已保存"); return; }
+    setPhase("edit");
+    if (isUncertain(r)) { setUncertain(true); setErr(UNCERTAIN); return; }
+    setFrozen(null); setErr(r.json?.message ?? "没有保存成功，你填的内容和图片都还在。");
   };
+  const asNew = () => { setFrozen(null); setEntryId(newId()); setErr(""); setUncertain(false); };
   if (phase === "done" && saved) return (
     <div className="card"><div className="ok"><b>已保存。</b></div><Tags r={saved} /><p style={{ fontWeight: 600 }}><Summary r={saved} /></p><p className="hint">{occurredLine(saved)}</p>
       <div className="actions"><button className="btn" onClick={() => onOpen(saved.id)}>查看</button>
-        <button className="btn sec" onClick={() => { setEntryId(newId()); setHospital(""); setHospitalOther(""); setDept(""); setDeptOther(""); setPicks([]); setNote(""); setDateOn(false); setDate(""); setSaved(null); setPhase("edit"); }}>再记一次</button></div></div>
+        <button className="btn sec" onClick={() => { setEntryId(newId()); setFrozen(null); setHospital(""); setHospitalOther(""); setDept(""); setDeptOther(""); setPicks([]); setNote(""); setDateOn(false); setDate(""); setSaved(null); setPhase("edit"); }}>再记一次</button></div></div>
   );
   return (
     <>
       <h2>这次去看医生</h2><p className="hint">医院、科室没写就是“未填”。传了图或写了备注，也不代表已经确诊或吃了药。</p>
-      {err ? <div className="err" role="alert">{err}{phase === "edit" && picks.length + note.length > 0 ? <div className="hint">你填的内容和图片都还在，重试不会重复保存。</div> : null}</div> : null}
+      {err ? <div className="err" role="alert">{err}{uncertain ? <div className="actions"><button className="btn sec" onClick={asNew}>放弃这次，改内容后作为新记录</button></div> : phase === "edit" && picks.length + note.length > 0 ? <div className="hint">你填的内容和图片都还在，重试不会重复保存。</div> : null}</div> : null}
+      <fieldset className="frozen" disabled={!!frozen}>
       <label className="f">医院</label>
-      <div className="chips" role="group" aria-label="医院">{HOSPITALS.map((x) => <Chip key={x} on={hospital === x} onClick={() => setHospital(hospital === x ? "" : x)}>{x}</Chip>)}</div>
+      <div className="chips" role="group" aria-label="医院">{HOSPITALS.map((x) => <Chip key={x} on={hospital === x} onClick={() => pickHospital(x)}>{x}</Chip>)}</div>
       {hospital === "其他" ? <><label className="f" htmlFor="hr-ho">医院名称</label><input id="hr-ho" type="text" value={hospitalOther} onChange={(e) => setHospitalOther(e.target.value)} placeholder="写下名称" maxLength={60} /></> : null}
       <label className="f">科室</label>
-      <div className="chips" role="group" aria-label="科室">{DEPARTMENTS.map((x) => <Chip key={x} on={dept === x} onClick={() => setDept(dept === x ? "" : x)}>{x}</Chip>)}</div>
+      <div className="chips" role="group" aria-label="科室">{DEPARTMENTS.map((x) => <Chip key={x} on={dept === x} onClick={() => pickDept(x)}>{x}</Chip>)}</div>
       {dept === "其他" ? <><label className="f" htmlFor="hr-do">科室名称</label><input id="hr-do" type="text" value={deptOther} onChange={(e) => setDeptOther(e.target.value)} placeholder="写下名称" maxLength={60} /></> : null}
       <label className="f">上传报告图 <span className="opt">可选多张，先在本机预览</span></label>
       <label className="filebtn" htmlFor="hr-files"><span aria-hidden="true">📷</span>选择图片<input id="hr-files" type="file" accept="image/*" multiple onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} /></label>
@@ -262,6 +304,7 @@ function VisitForm({ onLost, say, onSaved, onOpen }: Props) {
       <details className="more" open={dateOn}><summary onClick={(e) => { e.preventDefault(); const on = !dateOn; setDateOn(on); if (!on) setDate(""); }}>补就医日期<span className="hint" style={{ fontWeight: 500, marginLeft: 8 }}>可不填</span></summary>
         <div className="inner"><label className="f" htmlFor="hr-vd">哪一天去的</label><input id="hr-vd" type="date" max={today()} value={date} onChange={(e) => setDate(e.target.value)} />
           <p className="hint">不填：就医日期记为未知，不会当成今天已经去过。</p></div></details>
+      </fieldset>
       <div className="actions"><button className="btn block" disabled={phase === "saving"} onClick={submit}>{phase === "saving" ? "保存中…" : err ? "重试保存" : "保存"}</button></div>
     </>
   );
@@ -305,33 +348,39 @@ interface Edit { text: string; sym: SymState; hospital: string; hospitalOther: s
 const editFrom = (r: RecordView): Edit => ({ text: r.text ?? "", sym: symFrom(r.symptoms), hospital: r.hospital ?? "", hospitalOther: r.hospitalOther ?? "", dept: r.department ?? "", deptOther: r.departmentOther ?? "", note: r.note ?? "", changeTime: false, w: blankWhen(), visitDate: r.occurred.at ?? "" });
 const editPayload = (r: RecordView, e: Edit, confirmUnusualTemp: boolean) => r.kind === "note"
   ? { text: e.text, symptoms: symPayload(e.sym), confirmUnusualTemp, ...(e.changeTime ? { when: whenPayload(e.w) } : {}) }
-  : { hospital: e.hospital, hospitalOther: e.hospitalOther, department: e.dept, departmentOther: e.deptOther, note: e.note, ...(e.changeTime ? { visitDate: e.visitDate } : {}) };
+  : { hospital: e.hospital, hospitalOther: e.hospital === "其他" ? e.hospitalOther : "", department: e.dept, departmentOther: e.dept === "其他" ? e.deptOther : "", note: e.note, ...(e.changeTime ? { visitDate: e.visitDate } : {}) };
 
 function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: () => void; onLost: () => void; say: (m: string) => void; onChanged: () => void }) {
   const [d, setD] = useState<Detail | null>(null); const [msg, setMsg] = useState("");
   const [edit, setEdit] = useState<Edit | null>(null); const [reason, setReason] = useState("");
-  const [reqId, setReqId] = useState(newId);
+  // The in-flight action (correct / overwrite / void / restore) is frozen with its request ID: if the outcome is unknown, a retry
+  // replays exactly this request (the server answers "already applied" instead of applying it twice).
+  const pending = useRef<{ tag: string; path: string; body: Record<string, unknown> } | null>(null);
+  const [uncertain, setUncertain] = useState(false);
   const [conflict, setConflict] = useState<Detail | null>(null); const [needsConfirm, setNeedsConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => { (async () => { const r = await api("GET", `entries/${encodeURIComponent(id)}`); if (r.status === 401) { onLost(); return; } if (r.ok) setD({ record: r.json.record, history: r.json.history }); else setMsg(r.json?.message ?? "读取失败。"); })(); }, [id, onLost]);
   const rec = d?.record;
 
-  const send = async (path: string, body: Record<string, unknown>, okMsg: string) => {
-    setBusy(true); setMsg("");
-    const r = await api("POST", `entries/${encodeURIComponent(id)}/${path}`, body); setBusy(false);
-    if (r.status === 401) { onLost(); return false; }
-    if (r.ok) { setD({ record: r.json.record, history: r.json.history }); setEdit(null); setConflict(null); setReason(""); setReqId(newId()); setNeedsConfirm(false); onChanged(); say(okMsg); return true; }
+  const send = async (tag: string, path: string, make: () => Record<string, unknown>, okMsg: string) => {
+    const p = pending.current?.tag === tag ? pending.current : (pending.current = { tag, path, body: make() });
+    setBusy(true); setMsg(""); setUncertain(false);
+    const r = await api("POST", `entries/${encodeURIComponent(id)}/${p.path}`, p.body); setBusy(false);
+    if (r.status === 401) { pending.current = null; setMsg("登录已过期，这次没有保存。重新登录后你的改动还在，再点一次保存即可。"); onLost(); return false; }
+    if (r.ok) { pending.current = null; setD({ record: r.json.record, history: r.json.history }); setEdit(null); setConflict(null); setReason(""); setNeedsConfirm(false); onChanged(); say(r.json.duplicate ? "这次操作已经生效过了，没有重复" : okMsg); return true; }
+    if (isUncertain(r)) { setUncertain(true); setMsg(UNCERTAIN_ACTION); return false; } // keep the frozen request for an identical replay
+    pending.current = null;
     if (r.json?.code === "revision_conflict") { setConflict(r.json.current); return false; }
     if (r.json?.code === "temperature_needs_confirmation") { setNeedsConfirm(true); setMsg(r.json.message); return false; }
     setMsg(r.json?.message ?? "没有保存成功，你的改动还在。"); return false;
   };
-  const save = (confirm = false) => send("corrections", { requestId: reqId, expectedRevision: rec!.revision, reason, edit: editPayload(rec!, edit!, confirm) }, "已更正，原来的内容留在历史里");
-  const overwrite = async () => { // 用户明确选择“用我的草稿”：以当前修订号追加一次更正
-    const cur = conflict!.record; setD(conflict); setConflict(null); setReqId(newId());
-    setBusy(true); const r = await api("POST", `entries/${encodeURIComponent(id)}/corrections`, { requestId: newId(), expectedRevision: cur.revision, reason, edit: editPayload(cur, edit!, needsConfirm) }); setBusy(false);
-    if (r.ok) { setD({ record: r.json.record, history: r.json.history }); setEdit(null); onChanged(); say("已用你的草稿更正，别人的改动仍在历史里"); } else setMsg(r.json?.message ?? "没有保存成功，你的草稿还在。");
+  const save = (confirm = false) => send("correct", "corrections", () => ({ requestId: newId(), expectedRevision: rec!.revision, reason, edit: editPayload(rec!, edit!, confirm) }), "已更正，原来的内容留在历史里");
+  const overwrite = () => { // 用户明确选择“用我的草稿”：以当前修订号追加一次更正
+    const cur = conflict!.record;
+    return send("overwrite", "corrections", () => ({ requestId: newId(), expectedRevision: cur.revision, reason, edit: editPayload(cur, edit!, needsConfirm) }), "已用你的草稿更正，别人的改动仍在历史里");
   };
-  const attribution = (action: "void" | "restore") => send("attribution", { requestId: newId(), expectedRevision: rec!.revision, action }, action === "void" ? "已撤销归属，历史仍在" : "已恢复归属");
+  const attribution = (action: "void" | "restore") => send(action, "attribution", () => ({ requestId: newId(), expectedRevision: rec!.revision, action }), action === "void" ? "已撤销归属，历史仍在" : "已恢复归属");
+  const giveUp = () => { pending.current = null; setUncertain(false); setMsg("已放弃上一次操作。请先看一下记录现在的样子再决定；如果它其实已经生效，再改会提示“刚刚被改过”，不会覆盖。"); };
 
   return (
     <div className="sheet-wrap" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -340,8 +389,9 @@ function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: (
         {!rec ? <p className="hint">{msg || "读取中…"}</p> : edit ? (
           <>
             <h2>更正</h2><p className="hint">改的地方会写进历史，原来的内容不会丢。取消一个选项只表示“不记”，不会变成“没有”或“正常”。</p>
-            {msg ? <div className="err" role="alert">{msg}{needsConfirm ? <div className="actions"><button className="btn" onClick={() => save(true)}>确认无误，保存</button></div> : null}</div> : null}
+            {msg ? <div className="err" role="alert">{msg}{needsConfirm ? <div className="actions"><button className="btn" onClick={() => save(true)}>确认无误，保存</button></div> : null}{uncertain ? <div className="actions"><button className="btn sec" onClick={giveUp}>放弃这次操作</button></div> : null}</div> : null}
             {conflict ? <ConflictPanel current={conflict} draft={edit} busy={busy} onOverwrite={overwrite} onKeep={() => { setD(conflict); setConflict(null); setEdit(null); }} /> : null}
+            <fieldset className="frozen" disabled={uncertain}>
             {rec.kind === "note" ? (
               <>
                 <label className="f" htmlFor="hr-etext">手记</label><textarea id="hr-etext" value={edit.text} onChange={(e) => setEdit({ ...edit, text: e.target.value })} />
@@ -351,9 +401,9 @@ function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: (
               </>
             ) : (
               <>
-                <label className="f">医院</label><div className="chips" role="group" aria-label="医院">{HOSPITALS.map((x) => <Chip key={x} on={edit.hospital === x} onClick={() => setEdit({ ...edit, hospital: edit.hospital === x ? "" : x })}>{x}</Chip>)}</div>
+                <label className="f">医院</label><div className="chips" role="group" aria-label="医院">{HOSPITALS.map((x) => <Chip key={x} on={edit.hospital === x} onClick={() => { const v = edit.hospital === x ? "" : x; setEdit({ ...edit, hospital: v, hospitalOther: v === "其他" ? edit.hospitalOther : "" }); }}>{x}</Chip>)}</div>
                 {edit.hospital === "其他" ? <><label className="f" htmlFor="hr-eho">医院名称</label><input id="hr-eho" type="text" value={edit.hospitalOther} onChange={(e) => setEdit({ ...edit, hospitalOther: e.target.value })} /></> : null}
-                <label className="f">科室</label><div className="chips" role="group" aria-label="科室">{DEPARTMENTS.map((x) => <Chip key={x} on={edit.dept === x} onClick={() => setEdit({ ...edit, dept: edit.dept === x ? "" : x })}>{x}</Chip>)}</div>
+                <label className="f">科室</label><div className="chips" role="group" aria-label="科室">{DEPARTMENTS.map((x) => <Chip key={x} on={edit.dept === x} onClick={() => { const v = edit.dept === x ? "" : x; setEdit({ ...edit, dept: v, deptOther: v === "其他" ? edit.deptOther : "" }); }}>{x}</Chip>)}</div>
                 {edit.dept === "其他" ? <><label className="f" htmlFor="hr-edo">科室名称</label><input id="hr-edo" type="text" value={edit.deptOther} onChange={(e) => setEdit({ ...edit, deptOther: e.target.value })} /></> : null}
                 <label className="f" htmlFor="hr-enote">备注</label><textarea id="hr-enote" value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
                 <button type="button" className="btn ghost" onClick={() => setEdit({ ...edit, changeTime: !edit.changeTime })}>{edit.changeTime ? "不改就医日期" : "改就医日期"}</button>
@@ -361,12 +411,13 @@ function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: (
               </>
             )}
             <label className="f" htmlFor="hr-reason">理由 <span className="opt">可不填</span></label><input id="hr-reason" type="text" value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder="例如：看错了、医生后来说不一样" />
+            </fieldset>
             <div className="actions"><button className="btn" disabled={busy} onClick={() => save(false)}>保存更正</button><button className="btn sec" onClick={() => { setEdit(null); setMsg(""); setConflict(null); }}>不改了</button></div>
           </>
         ) : (
           <>
             <Tags r={rec} /><p style={{ fontWeight: 600, margin: "8px 0" }}><Summary r={rec} /></p><p className="hint">{occurredLine(rec)}</p>
-            {msg ? <div className="err" role="alert">{msg}</div> : null}
+            {msg ? <div className="err" role="alert">{msg}{uncertain ? <div className="actions"><button className="btn sec" onClick={giveUp}>放弃这次操作</button></div> : null}</div> : null}
             {rec.kind === "visit" && rec.images?.length ? <><h3>报告图</h3><div className="thumbs">{rec.images.map((im) => (
               <a className="thumb" key={im.sha256} href={`/api/health-record/originals/${im.sha256}`} target="_blank" rel="noreferrer" aria-label={`查看原图：${im.name}`}>
                 <img src={`/api/health-record/originals/${im.sha256}?thumb=1`} alt={`报告图：${im.name}`} /><div className="nm">{im.name}（点开看原图）</div></a>))}</div></> : null}
@@ -377,7 +428,7 @@ function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: (
               <div className="hist" key={h.id}><div className="h">{h.kind === "created" ? `${mdt(h.at)} · ${h.author} · 创建` : `${mdt(h.at)} · ${h.author} · 更正${h.reason ? `（${h.reason}）` : ""}`}</div>
                 {h.changes.map((c, i) => <div className="diff" key={i}><span>{FIELD_LABEL[c.field] ?? c.field}</span><span><s>{show(c.before)}</s> → <ins>{show(c.after)}</ins></span></div>)}</div>))}
             <div className="actions">
-              {rec.editable ? <button className="btn" onClick={() => { setEdit(editFrom(rec)); setReqId(newId()); setMsg(""); }}>更正</button> : null}
+              {rec.editable ? <button className="btn" onClick={() => { pending.current = null; setEdit(editFrom(rec)); setMsg(""); }}>更正</button> : null}
               {rec.editable && !rec.voided ? <button className="btn sec" disabled={busy} onClick={() => attribution("void")}>这条记错孩子了</button> : null}
               {rec.editable && rec.voided ? <button className="btn sec" disabled={busy} onClick={() => attribution("restore")}>恢复归属</button> : null}
               <button className="btn sec" onClick={onClose}>关闭</button>

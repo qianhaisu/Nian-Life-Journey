@@ -71,9 +71,9 @@ try {
   check("睡眠：选两项后可取消一项", (await page.locator('.chip:has-text("哄睡困难")').getAttribute("aria-pressed")) === "true" && (await page.locator('.chip:has-text("夜醒多")').getAttribute("aria-pressed")) === "false");
   await page.click('.chip:has-text("夜醒多")');
   await shot("03-note-expanded");
-  await page.click(".btn.block");
-  await page.waitForSelector(".card .ok");
-  check("手记保存成功（服务端提交后才提示）", /已保存/.test(await txt(".card")) && /浓鼻涕/.test(await txt(".card")) && /37.8/.test(await txt(".card")));
+  await page.click(".btn.block:visible");
+  await page.waitForSelector(".card:visible .ok");
+  check("手记保存成功（服务端提交后才提示）", /已保存/.test(await txt(".card:visible")) && /浓鼻涕/.test(await txt(".card:visible")) && /37.8/.test(await txt(".card:visible")));
   await shot("04-note-saved");
 
   // ---- 就医 ----
@@ -90,8 +90,8 @@ try {
   await page.fill("#hr-note", "医生说先观察两天，晚上超过 38.5 再来。");
   check("手机无横向溢出（就医）", !(await overflow()));
   await shot("05-visit-filled");
-  await page.click(".btn.block"); await page.waitForSelector(".card .ok");
-  check("就医保存成功，未填日期显示未知", /已保存/.test(await txt(".card")) && /就医日期未知/.test(await txt(".card")));
+  await page.click(".btn.block:visible"); await page.waitForSelector(".card:visible .ok");
+  check("就医保存成功，未填日期显示未知", /已保存/.test(await txt(".card:visible")) && /就医日期未知/.test(await txt(".card:visible")));
 
   // ---- 已记录：查看 / 原图 / 更正 / 历史 ----
   await page.click("nav.tabs [data-tab=hist]");

@@ -123,3 +123,5 @@
 .hr-root .bigimg{width:100%;height:auto;border-radius:12px;border:1px solid var(--border);background:#fff;display:block}
 .hr-root nav.tabs{position:sticky;bottom:0;left:auto;right:auto;margin:0 -16px}
 @media (min-width:700px){.hr-root{background:#EFE9DF}.hr-app{background:var(--paper);border:1px solid var(--border);border-radius:28px;margin:22px auto 40px;padding:0 24px 0;box-shadow:0 20px 60px rgba(67,62,56,.12);min-height:calc(100dvh - 44px);display:flex;flex-direction:column}.hr-app main{flex:1;padding-bottom:24px}.hr-root nav.tabs{margin:0 -24px;border-radius:0 0 28px 28px}}
+
+.hr-root fieldset.frozen{border:0;padding:0;margin:0;min-width:0}

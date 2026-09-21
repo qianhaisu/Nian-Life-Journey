@@ -2,7 +2,7 @@
 // same file); a bounded preview thumbnail is derived separately and is never used in place of the original.
 // Type and size are decided from the actual bytes (decoded by sharp), not from the filename or the client's Content-Type.
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp, { type Metadata } from "sharp";
 
@@ -34,27 +34,43 @@ export async function inspectImage(name: string, data: Buffer): Promise<Inspecte
   return { sha256: createHash("sha256").update(data).digest("hex"), ext, mime: MIME[ext], bytes: data.length, width: swap ? meta.height : meta.width, height: swap ? meta.width : meta.height, name: label, data, thumb };
 }
 
+const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+
 export class OriginalsStore {
-  constructor(private root: string, private hooks: { failWrite?: () => boolean } = {}) {}
+  constructor(private root: string, private hooks: { failWrite?: () => boolean } = {}, private guard: () => void = () => {}) {}
   private file(kind: "originals" | "thumbs", sha: string, ext: string) { return path.join(this.root, kind, `${sha}.${ext}`); }
-  private async put(file: string, data: Buffer) {
-    try { if ((await stat(file)).size === data.length) return; } catch { /* not there yet */ }
+  private async writeAtomic(file: string, data: Buffer) {
     if (this.hooks.failWrite?.()) throw new RecordError(500, "storage_failed", "原图没有保存成功，请稍后重试。");
     await mkdir(path.dirname(file), { recursive: true });
     const tmp = `${file}.${randomUUID()}.tmp`;
     try { await writeFile(tmp, data); await rename(tmp, file); }
     catch { await rm(tmp, { force: true }); throw new RecordError(500, "storage_failed", "原图没有保存成功，请稍后重试。"); }
   }
-  async save(img: InspectedImage) {
-    await this.put(this.file("originals", img.sha256, img.ext), img.data);
-    await this.put(this.file("thumbs", img.sha256, "jpg"), img.thumb);
+  /**
+   * The name is the SHA-256 of the content, so an existing file is only reused when its CONTENT hash matches (never just its size).
+   * A mismatching copy is kept aside as *.corrupt-<id> and replaced with the verified upload bytes.
+   */
+  private async putOriginal(img: InspectedImage) {
+    const file = this.file("originals", img.sha256, img.ext);
+    try {
+      if (sha256(await readFile(file)) === img.sha256) return;
+      await rename(file, `${file}.corrupt-${randomUUID().slice(0, 8)}`);
+    } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw new RecordError(500, "storage_failed", "原图没有保存成功，请稍后重试。"); }
+    await this.writeAtomic(file, img.data);
   }
-  /** Only ever builds a path from a validated hash and an extension from our own allow-list. */
+  async save(img: InspectedImage) {
+    this.guard();
+    await this.putOriginal(img);
+    await this.writeAtomic(this.file("thumbs", img.sha256, "jpg"), img.thumb); // a thumbnail is only a rebuildable preview
+  }
+  /** Only ever builds a path from a validated hash and an extension from our own allow-list; never returns bytes that do not match their name. */
   async read(sha: string, ext: string, thumb: boolean): Promise<{ data: Buffer; mime: string } | null> {
     if (!HASH_RE.test(sha) || !MIME[ext]) return null;
-    try {
-      if (thumb) return { data: await readFile(this.file("thumbs", sha, "jpg")), mime: "image/jpeg" };
-      return { data: await readFile(this.file("originals", sha, ext)), mime: MIME[ext] };
-    } catch { return null; }
+    this.guard();
+    let data: Buffer;
+    try { data = await readFile(thumb ? this.file("thumbs", sha, "jpg") : this.file("originals", sha, ext)); } catch { return null; }
+    if (thumb) return { data, mime: "image/jpeg" };
+    if (sha256(data) !== sha) throw new RecordError(500, "original_corrupt", "这张原图的文件已损坏，无法显示。请重新上传同一张图片来修复。");
+    return { data, mime: MIME[ext] };
   }
 }

@@ -15,6 +15,7 @@ import { applyCorrection, applyPlan, effectiveContent, isValidTimeString, planIm
 import { entityKey, hashOf, type Content, type Correction, type Ledger, type Ref } from "../model";
 import { WHO_LABEL, type HealthWho } from "./config";
 import { HASH_RE, OriginalsStore, RecordError, type InspectedImage } from "./media";
+import { isInside, repoRootOf } from "./paths";
 
 export const HOSPITALS = ["省儿保（滨江）", "省儿保（莫干山）", "市儿童医院", "浙一", "三墩", "其他"] as const;
 export const DEPARTMENTS = ["呼吸内科", "耳鼻喉", "外科", "其他"] as const;
@@ -23,7 +24,7 @@ const LAYER = "health_record", IMG_LAYER = "health_record_original";
 const ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
 const MAX_TEXT = 4000, MAX_OTHER = 60, MAX_REASON = 200;
 
-export interface ServiceOptions { now?: () => number; store?: StoreOptions; originalsHooks?: { failWrite?: () => boolean } }
+export interface ServiceOptions { repo?: string; now?: () => number; store?: StoreOptions; originalsHooks?: { failWrite?: () => boolean } }
 
 // ---------- time ----------
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -176,16 +177,28 @@ export class HealthRecordService {
   private now: () => number;
   private cache: { sig: string; views: RecordView[]; images: Map<string, string> } | null = null;
   private ledgerFile: string;
+  private repo: string;
+
+  /** Checked before every read and write: where ledger / originals / thumbs REALLY land (links followed) must be outside the repository. */
+  private guard() {
+    for (const sub of ["ledger", "originals", "thumbs"]) {
+      let inside = true;
+      try { inside = isInside(path.join(this.root, sub), this.repo); } catch { inside = true; }
+      if (inside) throw new RecordError(500, "private_path", "数据目录位置不安全，已拒绝读写。");
+    }
+  }
 
   constructor(readonly root: string, opts: ServiceOptions = {}) {
     this.store = new HealthFileStore(path.join(root, "ledger"), opts.store);
-    this.originals = new OriginalsStore(root, opts.originalsHooks);
+    this.repo = opts.repo ?? repoRootOf(process.cwd());
+    this.originals = new OriginalsStore(root, opts.originalsHooks, () => this.guard());
     this.now = opts.now ?? Date.now;
     this.ledgerFile = path.join(root, "ledger", "ledger.json");
   }
 
   // ----- read side (projection cached until ledger.json changes) -----
   private async index() {
+    this.guard();
     let sig = "none";
     try { const s = await stat(this.ledgerFile); sig = `${s.mtimeMs}:${s.size}`; } catch { /* no ledger yet */ }
     if (this.cache && this.cache.sig === sig) return this.cache;
@@ -278,6 +291,7 @@ export class HealthRecordService {
   }
 
   private async commitNew(id: string, content: Content, reqHash: string, imgs: InspectedImage[], shas: string[]) {
+    this.guard();
     const at = () => wallOf(this.now());
     try {
       const result = await this.store.transaction<{ duplicate: boolean }>((ledger) => {
@@ -310,6 +324,7 @@ export class HealthRecordService {
     if (typeof p.requestId !== "string" || !ID_RE.test(p.requestId)) throw bad("提交标识不正确，请刷新页面后重试。", "bad_request_id");
     if (typeof p.expectedRevision !== "number" || !Number.isInteger(p.expectedRevision) || p.expectedRevision < 1) throw bad("缺少版本信息，请刷新页面后重试。", "bad_revision");
     const reason = cleanText(p.reason, MAX_REASON, "理由") || p.defaultReason;
+    this.guard();
     const ref: Ref = { kind: "observation", id };
     const inputHash = hashOf({ id, who, rev: p.expectedRevision, reason, input: p.input });
     try {

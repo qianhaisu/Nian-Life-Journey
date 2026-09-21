@@ -13,7 +13,7 @@ const fail = (e: RecordError) => json(e.status, { ok: false, code: e.code, messa
 export function createHealthRecordHandler(getConfig: () => ConfigResult = () => loadHealthRecordConfig(), serviceOpts: () => ServiceOptions = () => ({})) {
   const brake = new LoginBrake();
   let svc: { root: string; service: HealthRecordService } | null = null;
-  const serviceFor = (cfg: HealthRecordConfig) => (svc && svc.root === cfg.root ? svc.service : (svc = { root: cfg.root, service: new HealthRecordService(cfg.root, serviceOpts()) }).service);
+  const serviceFor = (cfg: HealthRecordConfig) => (svc && svc.root === cfg.root ? svc.service : (svc = { root: cfg.root, service: new HealthRecordService(cfg.root, { repo: cfg.repo, ...serviceOpts() }) }).service);
 
   return async function handle(req: Request, segments: string[]): Promise<Response> {
     const conf = getConfig();
