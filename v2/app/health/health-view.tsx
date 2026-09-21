@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { FollowUpItem, HealthPage, PageBand, PageEpisode, PageNode, PageVisit } from "@/lib/health/page/model";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { HealthPage, PageBand, PageEpisode, PageNode, PageVisit } from "@/lib/health/page/model";
 
 // HEALTH-04 健康页（按 r5 设计）：只有主时间轴，按年切换（默认当年全年），手机横向滑动 + 左右箭头；
 // 红色只来自核查过的记录区间（原文写明 = 实心，疑似持续 = 斜纹，只知开始 = 短渐隐），其余是同一种默认底色；
-// 节点的日期、内容、附件默认收起，点开才显示。病程与后续措施都默认折叠。
+// 节点的日期、内容、附件默认收起，点开才显示。病程与观察与护理都默认折叠。当前年份的时间轴只画到今天（北京时间，由服务端给出）。
+// 报告附件在页内弹层打开（带“返回”按钮），不离开本页，年份、展开的病程和滚动位置都保留。
 
 const DAY = 86400000;
 const ms = (d: string) => Date.parse(`${d.slice(0, 10)}T00:00:00Z`);
@@ -35,10 +36,52 @@ function Icon({ kind }: { kind: "fever" | "visit" | "exam" | "flag" | "clip" | "
 }
 const Xp = () => <span className="hp-xp"><Icon kind="down" /><em /></span>;
 
+type Att = { href: string; label: string };
+const AttCtx = createContext<(a: Att) => void>(() => {});
+function AttLink({ a }: { a: Att }) {
+  const open = useContext(AttCtx);
+  return <a className="hp-att" href={a.href} target="_blank" rel="noreferrer" onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; e.preventDefault(); open(a); }}><Icon kind="clip" />{a.label}</a>;
+}
+/** Full-screen viewer over the health page: the page underneath is never navigated away from. Back button, Esc and the phone's back gesture all close it. */
+function AttViewer({ a, onClose }: { a: Att; onClose: () => void }) {
+  const [zoom, setZoom] = useState(1);
+  const [asFrame, setAsFrame] = useState(false);
+  const back = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const prev = document.body.style.overflow; document.body.style.overflow = "hidden";
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    addEventListener("keydown", key); back.current?.focus();
+    return () => { document.body.style.overflow = prev; removeEventListener("keydown", key); };
+  }, [onClose]);
+  return <div className="hp-view" role="dialog" aria-modal="true" aria-label={`报告附件：${a.label}`}>
+    <div className="hp-view-bar">
+      <button type="button" className="hp-view-back" ref={back} data-act="att-back" onClick={onClose}><Icon kind="left" />返回</button>
+      <span className="hp-view-t">{a.label}</span>
+      {asFrame ? null : <span className="hp-view-z">
+        <button type="button" aria-label="缩小" onClick={() => setZoom((z) => Math.max(1, +(z - 0.5).toFixed(1)))}>－</button>
+        <button type="button" aria-label="还原" onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
+        <button type="button" aria-label="放大" onClick={() => setZoom((z) => Math.min(5, +(z + 0.5).toFixed(1)))}>＋</button>
+      </span>}
+    </div>
+    <div className="hp-view-body">
+      {asFrame ? <iframe src={a.href} title={a.label} className="hp-view-frame" />
+        : <img src={a.href} alt={a.label} style={{ width: `${zoom * 100}%` }} onError={() => setAsFrame(true)} />}
+    </div>
+    <div className="hp-view-foot"><a href={a.href} target="_blank" rel="noreferrer">在新窗口打开原件</a></div>
+  </div>;
+}
+
 type Sel = { type: "node"; id: string } | { type: "band"; id: string } | { type: "rt" } | null;
 
 export function HealthView({ page }: { page: HealthPage }) {
-  return <div className="hp">
+  const [att, setAtt] = useState<Att | null>(null);
+  const open = useCallback((a: Att) => { try { history.pushState({ hpAtt: 1 }, ""); } catch { /* no history: the back button still closes it */ } setAtt(a); }, []);
+  const close = useCallback(() => { if (history.state && history.state.hpAtt) history.back(); else setAtt(null); }, []);
+  useEffect(() => {
+    const pop = () => { if (!(history.state && history.state.hpAtt)) setAtt(null); };
+    addEventListener("popstate", pop); return () => removeEventListener("popstate", pop);
+  }, []);
+  return <AttCtx.Provider value={open}><div className="hp">
     <div className="hp-head"><h1 className="hp-h1">健康</h1><Link className="hp-btn" href="/health/record">＋ 记一笔</Link></div>
     <JumpBar />
     <section className="hp-part" id="hp-s1" aria-labelledby="hp-t1">
@@ -46,10 +89,11 @@ export function HealthView({ page }: { page: HealthPage }) {
     </section>
     <div className="hp-narrow">
       <section className="hp-part" id="hp-s2" aria-labelledby="hp-t2"><h2 id="hp-t2">病程分析</h2><Episodes page={page} /></section>
-      <section className="hp-part" id="hp-s3" aria-labelledby="hp-t3"><h2 id="hp-t3">后续措施</h2><FollowUp page={page} /></section>
+      <section className="hp-part" id="hp-s3" aria-labelledby="hp-t3"><h2 id="hp-t3">观察与护理</h2><FollowUp page={page} /></section>
       <p className="hp-disc">辅助整理，不是诊断，不能代替医生。</p>
     </div>
-  </div>;
+    {att ? <AttViewer a={att} onClose={close} /> : null}
+  </div></AttCtx.Provider>;
 }
 
 function JumpBar() {
@@ -59,7 +103,7 @@ function JumpBar() {
     addEventListener("scroll", on, { passive: true }); return () => removeEventListener("scroll", on);
   }, []);
   return <nav className="hp-jump" aria-label="健康页三个部分">
-    {([["hp-s1", "健康时间轴"], ["hp-s2", "病程分析"], ["hp-s3", "后续措施"]] as const).map(([id, l]) =>
+    {([["hp-s1", "健康时间轴"], ["hp-s2", "病程分析"], ["hp-s3", "观察与护理"]] as const).map(([id, l]) =>
       <button key={id} type="button" aria-pressed={cur === id} onClick={() => document.getElementById(id)?.scrollIntoView()}>{l}</button>)}
   </nav>;
 }
@@ -69,7 +113,9 @@ function Timeline({ page }: { page: HealthPage }) {
   const [sel, setSel] = useState<Sel>(null);
   const [cw, setCw] = useState(0);
   const sc = useRef<HTMLDivElement>(null);
-  const Y0 = Date.UTC(year, 0, 1), Y1 = Date.UTC(year + 1, 0, 1);
+  const today = page.today, curYear = Number(today.slice(0, 4));
+  // the current year is drawn only up to today; earlier years keep the whole year
+  const Y0 = Date.UTC(year, 0, 1), Y1 = year >= curYear ? Math.min(Date.UTC(year + 1, 0, 1), ms(today) + DAY) : Date.UTC(year + 1, 0, 1);
   const days = (Y1 - Y0) / DAY;
   const ppd = cw >= 800 ? (cw - PAD - RPAD) / days : Math.max(PPD_MOBILE, cw ? (cw - PAD - RPAD) / days : PPD_MOBILE);
   const X = useCallback((d: string | number) => PAD + ((typeof d === "number" ? d : ms(d)) - Y0) / DAY * ppd, [Y0, ppd]);
@@ -94,7 +140,7 @@ function Timeline({ page }: { page: HealthPage }) {
     for (const n of inYear) { const x = X(n.date), g = groups[groups.length - 1]; if (g && x - g.xl < GAP) { g.nodes.push(n); g.xl = x; } else groups.push({ id: n.id, x, xl: x, nodes: [n] }); }
     return groups;
   }, [page.nodes, Y0, Y1, X]);
-  const bands = page.bands.filter((b) => ms(b.end) + DAY > Y0 && ms(b.start) < Y1);
+  const bands = page.bands.filter((b) => ms(b.end) + DAY > Y0 && ms(b.start) < Y1 && b.start <= today);
   const noData = [] as { a: number; b: number }[];
   const first = page.nodes[0]?.date;
   if (first && ms(first) > Y0) noData.push({ a: Y0, b: Math.min(ms(first), Y1) });
@@ -106,7 +152,7 @@ function Timeline({ page }: { page: HealthPage }) {
   const bandTitle = (b: PageBand) => b.status === "needs_review" ? "待重新核对" : b.kind === "recorded" ? "原文写明" : b.kind === "suspected" ? "疑似持续" : "只知道开始";
 
   return <div className={`hp-tl${fits ? " fits" : ""}`} id="hp-tl">
-    <div className="hp-tl-title"><h2 id="hp-t1">健康时间轴</h2><div className="hp-sub">（{year}年1月 ～ 12月{asOf && ms(asOf) >= Y0 && ms(asOf) < Y1 ? ` · 资料截至 ${md(asOf)}` : ""}）</div></div>
+    <div className="hp-tl-title"><h2 id="hp-t1">健康时间轴</h2><div className="hp-sub">（{year}年1月 ～ {year >= curYear ? md(today) : "12月"}{asOf && ms(asOf) >= Y0 && ms(asOf) < Y1 ? ` · 资料截至 ${md(asOf)}` : ""}）</div></div>
     <div className="hp-legend" aria-label="图例">
       <span><i className="l-p" />有问题或疑似问题（原文写明的时段）</span>
       <span><Icon kind="fever" />发热</span>
@@ -125,7 +171,7 @@ function Timeline({ page }: { page: HealthPage }) {
     </div>
     <div className="hp-scroll" ref={sc} tabIndex={0} aria-label="详细时间轴，可左右滑动">
       <div className="hp-track" style={{ width: W }}>
-        {Array.from({ length: 12 }, (_, i) => { const x = X(Date.UTC(year, i, 1)); return <div key={i}><div className="hp-monl" style={{ left: x }} /><div className="hp-mon" style={{ left: Math.max(x, PAD + 10) }}>{i + 1}月</div></div>; })}
+        {Array.from({ length: 12 }, (_, i) => i).filter((i) => Date.UTC(year, i, 1) < Y1).map((i) => { const x = X(Date.UTC(year, i, 1)); return <div key={i}><div className="hp-monl" style={{ left: x }} /><div className="hp-mon" style={{ left: Math.max(x, PAD + 10) }}>{i + 1}月</div></div>; })}
         <div className="hp-bp hp-base" style={{ left: X(Y0), width: X(Y1) - X(Y0) }} />
         {noData.filter((p) => X(p.b) - X(p.a) > 80).map((p) => <div key={p.a} className="hp-ndl" style={{ left: (X(p.a) + X(p.b)) / 2 }}>尚无资料</div>)}
         {bands.map((b) => {
@@ -177,7 +223,7 @@ function Detail({ sel, groups, page, onClose, bandTitle }: { sel: Sel; groups: {
       <div className="dh">{e.kind === "dot" ? <span className="dot" /> : <Icon kind={e.kind} />}<b>{md(e.date)}{e.time ? ` ${e.time}` : ""} · {e.title}</b></div>
       <p className="hp-muted">{e.text}</p>
       <div className="src"><span className="chip">{e.sourceLabel}</span>{e.who ? <span>{e.who}</span> : null}{e.timeKind === "recorded" ? <span>· 只知道记录时间</span> : null}
-        {e.attachments.map((a) => <a key={a.href} className="hp-att" href={a.href} target="_blank" rel="noreferrer"><Icon kind="clip" />{a.label}</a>)}
+        {e.attachments.map((a) => <AttLink key={a.href} a={a} />)}
         {e.episode ? <a className="chip ep" href={`#ep-${e.episode.id}`} onClick={() => openEp(e.episode!.id)}>{e.episode.title}</a> : <span>· 还没归入病程</span>}
       </div>
     </div>)}
@@ -207,9 +253,7 @@ function Episodes({ page }: { page: HealthPage }) {
         {eps.map((e) => <Episode key={e.id} e={e} />)}
       </div>
     </details>;
-  })}{page.looseHospital.length ? <details className="hp-cat" id="cat-loose"><summary><Icon kind="visit" /><span>没有对应到某次就诊的医院记录<small>{page.looseHospital.length} 条，来自就诊列表页</small></span><Xp /></summary>
-    <div className="hp-cat-body">{page.looseHospital.map((x) => <div className="hp-visit" key={x.id}><div className="vrow"><span className="k">诊断</span><span>{x.text}</span></div>
-      <div className="vrow"><span className="k">报告</span><span>{x.attachments.length ? x.attachments.map((a) => <a key={a.href} className="hp-att" href={a.href} target="_blank" rel="noreferrer"><Icon kind="clip" />{a.label}</a>) : "没有报告原件"}</span></div></div>)}</div></details> : null}</>;
+  })}</>;
 }
 
 /** Small coverage table: which of the child's own WeChat observations are on the timeline and why the others are not (no re-read of the whole ledger). */
@@ -229,6 +273,8 @@ function Episode({ e }: { e: PageEpisode }) {
   return <details className="hp-epi" id={`ep-${e.id}`}>
     <summary><span><b>{e.title}</b><small>{e.start ? md(e.start) : "开始日期不明"} – {e.endKnown && e.end ? md(e.end) : <span className="hp-unk">未知</span>}</small></span><Xp /></summary>
     <div className="hp-epb">
+      <h4>就医记录</h4>
+      {e.visits.length ? e.visits.map((v) => <Visit key={v.id} v={v} />) : <p className="hp-muted">这次没有医院记录（不等于没有就医）。</p>}
       <h4>发展经过</h4>
       <ul className="hp-course">
         {e.course.map((c, i) => <li key={i} className={c.review ? "review" : undefined}><span className="w">{mdShort(c.date)}</span>{c.text}{c.review ? <span className="hp-warn-inline">{c.review}</span> : null}</li>)}
@@ -237,13 +283,18 @@ function Episode({ e }: { e: PageEpisode }) {
       <h4>病程总结</h4>
       <div className="hp-sum">
         {e.summary.review ? <p className="hp-warn-inline">{e.summary.review}</p> : null}
-        {e.summary.analysis ? <Reading a={e.summary.analysis} /> : null}
-        {e.summary.points.length ? <ul>{e.summary.points.map((p, i) => <li key={i}>{p}</li>)}</ul> : <p>已审核底账里没有这一病程的要点。</p>}
-        {e.summary.open.length ? <p className="hp-muted">还不确定：{e.summary.open.join("；")}</p> : null}
-        <p className="hp-muted">{e.summary.medical}</p>
+        {e.summary.short && e.summary.analysis ? <div className="hp-read" data-analysis={e.summary.analysis.version} data-short>
+          {e.summary.analysis.review ? <p className="hp-warn-inline">{e.summary.analysis.review}</p> : null}
+          {e.summary.analysis.newerNote ? <p className="hp-warn-inline">{e.summary.analysis.newerNote}</p> : null}
+          <p>{e.summary.short.join("")}</p>
+          <p className="hp-muted">资料截至 {md(e.summary.analysis.dataAsOf)}。</p>
+        </div> : <>
+          {e.summary.analysis ? <Reading a={e.summary.analysis} /> : null}
+          {e.summary.points.length ? <ul>{e.summary.points.map((p, i) => <li key={i}>{p}</li>)}</ul> : <p>已审核底账里没有这一病程的要点。</p>}
+          {e.summary.open.length ? <p className="hp-muted">还不确定：{e.summary.open.join("；")}</p> : null}
+          <p className="hp-muted">{e.summary.medical}</p>
+        </>}
       </div>
-      <h4>就医记录</h4>
-      {e.visits.length ? e.visits.map((v) => <Visit key={v.id} v={v} />) : <p className="hp-muted">这次没有医院记录（不等于没有就医）。</p>}
     </div>
   </details>;
 }
@@ -266,25 +317,19 @@ function Visit({ v }: { v: PageVisit }) {
     <div className="vh"><b>{v.date ? md(v.date) : "日期不明"}</b><span>{v.hospital}{v.dept ? ` · ${v.dept}` : ""}</span>{!v.countsAsVisit ? <span className="chip">{v.kindLabel}</span> : null}</div>
     {v.diagnoses.length ? <div className="vrow"><span className="k">诊断</span><span>{v.diagnoses.join("；")}</span></div> : null}
     <div className="vrow"><span className="k">处方</span><span>{v.prescriptions.length ? <ul>{v.prescriptions.map((p, i) => <li key={i}>{p}</li>)}</ul> : "无处方记录"}</span></div>
-    <div className="vrow"><span className="k">报告</span><span>{v.reports.length ? v.reports.map((a) => <a key={a.href} className="hp-att" href={a.href} target="_blank" rel="noreferrer"><Icon kind="clip" />{a.label}</a>) : "没有报告原件"}</span></div>
+    <div className="vrow"><span className="k">报告</span><span>{v.reports.length ? v.reports.map((a) => <AttLink key={a.href} a={a} />) : "没有报告原件"}</span></div>
   </div>;
 }
 
 function FollowUp({ page }: { page: HealthPage }) {
   const f = page.followUp;
-  const tag = (k: FollowUpItem["kind"]) => (k === "conditional" ? "建议 · 遇到才需要" : k === "next_visit" ? "建议 · 下次看医生时问" : null);
-  const group = (id: string, title: string, icon: "eye" | "visit", items: FollowUpItem[]) => <details className="hp-grp" id={id}>
-    <summary><Icon kind={icon} />{title}<small className="cnt">{items.length} 项</small><Xp /></summary>
-    <div className="hp-grp-body">
-      {items.length ? items.map((m) => <div className={`hp-it${m.kind === "conditional" ? " urgent" : ""}`} key={m.id}>
-        {m.kind === "conditional" ? <Icon kind="alert" /> : null}
-        <div><div className="t">{m.text}</div>{m.detail ? <div className="sub">{m.detail}</div> : null}{m.review ? <div className="hp-warn-inline">{m.review}</div> : null}
-          <div className="m">{m.episodes.map((e) => <a key={e.id} className="chip ep" href={`#ep-${e.id}`} onClick={() => openEp(e.id)}>{e.title}</a>)}{tag(m.kind) ? <span className="chip sug">{tag(m.kind)}</span> : null}</div></div>
-      </div>) : <p className="hp-muted">没有已确认的就医预约。</p>}
-    </div>
-  </details>;
   return <>
     {f.status !== "current" && f.staleReason ? <p className="hp-warn">{f.staleReason}</p> : null}
-    {f.status === "missing" ? null : <>{group("g-care", "观察与护理", "eye", f.care)}{group("g-visit", "就医安排", "visit", f.visit)}</>}
+    {f.status === "missing" ? null : page.careGroups.map((g) => <details className="hp-grp" id={`care-${g.category}`} key={g.category}>
+      <summary>{g.category === "burn" ? <Icon kind="band" /> : g.category === "fever" ? <Icon kind="fever" /> : g.category === "resp" ? <Icon kind="lung" /> : <Icon kind="eye" />}{CAT[g.category]}<small className="cnt">{g.items.length} 项</small><Xp /></summary>
+      <div className="hp-grp-body">
+        {g.items.map((m) => <div className="hp-it" key={m.id}><div><div className="t">{m.text}</div>{m.review ? <div className="hp-warn-inline">{m.review}</div> : null}</div></div>)}
+      </div>
+    </details>)}
   </>;
 }

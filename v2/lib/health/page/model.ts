@@ -81,15 +81,24 @@ export interface PageEpisode {
   id: string; title: string; category: "resp" | "fever" | "burn" | "other";
   start: string | null; startNote: string | null; end: string | null; endKnown: boolean; endNote: string | null;
   course: { date: string; text: string; review?: string }[];
-  summary: { points: string[]; open: string[]; medical: string; review: string | null; analysis: EpisodeAnalysis | null };
+  summary: { points: string[]; open: string[]; medical: string; review: string | null; analysis: EpisodeAnalysis | null; /** 1–3 sentence page wording bound to the adopted analysis (DisplayFile), or null */ short: string[] | null };
   visits: PageVisit[];
 }
-export interface FollowUpItem { id: string; kind: MaterialItem["kind"]; text: string; detail: string | null; episodes: { id: string; title: string }[]; review: string | null }
+export interface FollowUpItem { id: string; kind: MaterialItem["kind"]; text: string; detail: string | null; episodes: { id: string; title: string }[]; review: string | null; /** hash of the reviewed source item (a material or an analysis measure) */ srcHash: string }
+/** Short page wording kept SEPARATE from the reviewed analysis body and materials. Each entry names what it was written from
+ *  (analysis version + body hash, or the source items' hashes); when that source changes the short wording is dropped and the reviewed text is shown instead. */
+export interface DisplayFile {
+  schema: 1; writtenAt: string; writer: string;
+  episodes: Record<string, { version: string; bodyHash: string; summary: string[] }>;
+  care: { id: string; category: PageEpisode["category"]; text: string; sources: { id: string; hash: string }[] }[];
+}
+export interface CareGroup { category: PageEpisode["category"]; items: { id: string; text: string; review: string | null }[] }
 export interface HealthReminder { id: string; date: string; title: string; place: string }
 export interface HealthPage {
-  asOf: string | null; years: number[]; defaultYear: number;
+  asOf: string | null; /** today's date (Shanghai wall clock): the current year's axis ends here */ today: string; years: number[]; defaultYear: number;
   nodes: PageNode[]; bands: PageBand[];
   episodes: PageEpisode[];
+  careGroups: CareGroup[];
   followUp: { care: FollowUpItem[]; visit: FollowUpItem[]; status: "current" | "stale" | "missing"; basisDate: string | null; staleReason: string | null };
   enrolment: { date: string; note: string; status: "ok" | "needs_review" } | null;
   /** hospital facts that have no visit number (they come from a visit-list page): kept reachable, with their originals */
@@ -105,6 +114,8 @@ export interface PageInputs {
   history: Ledger | null; record: Ledger | null;
   intervals: IntervalFile | null; materials: MaterialsFile | null;
   derived?: DerivedFile | null;
+  /** short page wording (private file, separate from the reviewed texts) */
+  display?: DisplayFile | null;
   /** adopted per-episode analyses (private file); only an adopted version with an unchanged dependency snapshot counts as reviewed */
   analyses?: AnalysisFile | null;
   /** local medical-evidence register lookup; without it an adopted analysis can never be verified (shown as needing re-review) */
@@ -291,7 +302,7 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       if (ep) cov.shownAttached++; else if (mr === "candidate" || mr === "background") cov.shownCandidate++; else cov.shownUnattached++;
       const occurred = day(c.occurredAt);
       const d = occurred ?? day(c.recordedAt);
-      if (!d) continue;
+      if (!d || d > nowDay) continue; // a date still ahead is never drawn on the timeline
       const text = clean(c.text);
       entries.push({ id: e.id, ledger: "history", date: d, time: typeof c.recordedAt === "string" ? c.recordedAt.slice(11, 16) || null : null, timeKind: occurred ? "occurred" : "recorded",
         kind: looksFeverish(text) ? "fever" : "dot", title: clip(text, 24), text: clip(text, 300), who: c.speaker ? String(c.speaker) : null,
@@ -317,7 +328,7 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       if (c.layer !== "health_record" || c.attribution === "not_child") continue;
       const occurred = day(c.occurredAt);
       const d = occurred ?? day(c.recordedAt);
-      if (!d) continue;
+      if (!d || d > nowDay) continue;
       const imgs = Array.isArray(c.images) ? (c.images as { sha256: string; name: string }[]) : [];
       const isVisit = c.kind === "visit";
       const sy = (c.symptoms ?? {}) as Record<string, unknown>;
@@ -349,9 +360,10 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
     const ep = effectiveContent(H!, { kind: "episode", id: b.episodeId })!.content;
     const endKnown = b.declaredEnd === "ended" && !!day(b.end);
     const course: { date: string; text: string; review?: string }[] = [];
-    if (day(b.start)) course.push({ date: day(b.start)!, text: `开始${ep.startQualifier ? ` · ${clean(ep.startQualifier)}` : ""}` });
     const epBands = bands.filter((x) => x.episodeId === b.episodeId && x.kind !== "open");
-    for (const band of epBands) course.push({ date: band.start, text: `${band.kind === "recorded" ? "原文写明" : "疑似持续"}：${md(band.start)}–${md(band.end)} ${band.label}`,
+    // key changes only: the start is one line unless a reviewed span already opens on that day; visits are listed above the course, not repeated in it
+    if (day(b.start) && !epBands.some((x) => x.start === day(b.start))) course.push({ date: day(b.start)!, text: `开始${ep.startQualifier ? ` · ${clean(ep.startQualifier)}` : ""}` });
+    for (const band of epBands) course.push({ date: band.start, text: `${band.kind === "recorded" ? "原文写明" : "疑似持续"}：${md(band.start)}${band.end !== band.start ? `–${md(band.end)}` : ""} ${band.label}`,
       review: band.status === "needs_review" ? `待重新核对：${band.statusReasons.join("；")}。核对之前这条不当作有效经过。` : undefined });
     const pendingBands = epBands.filter((x) => x.status === "needs_review");
     const stamp = inp.intervals?.episodeStamps?.[b.episodeId];
@@ -369,12 +381,12 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
     else if (av && aWhy.length) changedEps.set(b.episodeId, "医学分析读到的事实或依据的医学证据在采用之后有变化");
     if (invalid) { changedEps.set(b.episodeId, "医学分析的正文或证据绑定与审核时不一致"); withheld.add(b.episodeId); }
     if (av && aWhy.length) analysisWhy.set(b.episodeId, aWhy);
-    for (const x of b.encounters) if (day(x.date)) { const v = visitOf(H!, x); course.push({ date: day(x.date)!, text: `${x.kindLabel}：${v.dept || v.hospital}${v.diagnoses.length ? `，${v.diagnoses.join("；")}` : ""}` }); }
     course.sort((a, c) => (a.date < c.date ? -1 : a.date > c.date ? 1 : 0));
+    for (let i = course.length - 1; i > 0; i--) if (course[i].text === course[i - 1].text && course[i].date === course[i - 1].date) course.splice(i, 1);
     let analysis: EpisodeAnalysis | null = null;
     if (av) {
       const last = av.events.filter((x) => x.status === "adopted").pop()!;
-      const lastAct = course.length ? course[course.length - 1].date : av.body.dataAsOf;
+      const lastAct = [...b.encounters.map((x) => day(x.date) ?? ""), ...course.map((x) => x.date)].filter(Boolean).sort().pop() ?? av.body.dataAsOf;
       const newer = entries.filter((x) => x.date > av.body.dataAsOf && x.date <= nowDay && (!x.episode || x.episode.id === b.episodeId)).sort((p, q) => p.date.localeCompare(q.date));
       analysis = { version: av.id, dataAsOf: av.body.dataAsOf, paragraphs: av.body.summary, layers: av.body.layers.map((l) => ({ label: LAYER_LABEL[l.level], text: l.text })), uncertain: av.body.uncertain, impact: av.body.impact, currentStatus: av.body.currentStatus,
         adoptedBy: last.by, adoptedAt: last.at, basis: last.basis ?? "",
@@ -391,6 +403,7 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
         open: (Array.isArray(ep.openQuestions) ? ep.openQuestions : []).map(clean).filter(Boolean),
         medical: analysis ? "以上是辅助分析材料，不是医生的诊断或意见；有疑问以医生判断为准。" : "这一病程还没有经过审核的医学解释，待补；上面只列已审核底账里的要点。",
         analysis,
+        short: analysis && !invalid && inp.display?.episodes?.[b.episodeId]?.version === avAll!.id && inp.display.episodes[b.episodeId].bodyHash === avAll!.bodyHash ? inp.display.episodes[b.episodeId].summary : null,
         // an interval that lost its evidence also puts the episode's summary points (which rest on the same records) under review
         review: [pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间因依据变化正在待重新核对` : "", stampProblem ?? ""].filter(Boolean).length
           ? `待重新核对：${[pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间的依据变化` : "", stampProblem ?? ""].filter(Boolean).join("；")}。下面的要点可能受影响，先按旧底账原样保留。${invalid ? `　另外，这一病程采用过的医学分析，其正文或证据绑定与审核时不一致（${prob!.integrity.join("；")}），不能作为有效分析，内容不显示，历史已保留。` : ""}`
@@ -417,7 +430,7 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
     if (!av) continue;
     if (!analysisAsOf || av.body.dataAsOf > analysisAsOf) analysisAsOf = av.body.dataAsOf;
     const why = [...(analysisWhy.get(b.episodeId) ?? []), ...(pendingByEp.has(b.episodeId) ? ["这一病程有区间待重新核对"] : [])];
-    for (const m of av.body.measures) aItems.push({ group: m.group, item: { id: `${av.id}:${m.id}`, kind: m.kind, text: m.text, detail: [m.detail, m.conditions.length ? `适用前提：${m.conditions.join("；")}` : "", m.reassessWhen.length ? `出现这些情况要重新评估：${m.reassessWhen.join("；")}` : ""].filter(Boolean).join("　") || null, episodes: [epRef(b.episodeId)], review: why.length ? `待重新核对：${[...new Set(why)].join("；")}。` : null } });
+    for (const m of av.body.measures) aItems.push({ group: m.group, item: { id: `${av.id}:${m.id}`, kind: m.kind, text: m.text, detail: [m.detail, m.conditions.length ? `适用前提：${m.conditions.join("；")}` : "", m.reassessWhen.length ? `出现这些情况要重新评估：${m.reassessWhen.join("；")}` : ""].filter(Boolean).join("　") || null, episodes: [epRef(b.episodeId)], review: why.length ? `待重新核对：${[...new Set(why)].join("；")}。` : null, srcHash: hashOf(m) } });
   }
   if (!inp.materials && !aItems.length) followUp = { care: [], visit: [], status: "missing", basisDate: null, staleReason: "后续措施的审核材料还没有接通。" };
   else {
@@ -440,8 +453,8 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       for (const e of m.episodes ?? []) { if (pendingByEp.has(e)) why.push("关联的病程有区间待重新核对"); if (changedEps.has(e)) why.push("关联的病程在核对之后底账有变化"); }
       return why.length ? `待重新核对：${[...new Set(why)].join("；")}。这条通用内容仍照常显示，但来源是否仍然有效没有确认。` : null;
     };
-    const item = (m: MaterialItem): FollowUpItem => ({ id: m.id, kind: m.kind, text: m.text, detail: m.detail ?? null, episodes: (m.episodes ?? []).filter((e) => epTitle.has(e)).map(epRef), review: reviewOf(m) });
-    const allItems = [...mats.map(item), ...aItems.map((x) => x.item)];
+    const item = (m: MaterialItem): FollowUpItem => ({ id: m.id, kind: m.kind, text: m.text, detail: m.detail ?? null, episodes: (m.episodes ?? []).filter((e) => epTitle.has(e)).map(epRef), review: reviewOf(m), srcHash: hashOf(m) });
+    const allItems = [...mats.filter((m) => m.group === "care").map(item), ...aItems.filter((x) => x.group === "care").map((x) => x.item)]; // only the care items are shown on the page
     const reviewCount = allItems.filter((i) => i.review).length;
     followUp = {
       care: [...mats.filter((m) => m.group === "care").map(item), ...aItems.filter((x) => x.group === "care").map((x) => x.item)],
@@ -449,6 +462,24 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       status: newer.length || reviewCount ? "stale" : "current", basisDate: cutoff,
       staleReason: [newer.length ? `这些措施依据 ${md(cutoff)} 之前的资料整理；之后又有 ${md(newer[0].date)} 起的新记录，还没有重新审核。` : "", reviewCount ? `有 ${reviewCount} 条措施的依据发生变化，已标为待重新核对。` : ""].filter(Boolean).join("") || null,
     };
+  }
+
+  // ----- care groups: by the kind of episode the care belongs to; short wording only while its sources are unchanged -----
+  const catOfEp = new Map(episodes.map((e) => [e.id, e.category]));
+  const careGroups: CareGroup[] = [];
+  {
+    const put = (category: PageEpisode["category"], it: CareGroup["items"][number]) => { (careGroups.find((g) => g.category === category) ?? careGroups[careGroups.push({ category, items: [] }) - 1]).items.push(it); };
+    const used = new Set<string>();
+    for (const d of inp.display?.care ?? []) {
+      const src = d.sources.map((x) => followUp.care.find((i) => i.id === x.id && i.srcHash === x.hash));
+      if (!src.length || src.some((x) => !x)) continue;
+      for (const x of src) used.add(x!.id);
+      const why = [...new Set(src.map((x) => x!.review).filter((x): x is string => !!x))];
+      put(d.category, { id: d.id, text: d.text, review: why.length ? why.join("") : null });
+    }
+    for (const i of followUp.care) if (!used.has(i.id)) put((i.episodes.map((e) => catOfEp.get(e.id)).find(Boolean) ?? "other") as PageEpisode["category"], { id: i.id, text: i.text, review: i.review });
+    const order: PageEpisode["category"][] = ["resp", "fever", "burn", "other"];
+    careGroups.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category));
   }
 
   // ----- reminders: only explicit appointments that are still ahead -----
@@ -480,8 +511,8 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
     enrolment = { date: en.date, status: bad.length ? "needs_review" : "ok", note: `${en.basis}${en.parentConfirmed ? "" : "（家长还没有在这里确认）"}${bad.length ? `。待重新核对：${[...new Set(bad)].join("；")}` : ""}` };
   }
   return {
-    asOf: lastNodeDay, years, defaultYear: nowYear,
-    nodes, bands, episodes, followUp,
+    asOf: lastNodeDay, today: nowDay, years, defaultYear: nowYear,
+    nodes, bands, episodes, careGroups, followUp,
     enrolment, looseHospital, coverage: cov,
     reminders,
     pendingIntervals: bands.filter((b) => b.status === "needs_review").map((b) => b.id),

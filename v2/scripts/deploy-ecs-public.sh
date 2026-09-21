@@ -273,6 +273,7 @@ umask 077
   echo "HEALTH_PAGE_MATERIALS=$dir/pagedata/materials.json"
   echo "HEALTH_PAGE_DERIVED=$dir/pagedata/derived.json"
   echo "HEALTH_PAGE_ANALYSES=$dir/analyses/analyses.json"
+  [ -f "$dir/pagedata/display.json" ] && echo "HEALTH_PAGE_DISPLAY=$dir/pagedata/display.json"
   echo "HEALTH_PAGE_EVIDENCE=$dir/evidence/register.json"
   echo "HEALTH_PAGE_MATERIAL_ROOT=$dir/material-root"
 } > "$out"
