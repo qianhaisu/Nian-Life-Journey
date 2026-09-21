@@ -297,7 +297,7 @@ work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 sudo bash -c "cd '$dir' && find . -type f -not -path './.*prev-*' -print0 | sort -z | xargs -0 sha256sum" > "$work/MANIFEST.sha256"
 sudo tar -C "$dir" --exclude='./.*prev-*' -czf "$work/health-$stamp.tar.gz" .
 sudo cp "$work/health-$stamp.tar.gz" "$bak/health-$stamp.tar.gz"; sudo cp "$work/MANIFEST.sha256" "$bak/health-$stamp.MANIFEST.sha256"
-( cd "$bak" && sudo sha256sum "health-$stamp.tar.gz" ) > "$work/tar.sha"; sudo cp "$work/tar.sha" "$bak/health-$stamp.tar.gz.sha256"
+sudo bash -c "cd \"$bak\" && sha256sum \"health-$stamp.tar.gz\"" > "$work/tar.sha"; sudo cp "$work/tar.sha" "$bak/health-$stamp.tar.gz.sha256"
 echo "BACKUP=$bak/health-$stamp.tar.gz files=$(wc -l < "$work/MANIFEST.sha256")"
 EOF
     ;;
@@ -308,9 +308,9 @@ EOF
 set -euo pipefail
 pkg="$1"; man="${pkg%.tar.gz}.MANIFEST.sha256"
 work=$(mktemp -d); trap 'sudo rm -rf "$work"' EXIT
-( cd "$(dirname "$pkg")" && sudo sha256sum -c --quiet "$(basename "$pkg").sha256" ) && echo "archive checksum OK"
+sudo bash -c "cd \"$(dirname "$pkg")\" && sha256sum -c --quiet \"$(basename "$pkg").sha256\"" && echo "archive checksum OK"
 sudo tar -xzf "$pkg" -C "$work"
-( cd "$work" && sudo sha256sum -c --quiet "$man" ) && echo "manifest OK ($(sudo wc -l < "$man") files)"
+sudo bash -c "cd \"$work\" && sha256sum -c --quiet \"$man\"" && echo "manifest OK ($(sudo grep -c . "$man") files)"
 sudo python3 - "$work" <<'PYEOF'
 import json, os, sys
 root = sys.argv[1]; n = 0

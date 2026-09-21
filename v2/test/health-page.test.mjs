@@ -33,7 +33,7 @@ async function fixture() {
   await writeFile(path.join(dir, "outside.jpg"), outside);
   const src = (id, root, relPath, bytes) => ({ kind: "source", id, content: { layer: "hospital_document", root, relPath, sha256: sha(bytes), docKind: "检验报告" } });
   const batch = { batchId: "synthetic-history", items: [
-    src("doc:1", allowed, "hosp/a.jpg", good), src("doc:other-root", other, "b.jpg", outside), src("doc:trav", allowed, "../outside.jpg", outside),
+    src("doc:1", allowed, "hosp/a.jpg", good), src("doc:other-root", other, "b.jpg", outside), src("doc:trav", allowed, "../outside.jpg", outside), src("doc:bs", allowed, "hosp\\a.jpg", good),
     { kind: "encounter", id: "E1", content: { kind: "visit", date: "2026-07-26", hospital: "某儿童医院", dept: "呼吸内科" }, links: [{ role: "documented_in", to: { kind: "source", id: "doc:1" } }] },
     { kind: "encounter", id: "E2", content: { kind: "appointment_only", date: "2026-10-08", hospital: "某儿童医院", dept: "耳鼻喉科" } },
     { kind: "encounter", id: "E3", content: { kind: "appointment_only", date: "2026-05-05", hospital: "某医院", dept: "外科" } },
@@ -425,6 +425,7 @@ test("4b 部署时的原件目录映射：账本记录的根目录不改，映�
     // the recorded root (f.allowed) is NOT served directly any more; only the mapped server directory is
     const mapped = svc({ originalRoots: [served], originalRootMap: [{ from: f.allowed, to: served }] });
     assert.deepEqual((await mapped.historyOriginal("doc:1"))?.data, f.good);
+    assert.deepEqual((await mapped.historyOriginal("doc:bs"))?.data, f.good, "账本里 Windows 分隔符的相对路径在 Linux 服务器上也能找到");
     assert.equal(await svc({ originalRoots: [served], originalRootMap: [] }).historyOriginal("doc:1"), null, "没有映射：记录的根目录不在允许列表");
     assert.equal(await mapped.historyOriginal("doc:other-root"), null, "另一个根目录没有映射");
     await writeFile(path.join(served, "hosp", "a.jpg"), "tampered");

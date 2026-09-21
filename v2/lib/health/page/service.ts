@@ -133,7 +133,8 @@ export class HealthPageService {
     const mapped = this.cfg.originalRootMap?.find((m) => norm(m.from) === norm(recorded))?.to ?? recorded;
     try { rootReal = resolveThroughLinks(mapped); } catch { return null; }
     if (!this.cfg.originalRoots.some((r) => norm(r) === norm(rootReal))) return null;
-    const file = path.resolve(rootReal, c.relPath);
+    // the ledger may carry Windows separators (recorded on another machine); containment is still checked on the resolved path
+    const file = path.resolve(rootReal, c.relPath.replace(/\\/g, "/"));
     let real: string;
     try { real = resolveThroughLinks(file); } catch { return null; }
     if (!isInside(real, rootReal)) return null;
