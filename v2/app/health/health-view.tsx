@@ -197,7 +197,7 @@ function openEp(id: string) {
 
 function Episodes({ page }: { page: HealthPage }) {
   if (!page.inputs.history) return <p className="hp-muted">历史病程资料还没有接通。</p>;
-  return <>{CAT_ORDER.map((c) => {
+  return <>{Coverage({ page })}{CAT_ORDER.map((c) => {
     const eps = page.episodes.filter((e) => e.category === c).sort((a, b) => String(b.start).localeCompare(String(a.start)));
     if (!eps.length) return null;
     return <details className="hp-cat" key={c} id={`cat-${c}`}>
@@ -207,7 +207,22 @@ function Episodes({ page }: { page: HealthPage }) {
         {eps.map((e) => <Episode key={e.id} e={e} />)}
       </div>
     </details>;
-  })}</>;
+  })}{page.looseHospital.length ? <details className="hp-cat" id="cat-loose"><summary><Icon kind="visit" /><span>没有对应到某次就诊的医院记录<small>{page.looseHospital.length} 条，来自就诊列表页</small></span><Xp /></summary>
+    <div className="hp-cat-body">{page.looseHospital.map((x) => <div className="hp-visit" key={x.id}><div className="vrow"><span className="k">诊断</span><span>{x.text}</span></div>
+      <div className="vrow"><span className="k">报告</span><span>{x.attachments.length ? x.attachments.map((a) => <a key={a.href} className="hp-att" href={a.href} target="_blank" rel="noreferrer"><Icon kind="clip" />{a.label}</a>) : "没有报告原件"}</span></div></div>)}</div></details> : null}</>;
+}
+
+/** Small coverage table: which of the child's own WeChat observations are on the timeline and why the others are not (no re-read of the whole ledger). */
+function Coverage({ page }: { page: HealthPage }) {
+  const c = page.coverage; const ex = Object.entries(c.excluded).filter(([, n]) => n > 0);
+  if (!c.total) return null;
+  return <details className="hp-cov"><summary>哪些微信记录显示在时间轴上<Xp /></summary>
+    <table><tbody>
+      <tr><td>已归入病程</td><td>{c.shownAttached}</td></tr>
+      <tr><td>已确认是孩子、但还没归入病程</td><td>{c.shownUnattached}</td></tr>
+      <tr><td>候选或同期背景（不计入病程）</td><td>{c.shownCandidate}</td></tr>
+      {ex.map(([why, n]) => <tr key={why}><td>没有显示：{why}</td><td>{n}</td></tr>)}
+    </tbody></table></details>;
 }
 
 function Episode({ e }: { e: PageEpisode }) {
@@ -216,11 +231,12 @@ function Episode({ e }: { e: PageEpisode }) {
     <div className="hp-epb">
       <h4>发展经过</h4>
       <ul className="hp-course">
-        {e.course.map((c, i) => <li key={i}><span className="w">{mdShort(c.date)}</span>{c.text}</li>)}
+        {e.course.map((c, i) => <li key={i} className={c.review ? "review" : undefined}><span className="w">{mdShort(c.date)}</span>{c.text}{c.review ? <span className="hp-warn-inline">{c.review}</span> : null}</li>)}
         <li className="q"><span className="w">结束</span>{e.endKnown && e.end ? <>{md(e.end)}</> : <span className="hp-unk">时间未知</span>}{e.endNote ? <span className="hp-muted">（{e.endNote}）</span> : null}</li>
       </ul>
       <h4>病程总结</h4>
       <div className="hp-sum">
+        {e.summary.review ? <p className="hp-warn-inline">{e.summary.review}</p> : null}
         {e.summary.points.length ? <ul>{e.summary.points.map((p, i) => <li key={i}>{p}</li>)}</ul> : <p>已审核底账里没有这一病程的要点。</p>}
         {e.summary.open.length ? <p className="hp-muted">还不确定：{e.summary.open.join("；")}</p> : null}
         <p className="hp-muted">{e.summary.medical}</p>
@@ -248,7 +264,7 @@ function FollowUp({ page }: { page: HealthPage }) {
     <div className="hp-grp-body">
       {items.length ? items.map((m) => <div className={`hp-it${m.kind === "conditional" ? " urgent" : ""}`} key={m.id}>
         {m.kind === "conditional" ? <Icon kind="alert" /> : null}
-        <div><div className="t">{m.text}</div>{m.detail ? <div className="sub">{m.detail}</div> : null}
+        <div><div className="t">{m.text}</div>{m.detail ? <div className="sub">{m.detail}</div> : null}{m.review ? <div className="hp-warn-inline">{m.review}</div> : null}
           <div className="m">{m.episodes.map((e) => <a key={e.id} className="chip ep" href={`#ep-${e.id}`} onClick={() => openEp(e.id)}>{e.title}</a>)}{tag(m.kind) ? <span className="chip sug">{tag(m.kind)}</span> : null}</div></div>
       </div>) : <p className="hp-muted">没有已确认的就医预约。</p>}
     </div>

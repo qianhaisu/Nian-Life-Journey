@@ -8,7 +8,7 @@
 // silently keeping the old verdict. Scattered records are nodes, never a span. No green, no day counts, no ratios.
 import { effectiveContent } from "../graph";
 import { effectiveHash } from "../ledger";
-import { entityKey, type Content, type Ledger, type Ref } from "../model";
+import { entityKey, hashOf, type Content, type Ledger, type Ref } from "../model";
 import { buildTimeline, type EncounterView, type FactView, type SourceRef } from "../timeline";
 
 // ---------- reviewed inputs ----------
@@ -26,9 +26,16 @@ export interface IntervalReview {
   reason: string;
   timeNote?: string;
 }
-export interface EnrolmentReview { date: string; basis: string; sources: { conversation: string; at: string; textSha256: string }[]; parentConfirmed: boolean }
+/** The enrolment date is derived from records: it is valid only while every cited source is still present with the hash it had when reviewed. */
+export interface EnrolmentReview { date: string; basis: string; sources: { ledger: "history" | "record" | "derived"; ref: Ref; hash: string; note?: string }[]; parentConfirmed: boolean }
 /** nodes: scattered records that were read in the review and belong on the timeline as single points (never a span). */
 export interface IntervalFile { schema: 1; reviewedAt: string; reviewer: string; intervals: IntervalReview[]; nodes?: ReviewedRef[]; enrolment?: EnrolmentReview | null }
+
+/** R1 private derived layer: records found in the review that are NOT in the accepted ledger. They are kept separate (never written into it),
+ *  carry their own source identity + a hash of the source text, and are shown as extra evidence: a recovery statement is either an interval's
+ *  end evidence (endEvidence) or, when it cannot be tied to that span, a counter/pending item (pending). */
+export interface DerivedRecord { id: string; date: string; who: string | null; text: string; source: { conversation: string; at: string; textSha256: string }; nature: "recovery" | "enrolment"; intervalId?: string; disposition: "end_evidence" | "pending_link" | "linked"; context: string; contextLines?: string[] }
+export interface DerivedFile { schema: 1; reviewedAt: string; records: DerivedRecord[] }
 
 export interface MaterialItem {
   id: string; group: "care" | "visit";
@@ -53,23 +60,29 @@ export interface PageBand {
   id: string; kind: "recorded" | "suspected" | "open"; start: string; end: string; startApprox: boolean;
   episodeId: string | null; label: string; status: "ok" | "needs_review"; statusReasons: string[];
   explain: string; timeNote: string | null; supports: BandRef[]; counter: BandRef[];
+  /** true when the end date comes from a derived (not yet accepted-ledger) record */
+  endFromDerived?: boolean;
 }
 export interface PageVisit { id: string; date: string; kindLabel: string; countsAsVisit: boolean; hospital: string; dept: string; diagnoses: string[]; prescriptions: string[]; reports: Attachment[] }
 export interface PageEpisode {
   id: string; title: string; category: "resp" | "fever" | "burn" | "other";
   start: string | null; startNote: string | null; end: string | null; endKnown: boolean; endNote: string | null;
-  course: { date: string; text: string }[];
-  summary: { points: string[]; open: string[]; medical: string };
+  course: { date: string; text: string; review?: string }[];
+  summary: { points: string[]; open: string[]; medical: string; review: string | null };
   visits: PageVisit[];
 }
-export interface FollowUpItem { id: string; kind: MaterialItem["kind"]; text: string; detail: string | null; episodes: { id: string; title: string }[] }
+export interface FollowUpItem { id: string; kind: MaterialItem["kind"]; text: string; detail: string | null; episodes: { id: string; title: string }[]; review: string | null }
 export interface HealthReminder { id: string; date: string; title: string; place: string }
 export interface HealthPage {
   asOf: string | null; years: number[]; defaultYear: number;
   nodes: PageNode[]; bands: PageBand[];
   episodes: PageEpisode[];
   followUp: { care: FollowUpItem[]; visit: FollowUpItem[]; status: "current" | "stale" | "missing"; basisDate: string | null; staleReason: string | null };
-  enrolment: { date: string; note: string } | null;
+  enrolment: { date: string; note: string; status: "ok" | "needs_review" } | null;
+  /** hospital facts that have no visit number (they come from a visit-list page): kept reachable, with their originals */
+  looseHospital: { id: string; type: string; text: string; attachments: Attachment[] }[];
+  /** small coverage table for own-child WeChat observations: what is shown and why the rest is not (no full re-read) */
+  coverage: { shownAttached: number; shownUnattached: number; shownCandidate: number; excluded: Record<string, number>; total: number };
   reminders: HealthReminder[];
   pendingIntervals: string[];
   inputs: { history: boolean; records: boolean; intervals: boolean; materials: boolean };
@@ -78,10 +91,36 @@ export interface HealthPage {
 export interface PageInputs {
   history: Ledger | null; record: Ledger | null;
   intervals: IntervalFile | null; materials: MaterialsFile | null;
+  derived?: DerivedFile | null;
+  /** current SHA-256 of a materials source file, when it can be read (undefined = could not be checked) */
+  materialSourceHash?: (file: string) => string | undefined;
   now: string; // Shanghai wall clock YYYY-MM-DDTHH:mm
 }
 
-const HISTORY_ROLES = new Set(["observation", "relay", "recall", "medication_administered"]);
+// Factual roles that may appear on the timeline when the record is the child's. Questions, plans, reminders, AI references,
+// hand-over notes and summary relays are never shown as a health event on their own.
+const HISTORY_ROLES = new Set(["observation", "relay", "recall", "medication_administered", "medication_not_given"]);
+const ADOPTED = /^claude_(full_read|context_reviewed)/;
+// Direct statements about the child's own health state. Everything else under an "observation" role (AI references, other people's
+// opinions and hypotheses, growth, feeding, teething, vaccines, family feelings, admin) is not a health event and is listed in the coverage table.
+const OWN_HEALTH_KINDS = new Set(["observation", "symptom_report", "symptom_course", "symptom_denied", "symptom_onset_uncertain", "measurement", "medication_administered", "medication_not_given", "medication_adherence", "medication_course", "medication_withheld",
+  "care_event", "care_observation", "care_fact", "relayed_doctor", "diagnosis_relayed", "relayed_result", "injury_observation", "incident", "parent_judgement", "parent_summary", "history", "recollection", "monitor", "family_observation"]);
+const NOT_HEALTH_KINDS = /^(ai_|regimen_ai|growth|feeding|teething|dental|vaccine|development|newborn|birth_fact|alt_|lay_|family_(opinion|hypothesis|worry|claim|conflict|state|action)|parent_(emotion|prediction|understanding)|hypothesis|hearsay|dispute|care_(admin|summary|history|reasoning|method|quality|advice|decision|detail|action|note)|medication_(purchase|plan|planned|reasoning|item|reminder|intent|consider|standby|handover)|supplement|concern|ack|safety|exposure|uncertain|invalid|instruction|relayed_(lay|family)|measurement_method|lab_)/;
+/** Why an observation is NOT shown as an own health record (null = show). Identity and episode membership are separate questions:
+ *  a confirmed own record does not vanish because it is not attached to an episode; an explicit non-child mark or a non-factual role does. */
+/** A generic "observation" (the catch-all kind) only counts as a health record when the text itself carries a health cue; ordinary daily chat does not. */
+const HEALTH_CUE = /鼻|涕|咳|烧|发热|低热|热度|℃|体温|喘|痰|感冒|嗓|喉|雾化|吐|拉肚子|拉稀|腹泻|便秘|疹|痒|红肿|渗液|结痂|烫|伤口|疤|药|头孢|布洛芬|美林|泰诺|克拉|打针|输液|医院|医生|门诊|急诊|挂号|检查|化验|血常规|拍片|肺炎|炎|过敏|哭得|不舒服|没精神|精神(差|不好|状态)|睡不好|睡得不|打呼|鼻塞|呼吸/;
+export function exclusionReason(c: Content): string | null {
+  if (c.attribution === "not_child") return "标为不是孩子的记录";
+  const subj = typeof c.subject === "string" ? c.subject : null;
+  if (subj && subj !== "child" && subj !== "张年") return "主体是别人";
+  if (!HISTORY_ROLES.has(String(c.role))) return c.role === "summary_relay" ? "汇总稿转述（另有来源层）" : "不是事实陈述（提问、计划、提醒等）";
+  if (!subj && !ADOPTED.test(String(c.reviewStatus ?? ""))) return "没有本人依据（身份字段缺失且未经采用）";
+  const fk = String(c.factKind ?? "");
+  if (fk && !OWN_HEALTH_KINDS.has(fk)) return NOT_HEALTH_KINDS.test(fk) ? "不是孩子健康状态的陈述（成长、喂养、牙齿、疫苗、他人看法、AI 引用等）" : "类别不明，不当作健康事实显示";
+  if (fk === "observation" && !HEALTH_CUE.test(String(c.text ?? ""))) return "泛类日常记录，文字里没有健康线索";
+  return null;
+}
 const day = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null);
 const clean = (s: unknown) => String(s ?? "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -155,7 +194,12 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
   const tl = H ? buildTimeline(H, { asOf: nowDay }) : null;
   const epTitle = new Map((tl?.blocks ?? []).map((b) => [b.episodeId, clean(b.title)]));
   const epOf = new Map<string, string>();
-  for (const b of tl?.blocks ?? []) for (const i of b.items) epOf.set(i.observationId, b.episodeId);
+  const memberRole = new Map<string, "attached" | "candidate" | "background">();
+  for (const b of tl?.blocks ?? []) {
+    for (const i of b.items) { epOf.set(i.observationId, b.episodeId); memberRole.set(i.observationId, "attached"); }
+    for (const i of b.candidates) if (!memberRole.has(i.observationId)) memberRole.set(i.observationId, "candidate");
+    for (const i of b.background) if (!memberRole.has(i.observationId)) memberRole.set(i.observationId, "background");
+  }
 
   // ----- bands -----
   const reviewedIds = new Set<string>();
@@ -173,6 +217,7 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
     }
   }
   for (const r of inp.intervals?.nodes ?? []) if (checkRef(inp, r).ok) reviewedIds.add(`${r.ledger}:${r.ref.id}`);
+  const derivedFor = (id: string) => (inp.derived?.records ?? []).filter((d) => d.intervalId === id);
   for (const iv of inp.intervals?.intervals ?? []) {
     const reasons: string[] = [];
     const sup: BandRef[] = [], ctr: BandRef[] = [];
@@ -180,10 +225,18 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
     for (const r of iv.counter ?? []) { reviewedIds.add(`${r.ledger}:${r.ref.id}`); const c = checkRef(inp, r); if (!c.ok) reasons.push(c.why!); ctr.push({ id: r.ref.id, date: c.date ?? "", text: r.note ?? c.text }); }
     const lo = addDays(iv.start, -1), hi = addDays(iv.end, 3);
     for (const n of newAfterReview) if (n.date >= lo && n.date <= hi && !reviewedIds.has(`${n.ledger}:${n.id}`)) reasons.push(`核查之后又有 ${md(n.date)} 的新记录落在这段时间附近`);
+    // derived layer (private, not in the accepted ledger): a recovery statement is end evidence only when the review tied it to this span;
+    // otherwise it is shown as a pending counter item so it is never silently dropped
+    let end = iv.end, endFromDerived = false;
+    for (const d of derivedFor(iv.id)) {
+      const item: BandRef = { id: d.id, date: d.date, text: `${d.context}（来源：${d.source.conversation} ${d.source.at}，派生层，尚未入账）` };
+      if (d.disposition === "end_evidence" && d.date >= iv.start) { if (d.date > end || !endFromDerived) { end = d.date; endFromDerived = true; } sup.push(item); }
+      else ctr.push({ ...item, text: `待定关联：${item.text}` });
+    }
     const explain = iv.kind === "recorded"
       ? `原文写明的持续时间：${iv.reason}`
       : `疑似持续：${iv.reason}（这是把几条记录连起来看的判断，不是原文直接写的时长）`;
-    bands.push({ id: iv.id, kind: iv.kind, start: iv.start, end: iv.end, startApprox: !!iv.startApprox, episodeId: iv.episodeId, label: iv.label, status: reasons.length ? "needs_review" : "ok", statusReasons: [...new Set(reasons)], explain, timeNote: iv.timeNote ?? null, supports: sup, counter: ctr });
+    bands.push({ id: iv.id, kind: iv.kind, start: iv.start, end, startApprox: !!iv.startApprox, episodeId: iv.episodeId, label: iv.label, status: reasons.length ? "needs_review" : "ok", statusReasons: [...new Set(reasons)], explain, timeNote: endFromDerived ? `结束日期取自派生层记录（尚未入账，来源见依据）${iv.timeNote ? "；" + iv.timeNote : ""}` : iv.timeNote ?? null, supports: sup, counter: ctr, endFromDerived });
   }
   // an episode with an unknown end and no reviewed span only gets a short visual fade at its start: never a length
   for (const b of tl?.blocks ?? []) {
@@ -194,6 +247,8 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
 
   // ----- entries -> nodes -----
   const entries: PageEntry[] = [];
+  const cov: HealthPage["coverage"] = { shownAttached: 0, shownUnattached: 0, shownCandidate: 0, excluded: {}, total: 0 };
+  if (H) cov.total = Object.values(H.entities).filter((e) => e.kind === "observation").length;
   if (H && tl) {
     const inReview = new Set([...reviewedIds].filter((k) => k.startsWith("history:")).map((k) => k.slice(8)));
     for (const e of Object.values(H.entities)) {
@@ -201,14 +256,19 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       const eff = effectiveContent(H, { kind: "observation", id: e.id })!;
       const c = eff.content;
       const ep = epOf.get(e.id) ?? null;
-      if (!(ep && HISTORY_ROLES.has(String(c.role))) && !inReview.has(e.id)) continue;
-      if (c.attribution === "not_child") continue;
+      if (c.attribution === "not_child") { cov.excluded["标为不是孩子的记录"] = (cov.excluded["标为不是孩子的记录"] ?? 0) + 1; continue; }
+      const why = exclusionReason(c);
+      if (why && !inReview.has(e.id)) { cov.excluded[why] = (cov.excluded[why] ?? 0) + 1; continue; }
+      if (why) cov.excluded[why] = (cov.excluded[why] ?? 0) + 0;
+      const mr = memberRole.get(e.id);
+      if (ep) cov.shownAttached++; else if (mr === "candidate" || mr === "background") cov.shownCandidate++; else cov.shownUnattached++;
       const occurred = day(c.occurredAt);
       const d = occurred ?? day(c.recordedAt);
       if (!d) continue;
       const text = clean(c.text);
       entries.push({ id: e.id, ledger: "history", date: d, time: typeof c.recordedAt === "string" ? c.recordedAt.slice(11, 16) || null : null, timeKind: occurred ? "occurred" : "recorded",
-        kind: looksFeverish(text) ? "fever" : "dot", title: clip(text, 24), text: clip(text, 300), who: c.speaker ? String(c.speaker) : null, sourceLabel: "微信记录", episode: ep ? { id: ep, title: epTitle.get(ep) ?? ep } : null, attachments: [] });
+        kind: looksFeverish(text) ? "fever" : "dot", title: clip(text, 24), text: clip(text, 300), who: c.speaker ? String(c.speaker) : null,
+        sourceLabel: mr === "candidate" ? "微信记录 · 候选（只是时间接近，不计入病程）" : mr === "background" ? "微信记录 · 同期背景（不计入病程）" : "微信记录", episode: ep ? { id: ep, title: epTitle.get(ep) ?? ep } : null, attachments: [] });
     }
     const encEp = new Map<string, string>();
     for (const b of tl.blocks) for (const x of b.encounters) if (!encEp.has(x.id)) encEp.set(x.id, b.episodeId);
@@ -237,7 +297,7 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       const temp = sy.temperature && typeof sy.temperature === "object" ? Number((sy.temperature as { value: number }).value) : null;
       const bits = isVisit
         ? [clean(c.hospital === "其他" ? c.hospitalOther : c.hospital), clean(c.department === "其他" ? c.departmentOther : c.department), clean(c.note)]
-        : [clean(c.text), temp !== null ? `体温 ${temp} ℃` : "", sy.nose ? String(sy.nose) : "", sy.cough ? `咳嗽${sy.cough}` : ""];
+        : [clean(c.text), temp !== null ? `体温 ${temp} ℃` : "", sy.nose ? String(sy.nose) : "", sy.cough ? `咳嗽${sy.cough}` : "", sy.nasalVoice === true ? "有鼻音" : "", Array.isArray(sy.sleep) && sy.sleep.length ? `睡眠：${(sy.sleep as string[]).join("、")}` : ""];
       const text = bits.filter(Boolean).join(" · ");
       entries.push({ id: e.id, ledger: "record", date: d, time: occurred && String(c.occurredAt).length > 10 ? String(c.occurredAt).slice(11, 16) : null, timeKind: occurred ? "occurred" : "recorded",
         kind: isVisit ? "visit" : (temp !== null && temp >= 37.5) || looksFeverish(text) ? "fever" : "dot", title: isVisit ? "就医资料" : "爸妈手记", text: clip(text, 300), who: c.speaker ? String(c.speaker) : null, sourceLabel: "家长记录", episode: null,
@@ -256,9 +316,12 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
   const episodes: PageEpisode[] = (tl?.blocks ?? []).map((b) => {
     const ep = effectiveContent(H!, { kind: "episode", id: b.episodeId })!.content;
     const endKnown = b.declaredEnd === "ended" && !!day(b.end);
-    const course: { date: string; text: string }[] = [];
+    const course: { date: string; text: string; review?: string }[] = [];
     if (day(b.start)) course.push({ date: day(b.start)!, text: `开始${ep.startQualifier ? ` · ${clean(ep.startQualifier)}` : ""}` });
-    for (const band of bands) if (band.episodeId === b.episodeId && band.kind !== "open") course.push({ date: band.start, text: `${band.kind === "recorded" ? "原文写明" : "疑似持续"}：${md(band.start)}–${md(band.end)} ${band.label}` });
+    const epBands = bands.filter((x) => x.episodeId === b.episodeId && x.kind !== "open");
+    for (const band of epBands) course.push({ date: band.start, text: `${band.kind === "recorded" ? "原文写明" : "疑似持续"}：${md(band.start)}–${md(band.end)} ${band.label}`,
+      review: band.status === "needs_review" ? `待重新核对：${band.statusReasons.join("；")}。核对之前这条不当作有效经过。` : undefined });
+    const pendingBands = epBands.filter((x) => x.status === "needs_review");
     for (const x of b.encounters) if (day(x.date)) { const v = visitOf(H!, x); course.push({ date: day(x.date)!, text: `${x.kindLabel}：${v.dept || v.hospital}${v.diagnoses.length ? `，${v.diagnoses.join("；")}` : ""}` }); }
     course.sort((a, c) => (a.date < c.date ? -1 : a.date > c.date ? 1 : 0));
     return {
@@ -270,10 +333,15 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
         points: (Array.isArray(ep.keyFindings) ? ep.keyFindings : []).map(clean).filter(Boolean),
         open: (Array.isArray(ep.openQuestions) ? ep.openQuestions : []).map(clean).filter(Boolean),
         medical: "这一病程还没有经过审核的医学解释，待补；上面只列已审核底账里的要点。",
+        // an interval that lost its evidence also puts the episode's summary points (which rest on the same records) under review
+        review: pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间因依据变化正在待重新核对，下面的要点可能受影响，先按旧底账原样保留。` : null,
       },
       visits: b.encounters.map((x) => visitOf(H!, x)).sort((a, c) => a.date.localeCompare(c.date)),
     };
   });
+
+  // ----- hospital facts with no visit number (from a visit-list page): still reachable, with their originals -----
+  const looseHospital: HealthPage["looseHospital"] = (tl?.unattachedFacts ?? []).map((f) => ({ id: f.id, type: f.type, text: clip(clean(f.displayValue), 60), attachments: reportsOf(H!, f.documents) }));
 
   // ----- follow-up -----
   const epRef = (id: string) => ({ id, title: epTitle.get(id) ?? id });
@@ -283,12 +351,26 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
   else {
     const cutoff = inp.materials.dataCutoff.slice(0, 10);
     const newer = nodes.filter((n) => n.date > cutoff);
-    const item = (m: MaterialItem): FollowUpItem => ({ id: m.id, kind: m.kind, text: m.text, detail: m.detail ?? null, episodes: (m.episodes ?? []).filter((e) => epTitle.has(e)).map(epRef) });
+    // per-item dependency check. General care / emergency-sign items rest on the source document and the evidence version only;
+    // an item tied to an episode is also held when that episode has a span under review or a corrected key record.
+    const pendingByEp = new Map<string, string[]>();
+    for (const bd of bands) if (bd.status === "needs_review" && bd.episodeId) (pendingByEp.get(bd.episodeId) ?? pendingByEp.set(bd.episodeId, []).get(bd.episodeId)!).push(bd.id);
+    const reviewOf = (m: MaterialItem): string | null => {
+      const why: string[] = [];
+      const cur = inp.materialSourceHash?.(m.source.file);
+      if (cur === undefined && inp.materialSourceHash) why.push("来源文件读不到，无法核对");
+      else if (cur !== undefined && m.source.sha256 !== "0" && cur !== m.source.sha256) why.push("来源文件内容已变化");
+      for (const e of m.episodes ?? []) if (pendingByEp.has(e)) why.push(`关联的病程有区间待重新核对`);
+      return why.length ? `待重新核对：${[...new Set(why)].join("；")}。原文保留，适用条件不变。` : null;
+    };
+    const item = (m: MaterialItem): FollowUpItem => ({ id: m.id, kind: m.kind, text: m.text, detail: m.detail ?? null, episodes: (m.episodes ?? []).filter((e) => epTitle.has(e)).map(epRef), review: reviewOf(m) });
+    const allItems = inp.materials.items.map(item);
+    const reviewCount = allItems.filter((i) => i.review).length;
     followUp = {
       care: inp.materials.items.filter((m) => m.group === "care").map(item),
       visit: inp.materials.items.filter((m) => m.group === "visit").sort((a, b) => (a.kind === "conditional" ? -1 : 0) - (b.kind === "conditional" ? -1 : 0)).map(item),
-      status: newer.length ? "stale" : "current", basisDate: cutoff,
-      staleReason: newer.length ? `这些措施依据 ${md(cutoff)} 之前的资料整理；之后又有 ${md(newer[0].date)} 起的新记录，还没有重新审核。` : null,
+      status: newer.length || reviewCount ? "stale" : "current", basisDate: cutoff,
+      staleReason: [newer.length ? `这些措施依据 ${md(cutoff)} 之前的资料整理；之后又有 ${md(newer[0].date)} 起的新记录，还没有重新审核。` : "", reviewCount ? `有 ${reviewCount} 条措施的依据发生变化，已标为待重新核对。` : ""].filter(Boolean).join("") || null,
     };
   }
 
@@ -310,10 +392,20 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
   for (const b of bands) ys.add(Number(b.start.slice(0, 4)));
   const years = [...ys].filter((y) => y >= 2000 && y <= nowYear).sort();
   const en = inp.intervals?.enrolment;
+  let enrolment: HealthPage["enrolment"] = null;
+  if (en) {
+    const bad: string[] = [];
+    for (const src of en.sources) {
+      if (src.ledger === "derived") { const d = (inp.derived?.records ?? []).find((x) => x.id === src.ref.id); if (!d || hashOf(d) !== src.hash) bad.push(`入托依据 ${src.ref.id} 与核查时不一致`); continue; }
+      const c = checkRef(inp, { ref: src.ref, ledger: src.ledger, hash: src.hash });
+      if (!c.ok) bad.push(c.why!);
+    }
+    enrolment = { date: en.date, status: bad.length ? "needs_review" : "ok", note: `${en.basis}${en.parentConfirmed ? "" : "（家长还没有在这里确认）"}${bad.length ? `。待重新核对：${[...new Set(bad)].join("；")}` : ""}` };
+  }
   return {
     asOf: lastNodeDay, years, defaultYear: nowYear,
     nodes, bands, episodes, followUp,
-    enrolment: en ? { date: en.date, note: `${en.basis}${en.parentConfirmed ? "" : "（家长还没有在这里确认）"}` } : null,
+    enrolment, looseHospital, coverage: cov,
     reminders,
     pendingIntervals: bands.filter((b) => b.status === "needs_review").map((b) => b.id),
     inputs: { history: !!H, records: !!R, intervals: !!inp.intervals, materials: !!inp.materials },

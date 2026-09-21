@@ -22,13 +22,15 @@ const HIST = path.join(DATA, "history-ledger", "ledger.json");
 const ledger = JSON.parse(readFileSync(HIST, "utf8"));
 const last = (e) => e.versions[e.versions.length - 1].content;
 const originals = Object.values(ledger.entities).filter((e) => e.kind === "source" && last(e).layer === "hospital_document").map((e) => ({ id: e.id, file: path.join(last(e).root, last(e).relPath), want: last(e).sha256 }));
-const inputFiles = [HIST, path.join(DATA, "intervals.json"), path.join(DATA, "materials.json"), "C:/Users/teddy/NianlifeOps/health-tracking/2026-09-21/health-02-binding-fix/ledger-full/ledger.json"];
+const DERIVED = path.join(DATA, "derived.json"), MATROOT = process.env.HP_MATERIAL_ROOT ?? "C:/Users/teddy/NianlifeOps/health-tracking/2026-09-20";
+const hasDerived = (() => { try { readFileSync(DERIVED); return true; } catch { return false; } })();
+const inputFiles = [HIST, path.join(DATA, "intervals.json"), path.join(DATA, "materials.json"), "C:/Users/teddy/NianlifeOps/health-tracking/2026-09-21/health-02-binding-fix/ledger-full/ledger.json", ...(hasDerived ? [DERIVED, path.join(MATROOT, "run-20260920-r4-fix2/parent-action-plan.md")] : [])];
 const before = Object.fromEntries([...inputFiles, ...originals.map((o) => o.file)].map((f) => [f, sha(f)]));
 check("开始时：医院原件都与账本记录的 SHA-256 一致", originals.every((o) => before[o.file] === o.want), `${originals.length} 份`);
 
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT), "-H", "127.0.0.1"], {
   env: { ...process.env, NEXT_DIST_DIR: process.env.NEXT_DIST_DIR ?? ".next-hr4", HEALTH_RECORD_ROOT: REC, HEALTH_RECORD_SESSION_SECRET: randomUUID() + randomUUID(), HEALTH_RECORD_MOM_PASSWORD: MOM, HEALTH_RECORD_DAD_PASSWORD: `dad-${randomUUID()}`, HEALTH_RECORD_COOKIE_SECURE: "0",
-    HEALTH_HISTORY_LEDGER: path.join(DATA, "history-ledger"), HEALTH_HISTORY_ORIGINAL_ROOTS: "C:\\Users\\teddy\\Pictures", HEALTH_PAGE_INTERVALS: path.join(DATA, "intervals.json"), HEALTH_PAGE_MATERIALS: path.join(DATA, "materials.json") },
+    HEALTH_HISTORY_LEDGER: path.join(DATA, "history-ledger"), HEALTH_HISTORY_ORIGINAL_ROOTS: "C:\\Users\\teddy\\Pictures", HEALTH_PAGE_INTERVALS: path.join(DATA, "intervals.json"), HEALTH_PAGE_MATERIALS: path.join(DATA, "materials.json"), ...(hasDerived ? { HEALTH_PAGE_DERIVED: DERIVED, HEALTH_PAGE_MATERIAL_ROOT: MATROOT } : {}) },
   stdio: ["ignore", "pipe", "pipe"],
 });
 let log = ""; server.stdout.on("data", (d) => (log += d)); server.stderr.on("data", (d) => (log += d));
@@ -150,6 +152,34 @@ try {
   const fu = await page.evaluate(() => ({ care: document.querySelectorAll("#g-care .hp-it").length, visit: document.querySelectorAll("#g-visit .hp-it").length, cond: document.querySelector("#g-visit .hp-it")?.classList.contains("urgent"), xp: getComputedStyle(document.querySelector("#g-care .hp-xp em"), "::after").content, groups: document.querySelectorAll("details.hp-grp").length, noBasis: !/查看依据|依据按钮/.test(document.querySelector("#hp-s3").textContent) }));
   check("后续措施只有观察与护理、就医安排两组；点标题展开；条件性就医放首位；无依据入口", fu.groups === 2 && fu.care > 0 && fu.visit > 0 && fu.cond && /收起/.test(fu.xp) && fu.noBasis, JSON.stringify(fu));
   await shot("m7-follow-up");
+
+  // ================= R1：本人未挂靠、覆盖表、恢复说法、入托、措施来源核验 =================
+  if (hasDerived) {
+    await page.goto("/health"); await page.waitForSelector("#hp-tl");
+    const r1 = await page.evaluate(() => ({
+      cov: [...document.querySelectorAll(".hp-cov tr")].map((r) => r.textContent),
+      loose: !!document.querySelector("#cat-loose"), looseN: document.querySelectorAll("#cat-loose .hp-visit").length, looseAtt: document.querySelectorAll("#cat-loose a.hp-att").length,
+      covOpen: document.querySelector(".hp-cov")?.open ?? null,
+    }));
+    check("覆盖核对表：说明本人事实哪些显示、哪些有明确排除理由（不重读全量原文）", r1.cov.length >= 5 && r1.cov.some((t) => /还没归入病程/.test(t)) && r1.cov.some((t) => /没有显示：/.test(t)) && r1.covOpen === false, r1.cov.join(" | "));
+    check("无就诊号的医院事实有可达位置（折叠区）并带原件附件", r1.loose && r1.looseN === 5 && r1.looseAtt >= 5, JSON.stringify({ n: r1.looseN, att: r1.looseAtt }));
+    const un26 = await page.evaluate(() => document.querySelectorAll(".hp-nd.un").length);
+    await page.click("[data-year='2025']"); await page.waitForTimeout(200);
+    const un25 = await page.evaluate(() => document.querySelectorAll(".hp-nd.un").length);
+    await page.click("[data-year='2026']"); await page.waitForTimeout(200);
+    check("时间轴上出现“已确认是孩子、还没归入病程”的空心节点（此前只有被核查引用的才显示；2025 年 2 个节点 → 更多）", un26 >= 5 && un25 >= 10, `2026:${un26} 2025:${un25}`);
+    // 4/2–4/5 疑似区间：恢复说法作为待定关联出现，结束不延长
+    await page.evaluate(() => { document.querySelector('.hp-bp[data-band="IV-2026-04a"]').scrollIntoView({ block: "center", inline: "center" }); });
+    await page.locator('.hp-bp[data-band="IV-2026-04a"]').click();
+    const bd = await page.locator(".hp-detail").innerText();
+    check("恢复说法：作为“待定关联”列在反证里，写明来源、派生层、尚未入账；结束仍写不明（区间止于 4月5日）", /待定关联/.test(bd) && /尚未入账/.test(bd) && /4月2日 – 4月5日/.test(bd), bd.split("\n").slice(0, 2).join(" / "));
+    await page.click(".hp-detail [data-act=close]");
+    await page.locator("[data-rt]").click();
+    const en = await page.locator(".hp-detail").innerText();
+    check("入托：有可核验来源（两条派生层记录，指纹校验通过），状态正常，家长尚未确认时如实写明", /入托/.test(en) && /家长还没有在这里确认/.test(en) && !/待重新核对/.test(en), en.replace(/\n/g, " ").slice(0, 80));
+    const fu2 = await page.evaluate(() => ({ warn: document.querySelector("#hp-s3 .hp-warn")?.textContent ?? "", inline: document.querySelectorAll("#hp-s3 .hp-warn-inline").length }));
+    check("措施来源文件哈希与材料记录一致：没有“来源文件已变化”，措施为 current", !/依据发生变化/.test(fu2.warn) && fu2.inline === 0, fu2.warn.slice(0, 60));
+  }
 
   // ================= 6 桌面（在新增合成记录之前截图，保持画面是核查后的状态） =================
   const dctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, baseURL: BASE });

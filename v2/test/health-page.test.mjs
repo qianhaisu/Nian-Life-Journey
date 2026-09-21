@@ -7,9 +7,9 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { applyCorrection, applyPlan, effectiveHash, planImport } from "../lib/health/ledger.ts";
-import { emptyLedger } from "../lib/health/model.ts";
+import { emptyLedger, hashOf } from "../lib/health/model.ts";
 import { HealthFileStore } from "../lib/health/file-store.ts";
-import { buildHealthPage, looksFeverish } from "../lib/health/page/model.ts";
+import { buildHealthPage, exclusionReason, looksFeverish } from "../lib/health/page/model.ts";
 import { HealthPageService, loadPageSourcesConfig } from "../lib/health/page/service.ts";
 import { loadHealthRecordConfig } from "../lib/health/record/config.ts";
 import { createHealthRecordHandler } from "../lib/health/record/http.ts";
@@ -20,7 +20,7 @@ const T0 = Date.parse("2026-09-21T10:00:00+08:00");
 const NOW = "2026-09-21T10:00";
 const sha = (b) => createHash("sha256").update(b).digest("hex");
 const uid = (() => { let n = 0; return () => `pg${String(++n).padStart(6, "0")}${"y".repeat(12)}`; })();
-const obs = (id, recordedAt, text, links = []) => ({ kind: "observation", id, content: { role: "observation", recordedAt, occurredAt: null, occurredPrecision: null, timeBasis: "message_time_only", text, speaker: "妈妈" }, links });
+const obs = (id, recordedAt, text, links = [], extra = {}) => ({ kind: "observation", id, content: { role: "observation", recordedAt, occurredAt: null, occurredPrecision: null, timeBasis: "message_time_only", text, speaker: "妈妈", factKind: "symptom_report", reviewStatus: "claude_full_read_r4", ...extra }, links });
 
 async function fixture() {
   const dir = await mkdtemp(path.join(os.tmpdir(), "health-page-test-"));
@@ -45,7 +45,7 @@ async function fixture() {
     obs("O3", "2026-04-28 17:32:15", "目前没有流鼻涕"),
     obs("O4", "2026-07-12 19:58:37", "37.8", [{ role: "attached", to: { kind: "episode", id: "EP-X" } }]),
     obs("O5", "2026-07-26 11:13:06", "7月10日左右开始流鼻涕，这两天一直没有减轻", [{ role: "attached", to: { kind: "episode", id: "EP-X" } }]),
-    obs("O6", "2026-07-13 09:00:00", "他们家孩子也发烧了"), // not reviewed, not attached: never a node
+    obs("O6", "2026-07-13 09:00:00", "他们家孩子也发烧了", [], { subject: "别人家的孩子" }), // explicitly someone else: never a node, whether or not it is attached
   ] };
   const plan = planImport(emptyLedger(), batch);
   assert.equal(plan.rejected, false, JSON.stringify(plan.items.filter((i) => i.action === "rejected")));
@@ -76,7 +76,7 @@ test("1 模型：红色只来自核查区间；零散记录只是节点；没有
     assert.ok(!JSON.stringify(p).includes("green") && !/确认健康/.test(JSON.stringify(p)), "没有绿色、没有“确认健康”");
     const nodeDays = p.nodes.map((n) => n.date);
     assert.ok(nodeDays.includes("2026-04-22") && nodeDays.includes("2026-07-12") && nodeDays.includes("2026-07-26"));
-    assert.ok(!nodeDays.includes("2026-07-13"), "没核查、没挂靠的他人发烧不成为节点");
+    assert.ok(!nodeDays.includes("2026-07-13"), "说的是别人的记录不成为节点");
     assert.equal(p.nodes.find((n) => n.date === "2026-07-12").kind, "fever");
     const ep = p.episodes.find((e) => e.id === "EP-X");
     assert.equal(ep.category, "resp");
@@ -190,4 +190,127 @@ test("4 访问保护：提醒与医院原件都要登录；原件只从允许的
 test("5 发热图标判断：读数 ≥37.5 或明确发热字样；否定、退烧、“以下”都不算", () => {
   for (const t of ["37.8", "39.4", "有点发烧", "小年年感冒了，有点发烧。"]) assert.equal(looksFeverish(t), true, t);
   for (const t of ["36.7", "降到 38 以下了", "烧彻底退了", "没发烧", "体温正常", "我们给宝贝量过体温也都正常哒"]) assert.equal(looksFeverish(t), false, t);
+});
+
+// ================= HEALTH-04-R1 =================
+const addLater = (ledger, batchId, items, at = "2026-09-22T00:00:00.000Z") => applyPlan(ledger, planImport(ledger, { batchId, items }), { runId: batchId, at });
+
+test("R1-A 本人未挂靠记录可见；别人、问句、AI 引用、日常闲聊不可见；覆盖表说明理由", async () => {
+  const f = await fixture();
+  try {
+    const later = addLater(f.history, "new-own", [
+      obs("N1", "2026-09-20 08:00:00", "孩子今天流鼻涕，确认是本人的新记录"),
+      obs("N2", "2026-09-20 09:00:00", "他今天有咳嗽吗", [], { role: "question", factKind: "question" }),
+      obs("N3", "2026-09-20 09:05:00", "六个月婴儿总是拿手抓头，可能是", [], { factKind: "ai_reference" }),
+      obs("N4", "2026-09-20 09:10:00", "同事家孩子也发烧了", [], { subject: "同事的孩子" }),
+      obs("N5", "2026-09-20 09:15:00", "今天天气不错，去公园玩了", [], { factKind: "observation" }),
+      obs("N6", "2026-09-20 09:20:00", "记错孩子的发烧", [], { attribution: "not_child" }),
+      obs("N7", "2026-09-20 09:25:00", "低烧没吃药", [], { role: "medication_not_given", factKind: "medication_not_given" }),
+      obs("N8", "2026-09-20 09:30:00", "没有任何本人依据的一句话说他咳嗽", [], { reviewStatus: undefined }),
+    ]);
+    const p = buildHealthPage({ history: later, record: null, intervals: f.intervals, materials: f.materials, now: NOW });
+    const shown = new Set(p.nodes.flatMap((n) => n.entries.map((e) => e.id)));
+    assert.deepEqual(["N1", "N7"].map((i) => shown.has(i)), [true, true], "本人的未挂靠事实、未给药都可见");
+    assert.deepEqual(["N2", "N3", "N4", "N5", "N6", "N8"].map((i) => shown.has(i)), [false, false, false, false, false, false]);
+    assert.equal(p.nodes.find((n) => n.date === "2026-09-20").entries.find((e) => e.id === "N1").episode, null, "可见不等于挂靠病程");
+    assert.equal(p.bands.some((b) => b.start === "2026-09-20"), false, "新记录只是节点，红色区间仍待核查、不自动生成");
+    assert.equal(p.followUp.status, "stale");
+    assert.ok(p.coverage.shownUnattached >= 3);
+    assert.ok(p.coverage.excluded["标为不是孩子的记录"] >= 1 && p.coverage.excluded["主体是别人"] >= 1 && p.coverage.excluded["不是事实陈述（提问、计划、提醒等）"] >= 1);
+    // identity and episode membership are separate questions
+    assert.equal(exclusionReason({ role: "observation", factKind: "symptom_report", reviewStatus: "claude_full_read_r4", text: "x" }), null);
+    assert.match(exclusionReason({ role: "observation", factKind: "symptom_report", text: "x" }), /没有本人依据/);
+    assert.match(exclusionReason({ role: "observation", factKind: "observation", reviewStatus: "claude_full_read_r4", text: "今天去公园" }), /没有健康线索/);
+  } finally { await f.cleanup(); }
+});
+
+test("R1-A 手记的睡眠、鼻音等有效字段不丢；无就诊号的医院事实有可达位置", async () => {
+  const f = await fixture();
+  try {
+    const root = path.join(f.dir, "rec-root");
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root, HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw" }, "/elsewhere");
+    const records = new HealthRecordService(root, { repo: conf.config.repo, now: () => T0 });
+    const made = await records.createNote("mom", { entryId: uid(), text: "夜里不好睡", when: { mode: "date", date: "2026-09-20", precision: "day" }, symptoms: { nasalVoice: true, sleep: ["夜醒多"], nose: "清鼻涕" } });
+    const p = buildHealthPage({ history: f.history, record: await records.readLedger(), intervals: f.intervals, materials: f.materials, now: NOW });
+    const e = p.nodes.flatMap((n) => n.entries).find((x) => x.id === made.record.id);
+    assert.match(e.text, /有鼻音/); assert.match(e.text, /睡眠：夜醒多/); assert.match(e.text, /清鼻涕/);
+    const withLoose = addLater(f.history, "loose", [{ kind: "canonical_fact", id: "CF-LOOSE", content: { type: "diagnosis", value: "急性鼻窦炎", structured: null }, links: [{ role: "documented_in", to: { kind: "source", id: "doc:1" } }] }]);
+    const p2 = buildHealthPage({ history: withLoose, record: null, intervals: f.intervals, materials: f.materials, now: NOW });
+    assert.deepEqual(p2.looseHospital.map((x) => [x.id, x.text, x.attachments.length]), [["CF-LOOSE", "急性鼻窦炎", 1]]);
+  } finally { await f.cleanup(); }
+});
+
+test("R1-B 失效贯穿：区间、病程经过、病程要点、关联措施同时待核；历史更正与来源文件变化都触发", async () => {
+  const f = await fixture();
+  try {
+    const v1 = sha(Buffer.from("v1"));
+    const materials = { ...f.materials, items: f.materials.items.map((m) => ({ ...m, source: { ...m.source, file: "plan.md", sha256: v1 } })) };
+    const base = buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials, now: NOW, materialSourceHash: () => v1 });
+    assert.equal(base.followUp.status, "current");
+    assert.ok(base.episodes.find((e) => e.id === "EP-X").course.every((c) => !c.review));
+    const corrected = applyCorrection(f.history, { id: "c-b", type: "field", ref: { kind: "observation", id: "O5" }, changes: [{ field: "text", after: "更正：孩子没有流鼻涕，之前说的是大人" }], author: "妈妈", at: "2026-09-22T00:00", reason: "更正" }).ledger;
+    const p = buildHealthPage({ history: corrected, record: null, intervals: f.intervals, materials, now: NOW, materialSourceHash: () => v1 });
+    assert.equal(p.bands.find((b) => b.id === "IV-b").status, "needs_review");
+    const ep = p.episodes.find((e) => e.id === "EP-X");
+    assert.ok(ep.course.some((c) => /原文写明/.test(c.text) && /待重新核对/.test(c.review)), "病程经过里同一条断言带待核标识");
+    assert.match(ep.summary.review, /待重新核对/, "病程要点同样标待核");
+    assert.equal(p.followUp.status, "stale", "更正历史依据后措施不再是 current");
+    const m2 = p.followUp.care.find((m) => m.id === "m2"), m1 = p.followUp.visit.find((m) => m.id === "m1");
+    assert.match(m2.review, /关联的病程有区间待重新核对/);
+    assert.equal(m1.review, null, "与该病程无关的通用危险信号不因此被撤下");
+    assert.equal(m2.text, "规律供液", "旧内容保留，只是标待核");
+    const changed = buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials, now: NOW, materialSourceHash: () => sha(Buffer.from("v2")) });
+    assert.ok(changed.followUp.care.every((m) => /来源文件内容已变化/.test(m.review)) && changed.followUp.status === "stale");
+    const gone = buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials, now: NOW, materialSourceHash: () => undefined });
+    assert.ok(gone.followUp.visit.every((m) => /来源文件读不到/.test(m.review)));
+  } finally { await f.cleanup(); }
+});
+
+test("R1-B 服务层：来源文件被改写后，重新读取即标待核；越出材料根目录的来源不读取", async () => {
+  const f = await fixture();
+  try {
+    const matRoot = path.join(f.dir, "mat"); await mkdir(matRoot, { recursive: true });
+    await writeFile(path.join(matRoot, "plan.md"), "plan v1");
+    const m = { ...f.materials, items: f.materials.items.map((x) => ({ ...x, source: { ...x.source, file: "plan.md", sha256: sha(Buffer.from("plan v1")) } })) };
+    await writeFile(path.join(f.dir, "materials.json"), JSON.stringify(m));
+    const root = path.join(f.dir, "rec-root2");
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root, HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw" }, "/elsewhere");
+    const mk = () => new HealthPageService(new HealthRecordService(root, { repo: conf.config.repo, now: () => T0 }), { historyLedgerDir: f.histDir, originalRoots: [], intervalsFile: path.join(f.dir, "intervals.json"), materialsFile: path.join(f.dir, "materials.json"), materialRoot: matRoot, problems: [] }, () => T0);
+    const svc = mk();
+    assert.equal((await svc.page()).followUp.status, "current");
+    await writeFile(path.join(matRoot, "plan.md"), "plan v2 edited");
+    const after = await svc.page();
+    assert.equal(after.followUp.status, "stale");
+    assert.ok(after.followUp.care.every((x) => /来源文件内容已变化/.test(x.review)));
+    await writeFile(path.join(f.dir, "outside.md"), "x");
+    await writeFile(path.join(f.dir, "materials.json"), JSON.stringify({ ...m, items: m.items.map((x) => ({ ...x, source: { ...x.source, file: "../outside.md" } })) }));
+    assert.ok((await mk().page()).followUp.care.every((x) => /来源文件读不到/.test(x.review)));
+  } finally { await f.cleanup(); }
+});
+
+test("R1-C 恢复说法：不能确归则不作结束依据，但作为待定关联显示；能确归才延长结束；入托来源被改后失效", async () => {
+  const f = await fixture();
+  try {
+    const rec = (over = {}) => ({ id: "D-r", date: "2026-04-25", who: "爸爸", nature: "recovery", disposition: "pending_link", intervalId: "IV-a", text: "病好了", source: { conversation: "私聊", at: "2026-04-25 21:00:00", textSha256: "0".repeat(64) }, context: "上下文没有明说指哪件事", ...over });
+    const der = (r) => ({ schema: 1, reviewedAt: "2026-09-21T00:00:00Z", records: [r] });
+    const pending = buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials: f.materials, derived: der(rec()), now: NOW });
+    const a = pending.bands.find((b) => b.id === "IV-a");
+    assert.equal(a.end, "2026-04-24", "不能确归：结束不变");
+    assert.ok(a.counter.some((c) => /待定关联/.test(c.text) && /私聊 2026-04-25/.test(c.text)) && !a.supports.some((s) => s.id === "D-r"), "作为反证/待定关联显示，没有省略");
+    const linked = buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials: f.materials, derived: der(rec({ disposition: "end_evidence" })), now: NOW });
+    const b = linked.bands.find((x) => x.id === "IV-a");
+    assert.equal(b.end, "2026-04-25"); assert.equal(b.endFromDerived, true); assert.match(b.timeNote, /派生层/);
+    assert.ok(b.supports.some((s) => s.id === "D-r"));
+    const en = { date: "2026-02-24", basis: "两条原文互证", parentConfirmed: false, sources: [{ ledger: "derived", ref: { kind: "observation", id: "D-r" }, hash: hashOf(rec()) }] };
+    const ok = buildHealthPage({ history: f.history, record: null, intervals: { ...f.intervals, enrolment: en }, materials: f.materials, derived: der(rec()), now: NOW });
+    assert.equal(ok.enrolment.status, "ok");
+    const changed = buildHealthPage({ history: f.history, record: null, intervals: { ...f.intervals, enrolment: en }, materials: f.materials, derived: der(rec({ text: "被更正过" })), now: NOW });
+    assert.equal(changed.enrolment.status, "needs_review"); assert.match(changed.enrolment.note, /待重新核对/);
+    const removed = buildHealthPage({ history: f.history, record: null, intervals: { ...f.intervals, enrolment: en }, materials: f.materials, derived: null, now: NOW });
+    assert.equal(removed.enrolment.status, "needs_review");
+    const cor = applyCorrection(f.history, { id: "c-e", type: "field", ref: { kind: "observation", id: "O1" }, changes: [{ field: "text", after: "更正" }], author: "妈妈", at: "2026-09-22T00:00", reason: "x" }).ledger;
+    const enL = { date: "2026-02-24", basis: "x", parentConfirmed: true, sources: [{ ledger: "history", ref: { kind: "observation", id: "O1" }, hash: effectiveHash(f.history, { kind: "observation", id: "O1" }) }] };
+    assert.equal(buildHealthPage({ history: f.history, record: null, intervals: { ...f.intervals, enrolment: enL }, materials: f.materials, now: NOW }).enrolment.status, "ok");
+    assert.equal(buildHealthPage({ history: cor, record: null, intervals: { ...f.intervals, enrolment: enL }, materials: f.materials, now: NOW }).enrolment.status, "needs_review");
+  } finally { await f.cleanup(); }
 });

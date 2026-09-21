@@ -9,16 +9,17 @@
 //   confirm-binding --ledger DIR --file confirm.json [--apply]  ({from:{kind,id}, role, source, toVersion, by, reason}: states which source version a PENDING fact version rests on, without re-sending the fact)
 //   timeline --ledger DIR --as-of YYYY-MM-DD --out DIR [--stale-days 14]
 //   analyses --ledger DIR
-//   stamp-intervals --ledger HISTORY_DIR [--record-ledger DIR] --file review.json --out stamped.json
+//   stamp-intervals --ledger HISTORY_DIR [--record-ledger DIR] [--derived derived.json] --file review.json --out stamped.json
 //      (HEALTH-04) records the current effective hash of every support/counter record in a reviewed interval file; a later change to
 //      any of them makes the page show that interval as "needs review" instead of keeping the old verdict.
-//   page --ledger HISTORY_DIR [--record-ledger DIR] [--intervals F] [--materials F] --as-of YYYY-MM-DDTHH:mm --out DIR
+//   page --ledger HISTORY_DIR [--record-ledger DIR] [--intervals F] [--materials F] [--derived F] [--material-root DIR] --as-of YYYY-MM-DDTHH:mm --out DIR
 //      (HEALTH-04) builds the same page model the /health page shows and writes page-model.json + impact.json. This is the one update
 //      entry after a WeChat increment: `import --apply` into the history ledger, then `page` to see which intervals / follow-up items
 //      became "needs review". The site itself recomputes on the next read (its cache is keyed on the files).
 // Default is dry-run; nothing is written without --apply.
 // Exit codes: 0 ok | 1 error (I/O, usage, unreadable input) | 2 input rejected, nothing written | 3 needs human review (conflict/ambiguity listed).
 // Error and report output carries ids, counts, reasons and line numbers — never message or document text.
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +27,7 @@ import { HealthFileStore } from "../../lib/health/file-store.ts";
 import { runCorrection, runImport } from "../../lib/health/importer.ts";
 import { Graph, analysisStatus, effectiveContent, effectiveHash } from "../../lib/health/ledger.ts";
 import { buildHealthPage } from "../../lib/health/page/model.ts";
+import { hashOf } from "../../lib/health/model.ts";
 import { adaptEpisodesR4, adaptHandoff, adaptHospitalR2, adaptWechatFactsR4 } from "../../lib/health/adapters.ts";
 import { buildTimeline, renderHtml, renderMarkdown } from "../../lib/health/timeline.ts";
 import { MessageInputError, adaptMessagesJson, adaptMessagesMarkdown } from "./message-adapters.mjs";
@@ -138,6 +140,11 @@ export async function main(argv) {
         if (!L || !effectiveContent(L, r.ref)) { bad.push(`${iv.id}:${r.ref?.kind}:${r.ref?.id}`); continue; }
         r.hash = effectiveHash(L, r.ref);
       }
+      const derived = args.derived ? readJson(args.derived, "--derived") : null;
+      for (const src of file.enrolment?.sources ?? []) {
+        if (src.ledger === "derived") { const d = (derived?.records ?? []).find((x) => x.id === src.ref?.id); if (!d) { bad.push(`enrolment:derived:${src.ref?.id}`); continue; } src.hash = hashOf(d); }
+        else { const L = src.ledger === "record" ? record : history; if (!L || !effectiveContent(L, src.ref)) { bad.push(`enrolment:${src.ref?.id}`); continue; } src.hash = effectiveHash(L, src.ref); }
+      }
       if (bad.length) { console.error(JSON.stringify({ unknownRefs: bad })); return 2; }
       file.reviewedAt = new Date().toISOString(); // records imported after this instant and falling inside a span re-open it for review
       writeOut(String(args.out), JSON.stringify(file, null, 1), "--out");
@@ -146,7 +153,10 @@ export async function main(argv) {
     }
     const asOf = String(args["as-of"] ?? "");
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(asOf)) throw new Error("--as-of must be YYYY-MM-DDTHH:mm (Shanghai wall clock)");
-    const page = buildHealthPage({ history, record, intervals: args.intervals ? readJson(args.intervals, "--intervals") : null, materials: args.materials ? readJson(args.materials, "--materials") : null, now: asOf });
+    const materials = args.materials ? readJson(args.materials, "--materials") : null;
+    const rootDir = args["material-root"] ? assertOutsideRepo(String(args["material-root"]), "--material-root") : null;
+    const materialSourceHash = materials && rootDir ? (file) => { try { return createHash("sha256").update(readFileSync(path.resolve(rootDir, file))).digest("hex"); } catch { return undefined; } } : undefined;
+    const page = buildHealthPage({ history, record, intervals: args.intervals ? readJson(args.intervals, "--intervals") : null, materials, derived: args.derived ? readJson(args.derived, "--derived") : null, materialSourceHash, now: asOf });
     const impact = { asOf: page.asOf, nodes: page.nodes.length, bands: page.bands.map((b) => ({ id: b.id, kind: b.kind, start: b.start, end: b.end, status: b.status, reasons: b.statusReasons })), pendingIntervals: page.pendingIntervals, followUp: { status: page.followUp.status, reason: page.followUp.staleReason }, reminders: page.reminders.length };
     writeOut(path.join(String(args.out), "page-model.json"), JSON.stringify(page, null, 1), "--out");
     writeOut(path.join(String(args.out), "impact.json"), JSON.stringify(impact, null, 1), "--out");

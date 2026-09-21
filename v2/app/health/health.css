@@ -133,3 +133,12 @@ button.hp-bp { cursor: pointer; }
 .hp-it .m { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .hp-disc { font-size: .78rem; color: var(--color-muted); margin: 14px 2px; }
 @media (prefers-reduced-motion: reduce) { .hp-xp .hp-i { transition: none; } }
+
+/* R1：待重新核对的标识（不改版式，只补显示） */
+.hp-warn-inline { display: block; margin-top: 4px; padding: 4px 10px; border-radius: 8px; background: #FBF0D9; color: #7A4F10; font-size: .82rem; font-weight: 500; }
+.hp-course li.review { opacity: .8; }
+.hp-cov { margin: 4px 0 10px; }
+.hp-cov > summary { min-height: 44px; display: flex; align-items: center; gap: 8px; color: var(--color-muted); font-size: .85rem; font-weight: 700; }
+.hp-cov table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.hp-cov td { padding: 4px 6px; border-top: 1px solid var(--color-border); }
+.hp-cov td:last-child { text-align: right; width: 3.5em; }
