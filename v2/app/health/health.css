@@ -142,3 +142,6 @@ button.hp-bp { cursor: pointer; }
 .hp-cov table { width: 100%; border-collapse: collapse; font-size: .84rem; }
 .hp-cov td { padding: 4px 6px; border-top: 1px solid var(--color-border); }
 .hp-cov td:last-child { text-align: right; width: 3.5em; }
+.hp-read { margin: 0 0 .6em; padding-bottom: .5em; border-bottom: 1px solid var(--color-border, rgba(0,0,0,.08)); }
+.hp-read p { margin: 0 0 .5em; }
+.hp-read ul { margin: 0 0 .5em; }

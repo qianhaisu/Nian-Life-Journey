@@ -10,6 +10,7 @@ import { effectiveContent, Graph } from "../graph";
 import { effectiveHash } from "../ledger";
 import { entityKey, hashOf, type Content, type Ledger, type Ref } from "../model";
 import { buildTimeline, type EncounterView, type FactView, type SourceRef } from "../timeline";
+import { LAYER_LABEL, adoptedOf, snapshotProblems, type AnalysisFile } from "./analysis";
 
 // ---------- reviewed inputs ----------
 export interface ReviewedRef { ref: Ref; ledger: "history" | "record"; hash: string; note?: string }
@@ -67,11 +68,20 @@ export interface PageBand {
   endFromDerived?: boolean;
 }
 export interface PageVisit { id: string; date: string; kindLabel: string; countsAsVisit: boolean; hospital: string; dept: string; diagnoses: string[]; prescriptions: string[]; reports: Attachment[] }
+/** The adopted medical-assistance reading of one episode (HEALTH-M01-A). Facts and medical evidence stay in the private analysis pack; the page only shows the reading. */
+export interface EpisodeAnalysis {
+  version: string; dataAsOf: string; paragraphs: string[]; layers: { label: string; text: string }[]; uncertain: string[]; impact: string; currentStatus: string;
+  adoptedBy: string; adoptedAt: string; basis: string;
+  /** set when the facts it read changed after adoption: the text stays (for tracing) but is held for re-review */
+  review: string | null;
+  /** records that arrived after the data date and are not part of this reading */
+  newerNote: string | null;
+}
 export interface PageEpisode {
   id: string; title: string; category: "resp" | "fever" | "burn" | "other";
   start: string | null; startNote: string | null; end: string | null; endKnown: boolean; endNote: string | null;
   course: { date: string; text: string; review?: string }[];
-  summary: { points: string[]; open: string[]; medical: string; review: string | null };
+  summary: { points: string[]; open: string[]; medical: string; review: string | null; analysis: EpisodeAnalysis | null };
   visits: PageVisit[];
 }
 export interface FollowUpItem { id: string; kind: MaterialItem["kind"]; text: string; detail: string | null; episodes: { id: string; title: string }[]; review: string | null }
@@ -95,6 +105,8 @@ export interface PageInputs {
   history: Ledger | null; record: Ledger | null;
   intervals: IntervalFile | null; materials: MaterialsFile | null;
   derived?: DerivedFile | null;
+  /** adopted per-episode analyses (private file); only an adopted version with an unchanged dependency snapshot counts as reviewed */
+  analyses?: AnalysisFile | null;
   /** current SHA-256 of a materials source file, when it can be read (undefined = could not be checked) */
   materialSourceHash?: (file: string) => string | undefined;
   now: string; // Shanghai wall clock YYYY-MM-DDTHH:mm
@@ -145,7 +157,8 @@ export function looksFeverish(text: string): boolean {
   return /(发烧|发热|低烧|高烧|低热|高热|有点烧)/.test(text);
 }
 export function categoryOf(title: string): PageEpisode["category"] {
-  if (/烫伤|烧伤/.test(title)) return "burn";
+  // a respiratory/fever episode that merely overlaps a burn in time (title mentions both) is filed under what it is about, once
+  if (/烫伤|烧伤/.test(title) && !/发热|发烧|呼吸道|咳|鼻|支气管|肺|咽/.test(title)) return "burn";
   if (/咳|鼻|支气管|肺|咽|呼吸|流涕|喘|感冒/.test(title)) return "resp";
   if (/发热|发烧/.test(title)) return "fever";
   return "other";
@@ -326,6 +339,9 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
 
   // ----- episodes -----
   const changedEps = new Map<string, string>();
+  const analysisWhy = new Map<string, string[]>();
+  const graphH = H ? new Graph(H) : null;
+  const daysApart = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000;
   const episodes: PageEpisode[] = (tl?.blocks ?? []).map((b) => {
     const ep = effectiveContent(H!, { kind: "episode", id: b.episodeId })!.content;
     const endKnown = b.declaredEnd === "ended" && !!day(b.end);
@@ -336,11 +352,27 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       review: band.status === "needs_review" ? `待重新核对：${band.statusReasons.join("；")}。核对之前这条不当作有效经过。` : undefined });
     const pendingBands = epBands.filter((x) => x.status === "needs_review");
     const stamp = inp.intervals?.episodeStamps?.[b.episodeId];
-    const closureNow = new Graph(H!).closureHash({ kind: "episode", id: b.episodeId });
-    const stampProblem = inp.intervals ? (stamp === undefined ? "这一病程的要点还没有记录核对时的底账版本" : stamp !== closureNow ? "这一病程关联的医院事实、就诊、来源或成员在核对之后有变化" : null) : null;
+    const closureNow = graphH!.closureHash({ kind: "episode", id: b.episodeId });
+    // an adopted analysis whose dependency snapshot still matches is itself a review of the episode at this exact state
+    const av = inp.analyses ? adoptedOf(inp.analyses, b.episodeId) : null;
+    const aWhy = av ? snapshotProblems({ history: H, record: R }, av, graphH!) : [];
+    const stale0 = inp.intervals ? (stamp === undefined ? "这一病程的要点还没有记录核对时的底账版本" : stamp !== closureNow ? "这一病程关联的医院事实、就诊、来源或成员在核对之后有变化" : null) : null;
+    const stampProblem = av && !aWhy.length ? null : stale0;
     if (stampProblem) changedEps.set(b.episodeId, stampProblem);
+    else if (av && aWhy.length) changedEps.set(b.episodeId, "医学分析读到的事实在采用之后有变化");
+    if (av && aWhy.length) analysisWhy.set(b.episodeId, aWhy);
     for (const x of b.encounters) if (day(x.date)) { const v = visitOf(H!, x); course.push({ date: day(x.date)!, text: `${x.kindLabel}：${v.dept || v.hospital}${v.diagnoses.length ? `，${v.diagnoses.join("；")}` : ""}` }); }
     course.sort((a, c) => (a.date < c.date ? -1 : a.date > c.date ? 1 : 0));
+    let analysis: EpisodeAnalysis | null = null;
+    if (av) {
+      const last = av.events.filter((x) => x.status === "adopted").pop()!;
+      const lastAct = course.length ? course[course.length - 1].date : av.body.dataAsOf;
+      const newer = entries.filter((x) => x.date > av.body.dataAsOf && x.date <= nowDay && (!x.episode || x.episode.id === b.episodeId)).sort((p, q) => p.date.localeCompare(q.date));
+      analysis = { version: av.id, dataAsOf: av.body.dataAsOf, paragraphs: av.body.summary, layers: av.body.layers.map((l) => ({ label: LAYER_LABEL[l.level], text: l.text })), uncertain: av.body.uncertain, impact: av.body.impact, currentStatus: av.body.currentStatus,
+        adoptedBy: last.by, adoptedAt: last.at, basis: last.basis ?? "",
+        review: aWhy.length ? `待重新核对：${aWhy.join("；")}。这版分析的文字保留供追溯，先不要当作当前判断。` : null,
+        newerNote: newer.length && daysApart(lastAct, av.body.dataAsOf) <= 14 ? `这版分析只读到 ${md(av.body.dataAsOf)} 为止的资料；此后又有 ${newer.length} 条新记录（${md(newer[0].date)}起）还没有纳入，需要重新分析后才会反映。` : null };
+    }
     return {
       id: b.episodeId, title: clean(b.title), category: categoryOf(clean(b.title)),
       start: day(b.start), startNote: ep.startText ? clean(ep.startText) : null,
@@ -349,7 +381,8 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       summary: {
         points: (Array.isArray(ep.keyFindings) ? ep.keyFindings : []).map(clean).filter(Boolean),
         open: (Array.isArray(ep.openQuestions) ? ep.openQuestions : []).map(clean).filter(Boolean),
-        medical: "这一病程还没有经过审核的医学解释，待补；上面只列已审核底账里的要点。",
+        medical: analysis ? "以上是辅助分析材料，不是医生的诊断或意见；有疑问以医生判断为准。" : "这一病程还没有经过审核的医学解释，待补；上面只列已审核底账里的要点。",
+        analysis,
         // an interval that lost its evidence also puts the episode's summary points (which rest on the same records) under review
         review: [pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间因依据变化正在待重新核对` : "", stampProblem ?? ""].filter(Boolean).length
           ? `待重新核对：${[pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间的依据变化` : "", stampProblem ?? ""].filter(Boolean).join("；")}。下面的要点可能受影响，先按旧底账原样保留。` : null,
@@ -365,14 +398,25 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
   const epRef = (id: string) => ({ id, title: epTitle.get(id) ?? id });
   const lastNodeDay = nodes.length ? nodes[nodes.length - 1].date : null;
   let followUp: HealthPage["followUp"];
-  if (!inp.materials) followUp = { care: [], visit: [], status: "missing", basisDate: null, staleReason: "后续措施的审核材料还没有接通。" };
+  // measures of adopted analyses (one set per episode); each is held for re-review when the facts it read changed or a span of that episode is under review
+  const pendingByEp = new Map<string, string[]>();
+  for (const bd of bands) if (bd.status === "needs_review" && bd.episodeId) (pendingByEp.get(bd.episodeId) ?? pendingByEp.set(bd.episodeId, []).get(bd.episodeId)!).push(bd.id);
+  const aItems: { group: "care" | "visit"; item: FollowUpItem }[] = [];
+  let analysisAsOf: string | null = null;
+  for (const b of tl?.blocks ?? []) {
+    const av = inp.analyses ? adoptedOf(inp.analyses, b.episodeId) : null;
+    if (!av) continue;
+    if (!analysisAsOf || av.body.dataAsOf > analysisAsOf) analysisAsOf = av.body.dataAsOf;
+    const why = [...(analysisWhy.get(b.episodeId) ?? []), ...(pendingByEp.has(b.episodeId) ? ["这一病程有区间待重新核对"] : [])];
+    for (const m of av.body.measures) aItems.push({ group: m.group, item: { id: `${av.id}:${m.id}`, kind: m.kind, text: m.text, detail: [m.detail, m.conditions.length ? `适用前提：${m.conditions.join("；")}` : "", m.reassessWhen.length ? `出现这些情况要重新评估：${m.reassessWhen.join("；")}` : ""].filter(Boolean).join("　") || null, episodes: [epRef(b.episodeId)], review: why.length ? `待重新核对：${[...new Set(why)].join("；")}。` : null } });
+  }
+  if (!inp.materials && !aItems.length) followUp = { care: [], visit: [], status: "missing", basisDate: null, staleReason: "后续措施的审核材料还没有接通。" };
   else {
-    const cutoff = inp.materials.dataCutoff.slice(0, 10);
+    const cutoff = inp.materials ? inp.materials.dataCutoff.slice(0, 10) : analysisAsOf!;
+    const mats = inp.materials?.items ?? [];
     const newer = nodes.filter((n) => n.date > cutoff);
     // per-item dependency check. General care / emergency-sign items rest on the source document and the evidence version only;
     // an item tied to an episode is also held when that episode has a span under review or a corrected key record.
-    const pendingByEp = new Map<string, string[]>();
-    for (const bd of bands) if (bd.status === "needs_review" && bd.episodeId) (pendingByEp.get(bd.episodeId) ?? pendingByEp.set(bd.episodeId, []).get(bd.episodeId)!).push(bd.id);
     const reviewOf = (m: MaterialItem): string | null => {
       const why: string[] = [];
       // Presence of a material means its source must be verifiable: a missing checker, an unreadable file or a malformed recorded hash is
@@ -388,11 +432,11 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       return why.length ? `待重新核对：${[...new Set(why)].join("；")}。这条通用内容仍照常显示，但来源是否仍然有效没有确认。` : null;
     };
     const item = (m: MaterialItem): FollowUpItem => ({ id: m.id, kind: m.kind, text: m.text, detail: m.detail ?? null, episodes: (m.episodes ?? []).filter((e) => epTitle.has(e)).map(epRef), review: reviewOf(m) });
-    const allItems = inp.materials.items.map(item);
+    const allItems = [...mats.map(item), ...aItems.map((x) => x.item)];
     const reviewCount = allItems.filter((i) => i.review).length;
     followUp = {
-      care: inp.materials.items.filter((m) => m.group === "care").map(item),
-      visit: inp.materials.items.filter((m) => m.group === "visit").sort((a, b) => (a.kind === "conditional" ? -1 : 0) - (b.kind === "conditional" ? -1 : 0)).map(item),
+      care: [...mats.filter((m) => m.group === "care").map(item), ...aItems.filter((x) => x.group === "care").map((x) => x.item)],
+      visit: [...mats.filter((m) => m.group === "visit").sort((a, b) => (a.kind === "conditional" ? -1 : 0) - (b.kind === "conditional" ? -1 : 0)).map(item), ...aItems.filter((x) => x.group === "visit").sort((a, b) => (a.item.kind === "conditional" ? -1 : 0) - (b.item.kind === "conditional" ? -1 : 0)).map((x) => x.item)],
       status: newer.length || reviewCount ? "stale" : "current", basisDate: cutoff,
       staleReason: [newer.length ? `这些措施依据 ${md(cutoff)} 之前的资料整理；之后又有 ${md(newer[0].date)} 起的新记录，还没有重新审核。` : "", reviewCount ? `有 ${reviewCount} 条措施的依据发生变化，已标为待重新核对。` : ""].filter(Boolean).join("") || null,
     };

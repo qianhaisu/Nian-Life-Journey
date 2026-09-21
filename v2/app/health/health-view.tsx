@@ -237,6 +237,7 @@ function Episode({ e }: { e: PageEpisode }) {
       <h4>病程总结</h4>
       <div className="hp-sum">
         {e.summary.review ? <p className="hp-warn-inline">{e.summary.review}</p> : null}
+        {e.summary.analysis ? <Reading a={e.summary.analysis} /> : null}
         {e.summary.points.length ? <ul>{e.summary.points.map((p, i) => <li key={i}>{p}</li>)}</ul> : <p>已审核底账里没有这一病程的要点。</p>}
         {e.summary.open.length ? <p className="hp-muted">还不确定：{e.summary.open.join("；")}</p> : null}
         <p className="hp-muted">{e.summary.medical}</p>
@@ -245,6 +246,19 @@ function Episode({ e }: { e: PageEpisode }) {
       {e.visits.length ? e.visits.map((v) => <Visit key={v.id} v={v} />) : <p className="hp-muted">这次没有医院记录（不等于没有就医）。</p>}
     </div>
   </details>;
+}
+
+function Reading({ a }: { a: NonNullable<PageEpisode["summary"]["analysis"]> }) {
+  return <div className="hp-read" data-analysis={a.version}>
+    {a.review ? <p className="hp-warn-inline">{a.review}</p> : null}
+    {a.newerNote ? <p className="hp-warn-inline">{a.newerNote}</p> : null}
+    {a.paragraphs.map((p, i) => <p key={i}>{p}</p>)}
+    <ul>{a.layers.map((l, i) => <li key={i}><b>{l.label}：</b>{l.text}</li>)}</ul>
+    {a.uncertain.length ? <p className="hp-muted">不能确定：{a.uncertain.join("；")}</p> : null}
+    <p>{a.impact}</p>
+    <p className="hp-muted">截至 {md(a.dataAsOf)} 的资料：{a.currentStatus}</p>
+    <p className="hp-muted">已采用：{a.adoptedBy}，{a.adoptedAt.slice(0, 10)}；审核依据：{a.basis}</p>
+  </div>;
 }
 
 function Visit({ v }: { v: PageVisit }) {
