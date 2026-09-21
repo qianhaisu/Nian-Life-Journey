@@ -212,6 +212,13 @@ export class HealthRecordService {
     return (this.cache = { sig, views, images });
   }
 
+  /** Read side for the HEALTH-04 page (same private-path guard): the file signature, and the ledger itself. */
+  async ledgerSignature(): Promise<string> {
+    this.guard();
+    try { const s = await stat(this.ledgerFile); return `${s.mtimeMs}:${s.size}`; } catch { return "none"; }
+  }
+  async readLedger(): Promise<Ledger> { this.guard(); return this.store.read(); }
+
   async list(opts: { cursor?: string | null; limit?: number } = {}) {
     const limit = Math.min(Math.max(opts.limit ?? 20, 1), 50);
     const { views } = await this.index();

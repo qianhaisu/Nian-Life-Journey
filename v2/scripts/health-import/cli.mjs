@@ -9,6 +9,13 @@
 //   confirm-binding --ledger DIR --file confirm.json [--apply]  ({from:{kind,id}, role, source, toVersion, by, reason}: states which source version a PENDING fact version rests on, without re-sending the fact)
 //   timeline --ledger DIR --as-of YYYY-MM-DD --out DIR [--stale-days 14]
 //   analyses --ledger DIR
+//   stamp-intervals --ledger HISTORY_DIR [--record-ledger DIR] --file review.json --out stamped.json
+//      (HEALTH-04) records the current effective hash of every support/counter record in a reviewed interval file; a later change to
+//      any of them makes the page show that interval as "needs review" instead of keeping the old verdict.
+//   page --ledger HISTORY_DIR [--record-ledger DIR] [--intervals F] [--materials F] --as-of YYYY-MM-DDTHH:mm --out DIR
+//      (HEALTH-04) builds the same page model the /health page shows and writes page-model.json + impact.json. This is the one update
+//      entry after a WeChat increment: `import --apply` into the history ledger, then `page` to see which intervals / follow-up items
+//      became "needs review". The site itself recomputes on the next read (its cache is keyed on the files).
 // Default is dry-run; nothing is written without --apply.
 // Exit codes: 0 ok | 1 error (I/O, usage, unreadable input) | 2 input rejected, nothing written | 3 needs human review (conflict/ambiguity listed).
 // Error and report output carries ids, counts, reasons and line numbers — never message or document text.
@@ -17,7 +24,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { HealthFileStore } from "../../lib/health/file-store.ts";
 import { runCorrection, runImport } from "../../lib/health/importer.ts";
-import { Graph, analysisStatus } from "../../lib/health/ledger.ts";
+import { Graph, analysisStatus, effectiveContent, effectiveHash } from "../../lib/health/ledger.ts";
+import { buildHealthPage } from "../../lib/health/page/model.ts";
 import { adaptEpisodesR4, adaptHandoff, adaptHospitalR2, adaptWechatFactsR4 } from "../../lib/health/adapters.ts";
 import { buildTimeline, renderHtml, renderMarkdown } from "../../lib/health/timeline.ts";
 import { MessageInputError, adaptMessagesJson, adaptMessagesMarkdown } from "./message-adapters.mjs";
@@ -116,6 +124,33 @@ export async function main(argv) {
     writeOut(path.join(out, "timeline.md"), renderMarkdown(tl), "--out");
     writeOut(path.join(out, "timeline.html"), renderHtml(tl), "--out");
     console.log(JSON.stringify({ blocks: tl.blocks.length, unattachedObservations: tl.unattached.length, unattachedEncounters: tl.unattachedEncounters.length, unattachedFacts: tl.unattachedFacts.length, ambiguities: tl.ambiguities.length, out: path.resolve(out) }, null, 1));
+    return 0;
+  }
+  if (cmd === "stamp-intervals" || cmd === "page") {
+    const history = await store.read();
+    const record = args["record-ledger"] ? await new HealthFileStore(assertOutsideRepo(String(args["record-ledger"]), "--record-ledger")).read() : null;
+    const readJson = (f, label) => { try { return JSON.parse(readFileSync(assertOutsideRepo(String(f), label), "utf8")); } catch { throw new Error(`cannot read ${label} as JSON`); } };
+    if (cmd === "stamp-intervals") {
+      const file = readJson(args.file, "--file");
+      const bad = [];
+      for (const iv of [...(file.intervals ?? []), { id: "nodes", supports: file.nodes ?? [] }]) for (const r of [...(iv.supports ?? []), ...(iv.counter ?? [])]) {
+        const L = r.ledger === "record" ? record : history;
+        if (!L || !effectiveContent(L, r.ref)) { bad.push(`${iv.id}:${r.ref?.kind}:${r.ref?.id}`); continue; }
+        r.hash = effectiveHash(L, r.ref);
+      }
+      if (bad.length) { console.error(JSON.stringify({ unknownRefs: bad })); return 2; }
+      file.reviewedAt = new Date().toISOString(); // records imported after this instant and falling inside a span re-open it for review
+      writeOut(String(args.out), JSON.stringify(file, null, 1), "--out");
+      console.log(JSON.stringify({ intervals: (file.intervals ?? []).length, refs: (file.intervals ?? []).reduce((n, iv) => n + (iv.supports?.length ?? 0) + (iv.counter?.length ?? 0), 0) }));
+      return 0;
+    }
+    const asOf = String(args["as-of"] ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(asOf)) throw new Error("--as-of must be YYYY-MM-DDTHH:mm (Shanghai wall clock)");
+    const page = buildHealthPage({ history, record, intervals: args.intervals ? readJson(args.intervals, "--intervals") : null, materials: args.materials ? readJson(args.materials, "--materials") : null, now: asOf });
+    const impact = { asOf: page.asOf, nodes: page.nodes.length, bands: page.bands.map((b) => ({ id: b.id, kind: b.kind, start: b.start, end: b.end, status: b.status, reasons: b.statusReasons })), pendingIntervals: page.pendingIntervals, followUp: { status: page.followUp.status, reason: page.followUp.staleReason }, reminders: page.reminders.length };
+    writeOut(path.join(String(args.out), "page-model.json"), JSON.stringify(page, null, 1), "--out");
+    writeOut(path.join(String(args.out), "impact.json"), JSON.stringify(impact, null, 1), "--out");
+    console.log(JSON.stringify({ nodes: impact.nodes, bands: impact.bands.length, pendingIntervals: impact.pendingIntervals, followUp: impact.followUp.status }, null, 1));
     return 0;
   }
   if (cmd === "analyses") {

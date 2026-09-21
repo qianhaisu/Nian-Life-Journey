@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { HabitShownReporter } from "@/components/habit-shown-reporter";
+import { HomeHealthReminders } from "@/components/home-health-reminders";
 
 // 首页第二部分：「每周提醒」（用户 2026-09-16 第 4 条：所有可见标题与可访问名称统一用这四个字，
 // 不再出现「给爸爸妈妈的每周提醒」「这几天的提醒事项」这些旧名字）。
@@ -137,7 +138,9 @@ function Row({ reminder, checked, onToggle, habitId }: {
   habitId?: string;
 }) {
   const inputId = `weekly-${reminder.id}`;
+  // HEALTH-04：提醒区区分「生活 / 健康」。这一轨是微信里的待办，统一标「生活」；健康提醒由 HomeHealthReminders 单独给出。
   const label = <>
+    <span className="weekly-kind weekly-kind--life">生活</span>
     <span className="weekly-title">{reminder.title}</span>
     <span className="weekly-when">
       {" · "}
@@ -282,6 +285,7 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
         />
       ))}
     </ul> : null}
+    <HomeHealthReminders />
     {/* 超出默认位的**本周**事项收在这里，一条都不会因为放不下而消失。标题不写数字（原则三）。 */}
     {more.length > 0 ? <details className="weekly-more">
       <summary>本周还记着的其他事</summary>

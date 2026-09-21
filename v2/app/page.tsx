@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { HomeMemory } from "@/components/home-memory";
+import { HomeHealthReminders } from "@/components/home-health-reminders";
 import { HomeReminders, type HomeReminder as HomeReminderView, type HomeReminderSource } from "@/components/home-reminders";
 import { MODALITY_LABEL, SOURCE_KIND_LABEL, roleText, type SourceKind } from "@/components/upcoming-tasks";
 import { readHomeFeed, HOME_REMINDER_LABEL, type HomeFeed, type HomeReminder, type HomeReminderState } from "@/lib/home-feed";
@@ -134,7 +135,8 @@ const LIVE_REMINDER_STATES = new Set<HomeReminderState>(["active", "needs_confir
  */
 function Reminders({ feed }: { feed: HomeFeed }) {
   const { reminders } = feed;
-  if (reminders.status === "unavailable") return null;
+  // HEALTH-04：生活提醒读不出来时，这一块不画；健康提醒（明确预约）另有来源，不能跟着消失。
+  if (reminders.status === "unavailable") return <HomeHealthReminders standalone />;
   const shown = reminders.status === "ready" ? reminders.shown : [];
   const more = reminders.status === "ready"
     ? reminders.more.filter((reminder) => LIVE_REMINDER_STATES.has(reminder.state))

@@ -5,15 +5,22 @@ import { clearCookie, issueSession, LoginBrake, passwordMatches, readSession, sa
 import { loadHealthRecordConfig, type ConfigResult, type HealthRecordConfig, type HealthWho } from "./config";
 import { IMAGE_LIMITS, inspectImage, RecordError, type InspectedImage } from "./media";
 import { HealthRecordService, type ServiceOptions } from "./service";
+import { HealthPageService, loadPageSourcesConfig, type PageSourcesConfig } from "../page/service";
 
 const HEADERS = { "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff", Vary: "Cookie", "Referrer-Policy": "no-referrer" };
 const json = (status: number, body: unknown, extra: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { ...HEADERS, "Content-Type": "application/json; charset=utf-8", ...extra } });
 const fail = (e: RecordError) => json(e.status, { ok: false, code: e.code, message: e.message, ...e.extra });
 
-export function createHealthRecordHandler(getConfig: () => ConfigResult = () => loadHealthRecordConfig(), serviceOpts: () => ServiceOptions = () => ({})) {
+export function createHealthRecordHandler(getConfig: () => ConfigResult = () => loadHealthRecordConfig(), serviceOpts: () => ServiceOptions = () => ({}), pageSources: (cfg: HealthRecordConfig) => PageSourcesConfig = (cfg) => loadPageSourcesConfig(cfg.repo)) {
   const brake = new LoginBrake();
   let svc: { root: string; service: HealthRecordService } | null = null;
   const serviceFor = (cfg: HealthRecordConfig) => (svc && svc.root === cfg.root ? svc.service : (svc = { root: cfg.root, service: new HealthRecordService(cfg.root, { repo: cfg.repo, ...serviceOpts() }) }).service);
+  let pages: { key: string; page: HealthPageService } | null = null;
+  const pageFor = (cfg: HealthRecordConfig) => {
+    const sources = pageSources(cfg), key = `${cfg.root}|${JSON.stringify(sources)}`;
+    if (!pages || pages.key !== key) pages = { key, page: new HealthPageService(serviceFor(cfg), sources, serviceOpts().now) };
+    return pages.page;
+  };
 
   return async function handle(req: Request, segments: string[]): Promise<Response> {
     const conf = getConfig();
@@ -58,6 +65,13 @@ export function createHealthRecordHandler(getConfig: () => ConfigResult = () => 
       }
       if (a === "entries" && b && c === "corrections" && method === "POST") return json(200, { ok: true, ...(await service.correct(session.who, decodeURIComponent(b), (await readJson(req)) as Record<string, unknown>)) });
       if (a === "entries" && b && c === "attribution" && method === "POST") return json(200, { ok: true, ...(await service.setAttribution(session.who, decodeURIComponent(b), (await readJson(req)) as Record<string, unknown>)) });
+      // HEALTH-04: health reminders for the home page (explicit appointments only) and hospital originals from the history ledger
+      if (a === "reminders" && !b && method === "GET") return json(200, { ok: true, items: (await pageFor(cfg).page()).reminders });
+      if (a === "history-originals" && b && !c && method === "GET") {
+        const f = await pageFor(cfg).historyOriginal(decodeURIComponent(b));
+        if (!f) return json(404, { ok: false, code: "not_found", message: "找不到这份原件。" });
+        return new Response(new Uint8Array(f.data), { status: 200, headers: { ...HEADERS, "Content-Type": f.mime, "Content-Disposition": "inline", "Content-Length": String(f.data.length) } });
+      }
       if (a === "originals" && b && method === "GET") {
         const thumb = new URL(req.url).searchParams.get("thumb") === "1";
         const f = await service.readOriginal(b, thumb);

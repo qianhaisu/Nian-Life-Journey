@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Three places, equal weight, on every screen. Capture keeps its route but is not a destination the
+// Four places, equal weight, on every screen (HEALTH-04: 首页 / 记忆 / 健康 / 妈妈月报). Capture keeps its route but is not a destination the
 // family navigates to — the archive grows on its own.
 const primary = [
   { href: "/", label: "首页", match: (path: string) => path === "/" },
   { href: "/memory", label: "记忆", match: (path: string) => path.startsWith("/memory") || path.startsWith("/events") },
+  { href: "/health", label: "健康", match: (path: string) => path.startsWith("/health") },
   { href: "/mom-reports", label: "妈妈月报", match: (path: string) => path.startsWith("/mom-reports") },
 ];
 

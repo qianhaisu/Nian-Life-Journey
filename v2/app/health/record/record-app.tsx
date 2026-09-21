@@ -110,7 +110,7 @@ function Workspace({ label, onLost: lost, onLogout }: { label: string; onLost: (
   return (
     <div className="hr-app">
       <header className="top"><h1>健康记录<small>给张年记一笔 · 由家长录入</small></h1>
-        <div className="who"><span>{label}</span><button className="btn ghost" style={{ minHeight: 36, padding: "4px 8px" }} onClick={onLogout}>退出</button></div></header>
+        <div className="who"><a className="btn ghost" style={{ minHeight: 36, padding: "4px 8px", textDecoration: "none" }} href="/health">返回健康</a><span>{label}</span><button className="btn ghost" style={{ minHeight: 36, padding: "4px 8px" }} onClick={onLogout}>退出</button></div></header>
       {toast ? <div className="toast" role="status">{toast}</div> : null}
       <main id="hr-view">
         <div hidden={tab !== "note"}><NoteForm onLost={lost} say={say} onSaved={() => setListVersion((v) => v + 1)} onOpen={(id) => { setTab("hist"); setOpenId(id); }} /></div>
@@ -132,7 +132,7 @@ function Login({ onDone, draftOwner }: { onDone: (w: Who) => void; draftOwner: "
       setBusy(true); const r = await api("POST", "session", { who, password: pw }); setBusy(false);
       if (r.ok) onDone({ who: r.json.who, label: r.json.label }); else setErr(r.json?.message ?? "登录失败。");
     }}>
-      <h1>健康记录</h1><p className="hint">只有妈妈和爸爸可以进入。</p>
+      <h1>健康记录</h1><p className="hint">只有妈妈和爸爸可以进入。<a href="/health">返回健康</a></p>
       {draftOwner ? <div className="note" role="status">{who && who !== draftOwner ? `${LABEL[draftOwner]}还有没提交的内容，只有${LABEL[draftOwner]}重新登录才会恢复，不会带给你。` : `你填到一半的内容还保留着，登录后继续。`}</div> : null}
       <label className="f">我是</label>
       <div className="seg two" role="group" aria-label="我是">{([["mom", "妈妈"], ["dad", "爸爸"]] as const).map(([k, l]) => <button type="button" key={k} data-who={k} aria-pressed={who === k} onClick={() => setWhoSel(k)}>{l}</button>)}</div>

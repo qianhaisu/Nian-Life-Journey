@@ -675,3 +675,11 @@
   .memory-frame.is-current[data-fx],
   .memory-player-frame.is-current[data-fx] { animation: none; transform: scale(1); }
 }
+
+/* HEALTH-04：提醒区的「生活 / 健康」标记。健康用圆润红十字；颜色沿用站点 sage-ink 与既有红色。 */
+.weekly-kind { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.7; vertical-align: 1px; white-space: nowrap; }
+.weekly-kind--life { background: #EEF1EA; color: var(--sage-ink); }
+.weekly-kind--health { background: #FDE7E7; color: #B3282D; }
+.weekly-kind .kind-cross { width: 13px; height: 13px; fill: none; stroke: #E5484D; stroke-width: 5.4; stroke-linecap: round; }
+.weekly-health-login { margin: 8px 0 0; font-size: 14px; color: var(--home-ink, var(--color-text)); }
+.weekly-health-login a { color: var(--home-accent); }
