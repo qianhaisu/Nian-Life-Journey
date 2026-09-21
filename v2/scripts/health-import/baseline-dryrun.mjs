@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { HealthFileStore } from "../../lib/health/file-store.ts";
-import { runImport } from "../../lib/health/importer.ts";
+import { runCorrection, runImport } from "../../lib/health/importer.ts";
 import { adaptEpisodesR4, adaptHandoff, adaptHospitalR2, adaptWechatFactsR4 } from "../../lib/health/adapters.ts";
 import { businessDigest } from "../../lib/health/model.ts";
 import { confirmedFactIds, membership } from "../../lib/health/ledger.ts";
@@ -108,6 +108,27 @@ report.counts = {
   hospitalSkipped: hosp.skipped,
   perEpisode: episodes.map((e) => ({ id: e.id, expectedAttached: (e.wechat_fact_ids ?? []).filter((i) => !candSet(e).has(i)).length, ledgerAttached: confirmedFactIds(fullLedger, e.id).length, expectedCandidates: candSet(e).size, ledgerCandidates: membership(fullLedger, e.id).candidate.filter((i) => !i.startsWith("HR-")).length, expectedEncounters: (e.enc ?? []).length, ledgerEncounters: tl.blocks.find((b) => b.episodeId === e.id)?.encounters.length, status: tl.blocks.find((b) => b.episodeId === e.id)?.derivedStatus })),
 };
+// Structured-field display: every canonical fact that carries structured fields must show them; a correction on the SCRATCH ledger
+// (never the inputs) must change the displayed effective value and produce a diff, while the cached timeline still equals a fresh one.
+{
+  const allFacts = [...tl.blocks.flatMap((b) => b.encounters.flatMap((e) => e.facts)), ...tl.unattachedFacts];
+  const withStructured = [...new Map(allFacts.filter((f) => f.structured).map((f) => [f.id, f])).values()]; // an encounter can appear under several episodes: count facts once
+  const byType = {};
+  for (const f of withStructured) byType[f.type] = (byType[f.type] ?? 0) + 1;
+  report.structured = { canonicalFactsWithStructuredInInput: cfRows.filter((f) => f.structured).length, shownInTimeline: withStructured.length, byType, allShowStructuredText: withStructured.every((f) => f.structuredText) };
+  const target = allFacts.find((f) => f.type === "medication_prescribed" && f.structured) ?? withStructured[0];
+  if (target) {
+    rmSync(path.join(out, "ledger-probe"), { recursive: true, force: true });
+    const probe = new HealthFileStore(path.join(out, "ledger-probe"));
+    await runAll(probe, batches(facts, episodes), true);
+    const base = buildTimeline(await probe.read(), { asOf });
+    await runCorrection(probe, { id: "probe-1", type: "field", ref: { kind: "canonical_fact", id: target.id }, field: "structured.note", after: "probe: structured correction on scratch ledger", author: "dry-run probe", at: asOf, reason: "verify structured correction display" }, { apply: true });
+    const cached = buildTimeline(await probe.read(), { asOf, previous: base }), fresh = buildTimeline(await probe.read(), { asOf });
+    const shown = [...cached.blocks.flatMap((b) => b.encounters.flatMap((e) => e.facts)), ...cached.unattachedFacts].find((f) => f.id === target.id);
+    const d = diffTimelines(base, cached);
+    report.structured.probe = { factType: target.type, displayedAfterCorrection: shown.valueTextSuperseded && /probe: structured correction/.test(shown.displayValue), originalTextKept: shown.value === target.value, diffChangedBlocks: d.changedBlocks.length, diffUnattachedFactsChanged: d.unattachedFacts.changed.length, cachedEqualsFresh: timelineContentHash(cached) === timelineContentHash(fresh), cacheStats: cached.stats };
+  }
+}
 // Optional read-only structure spot-check of a real WeFlow export (counts only)
 if (args["export-md"]) {
   const file = String(args["export-md"]);
@@ -126,4 +147,4 @@ report.inputsUnchanged = JSON.stringify(before) === JSON.stringify(Object.fromEn
 report.inputSha256 = before;
 writeFileSync(path.join(out, "dryrun-report.json"), JSON.stringify(report, null, 1));
 const brief = (rows) => rows.map((p) => ({ b: p.batch, counts: p.counts, err: p.error, rej: p.rejections?.length ?? p.report?.rejections?.length, linkRej: p.linkRejections?.length ?? p.report?.linkRejections?.length }));
-console.log(JSON.stringify({ counts: { ...report.counts, perEpisode: undefined, hospitalSkipped: report.counts.hospitalSkipped.length }, perEpisode: report.counts.perEpisode, replayBusinessUnchanged: report.phases.replayBusinessUnchanged, applyFull: brief(report.phases.applyFull), incremental: { ...report.phases.incremental, diff: { ...diff, changedBlocks: diff.changedBlocks.map((c) => ({ ...c, addedItems: c.addedItems.length, changedItems: c.changedItems.length, removedItems: c.removedItems.length })) } }, exportSpotCheck: report.exportSpotCheck, inputsUnchanged: report.inputsUnchanged }, null, 1));
+console.log(JSON.stringify({ counts: { ...report.counts, perEpisode: undefined, hospitalSkipped: report.counts.hospitalSkipped.length }, perEpisode: report.counts.perEpisode, replayBusinessUnchanged: report.phases.replayBusinessUnchanged, applyFull: brief(report.phases.applyFull), incremental: { ...report.phases.incremental, diff: { ...diff, changedBlocks: diff.changedBlocks.map((c) => ({ ...c, addedItems: c.addedItems.length, changedItems: c.changedItems.length, removedItems: c.removedItems.length })) } }, structured: report.structured, exportSpotCheck: report.exportSpotCheck, inputsUnchanged: report.inputsUnchanged }, null, 1));

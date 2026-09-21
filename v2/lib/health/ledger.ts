@@ -1,35 +1,37 @@
 // HEALTH-02 ledger operations. Everything here is pure: (ledger, input) -> result / new ledger.
 // Persistence, locking and atomic write live in file-store.ts.
 import {
-  EPISODE_MEMBERSHIP_ROLES, LINK_FROM_EXTRA, LINK_RULES, businessDigest, cloneLedger, entityKey, hashOf, linkId,
+  EPISODE_MEMBERSHIP_ROLES, LINK_FROM_EXTRA, LINK_RULES, bindingAt, businessDigest, cloneLedger, entityKey, hashOf, linkId,
   type Analysis, type AnalysisSnapshot, type Content, type Correction, type Entity, type EntityKind, type Ledger, type Link, type LinkRole, type Ref,
 } from "./model";
-import { Graph, assertSafePath, effectiveContent, effectiveLinks, getPath } from "./graph";
+import { Graph, assertSafePath, boundVersionOf, effectiveContent, effectiveLinks, getPath } from "./graph";
 
 export { effectiveContent, effectiveLinks, Graph };
 
 // ---------- batch input ----------
-export interface BatchLink { role: LinkRole; to: Ref; basis?: string }
+/** toVersion (sources only): the source version the from-entity version rests on. Omitted => the version the source has after this batch for NEW links (same-batch revision if it changes here); existing links whose evidence version cannot be established are reported (`unconfirmed`), never guessed. */
+export interface BatchLink { role: LinkRole; to: Ref; basis?: string; toVersion?: number }
 export interface BatchItem { kind: EntityKind; id?: string; identity?: "strong" | "weak"; content: Content; links?: BatchLink[] }
-export interface StandaloneLink { from: Ref; role: LinkRole; to: Ref; basis?: string }
+export interface StandaloneLink { from: Ref; role: LinkRole; to: Ref; basis?: string; toVersion?: number }
 /** Pre-ledger correction history, already folded into the imported values. Never changes effective content. */
 export interface HistoricalCorrection { id: string; ref: Ref; field: string; before: unknown; after: unknown; method: string; status: string; at: string; reason: string; targets?: Ref[] }
 export interface Batch { batchId: string; items: BatchItem[]; links?: StandaloneLink[]; historical?: HistoricalCorrection[] }
 
 export type Action = "new" | "duplicate" | "version_change" | "conflict" | "ambiguous" | "rejected";
 export interface PlanItem { ref: Ref; action: Action; reason?: string; detail?: Record<string, unknown> }
-export interface PlanLink { id: string; action: "new" | "duplicate" | "conflict" | "held" | "rejected"; reason?: string }
+export interface PlanLink { id: string; action: "new" | "duplicate" | "rebind" | "unconfirmed" | "conflict" | "held" | "rejected"; reason?: string }
 export interface Impact { changed: Ref[]; entities: string[]; episodes: string[]; analyses: string[]; sourceRevisions: string[] }
 export interface Plan {
   batchId: string; inputHash: string;
   items: PlanItem[]; links: PlanLink[];
-  counts: Record<Action, number> & { links_new: number; links_duplicate: number; links_conflict: number; links_held: number; historical_new: number };
+  counts: Record<Action, number> & { links_new: number; links_duplicate: number; links_rebind: number; links_unconfirmed: number; links_conflict: number; links_held: number; historical_new: number };
   rejected: boolean; // any rejected item/link/in-batch conflict => apply refuses the whole batch, nothing written
   needsReview: boolean; // conflicts / ambiguities exist and are listed for a human
   impact: Impact;
   // internal, consumed by applyPlan
   _apply: {
-    items: { item: BatchItem; id: string; identity: "strong" | "weak"; hash: string; action: "new" | "version_change"; ambiguousWith?: string[] }[];
+    items: { item: BatchItem; id: string; identity: "strong" | "weak"; hash: string; action: "new" | "version_change"; ambiguousWith?: string[]; ambiguousAlias?: string }[];
+    rebinds: { linkId: string; binding: { from: number; to: number } }[];
     links: { link: Link }[];
     aliases: { key: string; alias: string }[];
     rekeys: { from: string; to: string; alias: string }[];
@@ -60,16 +62,46 @@ export type Validator = (item: { kind: EntityKind; content: Content }, ctx: { le
 const PRECISIONS = new Set(["minute", "hour", "day", "month", "year", "range", "approx"]);
 const DECLARED_END = new Set(["ongoing", "ended", "end_unknown"]);
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
-/** Real calendar date/time, not just a shape: 2030-02-31 and month 13 are refused. */
-export function isValidTimeString(v: unknown): boolean {
-  if (typeof v !== "string") return false;
-  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(v);
-  if (!m) return false;
-  const [y, mo, d] = [+m[1], +m[2], +m[3]];
+export type TimeShape = "year" | "month" | "day" | "minute" | "second";
+const TIME_RE = /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})?)?)?)?$/;
+const SHAPE_RANK: Record<TimeShape, number> = { year: 0, month: 1, day: 2, minute: 3, second: 4 };
+/**
+ * Whole-string, calendar-real parse. Accepts YYYY, YYYY-MM, YYYY-MM-DD, and YYYY-MM-DD[ T]HH:MM[:SS[.fff]] with an optional
+ * Z / +-HH:MM offset (no offset = Shanghai wall clock, the ledger convention). Trailing text, month 13, Feb 31, hour 24 and
+ * impossible offsets are refused. Returns the finest shape present.
+ */
+export function parseTimeString(v: unknown): { shape: TimeShape; offset: string | null } | null {
+  if (typeof v !== "string") return null;
+  const m = TIME_RE.exec(v);
+  if (!m) return null;
+  const y = +m[1], mo = m[2] === undefined ? 1 : +m[2], d = m[3] === undefined ? 1 : +m[3];
   const dt = new Date(Date.UTC(y, mo - 1, d));
-  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return false;
-  if (m[4] !== undefined && (+m[4] > 23 || +m[5] > 59 || (m[6] !== undefined && +m[6] > 59))) return false;
-  return true;
+  if (mo < 1 || mo > 12 || dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+  if (m[4] !== undefined && (+m[4] > 23 || +m[5] > 59 || (m[6] !== undefined && +m[6] > 59))) return null;
+  if (m[7] && m[7] !== "Z") { const o = /^[+-](\d{2}):?(\d{2})$/.exec(m[7])!; if (+o[1] > 14 || +o[2] > 59) return null; }
+  const shape: TimeShape = m[6] !== undefined ? "second" : m[4] !== undefined ? "minute" : m[3] !== undefined ? "day" : m[2] !== undefined ? "month" : "year";
+  return { shape, offset: m[7] ?? null };
+}
+export const isValidTimeString = (v: unknown) => parseTimeString(v) !== null;
+/** Declared precision must not be finer than what the value carries (approx/range carry their own meaning and are exempt). */
+function precisionFits(value: string, precision: string): boolean {
+  const p = parseTimeString(value);
+  if (!p) return false;
+  const need: Record<string, number> = { year: 0, month: 1, day: 2, hour: 3, minute: 3 };
+  return precision in need ? SHAPE_RANK[p.shape] >= need[precision] : true;
+}
+const isNumericLike = (v: unknown) => typeof v === "number" || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v.trim()));
+/**
+ * A {value, unit} object. Strict (measure/dose objects): a value needs a real unit string. Lenient (structured lab-style
+ * result): a numeric value needs the `unit` key present, `null` meaning the source itself has no unit; textual results need none.
+ */
+function quantityProblem(q: unknown, label: string, lenient: boolean): string | null {
+  if (q === undefined || q === null || typeof q !== "object" || Array.isArray(q)) return null;
+  const o = q as Record<string, unknown>;
+  if (!("value" in o)) return null;
+  if (o.value === undefined || o.value === null || o.value === "") return lenient ? null : `${label}_value_missing`; // lenient: the source has no result yet (e.g. a panel header): explicit unknown, not an error
+  if (lenient) return !isNumericLike(o.value) || "unit" in o ? null : `${label}_unit_missing`;
+  return isStr(o.unit) ? null : `${label}_unit_missing`;
 }
 
 export const CONTENT_VALIDATORS: Validator[] = [
@@ -84,17 +116,13 @@ export const CONTENT_VALIDATORS: Validator[] = [
       if (!isStr(c.occurredAt)) return "occurred_at_not_string";
       if (!isValidTimeString(c.occurredAt)) return "occurred_at_not_a_valid_time";
       if (!isStr(c.occurredPrecision) || !PRECISIONS.has(c.occurredPrecision)) return "occurred_precision_missing";
+      if (!precisionFits(c.occurredAt, c.occurredPrecision)) return "occurred_precision_finer_than_value";
       if (!isStr(c.timeBasis) || c.timeBasis === "message_time_only" || c.timeBasis === "unknown") return "occurred_at_needs_an_explicit_time_basis";
     } else {
       if (c.timeBasis !== "message_time_only" && c.timeBasis !== "unknown") return "unknown_occurrence_must_declare_time_basis";
       if (c.occurredPrecision != null) return "unknown_occurrence_with_precision";
     }
-    const m = c.measure as { value?: unknown; unit?: unknown } | undefined;
-    if (m !== undefined && m !== null) {
-      if (m.value === undefined || m.value === null || m.value === "") return "measure_value_missing";
-      if (!isStr(m.unit)) return "measure_unit_missing";
-    }
-    return null;
+    return quantityProblem(c.measure, "measure", false) ?? quantityProblem(c.dose, "dose", false);
   },
   (item) => {
     if (item.kind !== "episode") return null;
@@ -109,7 +137,18 @@ export const CONTENT_VALIDATORS: Validator[] = [
     return null;
   },
   (item) => (item.kind === "encounter" && !isStr(item.content.kind) ? "encounter_kind_missing" : null),
-  (item) => (item.kind === "canonical_fact" && (!isStr(item.content.type) || item.content.value === undefined) ? "canonical_fact_incomplete" : null),
+  (item) => {
+    if (item.kind !== "canonical_fact") return null;
+    const c = item.content;
+    if (!isStr(c.type) || c.value === undefined) return "canonical_fact_incomplete";
+    if (c.structured === undefined || c.structured === null) return quantityProblem(c.dose, "dose", false);
+    if (typeof c.structured !== "object" || Array.isArray(c.structured)) return "structured_not_object";
+    const s = c.structured as Record<string, unknown>;
+    // lab-style {name,value,unit,...}: numeric value needs the `unit` key (null = the source has no unit); a dose given as an
+    // object needs a real unit; a dose given as source text ("per dose ...") stays text: never parsed, converted or invented.
+    return quantityProblem(s, "structured", true) ?? quantityProblem(s.dose, "dose", false) ?? quantityProblem(c.dose, "dose", false);
+  },
+  (item) => (item.kind === "encounter" && item.content.date != null && !isValidTimeString(item.content.date) ? "encounter_date_not_a_valid_time" : null),
 ];
 export function firstRejection(item: { kind: EntityKind; content: Content }, ledger: Ledger, validators: Validator[] = CONTENT_VALIDATORS): string | null {
   for (const v of validators) {
@@ -132,7 +171,7 @@ const keyKind = (k: string) => k.slice(0, k.indexOf(":")) as EntityKind;
 export function planImport(ledger: Ledger, batch: Batch, validators: Validator[] = CONTENT_VALIDATORS): Plan {
   const items: PlanItem[] = [];
   const planLinks: PlanLink[] = [];
-  const apply: Plan["_apply"] = { items: [], links: [], aliases: [], rekeys: [], historical: [] };
+  const apply: Plan["_apply"] = { items: [], links: [], rebinds: [], aliases: [], rekeys: [], historical: [] };
   const held = new Set<string>();
   const known = new Set(Object.keys(ledger.entities));
   const kinds = new Map<string, EntityKind>(Object.entries(ledger.entities).map(([k, e]) => [k, e.kind]));
@@ -178,13 +217,21 @@ export function planImport(ledger: Ledger, batch: Batch, validators: Validator[]
   }
   ordered.sort((a, b) => (a.identity === b.identity ? 0 : a.identity === "strong" ? -1 : 1));
 
-  const addNew = (r: Row, key: string, ambiguousKeys: string[], reason?: string) => {
+  const addNew = (r: Row, key: string, ambiguousKeys: string[], reason?: string, alias?: string) => {
     const ref: Ref = { kind: r.raw.kind, id: r.id };
     items.push(ambiguousKeys.length ? { ref, action: "ambiguous", reason, detail: { existingIds: ambiguousKeys.map(keyId), written: true } } : { ref, action: "new" });
-    apply.items.push({ item: r.raw, id: r.id, identity: r.identity, hash: r.hash, action: "new", ambiguousWith: ambiguousKeys.length ? ambiguousKeys : undefined });
+    apply.items.push({ item: r.raw, id: r.id, identity: r.identity, hash: r.hash, action: "new", ambiguousWith: ambiguousKeys.length ? ambiguousKeys : undefined, ambiguousAlias: alias });
     known.add(key); kinds.set(key, r.raw.kind); versionAfter.set(key, 1);
     addSlot(r.raw.kind, key, r.id, r.identity, r.raw.content);
   };
+  // how many NEW strong messages of this batch share one weak identity (same conversation/time/speaker/text): decided up front so it cannot depend on order
+  const batchStrongNewByWid = new Map<string, number>();
+  for (const r of ordered) {
+    if (r.identity !== "strong" || !hasSlot(r.raw.content)) continue;
+    if (ledger.entities[entityKey(r.raw.kind, r.id)] || aliasToKey.has(`${r.raw.kind}:${r.id}`)) continue;
+    const w = weakId(r.raw.content);
+    batchStrongNewByWid.set(w, (batchStrongNewByWid.get(w) ?? 0) + 1);
+  }
 
   for (const r of ordered) {
     const { raw, id, identity, hash } = r;
@@ -196,29 +243,35 @@ export function planImport(ledger: Ledger, batch: Batch, validators: Validator[]
     if (!existing) {
       const twins = hasSlot(raw.content) ? slotIndex.get(slotKeyOf(raw.kind, raw.content)) ?? [] : [];
       const th = hashOf(raw.content.text ?? null);
-      const sameText = twins.filter((t) => t.textHash === th && t.key !== key);
+      const strongSame = twins.filter((t) => t.textHash === th && t.identity === "strong" && t.key !== key);
       const otherText = twins.filter((t) => t.textHash !== th && t.key !== key);
       if (identity === "weak") {
-        const match = sameText.find((t) => t.identity === "strong") ?? sameText[0];
-        if (match) { items.push({ ref, action: "duplicate", reason: "weak_identity_matches_existing_slot_and_text", detail: { existingId: match.id } }); apply.aliases.push({ key: match.key, alias: id }); continue; }
-        const strongOther = otherText.filter((t) => t.identity === "strong").map((t) => t.key);
-        addNew(r, key, strongOther, "weak_message_same_slot_as_strong_message_with_different_text");
+        // exactly one matching strong message => alias of it; several (e.g. the same text sent twice) => keep the weak record AND
+        // every strong message, with a pending mapping to each; never pick the first
+        if (strongSame.length === 1) { items.push({ ref, action: "duplicate", reason: "weak_identity_matches_existing_slot_and_text", detail: { existingId: strongSame[0].id } }); apply.aliases.push({ key: strongSame[0].key, alias: id }); continue; }
+        if (strongSame.length > 1) { addNew(r, key, strongSame.map((t) => t.key), "weak_identity_matches_multiple_strong_messages"); continue; }
+        addNew(r, key, otherText.filter((t) => t.identity === "strong").map((t) => t.key), "weak_message_same_slot_as_strong_message_with_different_text");
         continue;
       }
-      // strong, new: adopt an existing weak twin with the same text (re-key) so it is not counted twice, in either arrival order
-      const weakSame = sameText.find((t) => t.identity === "weak" && !!ledger.entities[t.key]);
-      if (weakSame) {
-        const weakEntity = ledger.entities[weakSame.key];
+      // strong, new
+      const wid = hasSlot(raw.content) ? weakId(raw.content) : null;
+      const weakKey = wid ? entityKey(raw.kind, wid) : null;
+      const weakEntity = weakKey ? ledger.entities[weakKey] : undefined;
+      if (weakKey && weakEntity && weakEntity.identity === "weak") {
+        const competing = ((batchStrongNewByWid.get(wid!) ?? 1) - 1) + strongSame.filter((t) => !!ledger.entities[t.key]).length;
+        if (competing > 0) { addNew(r, key, [weakKey], "multiple_strong_candidates_for_one_weak_identity"); continue; }
+        // exactly one strong candidate: adopt (re-key) so the message is not counted twice, in either arrival order
         const prevHash = weakEntity.versions.at(-1)!.hash;
-        apply.rekeys.push({ from: weakSame.key, to: key, alias: weakSame.id });
-        known.add(key); kinds.set(key, raw.kind); aliasToKey.set(`${raw.kind}:${weakSame.id}`, key);
+        apply.rekeys.push({ from: weakKey, to: key, alias: wid! });
+        known.add(key); kinds.set(key, raw.kind); aliasToKey.set(`${raw.kind}:${wid}`, key);
         versionAfter.set(key, weakEntity.versions.length + (prevHash === hash ? 0 : 1));
-        if (prevHash === hash) items.push({ ref, action: "duplicate", reason: "adopts_weak_identity_same_content", detail: { weakId: weakSame.id } });
-        else { items.push({ ref, action: "version_change", reason: "adopts_weak_identity", detail: { weakId: weakSame.id, changedFields: changedFields(weakEntity.versions.at(-1)!.content, raw.content), shadowedByCorrection: [] } }); apply.items.push({ item: raw, id, identity: "strong", hash, action: "version_change" }); }
+        if (prevHash === hash) items.push({ ref, action: "duplicate", reason: "adopts_weak_identity_same_content", detail: { weakId: wid } });
+        else { items.push({ ref, action: "version_change", reason: "adopts_weak_identity", detail: { weakId: wid, changedFields: changedFields(weakEntity.versions.at(-1)!.content, raw.content), shadowedByCorrection: [] } }); apply.items.push({ item: raw, id, identity: "strong", hash, action: "version_change" }); }
         continue;
       }
-      const weakOther = otherText.filter((t) => t.identity === "weak").map((t) => t.key);
-      addNew(r, key, weakOther, "strong_message_same_slot_as_weak_message_with_different_text");
+      const holder = wid ? aliasToKey.get(`${raw.kind}:${wid}`) : undefined; // a strong entity already adopted this weak identity
+      if (holder && holder !== key) { addNew(r, key, [holder], "weak_alias_shared_by_multiple_strong_messages", wid!); continue; }
+      addNew(r, key, otherText.filter((t) => t.identity === "weak").map((t) => t.key), "strong_message_same_slot_as_weak_message_with_different_text");
       continue;
     }
 
@@ -241,7 +294,7 @@ export function planImport(ledger: Ledger, batch: Batch, validators: Validator[]
   for (const l of effectiveLinks(ledger)) if (MEMBERSHIP_FAMILY.has(l.role)) membershipRoleOf.set(`${l.from.id}>${l.to.id}`, l.effectiveRole as LinkRole);
   const decls: { from: Ref; bl: BatchLink }[] = [];
   for (const row of rows) if (!rejectedKeys.has(entityKey(row.raw.kind, row.id))) for (const bl of row.raw.links ?? []) decls.push({ from: { kind: row.raw.kind, id: row.id }, bl });
-  for (const l of batch.links ?? []) decls.push({ from: l.from, bl: { role: l.role, to: l.to, basis: l.basis } });
+  for (const l of batch.links ?? []) decls.push({ from: l.from, bl: { role: l.role, to: l.to, basis: l.basis, toVersion: l.toVersion } });
   const canon = (r: Ref): { key: string; ref: Ref } => {
     const k = entityKey(r.kind, r.id);
     const a = ledger.entities[k] ? k : aliasToKey.get(`${r.kind}:${r.id}`) ?? k;
@@ -259,13 +312,31 @@ export function planImport(ledger: Ledger, batch: Batch, validators: Validator[]
     if (!known.has(fromKey)) { planLinks.push({ id: lid, action: "rejected", reason: "dangling_source" }); continue; }
     if (!known.has(toKey)) { planLinks.push({ id: lid, action: "rejected", reason: "dangling_target" }); continue; }
     if (kinds.get(toKey) !== to.kind || !rule.to.includes(to.kind)) { planLinks.push({ id: lid, action: "rejected", reason: "wrong_target_kind" }); continue; }
-    if (ledger.links[lid] || apply.links.some((a) => a.link.id === lid)) { planLinks.push({ id: lid, action: "duplicate" }); continue; }
+    const isSource = to.kind === "source";
+    const fromNow = ledger.entities[fromKey]?.versions.length ?? 0, toNow = ledger.entities[toKey]?.versions.length ?? 0;
+    const fromVer = versionAfter.get(fromKey) ?? fromNow, toVerAfter = versionAfter.get(toKey) ?? toNow;
+    if (isSource && bl.toVersion !== undefined && (!Number.isInteger(bl.toVersion) || bl.toVersion < 1 || bl.toVersion > toVerAfter)) { planLinks.push({ id: lid, action: "rejected", reason: "binding_version_out_of_range" }); continue; }
+    if (apply.links.some((a) => a.link.id === lid)) { planLinks.push({ id: lid, action: "duplicate" }); continue; }
+    const existingLink = ledger.links[lid];
+    if (existingLink) {
+      // The link already exists. If this batch gives the from-entity a NEW version, that version needs its own evidence binding:
+      // explicit toVersion, or the source revision supplied in the same batch; otherwise it is reported (never guessed) and the
+      // new version keeps the previous binding.
+      if (isSource && fromVer > fromNow && !apply.rebinds.some((x) => x.linkId === lid)) {
+        const eff = bindingAt(existingLink, fromNow);
+        const desired = bl.toVersion ?? (toVerAfter > toNow ? toVerAfter : null);
+        if (desired !== null && desired !== eff) { apply.rebinds.push({ linkId: lid, binding: { from: fromVer, to: desired } }); planLinks.push({ id: lid, action: "rebind" }); continue; }
+        if (desired === null && eff !== null && toNow > eff) { planLinks.push({ id: lid, action: "unconfirmed", reason: "source_binding_unconfirmed" }); continue; }
+      }
+      planLinks.push({ id: lid, action: "duplicate" });
+      continue;
+    }
     if (MEMBERSHIP_FAMILY.has(bl.role)) {
       const prior = membershipRoleOf.get(`${fromRef.id}>${to.id}`);
       const inBatch = apply.links.find((a) => a.link.from.id === fromRef.id && a.link.to.id === to.id && MEMBERSHIP_FAMILY.has(a.link.role));
       if ((prior && prior !== bl.role) || (inBatch && inBatch.link.role !== bl.role)) { planLinks.push({ id: lid, action: "conflict", reason: "membership_role_conflict" }); continue; }
     }
-    apply.links.push({ link: { id: lid, from: fromRef, to, role: bl.role, basis: bl.basis, runId: "", toVersion: to.kind === "source" ? versionAfter.get(toKey) : undefined } });
+    apply.links.push({ link: { id: lid, from: fromRef, to, role: bl.role, basis: bl.basis, runId: "", bindings: isSource ? [{ from: fromVer, to: bl.toVersion ?? toVerAfter, runId: "" }] : undefined } });
     planLinks.push({ id: lid, action: "new" });
   }
 
@@ -280,12 +351,12 @@ export function planImport(ledger: Ledger, batch: Batch, validators: Validator[]
     apply.historical.push(c);
   }
 
-  const counts = { new: 0, duplicate: 0, version_change: 0, conflict: 0, ambiguous: 0, rejected: 0, links_new: 0, links_duplicate: 0, links_conflict: 0, links_held: 0, historical_new: apply.historical.length };
+  const counts = { new: 0, duplicate: 0, version_change: 0, conflict: 0, ambiguous: 0, rejected: 0, links_new: 0, links_duplicate: 0, links_rebind: 0, links_unconfirmed: 0, links_conflict: 0, links_held: 0, historical_new: apply.historical.length };
   for (const i of items) counts[i.action]++;
-  for (const l of planLinks) { if (l.action === "new") counts.links_new++; else if (l.action === "duplicate") counts.links_duplicate++; else if (l.action === "conflict") counts.links_conflict++; else if (l.action === "held") counts.links_held++; else counts.rejected++; }
+  for (const l of planLinks) { if (l.action === "new") counts.links_new++; else if (l.action === "duplicate") counts.links_duplicate++; else if (l.action === "rebind") counts.links_rebind++; else if (l.action === "unconfirmed") counts.links_unconfirmed++; else if (l.action === "conflict") counts.links_conflict++; else if (l.action === "held") counts.links_held++; else counts.rejected++; }
   const rejected = hardConflict || items.some((i) => i.action === "rejected") || planLinks.some((l) => l.action === "rejected");
-  const needsReview = counts.conflict > 0 || counts.ambiguous > 0 || counts.links_conflict > 0;
-  const changedRefs: Ref[] = [...apply.items.map((a) => ({ kind: a.item.kind, id: a.id })), ...apply.rekeys.map((k) => ({ kind: keyKind(k.to), id: keyId(k.to) }))];
+  const needsReview = counts.conflict > 0 || counts.ambiguous > 0 || counts.links_conflict > 0 || counts.links_unconfirmed > 0;
+  const changedRefs: Ref[] = [...apply.items.map((a) => ({ kind: a.item.kind, id: a.id })), ...apply.rekeys.flatMap((k) => [{ kind: keyKind(k.to), id: keyId(k.to) }, { kind: keyKind(k.from), id: keyId(k.from) }]), ...apply.rebinds.map((x) => ledger.links[x.linkId].from)];
   return { batchId: batch.batchId, inputHash: hashOf(batch), items, links: planLinks, counts, rejected, needsReview, impact: computeImpact(ledger, changedRefs, apply.links.map((a) => a.link), undefined, versionAfter), _apply: apply };
 }
 
@@ -294,10 +365,16 @@ function changedFields(a: Content, b: Content): string[] {
   for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) if (hashOf(a[k]) !== hashOf(b[k])) out.push(k);
   return out.sort();
 }
+/** trailing unit token of a source-text quantity ("...5.00ml" -> "ml"); only used to DETECT a change, never to convert. */
+const embeddedUnit = (v: unknown) => (typeof v === "string" ? /\d\s*([^\d\s.,;:()（）]+)\s*$/.exec(v)?.[1] ?? null : null);
 function unitChanged(a: Content, b: Content): Record<string, unknown> | null {
-  for (const path of ["measure.unit", "dose.unit", "unit"]) {
+  for (const path of ["measure.unit", "dose.unit", "unit", "structured.unit", "structured.dose.unit"]) {
     const x = getPath(a, path), y = getPath(b, path);
     if (x !== undefined && y !== undefined && x !== y) return { field: path, before: x, after: y };
+  }
+  for (const path of ["structured.dose", "structured.spec", "structured.qty", "dose"]) {
+    const x = embeddedUnit(getPath(a, path)), y = embeddedUnit(getPath(b, path));
+    if (x && y && x !== y) return { field: path, before: x, after: y, kind: "unit_token_in_text" };
   }
   return null;
 }
@@ -318,13 +395,15 @@ export function computeImpact(ledger: Ledger, changed: Ref[], newLinks: Link[] =
     const snap = a.versions.at(-1)!.snapshot;
     return snap.refs.some((r) => affected.has(entityKey(r.ref.kind, r.ref.id))) || snap.episodes.some((e) => affected.has(entityKey("episode", e.id)));
   }).map((a) => a.id).sort();
-  const sourceRevisions = graph.links.filter((l) => l.to.kind === "source" && affected.has(entityKey("source", l.to.id)) && (l.toVersion ?? 0) < (versionsAfter?.get(entityKey("source", l.to.id)) ?? ledger.entities[entityKey("source", l.to.id)]?.versions.length ?? 0)).map((l) => l.id).sort();
+  const sourceRevisions = graph.links.filter((l) => l.to.kind === "source" && affected.has(entityKey("source", l.to.id)) && boundVersionOf(ledger, l as Link) < (versionsAfter?.get(entityKey("source", l.to.id)) ?? ledger.entities[entityKey("source", l.to.id)]?.versions.length ?? 0)).map((l) => l.id).sort();
   return { changed, entities: [...affected].sort(), episodes, analyses, sourceRevisions };
 }
 
 // ---------- apply (pure: returns new ledger) ----------
 function rekey(next: Ledger, fromKey: string, toKey: string, alias: string) {
   const e = next.entities[fromKey];
+  if (!e) throw new Error(`cannot re-key ${fromKey}: entity missing (a weak identity can be adopted by only one strong message)`);
+  if (next.entities[toKey]) throw new Error(`cannot re-key ${fromKey}: ${toKey} already exists`);
   const fromId = keyId(fromKey), toId = keyId(toKey);
   delete next.entities[fromKey];
   next.entities[toKey] = { ...e, id: toId, identity: "strong", aliases: [...new Set([...(e.aliases ?? []), alias])] };
@@ -338,33 +417,39 @@ function rekey(next: Ledger, fromKey: string, toKey: string, alias: string) {
     links[nl.id] = nl;
   }
   next.links = links;
-  next.corrections = next.corrections.map((c) => (c.type === "link" ? { ...c, linkId: linkMap.get(c.linkId) ?? c.linkId } : { ...c, ref: remap(c.ref) })) as Correction[];
-  for (const a of Object.values(next.analyses)) for (const v of a.versions) v.snapshot.refs = v.snapshot.refs.map((x) => ({ ...x, ref: remap(x.ref) }));
-  for (const [k, p] of Object.entries(next.ambiguities)) if (p.a === fromKey || p.b === fromKey) { delete next.ambiguities[k]; const a = p.a === fromKey ? toKey : p.a, b = p.b === fromKey ? toKey : p.b; next.ambiguities[pairKeyOf(a, b)] = { a: a < b ? a : b, b: a < b ? b : a, reason: p.reason }; }
+  // live pointers move so corrections/analyses keep applying; the identity they were recorded against is preserved
+  next.corrections = next.corrections.map((c) => {
+    if (c.type === "link") { const nl = linkMap.get(c.linkId) ?? c.linkId; return nl === c.linkId ? c : { ...c, linkId: nl, linkIdAtRecording: c.linkIdAtRecording ?? c.linkId }; }
+    const nr = remap(c.ref);
+    return nr === c.ref ? c : { ...c, ref: nr, refAtRecording: c.refAtRecording ?? c.ref };
+  }) as Correction[];
+  for (const a of Object.values(next.analyses)) for (const v of a.versions) v.snapshot.refs = v.snapshot.refs.map((x) => { const nr = remap(x.ref); return nr === x.ref ? x : { ...x, ref: nr, originalRef: x.originalRef ?? x.ref }; });
+  for (const [k, p] of Object.entries(next.ambiguities)) if (p.a === fromKey || p.b === fromKey) { delete next.ambiguities[k]; const a = p.a === fromKey ? toKey : p.a, b = p.b === fromKey ? toKey : p.b; next.ambiguities[pairKeyOf(a, b)] = { ...p, a: a < b ? a : b, b: a < b ? b : a }; }
 }
 
 export function applyPlan(ledger: Ledger, plan: Plan, meta: { runId: string; at: string }): Ledger {
   if (plan.rejected) throw new Error(`batch ${plan.batchId} rejected; nothing written`);
   const next = cloneLedger(ledger);
+  for (const rb of plan._apply.rebinds) { const l = next.links[rb.linkId]; if (!l) throw new Error(`rebind target link missing`); l.bindings = [...(l.bindings ?? []), { ...rb.binding, runId: meta.runId }]; }
   for (const k of plan._apply.rekeys) rekey(next, k.from, k.to, k.alias);
   const resolve = (r: Ref) => { const k = entityKey(r.kind, r.id); if (next.entities[k]) return k; const hit = Object.entries(next.entities).find(([, e]) => e.kind === r.kind && (e.aliases ?? []).includes(r.id)); return hit ? hit[0] : k; };
   for (const a of plan._apply.items) {
     const key = entityKey(a.item.kind, a.id);
     const e = next.entities[key] ?? (next.entities[key] = { kind: a.item.kind, id: a.id, identity: a.identity, versions: [] });
     e.versions.push({ version: e.versions.length + 1, hash: a.hash, content: a.item.content, runId: meta.runId, at: meta.at });
-    for (const other of a.ambiguousWith ?? []) next.ambiguities[pairKeyOf(key, other)] = { a: key < other ? key : other, b: key < other ? other : key, reason: "same_slot_weak_and_strong_message_with_different_text" };
+    for (const other of a.ambiguousWith ?? []) next.ambiguities[pairKeyOf(key, other)] = { a: key < other ? key : other, b: key < other ? other : key, reason: a.ambiguousAlias ? "weak_identity_alias_shared_by_multiple_strong_messages" : "same_slot_weak_and_strong_message_candidates", ...(a.ambiguousAlias ? { alias: a.ambiguousAlias } : {}) };
   }
   for (const al of plan._apply.aliases) { const e = next.entities[al.key]; if (e && !(e.aliases ?? []).includes(al.alias)) e.aliases = [...(e.aliases ?? []), al.alias]; }
   for (const l of plan._apply.links) {
     const ef = next.entities[resolve(l.link.from)], et = next.entities[resolve(l.link.to)];
     if (!ef || !et) throw new Error(`link ${l.link.id}: endpoint missing after apply`);
-    const nl: Link = { ...l.link, from: { kind: ef.kind, id: ef.id }, to: { kind: et.kind, id: et.id }, runId: meta.runId };
+    const nl: Link = { ...l.link, from: { kind: ef.kind, id: ef.id }, to: { kind: et.kind, id: et.id }, runId: meta.runId, bindings: l.link.bindings?.map((b) => ({ ...b, runId: meta.runId })) };
     nl.id = linkId(nl.from, nl.to, nl.role);
     if (!next.links[nl.id]) next.links[nl.id] = nl;
   }
   for (const c of plan._apply.historical) next.corrections.push(c);
   const c = plan.counts;
-  next.runs.push({ runId: meta.runId, at: meta.at, mode: "apply", batchId: plan.batchId, inputHash: plan.inputHash, counts: { new: c.new, duplicate: c.duplicate, version_change: c.version_change, conflict: c.conflict, ambiguous: c.ambiguous, links_new: c.links_new, links_duplicate: c.links_duplicate, links_conflict: c.links_conflict, links_held: c.links_held, historical_new: c.historical_new } });
+  next.runs.push({ runId: meta.runId, at: meta.at, mode: "apply", batchId: plan.batchId, inputHash: plan.inputHash, counts: { new: c.new, duplicate: c.duplicate, version_change: c.version_change, conflict: c.conflict, ambiguous: c.ambiguous, links_new: c.links_new, links_duplicate: c.links_duplicate, links_rebind: c.links_rebind, links_unconfirmed: c.links_unconfirmed, links_conflict: c.links_conflict, links_held: c.links_held, historical_new: c.historical_new } });
   next.revision = ledger.revision + 1;
   const problems = checkInvariants(next);
   if (problems.length) throw new Error(`invariants failed after apply: ${problems.slice(0, 5).join("; ")}`);
@@ -381,7 +466,7 @@ export function checkInvariants(ledger: Ledger): string[] {
       if (!t) problems.push(`link ${l.id}: target entity missing`);
       const rule = LINK_RULES[l.role];
       if (!rule || !rule.to.includes(l.to.kind) || !(rule.from === l.from.kind || (LINK_FROM_EXTRA[l.role] ?? []).includes(l.from.kind))) problems.push(`link ${l.id}: role/kind mismatch`);
-      if (t && l.toVersion !== undefined && (l.toVersion < 1 || l.toVersion > t.versions.length)) problems.push(`link ${l.id}: bound version out of range`);
+      for (const b of l.bindings ?? []) if (!t || b.to < 1 || b.to > t.versions.length || b.from < 1 || (f && b.from > f.versions.length)) problems.push(`link ${l.id}: binding out of range`);
     } },
     () => { const seen = new Map<string, string>(); for (const l of effectiveLinks(ledger)) {
       if (!MEMBERSHIP_FAMILY.has(l.role) || l.effectiveRole === "removed") continue;
@@ -400,6 +485,25 @@ export function checkInvariants(ledger: Ledger): string[] {
   return problems;
 }
 
+// ---------- identity resolution: ONE resolver for corrections, analyses, trace and links ----------
+export interface Resolved { ref: Ref; redirectedFrom: string | null }
+/**
+ * Resolve a possibly retired weak id to the entity that adopted it. A retired id stays valid for lookup, correction and
+ * retry; the result says it was redirected. An id shared by several strong candidates is NOT resolved (identity_ambiguous)
+ * and lists the candidates, so nothing is silently attached to the first one.
+ */
+export function resolveRef(ledger: Ledger, ref: Ref): Resolved {
+  if (!ref || typeof ref.id !== "string") throw new Error("reference needs kind and id");
+  if (ledger.entities[entityKey(ref.kind, ref.id)]) return { ref, redirectedFrom: null };
+  const amb = Object.values(ledger.ambiguities).filter((a) => a.alias === ref.id);
+  if (amb.length) throw new Error(`identity_ambiguous: ${ref.kind}:${ref.id} maps to several candidates: ${[...new Set(amb.flatMap((a) => [a.a, a.b]))].join(", ")}`);
+  const hit = Object.values(ledger.entities).find((e) => e.kind === ref.kind && (e.aliases ?? []).includes(ref.id));
+  if (hit) return { ref: { kind: hit.kind, id: hit.id }, redirectedFrom: ref.id };
+  return { ref, redirectedFrom: null };
+}
+/** Ids under which an entity has ever been addressed (its id + retired weak ids): a retried request may use any of them. */
+const idVariants = (ledger: Ledger, ref: Ref) => [ref.id, ...(ledger.entities[entityKey(ref.kind, ref.id)]?.aliases ?? [])];
+
 // ---------- corrections ----------
 export type CorrectionInput =
   // one atomic correction may change several fields (e.g. occurredAt + timeBasis + precision); validation sees the result as a whole
@@ -416,26 +520,38 @@ export function applyCorrection(ledger: Ledger, input: CorrectionInput): Correct
   const existing = ledger.corrections.find((c) => c.id === input.id);
   const none: Impact = { changed: [], entities: [], episodes: [], analyses: [], sourceRevisions: [] };
   if (input.type === "field") {
+    const requested = input.ref;
+    const ref = resolveRef(ledger, input.ref).ref;
     const changes = input.changes ?? (input.field !== undefined ? [{ field: input.field, after: input.after }] : []);
     if (!changes.length) throw new Error("field correction needs field/after or changes");
     for (const c of changes) assertSafePath(c.field);
     if (new Set(changes.map((c) => c.field)).size !== changes.length) throw new Error("field correction lists a field twice");
-    const reqHash = hashOf({ t: "field", ref: input.ref, ch: changes.map((c) => [c.field, c.after ?? null]), au: input.author, at: input.at, r: input.reason });
+    const hashFor = (id: string) => hashOf({ t: "field", ref: { kind: ref.kind, id }, ch: changes.map((c) => [c.field, c.after ?? null]), au: input.author, at: input.at, r: input.reason });
+    const reqHash = hashFor(ref.id);
     const prior = ledger.corrections.filter((c) => c.id === input.id || c.id.startsWith(`${input.id}#`));
-    if (prior.length) { if (prior.every((c) => c.reqHash === reqHash)) return { ledger, action: "duplicate", impact: none }; throw new Error(`correction id ${input.id} already used with a different request`); }
-    const eff = effectiveContent(ledger, input.ref);
-    if (!eff) throw new Error(`correction target ${input.ref?.kind}:${input.ref?.id} does not exist`);
+    // a retry may name the entity by its current id or by any id it was addressed by before an identity upgrade
+    const sameRequest = (h: string) => [requested.id, ...idVariants(ledger, ref)].some((v) => hashFor(v) === h);
+    if (prior.length) { if (prior.every((c) => sameRequest(c.reqHash))) return { ledger, action: "duplicate", impact: none }; throw new Error(`correction id ${input.id} already used with a different request`); }
+    const eff = effectiveContent(ledger, ref);
+    if (!eff) throw new Error(`correction target ${ref?.kind}:${ref?.id} does not exist`);
     const next = cloneLedger(ledger);
-    changes.forEach((c, i) => next.corrections.push({ id: changes.length > 1 ? `${input.id}#${i}` : input.id, type: "field", ref: input.ref, field: c.field, before: getPath(eff.content, c.field) ?? null, after: c.after, author: input.author, at: input.at, reason: input.reason, baseVersion: eff.version, reqHash }));
+    changes.forEach((c, i) => next.corrections.push({ id: changes.length > 1 ? `${input.id}#${i}` : input.id, type: "field", ref: ref, field: c.field, before: getPath(eff.content, c.field) ?? null, after: c.after, author: input.author, at: input.at, reason: input.reason, baseVersion: eff.version, reqHash }));
     next.revision++;
     const problems = checkInvariants(next);
     if (problems.length) throw new Error(`correction refused: ${problems[0]}`);
-    return { ledger: next, action: "new", impact: computeImpact(next, [input.ref]) };
+    return { ledger: next, action: "new", impact: computeImpact(next, [ref]) };
   }
   if (input.type !== "link") throw new Error("unknown correction type");
+  const requestedLid = linkId(input.from, input.to, input.role);
+  input = { ...input, from: resolveRef(ledger, input.from).ref, to: resolveRef(ledger, input.to).ref };
   const lid = linkId(input.from, input.to, input.role);
   const reqHash = hashOf({ t: "link", l: lid, a: input.afterRole, au: input.author, at: input.at, r: input.reason });
-  if (existing) { if (existing.reqHash === reqHash) return { ledger, action: "duplicate", impact: none }; throw new Error(`correction id ${input.id} already used with a different request`); }
+  if (existing) {
+    // the retry may name the link by its current id or by the id it had when the correction was recorded
+    const candidates = [requestedLid, lid, existing.type === "link" ? existing.linkIdAtRecording ?? existing.linkId : ""];
+    if (existing.type === "link" && candidates.some((l) => existing.reqHash === hashOf({ t: "link", l, a: input.afterRole, au: input.author, at: input.at, r: input.reason }))) return { ledger, action: "duplicate", impact: none };
+    throw new Error(`correction id ${input.id} already used with a different request`);
+  }
   const link = ledger.links[lid];
   if (!link) throw new Error(`correction target link ${lid} does not exist`);
   if (input.afterRole !== "removed") {
@@ -459,6 +575,7 @@ export function snapshotFor(ledger: Ledger, refs: Ref[], episodeIds: string[], e
 }
 
 export function putAnalysis(ledger: Ledger, input: { id: string; at: string; author: string; body: Content; conditions?: string[]; reassessWhen?: string[]; refs: Ref[]; episodeIds?: string[]; evidence?: { id: string; version: string }[] }): Ledger {
+  input = { ...input, refs: input.refs.map((r) => resolveRef(ledger, r).ref) };
   for (const r of input.refs) if (!currentEntity(ledger, r)) throw new Error(`analysis refs missing entity ${r.kind}:${r.id}`);
   for (const id of input.episodeIds ?? []) if (!currentEntity(ledger, { kind: "episode", id })) throw new Error(`analysis refs missing episode ${id}`);
   const next = cloneLedger(ledger);

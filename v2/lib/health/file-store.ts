@@ -51,7 +51,10 @@ export class HealthFileStore {
     let parsed: Ledger;
     try { parsed = JSON.parse(text) as Ledger; } catch { throw new Error("ledger.json is not valid JSON (contents not shown)"); }
     if (parsed.schema !== 1) throw new Error("ledger.json has an unsupported schema version");
-    return { ...emptyLedger(), ...parsed };
+    const ledger = { ...emptyLedger(), ...parsed };
+    // ledgers written before evidence bindings existed carried a single toVersion; it becomes the first binding
+    for (const l of Object.values(ledger.links)) if (l.toVersion !== undefined && !l.bindings) { l.bindings = [{ from: 1, to: l.toVersion, runId: l.runId }]; delete l.toVersion; }
+    return ledger;
   }
 
   private async readOwner(): Promise<Owner | null> {

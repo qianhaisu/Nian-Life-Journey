@@ -34,7 +34,7 @@ CREATE TABLE health_links (
   from_kind text NOT NULL, from_id text NOT NULL,
   to_kind text NOT NULL, to_id text NOT NULL,
   basis text,
-  to_version integer,                 -- version of the target the link was derived from (sources keep their bound version)
+  bindings jsonb,                     -- evidence bindings [{from,to,run_id}] append-only: from-entity version F rests on source version T
   run_id text NOT NULL,
   FOREIGN KEY (from_kind, from_id) REFERENCES health_entities (kind, id),
   FOREIGN KEY (to_kind, to_id) REFERENCES health_entities (kind, id)
@@ -46,6 +46,7 @@ CREATE TABLE health_corrections (
   type text NOT NULL CHECK (type IN ('field','link','historical')), -- historical = pre-ledger history, never changes effective content
   req_hash text NOT NULL,             -- normalized request; same id + different hash is refused
   method text, status text, targets jsonb,
+  ref_at_recording jsonb, link_id_at_recording text, -- identity the correction was recorded against (kept across weak->strong upgrades)
   kind text, entity_id text, field text, link_id text REFERENCES health_links (id),
   before_value jsonb, after_value jsonb, before_role text, after_role text,
   base_version integer,
@@ -54,7 +55,7 @@ CREATE TABLE health_corrections (
 );
 
 CREATE TABLE health_ambiguities (
-  a text NOT NULL, b text NOT NULL, reason text NOT NULL, PRIMARY KEY (a, b)   -- sorted pair; same-slot weak/strong messages with different text, both kept
+  a text NOT NULL, b text NOT NULL, reason text NOT NULL, alias text, PRIMARY KEY (a, b)   -- sorted pair; same-slot weak/strong messages with different text, both kept
 );
 
 CREATE TABLE health_analyses (

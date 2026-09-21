@@ -7,7 +7,7 @@
 //   observation / canonical_fact / episode depends on: the sources it is documented in / read from / supported by
 //
 // A dependent's hash therefore changes when anything it (transitively) rests on changes.
-import { EPISODE_MEMBERSHIP_ROLES, entityKey, hashOf, type Content, type EntityKind, type Ledger, type Link, type LinkRole, type Ref } from "./model";
+import { EPISODE_MEMBERSHIP_ROLES, bindingAt, entityKey, hashOf, type Content, type EntityKind, type Ledger, type Link, type LinkRole, type Ref } from "./model";
 
 export type EffLink = Link & { effectiveRole: LinkRole | "removed"; correctionId?: string };
 
@@ -56,6 +56,26 @@ export function effectiveContent(ledger: Ledger, ref: Ref): { content: Content; 
   return { content, version: v.version, corrections: applied };
 }
 
+/**
+ * Content of one specific version with the human corrections that were made against it or an earlier version applied
+ * (a correction made when version k was current carries baseVersion k). This is what a fact version bound to that
+ * source version actually rested on, corrections included.
+ */
+export function contentAtVersion(ledger: Ledger, ref: Ref, version: number): Content | undefined {
+  const e = ledger.entities[entityKey(ref.kind, ref.id)];
+  const v = e?.versions[version - 1];
+  if (!e || !v) return undefined;
+  const content = structuredClone(v.content);
+  for (const c of ledger.corrections) if (c.type === "field" && c.ref.kind === ref.kind && c.ref.id === ref.id && c.baseVersion <= version) setPath(content, c.field, c.after);
+  return content;
+}
+/** Source version a link's from-entity (at its CURRENT version) rests on; falls back to the target's current version if unbound. */
+export function boundVersionOf(ledger: Ledger, l: Link): number {
+  const from = ledger.entities[entityKey(l.from.kind, l.from.id)];
+  const to = ledger.entities[entityKey(l.to.kind, l.to.id)];
+  return (from ? bindingAt(l, from.versions.length) : null) ?? to?.versions.length ?? 0;
+}
+
 export class Graph {
   ledger: Ledger;
   links: EffLink[];
@@ -100,22 +120,22 @@ export class Graph {
     while (stack.length) for (const d of this.rdeps.get(stack.pop()!) ?? []) if (!seen.has(d)) { seen.add(d); stack.push(d); }
     return seen;
   }
-  /** Hash of an entity and everything it rests on. Source contents come from the version each link is bound to. */
+  /**
+   * Hash of an entity and everything it rests on. A source contributes its CURRENT effective state (version, content,
+   * corrections) — so direct analyses on a source see corrections and every new version — and, per evidence link, the
+   * exact version the dependent is bound to (content at that version, corrections included), so v1->v2->v3 and
+   * later corrections are all distinguishable.
+   */
   closureHash(ref: Ref): string {
     const key = entityKey(ref.kind, ref.id);
     const hit = this.closure.get(key);
     if (hit) return hit;
     const nodes = this.dependenciesOf(key).sort();
-    const parts = nodes.map((k) => {
-      const kind = k.slice(0, k.indexOf(":")) as EntityKind;
-      const edges = (this.edgeLinks.get(k) ?? []).map((l) => [l.id, l.effectiveRole]).sort();
-      return [k, kind === "source" ? "src" : this.hashNode(k), edges];
-    });
+    const parts = nodes.map((k) => [k, this.hashNode(k), (this.edgeLinks.get(k) ?? []).map((l) => [l.id, l.effectiveRole]).sort()]);
     const bound = nodes.flatMap((k) => (this.edgeLinks.get(k) ?? []).filter((l) => l.to.kind === "source").map((l) => {
-      const src = this.ledger.entities[entityKey("source", l.to.id)];
-      const v = l.toVersion ?? src?.versions.length ?? 0;
-      const ver = src?.versions[v - 1];
-      return [l.id, v, ver ? hashOf(ver.content) : "absent", src ? src.versions.length > v : false];
+      const v = boundVersionOf(this.ledger, l);
+      const c = contentAtVersion(this.ledger, l.to, v);
+      return [l.id, v, c ? hashOf(c) : "absent", this.ledger.entities[entityKey("source", l.to.id)]?.versions.length ?? 0];
     })).sort();
     const h = hashOf({ parts, bound });
     this.closure.set(key, h);

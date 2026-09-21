@@ -61,10 +61,14 @@ export function adaptEpisodesR4(rows: Row[], batchId: string, opts: { groups?: R
   const assoc = new Map((opts.association ?? []).map((a) => [`${a.fact_id}>${a.episode}`, a]));
   for (const e of rows) {
     const g = groups.get(e.group_id);
+    // "2026-08-31 前后（范围表达）": a real date plus a source-stated approximation. The date goes to the strictly validated field; the
+    // qualifier and the original text are kept beside it. Anything that does not start with a real date is left as-is and refused by validation.
+    const split = (v: unknown) => { const m = typeof v === "string" ? /^(\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)\s*(\S.*)?$/.exec(v) : null; return m ? { date: m[1], qualifier: m[2] ?? null } : { date: v ?? null, qualifier: null }; };
+    const st = split(e.start), en = split(e.end);
     const content: Row = {
-      title: e.label, start: e.start ?? null, startBasis: e.start_basis ?? null, end: e.end ?? null, endBasis: e.end_basis ?? null,
+      title: e.label, start: st.date, startQualifier: st.qualifier, startText: e.start ?? null, startBasis: e.start_basis ?? null, end: en.date, endQualifier: en.qualifier, endText: e.end ?? null, endBasis: e.end_basis ?? null,
       // r4 never asserts "still ongoing": no end record => end unknown, not "ongoing".
-      declaredEnd: e.end ? "ended" : "end_unknown", canonical: !!e.canonical, canonicalBasis: e.canonical_basis ?? null, supersededBy: e.superseded_by ?? null,
+      declaredEnd: en.date ? "ended" : "end_unknown", canonical: !!e.canonical, canonicalBasis: e.canonical_basis ?? null, supersededBy: e.superseded_by ?? null,
       groupId: e.group_id ?? null, primaryInGroup: e.primary_in_group ?? null,
       group: g ? { views: g.views, primaryView: g.primary_view, encounters: g.encounters, basis: g.basis } : null,
       keyFindings: e.key_findings ?? [], openQuestions: e.open_q ?? [], encounterRefs: e.encounters ?? [], hospitalSource: e.hospital_source ?? null,
