@@ -1,6 +1,8 @@
 // HEALTH-04 read side. Everything is read-only and optional:
 //   HEALTH_HISTORY_LEDGER        directory holding the HEALTH-02 ledger.json (read, never written; no lock is taken)
 //   HEALTH_HISTORY_ORIGINAL_ROOTS ';'-separated roots from which hospital originals may be served (a source's own `root` must be one of them)
+//   HEALTH_HISTORY_ORIGINAL_ROOT_MAP ';'-separated "<root recorded in the ledger>=<absolute server directory>" pairs, for a deployment whose originals live somewhere else than where they were recorded
+//                                (the ledger is not rewritten, so hashes and analysis snapshots stay valid; the server directory is served only after the same allow-list, containment and SHA-256 checks)
 //   HEALTH_PAGE_INTERVALS        reviewed interval file (JSON)
 //   HEALTH_PAGE_MATERIALS        reviewed follow-up materials file (JSON)
 //   HEALTH_PAGE_DERIVED          private derived layer (JSON): records found in review but not in the accepted ledger (recovery statements)
@@ -23,7 +25,7 @@ import { isAnalysisFile, type AnalysisFile } from "./analysis";
 import { evidenceResolverFromFile } from "./evidence";
 import { buildHealthPage, type DerivedFile, type HealthPage, type IntervalFile, type MaterialsFile } from "./model";
 
-export interface PageSourcesConfig { historyLedgerDir: string | null; originalRoots: string[]; intervalsFile: string | null; materialsFile: string | null; derivedFile?: string | null; analysesFile?: string | null; evidenceFile?: string | null; materialRoot?: string | null; problems: string[] }
+export interface PageSourcesConfig { historyLedgerDir: string | null; originalRoots: string[]; originalRootMap?: { from: string; to: string }[]; intervalsFile: string | null; materialsFile: string | null; derivedFile?: string | null; analysesFile?: string | null; evidenceFile?: string | null; materialRoot?: string | null; problems: string[] }
 
 export function loadPageSourcesConfig(repo: string, env: Record<string, string | undefined> = process.env): PageSourcesConfig {
   const problems: string[] = [];
@@ -41,7 +43,14 @@ export function loadPageSourcesConfig(repo: string, env: Record<string, string |
     if (!path.isAbsolute(r)) { problems.push("HEALTH_HISTORY_ORIGINAL_ROOTS entries must be absolute"); continue; }
     try { const real = resolveThroughLinks(r); if (isInside(real, repo)) problems.push("HEALTH_HISTORY_ORIGINAL_ROOTS entry resolves inside the repository"); else roots.push(real); } catch { problems.push("HEALTH_HISTORY_ORIGINAL_ROOTS entry could not be resolved"); }
   }
-  return { historyLedgerDir: one("HEALTH_HISTORY_LEDGER"), originalRoots: roots, intervalsFile: one("HEALTH_PAGE_INTERVALS"), materialsFile: one("HEALTH_PAGE_MATERIALS"), derivedFile: one("HEALTH_PAGE_DERIVED"), analysesFile: one("HEALTH_PAGE_ANALYSES"), evidenceFile: one("HEALTH_PAGE_EVIDENCE"), materialRoot: one("HEALTH_PAGE_MATERIAL_ROOT"), problems };
+  const originalRootMap: { from: string; to: string }[] = [];
+  for (const pair of (env.HEALTH_HISTORY_ORIGINAL_ROOT_MAP ?? "").split(";").map((x) => x.trim()).filter(Boolean)) {
+    const i = pair.lastIndexOf("=");
+    const from = i > 0 ? pair.slice(0, i).trim() : "", to = i > 0 ? pair.slice(i + 1).trim() : "";
+    if (!from || !path.isAbsolute(to)) { problems.push("HEALTH_HISTORY_ORIGINAL_ROOT_MAP entries must be <recorded root>=<absolute directory>"); continue; }
+    try { const real = resolveThroughLinks(to); if (isInside(real, repo)) problems.push("HEALTH_HISTORY_ORIGINAL_ROOT_MAP target resolves inside the repository"); else { originalRootMap.push({ from, to: real }); roots.push(real); } } catch { problems.push("HEALTH_HISTORY_ORIGINAL_ROOT_MAP target could not be resolved"); }
+  }
+  return { historyLedgerDir: one("HEALTH_HISTORY_LEDGER"), originalRoots: roots, originalRootMap, intervalsFile: one("HEALTH_PAGE_INTERVALS"), materialsFile: one("HEALTH_PAGE_MATERIALS"), derivedFile: one("HEALTH_PAGE_DERIVED"), analysesFile: one("HEALTH_PAGE_ANALYSES"), evidenceFile: one("HEALTH_PAGE_EVIDENCE"), materialRoot: one("HEALTH_PAGE_MATERIAL_ROOT"), problems };
 }
 
 async function sigOf(file: string | null) { if (!file) return "-"; try { const s = await stat(file); return `${s.mtimeMs}:${s.size}`; } catch { return "missing"; } }
@@ -120,7 +129,9 @@ export class HealthPageService {
     const c = effectiveContent(history, { kind: "source", id })?.content;
     if (!c || c.layer !== "hospital_document" || typeof c.root !== "string" || typeof c.relPath !== "string" || typeof c.sha256 !== "string") return null;
     let rootReal: string;
-    try { rootReal = resolveThroughLinks(c.root); } catch { return null; }
+    const recorded = c.root;
+    const mapped = this.cfg.originalRootMap?.find((m) => norm(m.from) === norm(recorded))?.to ?? recorded;
+    try { rootReal = resolveThroughLinks(mapped); } catch { return null; }
     if (!this.cfg.originalRoots.some((r) => norm(r) === norm(rootReal))) return null;
     const file = path.resolve(rootReal, c.relPath);
     let real: string;

@@ -17,6 +17,11 @@
 #   swap <short>             换 Web 容器；旧容器改名 nianlife-diag-web-pre-<short>-<时间> 保留
 #   caddy-up                 解析已指向 ECS_PUBLIC_IP 才启动 Caddy（自动申请证书）
 #   verify                   本机外部验证：跳转、证书、首页、健康检查的 SHA
+#   health-data-install <本地目录>  健康模块私有数据装到 /srv/nianlife-health（只换只读部分，绝不碰 record/）
+#   health-env <短SHA>       用本机私有密钥文件（HEALTH_SECRETS_FILE）在 ECS 上生成新的运行时 env 源文件（不回显）
+#   health-backup            /srv/nianlife-health → 带逐文件 SHA-256 清单的压缩包（HEALTH_BACKUP_DIR），只增不删
+#   health-restore-check <包> 解到隔离临时目录核对清单并解析各账本，不动线上数据
+#   caddy-reload             校验并热加载 Caddyfile.ecs（原地覆盖以保持挂载，旧版留 .prev-<时间>）
 #   rollback-app <容器名>    把保留的旧 Web 容器改回 nianlife-diag-web 并启动
 #   rollback-caddy           停 Caddy（保留容器与证书卷），80/443 回到关闭状态
 #
@@ -32,6 +37,10 @@ ENV_SOURCE="${ENV_SOURCE:-/home/ecs-user/.env.runtime.a56fee4}"
 # 编辑稿放在仓库外的私有目录，只读挂进容器。留空则完全是原来的行为（没有挂载）。
 CONTENT_HOST_DIR="${CONTENT_HOST_DIR:-/srv/nianlife-content}"
 CONTENT_MOUNT="${CONTENT_MOUNT:-$CONTENT_HOST_DIR:$CONTENT_HOST_DIR:ro}"
+# 健康模块私有数据（HEALTH_MOUNTS 留空 = 完全是原来的行为）。整个目录只读，record 子目录单独可写。
+HEALTH_HOST_DIR="${HEALTH_HOST_DIR:-/srv/nianlife-health}"
+HEALTH_BACKUP_DIR="${HEALTH_BACKUP_DIR:-/srv/nianlife-health-backups}"
+HEALTH_MOUNTS="${HEALTH_MOUNTS:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 
@@ -166,16 +175,16 @@ EOF
     short="${1:?usage: swap <short>}"
     scp -o BatchMode=yes -i "$ECS_KEY" "$SCRIPT_DIR/ecs-swap.sh" "$ECS_SSH:/home/ecs-user/ecs-swap.sh"
     scp -o BatchMode=yes -i "$ECS_KEY" "$SCRIPT_DIR/ecs-retention.py" "$ECS_SSH:/home/ecs-user/ecs-retention.py"
-    remote "$short" "$ENV_SOURCE" "$CONTENT_MOUNT" <<'EOF'
+    remote "$short" "$ENV_SOURCE" "$CONTENT_MOUNT" "$HEALTH_MOUNTS" <<'EOF'
 set -euo pipefail
-short="$1"; env_src="$2"; mount_spec="$3"
+short="$1"; env_src="$2"; mount_spec="$3"; health_mounts="${4:-}"
 exec 9>/home/ecs-user/.nianlife-deploy.lock
 flock -n 9 || { echo "STOP: another deployment is active"; exit 9; }
 ts=$(date +%Y%m%d-%H%M%S)
 run="/home/ecs-user/d04-runs/swap-$short-$ts"
 mkdir -p "$run"; cp -p /home/ecs-user/ecs-swap.sh "$run/swap.sh"
 docker image inspect "nianlife-web:$short" >/dev/null
-bash "$run/swap.sh" "$env_src" "/home/ecs-user/.env.runtime.$short" "$short" "nianlife-diag-web-pre-$short-$ts" 48 5 "$mount_spec" 2>&1 | tee "$run/swap.log"
+bash "$run/swap.sh" "$env_src" "/home/ecs-user/.env.runtime.$short" "$short" "nianlife-diag-web-pre-$short-$ts" 48 5 "$mount_spec" "$health_mounts" 2>&1 | tee "$run/swap.log"
 echo "ROLLBACK_CONTAINER=nianlife-diag-web-pre-$short-$ts"
 if ! python3 /home/ecs-user/ecs-retention.py --apply 2>&1 | tee "$run/retention.log"; then
   echo "RETENTION_FAILED: new release is running; maintenance is incomplete (do not roll back automatically)"
@@ -221,6 +230,111 @@ EOF
     for h in nianlife.cn www.nianlife.cn; do
       echo | openssl s_client -connect "$h:443" -servername "$h" 2>/dev/null | openssl x509 -noout -subject -issuer -enddate
     done
+    ;;
+
+  health-data-install)
+    src="${1:?usage: health-data-install <local dir with ledger/ pagedata/ analyses/ evidence/ material-root/ originals/>}"
+    [ -d "$src/ledger" ] && [ -d "$src/analyses" ] && [ -d "$src/evidence" ] || { echo "STOP: $src is not a health data package"; exit 2; }
+    stamp="$(date +%Y%m%d-%H%M%S)"; tar_local="$(mktemp -d)/health-data-$stamp.tar"
+    tar -C "$src" -cf "$tar_local" --exclude=record .
+    scp -o BatchMode=yes -i "$ECS_KEY" "$tar_local" "$ECS_SSH:/home/ecs-user/health-data-$stamp.tar"
+    remote "$stamp" "$HEALTH_HOST_DIR" <<'EOF'
+set -euo pipefail
+stamp="$1"; dir="$2"; tmp="/home/ecs-user/health-data-$stamp"
+sudo mkdir -p "$dir" "$dir/record"
+mkdir "$tmp" && tar -xf "$tmp.tar" -C "$tmp"
+# 只读部分整体换成新包（旧的改名保留），record/ 是家里的手记账本，任何时候都不动。
+for part in ledger pagedata analyses evidence material-root originals; do
+  [ -d "$tmp/$part" ] || continue
+  if [ -e "$dir/$part" ]; then sudo mv "$dir/$part" "$dir/.$part.prev-$stamp"; fi
+  sudo mv "$tmp/$part" "$dir/$part"
+done
+sudo chown -R root:root "$dir/ledger" "$dir/pagedata" "$dir/analyses" "$dir/evidence" "$dir/material-root" "$dir/originals" 2>/dev/null || true
+sudo chmod -R a+rX "$dir"
+sudo chown 1001:1001 "$dir/record"; sudo chmod 0700 "$dir/record"
+rm -rf "$tmp" "$tmp.tar"
+echo "installed under $dir:"; sudo ls -1 "$dir"; sudo du -sh "$dir"
+EOF
+    ;;
+
+  health-env)
+    short="${1:?usage: health-env <short sha>}"; : "${HEALTH_SECRETS_FILE:?set HEALTH_SECRETS_FILE (local private file with the three HEALTH_RECORD_* secrets)}"
+    [ -f "$HEALTH_SECRETS_FILE" ] || { echo "STOP: secrets file not found"; exit 2; }
+    scp -o BatchMode=yes -i "$ECS_KEY" "$HEALTH_SECRETS_FILE" "$ECS_SSH:/home/ecs-user/.health-secrets.tmp"
+    remote "$short" "$ENV_SOURCE" "$HEALTH_HOST_DIR" <<'EOF'
+set -euo pipefail
+short="$1"; base="$2"; dir="$3"; out="/home/ecs-user/.env.runtime.health-$short"; sec=/home/ecs-user/.health-secrets.tmp
+trap 'rm -f "$sec"' EXIT
+[ -f "$base" ] || { echo "STOP: base env $base not found"; exit 3; }
+[ ! -e "$out" ] || { echo "STOP: $out already exists (env sources are immutable; use a new name)"; exit 3; }
+for k in HEALTH_RECORD_SESSION_SECRET HEALTH_RECORD_MOM_PASSWORD HEALTH_RECORD_DAD_PASSWORD; do grep -q "^$k=." "$sec" || { echo "STOP: $k missing in secrets file"; exit 3; }; done
+umask 077
+{
+  cat "$base"; echo
+  echo "HEALTH_RECORD_ROOT=$dir/record"
+  echo "HEALTH_HISTORY_LEDGER=$dir/ledger"
+  echo "HEALTH_PAGE_INTERVALS=$dir/pagedata/intervals.json"
+  echo "HEALTH_PAGE_MATERIALS=$dir/pagedata/materials.json"
+  echo "HEALTH_PAGE_DERIVED=$dir/pagedata/derived.json"
+  echo "HEALTH_PAGE_ANALYSES=$dir/analyses/analyses.json"
+  echo "HEALTH_PAGE_EVIDENCE=$dir/evidence/register.json"
+  echo "HEALTH_PAGE_MATERIAL_ROOT=$dir/material-root"
+  cat "$sec"
+} > "$out"
+if [ -f "$dir/pagedata/original-root-map.txt" ]; then echo "HEALTH_HISTORY_ORIGINAL_ROOT_MAP=$(cat "$dir/pagedata/original-root-map.txt")" >> "$out"; fi
+echo "wrote $out (health variables: $(grep -c '^HEALTH_' "$out"), total lines: $(grep -c . "$out"); values not shown)"
+EOF
+    ;;
+
+  health-backup)
+    remote "$HEALTH_HOST_DIR" "$HEALTH_BACKUP_DIR" <<'EOF'
+set -euo pipefail
+dir="$1"; bak="$2"; stamp=$(date +%Y%m%d-%H%M%S)
+sudo mkdir -p "$bak"; sudo chmod 0700 "$bak"
+exec 9>/home/ecs-user/.nianlife-deploy.lock
+flock -n 9 || { echo "STOP: another deployment is active"; exit 9; }
+work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+sudo bash -c "cd '$dir' && find . -type f -not -path './.*prev-*' -print0 | sort -z | xargs -0 sha256sum" > "$work/MANIFEST.sha256"
+sudo tar -C "$dir" --exclude='./.*prev-*' -czf "$work/health-$stamp.tar.gz" .
+sudo cp "$work/health-$stamp.tar.gz" "$bak/health-$stamp.tar.gz"; sudo cp "$work/MANIFEST.sha256" "$bak/health-$stamp.MANIFEST.sha256"
+( cd "$bak" && sudo sha256sum "health-$stamp.tar.gz" ) > "$work/tar.sha"; sudo cp "$work/tar.sha" "$bak/health-$stamp.tar.gz.sha256"
+echo "BACKUP=$bak/health-$stamp.tar.gz files=$(wc -l < "$work/MANIFEST.sha256")"
+EOF
+    ;;
+
+  health-restore-check)
+    pkg="${1:?usage: health-restore-check <backup tar.gz path on ECS>}"
+    remote "$pkg" <<'EOF'
+set -euo pipefail
+pkg="$1"; man="${pkg%.tar.gz}.MANIFEST.sha256"
+work=$(mktemp -d); trap 'sudo rm -rf "$work"' EXIT
+( cd "$(dirname "$pkg")" && sudo sha256sum -c --quiet "$(basename "$pkg").sha256" ) && echo "archive checksum OK"
+sudo tar -xzf "$pkg" -C "$work"
+( cd "$work" && sudo sha256sum -c --quiet "$man" ) && echo "manifest OK ($(sudo wc -l < "$man") files)"
+sudo python3 - "$work" <<'PYEOF'
+import json, os, sys
+root = sys.argv[1]; n = 0
+for dp, _, fs in os.walk(root):
+    for f in fs:
+        if f.endswith(".json"):
+            json.load(open(os.path.join(dp, f), encoding="utf-8")); n += 1
+print("parsed %d json files" % n)
+PYEOF
+echo "RESTORE_CHECK_OK (isolated dir removed; live data untouched)"
+EOF
+    ;;
+
+  caddy-reload)
+    scp -o BatchMode=yes -i "$ECS_KEY" "$REPO_ROOT/v2/Caddyfile.ecs" "$ECS_SSH:/home/ecs-user/nianlife-caddy/Caddyfile.new"
+    remote "$CADDY_IMAGE" <<'EOF'
+set -euo pipefail
+image="$1"; d=/home/ecs-user/nianlife-caddy; ts=$(date +%Y%m%d-%H%M%S)
+docker run --rm -v "$d/Caddyfile.new":/etc/caddy/Caddyfile:ro "$image" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+cp -p "$d/Caddyfile" "$d/Caddyfile.prev-$ts"
+cat "$d/Caddyfile.new" > "$d/Caddyfile"   # 原地覆盖：容器里的文件挂载跟着 inode 走，mv 会让它看不到新内容
+docker exec nianlife-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+echo "CADDY_RELOADED previous=$d/Caddyfile.prev-$ts"
+EOF
     ;;
 
   rollback-app)

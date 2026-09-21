@@ -414,3 +414,27 @@ test("R1F-2b 来源核验缺失、不可读、哈希无效时不标 current；�
     assert.ok(missing.followUp.care.every((m) => /来源文件读不到/.test(m.review)), "根目录里没有源文件：读不到，不是 current");
   } finally { await f.cleanup(); }
 });
+
+test("4b 部署时的原件目录映射：账本记录的根目录不改，映射到服务器目录后仍按允许列表、包含关系和 SHA-256 提供", async () => {
+  const f = await fixture();
+  try {
+    const served = path.join(f.dir, "served"); await mkdir(path.join(served, "hosp"), { recursive: true });
+    await writeFile(path.join(served, "hosp", "a.jpg"), f.good);
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: path.join(f.dir, "rr"), HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw" }, "/elsewhere");
+    const svc = (cfg) => new HealthPageService(new HealthRecordService(path.join(f.dir, "rr"), { repo: conf.config.repo, now: () => T0 }), { historyLedgerDir: f.histDir, intervalsFile: null, materialsFile: null, problems: [], ...cfg }, () => T0);
+    // the recorded root (f.allowed) is NOT served directly any more; only the mapped server directory is
+    const mapped = svc({ originalRoots: [served], originalRootMap: [{ from: f.allowed, to: served }] });
+    assert.deepEqual((await mapped.historyOriginal("doc:1"))?.data, f.good);
+    assert.equal(await svc({ originalRoots: [served], originalRootMap: [] }).historyOriginal("doc:1"), null, "没有映射：记录的根目录不在允许列表");
+    assert.equal(await mapped.historyOriginal("doc:other-root"), null, "另一个根目录没有映射");
+    await writeFile(path.join(served, "hosp", "a.jpg"), "tampered");
+    assert.equal(await mapped.historyOriginal("doc:1"), null, "内容与记录的哈希不符不提供");
+    // env parsing: pairs are "<recorded root>=<absolute dir>", a target inside the repo or a relative one is refused by name
+    const P1 = String.raw`C:\Users\x\Pictures`, P2 = String.raw`E:\WechatHis\texts`;
+    const ok = loadPageSourcesConfig("/elsewhere-repo", { HEALTH_HISTORY_ORIGINAL_ROOT_MAP: `${P1}=${served};${P2}=${served}` });
+    assert.deepEqual(ok.originalRootMap.map((m) => m.from), [P1, P2]);
+    assert.ok(ok.originalRoots.length >= 1 && ok.problems.length === 0);
+    const bad = loadPageSourcesConfig(path.resolve("."), { HEALTH_HISTORY_ORIGINAL_ROOT_MAP: `${P1}=relative/dir;${P2}=${path.resolve("lib")}` });
+    assert.equal(bad.originalRootMap.length, 0); assert.equal(bad.problems.length, 2);
+  } finally { await f.cleanup(); }
+});
