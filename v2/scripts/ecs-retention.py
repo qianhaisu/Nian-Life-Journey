@@ -46,7 +46,8 @@ def plan(items):
 
 
 def identity(c):
-    return (c["Id"], c["Image"], c.get("Mounts", []))
+    # docker inspect does not promise the order of Mounts (several bind mounts: it varies between calls), so compare them as a set
+    return (c["Id"], c["Image"], sorted(json.dumps(m, sort_keys=True) for m in c.get("Mounts", [])))
 
 
 def check_http(live):
