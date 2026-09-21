@@ -6,6 +6,7 @@
 //      ADAPTER (accepted-fact files):  wechat-r4 | episodes-r4 [--groups F --association F] | hospital-r2 (--input enc --input facts --input manifest [--corrections F]) | handoff
 //      ADAPTER (raw messages -> sources only, NOT health events): messages-md | messages-json   [--conversation ID]
 //   correct  --ledger DIR --file correction.json [--apply]      (dry-run runs the same validation as apply)
+//   confirm-binding --ledger DIR --file confirm.json [--apply]  ({from:{kind,id}, role, source, toVersion, by, reason}: states which source version a PENDING fact version rests on, without re-sending the fact)
 //   timeline --ledger DIR --as-of YYYY-MM-DD --out DIR [--stale-days 14]
 //   analyses --ledger DIR
 // Default is dry-run; nothing is written without --apply.
@@ -97,6 +98,15 @@ export async function main(argv) {
     const r = await runCorrection(store, input, { apply: !!args.apply });
     console.log(JSON.stringify({ mode: args.apply ? "apply" : "dry-run", ...r }, null, 1));
     return 0;
+  }
+  if (cmd === "confirm-binding") {
+    let c;
+    try { c = JSON.parse(readFileSync(String(args.file), "utf8")); } catch { throw new Error("cannot read confirmation file as JSON"); }
+    const b = { batchId: `confirm-binding-${c?.from?.id}-${c?.source}-${c?.toVersion}`, items: [], links: [{ from: c.from, role: c.role ?? "from_source", to: { kind: "source", id: c.source }, toVersion: c.toVersion, confirmation: { by: c.by, reason: c.reason } }] };
+    let report;
+    try { report = await runImport(store, b, { apply: !!args.apply }); } catch (e) { if (e.report) { report = e.report; report.error = e.message; } else throw e; }
+    console.log(JSON.stringify({ mode: report.mode, applied: report.applied, counts: report.counts, links: report.links, rejected: report.rejected, needsReview: report.needsReview, impact: { episodes: report.impact.episodes, analyses: report.impact.analyses } }, null, 1));
+    return report.rejected ? 2 : report.needsReview ? 3 : 0;
   }
   if (cmd === "timeline") {
     const ledger = await store.read();

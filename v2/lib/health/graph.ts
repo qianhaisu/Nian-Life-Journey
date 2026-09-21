@@ -7,7 +7,7 @@
 //   observation / canonical_fact / episode depends on: the sources it is documented in / read from / supported by
 //
 // A dependent's hash therefore changes when anything it (transitively) rests on changes.
-import { EPISODE_MEMBERSHIP_ROLES, bindingAt, entityKey, hashOf, type Content, type EntityKind, type Ledger, type Link, type LinkRole, type Ref } from "./model";
+import { EPISODE_MEMBERSHIP_ROLES, bindingAt, entityKey, hashOf, pendingFor, type Content, type EntityKind, type Ledger, type Link, type LinkRole, type Ref } from "./model";
 
 export type EffLink = Link & { effectiveRole: LinkRole | "removed"; correctionId?: string };
 
@@ -135,7 +135,9 @@ export class Graph {
     const bound = nodes.flatMap((k) => (this.edgeLinks.get(k) ?? []).filter((l) => l.to.kind === "source").map((l) => {
       const v = boundVersionOf(this.ledger, l);
       const c = contentAtVersion(this.ledger, l.to, v);
-      return [l.id, v, c ? hashOf(c) : "absent", this.ledger.entities[entityKey("source", l.to.id)]?.versions.length ?? 0];
+      const from = this.ledger.entities[entityKey(l.from.kind, l.from.id)];
+      const pending = from ? pendingFor(this.ledger.bindingEvents, l.id, from.versions.length) : null;
+      return [l.id, v, c ? hashOf(c) : "absent", this.ledger.entities[entityKey("source", l.to.id)]?.versions.length ?? 0, pending ? pending.id : null];
     })).sort();
     const h = hashOf({ parts, bound });
     this.closure.set(key, h);

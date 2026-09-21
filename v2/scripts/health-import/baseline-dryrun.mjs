@@ -10,7 +10,7 @@ import { runCorrection, runImport } from "../../lib/health/importer.ts";
 import { adaptEpisodesR4, adaptHandoff, adaptHospitalR2, adaptWechatFactsR4 } from "../../lib/health/adapters.ts";
 import { businessDigest } from "../../lib/health/model.ts";
 import { confirmedFactIds, membership } from "../../lib/health/ledger.ts";
-import { buildTimeline, diffTimelines, renderHtml, renderMarkdown, timelineContentHash } from "../../lib/health/timeline.ts";
+import { buildTimeline, diffTimelines, renderHtml, renderMarkdown, timelineContentHash, traceObservation } from "../../lib/health/timeline.ts";
 import { adaptMessagesMarkdown } from "./message-adapters.mjs";
 import { parseArgs } from "./cli.mjs";
 import { assertOutsideRepo } from "./paths.mjs";
@@ -127,6 +127,24 @@ report.counts = {
     const shown = [...cached.blocks.flatMap((b) => b.encounters.flatMap((e) => e.facts)), ...cached.unattachedFacts].find((f) => f.id === target.id);
     const d = diffTimelines(base, cached);
     report.structured.probe = { factType: target.type, displayedAfterCorrection: shown.valueTextSuperseded && /probe: structured correction/.test(shown.displayValue), originalTextKept: shown.value === target.value, diffChangedBlocks: d.changedBlocks.length, diffUnattachedFactsChanged: d.unattachedFacts.changed.length, cachedEqualsFresh: timelineContentHash(cached) === timelineContentHash(fresh), cacheStats: cached.stats };
+    // Binding probe (scratch ledger only): give one observation a NEW version that adds an extra source, then a pending binding; the old version must not show the new source.
+    {
+      const led = await probe.read();
+      const o = Object.values(led.entities).find((e) => e.kind === "observation" && e.versions.length === 1 && Object.values(led.links).some((l) => l.from.id === e.id && l.role === "from_source"));
+      const oldSources = traceObservation(led, o.id).observation.versions[0].sources.map((x) => x.source);
+      const fs0 = Object.values(led.links).find((l) => l.from.id === o.id && l.role === "from_source");
+      const extra = { kind: "source", id: "probe:extra-source", content: { layer: "probe", recordedAt: `${asOf} 00:00:00` } };
+      await runImport(probe, { batchId: "probe-extra", items: [extra, { kind: "observation", id: o.id, content: { ...o.versions[0].content, text: `${o.versions[0].content.text} (probe revision)` }, links: [{ role: "supports", to: { kind: "source", id: extra.id } }] }] }, { apply: true, now: () => `${asOf}T00:00:00Z` });
+      await runImport(probe, { batchId: "probe-src-rev", items: [{ kind: "source", id: fs0.to.id, content: { ...led.entities[`source:${fs0.to.id}`].versions[0].content, probeRevision: true } }] }, { apply: true, now: () => `${asOf}T00:00:00Z` });
+      const r3 = await runImport(probe, { batchId: "probe-v3", items: [{ kind: "observation", id: o.id, content: { ...o.versions[0].content, text: `${o.versions[0].content.text} (probe revision 2)` }, links: [{ role: "from_source", to: { kind: "source", id: fs0.to.id } }] }] }, { apply: true, now: () => `${asOf}T00:00:00Z` });
+      const led2 = await probe.read();
+      const tr = traceObservation(led2, o.id);
+      const replay = await runImport(probe, { batchId: "probe-v3", items: [{ kind: "observation", id: o.id, content: { ...o.versions[0].content, text: `${o.versions[0].content.text} (probe revision 2)` }, links: [{ role: "from_source", to: { kind: "source", id: fs0.to.id } }] }] }, { apply: false });
+      const conf = await runImport(probe, { batchId: "probe-confirm", items: [], links: [{ from: { kind: "observation", id: o.id }, role: "from_source", to: { kind: "source", id: fs0.to.id }, toVersion: 2, confirmation: { by: "dry-run probe", reason: "verify confirmation on scratch ledger" } }] }, { apply: true, now: () => `${asOf}T00:00:00Z` });
+      const led3 = await probe.read();
+      const tr3 = traceObservation(led3, o.id);
+      report.bindingProbe = { oldVersionSourcesBefore: oldSources.length, oldVersionSourcesAfter: tr.observation.versions[0].sources.map((x) => x.source).length, oldVersionShowsExtra: tr.observation.versions[0].sources.some((x) => x.source === extra.id), currentShowsExtra: tr.sources.some((x) => x.source === extra.id), pendingRecorded: r3.needsReview && led2.bindingEvents.some((e) => e.type === "pending"), replayStillNeedsReview: replay.needsReview, confirmed: conf.counts.links_confirm === 1, versionsAfterConfirm: led3.entities[`observation:${o.id}`].versions.length, versionsBeforeConfirm: led2.entities[`observation:${o.id}`].versions.length, boundVersionsAfterConfirm: tr3.observation.versions.map((v) => v.sources.find((x) => x.source === fs0.to.id)?.boundVersion ?? null), pendingAfterConfirm: buildTimeline(led3, { asOf }).pendingBindings.length };
+    }
   }
 }
 // Optional read-only structure spot-check of a real WeFlow export (counts only)
@@ -147,4 +165,4 @@ report.inputsUnchanged = JSON.stringify(before) === JSON.stringify(Object.fromEn
 report.inputSha256 = before;
 writeFileSync(path.join(out, "dryrun-report.json"), JSON.stringify(report, null, 1));
 const brief = (rows) => rows.map((p) => ({ b: p.batch, counts: p.counts, err: p.error, rej: p.rejections?.length ?? p.report?.rejections?.length, linkRej: p.linkRejections?.length ?? p.report?.linkRejections?.length }));
-console.log(JSON.stringify({ counts: { ...report.counts, perEpisode: undefined, hospitalSkipped: report.counts.hospitalSkipped.length }, perEpisode: report.counts.perEpisode, replayBusinessUnchanged: report.phases.replayBusinessUnchanged, applyFull: brief(report.phases.applyFull), incremental: { ...report.phases.incremental, diff: { ...diff, changedBlocks: diff.changedBlocks.map((c) => ({ ...c, addedItems: c.addedItems.length, changedItems: c.changedItems.length, removedItems: c.removedItems.length })) } }, structured: report.structured, exportSpotCheck: report.exportSpotCheck, inputsUnchanged: report.inputsUnchanged }, null, 1));
+console.log(JSON.stringify({ counts: { ...report.counts, perEpisode: undefined, hospitalSkipped: report.counts.hospitalSkipped.length }, perEpisode: report.counts.perEpisode, replayBusinessUnchanged: report.phases.replayBusinessUnchanged, applyFull: brief(report.phases.applyFull), incremental: { ...report.phases.incremental, diff: { ...diff, changedBlocks: diff.changedBlocks.map((c) => ({ ...c, addedItems: c.addedItems.length, changedItems: c.changedItems.length, removedItems: c.removedItems.length })) } }, structured: report.structured, bindingProbe: report.bindingProbe, exportSpotCheck: report.exportSpotCheck, inputsUnchanged: report.inputsUnchanged }, null, 1));

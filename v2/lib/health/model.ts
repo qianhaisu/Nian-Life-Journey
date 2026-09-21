@@ -43,7 +43,16 @@ export interface Entity { kind: EntityKind; id: string; identity: "strong" | "we
 // Evidence binding (links whose target is a source): "from-entity version F rests on source version T". Bindings are
 // append-only; the binding that applies to a from-version is the last one whose `from` <= that version, so an older
 // fact version keeps its original evidence and a later source revision never silently replaces it.
-export interface Binding { from: number; to: number; runId: string }
+export interface Binding { from: number; to: number; runId: string; event?: string }
+/** Append-only audit of evidence bindings that need or received a human decision. `pending`: a new fact version arrived without saying which source version it rests on
+ *  (it keeps the previous binding meanwhile). `confirmed`: someone stated the version explicitly (who, why, when, before -> after). */
+export interface BindingEvent { id: string; type: "pending" | "confirmed"; linkId: string; fromVersion: number; before: number | null; after: number | null; sourceCurrentVersion: number; by?: string; reason?: string; at: string; runId: string }
+/** Unresolved pending event for (link, from-version): pending and not followed by a confirmation. */
+export function pendingFor(events: BindingEvent[], linkId: string, fromVersion: number): BindingEvent | null {
+  let pending: BindingEvent | null = null;
+  for (const e of events) if (e.linkId === linkId && e.fromVersion === fromVersion) { if (e.type === "pending") pending = e; else pending = null; }
+  return pending;
+}
 export interface Link { id: string; from: Ref; to: Ref; role: LinkRole; basis?: string; runId: string; bindings?: Binding[]; toVersion?: number /* legacy, normalized into bindings on read */ }
 /** Source version a from-entity version rests on, or null when no binding applies (non-source links, or version older than the first binding). */
 export function bindingAt(link: Link, fromVersion: number): number | null {
@@ -78,13 +87,14 @@ export interface Ledger {
   corrections: Correction[];
   // Same-slot weak/strong messages whose text differs: both kept, never merged, listed for review. Key = sorted pair.
   ambiguities: Record<string, { a: string; b: string; reason: string; alias?: string }>;
+  bindingEvents: BindingEvent[];
   analyses: Record<string, Analysis>;
   evidence: Record<string, EvidenceEntry>;
   runs: RunRecord[]; // operational log; excluded from businessDigest
 }
 
 export function emptyLedger(): Ledger {
-  return { schema: 1, revision: 0, entities: {}, links: {}, corrections: [], ambiguities: {}, analyses: {}, evidence: {}, runs: [] };
+  return { schema: 1, revision: 0, entities: {}, links: {}, corrections: [], ambiguities: {}, bindingEvents: [], analyses: {}, evidence: {}, runs: [] };
 }
 
 export const entityKey = (kind: EntityKind, id: string) => `${kind}:${id}`;
@@ -104,5 +114,5 @@ export function cloneLedger(ledger: Ledger): Ledger { return structuredClone(led
 export function businessDigest(ledger: Ledger): string {
   const entities = Object.fromEntries(Object.entries(ledger.entities).map(([k, e]) => [k, { i: e.identity, v: e.versions.map((v) => v.hash), al: [...(e.aliases ?? [])].sort() }]));
   const links = Object.fromEntries(Object.entries(ledger.links).map(([k, l]) => [k, { r: l.role, b: l.basis ?? null, bd: (l.bindings ?? []).map((x) => [x.from, x.to]) }]));
-  return hashOf({ e: entities, l: links, c: ledger.corrections, m: ledger.ambiguities, a: ledger.analyses, v: ledger.evidence });
+  return hashOf({ e: entities, l: links, c: ledger.corrections, m: ledger.ambiguities, be: ledger.bindingEvents.map((e) => [e.id, e.type, e.before, e.after, e.by ?? null, e.reason ?? null]), a: ledger.analyses, v: ledger.evidence });
 }

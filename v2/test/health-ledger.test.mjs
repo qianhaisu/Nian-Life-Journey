@@ -238,7 +238,7 @@ test("shared source: story-side data is never read or changed (ledger holds refe
     assert.ok(!/from "\.\.\/db|persistCareEpisode|getStore|DATABASE_URL/.test(text.replace(/\/\/.*$/gm, "")), `${f}.ts must not touch the application database`);
   }
   const l = emptyLedger();
-  assert.deepEqual(Object.keys(l).sort(), ["ambiguities", "analyses", "corrections", "entities", "evidence", "links", "revision", "runs", "schema"]);
+  assert.deepEqual(Object.keys(l).sort(), ["ambiguities", "analyses", "bindingEvents", "corrections", "entities", "evidence", "links", "revision", "runs", "schema"]);
 });
 
 test("trace: every timeline item resolves to observation versions, source chain and corrections", async () => {

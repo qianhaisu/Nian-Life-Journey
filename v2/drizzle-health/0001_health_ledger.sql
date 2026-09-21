@@ -54,6 +54,12 @@ CREATE TABLE health_corrections (
   seq bigserial NOT NULL              -- history order; latest seq per (entity, field)/(link) is current
 );
 
+CREATE TABLE health_binding_events (   -- append-only: pending (fact version arrived without a stated source version) / confirmed (who, why, before -> after)
+  id text PRIMARY KEY, type text NOT NULL CHECK (type IN ('pending','confirmed')), link_id text NOT NULL REFERENCES health_links (id),
+  from_version integer NOT NULL, before_version integer, after_version integer, source_current_version integer NOT NULL,
+  by text, reason text, at timestamptz NOT NULL, run_id text NOT NULL
+);
+
 CREATE TABLE health_ambiguities (
   a text NOT NULL, b text NOT NULL, reason text NOT NULL, alias text, PRIMARY KEY (a, b)   -- sorted pair; same-slot weak/strong messages with different text, both kept
 );

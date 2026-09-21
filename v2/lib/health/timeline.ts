@@ -7,10 +7,11 @@
 // Nothing is silently truncated: a shortened text is marked and the full text is in timeline.json.
 import { Graph, contentAtVersion, effectiveContent, type EffLink } from "./graph";
 import { resolveRef } from "./ledger";
-import { bindingAt, entityKey, hashOf, type Content, type Correction, type Ledger } from "./model";
+import { bindingAt, entityKey, hashOf, pendingFor, type BindingEvent, type Content, type Correction, type Ledger } from "./model";
 
 export type Category = "prescription" | "plan" | "handoff" | "summary_relay" | "executed_report" | "not_given_report" | "question" | "reminder" | "recall" | "relay" | "observation";
-export interface SourceRef { id: string; role: "from_source" | "supports"; boundVersion: number | null; currentVersion: number; newerVersionAvailable: boolean; sha256?: string; relPath?: string }
+/** bindingPending: this fact version arrived without saying which source version it rests on; it keeps the previous binding until someone confirms. */
+export interface SourceRef { linkId: string; id: string; role: "from_source" | "supports"; boundVersion: number | null; currentVersion: number; newerVersionAvailable: boolean; bindingPending: boolean; confirmedBy?: string; sha256?: string; relPath?: string }
 export interface TraceInfo { observationId: string; version: number; sources: SourceRef[]; corrections: string[] }
 export interface TimelineItem {
   observationId: string; displayTime: string; timeKind: "occurred" | "recorded_only"; precision: string | null;
@@ -31,6 +32,7 @@ export interface Timeline {
   asOf: string; blocks: TimelineBlock[];
   unattached: TimelineItem[]; unattachedEncounters: EncounterView[]; unattachedFacts: FactView[];
   ambiguities: { a: string; b: string; reason: string }[];
+  pendingBindings: (BindingEvent & { fact: string })[];
   stats: { computed: number; reused: number };
 }
 
@@ -69,16 +71,26 @@ class View {
   out(kind: string, id: string) { return this.byFrom.get(`${kind}:${id}`) ?? []; }
   inn(kind: string, id: string) { return this.byTo.get(`${kind}:${id}`) ?? []; }
   eff(kind: string, id: string) { return effectiveContent(this.ledger, { kind: kind as never, id }); }
-  /** Sources a from-entity VERSION rests on: each link's binding for that version (older fact versions keep their original evidence). */
+  /**
+   * Sources a from-entity VERSION rests on. A relation applies to a version only if it has a binding for it (created at or before that
+   * version): an older fact version never shows a source that was added later, and "no binding" never falls back to the newest evidence.
+   * Links without any binding (ledgers written before bindings existed) are treated as applying to every version.
+   */
   sourceRefs(l: EffLink[], roles: string[], fromVersion: number): SourceRef[] {
-    return l.filter((x) => roles.includes(x.effectiveRole) && x.to.kind === "source").map((x) => {
-      const s = this.ledger.entities[entityKey("source", x.to.id)];
-      const cur = s?.versions.length ?? 0;
+    const out: SourceRef[] = [];
+    for (const x of l) {
+      if (!roles.includes(x.effectiveRole) || x.to.kind !== "source") continue;
+      const hasBindings = (x.bindings ?? []).length > 0;
       const boundOrNull = bindingAt(x, fromVersion);
+      if (hasBindings && boundOrNull === null) continue;
+      const s0 = this.ledger.entities[entityKey("source", x.to.id)];
+      const cur = s0?.versions.length ?? 0;
       const bound = boundOrNull ?? cur;
       const c = (contentAtVersion(this.ledger, x.to, bound) ?? {}) as Content;
-      return { id: x.to.id, role: (x.effectiveRole === "supports" ? "supports" : "from_source") as SourceRef["role"], boundVersion: boundOrNull, currentVersion: cur, newerVersionAvailable: cur > bound, sha256: c.sha256 as string | undefined, relPath: c.relPath as string | undefined };
-    }).sort((a, b) => (a.role === b.role ? a.id.localeCompare(b.id) : a.role === "from_source" ? -1 : 1));
+      const confirm = this.ledger.bindingEvents.find((e) => e.type === "confirmed" && e.linkId === x.id && e.fromVersion === fromVersion);
+      out.push({ linkId: x.id, id: x.to.id, role: (x.effectiveRole === "supports" ? "supports" : "from_source") as SourceRef["role"], boundVersion: boundOrNull, currentVersion: cur, newerVersionAvailable: cur > bound, bindingPending: pendingFor(this.ledger.bindingEvents, x.id, fromVersion) !== null, confirmedBy: confirm?.by, sha256: c.sha256 as string | undefined, relPath: c.relPath as string | undefined });
+    }
+    return out.sort((a, b) => (a.role === b.role ? a.id.localeCompare(b.id) : a.role === "from_source" ? -1 : 1));
   }
   item(observationId: string, counted: boolean, basis: string | null): TimelineItem | null {
     const eff = this.eff("observation", observationId);
@@ -155,7 +167,8 @@ export function buildTimeline(ledger: Ledger, opts: { asOf: string; staleDays?: 
   const unattachedEncounters = Object.values(ledger.entities).filter((e) => e.kind === "encounter" && !placedEnc.has(e.id)).map((e) => v.encounter(e.id)!).sort((a, b) => String(a.date).localeCompare(String(b.date)) || a.id.localeCompare(b.id));
   const unattachedFacts = Object.values(ledger.entities).filter((e) => e.kind === "canonical_fact" && !v.out("canonical_fact", e.id).some((l) => l.effectiveRole === "of_encounter")).map((e) => v.fact(e.id)!).sort((a, b) => a.id.localeCompare(b.id));
   const ambiguities = Object.values(ledger.ambiguities).sort((a, b) => (a.a + a.b).localeCompare(b.a + b.b));
-  return { asOf: opts.asOf, blocks, unattached, unattachedEncounters, unattachedFacts, ambiguities, stats: { computed, reused } };
+  const pendingBindings = ledger.bindingEvents.filter((e) => e.type === "pending" && pendingFor(ledger.bindingEvents, e.linkId, e.fromVersion)?.id === e.id).map((e) => ({ ...e, fact: ledger.links[e.linkId]?.from.id ?? "" })).sort((a, b) => a.id.localeCompare(b.id));
+  return { asOf: opts.asOf, blocks, unattached, unattachedEncounters, unattachedFacts, ambiguities, pendingBindings, stats: { computed, reused } };
 }
 function daysBetween(a: string, b: string) { return (Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / 86400000; }
 
@@ -202,16 +215,24 @@ export function traceObservation(ledger: Ledger, observationId: string) {
   const e = ledger.entities[entityKey("observation", id)];
   if (!e) return null;
   const v = new View(ledger);
-  const links = v.out("observation", id);
   const roles = ["from_source", "supports"];
-  const withEntity = (s: SourceRef) => ({ role: s.role, source: s.id, boundVersion: s.boundVersion, currentVersion: s.currentVersion, newerVersionAvailable: s.newerVersionAvailable, entity: contentAtVersion(ledger, { kind: "source", id: s.id }, s.boundVersion ?? s.currentVersion) ?? null });
+  const allLinks = v.g.links.filter((l) => l.from.kind === "observation" && l.from.id === id && l.to.kind === "source");
+  const currentLinks = allLinks.filter((l) => l.effectiveRole !== "removed");
+  const latest = e.versions.length;
+  const withEntity = (s: SourceRef) => {
+    const cl = allLinks.find((l) => l.id === s.linkId);
+    return { role: s.role, source: s.id, boundVersion: s.boundVersion, currentVersion: s.currentVersion, newerVersionAvailable: s.newerVersionAvailable, bindingPending: s.bindingPending, confirmedBy: s.confirmedBy ?? null, currentRole: cl?.effectiveRole ?? null, withdrawnSince: cl?.effectiveRole === "removed" ? cl.correctionId ?? "removed" : null, entity: contentAtVersion(ledger, { kind: "source", id: s.id }, s.boundVersion ?? s.currentVersion) ?? null };
+  };
+  // historical versions: the relations AS DECLARED (a later removal is annotated via withdrawnSince, never applied backwards); the latest version: effective relations
+  const declared = allLinks.map((l) => ({ ...l, effectiveRole: l.role }));
   return {
     resolvedFrom: resolved.redirectedFrom,
-    observation: { id, aliases: e.aliases ?? [], versions: e.versions.map((x) => ({ version: x.version, hash: x.hash, runId: x.runId, at: x.at, sources: v.sourceRefs(links, roles, x.version).map(withEntity) })) },
-    sources: v.sourceRefs(links, roles, e.versions.length).map(withEntity),
+    observation: { id, aliases: e.aliases ?? [], versions: e.versions.map((x) => ({ version: x.version, hash: x.hash, runId: x.runId, at: x.at, sources: v.sourceRefs(x.version === latest ? currentLinks : declared, roles, x.version).map(withEntity) })) },
+    sources: v.sourceRefs(currentLinks, roles, latest).map(withEntity),
     removedSources: v.g.links.filter((l) => l.from.kind === "observation" && l.from.id === id && l.effectiveRole === "removed" && l.to.kind === "source").map((l) => ({ source: l.to.id, correctionId: l.correctionId ?? null })),
     membership: v.g.links.filter((l) => l.from.kind === "observation" && l.from.id === id && l.to.kind === "episode").map((l) => ({ episode: l.to.id, declaredRole: l.role, effectiveRole: l.effectiveRole, correctionId: l.correctionId ?? null })),
     corrections: ledger.corrections.filter((c) => (c.type === "field" && c.ref.kind === "observation" && c.ref.id === id) || (c.type === "link" && c.linkId.includes(`observation:${id}|`))),
+    bindingEvents: ledger.bindingEvents.filter((ev) => allLinks.some((l) => l.id === ev.linkId)),
   };
 }
 
@@ -225,7 +246,7 @@ function line(i: TimelineItem) {
   const t = i.timeKind === "occurred" ? `${i.displayTime}（发生，${i.precision}）` : `${i.displayTime}（仅消息记录时间，发生时间未知）`;
   const corr = i.trace.corrections.length ? ` ✎更正 ${i.trace.corrections.join(",")}` : "";
   const text = i.textTruncated ? `${i.text.slice(0, TEXT_LIMIT)}…（节选，全文见 timeline.json）` : i.text;
-  const src = i.trace.sources.map((s) => `${s.id}${s.boundVersion ? `@v${s.boundVersion}` : ""}${s.newerVersionAvailable ? "(有更新版本)" : ""}`).join("、") || "无";
+  const src = i.trace.sources.map((s) => `${s.id}${s.boundVersion ? `@v${s.boundVersion}` : ""}${s.newerVersionAvailable ? "(有更新版本)" : ""}${s.bindingPending ? "(依据版本待确认)" : ""}`).join("、") || "无";
   return `- ${t} · ${CATEGORY_LABEL[i.category]} · ${text} ⟨${i.observationId} v${i.trace.version}; 来源 ${src}${i.linkBasis ? `; 关联依据 ${i.linkBasis}` : ""}⟩${corr}`;
 }
 /** Current value first; the original text is shown but marked as superseded when a correction changed the structured fields. */
@@ -252,6 +273,7 @@ export function renderMarkdown(t: Timeline): string {
   out.push(`## 未挂靠到任何病程的就诊/检查（${t.unattachedEncounters.length}）`, ...t.unattachedEncounters.flatMap(encLines), "");
   out.push(`## 未挂靠到任何就诊的规范事实（${t.unattachedFacts.length}）`, "源资料没有就诊号；保留为本人事实，不伪造就诊。", ...t.unattachedFacts.map((f) => `- [${f.type}] ${factText(f)} ⟨${f.id}; 来源 ${f.documents.map((d) => d.id).join("、") || "无"}⟩`), "");
   out.push(`## 未挂靠到任何病程的观察（${t.unattached.length}，全部列出）`, "未挂靠不等于无关，只是不据日期硬挂。", "", ...t.unattached.map(line), "");
+  if (t.pendingBindings.length) out.push(`## 待确认的来源绑定（${t.pendingBindings.length}）`, "新版本事实未说明所依据的来源版本，暂沿用旧绑定；确认前请勿当作已核依据。", ...t.pendingBindings.map((p) => `- ${p.fact}（事实 v${p.fromVersion}）沿用来源 v${p.before}，来源当前 v${p.sourceCurrentVersion} ⟨${p.linkId}⟩`), "");
   if (t.ambiguities.length) out.push(`## 待人工判断的同槽位歧义（${t.ambiguities.length}）`, ...t.ambiguities.map((a) => `- ${a.a} ↔ ${a.b}：${a.reason}`));
   return out.join("\n");
 }

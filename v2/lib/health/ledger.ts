@@ -1,8 +1,8 @@
 // HEALTH-02 ledger operations. Everything here is pure: (ledger, input) -> result / new ledger.
 // Persistence, locking and atomic write live in file-store.ts.
 import {
-  EPISODE_MEMBERSHIP_ROLES, LINK_FROM_EXTRA, LINK_RULES, bindingAt, businessDigest, cloneLedger, entityKey, hashOf, linkId,
-  type Analysis, type AnalysisSnapshot, type Content, type Correction, type Entity, type EntityKind, type Ledger, type Link, type LinkRole, type Ref,
+  EPISODE_MEMBERSHIP_ROLES, LINK_FROM_EXTRA, LINK_RULES, bindingAt, businessDigest, pendingFor, cloneLedger, entityKey, hashOf, linkId,
+  type Analysis, type AnalysisSnapshot, type BindingEvent, type Content, type Correction, type Entity, type EntityKind, type Ledger, type Link, type LinkRole, type Ref,
 } from "./model";
 import { Graph, assertSafePath, boundVersionOf, effectiveContent, effectiveLinks, getPath } from "./graph";
 
@@ -10,28 +10,31 @@ export { effectiveContent, effectiveLinks, Graph };
 
 // ---------- batch input ----------
 /** toVersion (sources only): the source version the from-entity version rests on. Omitted => the version the source has after this batch for NEW links (same-batch revision if it changes here); existing links whose evidence version cannot be established are reported (`unconfirmed`), never guessed. */
-export interface BatchLink { role: LinkRole; to: Ref; basis?: string; toVersion?: number }
+/** Who states which source version a fact version rests on, and why. Required to confirm a pending binding; the same fact text can be re-sent with it (no need to change the text). */
+export interface BindingConfirmation { by: string; reason: string }
+export interface BatchLink { role: LinkRole; to: Ref; basis?: string; toVersion?: number; confirmation?: BindingConfirmation }
 export interface BatchItem { kind: EntityKind; id?: string; identity?: "strong" | "weak"; content: Content; links?: BatchLink[] }
-export interface StandaloneLink { from: Ref; role: LinkRole; to: Ref; basis?: string; toVersion?: number }
+export interface StandaloneLink { from: Ref; role: LinkRole; to: Ref; basis?: string; toVersion?: number; confirmation?: BindingConfirmation }
 /** Pre-ledger correction history, already folded into the imported values. Never changes effective content. */
 export interface HistoricalCorrection { id: string; ref: Ref; field: string; before: unknown; after: unknown; method: string; status: string; at: string; reason: string; targets?: Ref[] }
 export interface Batch { batchId: string; items: BatchItem[]; links?: StandaloneLink[]; historical?: HistoricalCorrection[] }
 
 export type Action = "new" | "duplicate" | "version_change" | "conflict" | "ambiguous" | "rejected";
 export interface PlanItem { ref: Ref; action: Action; reason?: string; detail?: Record<string, unknown> }
-export interface PlanLink { id: string; action: "new" | "duplicate" | "rebind" | "unconfirmed" | "conflict" | "held" | "rejected"; reason?: string }
+export interface PlanLink { id: string; action: "new" | "duplicate" | "rebind" | "unconfirmed" | "confirm" | "conflict" | "held" | "rejected"; reason?: string }
 export interface Impact { changed: Ref[]; entities: string[]; episodes: string[]; analyses: string[]; sourceRevisions: string[] }
 export interface Plan {
   batchId: string; inputHash: string;
   items: PlanItem[]; links: PlanLink[];
-  counts: Record<Action, number> & { links_new: number; links_duplicate: number; links_rebind: number; links_unconfirmed: number; links_conflict: number; links_held: number; historical_new: number };
+  counts: Record<Action, number> & { links_new: number; links_duplicate: number; links_rebind: number; links_unconfirmed: number; links_confirm: number; links_conflict: number; links_held: number; historical_new: number };
   rejected: boolean; // any rejected item/link/in-batch conflict => apply refuses the whole batch, nothing written
   needsReview: boolean; // conflicts / ambiguities exist and are listed for a human
   impact: Impact;
   // internal, consumed by applyPlan
   _apply: {
     items: { item: BatchItem; id: string; identity: "strong" | "weak"; hash: string; action: "new" | "version_change"; ambiguousWith?: string[]; ambiguousAlias?: string }[];
-    rebinds: { linkId: string; binding: { from: number; to: number } }[];
+    rebinds: { linkId: string; binding: { from: number; to: number }; event?: Omit<BindingEvent, "runId" | "at"> & { at?: string } }[];
+    pendings: Omit<BindingEvent, "runId" | "at">[];
     links: { link: Link }[];
     aliases: { key: string; alias: string }[];
     rekeys: { from: string; to: string; alias: string }[];
@@ -171,7 +174,7 @@ const keyKind = (k: string) => k.slice(0, k.indexOf(":")) as EntityKind;
 export function planImport(ledger: Ledger, batch: Batch, validators: Validator[] = CONTENT_VALIDATORS): Plan {
   const items: PlanItem[] = [];
   const planLinks: PlanLink[] = [];
-  const apply: Plan["_apply"] = { items: [], links: [], rebinds: [], aliases: [], rekeys: [], historical: [] };
+  const apply: Plan["_apply"] = { items: [], links: [], rebinds: [], pendings: [], aliases: [], rekeys: [], historical: [] };
   const held = new Set<string>();
   const known = new Set(Object.keys(ledger.entities));
   const kinds = new Map<string, EntityKind>(Object.entries(ledger.entities).map(([k, e]) => [k, e.kind]));
@@ -294,7 +297,7 @@ export function planImport(ledger: Ledger, batch: Batch, validators: Validator[]
   for (const l of effectiveLinks(ledger)) if (MEMBERSHIP_FAMILY.has(l.role)) membershipRoleOf.set(`${l.from.id}>${l.to.id}`, l.effectiveRole as LinkRole);
   const decls: { from: Ref; bl: BatchLink }[] = [];
   for (const row of rows) if (!rejectedKeys.has(entityKey(row.raw.kind, row.id))) for (const bl of row.raw.links ?? []) decls.push({ from: { kind: row.raw.kind, id: row.id }, bl });
-  for (const l of batch.links ?? []) decls.push({ from: l.from, bl: { role: l.role, to: l.to, basis: l.basis, toVersion: l.toVersion } });
+  for (const l of batch.links ?? []) decls.push({ from: l.from, bl: { role: l.role, to: l.to, basis: l.basis, toVersion: l.toVersion, confirmation: l.confirmation } });
   const canon = (r: Ref): { key: string; ref: Ref } => {
     const k = entityKey(r.kind, r.id);
     const a = ledger.entities[k] ? k : aliasToKey.get(`${r.kind}:${r.id}`) ?? k;
@@ -319,14 +322,39 @@ export function planImport(ledger: Ledger, batch: Batch, validators: Validator[]
     if (apply.links.some((a) => a.link.id === lid)) { planLinks.push({ id: lid, action: "duplicate" }); continue; }
     const existingLink = ledger.links[lid];
     if (existingLink) {
-      // The link already exists. If this batch gives the from-entity a NEW version, that version needs its own evidence binding:
-      // explicit toVersion, or the source revision supplied in the same batch; otherwise it is reported (never guessed) and the
-      // new version keeps the previous binding.
-      if (isSource && fromVer > fromNow && !apply.rebinds.some((x) => x.linkId === lid)) {
-        const eff = bindingAt(existingLink, fromNow);
-        const desired = bl.toVersion ?? (toVerAfter > toNow ? toVerAfter : null);
-        if (desired !== null && desired !== eff) { apply.rebinds.push({ linkId: lid, binding: { from: fromVer, to: desired } }); planLinks.push({ id: lid, action: "rebind" }); continue; }
-        if (desired === null && eff !== null && toNow > eff) { planLinks.push({ id: lid, action: "unconfirmed", reason: "source_binding_unconfirmed" }); continue; }
+      if (isSource) {
+        const eff = bindingAt(existingLink, fromNow); // binding governing the from-entity's CURRENT version
+        const newVersionHere = fromVer > fromNow;
+        if (newVersionHere) {
+          // A new fact version needs its own binding: explicit toVersion, or the source revision supplied in the same batch;
+          // otherwise the previous binding is kept, a PENDING event is recorded (persisted, visible on replay) and it is reported.
+          if (!apply.rebinds.some((x) => x.linkId === lid) && !apply.pendings.some((x) => x.linkId === lid)) {
+            const desired = bl.toVersion ?? (toVerAfter > toNow ? toVerAfter : null);
+            if (desired !== null && desired !== eff) { apply.rebinds.push({ linkId: lid, binding: { from: fromVer, to: desired } }); planLinks.push({ id: lid, action: "rebind" }); continue; }
+            if (desired === null && eff !== null && toNow > eff) {
+              apply.pendings.push({ id: `pending|${lid}|${fromVer}`, type: "pending", linkId: lid, fromVersion: fromVer, before: eff, after: null, sourceCurrentVersion: toNow });
+              planLinks.push({ id: lid, action: "unconfirmed", reason: "source_binding_unconfirmed" });
+              continue;
+            }
+          }
+        } else {
+          const pendingNow = pendingFor(ledger.bindingEvents, lid, fromNow);
+          if (bl.toVersion !== undefined) {
+            if (pendingNow) {
+              // explicit confirmation of the pending binding for the CURRENT fact version, without touching the fact text
+              if (!bl.confirmation || !isStr(bl.confirmation.by) || !isStr(bl.confirmation.reason)) { planLinks.push({ id: lid, action: "rejected", reason: "confirmation_requires_by_and_reason" }); continue; }
+              if (!apply.rebinds.some((x) => x.linkId === lid)) {
+                apply.rebinds.push({ linkId: lid, binding: { from: fromNow, to: bl.toVersion }, event: { id: `confirm|${lid}|${fromNow}`, type: "confirmed", linkId: lid, fromVersion: fromNow, before: eff, after: bl.toVersion, sourceCurrentVersion: toNow, by: bl.confirmation.by, reason: bl.confirmation.reason } });
+                planLinks.push({ id: lid, action: "confirm" });
+              } else planLinks.push({ id: lid, action: "duplicate" });
+              continue;
+            }
+            if (eff !== null && bl.toVersion !== eff) { planLinks.push({ id: lid, action: "conflict", reason: "binding_for_this_version_already_established" }); continue; } // never silently overwritten
+          } else if (pendingNow) {
+            planLinks.push({ id: lid, action: "unconfirmed", reason: "source_binding_pending_confirmation" }); // still open on replay
+            continue;
+          }
+        }
       }
       planLinks.push({ id: lid, action: "duplicate" });
       continue;
@@ -351,12 +379,12 @@ export function planImport(ledger: Ledger, batch: Batch, validators: Validator[]
     apply.historical.push(c);
   }
 
-  const counts = { new: 0, duplicate: 0, version_change: 0, conflict: 0, ambiguous: 0, rejected: 0, links_new: 0, links_duplicate: 0, links_rebind: 0, links_unconfirmed: 0, links_conflict: 0, links_held: 0, historical_new: apply.historical.length };
+  const counts = { new: 0, duplicate: 0, version_change: 0, conflict: 0, ambiguous: 0, rejected: 0, links_new: 0, links_duplicate: 0, links_rebind: 0, links_unconfirmed: 0, links_confirm: 0, links_conflict: 0, links_held: 0, historical_new: apply.historical.length };
   for (const i of items) counts[i.action]++;
-  for (const l of planLinks) { if (l.action === "new") counts.links_new++; else if (l.action === "duplicate") counts.links_duplicate++; else if (l.action === "rebind") counts.links_rebind++; else if (l.action === "unconfirmed") counts.links_unconfirmed++; else if (l.action === "conflict") counts.links_conflict++; else if (l.action === "held") counts.links_held++; else counts.rejected++; }
+  for (const l of planLinks) { if (l.action === "new") counts.links_new++; else if (l.action === "duplicate") counts.links_duplicate++; else if (l.action === "rebind") counts.links_rebind++; else if (l.action === "unconfirmed") counts.links_unconfirmed++; else if (l.action === "confirm") counts.links_confirm++; else if (l.action === "conflict") counts.links_conflict++; else if (l.action === "held") counts.links_held++; else counts.rejected++; }
   const rejected = hardConflict || items.some((i) => i.action === "rejected") || planLinks.some((l) => l.action === "rejected");
   const needsReview = counts.conflict > 0 || counts.ambiguous > 0 || counts.links_conflict > 0 || counts.links_unconfirmed > 0;
-  const changedRefs: Ref[] = [...apply.items.map((a) => ({ kind: a.item.kind, id: a.id })), ...apply.rekeys.flatMap((k) => [{ kind: keyKind(k.to), id: keyId(k.to) }, { kind: keyKind(k.from), id: keyId(k.from) }]), ...apply.rebinds.map((x) => ledger.links[x.linkId].from)];
+  const changedRefs: Ref[] = [...apply.items.map((a) => ({ kind: a.item.kind, id: a.id })), ...apply.rekeys.flatMap((k) => [{ kind: keyKind(k.to), id: keyId(k.to) }, { kind: keyKind(k.from), id: keyId(k.from) }]), ...apply.rebinds.map((x) => ledger.links[x.linkId].from), ...apply.pendings.map((x) => ledger.links[x.linkId].from)];
   return { batchId: batch.batchId, inputHash: hashOf(batch), items, links: planLinks, counts, rejected, needsReview, impact: computeImpact(ledger, changedRefs, apply.links.map((a) => a.link), undefined, versionAfter), _apply: apply };
 }
 
@@ -417,6 +445,7 @@ function rekey(next: Ledger, fromKey: string, toKey: string, alias: string) {
     links[nl.id] = nl;
   }
   next.links = links;
+  next.bindingEvents = next.bindingEvents.map((ev) => { const nl = linkMap.get(ev.linkId); return nl && nl !== ev.linkId ? { ...ev, linkId: nl } : ev; });
   // live pointers move so corrections/analyses keep applying; the identity they were recorded against is preserved
   next.corrections = next.corrections.map((c) => {
     if (c.type === "link") { const nl = linkMap.get(c.linkId) ?? c.linkId; return nl === c.linkId ? c : { ...c, linkId: nl, linkIdAtRecording: c.linkIdAtRecording ?? c.linkId }; }
@@ -430,7 +459,12 @@ function rekey(next: Ledger, fromKey: string, toKey: string, alias: string) {
 export function applyPlan(ledger: Ledger, plan: Plan, meta: { runId: string; at: string }): Ledger {
   if (plan.rejected) throw new Error(`batch ${plan.batchId} rejected; nothing written`);
   const next = cloneLedger(ledger);
-  for (const rb of plan._apply.rebinds) { const l = next.links[rb.linkId]; if (!l) throw new Error(`rebind target link missing`); l.bindings = [...(l.bindings ?? []), { ...rb.binding, runId: meta.runId }]; }
+  for (const rb of plan._apply.rebinds) {
+    const l = next.links[rb.linkId]; if (!l) throw new Error(`rebind target link missing`);
+    l.bindings = [...(l.bindings ?? []), { ...rb.binding, runId: meta.runId, ...(rb.event ? { event: rb.event.id } : {}) }];
+    if (rb.event && !next.bindingEvents.some((e) => e.id === rb.event!.id)) next.bindingEvents.push({ ...rb.event, at: meta.at, runId: meta.runId });
+  }
+  for (const pd of plan._apply.pendings) if (!next.bindingEvents.some((e) => e.id === pd.id)) next.bindingEvents.push({ ...pd, at: meta.at, runId: meta.runId });
   for (const k of plan._apply.rekeys) rekey(next, k.from, k.to, k.alias);
   const resolve = (r: Ref) => { const k = entityKey(r.kind, r.id); if (next.entities[k]) return k; const hit = Object.entries(next.entities).find(([, e]) => e.kind === r.kind && (e.aliases ?? []).includes(r.id)); return hit ? hit[0] : k; };
   for (const a of plan._apply.items) {
@@ -449,7 +483,7 @@ export function applyPlan(ledger: Ledger, plan: Plan, meta: { runId: string; at:
   }
   for (const c of plan._apply.historical) next.corrections.push(c);
   const c = plan.counts;
-  next.runs.push({ runId: meta.runId, at: meta.at, mode: "apply", batchId: plan.batchId, inputHash: plan.inputHash, counts: { new: c.new, duplicate: c.duplicate, version_change: c.version_change, conflict: c.conflict, ambiguous: c.ambiguous, links_new: c.links_new, links_duplicate: c.links_duplicate, links_rebind: c.links_rebind, links_unconfirmed: c.links_unconfirmed, links_conflict: c.links_conflict, links_held: c.links_held, historical_new: c.historical_new } });
+  next.runs.push({ runId: meta.runId, at: meta.at, mode: "apply", batchId: plan.batchId, inputHash: plan.inputHash, counts: { new: c.new, duplicate: c.duplicate, version_change: c.version_change, conflict: c.conflict, ambiguous: c.ambiguous, links_new: c.links_new, links_duplicate: c.links_duplicate, links_rebind: c.links_rebind, links_unconfirmed: c.links_unconfirmed, links_confirm: c.links_confirm, links_conflict: c.links_conflict, links_held: c.links_held, historical_new: c.historical_new } });
   next.revision = ledger.revision + 1;
   const problems = checkInvariants(next);
   if (problems.length) throw new Error(`invariants failed after apply: ${problems.slice(0, 5).join("; ")}`);
@@ -480,6 +514,7 @@ export function checkInvariants(ledger: Ledger): string[] {
       if (c.type === "field") { const eff = effectiveContent(ledger, c.ref); const r = eff ? firstRejection({ kind: c.ref.kind, content: eff.content }, ledger) : "entity_missing"; if (r) problems.push(`correction ${c.id}: effective content invalid (${r})`); }
     } },
     () => { for (const [k, e] of Object.entries(ledger.entities)) if (k !== entityKey(e.kind, e.id)) problems.push(`entity key mismatch ${k}`); },
+    () => { for (const ev of ledger.bindingEvents) { const l = ledger.links[ev.linkId]; if (!l) problems.push(`binding event ${ev.id}: link missing`); else if (ev.type === "confirmed" && (!ev.by || !ev.reason)) problems.push(`binding event ${ev.id}: confirmation without who/why`); } },
   ];
   for (const check of checks) { try { check(); } catch (e) { problems.push(`invariant_check_error:${(e as Error).message}`); } }
   return problems;
