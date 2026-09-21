@@ -70,7 +70,7 @@ export class HealthPageService {
       this.historyLedger(), this.records.readLedger(), readJson(this.cfg.intervalsFile, isIntervals), readJson(this.cfg.materialsFile, isMaterials), readJson(this.cfg.derivedFile ?? null, isDerived),
     ]);
     const hashes = await this.materialSourceHashes(materials);
-    const page = buildHealthPage({ history, record, intervals, materials, derived, now: nowWall, materialSourceHash: materials && this.cfg.materialRoot ? (file) => hashes.get(file) : undefined });
+    const page = buildHealthPage({ history, record, intervals, materials, derived, now: nowWall, materialSourceHash: materials && this.cfg.materialRoot ? (file) => hashes.get(file) : undefined /* no root configured: the model reports "not verified" */ });
     this.cache = { sig, day: nowWall.slice(0, 10), page, history };
     return page;
   }
@@ -88,7 +88,7 @@ export class HealthPageService {
   }
   private async materialSourceHashes(m: MaterialsFile | null): Promise<Map<string, string | undefined>> {
     const out = new Map<string, string | undefined>();
-    if (!m || !this.cfg.materialRoot) return out; // no root configured: nothing can be checked, items keep their stored version
+    if (!m || !this.cfg.materialRoot) return out; // no root configured: nothing can be checked; the model then reports the items as "not verified" (never as current)
     for (const file of new Set(m.items.map((i) => i.source.file))) {
       const p = this.materialPath(file);
       try { out.set(file, p ? createHash("sha256").update(await readFile(p)).digest("hex") : undefined); } catch { out.set(file, undefined); }

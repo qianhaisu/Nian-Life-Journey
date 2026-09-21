@@ -28,6 +28,7 @@ import { runCorrection, runImport } from "../../lib/health/importer.ts";
 import { Graph, analysisStatus, effectiveContent, effectiveHash } from "../../lib/health/ledger.ts";
 import { buildHealthPage } from "../../lib/health/page/model.ts";
 import { hashOf } from "../../lib/health/model.ts";
+import { Graph as DepGraph } from "../../lib/health/graph.ts";
 import { adaptEpisodesR4, adaptHandoff, adaptHospitalR2, adaptWechatFactsR4 } from "../../lib/health/adapters.ts";
 import { buildTimeline, renderHtml, renderMarkdown } from "../../lib/health/timeline.ts";
 import { MessageInputError, adaptMessagesJson, adaptMessagesMarkdown } from "./message-adapters.mjs";
@@ -146,6 +147,7 @@ export async function main(argv) {
         else { const L = src.ledger === "record" ? record : history; if (!L || !effectiveContent(L, src.ref)) { bad.push(`enrolment:${src.ref?.id}`); continue; } src.hash = effectiveHash(L, src.ref); }
       }
       if (bad.length) { console.error(JSON.stringify({ unknownRefs: bad })); return 2; }
+      file.episodeStamps = Object.fromEntries(Object.values(history.entities).filter((e) => e.kind === "episode").map((e) => [e.id, new DepGraph(history).closureHash({ kind: "episode", id: e.id })]));
       file.reviewedAt = new Date().toISOString(); // records imported after this instant and falling inside a span re-open it for review
       writeOut(String(args.out), JSON.stringify(file, null, 1), "--out");
       console.log(JSON.stringify({ intervals: (file.intervals ?? []).length, refs: (file.intervals ?? []).reduce((n, iv) => n + (iv.supports?.length ?? 0) + (iv.counter?.length ?? 0), 0) }));

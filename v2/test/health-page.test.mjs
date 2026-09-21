@@ -9,7 +9,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { applyCorrection, applyPlan, effectiveHash, planImport } from "../lib/health/ledger.ts";
 import { emptyLedger, hashOf } from "../lib/health/model.ts";
 import { HealthFileStore } from "../lib/health/file-store.ts";
-import { buildHealthPage, exclusionReason, looksFeverish } from "../lib/health/page/model.ts";
+import { buildHealthPage, exclusionReason, isHardExclusion, looksFeverish } from "../lib/health/page/model.ts";
+import { Graph } from "../lib/health/graph.ts";
 import { HealthPageService, loadPageSourcesConfig } from "../lib/health/page/service.ts";
 import { loadHealthRecordConfig } from "../lib/health/record/config.ts";
 import { createHealthRecordHandler } from "../lib/health/record/http.ts";
@@ -53,23 +54,26 @@ async function fixture() {
   const histDir = path.join(dir, "history");
   await new HealthFileStore(histDir).transaction(() => ({ ledger: history, result: null }));
   const ref = (L, id, kind = "observation") => ({ ledger: "history", ref: { kind, id }, hash: effectiveHash(L, { kind, id }) });
-  const intervals = { schema: 1, reviewedAt: "2026-09-21T00:00:00.000Z", reviewer: "test", nodes: [],
+  const stamps = Object.fromEntries(["EP-X", "EP-Y"].map((id) => [id, new Graph(history).closureHash({ kind: "episode", id })]));
+  const intervals = { schema: 1, reviewedAt: "2026-09-21T00:00:00.000Z", reviewer: "test", nodes: [], episodeStamps: stamps,
     intervals: [
       { id: "IV-a", kind: "suspected", episodeId: null, start: "2026-04-22", end: "2026-04-24", endKind: "last_record", label: "鼻涕", reason: "「还是」承接", supports: [ref(history, "O1"), ref(history, "O2")], counter: [ref(history, "O3")] },
       { id: "IV-b", kind: "recorded", episodeId: "EP-X", start: "2026-07-10", startApprox: true, end: "2026-07-26", endKind: "last_record", label: "流涕咳嗽", reason: "原文写明", supports: [ref(history, "O5")] },
     ] };
+  const SRC_HASH = sha(Buffer.from("synthetic reviewed plan"));
   const materials = { schema: 1, generatedAt: "2026-09-21T00:00:00Z", dataCutoff: "2026-09-19T10:19", reviewedBy: "test",
-    items: [{ id: "m1", group: "visit", kind: "conditional", text: "呼吸明显费力时马上就医", source: { file: "x.md", sha256: "0", section: "§1", lines: "1" }, version: "v", conditions: [], reassessWhen: [] },
-      { id: "m2", group: "care", kind: "care", text: "规律供液", source: { file: "x.md", sha256: "0", section: "§1", lines: "2" }, version: "v", conditions: [], reassessWhen: [], episodes: ["EP-X"] }] };
+    items: [{ id: "m1", group: "visit", kind: "conditional", text: "呼吸明显费力时马上就医", source: { file: "x.md", sha256: SRC_HASH, section: "§1", lines: "1" }, version: "v", conditions: [], reassessWhen: [] },
+      { id: "m2", group: "care", kind: "care", text: "规律供液", source: { file: "x.md", sha256: SRC_HASH, section: "§1", lines: "2" }, version: "v", conditions: [], reassessWhen: [], episodes: ["EP-X"] }] };
+  const matRoot0 = path.join(dir, "materials-root"); await mkdir(matRoot0, { recursive: true }); await writeFile(path.join(matRoot0, "x.md"), "synthetic reviewed plan");
   await writeFile(path.join(dir, "intervals.json"), JSON.stringify(intervals));
   await writeFile(path.join(dir, "materials.json"), JSON.stringify(materials));
-  return { dir, allowed, histDir, history, intervals, materials, good, cleanup: () => rm(dir, { recursive: true, force: true }) };
+  return { dir, allowed, histDir, history, intervals, materials, good, SRC_HASH, matRoot: matRoot0, ok: () => SRC_HASH, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
 
 test("1 模型：红色只来自核查区间；零散记录只是节点；没有绿色；就医记录不展示实际用药；提醒只有将来的预约", async () => {
   const f = await fixture();
   try {
-    const p = buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials: f.materials, now: NOW });
+    const p = buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials: f.materials, now: NOW, materialSourceHash: f.ok });
     assert.deepEqual(p.bands.map((b) => [b.id, b.kind, b.status]), [["IV-a", "suspected", "ok"], ["IV-b", "recorded", "ok"], ["open-EP-Y", "open", "ok"]]);
     const openY = p.bands.find((b) => b.id === "open-EP-Y");
     assert.equal(openY.start, openY.end, "结束未知的病程只在开始处画一个短渐隐，不给长度");
@@ -126,7 +130,7 @@ test("3 更新入口：新增 / 更正 / 撤销后页面随之变化；重放不
     assert.ok(conf.ok);
     let now = T0;
     const records = new HealthRecordService(root, { repo: conf.config.repo, now: () => now });
-    const pages = new HealthPageService(records, { historyLedgerDir: f.histDir, originalRoots: [], intervalsFile: path.join(f.dir, "intervals.json"), materialsFile: path.join(f.dir, "materials.json"), problems: [] }, () => now);
+    const pages = new HealthPageService(records, { historyLedgerDir: f.histDir, originalRoots: [], intervalsFile: path.join(f.dir, "intervals.json"), materialsFile: path.join(f.dir, "materials.json"), materialRoot: f.matRoot, problems: [] }, () => now);
     const before = await pages.page();
     assert.equal(before.followUp.status, "current");
     const body = { entryId: uid(), text: "今天又咳了几声", when: { mode: "date", date: "2026-09-20", precision: "day" }, symptoms: { temperature: "37.9" } };
@@ -312,5 +316,101 @@ test("R1-C 恢复说法：不能确归则不作结束依据，但作为待定关
     const enL = { date: "2026-02-24", basis: "x", parentConfirmed: true, sources: [{ ledger: "history", ref: { kind: "observation", id: "O1" }, hash: effectiveHash(f.history, { kind: "observation", id: "O1" }) }] };
     assert.equal(buildHealthPage({ history: f.history, record: null, intervals: { ...f.intervals, enrolment: enL }, materials: f.materials, now: NOW }).enrolment.status, "ok");
     assert.equal(buildHealthPage({ history: cor, record: null, intervals: { ...f.intervals, enrolment: enL }, materials: f.materials, now: NOW }).enrolment.status, "needs_review");
+  } finally { await f.cleanup(); }
+});
+
+// ================= HEALTH-04-R1 定点补正 =================
+test("R1F-1 当前的身份/角色更正优先于旧审核引用：区间依据更正成别人的、或改成提问后，不再生成孩子的时间轴节点", async () => {
+  const f = await fixture();
+  try {
+    const base = buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials: f.materials, now: NOW, materialSourceHash: f.ok });
+    assert.ok(base.nodes.flatMap((n) => n.entries).some((e) => e.id === "O5"), "更正前，O5 是被区间引用的孩子记录");
+    for (const [name, changes] of [
+      ["主体改成别人", [{ field: "subject", after: "other_child" }]],
+      ["角色改成提问", [{ field: "role", after: "question" }]],
+      ["同时更正", [{ field: "subject", after: "other_child" }, { field: "role", after: "question" }]],
+      ["标为不是孩子", [{ field: "attribution", after: "not_child" }]],
+    ]) {
+      const changed = applyCorrection(f.history, { id: `c-${name}`, type: "field", ref: { kind: "observation", id: "O5" }, changes, author: "妈妈", at: "2026-09-22T00:00", reason: name }).ledger;
+      const p = buildHealthPage({ history: changed, record: null, intervals: f.intervals, materials: f.materials, now: NOW, materialSourceHash: f.ok });
+      assert.equal(p.nodes.flatMap((n) => n.entries).some((e) => e.id === "O5"), false, `${name}：不能再显示为孩子的事实节点`);
+      assert.equal(p.bands.find((b) => b.id === "IV-b").status, "needs_review", `${name}：区间同时待核，旧引用只留在历史依据里`);
+      assert.ok(p.bands.find((b) => b.id === "IV-b").supports.some((s) => s.id === "O5"), "旧依据仍可见，供核对");
+      assert.ok(p.coverage.excluded["主体是别人"] || p.coverage.excluded["不是事实陈述（提问、计划、提醒等）"] || p.coverage.excluded["标为不是孩子的记录"], `${name}：覆盖表里记为排除`);
+    }
+    // soft classification may still be rescued by a review reference; hard ones may not
+    assert.equal(isHardExclusion({ role: "observation", subject: "other_child" }), true);
+    assert.equal(isHardExclusion({ role: "question" }), true);
+    assert.equal(isHardExclusion({ role: "observation", factKind: "observation", text: "今天去公园" }), false);
+    // and the fixed behaviours stay: an own unattached record is still visible
+    const later = addLater(f.history, "own-again", [obs("N-own", "2026-09-20 08:00:00", "孩子今天流鼻涕")]);
+    assert.ok(buildHealthPage({ history: later, record: null, intervals: f.intervals, materials: f.materials, now: NOW, materialSourceHash: f.ok }).nodes.flatMap((n) => n.entries).some((e) => e.id === "N-own"));
+  } finally { await f.cleanup(); }
+});
+
+test("R1F-2a 医院事实更正：总结与关联措施待核，不只依赖红色区间", async () => {
+  const f = await fixture();
+  try {
+    const args = (h) => ({ history: h, record: null, intervals: f.intervals, materials: f.materials, now: NOW, materialSourceHash: f.ok });
+    const base = buildHealthPage(args(f.history));
+    assert.equal(base.followUp.status, "current"); assert.equal(base.episodes.find((e) => e.id === "EP-X").summary.review, null);
+    const cor = (ref, field, after, id) => applyCorrection(f.history, { id, type: "field", ref, changes: [{ field, after }], author: "妈妈", at: "2026-09-22T00:00", reason: "更正" }).ledger;
+    // the corrected diagnosis of the linked hospital visit (no interval involved)
+    const p = buildHealthPage(args(cor({ kind: "canonical_fact", id: "CF1" }, "value", "原诊断录入有误，待重新核对", "c-cf1")));
+    assert.ok(p.bands.every((b) => b.status === "ok"), "区间本身没有失效，证明不是靠红色区间判断");
+    const ep = p.episodes.find((e) => e.id === "EP-X");
+    assert.match(ep.summary.review, /待重新核对/); assert.match(ep.summary.review, /医院事实|就诊|来源|成员/);
+    assert.equal(ep.summary.points[0], "7/26 诊断急性支气管炎", "旧论断保留，只是标待核");
+    assert.match(p.followUp.care.find((m) => m.id === "m2").review, /底账有变化/);
+    assert.equal(p.followUp.visit.find((m) => m.id === "m1").review, null, "无关的通用危险信号不因此撤下");
+    assert.equal(p.followUp.status, "stale");
+    // other hospital-side changes: the encounter itself, and a visit source revision
+    for (const [ref, field, after, id] of [[{ kind: "encounter", id: "E1" }, "dept", "耳鼻喉科", "c-e1"], [{ kind: "canonical_fact", id: "CF2" }, "value", "另一种口服液", "c-cf2"]]) {
+      const q = buildHealthPage(args(cor(ref, field, after, id)));
+      assert.match(q.episodes.find((e) => e.id === "EP-X").summary.review ?? "", /待重新核对/, `${id} 触发`);
+    }
+    // an unrelated episode is not touched
+    assert.equal(p.episodes.find((e) => e.id === "EP-Y").summary.review, null);
+    // a new record attached to the episode also holds its summary until re-reviewed
+    const grown = addLater(f.history, "grow", [obs("N9", "2026-07-30 08:00:00", "还在咳", [{ role: "attached", to: { kind: "episode", id: "EP-X" } }])]);
+    assert.match(buildHealthPage(args(grown)).episodes.find((e) => e.id === "EP-X").summary.review ?? "", /待重新核对/);
+    // a review file without stamps never claims the summary is verified
+    const noStamp = buildHealthPage({ ...args(f.history), intervals: { ...f.intervals, episodeStamps: undefined } });
+    assert.match(noStamp.episodes.find((e) => e.id === "EP-X").summary.review ?? "", /还没有记录核对时的底账版本/);
+  } finally { await f.cleanup(); }
+});
+
+test("R1F-2b 来源核验缺失、不可读、哈希无效时不标 current；通用护理仍显示；服务层未配置根目录也一样", async () => {
+  const f = await fixture();
+  try {
+    const p0 = (extra) => buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials: f.materials, now: NOW, ...extra });
+    // 1 no checker at all (root not configured)
+    const none = p0({});
+    assert.equal(none.followUp.status, "stale");
+    assert.ok([...none.followUp.care, ...none.followUp.visit].every((m) => /来源核验没有配置/.test(m.review)));
+    assert.deepEqual(none.followUp.care.map((m) => m.text), ["规律供液"], "通用护理仍显示，没有整体撤下");
+    // 2 checker present but the file is unreadable
+    assert.ok(p0({ materialSourceHash: () => undefined }).followUp.visit.every((m) => /来源文件读不到/.test(m.review)));
+    // 3 malformed recorded hash (including the old "0" placeholder) can never be treated as verified
+    for (const bad of ["0", "", "abc", "Z".repeat(64), null]) {
+      const mat = { ...f.materials, items: f.materials.items.map((m) => ({ ...m, source: { ...m.source, sha256: bad } })) };
+      const p = buildHealthPage({ history: f.history, record: null, intervals: f.intervals, materials: mat, now: NOW, materialSourceHash: () => bad ?? undefined });
+      assert.equal(p.followUp.status, "stale", `哈希 ${JSON.stringify(bad)}`);
+      assert.ok(p.followUp.care.every((m) => /哈希格式无效/.test(m.review)));
+    }
+    // 4 verified and matching: current, no notes
+    const ok = p0({ materialSourceHash: f.ok });
+    assert.equal(ok.followUp.status, "current"); assert.ok([...ok.followUp.care, ...ok.followUp.visit].every((m) => m.review === null));
+    // 5 the service without HEALTH_PAGE_MATERIAL_ROOT, using a valid 64-hex hash whose source file cannot be read
+    const root = path.join(f.dir, "rec-root-x");
+    const conf = loadHealthRecordConfig({ HEALTH_RECORD_ROOT: root, HEALTH_RECORD_SESSION_SECRET: "s".repeat(40), HEALTH_RECORD_MOM_PASSWORD: "mom-synthetic-pw", HEALTH_RECORD_DAD_PASSWORD: "dad-synthetic-pw" }, "/elsewhere");
+    const mk = (materialRoot) => new HealthPageService(new HealthRecordService(root, { repo: conf.config.repo, now: () => T0 }), { historyLedgerDir: f.histDir, originalRoots: [], intervalsFile: path.join(f.dir, "intervals.json"), materialsFile: path.join(f.dir, "materials.json"), materialRoot, problems: [] }, () => T0);
+    const noRoot = await mk(null).page();
+    assert.equal(noRoot.followUp.status, "stale"); assert.ok(noRoot.followUp.care.every((m) => /来源核验没有配置/.test(m.review)));
+    const withRoot = await mk(f.matRoot).page();
+    assert.equal(withRoot.followUp.status, "current", "配置了根目录且哈希一致才算已核验");
+    const emptyRoot = path.join(f.dir, "empty-root"); await mkdir(emptyRoot, { recursive: true });
+    const missing = await mk(emptyRoot).page();
+    assert.ok(missing.followUp.care.every((m) => /来源文件读不到/.test(m.review)), "根目录里没有源文件：读不到，不是 current");
   } finally { await f.cleanup(); }
 });

@@ -6,7 +6,7 @@
 // Nothing here guesses a span: red only comes from a reviewed interval whose supporting records are still exactly what was
 // reviewed. A changed/voided support, or a new record inside the span, turns the interval into "needs review" instead of
 // silently keeping the old verdict. Scattered records are nodes, never a span. No green, no day counts, no ratios.
-import { effectiveContent } from "../graph";
+import { effectiveContent, Graph } from "../graph";
 import { effectiveHash } from "../ledger";
 import { entityKey, hashOf, type Content, type Ledger, type Ref } from "../model";
 import { buildTimeline, type EncounterView, type FactView, type SourceRef } from "../timeline";
@@ -29,7 +29,10 @@ export interface IntervalReview {
 /** The enrolment date is derived from records: it is valid only while every cited source is still present with the hash it had when reviewed. */
 export interface EnrolmentReview { date: string; basis: string; sources: { ledger: "history" | "record" | "derived"; ref: Ref; hash: string; note?: string }[]; parentConfirmed: boolean }
 /** nodes: scattered records that were read in the review and belong on the timeline as single points (never a span). */
-export interface IntervalFile { schema: 1; reviewedAt: string; reviewer: string; intervals: IntervalReview[]; nodes?: ReviewedRef[]; enrolment?: EnrolmentReview | null }
+export interface IntervalFile { schema: 1; reviewedAt: string; reviewer: string; intervals: IntervalReview[]; nodes?: ReviewedRef[]; enrolment?: EnrolmentReview | null;
+  /** episode id -> closure hash of the episode (members, visits, hospital facts, sources at bound versions) when the summary/measures were reviewed.
+   *  A different current hash means something the summary rests on changed: the episode's summary and linked measures are held for review. */
+  episodeStamps?: Record<string, string> }
 
 /** R1 private derived layer: records found in the review that are NOT in the accepted ledger. They are kept separate (never written into it),
  *  carry their own source identity + a hash of the source text, and are shown as extra evidence: a recovery statement is either an interval's
@@ -110,6 +113,14 @@ const NOT_HEALTH_KINDS = /^(ai_|regimen_ai|growth|feeding|teething|dental|vaccin
  *  a confirmed own record does not vanish because it is not attached to an episode; an explicit non-child mark or a non-factual role does. */
 /** A generic "observation" (the catch-all kind) only counts as a health record when the text itself carries a health cue; ordinary daily chat does not. */
 const HEALTH_CUE = /鼻|涕|咳|烧|发热|低热|热度|℃|体温|喘|痰|感冒|嗓|喉|雾化|吐|拉肚子|拉稀|腹泻|便秘|疹|痒|红肿|渗液|结痂|烫|伤口|疤|药|头孢|布洛芬|美林|泰诺|克拉|打针|输液|医院|医生|门诊|急诊|挂号|检查|化验|血常规|拍片|肺炎|炎|过敏|哭得|不舒服|没精神|精神(差|不好|状态)|睡不好|睡得不|打呼|鼻塞|呼吸/;
+/** Identity/role exclusions are decided by the CURRENT effective content and can never be overridden by an older review reference.
+ *  Only the softer "no evidence / no health cue / unknown kind" classifications may be rescued by a review that cited the record. */
+export function isHardExclusion(c: Content): boolean {
+  if (c.attribution === "not_child") return true;
+  const subj = typeof c.subject === "string" ? c.subject : null;
+  if (subj && subj !== "child" && subj !== "张年") return true;
+  return !HISTORY_ROLES.has(String(c.role));
+}
 export function exclusionReason(c: Content): string | null {
   if (c.attribution === "not_child") return "标为不是孩子的记录";
   const subj = typeof c.subject === "string" ? c.subject : null;
@@ -258,7 +269,8 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
       const ep = epOf.get(e.id) ?? null;
       if (c.attribution === "not_child") { cov.excluded["标为不是孩子的记录"] = (cov.excluded["标为不是孩子的记录"] ?? 0) + 1; continue; }
       const why = exclusionReason(c);
-      if (why && !inReview.has(e.id)) { cov.excluded[why] = (cov.excluded[why] ?? 0) + 1; continue; }
+      // a reviewed reference may keep a record on the page only against the soft classifications; identity/role corrections always win
+      if (why && (isHardExclusion(c) || !inReview.has(e.id))) { cov.excluded[why] = (cov.excluded[why] ?? 0) + 1; continue; }
       if (why) cov.excluded[why] = (cov.excluded[why] ?? 0) + 0;
       const mr = memberRole.get(e.id);
       if (ep) cov.shownAttached++; else if (mr === "candidate" || mr === "background") cov.shownCandidate++; else cov.shownUnattached++;
@@ -313,6 +325,7 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
   });
 
   // ----- episodes -----
+  const changedEps = new Map<string, string>();
   const episodes: PageEpisode[] = (tl?.blocks ?? []).map((b) => {
     const ep = effectiveContent(H!, { kind: "episode", id: b.episodeId })!.content;
     const endKnown = b.declaredEnd === "ended" && !!day(b.end);
@@ -322,6 +335,10 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
     for (const band of epBands) course.push({ date: band.start, text: `${band.kind === "recorded" ? "原文写明" : "疑似持续"}：${md(band.start)}–${md(band.end)} ${band.label}`,
       review: band.status === "needs_review" ? `待重新核对：${band.statusReasons.join("；")}。核对之前这条不当作有效经过。` : undefined });
     const pendingBands = epBands.filter((x) => x.status === "needs_review");
+    const stamp = inp.intervals?.episodeStamps?.[b.episodeId];
+    const closureNow = new Graph(H!).closureHash({ kind: "episode", id: b.episodeId });
+    const stampProblem = inp.intervals ? (stamp === undefined ? "这一病程的要点还没有记录核对时的底账版本" : stamp !== closureNow ? "这一病程关联的医院事实、就诊、来源或成员在核对之后有变化" : null) : null;
+    if (stampProblem) changedEps.set(b.episodeId, stampProblem);
     for (const x of b.encounters) if (day(x.date)) { const v = visitOf(H!, x); course.push({ date: day(x.date)!, text: `${x.kindLabel}：${v.dept || v.hospital}${v.diagnoses.length ? `，${v.diagnoses.join("；")}` : ""}` }); }
     course.sort((a, c) => (a.date < c.date ? -1 : a.date > c.date ? 1 : 0));
     return {
@@ -334,7 +351,8 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
         open: (Array.isArray(ep.openQuestions) ? ep.openQuestions : []).map(clean).filter(Boolean),
         medical: "这一病程还没有经过审核的医学解释，待补；上面只列已审核底账里的要点。",
         // an interval that lost its evidence also puts the episode's summary points (which rest on the same records) under review
-        review: pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间因依据变化正在待重新核对，下面的要点可能受影响，先按旧底账原样保留。` : null,
+        review: [pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间因依据变化正在待重新核对` : "", stampProblem ?? ""].filter(Boolean).length
+          ? `待重新核对：${[pendingBands.length ? `这一病程里有 ${pendingBands.length} 段时间的依据变化` : "", stampProblem ?? ""].filter(Boolean).join("；")}。下面的要点可能受影响，先按旧底账原样保留。` : null,
       },
       visits: b.encounters.map((x) => visitOf(H!, x)).sort((a, c) => a.date.localeCompare(c.date)),
     };
@@ -357,11 +375,17 @@ export function buildHealthPage(inp: PageInputs): HealthPage {
     for (const bd of bands) if (bd.status === "needs_review" && bd.episodeId) (pendingByEp.get(bd.episodeId) ?? pendingByEp.set(bd.episodeId, []).get(bd.episodeId)!).push(bd.id);
     const reviewOf = (m: MaterialItem): string | null => {
       const why: string[] = [];
-      const cur = inp.materialSourceHash?.(m.source.file);
-      if (cur === undefined && inp.materialSourceHash) why.push("来源文件读不到，无法核对");
-      else if (cur !== undefined && m.source.sha256 !== "0" && cur !== m.source.sha256) why.push("来源文件内容已变化");
-      for (const e of m.episodes ?? []) if (pendingByEp.has(e)) why.push(`关联的病程有区间待重新核对`);
-      return why.length ? `待重新核对：${[...new Set(why)].join("；")}。原文保留，适用条件不变。` : null;
+      // Presence of a material means its source must be verifiable: a missing checker, an unreadable file or a malformed recorded hash is
+      // "not verified", never silently "current". The item's text stays visible (general care is not withdrawn).
+      if (!/^[0-9a-f]{64}$/.test(m.source.sha256)) why.push("材料记录的来源哈希格式无效，无法核对来源");
+      else if (!inp.materialSourceHash) why.push("来源核验没有配置，无法确认来源仍然有效");
+      else {
+        const cur = inp.materialSourceHash(m.source.file);
+        if (cur === undefined) why.push("来源文件读不到，无法核对");
+        else if (cur !== m.source.sha256) why.push("来源文件内容已变化");
+      }
+      for (const e of m.episodes ?? []) { if (pendingByEp.has(e)) why.push("关联的病程有区间待重新核对"); if (changedEps.has(e)) why.push("关联的病程在核对之后底账有变化"); }
+      return why.length ? `待重新核对：${[...new Set(why)].join("；")}。这条通用内容仍照常显示，但来源是否仍然有效没有确认。` : null;
     };
     const item = (m: MaterialItem): FollowUpItem => ({ id: m.id, kind: m.kind, text: m.text, detail: m.detail ?? null, episodes: (m.episodes ?? []).filter((e) => epTitle.has(e)).map(epRef), review: reviewOf(m) });
     const allItems = inp.materials.items.map(item);
