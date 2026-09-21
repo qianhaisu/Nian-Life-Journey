@@ -29,13 +29,8 @@ Teddy 明确指定以下分工，适用于整个项目的新增功能、九月�
 
 ## 技术栈与目录
 
-Next.js 15 + React 19 + TypeScript + Tailwind 4 + Drizzle ORM/PostgreSQL（Neon，已在运行时接入）+ Sharp + AWS S3 SDK（R2）。
-
-- `v2/app`：页面、Server Action、Route Handler
 - `v2/lib/db`：Repository（默认走 PostgreSQL，JSON file store 保留仅供本地无凭据开发）
-- `v2/lib/organizer`：Organizer V2 **生产已开启**（`ORGANIZER_V2_ENABLED` 已在 Vercel 设置，2026-09-04 确认）。生产 provider 统一 DeepSeek（`AI_PROVIDER=deepseek`、`AI_MODEL=deepseek-flash`）；Gemini / OpenAI-compatible 分支保留但不再维护，不要改、不要删、不要拿它们做对比实验
-- `v2/lib/ingest`、`v2/tools/quark-connector`：Quark/WorkBuddy artifact 边界
-- `v2/lib/media`、`v2/lib/storage`、`v2/lib/archive`：媒体派生与存储
+- `v2/lib/organizer`：Organizer V2 **生产已开启**（`ORGANIZER_V2_ENABLED=true` 在 ECS 的 `.env.local` 里，2026-09-04 确认）。生产 provider 统一 DeepSeek（`AI_PROVIDER=deepseek`、`AI_MODEL=deepseek-flash`）；Gemini / OpenAI-compatible 分支保留但不再维护，不要改、不要删、不要拿它们做对比实验
 
 ## 产品原则验收：每个节点都要重跑，不是一次性的
 
@@ -135,7 +130,7 @@ Cowork 和 Code 之间的协调走这两个文件，不经过 Teddy。他明确�
 
 Organizer V2 已在生产运行，不是「还没上线」。问题相反：**它已经在跑，却只放行了 3 段 Memory**（生产 content_quality_reviews：life_event approved 3 / store_only 15 / downgrade 10 / rejected 6）。精度机制把真实人生挡在外面了。
 
-已定方向：Judgment 改 **recall-first**，精度机制降级为「对每句话的约束」，不再作为「要不要出候选」的门；人工审阅台（`/inbox`）作为 Organizer 最后一级。Organizer 搬到 Teddy 电脑上的本地 worker，Vercel 只做渲染和审阅台。
+已定方向：Judgment 改 **recall-first**，精度机制降级为「对每句话的约束」，不再作为「要不要出候选」的门；人工审阅台（`/inbox`）作为 Organizer 最后一级。Organizer 搬到 Teddy 电脑上的本地 worker（见 `v2/scripts/editor/nightly-*.mjs`，00:15 定时任务）。
 
 Capture 链路的同步调用问题仍在（响应延迟不稳定），本地 worker 上线后自然解决；不要靠调大 `AI_TIMEOUT_MS` 掩盖。
 
@@ -173,7 +168,7 @@ Teddy 的默认 Git 习惯：
 - 不再新建分支（feature branch）或 worktree；直接在 `main` 上开发、commit、push。
 - Teddy 说"commit"时，默认包含 commit 后正常 push `main`。
 - 不需要为普通 commit、push main 反复询问。
-- main push 触发 Vercel 自动部署属于正常结果。
+- main push 不触发生产变更：生产站运行在 ECS（47.99.243.155），部署走 `v2/scripts/deploy-ecs-public.sh`，需要手动触发。
 - 保留有意义的提交历史，不默认 squash/rebase。
 - 不 force push。
 - 不擅自删除远端分支。
@@ -183,7 +178,7 @@ Teddy 的默认 Git 习惯：
 
 - force push 或改写历史
 - 删除分支、文件或数据
-- drop 整个数据库，或不可恢复地删除现有业务记录（见下方「Neon/PostgreSQL」，普通 migration 不在此列）
+- drop 整个数据库，或不可恢复地删除现有业务记录（见下方「数据库」，普通 migration 不在此列）
 - 修改生产环境变量或密钥
 - 手动部署、回滚生产
 - 无法确定正确处理方式的实质性业务冲突
@@ -216,12 +211,13 @@ Teddy 的默认 Git 习惯：
 - 不再新建 feature branch；直接在 `main` 上开发、commit、push，与 `origin/main` 保持同步。
 - 多个 Session 可以并行做只读规划（阅读、分析、只读命令），但同一时间只能有一个 Session 对仓库做写操作（改文件、commit、push）。开始写操作前确认没有其他 Session 正在改动仓库。
 
-### Neon/PostgreSQL
+### 数据库（阿里云 RDS PostgreSQL）
 
-Nianlife 只有一个 Neon 数据库（integration `neon-citrine-park`），Vercel 里 `DATABASE_URL` 等变量同时挂在 Production 和 Preview 上，两者本来就是同一份连接串——**没有独立的 Development/Test 数据库，也不新建一个**。这个唯一的库同时充当开发库和测试库。
+**生产数据库是阿里云 RDS，不是 Neon。** Neon 已废弃；`.env.local` 里原来的 `DATABASE_URL` 已改名为 `NEON_LEGACY_DATABASE_URL`——故意让缺少 `DATABASE_URL` 的脚本立即报错，而不是静默写入旧库。
 
-- 不创建新 Neon Project、不建 Neon branch、不建第二个数据库、不要求 Teddy 另配一套连接串。
-- 普通建表、加字段、改约束、跑 migration、contract test 写入/清理测试数据，都已经授权，不用因为"这是 Production"就停下来问。
+- 生产 RDS 只能通过 SSH 隧道访问：`v2/.data/night-rds.mjs` 封装了隧道建立与连接，所有写库脚本必须经过它。
+- Drizzle migration 应用到 RDS：先开隧道，再用 `night-rds.mjs` 提供的连接跑迁移，**不要**直接拿 `.env.local` 里的 Neon 串连线上库。
+- 没有独立的 Development/Test 数据库。RDS 同时充当唯一的库；普通建表、加字段、改约束、跑 migration、测试写入/清理，都已经授权，不用因为"这是 Production"就停下来问。
 - 测试只清理自己创建的记录，不清空整个库；需要 drop 整个数据库或不可逆删除现有业务记录时才停下来找 Teddy。
 - Teddy 可以接受开发期间数据库短暂不可用、migration 期间网站报错——这是单人个人项目当前阶段的正常代价，不必为了避免这个而绕路。
 
@@ -300,13 +296,8 @@ Codex 报告只在 importer / worker / R2 上有一票，别处一票都没有�
    - `rm -f .env.local`
    - 为测试临时移动或改名 `.env.local`
 3. 测试必须通过单进程环境变量覆盖或隔离环境完成，不得操作真实 `.env.local`。
-4. `vercel env pull` 禁止直接写入 `.env.local`：
-   - 必须先写仓库外临时文件
-   - 验证不是空值或 `[SENSITIVE]`
-   - Sensitive 变量无法拉取时立即停止，不得覆盖原文件
-5. 即使需要重新执行 `vercel link`，也不得删除 `.env.local`。
-6. 任何获准的环境文件修改前，必须先在仓库外创建可恢复备份。
-7. 禁止在日志、聊天、commit 或终端输出中显示 secret 值。
+4. 任何获准的环境文件修改前，必须先在仓库外创建可恢复备份。
+5. 禁止在日志、聊天、commit 或终端输出中显示 secret 值。
 
 ## 现有改动保护规则
 
@@ -314,13 +305,7 @@ Codex 报告只在 importer / worker / R2 上有一票，别处一票都没有�
 
 ## 常用验证命令
 
-```
-cd v2
-npm run typecheck
-npm test
-npm run lint
-npm run build
-```
+应用在 `v2/`，验证命令走那里的 `package.json` scripts。
 
 不要每次微小改动都跑全套；完成一个切片后再验证。
 
