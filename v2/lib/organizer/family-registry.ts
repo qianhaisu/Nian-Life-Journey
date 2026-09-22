@@ -208,28 +208,50 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       // Teddy, confirmed 2026-09-12 session (stored in project memory), reconfirmed by context
       // 2026-09-21: 老苏 is 张年's maternal grandfather (外公). He is 苏静's father.
       //
-      // 1,243 messages in DB as of 2026-09-21 across 12 conversations: 467 in 亲爱的爸爸妈妈,
-      // 238 in 老苏家 (conversation:c9882c6d…), 224 in the daycare class group, 111 in each of the
-      // two 老苏家 alternate ids, and small counts elsewhere. Global mapping — 老苏 is specific
-      // enough as a name and appears consistently as 外公 across all measured contexts.
+      // 1,243 messages in DB as of 2026-09-21 across 12 conversations — scoped to all of them.
+      // No wxid/account-id evidence exists in the import (metadata carries a conversationDigest hash,
+      // not a stable account id), so the mapping is restricted to the conversations where his
+      // messages were measured. All 12 are listed here; new conversations must be added explicitly.
       sourceParticipantDigest: senderDigestForDisplayName("老苏"),
       displayName: "老苏",
       canonicalPersonId: "person-laos",
       relationshipToSubject: "maternal_grandfather",
       narrativeLabel: "外公",
+      conversationIds: [
+        "conversation:77348fd4007b65a8c3dc680f", // 亲爱的爸爸妈妈 JSON (467 msgs)
+        "conversation:c9882c6d1fb49581840dd47c", // 老苏家 JSON (238 msgs)
+        DAYCARE_CONVERSATION,                    // 乳儿班 JSON (224 msgs)
+        "conversation:b237eb2ab60e65c404be9cd0", // 老苏家 alt id (111 msgs)
+        "conversation:8245344e70d2a1a24311ea3e", // 老苏家 alt id 2 (111 msgs)
+        "conversation:e6adbcafc3c6e32be0494251", // 小雪微信群 (63 msgs)
+        "conversation:d3a0e5f619ac6fe3e40d81cf", // 乳儿班 md post-fix (15 msgs)
+        "conversation:d64551c8e1cea882635e3969", // 乳儿班 earliest id (5 msgs)
+        "conversation:bb5d5ba6da5986d35b923465", // 乳儿班 md pre-fix (5 msgs)
+        "conversation:3769bfd8fba668c7fb3ad240", // 亲爱的爸爸妈妈 md post-fix (2 msgs)
+        "conversation:6a708760503a82492b62494b", // (1 msg)
+        "conversation:6a77e80c2c1d96dd24bfc523", // (1 msg)
+      ],
     },
     {
       // Teddy, confirmed 2026-09-12 session (stored in project memory), reconfirmed by context
       // 2026-09-21: 张存华 is 张年's paternal grandfather (爷爷). He is 张永滕's father.
       //
-      // 572 messages in DB as of 2026-09-21: 477 in 亲爱的爸爸妈妈 (conversation:77348fd4…),
-      // 86 in the daycare class group, and small counts elsewhere. Global mapping — 张存华 is a
-      // full three-character name and specific enough that collision is implausible.
+      // 572 messages in DB as of 2026-09-21 across 7 conversations — scoped to all of them.
+      // No wxid/account-id evidence exists; scoped to confirmed conversations, same reasoning as 老苏.
       sourceParticipantDigest: senderDigestForDisplayName("张存华"),
       displayName: "张存华",
       canonicalPersonId: "person-zhangcunhua",
       relationshipToSubject: "paternal_grandfather",
       narrativeLabel: "爷爷",
+      conversationIds: [
+        "conversation:77348fd4007b65a8c3dc680f", // 亲爱的爸爸妈妈 JSON (477 msgs)
+        DAYCARE_CONVERSATION,                    // 乳儿班 JSON (86 msgs)
+        "conversation:d3a0e5f619ac6fe3e40d81cf", // 乳儿班 md post-fix (3 msgs)
+        "conversation:3769bfd8fba668c7fb3ad240", // 亲爱的爸爸妈妈 md post-fix (2 msgs)
+        "conversation:d64551c8e1cea882635e3969", // 乳儿班 earliest id (2 msgs)
+        "conversation:6a708760503a82492b62494b", // (1 msg)
+        "conversation:bb5d5ba6da5986d35b923465", // 乳儿班 md pre-fix (1 msg)
+      ],
     },
     // The nursery's own accounts, one per class plus the centre and its after-hours desk. Teddy,
     // 2026-09-04: a teacher's words are to read as 老师, never as a family member's. They share one

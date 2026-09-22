@@ -546,9 +546,15 @@ async function processItem(item) {
     allowedMediaTiers: MEDIA_TIERS,
   };
   const writerStory = { title: writer.output.title, story, usedMediaIds: writer.output.usedMediaIds ?? [] };
+  const resolvedPeople = [...new Set(
+    item.w.items
+      .map((wi) => resolveSpeaker(wi.senderDigest, FAMILY_REGISTRY, { conversationId: item.w.conversationId }))
+      .filter((s) => s.known && s.narrativeLabel)
+      .map((s) => s.narrativeLabel),
+  )];
   let applied;
   try {
-    const plan = planArtifacts({ window: item.w, outcome, windowFingerprint: item.fp, policy, story: writerStory, now, newId: newIdOf, editor: { proposedAction: verdict.proposedAction, sensitivityFlags: verdict.sensitivityFlags ?? [] } });
+    const plan = planArtifacts({ window: item.w, outcome, windowFingerprint: item.fp, policy, story: writerStory, now, newId: newIdOf, editor: { proposedAction: verdict.proposedAction, sensitivityFlags: verdict.sensitivityFlags ?? [] }, resolvedPeople });
     // Publication is a separate decision from writing, and it is not this script's to make unless
     // a human has said so on this run. Default: keep ADAPTER_REVIEW_DECISION, which is fail-closed.
     plan.review.reasonCodes = [...plan.review.reasonCodes, "t7-subject-gate"];

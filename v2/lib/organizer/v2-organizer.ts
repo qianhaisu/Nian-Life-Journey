@@ -25,6 +25,8 @@ import type { OrganizerOutcome } from "./contract";
 import type { ProductionSelection } from "./production-selector";
 import type { V2Pipeline, V2Judgment } from "./v2-pipeline";
 import { applyPlan, artifactRepositoryOf, planArtifacts, type ArtifactRepository, type PersistencePlan } from "./production-adapter";
+import { FAMILY_REGISTRY } from "./family-registry";
+import { resolveSpeaker } from "./identity";
 import { newId as defaultNewId } from "@/lib/db/repository-interface";
 import type { OrganizerWindowInput } from "@/lib/db/repository-interface";
 import type { OrganizerAction, OrganizerRun, RawSource } from "@/lib/types";
@@ -143,6 +145,12 @@ export class EvidenceOrganizerV2 {
     if (prior) return resultFromRun(prior, "already organized under this fingerprint");
 
     const decided = await this.decide(window, fingerprint, input.profile?.birthDate);
+    const resolvedPeople = [...new Set(
+      window.items
+        .map((item) => resolveSpeaker(item.senderDigest, FAMILY_REGISTRY, { conversationId: window.conversationId }))
+        .filter((s) => s.known && s.narrativeLabel)
+        .map((s) => s.narrativeLabel as string),
+    )];
     const plan = planArtifacts({
       window,
       outcome: decided.outcome,
@@ -153,6 +161,7 @@ export class EvidenceOrganizerV2 {
       now,
       newId,
       latencyMs: decided.latencyMs,
+      resolvedPeople,
     });
     if (decided.fallbackReason) plan.run.fallbackReason = decided.fallbackReason;
 

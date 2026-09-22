@@ -139,6 +139,13 @@ export type PlanInput = {
   now: string;
   newId: (prefix: string) => string;
   latencyMs?: number;
+  /**
+   * Narrative labels of known family members who spoke in this window. Derived by the caller
+   * (v2-organizer.ts / organizer-month-write.mjs) from the window's senderDigests via
+   * FAMILY_REGISTRY. The adapter never resolves identities itself — it persists a decision.
+   * Absent or empty → people stays [].
+   */
+  resolvedPeople?: string[];
 };
 
 /**
@@ -248,7 +255,7 @@ export function planArtifacts(input: PlanInput): PersistencePlan {
       id: eventId, profileId,
       title: input.story.title, story: input.story.story,
       occurredAt: outcome.occurredAt ?? window.activityDate,
-      people: [], tags: contentTypes, contentTypes,
+      people: input.resolvedPeople ?? [], tags: contentTypes, contentTypes,
       mediaIds, sourceIds: sourceIds.slice(), growthRecordIds: [], careRecordIds: [],
       eventType: (outcome.eventType === "milestone" ? "milestone" : "moment") as LifeEvent["eventType"],
       // 2026-09-16：这里原来写死 "memory"，于是这条路径在结构上就不可能产出 highlight/chapter，
