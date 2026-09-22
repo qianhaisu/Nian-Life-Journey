@@ -263,6 +263,47 @@ export type ClaudeStoryDecisionInput = {
   reasonCodes: string[];
 };
 
+/**
+ * Input for a versioned story content correction (applies diff to story text and/or people field,
+ * then records a review binding the new content hash).  Must not be used when a human decision
+ * exists on the target event.
+ */
+export type ClaudeStoryCorrectionInput = {
+  eventId: string;
+  /** sha256 of the CURRENT stored content — StaleReviewContent if this doesn't match. */
+  currentContentSha256: string;
+  /** If undefined, keep existing value. */
+  newTitle?: string | null;
+  /** If undefined, keep existing value. */
+  newStory?: string | null;
+  /** If undefined, keep existing people. */
+  newPeople?: string[];
+  promptVersion: string;
+  policyVersion: string;
+  /** Must include CLAUDE_AUTHORIZATION_REASON and at least one correction:* code. */
+  reasonCodes: string[];
+  /**
+   * Known legacy batch prompt versions whose "human" reviews may be bypassed for this correction.
+   * ONLY for the r7-regression-fix 2026-09-22 batch (prompt_version="agent-review-20260922-v1")
+   * which was inserted via forbidden direct-SQL with provider="agent". Unknown "agent" rows and
+   * all other human decisions remain protected. Scope to exact provenance — never a wildcard.
+   */
+  legacyBatchOverridePromptVersions?: string[];
+};
+
+export function assertClaudeStoryCorrectionInput(input: ClaudeStoryCorrectionInput): void {
+  if (!input.eventId) throw new StoryWriteContractError("MISSING_EVENT", "eventId is required");
+  if (!/^[0-9a-f]{64}$/.test(input.currentContentSha256 ?? ""))
+    throw new StoryWriteContractError("MISSING_CONTENT_HASH", "currentContentSha256 must be a 64-hex sha256");
+  if (!input.promptVersion || !input.policyVersion)
+    throw new StoryWriteContractError("MISSING_VERSION", "promptVersion and policyVersion are required");
+  assertClaudeReasonCodes(input.reasonCodes);
+  if (!input.reasonCodes.some((c) => c.startsWith("correction:")))
+    throw new StoryWriteContractError("MISSING_CORRECTION_CODE", "reasonCodes must include a correction:* code describing what was fixed");
+  if (input.reasonCodes.some((c) => c.startsWith(CONTENT_SHA256_REASON_PREFIX)))
+    throw new StoryWriteContractError("REASON_CODE_RESERVED", `caller must not supply ${CONTENT_SHA256_REASON_PREFIX}; it is computed and appended by applyClaudeStoryCorrection`);
+}
+
 export function assertClaudeStoryDecisionInput(input: ClaudeStoryDecisionInput): void {
   if (!input.eventId) throw new StoryWriteContractError("MISSING_EVENT", "eventId is required");
   if (!/^[0-9a-f]{64}$/.test(input.reviewedContentSha256 ?? "")) throw new StoryWriteContractError("MISSING_REVIEWED_CONTENT_HASH", "reviewedContentSha256 must be the 64-hex sha256 of the reviewed story content");

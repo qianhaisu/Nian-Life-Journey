@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { QualityReview } from "@/lib/organizer/quality-review";
-import type { ClaudeMediaDecisionInput, ClaudeStoryDecisionInput, HumanStoryDecisionInput, StoryContent, StoryProtection, WriteActor } from "@/lib/organizer/story-write-guard";
+import type { ClaudeMediaDecisionInput, ClaudeStoryCorrectionInput, ClaudeStoryDecisionInput, HumanStoryDecisionInput, StoryContent, StoryProtection, WriteActor } from "@/lib/organizer/story-write-guard";
 
 /** Automatic persistence accepts only the organizer actor; anything else is refused at runtime. */
 export type AutomaticWriteOptions = { actor?: WriteActor };
@@ -281,6 +281,11 @@ export interface Repository extends ChatImportRepository {
   // 2026-09-16: Claude review (authorized by Teddy). Same lock/hash/idempotency as the human entry, but
   // recorded as its own reviewer type and refused wherever a human row already made a decision.
   recordClaudeStoryDecision(input: ClaudeStoryDecisionInput): Promise<ClaudeDecisionResult>;
+  // 2026-09-22: Versioned story correction — updates content fields (title/story/people) inside a
+  // guarded transaction then binds a new content hash. Refuses if a human decision exists or if
+  // currentContentSha256 is stale. people is not in the content hash; people-only corrections produce
+  // the same newContentSha256 as oldContentSha256.
+  applyClaudeStoryCorrection(input: ClaudeStoryCorrectionInput): Promise<{ review: QualityReview; oldContentSha256: string; newContentSha256: string; idempotent: boolean }>;
   recordClaudeMediaDecision(input: ClaudeMediaDecisionInput): Promise<ClaudeDecisionResult>;
   getMediaContentVersion(mediaId: string): Promise<{ mediaId: string; contentVersion: string } | null>;
   getStoryContentVersion(eventId: string): Promise<{ eventId: string; contentSha256: string; content: StoryContent } | null>;

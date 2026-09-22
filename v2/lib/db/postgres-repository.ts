@@ -12,8 +12,8 @@ import { indexReviews, isEventPublishable, isTracePublishable, type QualityRevie
 import { createHash } from "node:crypto";
 import {
   CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
-  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryDecisionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, evaluateStoryProtection, mediaContentVersion, storyContentSha256, storyLinkTargets,
-  type ClaudeMediaDecisionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
+  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryDecisionInput, assertClaudeStoryCorrectionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, evaluateStoryProtection, mediaContentVersion, reviewerTypeOf, storyContentSha256, storyLinkTargets,
+  type ClaudeMediaDecisionInput, type ClaudeStoryCorrectionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
 } from "@/lib/organizer/story-write-guard";
 import { ledgerOnlyStoryPhotoIds, storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
 import { storyNeighbours } from "@/lib/story-neighbours";
@@ -1434,6 +1434,72 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         if (inserted.rows.length) return { review, contentVersion: current, idempotent: false };
         if (review.provider === CLAUDE_REVIEW_PROVIDER && review.decision === input.decision && boundContentSha256(review.reasonCodes) === current) return { review, contentVersion: current, idempotent: true };
         throw new StoryWriteContractError("CLAUDE_DECISION_CONFLICT", `${input.eventId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
+      });
+    },
+    // 2026-09-22: Versioned story correction — updates title/story/people and records a review binding
+    // the corrected content hash. Safe against human decisions (refuses if present) and hash staleness
+    // (refuses if currentContentSha256 doesn't match the stored story). people is NOT in the content
+    // hash (story-content-v1), so a people-only correction keeps the same content hash.
+    async applyClaudeStoryCorrection(input: ClaudeStoryCorrectionInput) {
+      assertClaudeStoryCorrectionInput(input);
+      return db.transaction(async (tx) => {
+        const q = tx as unknown as GuardTx;
+        await lockStoryLedger(q);
+        const event = await lockEventRow(q, "id", input.eventId);
+        if (!event) throw new StoryWriteContractError("EVENT_NOT_FOUND", `no life_event ${input.eventId}`);
+        const content = await readStoryContent(q, input.eventId);
+        const oldHash = storyContentSha256(content!);
+        if (oldHash !== input.currentContentSha256) {
+          throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `stored content hash ${oldHash.slice(0, 12)} does not match provided ${input.currentContentSha256.slice(0, 12)}; nothing written`);
+        }
+        const targets = storyLinkTargets(input.eventId, [event.organizationFingerprint]);
+        const ledger = await readLedgerRows(q, [...targets.ids, ...targets.fingerprintTargets]);
+        const overridablePVs = new Set(input.legacyBatchOverridePromptVersions ?? []);
+        const blocker = ledger.find(
+          (row) => STORY_DECISION_KINDS.has(row.targetKind) && reviewerTypeOf(row.provider) === "human" && !new Set(["needs_human_review", "needs_review"]).has(row.decision) && !overridablePVs.has(row.promptVersion),
+        );
+        if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human ${blocker.targetKind} decision (${blocker.provider}: ${blocker.decision}); correction refused`);
+        // Pre-mutation idempotency check: if a review for this promptVersion already exists, verify it
+        // bound the same content hash before allowing a re-run. A different-payload retry under the
+        // same key must be rejected (zero mutation) to prevent content drift with a stale review.
+        const existingThisVersion = ledger.find((row) => row.targetKind === "life_event" && row.targetId === input.eventId && row.promptVersion === input.promptVersion);
+        if (existingThisVersion) {
+          // Read full reason_codes for the existing review to check its bound hash
+          const [existingRow] = await (tx as any).select().from(t.contentQualityReviews).where(and(
+            eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
+          if (existingRow) {
+            const review = reviewFromRow(existingRow as Record<string, unknown>);
+            const boundHash = boundContentSha256(review.reasonCodes);
+            if (boundHash === oldHash) return { review, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
+            throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a correction to a different content version; use a new promptVersion for a new correction`);
+          }
+        }
+        const newTitle = input.newTitle !== undefined ? input.newTitle : content!.title;
+        const newStory = input.newStory !== undefined ? input.newStory : content!.story;
+        if (input.newPeople !== undefined) {
+          await q.execute(sql`update life_events set title = ${newTitle}, story = ${newStory}, people = ${JSON.stringify(input.newPeople)}::jsonb where id = ${input.eventId}`);
+        } else {
+          await q.execute(sql`update life_events set title = ${newTitle}, story = ${newStory} where id = ${input.eventId}`);
+        }
+        const newContent = await readStoryContent(q, input.eventId);
+        const newHash = storyContentSha256(newContent!);
+        const reasonCodes = [...input.reasonCodes, `corrected-from:${oldHash}`, `${CONTENT_SHA256_REASON_PREFIX}${newHash}`];
+        const id = `claude-review-${createHash("sha256").update(`${input.eventId}|${input.promptVersion}`).digest("hex").slice(0, 24)}`;
+        const [row] = await (tx as any).select().from(t.contentQualityReviews).where(and(
+          eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
+        if (row) {
+          // Already exists after mutation check above (race condition or logic error) — reject
+          throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `review for promptVersion "${input.promptVersion}" appeared after mutation; this should not happen`);
+        }
+        await q.execute(sql`insert into content_quality_reviews
+            (id, profile_id, target_kind, target_id, decision, reason_codes, provider, model, prompt_version, policy_version, review_fingerprint, reviewed_at)
+          values (${id}, ${content!.profileId}, 'life_event', ${input.eventId}, 'approved', ${JSON.stringify(reasonCodes)}::jsonb, ${CLAUDE_REVIEW_PROVIDER}, null,
+            ${input.promptVersion}, ${input.policyVersion}, ${`${input.eventId}:${input.promptVersion}`},
+            greatest((now() at time zone 'utc'), (select max(reviewed_at) + interval '1 microsecond' from content_quality_reviews where target_kind = 'life_event' and target_id = ${input.eventId})))`);
+        const [newRow] = await (tx as any).select().from(t.contentQualityReviews).where(and(
+          eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
+        const review = reviewFromRow(newRow as Record<string, unknown>);
+        return { review, oldContentSha256: oldHash, newContentSha256: newHash, idempotent: false };
       });
     },
     async recordClaudeMediaDecision(input: ClaudeMediaDecisionInput) {

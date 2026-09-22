@@ -18,8 +18,8 @@ import { indexReviews, isEventPublishable } from "@/lib/organizer/quality-review
 import { randomUUID } from "node:crypto";
 import {
   CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
-  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryDecisionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, canonicalOccurredAtUtc, evaluateStoryProtection, mediaContentVersion, rowLinksToStory, storyContentSha256,
-  type ClaudeMediaDecisionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
+  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryCorrectionInput, assertClaudeStoryDecisionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, canonicalOccurredAtUtc, evaluateStoryProtection, mediaContentVersion, reviewerTypeOf, rowLinksToStory, storyContentSha256,
+  type ClaudeMediaDecisionInput, type ClaudeStoryCorrectionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
 } from "@/lib/organizer/story-write-guard";
 
 const jsonLedgerRows = (store: Store): LedgerRow[] => store.qualityReviews.map((review) => ({ targetKind: review.targetKind, targetId: review.targetId, decision: review.decision, provider: review.provider, promptVersion: review.promptVersion, reviewedAt: review.reviewedAt }));
@@ -366,6 +366,38 @@ export function createJsonRepository(): Repository {
         const review: QualityReview = { id: `claude-review-${randomUUID()}`, profileId: event.profileId, targetKind: "life_event", targetId: input.eventId, decision: input.decision, reasonCodes: [...input.reasonCodes, `${CONTENT_SHA256_REASON_PREFIX}${current}`], provider: CLAUDE_REVIEW_PROVIDER, promptVersion: input.promptVersion, policyVersion: input.policyVersion, reviewFingerprint: `${input.eventId}:${input.promptVersion}`, reviewedAt: new Date(latest).toISOString() };
         store.qualityReviews.push(review);
         return { review, contentVersion: current, idempotent: false };
+      });
+    },
+    async applyClaudeStoryCorrection(input: ClaudeStoryCorrectionInput) {
+      assertClaudeStoryCorrectionInput(input);
+      return withStoreMutation((store) => {
+        const event = store.events.find((item) => item.id === input.eventId);
+        if (!event) throw new StoryWriteContractError("EVENT_NOT_FOUND", `no life_event ${input.eventId}`);
+        const oldHash = storyContentSha256(jsonStoryContent(event));
+        if (oldHash !== input.currentContentSha256) throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `stored content hash ${oldHash.slice(0, 12)} does not match provided ${input.currentContentSha256.slice(0, 12)}`);
+        const ledger: LedgerRow[] = store.qualityReviews
+          .filter((item) => rowLinksToStory(item, event.id, [event.organizationFingerprint]))
+          .map((item) => ({ targetKind: item.targetKind, targetId: item.targetId, decision: item.decision, provider: item.provider ?? "", promptVersion: item.promptVersion, reviewedAt: item.reviewedAt }));
+        const overridablePVs = new Set(input.legacyBatchOverridePromptVersions ?? []);
+        const blocker = ledger.find((row) => STORY_DECISION_KINDS.has(row.targetKind) && reviewerTypeOf(row.provider) === "human" && !new Set(["needs_human_review", "needs_review"]).has(row.decision) && !overridablePVs.has(row.promptVersion));
+        if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human decision; correction refused`);
+        const existingThisVersion = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
+        if (existingThisVersion) {
+          const boundHash = boundContentSha256(existingThisVersion.reasonCodes);
+          if (boundHash === oldHash) return { review: existingThisVersion, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
+          throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a correction to a different content version`);
+        }
+        if (input.newTitle !== undefined) event.title = input.newTitle ?? undefined;
+        if (input.newStory !== undefined) event.story = input.newStory ?? undefined;
+        if (input.newPeople !== undefined) event.people = input.newPeople;
+        const newHash = storyContentSha256(jsonStoryContent(event));
+        const reasonCodes = [...input.reasonCodes, `corrected-from:${oldHash}`, `${CONTENT_SHA256_REASON_PREFIX}${newHash}`];
+        const existing = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
+        if (existing) return { review: existing, oldContentSha256: oldHash, newContentSha256: newHash, idempotent: true };
+        const latest = Math.max(Date.now(), ...store.qualityReviews.filter((item) => item.targetKind === "life_event" && item.targetId === input.eventId).map((item) => Date.parse(item.reviewedAt) + 1).filter((value) => !Number.isNaN(value)));
+        const review: QualityReview = { id: `claude-review-${randomUUID()}`, profileId: event.profileId, targetKind: "life_event", targetId: input.eventId, decision: "approved", reasonCodes, provider: CLAUDE_REVIEW_PROVIDER, promptVersion: input.promptVersion, policyVersion: input.policyVersion, reviewFingerprint: `${input.eventId}:${input.promptVersion}`, reviewedAt: new Date(latest).toISOString() };
+        store.qualityReviews.push(review);
+        return { review, oldContentSha256: oldHash, newContentSha256: newHash, idempotent: false };
       });
     },
     async recordClaudeMediaDecision(input: ClaudeMediaDecisionInput) {

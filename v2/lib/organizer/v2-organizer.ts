@@ -145,8 +145,14 @@ export class EvidenceOrganizerV2 {
     if (prior) return resultFromRun(prior, "already organized under this fingerprint");
 
     const decided = await this.decide(window, fingerprint, input.profile?.birthDate);
+    // Only include speakers from the exact source messages the AI selected. The fallback to all
+    // window speakers was removed: empty sourceIds means the AI produced no grounded selection,
+    // so people[] should be empty rather than silently inflated with all chat participants.
+    // (R7 2026-09-22: the fallback was the root cause of 143 people-inflation cases.)
+    const decidedSourceIds = new Set(decided.outcome.sourceIds ?? []);
     const resolvedPeople = [...new Set(
       window.items
+        .filter((item) => decidedSourceIds.has(item.sourceId))
         .map((item) => resolveSpeaker(item.senderDigest, FAMILY_REGISTRY, { conversationId: window.conversationId }))
         .filter((s) => s.known && s.narrativeLabel)
         .map((s) => s.narrativeLabel as string),
