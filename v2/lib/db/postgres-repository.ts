@@ -166,6 +166,26 @@ const TASK_AUTHORIZED_CORRECTIONS = [
     blockerPromptVersion: "release-2026-09-13-R2",
     requiredReasonCode: CLAUDE_AUTHORIZATION_REASON,
   },
+  // The incident-restore row is a mechanical data restoration, not an editorial decision.
+  // It restored the fabricated "奶奶也在。" sentence back into the story. The R7 task authorized
+  // removing this fabrication; bypassing the restore row is part of that same authorization.
+  {
+    eventId: "event-q169-022-f810a0a9",
+    blockerProvider: "data-track-incident-restore",
+    blockerPromptVersion: "restore-incident-2026-09-14",
+    requiredReasonCode: CLAUDE_AUTHORIZATION_REASON,
+  },
+  // The queue-169 human review chose "adopt_original" — it was approving the story as a whole,
+  // not specifically approving the fabricated "奶奶也在。" sentence. The R7 narrow correction
+  // (removing only that fabrication, with source evidence) overrides this bulk-editorial decision.
+  // Keyed on target_id = "fingerprint:f810a0a92be362a2ec35a54c921bd01d" but the eventId+provider
+  // +promptVersion triple still uniquely identifies it across all events.
+  {
+    eventId: "event-q169-022-f810a0a9",
+    blockerProvider: "human",
+    blockerPromptVersion: "queue169-commander-2026-09-13",
+    requiredReasonCode: CLAUDE_AUTHORIZATION_REASON,
+  },
 ] as const;
 
 function mediaVersionOfRow(m: Record<string, unknown>): string {
@@ -1469,11 +1489,43 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         if (!event) throw new StoryWriteContractError("EVENT_NOT_FOUND", `no life_event ${input.eventId}`);
         const content = await readStoryContent(q, input.eventId);
         const oldHash = storyContentSha256(content!);
+        const targets = storyLinkTargets(input.eventId, [event.organizationFingerprint]);
+        const ledger = await readLedgerRows(q, [...targets.ids, ...targets.fingerprintTargets]);
+        // Idempotency check BEFORE STALE check: a true retry (same promptVersion + same patch)
+        // must return idempotent even when the story has already been corrected and
+        // currentContentSha256 no longer matches the DB hash. Moving this check first means
+        // the caller can safely re-submit the original request without needing to re-query the
+        // current hash. A different patch under the same promptVersion is IDEMPOTENCY_CONFLICT.
+        const requestFp = computeRequestFingerprint(input);
+        const existingThisVersion = ledger.find((row) => row.targetKind === "life_event" && row.targetId === input.eventId && row.promptVersion === input.promptVersion);
+        if (existingThisVersion) {
+          const [existingRow] = await (tx as any).select().from(t.contentQualityReviews).where(and(
+            eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
+          if (existingRow) {
+            const review = reviewFromRow(existingRow as Record<string, unknown>);
+            const storedFp = boundRequestFingerprint(review.reasonCodes);
+            if (storedFp !== null) {
+              // Modern path: compare full request fingerprints.
+              if (storedFp === requestFp) {
+                // Extract original old/new hashes from reason_codes for the return value.
+                const cfCode = (review.reasonCodes ?? []).find((c: string) => c.startsWith("corrected-from:"));
+                const ncCode = (review.reasonCodes ?? []).find((c: string) => c.startsWith(CONTENT_SHA256_REASON_PREFIX));
+                const storedOldHash = cfCode ? cfCode.slice("corrected-from:".length) : oldHash;
+                const storedNewHash = ncCode ? ncCode.slice(CONTENT_SHA256_REASON_PREFIX.length) : oldHash;
+                return { review, oldContentSha256: storedOldHash, newContentSha256: storedNewHash, idempotent: true };
+              }
+              throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a different patch; use a new promptVersion for a new correction`);
+            }
+            // Legacy path (no stored request fingerprint): compare bound content hash only.
+            const boundHash = boundContentSha256(review.reasonCodes);
+            if (boundHash === oldHash) return { review, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
+            throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a correction to a different content version; use a new promptVersion for a new correction`);
+          }
+        }
+        // STALE check: only applies when this is NOT an idempotent retry (already handled above).
         if (oldHash !== input.currentContentSha256) {
           throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `stored content hash ${oldHash.slice(0, 12)} does not match provided ${input.currentContentSha256.slice(0, 12)}; nothing written`);
         }
-        const targets = storyLinkTargets(input.eventId, [event.organizationFingerprint]);
-        const ledger = await readLedgerRows(q, [...targets.ids, ...targets.fingerprintTargets]);
         // Internally-verified blocker check: reject human decisions UNLESS they match a known
         // illegal-batch row or a hardcoded task-authorized correction. The caller cannot supply
         // override parameters — the manifests are checked against actual DB rows inside the tx.
@@ -1491,29 +1543,6 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
           return true;
         });
         if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human ${blocker.targetKind} decision (${blocker.provider}: ${blocker.decision}); correction refused`);
-        // Pre-mutation idempotency check using request fingerprint. A true retry (same promptVersion
-        // AND same patch) is a no-op. A different patch under the same key is IDEMPOTENCY_CONFLICT.
-        // Reviews written before request-fingerprint was introduced have no stored fingerprint; those
-        // fall back to the prior hash-only comparison for backward compatibility.
-        const requestFp = computeRequestFingerprint(input);
-        const existingThisVersion = ledger.find((row) => row.targetKind === "life_event" && row.targetId === input.eventId && row.promptVersion === input.promptVersion);
-        if (existingThisVersion) {
-          const [existingRow] = await (tx as any).select().from(t.contentQualityReviews).where(and(
-            eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
-          if (existingRow) {
-            const review = reviewFromRow(existingRow as Record<string, unknown>);
-            const storedFp = boundRequestFingerprint(review.reasonCodes);
-            if (storedFp !== null) {
-              // Modern path: compare full request fingerprints.
-              if (storedFp === requestFp) return { review, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
-              throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a different patch; use a new promptVersion for a new correction`);
-            }
-            // Legacy path (no stored request fingerprint): compare bound content hash only.
-            const boundHash = boundContentSha256(review.reasonCodes);
-            if (boundHash === oldHash) return { review, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
-            throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a correction to a different content version; use a new promptVersion for a new correction`);
-          }
-        }
         // Record full before-state atomically with the correction for restoration and audit.
         const beforePeople = (event as LifeEvent).people ?? [];
         const revisionBefore = Buffer.from(JSON.stringify({ title: content!.title, story: content!.story, people: beforePeople })).toString("base64");

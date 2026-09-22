@@ -59,9 +59,9 @@ process.env.DATABASE_URL = tunnelUrl;
 process.env.DATABASE_URL_UNPOOLED = tunnelUrl;
 
 // Import repository AFTER env is set so getPool() picks up the tunnel URL
-const { createPostgresRepository } = await import("../lib/db/postgres-repository.js");
+const { createPostgresRepository } = await import("../lib/db/postgres-repository.ts");
 
-const repo = createPostgresRepository(process.env);
+const repo = createPostgresRepository();
 
 // Verify we're on RDS (openTunnel already asserted, but double-check fingerprint)
 console.log(`Tunnel up on port ${tunnel.localPort}`);
@@ -117,7 +117,7 @@ for (const fix of FIXES) {
     });
 
     if (result.idempotent) {
-      console.log(`  IDEMPOTENT: already applied for promptVersion=${PROMPT_VERSION}`);
+      console.log(`  IDEMPOTENT: already applied for promptVersion=${fix.promptVersion}`);
     } else {
       console.log(`  APPLIED: oldHash=${result.oldContentSha256.slice(0, 12)}… newHash=${result.newContentSha256.slice(0, 12)}…`);
       console.log(`  reviewId: ${result.review.id}`);

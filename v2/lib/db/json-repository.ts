@@ -374,13 +374,35 @@ export function createJsonRepository(): Repository {
         const event = store.events.find((item) => item.id === input.eventId);
         if (!event) throw new StoryWriteContractError("EVENT_NOT_FOUND", `no life_event ${input.eventId}`);
         const oldHash = storyContentSha256(jsonStoryContent(event));
-        if (oldHash !== input.currentContentSha256) throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `stored content hash ${oldHash.slice(0, 12)} does not match provided ${input.currentContentSha256.slice(0, 12)}`);
         const ledger: LedgerRow[] = store.qualityReviews
           .filter((item) => rowLinksToStory(item, event.id, [event.organizationFingerprint]))
           .map((item) => ({ targetKind: item.targetKind, targetId: item.targetId, decision: item.decision, provider: item.provider ?? "", promptVersion: item.promptVersion, reviewedAt: item.reviewedAt }));
+        // Idempotency check BEFORE STALE check (mirrors postgres-repository fix).
+        const requestFp = computeRequestFingerprint(input);
+        const existingThisVersion = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
+        if (existingThisVersion) {
+          const storedFp = boundRequestFingerprint(existingThisVersion.reasonCodes);
+          if (storedFp !== null) {
+            if (storedFp === requestFp) {
+              const cfCode = (existingThisVersion.reasonCodes ?? []).find((c: string) => c.startsWith("corrected-from:"));
+              const ncCode = (existingThisVersion.reasonCodes ?? []).find((c: string) => c.startsWith(CONTENT_SHA256_REASON_PREFIX));
+              const storedOldHash = cfCode ? cfCode.slice("corrected-from:".length) : oldHash;
+              const storedNewHash = ncCode ? ncCode.slice(CONTENT_SHA256_REASON_PREFIX.length) : oldHash;
+              return { review: existingThisVersion, oldContentSha256: storedOldHash, newContentSha256: storedNewHash, idempotent: true };
+            }
+            throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a different patch`);
+          }
+          const boundHash = boundContentSha256(existingThisVersion.reasonCodes);
+          if (boundHash === oldHash) return { review: existingThisVersion, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
+          throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a correction to a different content version`);
+        }
+        // STALE check: only when NOT an idempotent retry.
+        if (oldHash !== input.currentContentSha256) throw new StoryWriteContractError("STALE_REVIEW_CONTENT", `stored content hash ${oldHash.slice(0, 12)} does not match provided ${input.currentContentSha256.slice(0, 12)}`);
         // Internal task-authorized corrections manifest (mirrors postgres-repository).
         const TASK_AUTHORIZED_CORRECTIONS = [
           { eventId: "event-q169-022-f810a0a9", blockerProvider: "commander-release-2026-09-13", blockerPromptVersion: "release-2026-09-13-R2", requiredReasonCode: CLAUDE_AUTHORIZATION_REASON },
+          { eventId: "event-q169-022-f810a0a9", blockerProvider: "data-track-incident-restore", blockerPromptVersion: "restore-incident-2026-09-14", requiredReasonCode: CLAUDE_AUTHORIZATION_REASON },
+          { eventId: "event-q169-022-f810a0a9", blockerProvider: "human", blockerPromptVersion: "queue169-commander-2026-09-13", requiredReasonCode: CLAUDE_AUTHORIZATION_REASON },
         ] as const;
         const blocker = ledger.find((row) => {
           if (!STORY_DECISION_KINDS.has(row.targetKind)) return false;
@@ -391,18 +413,6 @@ export function createJsonRepository(): Repository {
           return true;
         });
         if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human decision; correction refused`);
-        const requestFp = computeRequestFingerprint(input);
-        const existingThisVersion = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
-        if (existingThisVersion) {
-          const storedFp = boundRequestFingerprint(existingThisVersion.reasonCodes);
-          if (storedFp !== null) {
-            if (storedFp === requestFp) return { review: existingThisVersion, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
-            throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a different patch`);
-          }
-          const boundHash = boundContentSha256(existingThisVersion.reasonCodes);
-          if (boundHash === oldHash) return { review: existingThisVersion, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
-          throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a correction to a different content version`);
-        }
         const beforePeople = event.people ?? [];
         const revisionBefore = Buffer.from(JSON.stringify({ title: event.title ?? null, story: event.story ?? null, people: beforePeople })).toString("base64");
         if (input.newTitle !== undefined) event.title = input.newTitle ?? undefined;
