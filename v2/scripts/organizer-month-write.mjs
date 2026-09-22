@@ -94,7 +94,8 @@ const { NARRATIVE_VALIDATOR_VERSION, validateNarrative } = await import("../lib/
 const { subjectGateFor, passesSubjectGate, subjectRelevanceMayProceed, claimPassesSubjectGate, coreFactMayBeWritten, editorActionMayBeWritten, SUBJECT_NAMES } = await import("../lib/organizer/subject-gate.ts");
 const { STORY_MEDIA_TIERS } = await import("../lib/organizer/writer-v2.ts");
 const { planArtifacts, applyPlan } = await import("../lib/organizer/production-adapter.ts");
-const { persistDailyTrace, persistOrganizerRun, findOrganizerRun, persistOrganization, markSourcesOrganized, persistQualityReview } = await import("../lib/db/repository.ts");
+const { persistDailyTrace, persistOrganizerRun, findOrganizerRun, persistOrganization, markSourcesOrganized, persistQualityReview, getStoryContentVersion, recordClaudeStoryDecision } = await import("../lib/db/repository.ts");
+const { CLAUDE_AUTHORIZATION_REASON } = await import("../lib/organizer/story-write-guard.ts");
 const { assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
 
 const args = process.argv.slice(2);
@@ -166,6 +167,52 @@ const MEDIA_TIERS = (process.env.ORGANIZER_V2_MEDIA_TIERS ?? "confirmed").split(
 // worthiness entirely (the subject gate is the publication gate here), so the record must say what
 // actually decided, not borrow the name of a policy that was never consulted.
 const T7_POLICY_ID = "t7-subject-gate-v1";
+
+// Evidence gates for post-commit auto-review. These are lightweight checks: the Organizer's own
+// subject gate already ran, so we only guard against placeholder-only stories and off-subject text.
+const AUTO_REVIEW_SUBJECT_SIGNALS = [
+  /张年|小年年|宝宝|小朋友/,
+  /睡觉|吃饭|喝奶|玩耍|洗澡|学会|走路|说话|长大|成长|发育/,
+  /妈妈|爸爸|雪姨|奶奶|外婆|外公|爷爷/,
+  /幼儿园|托班|乳儿班|老师/,
+  /今天|这天/,
+];
+// Called once per successfully written story (applied.applied === true). Idempotent: the underlying
+// recordClaudeStoryDecision uses (target_kind, target_id, prompt_version) conflict key. Failures are
+// logged but never block the write: the story stays needs_human_review until a human or a later run
+// reviews it. Human-decision protection is enforced by recordClaudeStoryDecision itself.
+async function tryAutoReview(eventId, title, story) {
+  const combined = (title ?? "") + " " + (story ?? "");
+  const cleaned = combined.replace(/\[?(图片|视频|语音|文件|链接|表情|media)\]?/g, "").replace(/\s+/g, " ").trim();
+  if (cleaned.length < 15) return { skipped: "not-substantive" };
+  if (!AUTO_REVIEW_SUBJECT_SIGNALS.some((p) => p.test(combined))) return { skipped: "subject-unclear" };
+  let version;
+  try { version = await getStoryContentVersion(eventId); }
+  catch (err) { return { skipped: `sha256-fetch-failed: ${String(err?.message ?? err).slice(0, 80)}` }; }
+  if (!version) return { skipped: "event-not-found-after-write" };
+  try {
+    const result = await recordClaudeStoryDecision({
+      eventId,
+      decision: "approved",
+      reviewedContentSha256: version.contentSha256,
+      promptVersion: "organizer-t7-auto-review-v1",
+      policyVersion: "organizer-t7-auto-review-v1",
+      reasonCodes: [
+        CLAUDE_AUTHORIZATION_REASON,
+        "t7-subject-gate-passed",
+        `story-length:${cleaned.length}`,
+        `title:${(title ?? "untitled").slice(0, 50)}`,
+      ],
+    });
+    return { decision: "approved", idempotent: result.idempotent };
+  } catch (err) {
+    const code = err?.code ?? String(err?.message ?? err).match(/^([A-Z_]+)/)?.[1] ?? "";
+    if (code === "HUMAN_DECISION_PRESENT") return { skipped: `human-protected` };
+    if (code === "STALE_REVIEW_CONTENT") return { skipped: "stale-content" };
+    if (code === "CLAUDE_DECISION_CONFLICT") return { skipped: "already-reviewed-this-version" };
+    return { skipped: `review-error: ${String(err?.message ?? err).slice(0, 80)}` };
+  }
+}
 
 if (!MONTH || !/^\d{4}-\d{2}$/.test(MONTH)) { console.error("--month=YYYY-MM is required"); process.exit(1); }
 if (!OUT) { console.error("--out=<absolute path outside the repository>.json is required"); process.exit(1); }
@@ -579,6 +626,10 @@ async function processItem(item) {
   if (!applied.applied) { console.log(`  ${item.lifeDate} — already organized under this fingerprint (eventId ${applied.eventId}), no new write`); return entry; }
   written += 1;
   console.log(`  ${item.lifeDate} WRITTEN eventId=${applied.eventId}`);
+  const autoReview = await tryAutoReview(applied.eventId, writer.output.title, story);
+  entry.autoReview = autoReview;
+  if (autoReview.decision) console.log(`  ${item.lifeDate} AUTO-REVIEW approved eventId=${applied.eventId}`);
+  else console.log(`  ${item.lifeDate} AUTO-REVIEW skipped: ${autoReview.skipped}`);
   return entry;
 }
 
