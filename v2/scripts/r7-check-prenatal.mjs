@@ -1,0 +1,15 @@
+import path from "node:path";
+import { config as loadDotenv } from "dotenv";
+import pg from "pg";
+loadDotenv({ path: path.resolve(process.cwd(), ".env.local"), quiet: true });
+const { openTunnel, tunnelDatabaseUrl } = await import("../.data/night-rds.mjs");
+const tunnel = await openTunnel();
+const dbUrl = tunnelDatabaseUrl(tunnel.env, tunnel.localPort);
+const client = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
+await client.connect();
+const r = await client.query("SELECT source_label, COUNT(*)::int as n, MIN(captured_at AT TIME ZONE 'Asia/Shanghai')::text as min_dt, MAX(captured_at AT TIME ZONE 'Asia/Shanghai')::text as max_dt FROM raw_sources WHERE captured_at < '2025-01-01' GROUP BY source_label ORDER BY min_dt");
+console.log("Prenatal raw_sources by conversation:");
+console.table(r.rows);
+const le = await client.query("SELECT COUNT(*)::int as n FROM life_events WHERE event_date < '2025-01-01'");
+console.log("Prenatal life_events count:", le.rows[0].n);
+await client.end(); tunnel.close();

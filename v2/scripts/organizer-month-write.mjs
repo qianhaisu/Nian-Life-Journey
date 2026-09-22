@@ -637,7 +637,7 @@ if (SEMANTIC_REVIEW) {
       else if (outcome.kind === "corrected") { srCorrected++; console.log(`  ${entry.writtenEventId} corrected → ${outcome.newSha256?.slice(0, 8)}`); }
       else if (outcome.kind === "needs_human_review") { srFlagged++; console.log(`  ${entry.writtenEventId} needs_human_review: ${outcome.reason}`); }
       else if (outcome.kind === "error") { srErrors++; console.log(`  ${entry.writtenEventId} ERROR: ${outcome.error}`); }
-      else { console.log(`  ${entry.writtenEventId} skipped: ${(outcome as { reason?: string }).reason}`); }
+      else { console.log(`  ${entry.writtenEventId} skipped: ${outcome.reason ?? outcome.kind}`); }
     }
     console.log(`Semantic review: approved=${srApproved} corrected=${srCorrected} flagged=${srFlagged} errors=${srErrors}`);
   }
