@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PhotoGrid } from "@/components/photo-grid";
 import { PhotoGallery } from "@/components/photo-viewer";
 import type { MediaRef } from "@/lib/memory-chapters";
 
@@ -63,7 +64,12 @@ export function DayPhotos({
   return (
     <section className="day-photos" aria-label={`${dateLabel}的${kind}`}>
       <h3 className={quietLabel ? "section-mark visually-hidden" : "section-mark"}>这一天的{kind}</h3>
-      <PhotoGallery photos={shown} dateLabel={dateLabel} ageLabel={ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
+      {/* P-1: PhotoGrid for smart layout; fall back to PhotoGallery strip when preview only */}
+      {expanded || rest.length === 0 ? (
+        <PhotoGrid photos={shown} dateLabel={dateLabel} ageLabel={ageLabel} />
+      ) : (
+        <PhotoGallery photos={shown} dateLabel={dateLabel} ageLabel={ageLabel} stripSizes="(max-width: 700px) 30vw, 200px" />
+      )}
       {/* One control, in place, and it goes both ways. Expanding used to be one-way: a reader who
           opened a 30-picture day had no way back except scrolling past all of it. */}
       {rest.length > 0 ? (

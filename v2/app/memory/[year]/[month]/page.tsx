@@ -205,40 +205,71 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
       {archivePhotoCount > 0 ? <p className="chapter-meta"><a className="text-link" href="#month-photos">{albumLabel} →</a></p> : null}
     </header>
 
-    {composition.chapter.length > 0 ? <section className="month-reading" aria-labelledby="reading-title">
-      <h2 id="reading-title" className="section-mark">这个月记下来的</h2>
-      {/* A day's photographs follow the last of that day's stories, as 「这一天的照片」 — outside the
-          story cards, under the day's own heading. The reader finishes 8/19's words and 8/19's
-          pictures are right there, instead of at the far end of the month inside a folded section.
-          The group belongs to the date, not to any story above it: composition puts every one of a
-          chapter day's photographs here and none of them in 「这个月的照片」 (lib/publication-moments.ts),
-          so nothing is shown twice and nothing is stranded. */}
-      {composition.chapter.map((moment, index) => {
-        const dayEnds = composition.chapter[index + 1]?.day !== moment.day;
-        const group = dayEnds ? dayGroups.get(moment.day) : undefined;
-        // Once per day, after the day's last story and its reviewed group: a way into the month's
-        // album at this date — only when the album really has photographs of this exact day
-        // (dayAlbumFrom). Never a neighbouring day's, and never presented as a story's picture.
-        const albumEntry = dayEnds && albumDays.has(moment.day);
-        return <Fragment key={`${moment.day}-${moment.kind}-${moment.memory?.id ?? ""}`}>
-          <MonthMoment moment={moment} year={year} monthAgeLabel={chapter.ageLabel} priority={index === 0} continued={composition.chapter[index - 1]?.day === moment.day} />
-          {group ? <DayPhotos photos={group.photos} dateLabel={group.dateLabel} ageLabel={group.ageLabel} /> : null}
-          {albumEntry ? <DayAlbumLink year={year} month={monthSegment} day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} afterDayPhotos={Boolean(group)} /> : null}
-        </Fragment>;
-      })}
-    </section> : null}
+    {/* L-1: Unified date-ordered timeline — chapter (stories) and chronicle (photo days) merged.
+        A day is always in one or the other, never both: chapter days carry text; chronicle days
+        carry only photos. Merging them gives a single reading column ordered by when things happened.
+        Chapter days keep their dayPhotoGroups after the last story; chronicle days keep their
+        album link. Week grouping (L-2) is applied on top: the month is split into up to four
+        7-day spans with jump anchors. */}
+    {(() => {
+      // Merge chapter + chronicle into one date-ordered array
+      const chapterDaySet = new Set(composition.chapter.map((m) => m.day));
+      const timelineMoments = [...composition.chapter, ...composition.chronicle]
+        .sort((a, b) => a.day.localeCompare(b.day));
+      if (timelineMoments.length === 0) return null;
 
-    {composition.chronicle.length > 0 ? <section className="month-days" aria-labelledby="days-title">
-      <h2 id="days-title" className="section-mark">{composition.chapter.length > 0 ? "这个月的日子" : "这个月"}</h2>
-      <ol>
-        {/* A day here that carries words gets the same way into the album at its date as a story day
-            (chronicleAlbumDays) — after its words, once, only when the album has that exact day. */}
-        {composition.chronicle.map((moment, index) => <li className="month-day" key={moment.day}>
-          <MonthMoment moment={moment} year={year} monthAgeLabel={chapter.ageLabel} priority={index === 0 && composition.chapter.length === 0} />
-          {chronicleAlbum.has(moment.day) ? <DayAlbumLink year={year} month={monthSegment} day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} /> : null}
-        </li>)}
-      </ol>
-    </section> : null}
+      const weeks = groupIntoWeeks(timelineMoments);
+      const weekCount = weeks.length;
+
+      return <>
+        {/* Week jump nav — only when the month has more than one week of content */}
+        {weekCount > 1 ? <nav className="month-jump" aria-label="跳到这个月的某一段">
+          {weeks.map((wk, wi) => {
+            const [yr, mo] = timelineMoments[0].day.split("-");
+            const [from, to] = wk.label.split(" – ").map((s) => s.replace(" 日", ""));
+            const label = `第 ${wi + 1} 周 · ${Number(mo)} 月 ${from}-${to} 日`;
+            return <a key={wk.id} href={`#${wk.id}`}>{label}</a>;
+          })}
+        </nav> : null}
+
+        <section className="month-reading" aria-labelledby="timeline-title">
+          <h2 id="timeline-title" className="section-mark">这个月</h2>
+          {weeks.map((wk, wi) => <div className="month-week" id={wk.id} key={wk.id}>
+            {weekCount > 1 ? <p className="week-mark">{(() => {
+              const [yr, mo] = timelineMoments[0].day.split("-");
+              const [from, to] = wk.label.split(" – ").map((s) => s.replace(" 日", ""));
+              return `第 ${wi + 1} 周 · ${Number(mo)} 月 ${from}-${to} 日`;
+            })()}</p> : null}
+            {wk.entries.map((moment, localIndex) => {
+              // Find the global index for priority (first of entire timeline = priority)
+              const globalIndex = timelineMoments.indexOf(moment);
+              const prevMoment = timelineMoments[globalIndex - 1];
+              const nextMoment = timelineMoments[globalIndex + 1];
+              const isLastOfDay = nextMoment?.day !== moment.day;
+
+              // Chapter day: after last story, show day photo group + album link
+              const group = (isLastOfDay && chapterDaySet.has(moment.day)) ? dayGroups.get(moment.day) : undefined;
+              const albumEntry = isLastOfDay && albumDays.has(moment.day);
+              // Chronicle day: after its moment, show album link
+              const chronicleEntry = isLastOfDay && chronicleAlbum.has(moment.day);
+
+              return <Fragment key={`${moment.day}-${moment.kind}-${moment.memory?.id ?? ""}`}>
+                <MonthMoment
+                  moment={moment}
+                  year={year}
+                  monthAgeLabel={chapter.ageLabel}
+                  priority={globalIndex === 0}
+                  continued={prevMoment?.day === moment.day}
+                />
+                {group ? <DayPhotos photos={group.photos} dateLabel={group.dateLabel} ageLabel={group.ageLabel} /> : null}
+                {albumEntry ? <DayAlbumLink year={year} month={monthSegment} day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} afterDayPhotos={Boolean(group)} /> : null}
+                {chronicleEntry && !albumEntry ? <DayAlbumLink year={year} month={monthSegment} day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} /> : null}
+              </Fragment>;
+            })}
+          </div>)}
+        </section>
+      </>;
+    })()}
 
     {/* Folded by default: this section is deliverable photos with no story of their own, not
         something every reader needs pushed open. Addressable by id so the top-of-page link

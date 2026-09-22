@@ -80,24 +80,14 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       // and are NOT counted — a placeholder matching a placeholder proves nothing. The mapping is a
       // bijection in both directions across every overlapping message.
       //
-      // Scoped to conversations where this person is proven. The same plain digest also sits on
-      // 118 messages in 小雪微信群 (conversation:e6adbcaf…); whether that is the same person is not
-      // something this file may infer, so those stay unnamed.
-      //
-      // 👶🏻张小年成长主力作战部队 (conversation:4f8670546dd34b592448554d) added 2026-09-21: Teddy
-      // confirmed 雪姨=hxx. in NIGHT-RELATIONS-20260921. The group has only 4 participants —
-      // Ted (father), 阿静 (mother), hxx. (nanny), system messages — so hxx. in this context
-      // is unambiguously 雪姨. As of 2026-09-21 this conversation is not yet imported; the scope
-      // entry is added now so rows resolve correctly when the import runs.
+      // 2026-09-22: Teddy confirmed hxx = 雪姨 in ALL groups (not just daycare). Scope restriction
+      // removed. The same plain digest sits on 118 messages in 小雪微信群 (conversation:e6adbcaf…)
+      // and will now resolve correctly as 雪姨 there too.
       sourceParticipantDigest: senderDigestForDisplayName("hxx."),
       displayName: "hxx.",
       canonicalPersonId: "person-xueyi",
       relationshipToSubject: "nanny",
       narrativeLabel: "雪姨",
-      conversationIds: [
-        DAYCARE_CONVERSATION,
-        "conversation:4f8670546dd34b592448554d", // 👶🏻张小年成长主力作战部队 JSON
-      ],
     },
     {
       // Teddy, 2026-09-04: 陈亚萍 is 张年's grandmother. This supersedes the earlier "low value"
