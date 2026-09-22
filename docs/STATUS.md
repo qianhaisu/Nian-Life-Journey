@@ -37,6 +37,16 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-22 · Claude Code · R8 NIGHT-RELATIONS：出生前故事修正（2e114c8）
+
+**本轮线上多了什么家人能读的东西**：3 条出生前故事在 RDS 中修正（无推断内容）：NT 那天泰德去了医院（发送者归属修正）、最后一批合法美宝（去掉情绪推断）、产检结果苏静转述（去掉泰德/心里踏实了）。月度 Organizer `--commit` 默认启动语义审阅，无需额外 flag。出生前年份判断改用 profile.birthDate。
+
+**没做到什么 / 最大的已知 blocker**：ECS 未部署，家人暂时看不到 2024 年 Tab。provider 字段仍为 `claude-review`（系统固定字段），实际模型记录在 reason_codes 中。
+
+**下一件事**：Teddy 手动触发 `cd v2 && bash scripts/deploy-ecs-public.sh swap`；上线后验证 nianlife.cn/memory 出现 2024 年暖色 Tab + 3 条修正后出生前故事。
+
+---
+
 ### 2026-09-22 · Claude Code · R7 NIGHT-RELATIONS：出生前年份（2705b47）
 
 **本轮线上多了什么家人能读的东西**：DB 已写入 3 条出生前 life_events（已 approved）：NT 等待周 2024-06-28、张年首次被命名 2024-11-06、最后产检 2024-11-28。ECS 未部署前家人还看不到；代码（出生前暖色年份 Tab + 出生前标签）已在 main（e8c1c37/0754e05），数据（3 条故事）已在生产 RDS。
