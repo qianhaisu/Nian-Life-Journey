@@ -49,11 +49,11 @@ const corrections = [
     eventId: "93914a2f-c6ec-460e-b086-866a23396dea",
     label: "NT scan Jun 28 2024",
     // "泰德陪着她，一起等结果" has no source evidence.
-    // "那天她去了医院" — sender of "我去医院了" is 爸爸, not 苏静.
-    // Keep: 苏静 eager for NT, NT = announcement time, 爸爸 went to hospital that day.
+    // "那天她去了医院" — sender of "我去医院了" is Ted, not 苏静.
+    // Keep: 苏静 eager for NT, NT = announcement time, Ted went to hospital that day.
     newTitle: "NT 那一天",
-    newStory: "苏静很期待这次 NT，说检查之后就可以告诉大家了。NT 那天，泰德发消息说自己去了医院。",
-    newPeople: ["苏静", "泰德"],
+    newStory: "苏静很期待这次 NT，说检查之后就可以告诉大家了。NT 那天，Ted 发消息说自己去了医院。",
+    newPeople: ["苏静", "Ted"],
     reasonCodes: [
       AUTH_REASON,
       "correction:removed-unsourced-accompanying-claim",
@@ -66,10 +66,10 @@ const corrections = [
     eventId: "2ecb20ca-c6dc-4b8e-9c35-dc0b0df0a177",
     label: "张年 first named Nov 6 2024",
     // "证件还没到手""心里悬着""有人说""安静地等一个确定答案" — all inferred.
-    // Keep: 苏静 asked about 证件 risk, 泰德 said "可能成为最后一批合法美宝".
+    // Keep: 苏静 asked about 证件 risk, Ted said "可能成为最后一批合法美宝".
     newTitle: "最后一批",
-    newStory: "苏静问起证件的事。泰德说，孩子可能是最后一批合法美宝了。",
-    newPeople: ["苏静", "泰德"],
+    newStory: "苏静问起证件的事。Ted 说，孩子可能是最后一批合法美宝了。",
+    newPeople: ["苏静", "Ted"],
     reasonCodes: [
       AUTH_REASON,
       "correction:removed-unsourced-emotional-framing",

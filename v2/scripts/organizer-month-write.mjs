@@ -614,7 +614,7 @@ if (SEMANTIC_REVIEW) {
   const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
   const deepseekBaseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
   if (!deepseekApiKey) {
-    console.error("DEEPSEEK_API_KEY missing — skipping semantic review");
+    throw new Error("DEEPSEEK_API_KEY missing — semantic review is required after --commit; use --no-semantic-review to explicitly skip");
   } else {
     let srApproved = 0, srFlagged = 0, srCorrected = 0, srErrors = 0;
     for (const entry of writtenEntries) {
@@ -622,8 +622,8 @@ if (SEMANTIC_REVIEW) {
       const srcRows = await reviewPool.query(
         `SELECT rs.id, rs.text, rs.captured_at, rs.metadata
          FROM raw_sources rs
-         JOIN life_event_sources les ON les.source_id = rs.id
-         WHERE les.life_event_id = $1`, [entry.writtenEventId]
+         JOIN source_memory_links sml ON sml.raw_source_id = rs.id
+         WHERE sml.life_event_id = $1`, [entry.writtenEventId]
       );
       const sources = srcRows.rows.map((r) => ({
         id: r.id,
