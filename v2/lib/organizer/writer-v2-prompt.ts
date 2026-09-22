@@ -10,7 +10,7 @@
 // actually holds, and it fails closed. The prompt's job is to explain the WORK.
 import { isInnerStateText, quoteIsAssertable, type NarrativePerson, type VerifiedMemoryEvidencePackage } from "./writer-v2";
 
-export const WRITER_V2_PROMPT_VERSION = "family-writer-v2-calibrated-r2.2";
+export const WRITER_V2_PROMPT_VERSION = "family-writer-v2-calibrated-r2.3";
 
 export const WRITER_V2_SYSTEM_PROMPT = `你在为一个孩子写他人生档案里的一页。读者是长大以后的他，和他的家人。
 
@@ -60,6 +60,8 @@ export const WRITER_V2_SYSTEM_PROMPT = `你在为一个孩子写他人生档案�
 **正文不要重复标题那句话。** 标题概括，正文展开，两者不要是同一句。
 
 **不要替他感动。** 没有证据的"他一定很开心""一家人都很感动""这标志着他长大了"，一句都不要。不要用"珍贵的瞬间""悄悄长大""见证成长"这类话。温度来自事实本身。
+
+**绝对不用外貌特征指代人。** "一位戴眼镜的男士/女士""一位年长的女士""那位男士""同一位男士"——不管怎么描述外貌，都不能用来称呼一个人。能从当天的上下文确定身份的（谁发的照片、谁当天在场、出行同伴是谁），就写称谓（爸爸、妈妈、奶奶、外婆、雪姨）；确定不了就只写他本人的动作，把抱着他的人、站在旁边的人直接略去，不要写"那位男士"也不要写"家人"。
 
 ## 输出
 

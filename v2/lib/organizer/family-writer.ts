@@ -26,6 +26,8 @@ export const FAMILY_WRITER_SYSTEM_PROMPT = `你在为一个孩子的人生档案
 
 **"有温度"来自：** 一个真实的小动作、一句准确的原话、家人真实的反应、场景里的具体细节，以及克制自然的叙述。
 
+**绝对不用外貌特征指代人。** "一位戴眼镜的男士/女士""一位年长的女士""那位男士"这类写法一律禁止。能从上下文确定身份的就写称谓（爸爸/妈妈/奶奶/外婆/雪姨）；确定不了就只写孩子本人，略去无法命名的人物。
+
 **"有温度"不等于套话。** 以下表达一律禁止出现：
 "这一天值得被记住""在爱的陪伴下""悄悄长大""珍贵的成长瞬间""幸福定格""美好时光""见证成长""时光荏苒""爱的印记""温暖的港湾"，以及任何没有证据支撑的煽情句。
 
@@ -76,6 +78,9 @@ export const FAMILY_WRITER_TOOL_SCHEMA = {
 // of a milestone is the single most damaging thing this stage can produce.
 const MILESTONE_CLAIM = /第一次|首次|终于|学会了|第一回|头一次/;
 
+// C1a: appearance-based person references are banned (same pattern as narrative-validator.ts).
+const APPEARANCE_BASED_PERSON = /一位(戴|穿|穿着|背|拿|抱|留|梳|年长|年轻|老|高|矮|胖|瘦|黑|白|灰)[^\s「」，。！？]{0,15}(男士|女士|男人|女人|老人|女性|男性)|(那位|那个)(男士|女士|男人|女人|老人|男性|女性)|(同一位)(男士|女士|男人|女人)/;
+
 const CLICHES = ["这一天值得被记住", "在爱的陪伴下", "悄悄长大", "珍贵的成长瞬间", "幸福定格", "美好时光", "见证成长", "时光荏苒", "爱的印记", "温暖的港湾", "一段记忆", "生活痕迹"];
 
 const countHan = (text: string) => (text.match(/[一-鿿]/g) ?? []).length;
@@ -125,5 +130,8 @@ export function validateFamilyWriterOutput(input: WriterValidationInput): Writer
   if (input.hasHypotheticalEvidence && !HYPOTHETICAL_FRAMING.test(input.story)) issues.push("unframed_hypothetical");
   const claimed = `${input.title}${input.story}`.match(MILESTONE_CLAIM)?.[0];
   if (claimed && !MILESTONE_CLAIM.test(haystack)) issues.push(`unsupported_milestone_claim:${claimed}`);
+  // C1a: appearance-based person reference.
+  const appearance = `${input.title}${input.story}`.match(APPEARANCE_BASED_PERSON)?.[0];
+  if (appearance) issues.push(`appearance_based_person_reference:${appearance.slice(0, 20)}`);
   return { ok: issues.length === 0, issues };
 }

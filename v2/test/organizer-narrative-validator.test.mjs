@@ -559,3 +559,41 @@ test("没有人 is the absence of an actor, not an unnamed one", () => {
     assert.ok(!codes(r).includes("generic_family_collective"), `${story} -> ${JSON.stringify(r.issues)}`);
   }
 });
+
+// ---- v2.4: C1a appearance-based person reference (2026-09-23)
+// A person described by glasses, clothing, age or gender is an unnamed actor. Use a family role
+// (爸爸/妈妈/奶奶/雪姨) drawn from context, or omit the person entirely.
+
+test("v2.4: appearance-based person references are rejected", () => {
+  const cases = [
+    "一位戴眼镜的男士用背带抱着他站在银杏树前。",
+    "白天，一位年长的女士带他出门晒太阳。",
+    "同一位男士抱着他走进了电梯。",
+    "那位女士把他放进了婴儿车。",
+    "一位穿红色上衣的男人蹲下来逗他。",
+  ];
+  for (const story of cases) {
+    const r = validateNarrative({ pkg: pkg(), output: out({ story }) });
+    assert.ok(codes(r).includes("appearance_based_person_reference"), `expected rejection for: 「${story}」 but got: ${JSON.stringify(r.issues)}`);
+  }
+});
+
+test("v2.4: known family roles are not affected by the appearance rule", () => {
+  // These must still pass: 爸爸/妈妈/雪姨 are resolved persons, not appearance descriptions.
+  const cases = [
+    "爸爸用背带抱着他站在银杏树前。",
+    "奶奶带他出门晒了一上午的太阳。",
+    "雪姨把他放进婴儿车里。",
+  ];
+  for (const story of cases) {
+    const r = validateNarrative({ pkg: pkg({ identity: { ...pkg().identity, people: [...pkg().identity.people, { speakerDigest: "d-dad", known: true, canonicalPersonId: "person-dad", narrativeLabel: "爸爸", relationshipToSubject: "parent" }, { speakerDigest: "d-gran", known: true, canonicalPersonId: "person-gran", narrativeLabel: "奶奶", relationshipToSubject: "grandparent" }] } }), output: out({ story }) });
+    assert.ok(!codes(r).includes("appearance_based_person_reference"), `unexpected rejection for: 「${story}」 → ${JSON.stringify(r.issues)}`);
+  }
+});
+
+test("v2.4: 一位老师 is not an unnamed actor (legitimate use of 一位)", () => {
+  // 一位 + non-appearance role word should not be caught.
+  const story = "雪姨说一位老师来家访，他表现得很乖。";
+  const r = validateNarrative({ pkg: pkg(), output: out({ story }) });
+  assert.ok(!codes(r).includes("appearance_based_person_reference"), `unexpected rejection: ${JSON.stringify(r.issues)}`);
+});

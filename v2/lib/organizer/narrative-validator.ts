@@ -16,7 +16,7 @@ import { containsTechnicalPlaceholder } from "./quality-review";
 import { extractQuotes } from "./family-writer";
 import { isInnerStateText, mayIllustrateStory, quoteIsAssertable, type VerifiedMemoryEvidencePackage, type WriterV2Output } from "./writer-v2";
 
-export const NARRATIVE_VALIDATOR_VERSION = "narrative-validator-v2.3";
+export const NARRATIVE_VALIDATOR_VERSION = "narrative-validator-v2.4";
 
 // Family labels that may carry an attribution. Anyone else in a story is `unsupported_person`.
 const FAMILY_LABELS = ["爸爸", "妈妈", "雪姨", "奶奶", "爷爷", "外婆", "外公", "姥姥", "姥爷"];
@@ -69,6 +69,17 @@ const CLICHES = [
   "见证成长", "时光荏苒", "爱的印记", "温暖的港湾", "一段记忆", "生活痕迹",
   "见证了", "留下了美好", "满满的爱", "治愈了", "小小的身体里", "成长的印记",
 ];
+
+// C1a rule (2026-09-23): never use physical appearance to refer to a person. "一位戴眼镜的男士",
+// "一位年长的女士", "那位男士" etc. are unnamed-actor violations dressed as description. The correct
+// form is a known family role (爸爸/妈妈/雪姨…) determined from context, or the person is left out
+// of the sentence entirely. The pattern captures the most common shapes without firing on legitimate
+// uses of "一位" in other contexts (e.g. "一位老师").
+// Shapes caught:
+//   一位 + appearance adjective/verb phrase + 男士/女士/老人/男人/女人
+//   那位 / 那个 + 男士/女士/男人/女人
+//   同一位 + 男士/女士 (repeated-reference back to an unnamed person)
+const APPEARANCE_BASED_PERSON = /一位(戴|穿|穿着|背|拿|抱|留|梳|年长|年轻|老|高|矮|胖|瘦|黑|白|灰)[^\s「」，。！？]{0,15}(男士|女士|男人|女人|老人|女性|男性)|(那位|那个)(男士|女士|男人|女人|老人|男性|女性)|(同一位)(男士|女士|男人|女人)/;
 
 // The prompt bans "家人" as a speaker (identity.ts's whole point: an unmapped speaker is
 // UNKNOWN_SPEAKER_LABEL, never flattened into a generic family collective). Found 2026-09-05
@@ -330,6 +341,9 @@ export function validateNarrative({ pkg, output, storyMax = 180 }: NarrativeVali
   if (causal) add("unsupported_causal_link", causal);
   const pipeline = `${title}${story}`.match(PIPELINE_LANGUAGE)?.[0];
   if (pipeline) add("pipeline_reasoning_in_prose", pipeline);
+  // C1a: appearance-based person references. Use a known family role from context instead.
+  const appearance = `${title}${story}`.match(APPEARANCE_BASED_PERSON)?.[0];
+  if (appearance) add("appearance_based_person_reference", appearance.slice(0, 20));
 
   // ---------------------------------------------------------------- shape
 
