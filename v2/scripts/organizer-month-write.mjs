@@ -96,6 +96,9 @@ const { STORY_MEDIA_TIERS } = await import("../lib/organizer/writer-v2.ts");
 const { planArtifacts, applyPlan } = await import("../lib/organizer/production-adapter.ts");
 const { persistDailyTrace, persistOrganizerRun, findOrganizerRun, persistOrganization, markSourcesOrganized, persistQualityReview } = await import("../lib/db/repository.ts");
 const { assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
+const { reviewEventStory } = await import("../lib/organizer/semantic-review.ts");
+const { createPostgresRepository } = await import("../lib/db/postgres-repository.ts");
+const { getPool } = await import("../lib/db/client.ts");
 
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => { const hit = args.find((a) => a.startsWith(`--${name}=`)); return hit ? hit.slice(name.length + 3) : fallback; };
@@ -105,6 +108,9 @@ const OUT = argOf("out", null);
 const MAX_CALLS = Number(argOf("max-calls", "60"));
 const MAX_DAYS = Number(argOf("max-days", "31"));
 const COMMIT = hasFlag("commit");
+// --semantic-review: after committing stories, run DeepSeek semantic review on each new event.
+// Only valid with --commit; dry-run still runs the model but does not write DB decisions.
+const SEMANTIC_REVIEW = hasFlag("semantic-review");
 // --force: bypass the findOrganizerRun early-exit below (only that check — applyPlan's own
 // upsert-by-fingerprint idempotency downstream is untouched, so a forced rerun still can't
 // duplicate a row, it can only replace one). Needed to redo a month under a different model:
@@ -579,6 +585,8 @@ async function processItem(item) {
   }
   if (!applied.applied) { console.log(`  ${item.lifeDate} — already organized under this fingerprint (eventId ${applied.eventId}), no new write`); return entry; }
   written += 1;
+  entry.writtenEventId = applied.eventId;
+  entry.writtenSourceIds = item.w.items.map((i) => i.sourceId);
   console.log(`  ${item.lifeDate} WRITTEN eventId=${applied.eventId}`);
   return entry;
 }
@@ -594,6 +602,46 @@ async function worker(workerIndex) {
 
 console.log(`Concurrency: ${CONCURRENCY} worker(s).`);
 await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => worker(i)));
+
+// ── Post-write semantic review (--semantic-review) ─────────────────────────
+// For each newly written event, fetch its linked source texts and run DeepSeek review.
+// This wires the reusable reviewEventStory() into the production month-write pipeline.
+if (SEMANTIC_REVIEW) {
+  const reviewRepo = createPostgresRepository();
+  const reviewPool = getPool();
+  const writtenEntries = results.filter((r) => r.writtenEventId);
+  console.log(`\n── Semantic review: ${writtenEntries.length} newly written event(s) ──`);
+  const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
+  const deepseekBaseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
+  if (!deepseekApiKey) {
+    console.error("DEEPSEEK_API_KEY missing — skipping semantic review");
+  } else {
+    let srApproved = 0, srFlagged = 0, srCorrected = 0, srErrors = 0;
+    for (const entry of writtenEntries) {
+      // Fetch source texts linked to this life_event
+      const srcRows = await reviewPool.query(
+        `SELECT rs.id, rs.text, rs.captured_at, rs.metadata
+         FROM raw_sources rs
+         JOIN life_event_sources les ON les.source_id = rs.id
+         WHERE les.life_event_id = $1`, [entry.writtenEventId]
+      );
+      const sources = srcRows.rows.map((r) => ({
+        id: r.id,
+        text: r.text ?? "",
+        captured_at: r.captured_at instanceof Date ? r.captured_at.toISOString() : String(r.captured_at),
+        speaker: r.metadata?.senderDigest ? { displayName: r.metadata.senderDigest.slice(0, 8) } : undefined,
+      }));
+      const outcome = await reviewEventStory(entry.writtenEventId, sources, reviewRepo, reviewPool, { deepseekApiKey, deepseekBaseUrl, dryRun: !COMMIT });
+      entry.semanticReview = outcome;
+      if (outcome.kind === "approved") { srApproved++; console.log(`  ${entry.writtenEventId} approved`); }
+      else if (outcome.kind === "corrected") { srCorrected++; console.log(`  ${entry.writtenEventId} corrected → ${outcome.newSha256?.slice(0, 8)}`); }
+      else if (outcome.kind === "needs_human_review") { srFlagged++; console.log(`  ${entry.writtenEventId} needs_human_review: ${outcome.reason}`); }
+      else if (outcome.kind === "error") { srErrors++; console.log(`  ${entry.writtenEventId} ERROR: ${outcome.error}`); }
+      else { console.log(`  ${entry.writtenEventId} skipped: ${(outcome as { reason?: string }).reason}`); }
+    }
+    console.log(`Semantic review: approved=${srApproved} corrected=${srCorrected} flagged=${srFlagged} errors=${srErrors}`);
+  }
+}
 
 const publishable = results.filter((r) => r.proposed);
 // Token usage from BOTH halves. The writer's usage was already carried on each entry; the editor's

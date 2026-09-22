@@ -912,7 +912,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* 出生前年份（2024及更早）：温暖的赭石色，与出生后的年份在视觉上明显区分。 */
 .year-pill--prebirth { background: #F0E0C8; color: #7A4520; border: 1px solid #D4A882; }
 .year-pill--prebirth:hover { color: #7A4520; }
-.year-pill--prebirth.year-pill--active { background: #C8845A; color: #fff; border-color: #C8845A; }
+.year-pill--prebirth.year-pill--active { background: #C8845A; color: #3D1500; border-color: #C8845A; }
 .memory-year-section { padding: clamp(32px, 5vw, 56px) 0; }
 /* 年份分节的标题跟卡片网格同一条左对齐线（网格自己有 .reading-wrap 的版心）。 */
 .memory-year-heading { width: min(760px, calc(100% - 32px)); margin: 0 auto clamp(12px, 2vw, 18px); }
