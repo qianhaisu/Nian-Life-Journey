@@ -19,7 +19,8 @@ export const metadata: Metadata = { title: "记忆" };
 export default async function MemoryPage() {
   // Never prerender this page from the build's mock store — see lib/render-on-demand.ts.
   await renderOnDemand();
-  const { chapters, media, privilege, snapshots } = await loadFamilyArchiveOnDemand();
+  const { chapters, media, privilege, snapshots, birthDay } = await loadFamilyArchiveOnDemand();
+  const birthYear = birthDay ? Number(birthDay.slice(0, 4)) : 2025;
   const index = buildMemoryIndex(chapters, undefined, privilege);
 
   // First readable line from each month's snapshot summary.
@@ -81,7 +82,7 @@ export default async function MemoryPage() {
               whichever year is actually being read. */}
           <nav className="memory-year-nav reading-wrap" aria-label="按年份导航">
             {index.years.map((y) => {
-              const isPrebirth = Number(y.year) < 2025;
+              const isPrebirth = Number(y.year) < birthYear;
               return (
                 <a
                   key={y.year}
@@ -101,7 +102,7 @@ export default async function MemoryPage() {
           <YearNavHighlight />
 
           {index.years.map((year) => {
-            const isPrebirth = Number(year.year) < 2025;
+            const isPrebirth = Number(year.year) < birthYear;
             return (
             <section key={year.year} id={`year-${year.year}`} className={`memory-year-section${isPrebirth ? " memory-year-section--prebirth" : ""}`} aria-labelledby={`year-heading-${year.year}`}>
               {/* 2026-09-16 视觉验收：这个 section 原来只有 id、没有可见标题。两年的卡片在同一条

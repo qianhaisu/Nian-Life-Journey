@@ -108,9 +108,9 @@ const OUT = argOf("out", null);
 const MAX_CALLS = Number(argOf("max-calls", "60"));
 const MAX_DAYS = Number(argOf("max-days", "31"));
 const COMMIT = hasFlag("commit");
-// --semantic-review: after committing stories, run DeepSeek semantic review on each new event.
-// Only valid with --commit; dry-run still runs the model but does not write DB decisions.
-const SEMANTIC_REVIEW = hasFlag("semantic-review");
+// Semantic review runs by default after --commit. Disable with --no-semantic-review for
+// maintenance/diagnostic runs. Dry-run without --commit never runs semantic review.
+const SEMANTIC_REVIEW = COMMIT && !hasFlag("no-semantic-review");
 // --force: bypass the findOrganizerRun early-exit below (only that check — applyPlan's own
 // upsert-by-fingerprint idempotency downstream is untouched, so a forced rerun still can't
 // duplicate a row, it can only replace one). Needed to redo a month under a different model:
