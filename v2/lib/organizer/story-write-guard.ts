@@ -158,6 +158,10 @@ export type StoryContent = {
 
 export const STORY_CONTENT_HASH_VERSION = "story-content-v1";
 export const CONTENT_SHA256_REASON_PREFIX = "content-sha256:";
+/** A fingerprint of the requested changes, stored per-review to enable true idempotency comparison. */
+export const REQUEST_FINGERPRINT_REASON_PREFIX = "request-fingerprint:";
+/** Atomically records the full before-state (title, story, people) for restoration from the review. */
+export const REVISION_BEFORE_REASON_PREFIX = "revision-before:";
 
 export function canonicalOccurredAtUtc(value: string): string {
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(value)) return value;
@@ -179,6 +183,29 @@ export function boundContentSha256(reasonCodes: readonly string[] | null | undef
   const hits = (reasonCodes ?? []).filter((code) => typeof code === "string" && code.startsWith(CONTENT_SHA256_REASON_PREFIX));
   if (hits.length !== 1) return null;
   const hex = hits[0].slice(CONTENT_SHA256_REASON_PREFIX.length);
+  return /^[0-9a-f]{64}$/.test(hex) ? hex : null;
+}
+
+/**
+ * Canonical fingerprint of the patch requested in a ClaudeStoryCorrectionInput.
+ * Stored as `request-fingerprint:<hex>` so a true retry (same patch) is distinguished
+ * from a different-patch retry under the same promptVersion.
+ */
+export function computeRequestFingerprint(input: { newTitle?: string | null; newStory?: string | null; newPeople?: string[]; policyVersion: string }): string {
+  const payload = JSON.stringify({
+    newTitle: input.newTitle ?? null,
+    newStory: input.newStory ?? null,
+    newPeople: input.newPeople ? [...input.newPeople].sort() : null,
+    policyVersion: input.policyVersion,
+  });
+  return createHash("sha256").update(payload, "utf8").digest("hex");
+}
+
+/** Extracts the stored request fingerprint from a reason-code list, if present. */
+export function boundRequestFingerprint(reasonCodes: readonly string[] | null | undefined): string | null {
+  const hits = (reasonCodes ?? []).filter((code) => typeof code === "string" && code.startsWith(REQUEST_FINGERPRINT_REASON_PREFIX));
+  if (hits.length !== 1) return null;
+  const hex = hits[0].slice(REQUEST_FINGERPRINT_REASON_PREFIX.length);
   return /^[0-9a-f]{64}$/.test(hex) ? hex : null;
 }
 
@@ -282,13 +309,6 @@ export type ClaudeStoryCorrectionInput = {
   policyVersion: string;
   /** Must include CLAUDE_AUTHORIZATION_REASON and at least one correction:* code. */
   reasonCodes: string[];
-  /**
-   * Known legacy batch prompt versions whose "human" reviews may be bypassed for this correction.
-   * ONLY for the r7-regression-fix 2026-09-22 batch (prompt_version="agent-review-20260922-v1")
-   * which was inserted via forbidden direct-SQL with provider="agent". Unknown "agent" rows and
-   * all other human decisions remain protected. Scope to exact provenance — never a wildcard.
-   */
-  legacyBatchOverridePromptVersions?: string[];
 };
 
 export function assertClaudeStoryCorrectionInput(input: ClaudeStoryCorrectionInput): void {
@@ -300,8 +320,11 @@ export function assertClaudeStoryCorrectionInput(input: ClaudeStoryCorrectionInp
   assertClaudeReasonCodes(input.reasonCodes);
   if (!input.reasonCodes.some((c) => c.startsWith("correction:")))
     throw new StoryWriteContractError("MISSING_CORRECTION_CODE", "reasonCodes must include a correction:* code describing what was fixed");
-  if (input.reasonCodes.some((c) => c.startsWith(CONTENT_SHA256_REASON_PREFIX)))
-    throw new StoryWriteContractError("REASON_CODE_RESERVED", `caller must not supply ${CONTENT_SHA256_REASON_PREFIX}; it is computed and appended by applyClaudeStoryCorrection`);
+  const RESERVED_PREFIXES = [CONTENT_SHA256_REASON_PREFIX, REQUEST_FINGERPRINT_REASON_PREFIX, REVISION_BEFORE_REASON_PREFIX];
+  for (const prefix of RESERVED_PREFIXES) {
+    if (input.reasonCodes.some((c) => c.startsWith(prefix)))
+      throw new StoryWriteContractError("REASON_CODE_RESERVED", `caller must not supply ${prefix}; it is computed and appended by applyClaudeStoryCorrection`);
+  }
 }
 
 export function assertClaudeStoryDecisionInput(input: ClaudeStoryDecisionInput): void {

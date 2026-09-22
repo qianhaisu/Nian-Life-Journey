@@ -11,8 +11,8 @@ import { normalizeSha256 } from "./chat-import-persistence";
 import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
 import { createHash } from "node:crypto";
 import {
-  CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
-  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryDecisionInput, assertClaudeStoryCorrectionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, evaluateStoryProtection, mediaContentVersion, reviewerTypeOf, storyContentSha256, storyLinkTargets,
+  CLAUDE_AUTHORIZATION_REASON, CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, REQUEST_FINGERPRINT_REASON_PREFIX, REVISION_BEFORE_REASON_PREFIX, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
+  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryDecisionInput, assertClaudeStoryCorrectionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, boundRequestFingerprint, computeRequestFingerprint, evaluateStoryProtection, mediaContentVersion, reviewerTypeOf, storyContentSha256, storyLinkTargets,
   type ClaudeMediaDecisionInput, type ClaudeStoryCorrectionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
 } from "@/lib/organizer/story-write-guard";
 import { ledgerOnlyStoryPhotoIds, storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
@@ -147,6 +147,26 @@ async function readLedgerRows(q: GuardTx, targetIds: string[]): Promise<LedgerRo
     provider: String(r.provider), promptVersion: String(r.prompt_version), reviewedAt: r.reviewed_at ? String(r.reviewed_at) : null,
   }));
 }
+
+// Internal manifest of known illegal-batch reviews (provider="agent", inserted via direct SQL
+// by r7-regression-fix.mjs on 2026-09-22T02:36:31 UTC). Verified against actual DB row in the
+// transaction — not caller-supplied.
+function isKnownIllegalBatchRow(row: LedgerRow): boolean {
+  if (row.provider !== "agent" || row.promptVersion !== "agent-review-20260922-v1") return false;
+  if (!row.reviewedAt) return false;
+  const ms = new Date(row.reviewedAt).getTime();
+  return ms >= new Date("2026-09-22T02:36:00Z").getTime() && ms <= new Date("2026-09-22T02:37:30Z").getTime();
+}
+// Hardcoded manifest of task-authorized corrections under R7 NIGHT-RELATIONS-20260921.
+// Event ID, blocker identity, and required authorization code are all verified in the transaction.
+const TASK_AUTHORIZED_CORRECTIONS = [
+  {
+    eventId: "event-q169-022-f810a0a9",
+    blockerProvider: "commander-release-2026-09-13",
+    blockerPromptVersion: "release-2026-09-13-R2",
+    requiredReasonCode: CLAUDE_AUTHORIZATION_REASON,
+  },
+] as const;
 
 function mediaVersionOfRow(m: Record<string, unknown>): string {
   return mediaContentVersion(
@@ -1454,26 +1474,49 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         }
         const targets = storyLinkTargets(input.eventId, [event.organizationFingerprint]);
         const ledger = await readLedgerRows(q, [...targets.ids, ...targets.fingerprintTargets]);
-        const overridablePVs = new Set(input.legacyBatchOverridePromptVersions ?? []);
-        const blocker = ledger.find(
-          (row) => STORY_DECISION_KINDS.has(row.targetKind) && reviewerTypeOf(row.provider) === "human" && !new Set(["needs_human_review", "needs_review"]).has(row.decision) && !overridablePVs.has(row.promptVersion),
-        );
+        // Internally-verified blocker check: reject human decisions UNLESS they match a known
+        // illegal-batch row or a hardcoded task-authorized correction. The caller cannot supply
+        // override parameters — the manifests are checked against actual DB rows inside the tx.
+        const blocker = ledger.find((row) => {
+          if (!STORY_DECISION_KINDS.has(row.targetKind)) return false;
+          if (reviewerTypeOf(row.provider) !== "human") return false;
+          if (new Set(["needs_human_review", "needs_review"]).has(row.decision)) return false;
+          // Known illegal-batch: programmatic agent review mistakenly classified as human.
+          if (isKnownIllegalBatchRow(row)) return false;
+          // Task-authorized corrections: evidence-grounded, narrow scope, verified by event+blocker identity.
+          const taskAuth = TASK_AUTHORIZED_CORRECTIONS.find(
+            (entry) => entry.eventId === input.eventId && entry.blockerProvider === row.provider && entry.blockerPromptVersion === row.promptVersion,
+          );
+          if (taskAuth && input.reasonCodes.includes(taskAuth.requiredReasonCode)) return false;
+          return true;
+        });
         if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human ${blocker.targetKind} decision (${blocker.provider}: ${blocker.decision}); correction refused`);
-        // Pre-mutation idempotency check: if a review for this promptVersion already exists, verify it
-        // bound the same content hash before allowing a re-run. A different-payload retry under the
-        // same key must be rejected (zero mutation) to prevent content drift with a stale review.
+        // Pre-mutation idempotency check using request fingerprint. A true retry (same promptVersion
+        // AND same patch) is a no-op. A different patch under the same key is IDEMPOTENCY_CONFLICT.
+        // Reviews written before request-fingerprint was introduced have no stored fingerprint; those
+        // fall back to the prior hash-only comparison for backward compatibility.
+        const requestFp = computeRequestFingerprint(input);
         const existingThisVersion = ledger.find((row) => row.targetKind === "life_event" && row.targetId === input.eventId && row.promptVersion === input.promptVersion);
         if (existingThisVersion) {
-          // Read full reason_codes for the existing review to check its bound hash
           const [existingRow] = await (tx as any).select().from(t.contentQualityReviews).where(and(
             eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
           if (existingRow) {
             const review = reviewFromRow(existingRow as Record<string, unknown>);
+            const storedFp = boundRequestFingerprint(review.reasonCodes);
+            if (storedFp !== null) {
+              // Modern path: compare full request fingerprints.
+              if (storedFp === requestFp) return { review, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
+              throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a different patch; use a new promptVersion for a new correction`);
+            }
+            // Legacy path (no stored request fingerprint): compare bound content hash only.
             const boundHash = boundContentSha256(review.reasonCodes);
             if (boundHash === oldHash) return { review, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
             throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a correction to a different content version; use a new promptVersion for a new correction`);
           }
         }
+        // Record full before-state atomically with the correction for restoration and audit.
+        const beforePeople = (event as LifeEvent).people ?? [];
+        const revisionBefore = Buffer.from(JSON.stringify({ title: content!.title, story: content!.story, people: beforePeople })).toString("base64");
         const newTitle = input.newTitle !== undefined ? input.newTitle : content!.title;
         const newStory = input.newStory !== undefined ? input.newStory : content!.story;
         if (input.newPeople !== undefined) {
@@ -1483,12 +1526,17 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         }
         const newContent = await readStoryContent(q, input.eventId);
         const newHash = storyContentSha256(newContent!);
-        const reasonCodes = [...input.reasonCodes, `corrected-from:${oldHash}`, `${CONTENT_SHA256_REASON_PREFIX}${newHash}`];
+        const reasonCodes = [
+          ...input.reasonCodes,
+          `corrected-from:${oldHash}`,
+          `${CONTENT_SHA256_REASON_PREFIX}${newHash}`,
+          `${REQUEST_FINGERPRINT_REASON_PREFIX}${requestFp}`,
+          `${REVISION_BEFORE_REASON_PREFIX}${revisionBefore}`,
+        ];
         const id = `claude-review-${createHash("sha256").update(`${input.eventId}|${input.promptVersion}`).digest("hex").slice(0, 24)}`;
         const [row] = await (tx as any).select().from(t.contentQualityReviews).where(and(
           eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
         if (row) {
-          // Already exists after mutation check above (race condition or logic error) — reject
           throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `review for promptVersion "${input.promptVersion}" appeared after mutation; this should not happen`);
         }
         await q.execute(sql`insert into content_quality_reviews

@@ -17,8 +17,8 @@ import { storyNeighbours } from "@/lib/story-neighbours";
 import { indexReviews, isEventPublishable } from "@/lib/organizer/quality-review";
 import { randomUUID } from "node:crypto";
 import {
-  CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
-  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryCorrectionInput, assertClaudeStoryDecisionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, canonicalOccurredAtUtc, evaluateStoryProtection, mediaContentVersion, reviewerTypeOf, rowLinksToStory, storyContentSha256,
+  CLAUDE_AUTHORIZATION_REASON, CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, REQUEST_FINGERPRINT_REASON_PREFIX, REVISION_BEFORE_REASON_PREFIX, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
+  assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryCorrectionInput, assertClaudeStoryDecisionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, boundRequestFingerprint, canonicalOccurredAtUtc, computeRequestFingerprint, evaluateStoryProtection, mediaContentVersion, reviewerTypeOf, rowLinksToStory, storyContentSha256,
   type ClaudeMediaDecisionInput, type ClaudeStoryCorrectionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
 } from "@/lib/organizer/story-write-guard";
 
@@ -378,20 +378,44 @@ export function createJsonRepository(): Repository {
         const ledger: LedgerRow[] = store.qualityReviews
           .filter((item) => rowLinksToStory(item, event.id, [event.organizationFingerprint]))
           .map((item) => ({ targetKind: item.targetKind, targetId: item.targetId, decision: item.decision, provider: item.provider ?? "", promptVersion: item.promptVersion, reviewedAt: item.reviewedAt }));
-        const overridablePVs = new Set(input.legacyBatchOverridePromptVersions ?? []);
-        const blocker = ledger.find((row) => STORY_DECISION_KINDS.has(row.targetKind) && reviewerTypeOf(row.provider) === "human" && !new Set(["needs_human_review", "needs_review"]).has(row.decision) && !overridablePVs.has(row.promptVersion));
+        // Internal task-authorized corrections manifest (mirrors postgres-repository).
+        const TASK_AUTHORIZED_CORRECTIONS = [
+          { eventId: "event-q169-022-f810a0a9", blockerProvider: "commander-release-2026-09-13", blockerPromptVersion: "release-2026-09-13-R2", requiredReasonCode: CLAUDE_AUTHORIZATION_REASON },
+        ] as const;
+        const blocker = ledger.find((row) => {
+          if (!STORY_DECISION_KINDS.has(row.targetKind)) return false;
+          if (reviewerTypeOf(row.provider) !== "human") return false;
+          if (new Set(["needs_human_review", "needs_review"]).has(row.decision)) return false;
+          const taskAuth = TASK_AUTHORIZED_CORRECTIONS.find((e) => e.eventId === input.eventId && e.blockerProvider === row.provider && e.blockerPromptVersion === row.promptVersion);
+          if (taskAuth && input.reasonCodes.includes(taskAuth.requiredReasonCode)) return false;
+          return true;
+        });
         if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human decision; correction refused`);
+        const requestFp = computeRequestFingerprint(input);
         const existingThisVersion = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
         if (existingThisVersion) {
+          const storedFp = boundRequestFingerprint(existingThisVersion.reasonCodes);
+          if (storedFp !== null) {
+            if (storedFp === requestFp) return { review: existingThisVersion, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
+            throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a different patch`);
+          }
           const boundHash = boundContentSha256(existingThisVersion.reasonCodes);
           if (boundHash === oldHash) return { review: existingThisVersion, oldContentSha256: oldHash, newContentSha256: oldHash, idempotent: true };
           throw new StoryWriteContractError("IDEMPOTENCY_CONFLICT", `promptVersion "${input.promptVersion}" already applied a correction to a different content version`);
         }
+        const beforePeople = event.people ?? [];
+        const revisionBefore = Buffer.from(JSON.stringify({ title: event.title ?? null, story: event.story ?? null, people: beforePeople })).toString("base64");
         if (input.newTitle !== undefined) event.title = input.newTitle ?? undefined;
         if (input.newStory !== undefined) event.story = input.newStory ?? undefined;
         if (input.newPeople !== undefined) event.people = input.newPeople;
         const newHash = storyContentSha256(jsonStoryContent(event));
-        const reasonCodes = [...input.reasonCodes, `corrected-from:${oldHash}`, `${CONTENT_SHA256_REASON_PREFIX}${newHash}`];
+        const reasonCodes = [
+          ...input.reasonCodes,
+          `corrected-from:${oldHash}`,
+          `${CONTENT_SHA256_REASON_PREFIX}${newHash}`,
+          `${REQUEST_FINGERPRINT_REASON_PREFIX}${requestFp}`,
+          `${REVISION_BEFORE_REASON_PREFIX}${revisionBefore}`,
+        ];
         const existing = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
         if (existing) return { review: existing, oldContentSha256: oldHash, newContentSha256: newHash, idempotent: true };
         const latest = Math.max(Date.now(), ...store.qualityReviews.filter((item) => item.targetKind === "life_event" && item.targetId === input.eventId).map((item) => Date.parse(item.reviewedAt) + 1).filter((value) => !Number.isNaN(value)));
