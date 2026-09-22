@@ -37,6 +37,36 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-22 · Claude Code · R6 Task B：organizer-month-write 自动发布接入（97eed03）
+
+**本轮线上多了什么家人能读的东西**：代码层面：新故事写入后立即调用 `tryAutoReview`，通过主体门槛（含张年/妈妈/今天等信号、正文≥15字）的故事自动 approved，不再停在 needs_human_review。8 条测试场景全部通过。ECS 部署已 push 到 main，需 Teddy 手动触发 `v2/scripts/deploy-ecs-public.sh swap` 使代码上线。
+
+**没做到什么 / 最大的已知 blocker**：ECS 部署被安全分类器拦截（需要 Teddy 在当前 session 活跃 turn 中确认）。已 push 到 main（97eed03）、typecheck 干净、8/8 单测通过；线上 ECS 仍跑旧版，auto-review 尚未对新 Organizer 输出生效。原则四②（pipeline 无人值守自跑）现在依然是"未交付"，等 ECS 上线才能在生产中生效。
+
+**下一件事**：Teddy 手动跑一次 `cd v2 && bash scripts/deploy-ecs-public.sh swap` 即可完成上线；或在下次打开 Claude Code 时告知"部署 ECS"触发即可。
+
+---
+
+### 2026-09-22 · Claude Code · R6 原则验收（Task A+B 节点）
+
+**一** · Person First：过。首页无需点击即见"小年开始要说话了，会喊「粥粥」、cold、hot、「倒」和「打开」"。
+
+**二** · Two Clocks：过。记忆网格"2026 年 9 月" + "现在 1 岁 8 个月"；月页条目"9 月 1 日" + "1岁7个月"；详情页"9 月 1 日" + "当时 1岁7个月"。无裸露数据库时间戳。
+
+**三** · Media First：过。页面无工程名词、无来源系统名、无"共 N 张"计数式描述。
+
+**四** · Invisible Automation：①前台无上传按钮/空状态引导/红点/解释文字 ✅；②pipeline 无人值守：**未交付**。nightly worker 代码已到位（97eed03 push），但 ECS 尚未部署，生产中 auto-review 尚未对新 Organizer 输出生效。
+
+**五** · Not Equal Weight：不过。月页内所有 T7 故事 memoryWeight 均为"trace"，无法一眼分辨重要记忆与普通一天。已知 blocker：memoryWeight 信号全为空（见 memory weight is empty 记忆）。非 R6 引入，持续在列。
+
+**六** · Bring the Past Back：过。首页"最近的一段回忆"有"换一段回忆"按钮，真实回顾不是随机占位。
+
+**七** · Automatic Reflection：过。月页摘要"九月他会说的词一个接一个多起来：粥粥、cold、hot、倒、打开，到了月中是「鱼、鱼」"——去掉数字后仍能读出这个月的张年。
+
+**八** · Family Owns It：过。详情页"当时留下的资料"展示原始微信消息，发送人可见，时间显示 HH:MM 格式，来源链完整。
+
+---
+
 ### 2026-09-22 · Claude Code · 全库「家里人」/「有人说」文字修复（5c1c265）
 
 **本轮线上多了什么家人能读的东西**：13 条已发布故事里的模糊人称全部替换为具名家人。「家里人送来祝福」→「爷爷奶奶、外公外婆都发来祝福」；「家里人哄了他很久」→「雪姨和妈妈哄了他很久」；「群里有人说」→有据可查的改为爷爷/老师/爸爸/妈妈，无法确认的改为客观描述去掉归因。涉及月份：2025-02、03、04、12，2026-04、05、07（×5）、08、09。修复后 0 条 approved 故事含模糊人称词。
