@@ -247,15 +247,68 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
         "conversation:bb5d5ba6da5986d35b923465", // 乳儿班 md pre-fix (1 msg)
       ],
     },
+    {
+      // Teddy, 2026-09-23: 潇 is the main teacher (主要老师) in 乳儿班. Her stories call her 潇潇老师.
+      // Scoped to 乳儿班 conversation IDs so the display name does not accidentally absorb other accounts.
+      sourceParticipantDigest: senderDigestForDisplayName("潇"),
+      displayName: "潇",
+      canonicalPersonId: "person-xiaoxiao",
+      relationshipToSubject: "teacher",
+      narrativeLabel: "潇潇老师",
+      conversationIds: [
+        DAYCARE_CONVERSATION,
+        "conversation:d3a0e5f619ac6fe3e40d81cf", // 乳儿班 md post-fix
+        "conversation:d64551c8e1cea882635e3969", // 乳儿班 earliest
+        "conversation:bb5d5ba6da5986d35b923465", // 乳儿班 md pre-fix
+      ],
+    },
+    {
+      // Teddy, 2026-09-23: Korean nickname, was a 乳儿班 teacher who has since left (已离职).
+      // No Chinese name known; stories may call her 老师.
+      sourceParticipantDigest: senderDigestForDisplayName("학교 싫다"),
+      displayName: "학교 싫다",
+      canonicalPersonId: "person-nursery",
+      relationshipToSubject: "teacher",
+      narrativeLabel: "老师",
+      conversationIds: [
+        DAYCARE_CONVERSATION,
+        "conversation:d3a0e5f619ac6fe3e40d81cf",
+        "conversation:d64551c8e1cea882635e3969",
+        "conversation:bb5d5ba6da5986d35b923465",
+      ],
+    },
+    {
+      // Teddy, 2026-09-23: Robin = 多多, 小年干妈 (godmother), 苏静's close friend.
+      // Appears in 乳儿班家庭群 and 2028届 group. narrativeLabel is her name as the family uses it.
+      sourceParticipantDigest: senderDigestForDisplayName("Robin"),
+      displayName: "Robin",
+      canonicalPersonId: "person-duoduo",
+      relationshipToSubject: "godmother",
+      narrativeLabel: "多多",
+      conversationIds: [
+        DAYCARE_CONVERSATION,
+        "conversation:d3a0e5f619ac6fe3e40d81cf",
+        "conversation:f4f28678abd80b3e391c0885", // 2028届好奇星辰星班 md
+        "conversation:4f8670546dd34b592448554d", // 👶张小年成长主力作战部队
+      ],
+    },
+    {
+      // Teddy, 2026-09-23: 阳阳老师 is a 好奇星 teacher in 张小年小群.
+      sourceParticipantDigest: senderDigestForDisplayName("阳阳"),
+      displayName: "阳阳",
+      canonicalPersonId: "person-nursery",
+      relationshipToSubject: "teacher",
+      narrativeLabel: "阳阳老师",
+      conversationIds: [
+        "conversation:87c42fdc94895ff6b94222da", // 张小年小群 JSON
+        "conversation:8778e74dea416b9fc8ab6651", // 张小年小群 md post-fix
+        "conversation:d016ea9b700f45190ee50221", // 张小年小群 md pre-fix
+      ],
+    },
     // The nursery's own accounts, one per class plus the centre and its after-hours desk. Teddy,
     // 2026-09-04: a teacher's words are to read as 老师, never as a family member's. They share one
     // canonicalPersonId on purpose — they are one institution, so two of them saying the same thing
     // is one witness, not two corroborating ones.
-    //
-    // 潇 and the rest of the individuals in that group stay unmapped. Which of them are teachers and
-    // which are relatives is not something this file may infer: an unmapped speaker resolves to
-    // unknown and may not be named. 大兵 and 吴艳 are above because Teddy confirmed them, not
-    // because anything here worked them out.
     ...["好奇星芽星班", "好奇星辰星班", "好奇星禾星班", "好奇星托育中心（金地园区）", "好奇星晚托服务号15267129562"].map((displayName) => ({
       sourceParticipantDigest: senderDigestForDisplayName(displayName),
       displayName,
