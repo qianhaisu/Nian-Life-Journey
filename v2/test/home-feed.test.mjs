@@ -413,7 +413,7 @@ test("已完成的里程碑（升班/毕业……）也出现，即使不是医�
 // 这两条钉的是它**接进 buildReminders 之后**的行为：落在窗口外的事项不显示，
 // 但它既没过期也没完成，退场理由必须说清是哪一种，而且仍然可达。
 
-test("最近一次提及早于 7 天窗口的事项不占首页，但记成 out_of_window，不是过期、不是完成", () => {
+test("明确在下个月的事项不占本周首页，记录 out_of_window 而非过期或完成", () => {
   // 形状要挑对，否则测不到窗口：一条**没有日子的临时事项**在 48 小时后就先被保鲜判成 expired，
   // 根本走不到窗口这一关。所以用一条日子还没到、因此确实没过期的事项，
   // 它的提出日仍是默认的 2026-08-16（窗口外）——生产里「国庆去大湾区旅游」正是这个形状。
@@ -430,12 +430,12 @@ test("最近一次提及早于 7 天窗口的事项不占首页，但记成 out_
   assert.equal(reminders.retired.length, 1, "但它在 retired 里有记录，没有被悄悄丢掉");
 });
 
-test("这一周又被提起的旧事回到首页：判窗口用最近一次提及，不是首次提出", () => {
+test("旧消息中的本周事项仍进入首页", () => {
   // 8 月 16 日提出，9 月 10 日又被说了一次 —— 只看 evidence.day 会把它误判成窗口外。
   // 同样给一个还没到的日子，把「保鲜」这一关排除掉，单测窗口这一关。
   const restated = item("restated", {
     title: "又被提起的一件事",
-    when: { kind: "day", day: "2026-09-20" },
+    when: { kind: "day", day: TODAY },
     lastMentionedOn: "2026-09-10",
   });
   const reminders = buildReminders({ status: "ready", items: [restated] }, TODAY, undefined);
@@ -495,7 +495,7 @@ test("提醒的证据链：能落到具体记忆就落，落不到就退到那�
   // 2026-09-16：这条用例要看的是 evidence 怎么变成链接，所以得先让三条都进得了首页——
   // 给一个还没到的日子（不过期），再给一个窗口内的「最近一次提及」（进 7 天窗口）。
   // `evidence.day` 仍然停在 8 月，因为断言的正是「只有月份时要落到那个月」。
-  const live = { when: { kind: "day", day: "2026-09-20" }, lastMentionedOn: "2026-09-10" };
+  const live = { when: { kind: "day", day: TODAY }, lastMentionedOn: "2026-09-10" };
   const monthOnly = item("m", { ...live, evidence: { day: "2026-08-16" } });
   const withEvent = item("e", { ...live, evidence: { eventId: "ev-1", day: "2026-08-16" } });
   const none = item("n", { ...live, evidence: { eventId: "", day: "去年夏天" } });
@@ -970,4 +970,40 @@ test("近期优先只按照片自己的日子收窄，不动别的门槛：窗�
   const candidates = buildPhotoCandidates({ memories, birthDay: BIRTH, today: "2026-09-16", edition });
   const inRotation = candidates.filter((c) => c.cooldown);
   assert.equal(inRotation.length, days.length, "全部落在 90 天内，一组都不该少");
+});
+
+// 2026-09-22: synthetic regression cases for the reported disappearance.
+test("未结束计划跨过七天和周界仍保留，最近提到的排前；不复活过期或取消事项", () => {
+  const plans = [
+    item("older", { status: "tentative", evidence: { day: "2026-08-25" } }),
+    item("recent", { status: "tentative", evidence: { day: "2026-09-15" } }),
+    item("cancelled", { status: "cancelled", evidence: { day: "2026-09-15" } }),
+    item("expired", { when: { kind: "day", day: "2026-09-20" }, evidence: { day: "2026-09-15" } }),
+    item("stale-errand", { evidence: { day: "2026-09-15" } }),
+  ];
+  for (const today of ["2026-09-21", "2026-09-22", "2026-09-28"]) {
+    const result = buildReminders({ status: "ready", items: plans }, today, undefined);
+    assert.deepEqual([...result.shown, ...result.more].map(r => r.id), ["recent", "older"]);
+    assert.equal(result.shown[0].state, "tentative");
+  }
+  assert.equal(plans[1].status, "tentative");
+});
+
+test("旧消息中的本周日程显示，下周日程不提前混入；取代事项不显示", () => {
+  const items = [
+    item("this-week", { when: { kind: "day", day: "2026-09-27" } }),
+    item("next-week", { when: { kind: "day", day: "2026-09-28" } }),
+    item("replaced", { status: "tentative" }),
+    item("replacement", { status: "tentative", supersedes: ["replaced"] }),
+  ];
+  const result = buildReminders({ status: "ready", items }, "2026-09-22", undefined);
+  assert.deepEqual([...result.shown, ...result.more].map(r => r.id), ["this-week", "replacement"]);
+});
+
+test("已完成的重要事实按完成日归周，旧完成记录不会一直留在首页", () => {
+  const done = item("milestone", { title: "完成升班", status: "done", statusEvidence: { day: "2026-09-21" } });
+  const current = buildReminders({ status: "ready", items: [done] }, "2026-09-22", undefined);
+  assert.equal(current.shown[0].id, "milestone");
+  const nextWeek = buildReminders({ status: "ready", items: [done] }, "2026-09-28", undefined);
+  assert.equal(nextWeek.shown.length, 0);
 });

@@ -29,7 +29,7 @@ import { recentWindowStart } from "@/lib/home-recent-pick";
 import type { UpcomingFeed, UpcomingSources } from "@/lib/upcoming";
 import type { UpcomingItem, UpcomingWhen } from "@/lib/upcoming-contract";
 import { capHabitByShownDays, classifyFreshness, freshnessOf, isImportantItem, NO_HABIT_DISPLAY_LOG, type HabitDisplayLog } from "@/lib/upcoming-freshness";
-import { reminderInWindow } from "@/lib/home-reminder-window";
+import { reminderInWindow, lastMentionedOn } from "@/lib/home-reminder-window";
 import type { UpcomingProvenance } from "@/lib/upcoming-provenance";
 
 /** 契约版本。页面轨按这个字符串确认自己接的是哪一版；只做兼容新增时递增小版本号。 */
@@ -1154,20 +1154,8 @@ export function buildReminders(
   const retired: HomeRetiredReminder[] = all
     .filter((reminder) => reminder.state === "expired")
     .map((reminder) => ({ id: reminder.id, title: reminder.title, reason: reminder.reason, status: reminder.item.status, kind: "expired" as const }));
-  // 「每周提醒」= 过去 7 天微信里提到的、仍需办理的事（用户 2026-09-16 裁定：严格 7 天）。
-  //
-  // 两道闸门是分开的，顺序也不能换：
-  //   1. `reminderStateOf` 先判**还需不需要办**（done/cancelled/superseded/过期都在这里出局）；
-  //   2. `reminderInWindow` 再判**是不是这 7 天里被提起的**，依据是最近一次提及（不是首次提出），
-  //      来源必须是微信里有人说的（档案核对提醒不算）。见 lib/home-reminder-window.ts。
-  //
-  // 落在窗口外的**不是过期、更不是完成**：它们只是不属于"本周"，在 /events 的完整待办清单里
-  // 一条不少（components/upcoming-tasks.tsx）。所以它们进 retired 时带的是 out_of_window，
-  // 和 expired 分开记——两者混成一句，就是把"这周没人再提"说成"这件事过去了"。
-  // Teddy 2026-09-17 第 5 条：「每周提醒不一定只能是待办事项，重要事项有意义也可以列」。
-  // 所以 done 状态**有条件地**放行——只要关键事项（isImportantReminder：接种、就诊这类），
-  // 不要普通杂事「买尿布，已完成」那种噪音。已完成的关键事项本身就是「有意义」的那一种：
-  // 它是这周真实发生过的事，不是一件还要家人办的事，只是恰好也值得被看见。
+  // 2026-09-22：自然周事项 + 未结束的待定计划。先判保鲜/领域状态，再判本周相关性。
+  // 已完成只收重要事实；取消、取代和过期仍不进入首页，不改库状态或勾选记录。
   const stillOpen = all.filter((reminder) =>
     reminder.state === "active" || reminder.state === "needs_confirmation" || reminder.state === "tentative"
     // 2026-09-17 第 2 条又加了一种：done + 里程碑（isMilestoneReminder，独立词表，见上）。
@@ -1199,6 +1187,7 @@ export function buildReminders(
   const ordered = [...showable].sort((a, b) =>
     rank(a) - rank(b)
     || (endDayOf(a.item.when) ?? "9999-99-99").localeCompare(endDayOf(b.item.when) ?? "9999-99-99")
+    || (lastMentionedOn(b.item) ?? "").localeCompare(lastMentionedOn(a.item) ?? "")
     || a.id.localeCompare(b.id));
   // 习惯提醒「最多两个不同自然日露出」（§6.3）——数的是**实际展示过的日子**，由 habitLog 提供。
   //
@@ -1223,15 +1212,7 @@ export function buildReminders(
   const limit = displayable.some((reminder) => reminder.important) ? REMINDERS_MAX_SHOWN : REMINDERS_DEFAULT_SHOWN;
   const shown = displayable.slice(0, limit);
   const shownIds = new Set(shown.map((reminder) => reminder.id));
-  // `more` 装**本周仍需办理、或本周完成的关键事项，但没排进默认位**的那几条。
-  //
-  // 2026-09-16 修：这里原来是 `all.filter(不在 shown 里)`，也就是"其余全部"。改版之后那是个洞——
-  // 落在 7 天窗口外的事项被 showable 挡住了默认位，却从 `more` 这个门原样回到首页。
-  // 本地实测（接生产 RDS）：默认位 0 条、`本周还记着的其他事` 里 4 条，全部是 8 月提出的旧事，
-  // 于是「每周提醒」下面挂着的其实是一份旧账——正是这一版要解决的问题。
-  //
-  // 过期的、超窗口的、习惯露出到顶的，全都已经在 `retired` 里逐条记着原因，一条都没丢；
-  // 完整历史待办由 components/upcoming-tasks.tsx 承载。首页只说这一周。
+  // 折叠层与默认位共用筛选结果：本周事项和仍有效的未结束计划保持可达。
   const more = displayable.filter((reminder) => !shownIds.has(reminder.id));
   // 只有真的进了默认位、且本身是习惯类的，才进这一组。
   const habitShownIds = shown

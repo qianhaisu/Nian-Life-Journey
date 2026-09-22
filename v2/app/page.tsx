@@ -10,7 +10,7 @@ import { selectHomeMemories } from "@/lib/home-memory";
 import { topicLookupFrom } from "@/lib/home-memory-topics";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
 import { HOME_QUIET_STATES } from "@/lib/home-reminder-display";
-import { windowStart } from "@/lib/home-reminder-window";
+import { windowStart, windowEnd } from "@/lib/home-reminder-window";
 import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { formatDay, formatMonth } from "@/lib/time-signature";
@@ -21,7 +21,7 @@ import "./home.css";
 // 首页（2026-09-16 改版）。整页只有两件事：
 //
 //   一、最近怎么样，张年 —— 一段真实的回忆，静音预览，点开沉浸播放。
-//   二、每周提醒        —— 过去 7 天微信里提到、仍需办理的事。
+//   二、每周提醒        —— 本周事项及仍需确认的未结束计划。
 //
 // 旧首页的其他模块（回忆浮现、换张照片、近况、月份入口……）退出首页，**内容一条没删**：
 // 月份与全部记忆在顶部导航的「记忆」里，完整待办清单仍是 components/upcoming-tasks.tsx，
@@ -150,7 +150,7 @@ function Reminders({ feed }: { feed: HomeFeed }) {
     habitIds={reminders.status === "ready" ? reminders.habitShownIds : []}
     storageScope={CANONICAL_PROFILE_ID}
     rangeStart={rangeStart}
-    rangeEnd={feed.clock.today}
+    rangeEnd={windowEnd(feed.clock.today)}
   />;
 }
 

@@ -15,17 +15,17 @@ test("shanghaiToday 不依赖机器时区：UTC 16:30 已经是上海的次日",
   assert.equal(shanghaiToday(new Date("2026-09-19T15:59:00Z")), "2026-09-19");
 });
 
-test("只写「今天 − 2」及更早的日子：昨天和今天的数据还没齐", () => {
-  // 今天 9/21：9/19 可写，9/20（昨天）和 9/21（今天）不可写
+test("只写「今天 − 1」及更早的日子，不写今天", () => {
+  // 2026-09-21 已将延迟改为一天：今天 9/21，9/19 和 9/20 可写，9/21 不可写。
   const { write } = pickDays({ today: "2026-09-21", months: ["2026-09"], coveredDays: () => new Set(Array.from({ length: 18 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`)), hasMaterial: always, state: {} });
-  assert.deepEqual(write, ["2026-09-19"]);
-  assert.equal(READY_LAG_DAYS, 2);
+  assert.deepEqual(write, ["2026-09-19", "2026-09-20"]);
+  assert.equal(READY_LAG_DAYS, 1);
 });
 
-test("9/19 在 9/20 夜里还不可写（就是用户问的那个缺口：半天数据不能写成一天）", () => {
+test("9/20 夜间可处理已同步的 9/19，仍不处理 9/20 当天", () => {
   const covered = () => new Set(Array.from({ length: 18 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`));
   const { write } = pickDays({ today: "2026-09-20", months: ["2026-09"], coveredDays: covered, hasMaterial: always, state: {} });
-  assert.deepEqual(write, [], "9/20 当天夜里 cutoff 是 9/18，已覆盖，无事可做");
+  assert.deepEqual(write, ["2026-09-19"], "cutoff 是昨天 9/19，不处理今天");
 });
 
 test("已经有内容的日子绝不重写——手工编辑过的天不能被覆盖", () => {
@@ -55,7 +55,7 @@ test("held 的日子不再自动重试；skipped 的日子静默跳过", () => {
 
 test("月初跨月：两个月都看，按日期先后", () => {
   const { write } = pickDays({ today: "2026-10-03", months: ["2026-10", "2026-09"], coveredDays: (m) => (m === "2026-09" ? new Set(Array.from({ length: 29 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`)) : new Set()), hasMaterial: always, state: {} });
-  assert.deepEqual(write, ["2026-09-30", "2026-10-01"]);
+  assert.deepEqual(write, ["2026-09-30", "2026-10-01", "2026-10-02"]);
 });
 
 test("addDays 跨月跨年", () => {

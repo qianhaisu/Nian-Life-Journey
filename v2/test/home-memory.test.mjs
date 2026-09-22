@@ -12,7 +12,7 @@ import {
   selectHomeMemories, buildDayMemory, MEMORY_MIN_SLIDES, MEMORY_MAX_SLIDES, CROSS_DAY_PER_DAY_MAX,
 } from "../lib/home-memory.ts";
 import { moodFor, MEMORY_TRACKS, pickTrack } from "../lib/home-memory-mood.ts";
-import { reminderInWindow, lastMentionedOn, windowStart } from "../lib/home-reminder-window.ts";
+import { reminderInWindow, lastMentionedOn, windowStart, windowEnd } from "../lib/home-reminder-window.ts";
 import { lastMentionFrom } from "../lib/upcoming-contract.ts";
 
 // ── 夹具 ──────────────────────────────────────────────────────────────────────
@@ -647,13 +647,20 @@ test("情绪判定仍然按真实依据走，理由说得出是哪一条", () =>
 const wechat = { raised: { role: { kind: "family_member", role: "妈妈" }, modality: "plan", summary: "s", onDay: "2026-09-12" }, reviewState: "approved", itemId: "i", noChangeEvidence: true };
 const recordCheck = { raised: { role: { kind: "record_check", label: "档案核对提醒" }, modality: "statement", summary: "s", onDay: "2026-09-13" }, reviewState: "approved", itemId: "i", noChangeEvidence: true };
 
-test("窗口是含今天的 7 个自然日", () => {
-  assert.equal(windowStart("2026-09-16"), "2026-09-10");
+test("窗口是周一至周日，含跨月和跨年边界", () => {
+  for (const day of ["2026-09-21", "2026-09-22", "2026-09-27"]) {
+    assert.equal(windowStart(day), "2026-09-21");
+    assert.equal(windowEnd(day), "2026-09-27");
+  }
+  assert.equal(windowStart("2026-10-01"), "2026-09-28");
+  assert.equal(windowEnd("2026-10-01"), "2026-10-04");
+  assert.equal(windowStart("2027-01-01"), "2026-12-28");
+  assert.equal(windowEnd("2027-01-01"), "2027-01-03");
 });
 
 test("最近一次提及压过首次提出——这正是 evidence.day 单独不够用的地方", () => {
-  const item = { evidence: { day: "2026-08-04" }, lastMentionedOn: "2026-09-12" };
-  assert.equal(lastMentionedOn(item), "2026-09-12");
+  const item = { evidence: { day: "2026-08-04" }, lastMentionedOn: "2026-09-15" };
+  assert.equal(lastMentionedOn(item), "2026-09-15");
   assert.equal(reminderInWindow(item, wechat, "2026-09-16").inWindow, true);
 });
 
