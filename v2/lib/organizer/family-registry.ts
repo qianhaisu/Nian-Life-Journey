@@ -198,6 +198,8 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       // 282 in 亲爱的爸爸妈妈 (conversation:77348fd4…) and 102 in the daycare class group
       // (DAYCARE_CONVERSATION). No conversationIds scope — she is a named family member whose
       // display name is distinctive enough that a collision with an unrelated account is implausible.
+      // wxid confirmed 2026-09-22 via R7-CODEX-ACCOUNT-EVIDENCE.json (kept in private evidence file).
+      // Display name used for matching.
       sourceParticipantDigest: senderDigestForDisplayName("鹿城  筱薇"),
       displayName: "鹿城  筱薇",
       canonicalPersonId: "person-waipo",
@@ -209,9 +211,10 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       // 2026-09-21: 老苏 is 张年's maternal grandfather (外公). He is 苏静's father.
       //
       // 1,243 messages in DB as of 2026-09-21 across 12 conversations — scoped to all of them.
-      // No wxid/account-id evidence exists in the import (metadata carries a conversationDigest hash,
-      // not a stable account id), so the mapping is restricted to the conversations where his
-      // messages were measured. All 12 are listed here; new conversations must be added explicitly.
+      // wxid confirmed 2026-09-22 via R7-CODEX-ACCOUNT-EVIDENCE.json (kept in private evidence file).
+      // The registry uses displayName-based digests because WeFlow exports include a stable display
+      // name; the wxid is retained in the private evidence file, not in source code.
+      // The mapping is restricted to confirmed conversations; new conversations must be added explicitly.
       sourceParticipantDigest: senderDigestForDisplayName("老苏"),
       displayName: "老苏",
       canonicalPersonId: "person-laos",
@@ -237,7 +240,8 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       // 2026-09-21: 张存华 is 张年's paternal grandfather (爷爷). He is 张永滕's father.
       //
       // 572 messages in DB as of 2026-09-21 across 7 conversations — scoped to all of them.
-      // No wxid/account-id evidence exists; scoped to confirmed conversations, same reasoning as 老苏.
+      // wxid confirmed 2026-09-22 via R7-CODEX-ACCOUNT-EVIDENCE.json (kept in private evidence file).
+      // Scoped to confirmed conversations, same reasoning as 老苏.
       sourceParticipantDigest: senderDigestForDisplayName("张存华"),
       displayName: "张存华",
       canonicalPersonId: "person-zhangcunhua",
