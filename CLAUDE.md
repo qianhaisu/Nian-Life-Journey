@@ -314,6 +314,8 @@ ssh -i "$HOME/mnt/Downloads/nianlife-prod-ecs.pem" ecs-user@47.99.243.155 \
   "docker images | grep <SHORT_SHA>; tail -5 ~/build-<SHORT_SHA>.log"
 
 # Step 3：切换容器（健康检查通过后自动完成，约 10 秒）
+# ⚠️ 必须带 HEALTH_MOUNTS，否则健康页数据挂载缺失（2026-09-22 P0 根因）
+HEALTH_MOUNTS="/srv/nianlife-health:/srv/nianlife-health:ro,/srv/nianlife-health/record:/srv/nianlife-health/record" \
 ECS_SSH="ecs-user@47.99.243.155" \
 ECS_KEY="$HOME/mnt/Downloads/nianlife-prod-ecs.pem" \
 ECS_PUBLIC_IP="47.99.243.155" \
