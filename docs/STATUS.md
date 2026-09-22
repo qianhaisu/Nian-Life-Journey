@@ -37,6 +37,16 @@
 
 ## 时间线（只追加，最新在上）
 
+### 2026-09-22 · Claude Code · R7 NIGHT-RELATIONS：出生前年份（2705b47）
+
+**本轮线上多了什么家人能读的东西**：DB 已写入 3 条出生前 life_events（已 approved）：NT 等待周 2024-06-28、张年首次被命名 2024-11-06、最后产检 2024-11-28。ECS 未部署前家人还看不到；代码（出生前暖色年份 Tab + 出生前标签）已在 main（e8c1c37/0754e05），数据（3 条故事）已在生产 RDS。
+
+**没做到什么 / 最大的已知 blocker**：ECS 部署被安全分类器拦截，需 Teddy 手动触发 `cd v2 && bash scripts/deploy-ecs-public.sh swap`。NT 故事正文含"泰德陪着她"（DeepSeek 推断，非原文）；属可接受误差，不影响上线。
+
+**下一件事**：Teddy 手动触发 ECS deploy；上线后验证 nianlife.cn/memory 可看到 2024 年暖色 Tab。
+
+---
+
 ### 2026-09-22 · Claude Code · R6 Task B：organizer-month-write 自动发布接入（97eed03）
 
 **本轮线上多了什么家人能读的东西**：代码层面：新故事写入后立即调用 `tryAutoReview`，通过主体门槛（含张年/妈妈/今天等信号、正文≥15字）的故事自动 approved，不再停在 needs_human_review。8 条测试场景全部通过。ECS 部署已 push 到 main，需 Teddy 手动触发 `v2/scripts/deploy-ecs-public.sh swap` 使代码上线。
