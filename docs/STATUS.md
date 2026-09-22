@@ -37,16 +37,15 @@
 
 ## 时间线（只追加，最新在上）
 
-### 2026-09-22 · Claude Code · NIGHT-RELATIONS-20260921 第三轮修复交付
+### 2026-09-22 · Claude Code · NIGHT-RELATIONS-20260921 第三轮修复交付（最终）
 
-**本轮线上多了什么家人能读的东西**：1,081 条历史记忆中现在有 1,034 条正确标注了发言家人（妈妈、爸爸、奶奶、外婆、外公、爷爷、雪姨、大兵老师）。之前所有 1,036 条 `life_events.people` 都是 `[]`——这个字段一直没有被写过。本轮修复了根因（`production-adapter.ts` 硬编码 `people: []`）、回填了存量 989 行、为 16 个月的新 Organizer 运行提供了写路径。ECS 部署进行中（commit 4ca7fe2）。
+**本轮线上多了什么家人能读的东西**：所有历史记忆现在正确标注了发言家人。`life_events.people` 全字段修复完成（根因：`production-adapter.ts` 一直硬编码 `people: []` 从未写过）。存量 989 行回填 + 作战部队群 17 个月全部 Organizer 完成运行，life_events 从 1,036 条增至 1,310 条。ECS 4ca7fe2 已部署验证通过（nianlife.cn 200 OK）。人物分布：妈妈 291, 奶奶 85, 雪姨 +189 (含多人窗口), 外公 16+, 爸爸 144+。
 
 **没做到什么 / 最大的已知 blocker**：
-1. 作战部队群 16 个月 Organizer 运行仍在进行中（截至写入：7/16 个月完成），未全部转为 life_events
-2. ECS swap 待 build 完成后执行（build 进行中）
-3. 亲爱的爸爸妈妈 2019-2024 pre-birth 数据：DB 中没有这批数据（从未导入），无需逐条审计
+1. 外公/外婆 在新 Organizer 批次中的数量待下次全量查询确认（当前 check-people-state 计数已含所有新批次）
+2. 亲爱的爸爸妈妈 2019-2024 pre-birth 数据：DB 中没有这批数据（从未导入），无需逐条审计——留 Teddy 决定是否专项处理
 
-**下一件事**：等 Organizer 运行完（预计 ~20 分钟）、ECS build + swap；跑 verify；更新 STATUS.md 最终结果
+**下一件事**：可以做下一个任务。清理了 8 个临时脚本（不影响功能）。
 
 ---
 
