@@ -909,9 +909,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .year-pill { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 20px; border-radius: var(--r-badge); background: #fff; color: var(--clay-ink); font-size: .92rem; font-weight: 600; box-shadow: var(--shadow-badge); transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out); }
 .year-pill:hover { transform: translateY(-2px); box-shadow: var(--shadow); color: var(--clay-ink); }
 .year-pill--active { background: var(--clay); color: var(--color-primary); }
+/* 出生前年份（2024及更早）：温暖的赭石色，与出生后的年份在视觉上明显区分。 */
+.year-pill--prebirth { background: #F0E0C8; color: #7A4520; border: 1px solid #D4A882; }
+.year-pill--prebirth:hover { color: #7A4520; }
+.year-pill--prebirth.year-pill--active { background: #C8845A; color: #fff; border-color: #C8845A; }
 .memory-year-section { padding: clamp(32px, 5vw, 56px) 0; }
 /* 年份分节的标题跟卡片网格同一条左对齐线（网格自己有 .reading-wrap 的版心）。 */
 .memory-year-heading { width: min(760px, calc(100% - 32px)); margin: 0 auto clamp(12px, 2vw, 18px); }
+.memory-year-section--prebirth .memory-year-heading { color: #7A4520; }
+.prebirth-cue { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px; background: #F0E0C8; color: #7A4520; font-size: .72rem; font-weight: 700; letter-spacing: .06em; vertical-align: middle; }
 /* PAGE-0915-FULL-REMEDIATION-R1 D1：grid 默认 align-items:stretch 会把同一行里没有封面照片的卡
    （通常是内容还很少的当前月）拉伸到跟旁边有照片的卡一样高，那张卡自己的 #fff 背景就把多出来的
    高度填成一块空白——读起来像一张没做完的卡。改成 start，每张卡按自己内容的高度显示。 */

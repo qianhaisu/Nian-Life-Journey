@@ -1457,7 +1457,10 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         }
         const targets = storyLinkTargets(input.eventId, [event.organizationFingerprint]);
         const ledger = await readLedgerRows(q, [...targets.ids, ...targets.fingerprintTargets]);
-        const blocker = blockingHumanDecision(ledger, STORY_DECISION_KINDS);
+        // Exclude known illegal-batch rows before checking for blocking human decisions.
+        // Same exclusion that applyClaudeStoryCorrection uses; see isKnownIllegalBatchRow.
+        const filteredLedger = ledger.filter(r => !isKnownIllegalBatchRow(r));
+        const blocker = blockingHumanDecision(filteredLedger, STORY_DECISION_KINDS);
         if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human ${blocker.targetKind} decision (${blocker.provider}: ${blocker.decision}); a Claude decision may not be placed over it`);
         const reasonCodes = [...input.reasonCodes, `${CONTENT_SHA256_REASON_PREFIX}${current}`];
         const id = `claude-review-${createHash("sha256").update(`${input.eventId}|${input.promptVersion}`).digest("hex").slice(0, 24)}`;
