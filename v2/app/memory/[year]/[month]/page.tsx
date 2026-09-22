@@ -85,6 +85,18 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   if (content) {
     const available = new Map(media.map((item) => [item.id, item]));
     const eventIds = new Set(eventIdentities.map((item) => item.id));
+    // Edited month files are a reading arrangement, not a publication allow-list. They predate
+    // later Organizer runs, so treating them as the whole month made every subsequently approved
+    // story disappear from the month page. Keep the arranged days, then render every published
+    // memory that the file does not already represent.
+    const representedEventIds = new Set(content.days.flatMap((entry) => [
+      ...(entry.eventIds ?? []),
+      ...(entry.eventId ? [entry.eventId] : []),
+    ]));
+    const remainingMemories = composition.chapter.filter((moment) =>
+      moment.kind === "memory_led"
+      && Boolean(moment.memory)
+      && !representedEventIds.has(moment.memory!.id));
     const entries = content.days
       .slice()
       .sort((a, b) => a.day.localeCompare(b.day))
@@ -158,6 +170,18 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
           </ol>
         </div>)}
       </section>
+
+      {remainingMemories.length > 0 ? <section className="month-reading" aria-labelledby="more-memories-title">
+        <h2 id="more-memories-title" className="section-mark">这个月的故事</h2>
+        {remainingMemories.map((moment, index) => <MonthMoment
+          key={`${moment.day}-${moment.memory!.id}`}
+          moment={moment}
+          year={year}
+          monthAgeLabel={chapter.ageLabel}
+          priority={entries.length === 0 && index === 0}
+          continued={remainingMemories[index - 1]?.day === moment.day}
+        />)}
+      </section> : null}
 
       {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}
       {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`} prefetch={false}>{item.shortLabel}</Link>)}</p></footer> : null}
