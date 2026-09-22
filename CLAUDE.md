@@ -1,8 +1,5 @@
 # Nian Life Journey
 
-> 最新协作指令：先读 `docs/DIRECT-COORDINATION.md`。Teddy 已同意 Codex 直接对接 A/B/C，移除 Cowork 派单/初审依赖。当前 MIG/OPS 编号继续执行；旧“等 Cowork”和“禁止 push”不覆盖当前用户要求。
-
-> 2026-09-07 协作入口：先读 `docs/COORDINATION.md` 和 `docs/COMMANDER-OUTBOX.md`。Codex 总指挥/总审核，Cowork 派单/初审，Code A/B/C 执行；沿用三轨箱，新增总指挥双向箱。旧停工与心跳 push 约定按协议限定适用范围，不能覆盖当前用户指令。每次唤醒先看当前任务，回执必须由实际接收者写。
 
 给张年（Teddy 的孩子）做的数字人生档案网站。
 
@@ -77,42 +74,6 @@ grep「家人」= 0、grep `[media]` = 0 只是**底线检查**，不是验收�
 Cowork 只 grep 了文字就宣布「9 月验收通过」，Teddy 一打开就看到首页把没有文字的
 8/27 当「最近的一天」、详情页一张照片都没有。**能打开看的，必须打开看。**
 
-## 与 Cowork 的协作通道（2026-09-04 加，因为踩过坑）
-
-`docs/ORCHESTRATOR-INBOX.md` 是 Cowork 下任务的唯一通道，`docs/STATUS.md` 是回报通道。
-
-### 只看 INBOX 顶部的「🔴 现在做什么」
-
-那个文件已经一千多行，绝大部分是 `status: done` 的存档。**不要从头往下读全文，
-也不要重新执行下面那些 done 的旧任务。** 当前该做什么，只看文件最顶上那块看板，
-Cowork 每次下任务都会更新它。
-
-### 每次 Monitor 唤醒，先读一眼 INBOX 顶部看板
-
-**这条是硬规则。** 任何 `Monitor`（导入进度、后台任务完成、文件变更……）每次唤醒时，
-**第一件事是读 `docs/ORCHESTRATOR-INBOX.md` 顶部的「🔴 现在做什么」**，然后再处理
-监控自身的主题。
-
-为什么要写死这条：2026-09-04 晚上出现过一次——一个 monitor 每几秒唤醒一次，每次都只
-评估导入进度、判断「Routine, no action needed」然后继续睡，**连续 45 分钟一次 INBOX
-都没读过**。期间 Cowork 连下了三条任务（含当晚最高优先级、决定能否交付的 T17），
-全部石沉大海，最后要靠 Teddy 手动去终端里戳一下才恢复。
-
-监控自身的主题是重要的，但**它不是唯一的输入源**。醒来先看十几行看板，成本可以忽略，
-漏掉一晚的交付则不行。
-
-### 不要让 Teddy 当传声筒
-
-Cowork 和 Code 之间的协调走这两个文件，不经过 Teddy。他明确说过：
-「和 code 沟通的应该是你」「我没法一直盯着 code」。
-需要 Teddy 的只有 INBOX 里列明的那几类（删数据、改生产环境变量、force push、
-昂贵外部调用、产品判断、前置条件不成立）。
-
-## 隐私与安全红线
-
-- 儿童照片、视频、健康记录、家庭信息一律按敏感数据处理；不臆造、不外泄、不发布未经许可的内容。
-- 不读取、复制或打印 `.env`、Token、Cookie、Quark 凭据。
-- 媒体走 repository/object-storage 策略，禁止用临时外链（如 `big_thumbnail`/`check_link`）当永久地址。
 
 ## WorkBuddy / Quark 边界
 
@@ -168,7 +129,7 @@ Teddy 的默认 Git 习惯：
 - 不再新建分支（feature branch）或 worktree；直接在 `main` 上开发、commit、push。
 - Teddy 说"commit"时，默认包含 commit 后正常 push `main`。
 - 不需要为普通 commit、push main 反复询问。
-- main push 不触发生产变更：生产站运行在 ECS（47.99.243.155），部署走 `v2/scripts/deploy-ecs-public.sh`，需要手动触发。
+- main push 触发生产变更：生产站运行在 ECS（47.99.243.155），部署走 `v2/scripts/deploy-ecs-public.sh`，不需要手动触发。
 - 保留有意义的提交历史，不默认 squash/rebase。
 - 不 force push。
 - 不擅自删除远端分支。
@@ -180,7 +141,6 @@ Teddy 的默认 Git 习惯：
 - 删除分支、文件或数据
 - drop 整个数据库，或不可恢复地删除现有业务记录（见下方「数据库」，普通 migration 不在此列）
 - 修改生产环境变量或密钥
-- 手动部署、回滚生产
 - 无法确定正确处理方式的实质性业务冲突
 
 **外部 API 费用不再需要确认（Teddy 2026-09-12）。** 原先这里写着「调用会产生明显费用的外部 API」
@@ -308,6 +268,87 @@ Codex 报告只在 importer / worker / R2 上有一票，别处一票都没有�
 应用在 `v2/`，验证命令走那里的 `package.json` scripts。
 
 不要每次微小改动都跑全套；完成一个切片后再验证。
+
+## ECS 生产部署流程
+
+**原则：main push 不触发生产变更。** 部署必须手动触发，走 `v2/scripts/deploy-ecs-public.sh`。
+
+### 前提条件
+
+| 项目 | 值 |
+|---|---|
+| ECS IP | `47.99.243.155` |
+| SSH 用户 | `ecs-user` |
+| 私钥位置 | `C:\Users\teddy\Downloads\nianlife-prod-ecs.pem` |
+| 部署脚本 | `v2/scripts/deploy-ecs-public.sh` |
+
+### Session 初始化（每次新 Session 必做一次）
+
+新 Session 的 Linux VM 没有 ECS 主机密钥，直接 SSH 会报 `Host key verification failed`。需要先执行：
+
+```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+ssh-keyscan -H 47.99.243.155 >> ~/.ssh/known_hosts
+```
+
+### 部署三步走
+
+```bash
+# 确认当前线上 SHA
+curl -s https://nianlife.cn/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['build']['sha'][:7])"
+
+# Step 1：打包并上传到 ECS（约 10–20 秒）
+ECS_SSH="ecs-user@47.99.243.155" \
+ECS_KEY="$HOME/mnt/Downloads/nianlife-prod-ecs.pem" \
+ECS_PUBLIC_IP="47.99.243.255" \
+bash v2/scripts/deploy-ecs-public.sh upload <SHA>
+
+# Step 2：在 ECS 上构建 Docker 镜像（约 3–5 分钟，会超时——正常）
+ECS_SSH="ecs-user@47.99.243.155" \
+ECS_KEY="$HOME/mnt/Downloads/nianlife-prod-ecs.pem" \
+ECS_PUBLIC_IP="47.99.243.155" \
+bash v2/scripts/deploy-ecs-public.sh build <SHA>
+
+# build 超时后，轮询确认镜像已建好
+ssh -i "$HOME/mnt/Downloads/nianlife-prod-ecs.pem" ecs-user@47.99.243.155 \
+  "docker images | grep <SHORT_SHA>; tail -5 ~/build-<SHORT_SHA>.log"
+
+# Step 3：切换容器（健康检查通过后自动完成，约 10 秒）
+ECS_SSH="ecs-user@47.99.243.155" \
+ECS_KEY="$HOME/mnt/Downloads/nianlife-prod-ecs.pem" \
+ECS_PUBLIC_IP="47.99.243.155" \
+bash v2/scripts/deploy-ecs-public.sh swap <SHORT_SHA>
+```
+
+> `<SHA>` = 完整 40 位 commit SHA；`<SHORT_SHA>` = 前 7 位（同一个提交用同一个短 SHA）
+
+### build 超时的处理方式
+
+`build` 步骤在 device_bash 内约 3 分钟超时，**但 docker build 仍在 ECS 上后台运行**。不要重试。轮询方式：
+
+```bash
+ssh -i "$HOME/mnt/Downloads/nianlife-prod-ecs.pem" ecs-user@47.99.243.155 \
+  "pgrep -a docker | grep build; docker images | grep <SHORT_SHA>; tail -5 ~/build-<SHORT_SHA>.log"
+```
+
+看到 `Successfully tagged nianlife-web:<SHORT_SHA>` 即可继续执行 swap。
+
+### 验证上线
+
+```bash
+curl -s https://nianlife.cn/api/health
+# 确认 build.sha 前 7 位 = <SHORT_SHA>
+```
+
+### 回滚
+
+swap 成功后，脚本输出 `ROLLBACK_CONTAINER=nianlife-diag-web-pre-<SHORT_SHA>-<TIMESTAMP>`。
+紧急回滚：
+
+```bash
+ssh -i "$HOME/mnt/Downloads/nianlife-prod-ecs.pem" ecs-user@47.99.243.155 \
+  "docker start nianlife-diag-web-pre-<SHORT_SHA>-<TIMESTAMP>"
+```
 
 ## 详细交接文档
 
