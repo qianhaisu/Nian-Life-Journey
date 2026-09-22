@@ -11412,3 +11412,13 @@ ISR 页前面已经有 300 秒路由缓存，再叠 300 秒会让最坏情况变
 3. **下一件事**: Teddy 确认部署 → deploy swap → 浏览器验收 → ECS retention 清理
 
 NIGHT-RELATIONS-20260921 补充验收 2026-09-22: lint exit 0, 53 tests pass; 入库→记忆链路确认 Organizer 未处理新数据（已知现状）; 外婆/外公/爷爷 digest 在 DB 均有 400-1100+ 条对应; 亲爱的爸爸妈妈 pre-birth 2736 条抽样为成人日常（1.2% 关键词命中），建议 Teddy 决定; 573 媒体异常已分类（239 invalid=非图片格式，334 missing=导出时不存在）; 幂等性有 canonicalMessageId 设计保证; 代码已 push d425cf1，生产部署等 Teddy 确认
+
+---
+
+### 2026-09-23 · C1 外貌指代禁令 + Phase B 说话人识别（36a36dd，已部署）
+
+1. **线上多了什么**：narrative-validator v2.4 上线——「一位戴眼镜的男士/女士」「那位男士」「同一位男士」等外貌指代写法被 validator 和 writer 系统提示双重拦截；51/51 单元测试。生产 SHA 36a36dd。
+2. **没做到什么**：Phase B（说话人识别）完成调查，结果写入 `.data/speaker-identify-for-teddy.md`（15 个未认 digest 含样本消息）；**B2 结论：digest `2c62f546...` 不是雪姨，是陈亚萍/奶奶在某导出格式下的另一显示名，不要加进雪姨条目**。Phase A 数据补导（私聊_阿静去掉 --since、2028届 JSON 更新）尚未执行。
+3. **下一件**：Teddy 回复 `.data/speaker-identify-for-teddy.md` 中的身份确认 → Phase A import → Phase D 故事重写 → Phase E 懒加载
+
+原则验收（36a36dd 节点）：变更只影响 writer 层（拦截非必要外貌描述），不新增家人可读内容，八条验收与上轮相同：1/2/3/6/7/8 PASS；4 未交付（worker 尚未无人值守）；5 FAIL（memoryWeight 无 highlight 信号）。
