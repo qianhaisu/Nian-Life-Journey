@@ -40,7 +40,7 @@ CONTENT_MOUNT="${CONTENT_MOUNT:-$CONTENT_HOST_DIR:$CONTENT_HOST_DIR:ro}"
 # 健康模块私有数据（HEALTH_MOUNTS 留空 = 完全是原来的行为）。整个目录只读，record 子目录单独可写。
 HEALTH_HOST_DIR="${HEALTH_HOST_DIR:-/srv/nianlife-health}"
 HEALTH_BACKUP_DIR="${HEALTH_BACKUP_DIR:-/srv/nianlife-health-backups}"
-HEALTH_MOUNTS="${HEALTH_MOUNTS:-}"
+HEALTH_MOUNTS="${HEALTH_MOUNTS:-/srv/nianlife-health:/srv/nianlife-health:ro,/srv/nianlife-health/record:/srv/nianlife-health/record}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 
