@@ -76,11 +76,12 @@ try {
   if (fullConversation && (canary || capacityAudit)) throw new Error("WECHAT_MODE_CONFLICT");
   const conversationIndexValue = option("--conversation-index") !== undefined ? Number(option("--conversation-index")) : undefined;
   if (conversationIndexValue !== undefined && (!Number.isInteger(conversationIndexValue) || conversationIndexValue < 0)) throw new Error("CONVERSATION_INDEX_INVALID");
+  const conversationFileValue = option("--conversation-file");
   if (capacityAudit) {
     const maxMessages = positiveLimit(option("--max-messages"), "max_messages", 200_000) ?? 100;
     const maxMedia = positiveLimit(option("--max-media"), "max_media", 200_000) ?? 20;
     const { auditWechatCapacity } = await import("../lib/ingest/wechat-snapshot.ts");
-    const audit = await auditWechatCapacity(sourceRoot, { maxMessages, maxMedia, conversationIndex: conversationIndexValue, since: option("--since") });
+    const audit = await auditWechatCapacity(sourceRoot, { maxMessages, maxMedia, conversationIndex: conversationIndexValue, conversationFile: conversationFileValue, since: option("--since") });
     process.stdout.write(`${JSON.stringify(redactedCapacityAudit(audit))}\n`);
   } else {
     assertPostgresBackendForRealImport();
@@ -92,7 +93,7 @@ try {
       // Discover the selected conversation's true size with a cheap pass (no media hashing beyond
       // the floor caps), then re-request exactly that many messages/media refs so nothing is
       // truncated — no arbitrary "big enough" sentinel that could still clip an even larger export.
-      const probe = await loadWechatBundle(sourceRoot, { maxMessages: 1, maxMedia: 1, conversationIndex: conversationIndexValue, since: option("--since") });
+      const probe = await loadWechatBundle(sourceRoot, { maxMessages: 1, maxMedia: 1, conversationIndex: conversationIndexValue, conversationFile: conversationFileValue, since: option("--since") });
       maxMessages = Math.max(probe.availableMessageCount, 1);
       maxMedia = Math.max(probe.availableMediaRefCount, 1);
     } else {
@@ -109,6 +110,7 @@ try {
       maxMessages,
       maxMedia,
       conversationIndex: conversationIndexValue,
+      conversationFile: conversationFileValue,
       since: option("--since"),
       retryFailed: hasFlag("--retry-failed"),
       messageBatchSize,

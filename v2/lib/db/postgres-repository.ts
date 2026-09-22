@@ -417,7 +417,10 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
       const sourceKey = (s: { provider?: string; providerExternalId?: string }) => `${s.provider} ${s.providerExternalId}`;
       const sourceByKey = new Map<string, RawSource>();
       for (const input of inputs) if (!sourceByKey.has(sourceKey(input.source))) sourceByKey.set(sourceKey(input.source), input.source);
-      const sourceInputs = [...sourceByKey.values()];
+      // Strip null bytes and lone surrogates that PostgreSQL text columns cannot store.
+      // Old WeChat XML app-messages (type 8, cdnurl content) sometimes carry embedded binary.
+      const pgSafeText = (v: string | null | undefined) => v == null ? v : v.replace(/\x00/g, "").replace(/[\uD800-\uDFFF]/g, "");
+      const sourceInputs = [...sourceByKey.values()].map((s) => s.text != null ? { ...s, text: pgSafeText(s.text) } : s);
       const insertedSourceRows = (await tx.insert(t.rawSources).values(sourceInputs as any).onConflictDoNothing({ target: [t.rawSources.provider, t.rawSources.providerExternalId] }).returning()) as unknown as RawSource[];
       const insertedSourceByKey = new Map(insertedSourceRows.map((row) => [sourceKey(row), row] as const));
       const missingSourceInputs = sourceInputs.filter((s) => !insertedSourceByKey.has(sourceKey(s)));

@@ -29,7 +29,9 @@ export type WechatSnapshot = { rootFingerprint: string; fileCount: number; files
 // and is identical in both passes, so it is the only stable handle at this layer. The caller still
 // pins the batch by (source file sha256, approved id set) and must assert the resulting ids against
 // that set; see scripts/wechat-import-all.mjs, which refuses the run on any mismatch.
-export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number; since?: string; recordOrdinals?: ReadonlySet<number> };
+// `conversationFile`: path to the specific transcript file relative to sourceRoot (normalized, forward slashes).
+// Prefer this over conversationIndex — index can shift when files are added/removed.
+export type WechatBundleOptions = { maxMessages?: number; maxMedia?: number; now?: string; conversationIndex?: number; conversationFile?: string; since?: string; recordOrdinals?: ReadonlySet<number> };
 // `sessionKey` is the selected document's own chat id (Markdown 会话ID / JSON session.wxid). Two
 // exports of one chat share it and differ in every other identity, so it is what a cross-export
 // comparison has to be scoped by (lib/ingest/wechat-content-dedupe.ts). Empty when the export did
@@ -191,10 +193,18 @@ export async function loadWechatBundle(sourceRoot: string, options: WechatBundle
   // candidates is already in the deterministic (relativePath-digest) order established above;
   // conversationIndex picks a specific position in that same stable order instead of always
   // taking position 0, so a chosen medium-scale conversation stays chosen across process restarts.
-  const conversationIndex = options.conversationIndex ?? 0;
-  if (!Number.isInteger(conversationIndex) || conversationIndex < 0) throw new Error("WECHAT_CONVERSATION_INDEX_INVALID");
-  const selected = candidates[conversationIndex];
-  if (!selected) throw new Error("WECHAT_NO_VALID_SESSION");
+  // conversationFile (preferred) selects by stable path instead of fragile index.
+  let selected: typeof candidates[number] | undefined;
+  if (options.conversationFile !== undefined) {
+    const target = normalizeRelative(options.conversationFile);
+    selected = candidates.find((c) => normalizeRelative(c.entry.relativePath) === target);
+    if (!selected) throw new Error(`WECHAT_CONVERSATION_FILE_NOT_FOUND: ${target}`);
+  } else {
+    const conversationIndex = options.conversationIndex ?? 0;
+    if (!Number.isInteger(conversationIndex) || conversationIndex < 0) throw new Error("WECHAT_CONVERSATION_INDEX_INVALID");
+    selected = candidates[conversationIndex];
+    if (!selected) throw new Error("WECHAT_NO_VALID_SESSION");
+  }
   const allowed = options.recordOrdinals;
   if (allowed !== undefined && allowed.size === 0) throw new Error("WECHAT_MESSAGE_ALLOWLIST_EMPTY");
   // since -> allowlist -> truncate. See the WechatBundleOptions doc comment for why this order, and
