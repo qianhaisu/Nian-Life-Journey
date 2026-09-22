@@ -71,7 +71,8 @@ function AttViewer({ a, onClose }: { a: Att; onClose: () => void }) {
   </div>;
 }
 
-type Sel = { type: "node"; id: string } | { type: "band"; id: string } | { type: "rt" } | null;
+interface Bridge { id: string; b1: PageBand; b2: PageBand }
+type Sel = { type: "node"; id: string } | { type: "band"; id: string } | { type: "rt" } | { type: "bridge"; id: string } | null;
 
 export function HealthView({ page }: { page: HealthPage }) {
   const [att, setAtt] = useState<Att | null>(null);
@@ -112,6 +113,7 @@ function Timeline({ page }: { page: HealthPage }) {
   const [year, setYear] = useState(page.defaultYear);
   const [sel, setSel] = useState<Sel>(null);
   const [cw, setCw] = useState(0);
+  const [showSickInfo, setShowSickInfo] = useState(false);
   const sc = useRef<HTMLDivElement>(null);
   const today = page.today, curYear = Number(today.slice(0, 4));
   // the current year is drawn only up to today; earlier years keep the whole year
@@ -141,6 +143,45 @@ function Timeline({ page }: { page: HealthPage }) {
     return groups;
   }, [page.nodes, Y0, Y1, X]);
   const bands = page.bands.filter((b) => ms(b.end) + DAY > Y0 && ms(b.start) < Y1 && b.start <= today);
+
+  // bridge connectors: visually connect bands with a gap of 1–3 days (ok-status only)
+  const bridges = useMemo<Bridge[]>(() => {
+    const ok = page.bands.filter((b) => b.status === "ok" && ms(b.end) + DAY > Y0 && ms(b.start) < Y1 && b.start <= today);
+    const sorted = [...ok].sort((a, b) => ms(a.start) - ms(b.start));
+    const out: Bridge[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const b1 = sorted[i];
+      for (let j = i + 1; j < sorted.length; j++) {
+        const b2 = sorted[j];
+        const diff = ms(b2.start) - ms(b1.end);
+        if (diff >= 2 * DAY && diff <= 4 * DAY) out.push({ id: `${b1.id}--${b2.id}`, b1, b2 });
+        if (diff > 4 * DAY) break;
+      }
+    }
+    return out;
+  }, [page.bands, Y0, Y1, today]);
+
+  // cumulative sick days for the selected year (union of bands, bridges and unassigned nodes)
+  const sickDays = useMemo(() => {
+    const eY1 = Math.min(Y1, ms(today) + DAY);
+    const ok = page.bands.filter((b) => b.status === "ok" && ms(b.end) + DAY > Y0 && ms(b.start) < eY1 && b.start <= today);
+    const sorted = [...ok.filter((b) => b.kind !== "open")].sort((a, b) => ms(a.start) - ms(b.start));
+    const set = new Set<number>();
+    const clip = (d: number) => { if (d >= Y0 && d < eY1) set.add(d); };
+    if (sorted.length) {
+      let lo = ms(sorted[0].start), hi = ms(sorted[0].end) + DAY;
+      for (let i = 1; i < sorted.length; i++) {
+        const ns = ms(sorted[i].start), ne = ms(sorted[i].end) + DAY;
+        if (ns - hi <= 3 * DAY) hi = Math.max(hi, ne);
+        else { for (let d = lo; d < hi; d += DAY) clip(d); lo = ns; hi = ne; }
+      }
+      for (let d = lo; d < hi; d += DAY) clip(d);
+    }
+    for (const b of ok.filter((b) => b.kind === "open")) for (let d = ms(b.start); d < ms(b.start) + 4 * DAY; d += DAY) clip(d);
+    for (const n of page.nodes) if (n.unassigned && ms(n.date) >= Y0 && ms(n.date) < eY1) clip(ms(n.date));
+    return set.size;
+  }, [page.bands, page.nodes, Y0, Y1, today]);
+
   const noData = [] as { a: number; b: number }[];
   const first = page.nodes[0]?.date;
   if (first && ms(first) > Y0) noData.push({ a: Y0, b: Math.min(ms(first), Y1) });
@@ -169,6 +210,7 @@ function Timeline({ page }: { page: HealthPage }) {
       <button type="button" className="hp-arr" data-arr="-1" aria-label="向左" onClick={() => sc.current?.scrollBy({ left: -240, behavior: "smooth" })}><Icon kind="left" /></button>
       <button type="button" className="hp-arr" data-arr="1" aria-label="向右" onClick={() => sc.current?.scrollBy({ left: 240, behavior: "smooth" })}><Icon kind="right" /></button>
     </div>
+    {sickDays > 0 ? <div className="hp-sick-days">年度累计生病 😷 {sickDays} 天<button type="button" className="hp-sick-info" aria-label="计算说明" onClick={() => setShowSickInfo((x) => !x)}>ⓘ</button>{showSickInfo ? <span className="hp-sick-tip">含疑似时段；短间隔和结束不明时按约定补算，不是确诊患病天数。</span> : null}</div> : null}
     <div className="hp-scroll" ref={sc} tabIndex={0} aria-label="详细时间轴，可左右滑动">
       <div className="hp-track" style={{ width: W }}>
         {Array.from({ length: 12 }, (_, i) => i).filter((i) => Date.UTC(year, i, 1) < Y1).map((i) => { const x = X(Date.UTC(year, i, 1)); return <div key={i}><div className="hp-monl" style={{ left: x }} /><div className="hp-mon" style={{ left: Math.max(x, PAD + 10) }}>{i + 1}月</div></div>; })}
@@ -180,6 +222,7 @@ function Timeline({ page }: { page: HealthPage }) {
           const cls = b.status === "needs_review" ? "review" : b.kind === "recorded" ? "p" : b.kind === "suspected" ? "s" : "open";
           return <button key={b.id} type="button" className={`hp-bp ${cls}`} data-band={b.id} data-kind={b.kind} data-status={b.status} style={{ left, width: w }} aria-expanded={sel?.type === "band" && sel.id === b.id} aria-label={`${bandTitle(b)}：${md(b.start)}${b.kind === "open" ? "起" : `–${md(b.end)}`} ${b.label}`} onClick={() => choose({ type: "band", id: b.id })} />;
         })}
+        {bridges.map((br) => { const left = X(ms(br.b1.end) + DAY), w = X(ms(br.b2.start)) - left; return w > 0 ? <button key={br.id} type="button" className="hp-bp bridge" style={{ left, width: w }} aria-expanded={sel?.type === "bridge" && sel.id === br.id} aria-label="相邻区间连接，点击查看" onClick={() => choose({ type: "bridge", id: br.id })} /> : null; })}
         {asOf && ms(asOf) >= Y0 && ms(asOf) < Y1 ? <><div className="hp-asof" style={{ left: X(ms(asOf) + DAY) }} /><div className="hp-asof-l" style={{ left: X(ms(asOf) + DAY) }}>截至 {mdShort(asOf)}</div></> : null}
         {rt ? <button type="button" className="hp-rt" data-rt style={{ left: X(rt.date) - 1 }} aria-expanded={sel?.type === "rt"} aria-label={`入托，${md(rt.date)}`} onClick={() => choose({ type: "rt" })}><span className="pole" /><span className="t">入托</span></button> : null}
         {nodes.map((g) => {
@@ -194,12 +237,11 @@ function Timeline({ page }: { page: HealthPage }) {
         })}
       </div>
     </div>
-    <Detail sel={sel} groups={nodes} page={page} onClose={() => setSel(null)} bandTitle={bandTitle} />
-    <p className="hp-foot">红色只画记录里写明或能连起来看的问题时段；零散的记录只画节点，不连成区间；浅色底只表示没有标出问题区间，不代表健康。点小节点或色带看详情。</p>
+    <Detail sel={sel} groups={nodes} page={page} onClose={() => setSel(null)} bandTitle={bandTitle} bridges={bridges} />
   </div>;
 }
 
-function Detail({ sel, groups, page, onClose, bandTitle }: { sel: Sel; groups: { id: string; nodes: PageNode[] }[]; page: HealthPage; onClose: () => void; bandTitle: (b: PageBand) => string }) {
+function Detail({ sel, groups, page, onClose, bandTitle, bridges }: { sel: Sel; groups: { id: string; nodes: PageNode[] }[]; page: HealthPage; onClose: () => void; bandTitle: (b: PageBand) => string; bridges: Bridge[] }) {
   if (!sel) return <div id="hp-detail" hidden />;
   const close = <button type="button" className="hp-close" data-act="close" onClick={onClose}><Icon kind="up" />收起</button>;
   if (sel.type === "rt" && page.enrolment) return <div id="hp-detail" className="hp-detail" aria-live="polite"><div className="dtop"><b>入托 · {md(page.enrolment.date)}</b>{close}</div><p className="hp-muted">{page.enrolment.note}</p></div>;
@@ -213,6 +255,16 @@ function Detail({ sel, groups, page, onClose, bandTitle }: { sel: Sel; groups: {
       {b.status === "needs_review" ? <p className="hp-warn">这段需要重新核对：{b.statusReasons.join("；")}。在核对之前不按原来的判断画成红色。</p> : null}
       {b.supports.length ? <><h4>依据的记录</h4><ul className="hp-refs">{b.supports.map((r) => <RefLine key={r.id} date={r.date} text={r.text} />)}</ul></> : null}
       {b.counter.length ? <><h4>相反或不一致的记录</h4><ul className="hp-refs">{b.counter.map((r) => <RefLine key={r.id} date={r.date} text={r.text} />)}</ul></> : null}
+    </div>;
+  }
+  if (sel.type === "bridge") {
+    const br = bridges.find((b) => b.id === sel.id);
+    if (!br) return <div id="hp-detail" hidden />;
+    const gapDays = (ms(br.b2.start) - ms(br.b1.end)) / DAY - 1;
+    return <div id="hp-detail" className="hp-detail" aria-live="polite">
+      <div className="dtop"><b>相邻区间 · {md(br.b1.end)} – {md(br.b2.start)}</b>{close}</div>
+      <p>两次记录隔得很近（{gapDays} 天），可能还没完全好。</p>
+      <p className="hp-muted">上一段：{br.b1.label}；下一段：{br.b2.label}。这只是展示上的连线，不代表有原文记录。</p>
     </div>;
   }
   const g = groups.find((x) => sel.type === "node" && x.id === sel.id); if (!g) return <div id="hp-detail" hidden />;

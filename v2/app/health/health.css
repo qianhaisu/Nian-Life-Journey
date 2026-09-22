@@ -32,7 +32,7 @@
 .hp-legend span { display: flex; align-items: center; gap: 6px; }
 .hp-legend i { display: inline-block; width: 26px; height: 10px; border-radius: 5px; flex: none; }
 .hp-legend .l-p { background: var(--hp-red); }
-.hp-legend .l-s { background: repeating-linear-gradient(135deg, var(--hp-red) 0 4px, #fff 4px 7px); }
+.hp-legend .l-s { background: #F5A0A0; }
 .hp-legend .l-open { background: linear-gradient(90deg, var(--hp-red) 0, var(--hp-red) 35%, rgba(242, 90, 90, 0) 100%); border-radius: 5px 0 0 5px; }
 .hp-legend .l-nd { background: var(--hp-nd); }
 .hp-legend .l-un { width: 10px; height: 10px; border-radius: 50%; background: var(--color-surface); box-shadow: inset 0 0 0 2px var(--color-primary); margin: 0 8px; }
@@ -58,7 +58,8 @@
 button.hp-bp { cursor: pointer; }
 .hp-base { background: var(--hp-nd); }
 .hp-bp.p { background: var(--hp-red); }
-.hp-bp.s { background: repeating-linear-gradient(135deg, var(--hp-red) 0 5px, #fff 5px 9px); box-shadow: inset 0 0 0 1px var(--hp-red); }
+.hp-bp.s { background: #F5A0A0; }
+.hp-bp.bridge { background: #FBD8D8; border-radius: 0; }
 .hp-bp.open { background: linear-gradient(90deg, var(--hp-red) 0, var(--hp-red) 35%, rgba(242, 90, 90, 0) 100%); border-radius: 10px 0 0 10px; }
 .hp-bp.review { background: transparent; box-shadow: inset 0 0 0 1.5px #9C9286; border-style: dashed; }
 .hp-bp[aria-expanded="true"] { outline: 2px solid var(--brand-accent); outline-offset: 2px; }
@@ -75,6 +76,9 @@ button.hp-bp { cursor: pointer; }
 .hp-nd.un .dot { background: var(--color-surface); box-shadow: inset 0 0 0 2px var(--color-primary); }
 .hp-nd[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--brand-accent); background: rgba(168, 93, 67, .08); }
 .hp-foot { padding: 4px 16px 0; margin: 0; font-size: .76rem; color: var(--color-muted); }
+.hp-sick-days { display: flex; align-items: center; gap: 6px; padding: 6px 16px 0; font-size: .92rem; font-weight: 700; color: var(--color-primary); }
+.hp-sick-info { background: none; border: none; cursor: pointer; color: var(--color-muted); font-size: .88rem; padding: 0 2px; line-height: 1; }
+.hp-sick-tip { font-size: .78rem; font-weight: 400; color: var(--color-muted); }
 .hp-detail { margin: 8px 16px 0; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-bg); padding: 2px 14px 8px; }
 .hp-detail .dtop { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 0; color: var(--color-primary); }
 .hp-detail h4 { margin: 10px 0 4px; font-size: .88rem; }
