@@ -190,12 +190,17 @@ export function boundContentSha256(reasonCodes: readonly string[] | null | undef
  * Canonical fingerprint of the patch requested in a ClaudeStoryCorrectionInput.
  * Stored as `request-fingerprint:<hex>` so a true retry (same patch) is distinguished
  * from a different-patch retry under the same promptVersion.
+ *
+ * Field presence is encoded explicitly so that omitted (keep-existing) and explicit null
+ * (clear the field) produce DIFFERENT fingerprints. A sentinel string "__omitted__" marks
+ * fields not present in the input.
  */
+const FP_OMITTED = "__omitted__";
 export function computeRequestFingerprint(input: { newTitle?: string | null; newStory?: string | null; newPeople?: string[]; policyVersion: string }): string {
   const payload = JSON.stringify({
-    newTitle: input.newTitle ?? null,
-    newStory: input.newStory ?? null,
-    newPeople: input.newPeople ? [...input.newPeople].sort() : null,
+    newTitle: input.newTitle !== undefined ? (input.newTitle ?? null) : FP_OMITTED,
+    newStory: input.newStory !== undefined ? (input.newStory ?? null) : FP_OMITTED,
+    newPeople: input.newPeople !== undefined ? [...input.newPeople].sort() : FP_OMITTED,
     policyVersion: input.policyVersion,
   });
   return createHash("sha256").update(payload, "utf8").digest("hex");
