@@ -97,11 +97,23 @@ test("_source 不是 machine（包括无字段）的天不会被覆盖，返回 
   assert.equal(appendDay(content, e, OPTS).content.days[0].title, existingDay.title);
 });
 
-test("opts.force=true 可以覆盖人工编辑的天", () => {
+test("没有 force 开关：人工编辑的天（human 或无标记）怎么都覆盖不了", () => {
   const content = base();
-  const existingDay = content.days[0];
-  const e = entry({ day: existingDay.day, title: "强制覆盖" });
-  const { replaced, skipped } = appendDay(content, e, { ...OPTS, force: true });
-  assert.equal(replaced, true);
-  assert.ok(!skipped);
+  content.days[1]._source = "human";
+  for (const d of content.days) {
+    const res = appendDay(content, entry({ day: d.day, title: "机器要改这天" }), { ...OPTS, force: true });
+    assert.equal(res.skipped, true, d.day);
+    assert.equal(res.content.days.find((x) => x.day === d.day).title, d.title);
+  }
+});
+
+test("替换机器写的天：依据存进 _evidence，eventIds 带上", () => {
+  const once = appendDay(base(), entry({ title: "第一版" }), OPTS).content;
+  const evidence = { quotes: [{ quote: "好", label: "妈妈", sourceId: "src-b" }], persons: [] };
+  const { content } = appendDay(once, entry({ title: "第二版", evidence, eventIds: ["ev-1"] }), OPTS);
+  const d = content.days.find((x) => x.day === "2026-09-18");
+  assert.deepEqual(d._evidence, evidence);
+  assert.deepEqual(d.eventIds, ["ev-1"]);
+  assert.equal(d.eventId, "ev-1");
+  assert.ok(validateMonthContent(content, "2026-09"));
 });

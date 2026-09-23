@@ -20,6 +20,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { pickDays, isReadable, sensitiveHits, extractJson, checkDecision, timeWordProblems, afterFailure, shanghaiToday, addDays } from "./plan.mjs";
 import { validateDayText } from "./validate-day.mjs";
+import { labelForSender } from "./identity-rules.mjs";
 import { appendDay } from "./append-day.mjs";
 
 const OPS = process.env.NIANLIFE_OPS_DIR ?? "C:/Users/teddy/NianlifeOps/ops-daily";
@@ -61,7 +62,10 @@ function fetchContent(month) {
 }
 
 // ── 材料 ────────────────────────────────────────────────────────────────────────
-async function loadDayPack(rds, day, speakerLabel) {
+// 发送人称谓只按 family-registry 解析（identity-rules.mjs）。2026-09-23 之前这里读的是 9/18 的 speaker-map.json，
+// 那份表把雪姨标成「发言人E」「小年小姨」——引语因此被归到错的人名下。未登记的人一律「未登记的人」，不能被点名。
+export const UNREGISTERED = "未登记的人";
+async function loadDayPack(rds, day) {
   const rows = (await rds.client.query(
     `select id, source_label, to_char(captured_at at time zone 'Asia/Shanghai','HH24:MI') t, text, metadata->>'senderDigest' d
        from raw_sources where captured_at >= $1::date and captured_at < ($1::date + 1) and deleted_at is null order by captured_at, id`, [day])).rows;
@@ -70,7 +74,8 @@ async function loadDayPack(rds, day, speakerLabel) {
   for (const r of rows) {
     if (!isReadable(r.text)) continue;
     const k = `s${keys.size + 1}`;
-    keys.set(k, { id: r.id, text: String(r.text).trim(), hour: Number(String(r.t).slice(0, 2)), label: r.d ? (speakerLabel.get(r.d) ?? "群里有人") : "（无发言人）" });
+    const speaker = labelForSender(r.d, r.source_label);
+    keys.set(k, { id: r.id, text: String(r.text).trim(), hour: Number(String(r.t).slice(0, 2)), speaker, label: speaker ?? UNREGISTERED });
     lines.push(`${k} ${r.t} ${keys.get(k).label}: ${String(r.text).replace(/\s+/g, " ").trim().slice(0, 420)}`);
   }
   return { keys, text: lines.join("\n"), total: rows.length };
@@ -140,8 +145,6 @@ async function main() {
     const brief = fs.readFileSync(path.join(ED, "BRIEF.day.md"), "utf8");
     const stateFile = path.join(ED, "state.json");
     const state = readJson(stateFile, {});
-    const SPK = readJson("C:/Users/teddy/NianlifeOps/memory-tab-20260917/10-history-rollout/speaker-map.json", { speakers: [] });
-    const speakerLabel = new Map(SPK.speakers.map((s) => [s.digest, s.label]));
 
     const { openRds } = await import(pathToFileURL(path.join(REPO_V2, ".data/night-rds.mjs")).href);
     const rds = await openRds({ localPort: 15470 + Math.floor(Math.random() * 100), readOnly: true });
@@ -160,7 +163,7 @@ async function main() {
 
       for (const day of plan.write) {
         const month = day.slice(0, 7);
-        const pack = await loadDayPack(rds, day, speakerLabel);
+        const pack = await loadDayPack(rds, day);
         say(`[${day}] 材料：库里 ${pack.total} 条，可读 ${pack.keys.size} 条`);
         if (pack.keys.size === 0) { state[day] = { attempts: 0, status: "skipped" }; digest.skipped.push({ day, reason: "过滤后没有可读文字" }); continue; }
         const knownKeys = new Set(pack.keys.keys());
@@ -177,19 +180,21 @@ async function main() {
           if (shape.decision.decision === "skip") { decision = shape.decision; break; }
           // 逐段校验：这一段的引语必须出在「这一段」列出的消息里；这一段的时间词要和这一段的来源时间对得上。
           const problems = [];
-          const allSourceTexts = [];
+          const allSources = [];
+          const evidence = { quotes: [], persons: [] };
           for (const [i, para] of shape.decision.paragraphs.entries()) {
             const src = para.sources.map((k) => pack.keys.get(k));
-            allSourceTexts.push(...src.map((x) => x.text));
-            const v = validateDayText({ title: null, paragraphs: [para.text] }, src.map((x) => x.text), { realNames });
+            allSources.push(...src);
+            const v = validateDayText({ title: null, paragraphs: [para.text] }, src, { realNames });
+            for (const kind of ["quotes", "persons"]) evidence[kind].push(...v.evidence[kind].map((e) => ({ ...e, where: `第 ${i + 1} 段` })));
             problems.push(...v.errors.map((e) => e.replace(/^第 1 段/, `第 ${i + 1} 段`)));
             const badTime = timeWordProblems(para.text, src.map((x) => x.hour));
             if (badTime.length) problems.push(`第 ${i + 1} 段: 写了「${badTime.join("、")}」，但这一段引用的消息都不在这个时段`);
           }
           // 标题：不能含真实姓名/技术字样，引语（如有）要出在任一来源里
-          problems.push(...validateDayText({ title: shape.decision.title, paragraphs: [] }, allSourceTexts, { realNames }).errors.filter((e) => !/既没有标题/.test(e)));
+          problems.push(...validateDayText({ title: shape.decision.title, paragraphs: [] }, allSources, { realNames }).errors.filter((e) => !/既没有标题/.test(e)));
           if (problems.length) { errors = problems; say(`[${day}] 第 ${attempt} 稿未过校验：${problems.length} 条`); continue; }
-          decision = shape.decision; errors = null; break;
+          decision = { ...shape.decision, evidence }; errors = null; break;
         }
 
         fs.writeFileSync(path.join(ED, "drafts", `${day}.json`), JSON.stringify({ day, decision, errors, reply: decision ? undefined : lastReply }, null, 1), "utf8");
@@ -220,9 +225,10 @@ async function main() {
         const base = contents.get(month) ?? { schema: "nianlife.month-content/1", month, generatedAt: NOW.toISOString(), speakerBySourceId: {}, days: [] };
         const sources = [...new Set(decision.paragraphs.flatMap((x) => x.sources))].map((k) => pack.keys.get(k));
         const speakerBySourceId = Object.fromEntries(sources.map((s) => [s.id, s.label]));
-        const { content: next } = appendDay(base, {
-          day, kind: decision.kind, title: decision.title, paragraphs: paragraphTexts, sourceIds: sources.map((s) => s.id),
+        const { content: next, skipped: protectedDay } = appendDay(base, {
+          day, kind: decision.kind, title: decision.title, paragraphs: paragraphTexts, sourceIds: sources.map((s) => s.id), evidence: decision.evidence,
         }, { birthDay: BIRTH_DAY, speakerBySourceId, dataCutoff: day });
+        if (protectedDay) { digest.skipped.push({ day, reason: "这一天是人工编辑过的（或判断不出来源），不覆盖" }); ledger({ event: "protected", day }); continue; }
         contents.set(month, next);
         const out = path.join(ED, "drafts", `${month}.candidate.json`);
         fs.writeFileSync(out, JSON.stringify(next, null, 1), "utf8");

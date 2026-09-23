@@ -22,9 +22,14 @@ export function birthAge(birthDay, day) {
 
 /**
  * @param {object} content   现有的月内容（会被深拷贝，不改入参）
- * @param {object} entry     {day,kind,title,paragraphs,sourceIds?,firstScreenMediaIds?,expandedMediaIds?,storyBoundMediaIds?}
- * @param {{birthDay:string, speakerBySourceId?:Record<string,string>, dataCutoff?:string, now?:string, force?:boolean}} opts
- *   force=true 覆盖人工编辑的天（默认 false，即保护 _source="human" 或无 _source 标记的天）
+ * @param {object} entry     {day,kind,title,paragraphs,sourceIds?,firstScreenMediaIds?,expandedMediaIds?,storyBoundMediaIds?,eventIds?,evidence?}
+ *   evidence：validateDayText 返回的依据（每句引语的来源与发送人、每处点名的依据），原样存在这一天的 _evidence 上，
+ *   页面不读它；验收和抽检读它。
+ * @param {{birthDay:string, speakerBySourceId?:Record<string,string>, dataCutoff?:string, now?:string}} opts
+ *
+ * 人工编辑过的天（_source="human"，或者没有 _source——判断不出来源的一律按人工处理）**永远不覆盖**，
+ * 返回 skipped=true。这里没有 force 开关：人工改过的字，机器没有任何办法覆盖它（Teddy 2026-09-23 硬约束）。
+ * 9/19 批量生成的天要先经 mark-source.mjs 对着生成日志确认是机器写的，补上 _source:"machine"，才可替换。
  */
 export function appendDay(content, entry, opts) {
   const month = content.month;
@@ -48,20 +53,20 @@ export function appendDay(content, entry, opts) {
     firstScreenMediaIds: first,
     expandedMediaIds: expanded,
     storyBoundMediaIds: entry.storyBoundMediaIds ?? [],
-    eventId: null,
-    eventIds: [],
+    eventId: entry.eventIds?.[0] ?? null,
+    eventIds: entry.eventIds ?? [],
     sourceIds: entry.sourceIds ?? [],
     mergedEventCount: 0,
     pendingCount: 0,
     mediaNote: null,
     _source: "machine",
   };
+  if (entry.evidence) day._evidence = entry.evidence;
   const at = next.days.findIndex((existing) => existing.day === entry.day);
   const replaced = at >= 0;
   if (replaced) {
-    // 判断不出来源的一律当作人工内容保护，除非 opts.force = true。
-    const isHuman = !opts.force && next.days[at]._source !== "machine";
-    if (isHuman) return { content: next, replaced: false, skipped: true, days: next.days.length };
+    // 判断不出来源的一律当作人工内容保护。
+    if (next.days[at]._source !== "machine") return { content: next, replaced: false, skipped: true, days: next.days.length };
     next.days[at] = day;
   } else {
     next.days.push(day);

@@ -190,6 +190,11 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       // display name is distinctive enough that a collision with an unrelated account is implausible.
       // wxid confirmed 2026-09-22 via R7-CODEX-ACCOUNT-EVIDENCE.json (kept in private evidence file).
       // Display name used for matching.
+      //
+      // Teddy reconfirmed 2026-09-23 (round 3): 鹿城筱薇 = 外婆, speaks in the family group but not often.
+      // Re-measured the same day against E:\WechatHis	exts: every sender record spells the name with the
+      // double space (919 JSON senderDisplayName rows); the single-space form occurs only inside system
+      // lines (「"鹿城 筱薇" 撤回了一条消息」), never as a sender, so it needs no second entry.
       sourceParticipantDigest: senderDigestForDisplayName("鹿城  筱薇"),
       displayName: "鹿城  筱薇",
       canonicalPersonId: "person-waipo",
