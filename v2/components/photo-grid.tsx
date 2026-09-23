@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useCallback } from "react";
 import { ViewerModal, videoFrameStyle, type GalleryPhoto } from "@/components/photo-viewer";
 import { VideoPlayer } from "@/components/video-player";
+import { mediaDeliveryUrl } from "@/lib/media/paths";
 
 // Smart grid layout for any number of photos.
 //
@@ -42,6 +43,13 @@ function Cell({
   label?: string;
 }) {
   const isVideo = photo.type === "video";
+  // A grid cell is at most a third or a half of the reading column, and the grid is what every day
+  // shows by default — so a small cell asks for the ~480px thumbnail, derived from the id the way
+  // components/photo.tsx does (`thumbnailSrc` is null on every WeChat row). A missing thumbnail
+  // derivative falls back to the full file rather than leaving a hole. A picture standing alone, or
+  // the large cell of three, gets the full file from the start.
+  const [full, setFull] = useState(large);
+  const src = isVideo ? (photo.posterSrc ?? mediaDeliveryUrl(photo.id, "poster")) : full ? photo.src : (photo.thumbnailSrc ?? mediaDeliveryUrl(photo.id, "thumbnail"));
   // A video under 「+N」 is drawn by its poster like a still: the cell's job there is to open the rest.
   if (isVideo && !overlay) {
     return (
@@ -62,17 +70,15 @@ function Cell({
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
     >
       <Image
-        // A grid cell is at most a third or a half of the reading column: the thumbnail (~480px wide)
-        // covers it at 2x on a phone, and the grid is now what every day shows by default — loading
-        // each day's full-size files there would put the whole month's weight in front of the reader.
-        // A picture standing alone (or the large cell of three) keeps the full file.
-        src={isVideo ? (photo.posterSrc ?? photo.thumbnailSrc ?? photo.src) : large ? photo.src : (photo.thumbnailSrc ?? photo.src)}
+        key={src}
+        src={src}
         alt={photo.alt}
         fill
         sizes={sizes}
         priority={priority}
         unoptimized
         style={{ objectFit: "cover" }}
+        onError={() => { if (!full) setFull(true); }}
       />
       {overlay ? <span className="pg-overlay">{overlay}</span> : null}
     </figure>
