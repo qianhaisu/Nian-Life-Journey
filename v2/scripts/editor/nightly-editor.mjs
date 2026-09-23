@@ -68,7 +68,9 @@ export const UNREGISTERED = "未登记的人";
 async function loadDayPack(rds, day) {
   const rows = (await rds.client.query(
     `select id, source_label, to_char(captured_at at time zone 'Asia/Shanghai','HH24:MI') t, text, metadata->>'senderDigest' d
-       from raw_sources where captured_at >= $1::date and captured_at < ($1::date + 1) and deleted_at is null order by captured_at, id`, [day])).rows;
+       from raw_sources where captured_at >= $1::date and captured_at < ($1::date + 1) and deleted_at is null
+         and coalesce(metadata->>'duplicateOf', '') = '' -- 跨导出重复（NOT_DUPLICATE_MARKED_SQL）
+       order by captured_at, id`, [day])).rows;
   const keys = new Map();
   const lines = [];
   for (const r of rows) {

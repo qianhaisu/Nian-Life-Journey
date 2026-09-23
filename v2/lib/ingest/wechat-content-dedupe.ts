@@ -311,3 +311,43 @@ export function shanghaiDateDaysAgo(days: number, now: Date = new Date()): strin
   if (!Number.isInteger(days) || days < 0 || days > 400) throw new Error("WECHAT_SINCE_DAYS_INVALID");
   return new Date(now.getTime() + 8 * 3600_000 - days * 86_400_000).toISOString().slice(0, 10);
 }
+
+// ── 跨导出去重（2026-09-23 第四轮，私聊_阿静三份导入）───────────────────────────────────────────
+//
+// 同一条消息，WeFlow 的 JSON 与 Markdown 两种导出写法不同：
+//   引用回复  JSON「可以先看个几百的？[引用 苏静：你觉得要看这个医生吗]」
+//            MD  「> 苏静: 你觉得要看这个医生吗\n\n可以先看个几百的？」
+//   链接      MD 在标题前加「\[链接\]」；小程序 JSON 写标题、MD 只写「\[小程序\]美团」
+//   纯媒体    JSON 正文为空，MD 写「\[视频\]」「\[图片\]」
+// normalizeWechatText 只去掉空白与转义，这些都对不上（第四轮查到约 1,120 条）。下面的规范化把这些
+// 「写法」剥掉，只留说出来的那句话；比对键仍是 发送秒 + 发送人 + 规范化文本，三者都要相同。
+
+const QUOTE_SUFFIX = /\[引用 [^：:\]]{1,40}[：:][\s\S]*\]\s*$/;
+const QUOTE_PREFIX = /^\s*>\s*[^:：\n]{1,40}[:：][^\n]*\n+/;
+const BRACKET_TAG = /^\s*\[(链接|小程序|文件|视频号|名片|位置)\]/;
+const MEDIA_ONLY = /^\s*\[(视频|图片|表情|动画表情|语音|media)\]\s*$/;
+
+/** 跨导出比对用的正文：去掉引用、链接/小程序标签、纯媒体占位与转义，保留说出来的话。 */
+export function normalizeAcrossExports(text: string | null | undefined): string {
+  let s = String(text ?? "").split("\\").join("");
+  s = s.replace(QUOTE_PREFIX, "").replace(QUOTE_SUFFIX, "");
+  const tag = s.match(BRACKET_TAG);
+  // 小程序：两种导出写的标题不同（课程名 vs「美团」），标签本身才是共同的部分。
+  if (tag?.[1] === "小程序") return "[小程序]";
+  if (tag) s = s.replace(BRACKET_TAG, "");
+  if (MEDIA_ONLY.test(s)) return "";
+  return normalizeWechatText(s);
+}
+
+/**
+ * 被引用、所以不能软删的重复行，在 metadata.duplicateOf 里指向保留的那一条。
+ * 这样的行仍然存在（「读原记录」的链接照常打开），但 Organizer 与编辑读材料时跳过它，
+ * 不会把同一句话当两条证据读两遍。
+ */
+export function isDuplicateMarked(metadata: Record<string, unknown> | null | undefined): boolean {
+  const value = metadata?.duplicateOf;
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/** SQL 条件：只读没有 duplicateOf 标记的行。与 isDuplicateMarked 同义，给直接写 SQL 的读取方用。 */
+export const NOT_DUPLICATE_MARKED_SQL = "coalesce(metadata->>'duplicateOf', '') = ''";

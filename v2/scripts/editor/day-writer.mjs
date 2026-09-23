@@ -91,7 +91,9 @@ export function createDayWriter({ rds, outDir, realNames, vision = loadVisionDes
   async function packFor(t) {
     const rows = (await query(
       `select id, source_label, to_char(captured_at,'HH24:MI') t, text, metadata->>'senderDigest' dg, media_ids
-         from raw_sources where captured_at >= $1::date and captured_at < ($1::date + 1) and deleted_at is null order by captured_at, id`, [t.day])).rows;
+         from raw_sources where captured_at >= $1::date and captured_at < ($1::date + 1) and deleted_at is null
+           and coalesce(metadata->>'duplicateOf', '') = '' -- 跨导出重复（NOT_DUPLICATE_MARKED_SQL）
+         order by captured_at, id`, [t.day])).rows;
     const events = t.eventIds?.length ? (await query(`select title, story from life_events where id = any($1)`, [t.eventIds])).rows : [];
     const first = new Set(t.firstScreenMediaIds);
     return buildDayPack({

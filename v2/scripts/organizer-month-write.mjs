@@ -200,6 +200,8 @@ for (let offset = 0; ; offset += 1000) {
   const page = await client.query(
     `select ${COLS}, ${SHANGHAI_LIFE_DATE_SQL} as life_date from raw_sources
      where source_type='wechat' and deleted_at is null and profile_id=$1
+       -- duplicateOf：被引用而不能软删的跨导出重复行（lib/ingest/wechat-content-dedupe.ts NOT_DUPLICATE_MARKED_SQL）
+       and coalesce(metadata->>'duplicateOf', '') = ''
        and captured_at >= ($2::date - interval '7 days')
        and captured_at <  (($2::date + interval '1 month') + interval '7 days')
      order by captured_at, id limit 1000 offset ${offset}`, [PROFILE_ID, monthStart]);
