@@ -1,0 +1,105 @@
+{
+ "at": "2026-09-23T03:15:54.370Z",
+ "results": [
+  {
+   "pass": true,
+   "msg": "[desktop] 月页 2025-12-12 的视频：封面显示、点播放后在播",
+   "extra": {
+    "poster": "/api/media/wechat-media:bb76a29e6720db641e9282be53e65b2da6ba086347da07b84633ce84f6006db9?variant=poster",
+    "posterOk": true,
+    "currentTime": 0.512515
+   }
+  },
+  {
+   "pass": true,
+   "msg": "[desktop] 单日页 2025-12-12 的视频：封面显示、点播放后在播",
+   "extra": {
+    "poster": "/api/media/wechat-media:bb76a29e6720db641e9282be53e65b2da6ba086347da07b84633ce84f6006db9?variant=poster",
+    "posterOk": true,
+    "currentTime": 0.51517
+   }
+  },
+  {
+   "pass": true,
+   "msg": "[mobile390] 月页 2025-12-12 的视频：封面显示、点播放后在播",
+   "extra": {
+    "poster": "/api/media/wechat-media:bb76a29e6720db641e9282be53e65b2da6ba086347da07b84633ce84f6006db9?variant=poster",
+    "posterOk": true,
+    "currentTime": 0.515639
+   }
+  },
+  {
+   "pass": true,
+   "msg": "[mobile390] 单日页 2025-12-12 的视频：封面显示、点播放后在播",
+   "extra": {
+    "poster": "/api/media/wechat-media:bb76a29e6720db641e9282be53e65b2da6ba086347da07b84633ce84f6006db9?variant=poster",
+    "posterOk": true,
+    "currentTime": 0.507901
+   }
+  },
+  {
+   "pass": true,
+   "msg": "r4 视频 wechat-media:ff48b833e170bf8b939bf0c89b3… 封面可见、预览可播",
+   "extra": {
+    "played": 0.632039,
+    "size": "1280x720"
+   }
+  },
+  {
+   "pass": true,
+   "msg": "r4 视频 wechat-media:f839ea9a9f8e251ca096b858895… 封面可见、预览可播",
+   "extra": {
+    "played": 0.685568,
+    "size": "544x960"
+   }
+  },
+  {
+   "pass": true,
+   "msg": "r4 视频 wechat-media:56eefd1ac9dfd92767b9cc700d2… 封面可见、预览可播",
+   "extra": {
+    "played": 0.598391,
+    "size": "720x1280"
+   }
+  },
+  {
+   "pass": true,
+   "msg": "r4 视频 wechat-media:d2d4007d00b27ced9bfbd957e77… 封面可见、预览可播",
+   "extra": {
+    "played": 0.54005,
+    "size": "1280x720"
+   }
+  },
+  {
+   "pass": true,
+   "msg": "r4 视频 wechat-media:b7aa517997b6291a98ca4b905f6… 封面可见、预览可播",
+   "extra": {
+    "played": 0.571214,
+    "size": "544x960"
+   }
+  },
+  {
+   "pass": true,
+   "msg": "r4 视频 wechat-media:ed8e6037f7d637400c8d01392e0… 封面可见、预览可播",
+   "extra": {
+    "played": 0.587169,
+    "size": "1280x720"
+   }
+  },
+  {
+   "pass": true,
+   "msg": "r4 视频 wechat-media:f1868f66dcff2b26c8b9627d227… 封面可见、预览可播",
+   "extra": {
+    "played": 0.671718,
+    "size": "1280x720"
+   }
+  },
+  {
+   "pass": true,
+   "msg": "r4 视频 wechat-media:373f1785191ee82cebfe089a2bc… 封面可见、预览可播",
+   "extra": {
+    "played": 0.694058,
+    "size": "1280x720"
+   }
+  }
+ ]
+}
