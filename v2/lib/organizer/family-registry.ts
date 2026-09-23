@@ -265,9 +265,10 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
     {
       // Teddy, 2026-09-23: Korean nickname, was a 乳儿班 teacher who has since left (已离职).
       // No Chinese name known; stories may call her 老师.
+      // Own canonicalPersonId (not person-nursery) so she counts as a separate witness from the class accounts.
       sourceParticipantDigest: senderDigestForDisplayName("학교 싫다"),
       displayName: "학교 싫다",
-      canonicalPersonId: "person-nursery",
+      canonicalPersonId: "person-teacher-korean",
       relationshipToSubject: "teacher",
       narrativeLabel: "老师",
       conversationIds: [
@@ -294,9 +295,10 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
     },
     {
       // Teddy, 2026-09-23: 阳阳老师 is a 好奇星 teacher in 张小年小群.
+      // Own canonicalPersonId so she counts as a separate witness from the class accounts.
       sourceParticipantDigest: senderDigestForDisplayName("阳阳"),
       displayName: "阳阳",
-      canonicalPersonId: "person-nursery",
+      canonicalPersonId: "person-yangyang",
       relationshipToSubject: "teacher",
       narrativeLabel: "阳阳老师",
       conversationIds: [

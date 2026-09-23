@@ -39,8 +39,13 @@ export function quotesOf(text) {
 
 const TECHNICAL = /\[(media|图片|视频|表情包|语音|文件|动画表情)\]|\]\(media\/|https?:\/\/|undefined|Quark|微信|群聊|会话|导入|数据库|网站/i;
 
-/** 这些称呼只有出现在「」里、是别人原话的一部分时才允许（正文不点名，见 EDITOR-BRIEF「称呼」）。 */
-export const UNCONFIRMED_NAMES = ["雪姨", "小雪", "外婆", "干妈", "小姨", "晴姨", "阿姨", "保姆"];
+/**
+ * 正文不得出现在引号外的称呼。
+ * 规则：只有真正未确认身份的人才在这张表里——已在 family-registry 中登记的人可以出现在叙述语境
+ * 里（如「雪姨说「...」」）；下面留着的都是还没有注册身份的泛称。
+ * 已移出（已在 family-registry 确认）：雪姨、小雪（即 hxx.）、外婆（即 鹿城 筱薇）。
+ */
+export const UNCONFIRMED_NAMES = ["干妈", "小姨", "晴姨", "阿姨", "保姆"];
 
 const FIRST_TIME = /第一次|首次|头一回/;
 const BAD_AGE = /两岁|2岁|二岁/;

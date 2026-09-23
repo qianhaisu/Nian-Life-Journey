@@ -49,6 +49,12 @@ test("未确认称呼：引号外拦下，引号里（别人原话的一部分�
   assert.deepEqual(validateDayText(day(["有人说「外婆来接他了」。"]), ["外婆来接他了"]).errors, []);
 });
 
+test("已在 family-registry 确认的称呼（雪姨、外婆）可出现在叙述正文里", () => {
+  const src = ["雪姨说他没感觉", "外婆抱着他"];
+  assert.deepEqual(validateDayText(day(["雪姨说「他没感觉」。"]), src).errors, [], "雪姨在引号外");
+  assert.deepEqual(validateDayText(day(["外婆抱着他坐在沙发上。"]), src).errors, [], "外婆在引号外");
+});
+
 test("真实姓名连引号里也不行，必须换成称呼", () => {
   const { errors } = validateDayText(day(["妈妈说「张三你来一下」。"]), ["张三你来一下"], { realNames: ["张三"] });
   assert.match(errors.join(), /真实姓名/);

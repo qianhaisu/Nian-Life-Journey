@@ -23,7 +23,8 @@ export function birthAge(birthDay, day) {
 /**
  * @param {object} content   现有的月内容（会被深拷贝，不改入参）
  * @param {object} entry     {day,kind,title,paragraphs,sourceIds?,firstScreenMediaIds?,expandedMediaIds?,storyBoundMediaIds?}
- * @param {{birthDay:string, speakerBySourceId?:Record<string,string>, dataCutoff?:string, now?:string}} opts
+ * @param {{birthDay:string, speakerBySourceId?:Record<string,string>, dataCutoff?:string, now?:string, force?:boolean}} opts
+ *   force=true 覆盖人工编辑的天（默认 false，即保护 _source="human" 或无 _source 标记的天）
  */
 export function appendDay(content, entry, opts) {
   const month = content.month;
@@ -53,11 +54,18 @@ export function appendDay(content, entry, opts) {
     mergedEventCount: 0,
     pendingCount: 0,
     mediaNote: null,
+    _source: "machine",
   };
   const at = next.days.findIndex((existing) => existing.day === entry.day);
   const replaced = at >= 0;
-  if (replaced) next.days[at] = day;
-  else next.days.push(day);
+  if (replaced) {
+    // 判断不出来源的一律当作人工内容保护，除非 opts.force = true。
+    const isHuman = !opts.force && next.days[at]._source !== "machine";
+    if (isHuman) return { content: next, replaced: false, skipped: true, days: next.days.length };
+    next.days[at] = day;
+  } else {
+    next.days.push(day);
+  }
   next.days.sort((a, b) => a.day.localeCompare(b.day));
 
   // 新引用的消息要有称呼映射，否则资料区里会显示成匿名。只加不改：已有的映射一条都不动。

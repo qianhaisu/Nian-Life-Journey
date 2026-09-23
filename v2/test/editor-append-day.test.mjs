@@ -72,3 +72,36 @@ test("dataCutoff 与 generatedAt 更新，其余顶层字段不动", () => {
   assert.equal(content.intro, "介绍");
   assert.equal(content.cardLine, "月卡");
 });
+
+test("新生成的天带 _source: machine 标记", () => {
+  const { content } = appendDay(base(), entry(), OPTS);
+  assert.equal(content.days.find((d) => d.day === "2026-09-18")._source, "machine");
+});
+
+test("_source=machine 的天可以被后续机器生成覆盖", () => {
+  const once = appendDay(base(), entry({ title: "第一版" }), OPTS).content;
+  const { replaced, skipped } = appendDay(once, entry({ title: "第二版" }), OPTS);
+  assert.equal(replaced, true);
+  assert.ok(!skipped);
+});
+
+test("_source 不是 machine（包括无字段）的天不会被覆盖，返回 skipped=true", () => {
+  // 已有的 existingDay 没有 _source 字段 → 视为人工内容，不覆盖
+  const content = base();
+  const existingDay = content.days[0]; // 2026-09-16, no _source
+  const e = entry({ day: existingDay.day, title: "机器要改这天" });
+  const { replaced, skipped } = appendDay(content, e, OPTS);
+  assert.equal(replaced, false);
+  assert.equal(skipped, true);
+  // 原内容不变
+  assert.equal(appendDay(content, e, OPTS).content.days[0].title, existingDay.title);
+});
+
+test("opts.force=true 可以覆盖人工编辑的天", () => {
+  const content = base();
+  const existingDay = content.days[0];
+  const e = entry({ day: existingDay.day, title: "强制覆盖" });
+  const { replaced, skipped } = appendDay(content, e, { ...OPTS, force: true });
+  assert.equal(replaced, true);
+  assert.ok(!skipped);
+});
