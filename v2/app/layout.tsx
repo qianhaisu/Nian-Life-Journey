@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito } from "next/font/google";
+import localFont from "next/font/local";
 // 中文圆体 NianRound：本地静态 woff2 分片，同源加载，不请求 Google Fonts。
 // 分片与许可见 app/fonts.css 顶部注释与 public/fonts/nian-round/LICENSE.txt。
 // 写在 globals 之前，@font-face 先于用到它的规则声明。
@@ -14,11 +14,17 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
-// Self-hosted via Next.js font optimization — downloaded at build time, served from same origin,
-// zero runtime requests to fonts.googleapis.com (不走 Google Fonts CDN，大陆不阻塞).
-const nunito = Nunito({
-  subsets: ["latin"],
-  weight: ["400", "500", "800"],
+// Nunito, from files in the repository (app/fonts/nunito/, SIL OFL 1.1 — see OFL.txt there).
+// It used to be next/font/google, which downloads the font while `next build` runs: on 2026-09-23 the
+// ECS build failed on exactly that download. The file is the latin subset Google served that build
+// (a variable font), declared at the same three fixed weights as before — so a `font-weight: 600`
+// heading still resolves to the 800 face, exactly as it rendered with next/font/google.
+const nunito = localFont({
+  src: [
+    { path: "./fonts/nunito/nunito-latin.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/nunito/nunito-latin.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/nunito/nunito-latin.woff2", weight: "800", style: "normal" },
+  ],
   display: "swap",
   variable: "--font-nunito",
 });
