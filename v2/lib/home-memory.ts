@@ -156,6 +156,65 @@ function representatives(photos: readonly MediaRef[]): MediaRef[] {
     [...group].sort((a, b) => pixels(b) - pixels(a) || a.id.localeCompare(b.id))[0]);
 }
 
+/**
+ * 跨段去重（Teddy 2026-09-23：「同一张照片（以及同一次连拍里的近似照片）只能出现在一个段里」）。
+ *
+ * `ordered` 必须已按时间排好（调用方在这里之前已经排过）。**按连拍分组，整组一起判断**：
+ * 只要组里有一张已经被更早的段用掉，这一组（包括组里其它没被选中的近似照片）全部让路，
+ * 不只是把那一张精确 id 挡掉——这就是"近似照片"那半句的意思。
+ *
+ * 之所以在每一段自己过滤好的候选池上做（而不是先在全部照片上算一份全局连拍表），是因为
+ * 不同段的候选本来就是从同一个话题标签或同一段日期里筛出来的，连拍分组只在"确实可能是
+ * 同一次快门"的范围内做才有意义；跨段（比如"玩水"和"睡觉"）候选混在一起算连拍，只会因为
+ * 两张不相关的照片凑巧同一秒拍下（原图+压缩版最常见，但那是同一段内部的事）而互相顶掉。
+ */
+function excludeUsedBursts(ordered: readonly MediaRef[], usedIds: ReadonlySet<string>): MediaRef[] {
+  const kept: MediaRef[] = [];
+  for (const group of burstGroups([...ordered])) {
+    if (group.some((photo) => usedIds.has(photo.id))) continue;
+    kept.push(...group);
+  }
+  return kept;
+}
+
+/** 场景分组替代规则的窗口。真实"同场景"标注字段到位后，这一段整体删掉，改成读那个字段。 */
+const SCENE_GAP_MS = 10 * 60 * 1000;
+
+/**
+ * 同场景去重的**替代规则**（Teddy 2026-09-23）：数据 session 正在按"10 分钟内 + 画面相似度"
+ * 做真正的同场景分组；字段就绪前，先用"同一天 + 拍摄时间连续相差 10 分钟以内"这一条链式规则代替。
+ *
+ * **严格小于，不是小于等于**：`moments()` 这类测试夹具、以及现有选片逻辑里大量"隔 10 分钟
+ * 算不同瞬间"的假设，用的都是恰好 10 分钟的间隔。挑严格小于，10 分钟整的间隔仍然算不同场景，
+ * 不会把这些既有的、故意隔开的瞬间收成一场。真正连续快门（几秒到几分钟）落在这条窗口内才会被合并。
+ *
+ * `ordered` 必须已按时间排好；跨天不合并（day 由调用方给的 dayOf 判定）。
+ */
+function sceneGroups(ordered: readonly MediaRef[]): MediaRef[][] {
+  const groups: MediaRef[][] = [];
+  let current: MediaRef[] = [];
+  let lastTime: number | undefined;
+  let lastDay: string | undefined;
+  for (const photo of ordered) {
+    const time = photo.takenAt ? Date.parse(photo.takenAt) : undefined;
+    const day = dayOf(photo);
+    const sameScene = time !== undefined && lastTime !== undefined && day === lastDay
+      && time - lastTime < SCENE_GAP_MS;
+    if (current.length > 0 && !sameScene) { groups.push(current); current = []; }
+    current.push(photo);
+    lastTime = time ?? lastTime;
+    lastDay = day;
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
+
+/** 每个场景（见 sceneGroups）留一张最值得展示的：按价值分，没有价值分退回像素/时间顺序。 */
+function sceneRepresentatives(reps: readonly MediaRef[], topics: PhotoTopicLookup): MediaRef[] {
+  const better = byValue(topics);
+  return sceneGroups(reps).map((group) => [...group].sort(better)[0]);
+}
+
 /** 沿序列均匀取 max 个，保住开头、中段与结尾。**没有价值分时的退路。** */
 function spread<T>(items: readonly T[], max: number): T[] {
   if (items.length <= max) return [...items];
@@ -365,13 +424,16 @@ export function buildDayMemory(input: {
   day: string; dateLabel: string; ageLabel?: string;
   photos: readonly MediaRef[]; published: readonly EditorialMemory[]; privilege: MediaPrivilege;
   topics?: PhotoTopicLookup;
+  /** 跨段去重用（见 excludeUsedBursts）；这个主题目前不接入 selectHomeMemories，默认空集不影响任何调用方。 */
+  usedIds?: ReadonlySet<string>;
 }): HomeMemory | undefined {
   const { day, dateLabel, ageLabel, photos, published, privilege } = input;
   const topics = input.topics ?? NO_TOPICS;
+  const usedIds = input.usedIds ?? new Set<string>();
   // 没有已发布记忆的一天不做 day 主题：它得有真名字和能点进去的去处（原则八）。
   if (published.length === 0) return undefined;
-  const pool = usable(photos, privilege);
-  const reps = representatives(pool);
+  const pool = excludeUsedBursts([...usable(photos, privilege)].sort(byTime), usedIds);
+  const reps = sceneRepresentatives(representatives(pool), topics);
   if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
   // diversify: true——一天里发生的事不止一种，不该被价值分最高的那一件事占满整段。
@@ -458,8 +520,11 @@ const TOPIC_THEMES: ReadonlyArray<{
 function buildTopicMemory(input: {
   theme: (typeof TOPIC_THEMES)[number];
   photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup; birthDay?: string;
+  /** 已经被更早的段用掉的照片（跨段去重，见 excludeUsedBursts）。 */
+  usedIds?: ReadonlySet<string>;
 }): HomeMemory | undefined {
   const { theme, photos, privilege, topics, birthDay } = input;
+  const usedIds = input.usedIds ?? new Set<string>();
 
   const attempt = (
     match: (label: PhotoTopicLabel) => boolean,
@@ -471,8 +536,8 @@ function buildTopicMemory(input: {
     });
     if (pool.length === 0) return undefined;
 
-    const ordered = [...pool].sort(byTime);
-    const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics);
+    const ordered = excludeUsedBursts([...pool].sort(byTime), usedIds);
+    const reps = capPerDay(sceneRepresentatives(representatives(ordered), topics), CROSS_DAY_PER_DAY_MAX, topics);
     if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
     // 不传 diversify：这里的 pool 本来就只有同一个 topic 标签（match 筛出来的），
@@ -566,14 +631,17 @@ function buildSpanMemory(input: {
   key: string; title: string; subtitle: string;
   href?: string; linkLabel?: string;
   photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup;
+  /** 已经被更早的段用掉的照片（跨段去重，见 excludeUsedBursts）。 */
+  usedIds?: ReadonlySet<string>;
 }): HomeMemory | undefined {
   const { kind, key, title, subtitle, href, linkLabel, photos, privilege, topics } = input;
+  const usedIds = input.usedIds ?? new Set<string>();
   const pool = usable(photos, privilege);
-  const ordered = [...pool].sort(byTime);
+  const ordered = excludeUsedBursts([...pool].sort(byTime), usedIds);
   // 两处都要 diversify: true——不只是最后"挑哪几张"要顾话题多样性，
   // 更前面"每天先留哪 2 张"要是已经把某一天拍得最清楚的两张饭都留下来了，
   // 后面 pickSlides 面对的候选池里那一天就只剩吃饭这一个话题可选，diversify 也救不回来。
-  const reps = capPerDay(representatives(ordered), CROSS_DAY_PER_DAY_MAX, topics, true);
+  const reps = capPerDay(sceneRepresentatives(representatives(ordered), topics), CROSS_DAY_PER_DAY_MAX, topics, true);
   if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
   const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics, true);
@@ -636,10 +704,28 @@ export function selectHomeMemories(
     return { memories: [], absence: { kind: "empty_archive", reason: "档案里还没有一天带照片的记录" } };
   }
 
+  // 首页只展示跨日回忆，以最终展示照片的日期为准。
+  const spansMultipleDays = (memory: HomeMemory) =>
+    new Set(memory.slides.map((slide) => dayOf(slide.media)).filter(Boolean)).size > 1;
+
+  // 跨段去重（Teddy 2026-09-23：「同一张照片……只能出现在一个段里」）：按段依次建段，
+  // 选中的照片从下一段的候选池里排除（见 excludeUsedBursts）。**只有真的会展示的段才占用
+  // 这个名额**——被 spansMultipleDays 过滤掉的段（凑出来的照片全挤在一天里）没有上页面，
+  // 不该白白挡住后面的段。
+  const usedIds = new Set<string>();
+  const keep = (memory: HomeMemory | undefined): memory is HomeMemory => {
+    if (!memory || !spansMultipleDays(memory)) return false;
+    for (const slide of memory.slides) usedIds.add(slide.media.id);
+    return true;
+  };
+
   // 主题回忆：玩水 / 睡觉 / 笑 …… 从**全部照片**里找，不限于某一天或某一季。
-  const topicMemories = TOPIC_THEMES
-    .map((theme) => buildTopicMemory({ theme, photos: allPhotos, privilege, topics, birthDay }))
-    .filter((memory): memory is HomeMemory => Boolean(memory));
+  // 顺序就是 TOPIC_THEMES 的顺序（Teddy 点名的三个排在前面）——先建的段先挑照片。
+  const topicMemories: HomeMemory[] = [];
+  for (const theme of TOPIC_THEMES) {
+    const memory = buildTopicMemory({ theme, photos: allPhotos, privilege, topics, birthDay, usedIds });
+    if (keep(memory)) topicMemories.push(memory);
+  }
 
   // 季节主题
   const seasonPhotos = new Map<string, { label: string; year: number; photos: MediaRef[] }>();
@@ -651,9 +737,9 @@ export function selectHomeMemories(
     bucket.photos.push(...photos);
     seasonPhotos.set(key, bucket);
   }
-  const seasonMemories = [...seasonPhotos.entries()]
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([key, bucket]) => buildSpanMemory({
+  const seasonMemories: HomeMemory[] = [];
+  for (const [key, bucket] of [...seasonPhotos.entries()].sort((a, b) => b[0].localeCompare(a[0]))) {
+    const memory = buildSpanMemory({
       kind: "season",
       key: `season:${key}`,
       title: `${bucket.year} 年的${bucket.label}`,
@@ -663,16 +749,12 @@ export function selectHomeMemories(
       photos: bucket.photos,
       privilege,
       topics,
-    }))
-    .filter((memory): memory is HomeMemory => Boolean(memory));
+      usedIds,
+    });
+    if (keep(memory)) seasonMemories.push(memory);
+  }
 
-  // 首页只展示跨日回忆，以最终展示照片的日期为准。
-  const spansMultipleDays = (memory: HomeMemory) =>
-    new Set(memory.slides.map((slide) => dayOf(slide.media)).filter(Boolean)).size > 1;
-  const memories = interleaveKinds(
-    [topicMemories, seasonMemories].map((group) => group.filter(spansMultipleDays)),
-    HOME_MEMORIES_MAX,
-  );
+  const memories = interleaveKinds([topicMemories, seasonMemories], HOME_MEMORIES_MAX);
   if (memories.length === 0) {
     return {
       memories: [],

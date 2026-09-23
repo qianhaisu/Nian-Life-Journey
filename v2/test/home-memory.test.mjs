@@ -453,7 +453,11 @@ test("季节/一周主题：同一天的名额也要顾话题多样性，不能�
     if (id === "d1-eat-b") return { topic: "吃饭", value: 0.93, confidence: 0.9, water: false };
     if (id === "d1-laugh") return { topic: "笑", value: 0.85, confidence: 0.9, water: false };
     if (id === "d1-out") return { topic: "户外", value: 0.8, confidence: 0.9, water: false };
-    return { topic: "玩玩具", value: 0.8, confidence: 0.9, water: false }; // 其余陪衬的日子
+    // 其余陪衬的日子：value 故意压在 TOPIC_MIN_VALUE(0.7) 以下——2026-09-23 加了跨段去重之后，
+    // 如果这里给到 0.7 以上，d2/d3/d4 这 6 张会自己先凑成一段「玩玩具」主题（先建的段先挑），
+    // 把这条季节候选全部去重掉，季节反而因为供给耗尽建不出来。这条测试要测的是
+    // 「季节内部同一天的多样性」，不是跨段去重，所以让陪衬照片够不上任何主题的门槛。
+    return { topic: "玩玩具", value: 0.5, confidence: 0.9, water: false };
   };
   const months = [monthOf("2026-07", [
     { day: "2026-07-01", photos: day1 },
@@ -616,6 +620,87 @@ test("连拍折叠只看像素，不看价值分——压缩版分再高也不�
   for (const slide of memory.slides) {
     assert.match(slide.media.id, /^orig-/, `价值分把压缩版选上来了：${slide.media.id}`);
   }
+});
+
+// ── 跨段去重与同场景去重（Teddy 2026-09-23） ─────────────────────────────────
+
+test("跨段去重：同一张照片不能在两段回忆里各出现一次", () => {
+  // 同一批照片对「水」和「笑」两个主题都合格（topic 是「笑」，同时又是泳池实拍）。
+  // 供给充足（8 天 × 3 张 = 24 张，两段各只需要 6 张），所以两段都建得出来，
+  // 但选中的照片必须是两个不相交的子集，不能同一张在两段里各出现一次。
+  const months = eightDays("shared");
+  const { memories } = selectHomeMemories(
+    archiveOf(months),
+    labels({}, { topic: "笑", water: true, waterKind: "泳池", childInFrame: true, swimming: true, value: 0.9, confidence: 0.95 }),
+  );
+  const water = memories.find((m) => m.title === "玩水的日子");
+  const laugh = memories.find((m) => m.title === "笑起来的时候");
+  assert.ok(water && laugh, "供给充足，两段都该建得出来");
+  const waterIds = new Set(water.slides.map((s) => s.media.id));
+  const overlap = laugh.slides.filter((s) => waterIds.has(s.media.id));
+  assert.equal(overlap.length, 0, `两段回忆共用了 ${overlap.map((s) => s.media.id).join(",")}，跨段去重没生效`);
+});
+
+test("跨段去重供给耗尽时，后建的段没有照片可选，宁可不出这一段", () => {
+  // 每天正好 2 张（等于 CROSS_DAY_PER_DAY_MAX），且全部同时合格「水」与「笑」。
+  // 「水」在 TOPIC_THEMES 里排在「笑」前面，会先把每天 2 张的名额全部拿走，
+  // 「笑」的候选池因此被跨段去重清空——不该复用，也不该报错，只是这一段不出现。
+  const days = ["2026-07-01", "2026-07-08", "2026-07-15", "2026-07-22",
+    "2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22"];
+  const months = [
+    monthOf("2026-07", days.slice(0, 4).map((d) => ({ day: d, photos: moments(`tight${d}`, d, 2) }))),
+    monthOf("2026-08", days.slice(4).map((d) => ({ day: d, photos: moments(`tight${d}`, d, 2) }))),
+  ];
+  const { memories } = selectHomeMemories(
+    archiveOf(months),
+    labels({}, { topic: "笑", water: true, waterKind: "泳池", childInFrame: true, swimming: true, value: 0.9, confidence: 0.95 }),
+  );
+  const water = memories.find((m) => m.title === "玩水的日子");
+  const laugh = memories.find((m) => m.title === "笑起来的时候");
+  assert.ok(water, "先建的「水」应当拿到全部供给（每天正好 2 张，等于每天上限）");
+  assert.equal(water.slides.length, 16, "8 天 × 每天 2 张全部归「水」");
+  assert.equal(laugh, undefined, "「水」用完了全部供给，「笑」没有照片可选，宁可不出这一段");
+});
+
+test("同一段里同一场景（替代规则：同一天且拍摄时间相差 10 分钟以内）最多留一张，且是价值分更高的那一张", () => {
+  const closeDay = "2026-07-01";
+  // 3 分钟之内两张，替代规则判成同一场景；真正的同场景标注字段到位前，这条链式规则代它判。
+  const scenePair = [photo("scene-low", `${closeDay} 09:00:00`), photo("scene-high", `${closeDay} 09:03:00`)];
+  const otherDays = ["2026-07-08", "2026-07-15", "2026-07-22", "2026-07-29", "2026-08-05"]
+    .map((day, i) => ({ day, photos: moments(`solo${i}`, day, 1) }));
+  const months = [
+    monthOf("2026-07", [{ day: closeDay, photos: scenePair }, ...otherDays.slice(0, 4)]),
+    monthOf("2026-08", otherDays.slice(4)),
+  ];
+  const labelOf = (id) => {
+    if (id === "scene-low") return { topic: "笑", value: 0.6, confidence: 0.9, water: false };
+    if (id === "scene-high") return { topic: "笑", value: 0.95, confidence: 0.9, water: false };
+    return { topic: "笑", value: 0.85, confidence: 0.9, water: false };
+  };
+  const { memories } = selectHomeMemories(archiveOf(months), labelOf);
+  const laugh = memories.find((m) => m.title === "笑起来的时候");
+  assert.ok(laugh, "应当有一段「笑」的回忆");
+  const closeDaySlides = laugh.slides.filter((s) => s.media.takenAt.startsWith(closeDay));
+  assert.equal(closeDaySlides.length, 1, "同一场景（10 分钟以内）只能留一张");
+  assert.equal(closeDaySlides[0].media.id, "scene-high", "留下的应当是价值分更高的那一张");
+});
+
+test("恰好相差 10 分钟不算同一场景——不能把 moments() 这类刻意隔开的瞬间也收成一场", () => {
+  // 替代规则是"严格小于 10 分钟"，不是"小于等于"。选片逻辑到处假设「隔 10 分钟＝不同瞬间」
+  // （见 moments() 夹具），这条测试钉住这个边界不会被后续改动悄悄收紧。
+  const day = "2026-07-01";
+  const exactGap = [photo("a", `${day} 09:00:00`, {}), photo("b", `${day} 09:10:00`, {})];
+  const otherDays = ["2026-07-08", "2026-07-15", "2026-07-22", "2026-07-29"]
+    .map((d, i) => ({ day: d, photos: moments(`x${i}`, d, 2) }));
+  const months = [monthOf("2026-07", [{ day, photos: exactGap }, ...otherDays])];
+  const { memories } = selectHomeMemories(
+    archiveOf(months),
+    labels({}, { topic: "笑", value: 0.9, confidence: 0.9, water: false }),
+  );
+  const laugh = memories.find((m) => m.title === "笑起来的时候");
+  assert.ok(laugh, "应当有一段「笑」的回忆");
+  const thatDay = laugh.slides.filter((s) => s.media.takenAt.startsWith(day));
+  assert.equal(thatDay.length, 2, "恰好 10 分钟的两张仍然算两个场景，都该有机会入选");
 });
 
 // ── 配乐 ──────────────────────────────────────────────────────────────────────
