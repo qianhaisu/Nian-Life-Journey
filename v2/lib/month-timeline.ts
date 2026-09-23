@@ -1,3 +1,4 @@
+import { detectMilestone, emphasisWithMilestone, type Milestone } from "./milestones";
 import type { FamilyArchive } from "@/lib/family-archive";
 import { findMonth, toMediaRef, type MediaRef } from "@/lib/memory-chapters";
 import { pickLeadDays, pickLeadPhoto } from "@/lib/month-day-weight";
@@ -34,6 +35,8 @@ export type TimelineDay = {
   photos: MediaRef[];
   href: string;
   lead: boolean;
+  /** 文字里写明了的里程碑（lib/milestones.ts）：月页上抬成领头日并加一个小标记。 */
+  milestone: Milestone | null;
 };
 
 export type TimelineWeek = { id: string; label: string; days: string[] };
@@ -114,7 +117,7 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
       photos,
       // A day that kept one original event keeps that URL; every other day has its own page.
       href: eventId && eventIds.has(eventId) ? `/events/${eventId}` : `/memory/${year}/${monthSegment}/${entry.day.slice(8, 10)}`,
-      lead: false,
+      lead: false, milestone: null,
     });
   }
   const contentDays = days.size;
@@ -133,7 +136,7 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
       target = {
         day: moment.day, dateLabel: dateLabelOf(moment.day), ageLabel: moment.ageLabel,
         title: memory.title, paragraphs: memory.excerpt ? [memory.excerpt] : [], stories: [], photos: [],
-        href: `/events/${memory.id}`, lead: false,
+        href: `/events/${memory.id}`, lead: false, milestone: null,
       };
       days.set(moment.day, target);
       daysFromStoriesOnly += 1;
@@ -150,12 +153,15 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
   }
 
   const order: "desc" | "asc" = month === latestChapterMonth(archive) ? "desc" : "asc";
+  for (const entry of days.values()) {
+    entry.milestone = detectMilestone(entry.day, [entry.title, ...entry.paragraphs, ...entry.stories.flatMap((s) => [s.title, ...s.paragraphs])], archive.birthDay ?? undefined);
+  }
   const leadDays = pickLeadDays([...days.values()].map((entry) => ({
     day: entry.day,
     paragraphs: [...entry.paragraphs, ...entry.stories.flatMap((s) => s.paragraphs)],
     photoCount: entry.photos.length,
     storyBound: false,
-    emphasis: content.days.find((d) => d.day === entry.day)?.emphasis,
+    emphasis: emphasisWithMilestone(content.days.find((d) => d.day === entry.day)?.emphasis, entry.milestone),
     leadable: Boolean(pickLeadPhoto(entry.photos)),
   })));
   for (const entry of days.values()) entry.lead = leadDays.has(entry.day);
