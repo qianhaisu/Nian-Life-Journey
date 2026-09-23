@@ -129,7 +129,7 @@ Teddy 的默认 Git 习惯：
 - 不再新建分支（feature branch）或 worktree；直接在 `main` 上开发、commit、push。
 - Teddy 说"commit"时，默认包含 commit 后正常 push `main`。
 - 不需要为普通 commit、push main 反复询问。
-- main push 触发生产变更：生产站运行在 ECS（47.99.243.155），部署走 `v2/scripts/deploy-ecs-public.sh`，不需要手动触发。
+- main push **不**触发生产变更：生产站运行在 ECS（47.99.243.155），部署由唯一有部署权限的 session 手动走 `v2/scripts/deploy-ecs-public.sh`（见「ECS 生产部署流程」）。
 - 保留有意义的提交历史，不默认 squash/rebase。
 - 不 force push。
 - 不擅自删除远端分支。
@@ -272,6 +272,19 @@ Codex 报告只在 importer / worker / R2 上有一票，别处一票都没有�
 ## ECS 生产部署流程
 
 **原则：main push 不触发生产变更。** 部署必须手动触发，走 `v2/scripts/deploy-ecs-public.sh`。
+
+### 只有一个 session 有部署权限（2026-09-23）
+
+同一时间只有 Teddy 指定的**一个** session 可以执行 upload / build / swap / rollback-app。其他 session 只往 main 推代码，**不部署**、不 SSH 改 ECS 上的容器。没被指定为部署 session，就不要跑这个脚本的写操作子命令，哪怕"只是重新部署一下"。
+
+### 两道闸（脚本内置，没有旁路开关，不许绕过）
+
+- **部署前固定动作（`preflight`，`upload` 自动执行）**：已跟踪文件没有未提交改动 → `git pull --rebase` → 要部署的 SHA 必须等于 `origin/main` 最新提交。不满足就 STOP（exit 2）。未跟踪文件只提示，不拦。
+- **闸 a · 防覆盖（`swap` 开头）**：取线上 `/api/health` 的 `build.sha`，要求 `git merge-base --is-ancestor <线上SHA> <本次SHA>` 成立。不成立说明这次部署会盖掉线上已有的改动 → STOP（exit 11）。取不到线上 SHA、本地没有该提交，同样 STOP。
+- **闸 b · 切换后真实页面冒烟（`swap` 切换之后）**：`/api/health` 的 SHA 必须是本次 SHA；`/` 含「最近怎么样」；`/health` 含「年度累计生病」和「资料截至」（前者只在真实病程数据存在时渲染，缺 HEALTH_MOUNTS 或空状态就没有）；`/memory/2025/12` 含「2025 年 12 月」；`/memory/2025/12/01` 含「12 月 1 日」。每页必须 200，最多试 3 次。任何一项失败 → 自动启动 ROLLBACK_CONTAINER 回滚，exit 12（回滚也失败则 exit 13）。
+- 保留策略（清理旧容器）放在闸 b 通过**之后**才跑。
+- 演练记录：`.data/deploy-guard-test.md`（ce08236 放行，a3c4434 拦下）。
+- 要改冒烟页面或关键字，改脚本里的 `SMOKE_PAGES`，并先对当前线上页面确认关键字真的存在。
 
 ### 前提条件
 

@@ -14,7 +14,11 @@
 #   content-rollback <月> <版本文件名>|--withdraw
 #                            撤回一个月的编辑稿：指回 versions/ 里的某个旧版本，或整月撤下（软链改名保留，
 #                            页面回到没有编辑稿时的原样）。不删除任何版本文件。
-#   swap <short>             换 Web 容器；旧容器改名 nianlife-diag-web-pre-<short>-<时间> 保留
+#   preflight <sha>          部署前固定动作：已跟踪文件无改动、git pull --rebase、<sha> = origin/main（upload 自动跑）
+#   swap <short>             闸 a：线上 SHA 必须是 <short> 的祖先，否则 STOP（exit 11，无旁路）；
+#                            换 Web 容器，旧容器改名 nianlife-diag-web-pre-<short>-<时间> 保留；
+#                            闸 b：切换后真实页面冒烟（SMOKE_PAGES），失败自动 rollback-app 并 exit 12/13；
+#                            通过后才跑保留策略
 #   caddy-up                 解析已指向 ECS_PUBLIC_IP 才启动 Caddy（自动申请证书）
 #   verify                   本机外部验证：跳转、证书、首页、健康检查的 SHA
 #   health-data-install <本地目录>  健康模块私有数据装到 /srv/nianlife-health（只换只读部分，绝不碰 record/）
@@ -46,6 +50,87 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 
 remote() { ssh -o BatchMode=yes -o ConnectTimeout=15 -i "$ECS_KEY" "$ECS_SSH" bash -s -- "$@"; }
 free_mb_remote='df -B1M --output=avail / | tail -1 | tr -d " "'
+SITE="${SITE:-https://nianlife.cn}"
+
+# 线上正在跑的完整 SHA（/api/health 的 build.sha）；取不到就返回非 0。
+live_sha() {
+  curl --noproxy '*' -s -m 20 "$SITE/api/health" | grep -o '"sha":"[0-9a-f]\{40\}"' | head -1 | cut -d'"' -f4 | grep .
+}
+
+# 部署前固定动作（upload 自动执行）：已跟踪文件无改动 → git pull --rebase → 要部署的 SHA 必须是 origin/main 最新提交。
+# 未跟踪文件只列出不拦（git archive 只打包提交内容，不会带上它们）。
+preflight() {
+  local want="$1"
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no)" ]; then
+    echo "STOP(preflight): tracked files have uncommitted changes:"; git -C "$REPO_ROOT" status --short --untracked-files=no; exit 2
+  fi
+  local untracked; untracked=$(git -C "$REPO_ROOT" status --porcelain | grep -c '^??' || true)
+  [ "$untracked" = 0 ] || echo "preflight: $untracked untracked file(s) present (not deployed, not blocking)"
+  [ "$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)" = main ] || { echo "STOP(preflight): not on main"; exit 2; }
+  git -C "$REPO_ROOT" pull --rebase --quiet origin main || { echo "STOP(preflight): git pull --rebase failed"; exit 2; }
+  local head; head="$(git -C "$REPO_ROOT" rev-parse origin/main)"
+  [ "$want" = "$head" ] || { echo "STOP(preflight): $want is not origin/main HEAD ($head)"; exit 2; }
+  echo "PREFLIGHT_OK sha=$want (= origin/main, worktree clean)"
+}
+
+# 闸 a（防覆盖）：线上 SHA 必须是本次 SHA 的祖先（或就是它本身），否则这次部署会把线上已有的改动盖掉。
+# 没有旁路开关——取不到线上 SHA、本地没有这个提交、不是祖先，一律 STOP。
+guard_ancestor() {
+  local want="$1" live
+  git -C "$REPO_ROOT" fetch --quiet origin || echo "WARN: git fetch failed; using local objects"
+  live="$(live_sha)" || { echo "STOP(gate-a): cannot read live build.sha from $SITE/api/health"; exit 11; }
+  echo "gate-a: live=$live deploy=$want"
+  git -C "$REPO_ROOT" cat-file -e "$live^{commit}" 2>/dev/null || { echo "STOP(gate-a): live commit $live not in local repo"; exit 11; }
+  if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$live" "$want"; then
+    echo "STOP(gate-a): live ${live:0:7} is NOT an ancestor of ${want:0:7}; deploying would overwrite changes already online"; exit 11
+  fi
+  echo "GATE_A_OK live ${live:0:7} is an ancestor of ${want:0:7}"
+}
+
+# 闸 b（切换后真实页面冒烟）：每页 HTTP 200 且含关键内容；/health 的「年度累计生病」只在有真实病程数据
+# （累计天数 > 0）时才渲染，缺挂载/空状态时不会出现。每页最多试 3 次（冷启动 ISR 首次渲染可能慢）。
+SMOKE_PAGES=(
+  "/|最近怎么样"
+  "/health|年度累计生病|资料截至"
+  "/memory/2025/12|2025 年 12 月"
+  "/memory/2025/12/01|12 月 1 日"
+)
+smoke() {
+  local want="$1" ok=1 entry path code body live parts needles n
+  live="$(live_sha || true)"
+  if [ "$live" = "$want" ]; then echo "smoke /api/health build.sha=${live:0:7} OK"; else echo "smoke FAIL /api/health build.sha=${live:-none} want ${want:0:7}"; ok=0; fi
+  body="$(mktemp)"
+  for entry in "${SMOKE_PAGES[@]}"; do
+    IFS='|' read -r -a parts <<<"$entry"; path="${parts[0]}"; needles=("${parts[@]:1}")
+    local pass=0 try missing
+    for try in 1 2 3; do
+      code=$(curl --noproxy '*' -s -m 60 -o "$body" -w '%{http_code}' "$SITE$path" || echo 000)
+      missing=""
+      for n in "${needles[@]}"; do grep -qF "$n" "$body" || missing="$missing[$n]"; done
+      if [ "$code" = 200 ] && [ -z "$missing" ]; then pass=1; break; fi
+      sleep 5
+    done
+    if [ "$pass" = 1 ]; then echo "smoke $path 200 OK"; else echo "smoke FAIL $path http=$code missing=${missing:-none}"; ok=0; fi
+  done
+  rm -f "$body"
+  [ "$ok" = 1 ]
+}
+
+rollback_app() {
+  remote "$1" <<'EOF'
+set -euo pipefail
+name="$1"
+exec 9>/home/ecs-user/.nianlife-deploy.lock
+flock -n 9 || { echo "STOP: another deployment is active"; exit 9; }
+docker inspect "$name" --format 'restoring {{.Name}} image={{.Config.Image}}'
+failed="nianlife-diag-web-failed-$(date +%Y%m%d-%H%M%S)"
+docker stop nianlife-diag-web && docker rename nianlife-diag-web "$failed"
+docker rename "$name" nianlife-diag-web && docker start nianlife-diag-web
+for i in $(seq 1 24); do h=$(docker inspect -f '{{.State.Health.Status}}' nianlife-diag-web); echo "t=$i health=$h"; [ "$h" = healthy ] && break; sleep 5; done
+[ "$(docker inspect -f '{{.State.Health.Status}}' nianlife-diag-web)" = healthy ] || { echo "ROLLBACK_NOT_HEALTHY"; exit 6; }
+echo "kept failed container as $failed"
+EOF
+}
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
@@ -64,6 +149,7 @@ EOF
 
   upload)
     sha="$(git -C "$REPO_ROOT" rev-parse --verify "${1:?usage: upload <sha>}^{commit}")"; short="${sha:0:7}"
+    preflight "$sha"
     tar_local="$(mktemp -d)/v2-deploy-$short.tar"
     git -C "$REPO_ROOT" archive --format=tar -o "$tar_local" "$sha" v2
     ls -l "$tar_local"
@@ -171,11 +257,17 @@ ls -1 "$dir/versions" | grep "^$month\." | tail -5
 EOF
     ;;
 
+  preflight)
+    preflight "$(git -C "$REPO_ROOT" rev-parse --verify "${1:?usage: preflight <sha>}^{commit}")"
+    ;;
+
   swap)
-    short="${1:?usage: swap <short>}"
+    full="$(git -C "$REPO_ROOT" rev-parse --verify "${1:?usage: swap <short>}^{commit}")"; short="${full:0:7}"
+    guard_ancestor "$full"
+    swap_log="$(mktemp)"
     scp -o BatchMode=yes -i "$ECS_KEY" "$SCRIPT_DIR/ecs-swap.sh" "$ECS_SSH:/home/ecs-user/ecs-swap.sh"
     scp -o BatchMode=yes -i "$ECS_KEY" "$SCRIPT_DIR/ecs-retention.py" "$ECS_SSH:/home/ecs-user/ecs-retention.py"
-    remote "$short" "$ENV_SOURCE" "$CONTENT_MOUNT" "$HEALTH_MOUNTS" <<'EOF'
+    remote "$short" "$ENV_SOURCE" "$CONTENT_MOUNT" "$HEALTH_MOUNTS" <<'EOF' | tee "$swap_log"
 set -euo pipefail
 short="$1"; env_src="$2"; mount_spec="$3"; health_mounts="${4:-}"
 exec 9>/home/ecs-user/.nianlife-deploy.lock
@@ -186,7 +278,23 @@ mkdir -p "$run"; cp -p /home/ecs-user/ecs-swap.sh "$run/swap.sh"
 docker image inspect "nianlife-web:$short" >/dev/null
 bash "$run/swap.sh" "$env_src" "/home/ecs-user/.env.runtime.$short" "$short" "nianlife-diag-web-pre-$short-$ts" 48 5 "$mount_spec" "$health_mounts" 2>&1 | tee "$run/swap.log"
 echo "ROLLBACK_CONTAINER=nianlife-diag-web-pre-$short-$ts"
-if ! python3 /home/ecs-user/ecs-retention.py --apply 2>&1 | tee "$run/retention.log"; then
+echo "RUN_DIR=$run"
+EOF
+    rb="$(grep -o '^ROLLBACK_CONTAINER=.*' "$swap_log" | cut -d= -f2)"; run_dir="$(grep -o '^RUN_DIR=.*' "$swap_log" | cut -d= -f2)"
+    rm -f "$swap_log"
+    # 闸 b：冒烟不过就自动回滚到刚保留的旧容器。保留策略放在冒烟之后跑——同 SHA 重部署时旧容器与线上同镜像，
+    # 先跑保留会把唯一的回滚点清掉。
+    if ! smoke "$full"; then
+      echo "=== SMOKE FAILED === rolling back to $rb"
+      if rollback_app "$rb"; then echo "ROLLED_BACK to $rb (live now $(live_sha || echo unknown))"; exit 12; fi
+      echo "ROLLBACK_FAILED: manual action needed"; exit 13
+    fi
+    echo "GATE_B_OK"
+    remote "$run_dir" <<'EOF'
+set -euo pipefail
+exec 9>/home/ecs-user/.nianlife-deploy.lock
+flock -n 9 || { echo "STOP: another deployment is active"; exit 9; }
+if ! python3 /home/ecs-user/ecs-retention.py --apply 2>&1 | tee "$1/retention.log"; then
   echo "RETENTION_FAILED: new release is running; maintenance is incomplete (do not roll back automatically)"
   exit 10
 fi
@@ -334,19 +442,7 @@ EOF
     ;;
 
   rollback-app)
-    name="${1:?usage: rollback-app <nianlife-diag-web-pre-...>}"
-    remote "$name" <<'EOF'
-set -euo pipefail
-name="$1"
-exec 9>/home/ecs-user/.nianlife-deploy.lock
-flock -n 9 || { echo "STOP: another deployment is active"; exit 9; }
-docker inspect "$name" --format 'restoring {{.Name}} image={{.Config.Image}}'
-failed="nianlife-diag-web-failed-$(date +%Y%m%d-%H%M%S)"
-docker stop nianlife-diag-web && docker rename nianlife-diag-web "$failed"
-docker rename "$name" nianlife-diag-web && docker start nianlife-diag-web
-for i in $(seq 1 24); do h=$(docker inspect -f '{{.State.Health.Status}}' nianlife-diag-web); echo "t=$i health=$h"; [ "$h" = healthy ] && break; sleep 5; done
-echo "kept failed container as $failed"
-EOF
+    rollback_app "${1:?usage: rollback-app <nianlife-diag-web-pre-...>}"
     ;;
 
   rollback-caddy)
@@ -357,5 +453,5 @@ docker ps -a --filter name=^nianlife-caddy$ --format '{{.Names}} {{.Status}} (co
 EOF
     ;;
 
-  *) sed -n '2,22p' "$0"; exit 2 ;;
+  *) sed -n '2,26p' "$0"; exit 2 ;;
 esac
