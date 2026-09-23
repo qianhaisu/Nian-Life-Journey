@@ -176,7 +176,16 @@ test("2026-09-16 picture content version: checksum when there is one, a shape ha
   assert.notEqual(a, mediaContentVersion({ id: "m", objectKey: "k", width: 10, height: 21 }), "a resized picture is a new version");
 });
 
-test("no automatic code path references the Claude review methods either", () => {
+// 2026-09-23: the one automatic path that is allowed to call these entries is DeepSeek semantic review,
+// and only when it says so — every call must carry reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, so the
+// ledger records deepseek-semantic-review / deepseek-flash instead of impersonating Claude (Teddy's decision).
+const HONEST_MODEL_REVIEW = (text) => {
+  const calls = text.match(/recordClaude(Story|Media)Decision\(\{|applyClaudeStoryCorrection\(\{/g) ?? [];
+  const labelled = text.match(/reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER/g) ?? [];
+  return calls.length > 0 && labelled.length >= calls.length && /DEEPSEEK_SEMANTIC_REVIEW_PROVIDER = "deepseek-semantic-review"/.test(text);
+};
+
+test("no automatic code path references the Claude review methods, except DeepSeek semantic review that labels itself", () => {
   const root = process.cwd();
   const offenders = [];
   const scan = (dir, accept) => {
@@ -184,7 +193,8 @@ test("no automatic code path references the Claude review methods either", () =>
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) { scan(full, accept); continue; }
       if (!accept(entry.name)) continue;
-      if (/recordClaude(Story|Media)Decision/.test(readFileSync(full, "utf8"))) offenders.push(path.relative(root, full));
+      const text = readFileSync(full, "utf8");
+      if (/recordClaude(Story|Media)Decision/.test(text) && !HONEST_MODEL_REVIEW(text)) offenders.push(path.relative(root, full));
     }
   };
   scan(path.join(root, "lib", "organizer"), (name) => /\.(ts|mjs)$/.test(name) && name !== "story-write-guard.ts");
@@ -217,4 +227,14 @@ test("DeepSeek model: one pinned id, no fallback, a substituted response is refu
   assert.equal(assertProviderModel("deepseek-flash", { model: "deepseek-flash" }), "deepseek-flash");
   assert.equal(assertProviderModel("deepseek-flash", {}), null);
   assert.throws(() => assertProviderModel("deepseek-flash", { model: "deepseek-v4-pro" }), /PROVIDER_MODEL_MISMATCH/);
+});
+
+test("2026-09-23 DeepSeek semantic review is a model reviewer recorded truthfully, distinct from the automatic writer", async () => {
+  const g = await import("../lib/organizer/story-write-guard.ts");
+  assert.deepEqual(g.modelReviewerOf(undefined), { provider: "claude-review", model: null });
+  assert.deepEqual(g.modelReviewerOf("deepseek-semantic-review"), { provider: "deepseek-semantic-review", model: "deepseek-flash" });
+  assert.throws(() => g.modelReviewerOf("deepseek"), /REVIEWER_NOT_ACCEPTED|unknown model reviewer/);
+  assert.equal(g.reviewerTypeOf("deepseek-semantic-review"), "claude");
+  assert.equal(g.reviewerTypeOf("deepseek"), "automatic");
+  assert.throws(() => g.assertHumanDecisionInput({ eventId: "e", decision: "approved", reviewedContentSha256: "a".repeat(64), operator: "deepseek-semantic-review", promptVersion: "p", policyVersion: "q" }), /not a human|OPERATOR/);
 });

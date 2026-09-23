@@ -17,7 +17,7 @@ import { storyNeighbours } from "@/lib/story-neighbours";
 import { indexReviews, isEventPublishable } from "@/lib/organizer/quality-review";
 import { randomUUID } from "node:crypto";
 import {
-  CLAUDE_AUTHORIZATION_REASON, CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, REQUEST_FINGERPRINT_REASON_PREFIX, REVISION_BEFORE_REASON_PREFIX, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
+  CLAUDE_AUTHORIZATION_REASON, CLAUDE_REVIEW_PROVIDER, modelReviewerOf, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, REQUEST_FINGERPRINT_REASON_PREFIX, REVISION_BEFORE_REASON_PREFIX, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
   assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryCorrectionInput, assertClaudeStoryDecisionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, boundRequestFingerprint, canonicalOccurredAtUtc, computeRequestFingerprint, evaluateStoryProtection, mediaContentVersion, reviewerTypeOf, rowLinksToStory, storyContentSha256,
   type ClaudeMediaDecisionInput, type ClaudeStoryCorrectionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
 } from "@/lib/organizer/story-write-guard";
@@ -359,11 +359,11 @@ export function createJsonRepository(): Repository {
         if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human ${blocker.targetKind} decision (${blocker.provider}: ${blocker.decision}); a Claude decision may not be placed over it`);
         const existing = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
         if (existing) {
-          if (existing.provider === CLAUDE_REVIEW_PROVIDER && existing.decision === input.decision && boundContentSha256(existing.reasonCodes) === current) return { review: existing, contentVersion: current, idempotent: true };
+          if (existing.provider === modelReviewerOf(input.reviewer).provider && existing.decision === input.decision && boundContentSha256(existing.reasonCodes) === current) return { review: existing, contentVersion: current, idempotent: true };
           throw new StoryWriteContractError("CLAUDE_DECISION_CONFLICT", `${input.eventId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
         }
         const latest = Math.max(Date.now(), ...store.qualityReviews.filter((item) => item.targetKind === "life_event" && item.targetId === input.eventId).map((item) => Date.parse(item.reviewedAt) + 1).filter((value) => !Number.isNaN(value)));
-        const review: QualityReview = { id: `claude-review-${randomUUID()}`, profileId: event.profileId, targetKind: "life_event", targetId: input.eventId, decision: input.decision, reasonCodes: [...input.reasonCodes, `${CONTENT_SHA256_REASON_PREFIX}${current}`], provider: CLAUDE_REVIEW_PROVIDER, promptVersion: input.promptVersion, policyVersion: input.policyVersion, reviewFingerprint: `${input.eventId}:${input.promptVersion}`, reviewedAt: new Date(latest).toISOString() };
+        const review: QualityReview = { id: `claude-review-${randomUUID()}`, profileId: event.profileId, targetKind: "life_event", targetId: input.eventId, decision: input.decision, reasonCodes: [...input.reasonCodes, `${CONTENT_SHA256_REASON_PREFIX}${current}`], provider: modelReviewerOf(input.reviewer).provider, promptVersion: input.promptVersion, policyVersion: input.policyVersion, reviewFingerprint: `${input.eventId}:${input.promptVersion}`, reviewedAt: new Date(latest).toISOString() };
         store.qualityReviews.push(review);
         return { review, contentVersion: current, idempotent: false };
       });
@@ -429,7 +429,7 @@ export function createJsonRepository(): Repository {
         const existing = store.qualityReviews.find((item) => item.targetKind === "life_event" && item.targetId === input.eventId && item.promptVersion === input.promptVersion);
         if (existing) return { review: existing, oldContentSha256: oldHash, newContentSha256: newHash, idempotent: true };
         const latest = Math.max(Date.now(), ...store.qualityReviews.filter((item) => item.targetKind === "life_event" && item.targetId === input.eventId).map((item) => Date.parse(item.reviewedAt) + 1).filter((value) => !Number.isNaN(value)));
-        const review: QualityReview = { id: `claude-review-${randomUUID()}`, profileId: event.profileId, targetKind: "life_event", targetId: input.eventId, decision: "approved", reasonCodes, provider: CLAUDE_REVIEW_PROVIDER, promptVersion: input.promptVersion, policyVersion: input.policyVersion, reviewFingerprint: `${input.eventId}:${input.promptVersion}`, reviewedAt: new Date(latest).toISOString() };
+        const review: QualityReview = { id: `claude-review-${randomUUID()}`, profileId: event.profileId, targetKind: "life_event", targetId: input.eventId, decision: "approved", reasonCodes, provider: modelReviewerOf(input.reviewer).provider, promptVersion: input.promptVersion, policyVersion: input.policyVersion, reviewFingerprint: `${input.eventId}:${input.promptVersion}`, reviewedAt: new Date(latest).toISOString() };
         store.qualityReviews.push(review);
         return { review, oldContentSha256: oldHash, newContentSha256: newHash, idempotent: false };
       });

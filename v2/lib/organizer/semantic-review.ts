@@ -6,7 +6,11 @@
  *
  * Design:
  * - Reads CURRENT DB content (not pack text) as model input.
- * - Writes only through repo.recordClaudeStoryDecision / applyClaudeStoryCorrection.
+ * - Writes through repo.recordClaudeStoryDecision / applyClaudeStoryCorrection with
+ *   reviewer = DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, so the ledger says what actually judged the story
+ *   (provider deepseek-semantic-review, model deepseek-flash). Until 2026-09-23 it omitted the reviewer
+ *   and 218 DeepSeek verdicts were recorded as Claude approvals; Teddy chose "record truthfully,
+ *   DeepSeek may still approve".
  * - correct_needed + unapplied correction → needs_human_review (never auto-approve).
  * - Returns a ReviewOutcome describing what happened; never throws on non-transient failures.
  */
@@ -15,6 +19,8 @@ import { createHash } from "node:crypto";
 export const SEMANTIC_REVIEW_PROMPT_VERSION = "r7-semantic-review-v1";
 export const SEMANTIC_REVIEW_POLICY_VERSION = "r7-semantic-review-policy-v1";
 const CLAUDE_AUTHORIZATION_REASON = "authorized-by:teddy-2026-09-16";
+// = story-write-guard.ts DEEPSEEK_SEMANTIC_REVIEW_PROVIDER (not imported: this module stays dependency-free).
+const DEEPSEEK_SEMANTIC_REVIEW_PROVIDER = "deepseek-semantic-review" as const;
 const DEEPSEEK_MODEL = "deepseek-flash";
 
 export type SemanticReviewVerdict = "approve" | "correct_needed" | "flag";
@@ -166,8 +172,8 @@ export async function reviewEventStory(
   sources: SemanticReviewSource[],
   repo: {
     getStoryContentVersion(eventId: string): Promise<{ eventId: string; contentSha256: string; content: { title?: string | null; story?: string | null } } | null>;
-    recordClaudeStoryDecision(args: { eventId: string; decision: "approved" | "needs_human_review"; reviewedContentSha256: string; promptVersion: string; policyVersion: string; reasonCodes: string[] }): Promise<unknown>;
-    applyClaudeStoryCorrection(args: { eventId: string; currentContentSha256: string; newStory?: string; newPeople?: string[]; promptVersion: string; policyVersion: string; reasonCodes: string[] }): Promise<{ newContentSha256: string }>;
+    recordClaudeStoryDecision(args: { reviewer?: "deepseek-semantic-review"; eventId: string; decision: "approved" | "needs_human_review"; reviewedContentSha256: string; promptVersion: string; policyVersion: string; reasonCodes: string[] }): Promise<unknown>;
+    applyClaudeStoryCorrection(args: { reviewer?: "deepseek-semantic-review"; eventId: string; currentContentSha256: string; newStory?: string; newPeople?: string[]; promptVersion: string; policyVersion: string; reasonCodes: string[] }): Promise<{ newContentSha256: string }>;
   },
   pool: { query(sql: string, params: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }> },
   options: {
@@ -205,7 +211,7 @@ export async function reviewEventStory(
         reviewedContentSha256: version.contentSha256,
         promptVersion: SEMANTIC_REVIEW_PROMPT_VERSION,
         policyVersion: SEMANTIC_REVIEW_POLICY_VERSION,
-        reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:approved"],
+        reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:approved"],
       });
       return { kind: "approved", contentSha256: version.contentSha256 };
 
@@ -232,7 +238,7 @@ export async function reviewEventStory(
           ...(peopleChanged ? { newPeople: verdict.approved_people } : {}),
           promptVersion: SEMANTIC_REVIEW_PROMPT_VERSION,
           policyVersion: SEMANTIC_REVIEW_POLICY_VERSION,
-          reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:correction-applied"],
+          reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:correction-applied"],
         });
         return { kind: "corrected", contentSha256: version.contentSha256, newSha256: result.newContentSha256 };
       }
@@ -243,7 +249,7 @@ export async function reviewEventStory(
         reviewedContentSha256: version.contentSha256,
         promptVersion: SEMANTIC_REVIEW_PROMPT_VERSION,
         policyVersion: SEMANTIC_REVIEW_POLICY_VERSION,
-        reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:correction-unapplied", anyMismatch ? "reason:correction_text_not_found" : "reason:no_actual_change"],
+        reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:correction-unapplied", anyMismatch ? "reason:correction_text_not_found" : "reason:no_actual_change"],
       });
       return { kind: "needs_human_review", contentSha256: version.contentSha256, reason: anyMismatch ? "correction_text_not_found" : "no_actual_change" };
 
@@ -255,7 +261,7 @@ export async function reviewEventStory(
         reviewedContentSha256: version.contentSha256,
         promptVersion: SEMANTIC_REVIEW_PROMPT_VERSION,
         policyVersion: SEMANTIC_REVIEW_POLICY_VERSION,
-        reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:flagged", verdict.reasoning?.slice(0, 80) ?? ""],
+        reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:flagged", verdict.reasoning?.slice(0, 80) ?? ""],
       });
       return { kind: "needs_human_review", contentSha256: version.contentSha256, reason: "flagged:" + (verdict.reasoning?.slice(0, 60) ?? "") };
     }

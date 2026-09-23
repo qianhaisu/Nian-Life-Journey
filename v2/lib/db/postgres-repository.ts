@@ -11,7 +11,7 @@ import { normalizeSha256 } from "./chat-import-persistence";
 import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
 import { createHash } from "node:crypto";
 import {
-  CLAUDE_AUTHORIZATION_REASON, CLAUDE_REVIEW_PROVIDER, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, REQUEST_FINGERPRINT_REASON_PREFIX, REVISION_BEFORE_REASON_PREFIX, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
+  CLAUDE_AUTHORIZATION_REASON, CLAUDE_REVIEW_PROVIDER, modelReviewerOf, CONTENT_SHA256_REASON_PREFIX, FINGERPRINT_TARGET_PREFIX, MEDIA_CONTENT_VERSION_REASON_PREFIX, PHOTO_SUBJECT_KINDS, ProtectedStoryWriteError, REQUEST_FINGERPRINT_REASON_PREFIX, REVISION_BEFORE_REASON_PREFIX, STORY_DECISION_KINDS, STORY_REVIEW_KINDS, StoryWriteContractError,
   assertAutomaticActor, assertClaudeMediaDecisionInput, assertClaudeStoryDecisionInput, assertClaudeStoryCorrectionInput, assertHumanDecisionInput, assertNotAutomaticApproval, blockingHumanDecision, boundContentSha256, boundRequestFingerprint, computeRequestFingerprint, evaluateStoryProtection, mediaContentVersion, reviewerTypeOf, storyContentSha256, storyLinkTargets,
   type ClaudeMediaDecisionInput, type ClaudeStoryCorrectionInput, type ClaudeStoryDecisionInput, type HumanStoryDecisionInput, type LedgerRow, type StoryContent,
 } from "@/lib/organizer/story-write-guard";
@@ -1469,10 +1469,11 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         const blocker = blockingHumanDecision(filteredLedger, STORY_DECISION_KINDS);
         if (blocker) throw new StoryWriteContractError("HUMAN_DECISION_PRESENT", `${input.eventId} carries a human ${blocker.targetKind} decision (${blocker.provider}: ${blocker.decision}); a Claude decision may not be placed over it`);
         const reasonCodes = [...input.reasonCodes, `${CONTENT_SHA256_REASON_PREFIX}${current}`];
+        const who = modelReviewerOf(input.reviewer);
         const id = `claude-review-${createHash("sha256").update(`${input.eventId}|${input.promptVersion}`).digest("hex").slice(0, 24)}`;
         const inserted = await q.execute(sql`insert into content_quality_reviews
             (id, profile_id, target_kind, target_id, decision, reason_codes, provider, model, prompt_version, policy_version, review_fingerprint, reviewed_at)
-          select ${id}, ${content!.profileId}, 'life_event', ${input.eventId}, ${input.decision}, ${JSON.stringify(reasonCodes)}::jsonb, ${CLAUDE_REVIEW_PROVIDER}, null,
+          select ${id}, ${content!.profileId}, 'life_event', ${input.eventId}, ${input.decision}, ${JSON.stringify(reasonCodes)}::jsonb, ${who.provider}, ${who.model},
             ${input.promptVersion}, ${input.policyVersion}, ${`${input.eventId}:${input.promptVersion}`},
             greatest((now() at time zone 'utc'), (select max(reviewed_at) + interval '1 microsecond' from content_quality_reviews where target_kind = 'life_event' and target_id = ${input.eventId}))
           on conflict (target_kind, target_id, prompt_version) do nothing
@@ -1481,7 +1482,7 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
           eq(t.contentQualityReviews.targetKind, "life_event"), eq(t.contentQualityReviews.targetId, input.eventId), eq(t.contentQualityReviews.promptVersion, input.promptVersion)));
         const review = reviewFromRow(row as Record<string, unknown>);
         if (inserted.rows.length) return { review, contentVersion: current, idempotent: false };
-        if (review.provider === CLAUDE_REVIEW_PROVIDER && review.decision === input.decision && boundContentSha256(review.reasonCodes) === current) return { review, contentVersion: current, idempotent: true };
+        if (review.provider === who.provider && review.decision === input.decision && boundContentSha256(review.reasonCodes) === current) return { review, contentVersion: current, idempotent: true };
         throw new StoryWriteContractError("CLAUDE_DECISION_CONFLICT", `${input.eventId} already has a different ${input.promptVersion} decision; use a new promptVersion for a new decision`);
       });
     },
@@ -1579,7 +1580,7 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         }
         await q.execute(sql`insert into content_quality_reviews
             (id, profile_id, target_kind, target_id, decision, reason_codes, provider, model, prompt_version, policy_version, review_fingerprint, reviewed_at)
-          values (${id}, ${content!.profileId}, 'life_event', ${input.eventId}, 'approved', ${JSON.stringify(reasonCodes)}::jsonb, ${CLAUDE_REVIEW_PROVIDER}, null,
+          values (${id}, ${content!.profileId}, 'life_event', ${input.eventId}, 'approved', ${JSON.stringify(reasonCodes)}::jsonb, ${modelReviewerOf(input.reviewer).provider}, ${modelReviewerOf(input.reviewer).model},
             ${input.promptVersion}, ${input.policyVersion}, ${`${input.eventId}:${input.promptVersion}`},
             greatest((now() at time zone 'utc'), (select max(reviewed_at) + interval '1 microsecond' from content_quality_reviews where target_kind = 'life_event' and target_id = ${input.eventId})))`);
         const [newRow] = await (tx as any).select().from(t.contentQualityReviews).where(and(

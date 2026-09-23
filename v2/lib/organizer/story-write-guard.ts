@@ -59,10 +59,31 @@ export const AUTOMATIC_REVIEW_PROVIDERS: ReadonlySet<string> = new Set(["deepsee
 export const CLAUDE_REVIEW_PROVIDER = "claude-review";
 /** Claude 审核行必须带上的授权依据。写进 reason_codes，查账时一眼可见。 */
 export const CLAUDE_AUTHORIZATION_REASON = "authorized-by:teddy-2026-09-16";
+/**
+ * 2026-09-23（第三轮，Teddy 决定）：DeepSeek 的语义审核（lib/organizer/semantic-review.ts）要**如实记账**。
+ * 9/22 起它借用 Claude 的入口写库，218 条「approved」被记成 provider=claude-review、model 为空——
+ * 机器判定冒充了 Claude。Teddy 的决定是：如实记录，DeepSeek 的语义审核仍可批准。
+ * 所以它和 Claude 审核同属「模型审核者」这一类（可批准、让故事免受自动写手覆盖、但永远不压过家庭人工决定），
+ * 只是 provider/model 写真实的。它和 `deepseek`（Organizer 自动写手，永远不能批准）是两个不同的身份。
+ */
+export const DEEPSEEK_SEMANTIC_REVIEW_PROVIDER = "deepseek-semantic-review";
+/** 模型审核者 → 账上写的 model。Claude 那一栏历来为空，保持不变。 */
+export const MODEL_REVIEWERS: Readonly<Record<string, string | null>> = Object.freeze({
+  [CLAUDE_REVIEW_PROVIDER]: null,
+  [DEEPSEEK_SEMANTIC_REVIEW_PROVIDER]: "deepseek-flash",
+});
+export type ModelReviewer = typeof CLAUDE_REVIEW_PROVIDER | typeof DEEPSEEK_SEMANTIC_REVIEW_PROVIDER;
+/** 输入里的 reviewer（缺省 = Claude）→ 账上的 provider 与 model。未知的 reviewer 拒收。 */
+export function modelReviewerOf(reviewer: string | undefined): { provider: string; model: string | null } {
+  const provider = reviewer ?? CLAUDE_REVIEW_PROVIDER;
+  if (!(provider in MODEL_REVIEWERS)) throw new StoryWriteContractError("REVIEWER_NOT_ACCEPTED", `unknown model reviewer ${JSON.stringify(reviewer)}`);
+  return { provider, model: MODEL_REVIEWERS[provider] };
+}
 export type ReviewerType = "automatic" | "claude" | "human";
+/** "claude" = 模型审核者（Claude，或 Teddy 授权的 DeepSeek 语义审核），名字沿用 2026-09-16 的旧称。 */
 export function reviewerTypeOf(provider: string | null | undefined): ReviewerType {
   if (provider && AUTOMATIC_REVIEW_PROVIDERS.has(provider)) return "automatic";
-  if (provider === CLAUDE_REVIEW_PROVIDER) return "claude";
+  if (provider && provider in MODEL_REVIEWERS) return "claude";
   return "human";
 }
 
@@ -276,7 +297,7 @@ export function assertHumanDecisionInput(input: HumanStoryDecisionInput): void {
   if (!input.eventId) throw new StoryWriteContractError("MISSING_EVENT", "eventId is required");
   if (!/^[0-9a-f]{64}$/.test(input.reviewedContentSha256 ?? "")) throw new StoryWriteContractError("MISSING_REVIEWED_CONTENT_HASH", "reviewedContentSha256 must be the 64-hex sha256 of the reviewed story content");
   if (!input.operator || AUTOMATIC_REVIEW_PROVIDERS.has(input.operator)) throw new StoryWriteContractError("OPERATOR_NOT_HUMAN", `operator "${input.operator}" is empty or an automatic provider`);
-  if (input.operator === CLAUDE_REVIEW_PROVIDER) throw new StoryWriteContractError("OPERATOR_NOT_HUMAN", `operator "${CLAUDE_REVIEW_PROVIDER}" is not a human; Claude decisions go through recordClaudeStoryDecision`);
+  if (input.operator in MODEL_REVIEWERS) throw new StoryWriteContractError("OPERATOR_NOT_HUMAN", `operator "${CLAUDE_REVIEW_PROVIDER}" is not a human; Claude decisions go through recordClaudeStoryDecision`);
   if (!input.promptVersion || !input.policyVersion) throw new StoryWriteContractError("MISSING_VERSION", "promptVersion and policyVersion are required");
   if ((input.reasonCodes ?? []).some((code) => code.startsWith(CONTENT_SHA256_REASON_PREFIX))) throw new StoryWriteContractError("REASON_CODE_RESERVED", `reason codes may not carry their own ${CONTENT_SHA256_REASON_PREFIX} entry`);
 }
@@ -293,6 +314,8 @@ export type ClaudeStoryDecisionInput = {
   policyVersion: string;
   /** 必须含 CLAUDE_AUTHORIZATION_REASON；其余写审核依据（主体、日期、来源核对结果、暂缓原因）。 */
   reasonCodes: string[];
+  /** 谁审的：缺省 Claude；DeepSeek 语义审核必须写 DEEPSEEK_SEMANTIC_REVIEW_PROVIDER（如实记账）。 */
+  reviewer?: ModelReviewer;
 };
 
 /**
@@ -314,9 +337,12 @@ export type ClaudeStoryCorrectionInput = {
   policyVersion: string;
   /** Must include CLAUDE_AUTHORIZATION_REASON and at least one correction:* code. */
   reasonCodes: string[];
+  /** 同 ClaudeStoryDecisionInput.reviewer。 */
+  reviewer?: ModelReviewer;
 };
 
 export function assertClaudeStoryCorrectionInput(input: ClaudeStoryCorrectionInput): void {
+  modelReviewerOf(input.reviewer);
   if (!input.eventId) throw new StoryWriteContractError("MISSING_EVENT", "eventId is required");
   if (!/^[0-9a-f]{64}$/.test(input.currentContentSha256 ?? ""))
     throw new StoryWriteContractError("MISSING_CONTENT_HASH", "currentContentSha256 must be a 64-hex sha256");
@@ -333,6 +359,7 @@ export function assertClaudeStoryCorrectionInput(input: ClaudeStoryCorrectionInp
 }
 
 export function assertClaudeStoryDecisionInput(input: ClaudeStoryDecisionInput): void {
+  modelReviewerOf(input.reviewer);
   if (!input.eventId) throw new StoryWriteContractError("MISSING_EVENT", "eventId is required");
   if (!/^[0-9a-f]{64}$/.test(input.reviewedContentSha256 ?? "")) throw new StoryWriteContractError("MISSING_REVIEWED_CONTENT_HASH", "reviewedContentSha256 must be the 64-hex sha256 of the reviewed story content");
   if (!input.promptVersion || !input.policyVersion) throw new StoryWriteContractError("MISSING_VERSION", "promptVersion and policyVersion are required");
