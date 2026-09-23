@@ -75,6 +75,18 @@ export const VAGUE_PERSON = [
   [/(戴眼镜|年长|年轻|短发|长发|卷发)的(男|女|人|老)/, "按外貌指人"],
 ];
 
+/**
+ * 敏感信息（Teddy 2026-09-23，孕期与全站重写共用；引号里的原话也算——原话一样会出现在页面上）。
+ * 只写与宝宝有关的结论（「产检一切正常」「宝宝比预计大五天」），下面这些一律不写。
+ */
+export const SENSITIVE_TEXT = [
+  ["妈妈本人的病情、用药、检查指标", /(妈妈|孕妇|她)[^。；！？]{0,8}(用药|吃药|打针|输液|化验|血糖|血压|血常规|指标|并发症|贫血|出血|手术|住院)|妊娠(期)?糖尿病|妊高症|妊娠高血压|先兆(流产|早产)|黄体酮|保胎药|宫缩抑制|糖耐|唐筛(结果|数值)|孕酮/],
+  ["钱", /\d+(\.\d+)?\s*(元|块钱?|万|千|美元|美金|刀|港币)|[¥￥$]\s*\d|工资|收入|薪|费用|价格|报价|多少钱|花了|房贷|贷款|账户|转账|红包|报销|个税|退税|理财|存款|首付/],
+  ["证件与身份办理", /身份证|护照|签证|绿卡|国籍|入籍|出生纸|出生证明|社保卡|医保卡|保险卡|户口|SSN|移民局/],
+  ["精确地址与电话", /(?<!\d)1[3-9]\d{9}(?!\d)|\d{3,4}-\d{7,8}|门牌|\d+\s*(号楼|栋|幢|单元|室)|(路|街|道|弄|巷)\d+号/],
+  ["夫妻争执、工作矛盾、负面评价", /吵架|争吵|吵了|冷战|闹崩|离婚|埋怨|抱怨|不满意|矛盾|甩锅|太差劲|不靠谱/],
+];
+
 const FIRST_TIME = /第一次|首次|头一回/;
 const BAD_AGE = /两岁|2岁|二岁/;
 
@@ -168,6 +180,7 @@ export function validateDayText(entry, sources, opts = {}) {
     const outside = String(text).replace(/「[^「」]*」/g, "");
     for (const name of UNCONFIRMED_NAMES) if (outside.includes(name)) err(where, `引号外出现注册表里没有的称谓「${name}」`);
     for (const [re, label] of VAGUE_PERSON) if (re.test(outside)) err(where, `含糊的指人写法「${label}」：能解析发送人的写称谓，解析不出的不写`);
+    for (const [label, re] of SENSITIVE_TEXT) { const m = String(text).match(re); if (m) err(where, `敏感信息（${label}）「${m[0]}」：不写进故事`); }
     // 真实姓名连引号里也不行（EDITOR-BRIEF：已确认身份的人也只能用称呼，不能用真名）。
     for (const name of opts.realNames ?? []) if (name && text.includes(name)) err(where, "出现真实姓名，请换成称呼");
 
