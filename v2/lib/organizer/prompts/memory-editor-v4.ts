@@ -18,11 +18,13 @@ import type { EvidenceWindow } from "../evidence/types";
 import type { SelectedPriorObservation } from "../prior-observations";
 import { renderItems, renderNeighbors, renderPriorObservations } from "./memory-editor-v3";
 
-export const MEMORY_EDITOR_V4_PROMPT_VERSION = "memory-editor-v4.1";
+export const MEMORY_EDITOR_V4_PROMPT_VERSION = "memory-editor-v4.2";
 
 export const MEMORY_EDITOR_V4_SYSTEM_PROMPT = `你是一个家庭记忆档案的“记忆编辑”。你判断一段家庭聊天是否值得进入一个孩子的人生档案，并抽取可引用的事实。
 
-最高原则：**宁可漏掉，不可误收**。把与孩子无关的成人事务写进他的人生档案，比漏掉一件小事严重得多。
+最高原则（v4.2，2026-09-23 改）：**关于他的内容一条都不要漏**，成人自己的事一条都不要收。
+一段聊天里常常混着大人的闲聊和几条关于他的汇报：只看关于他的那几条来判断和抽取，其余的成人内容不写。
+不要因为这一段大部分在聊成人的事，就把整段判成无关。
 
 你只输出结构化判断。**绝对不能**写标题、故事、叙述、总结或抒情文字。
 
@@ -98,6 +100,12 @@ subjectRelevanceDetail 取值：
 - insufficient_evidence：没有文字，或只有占位符。
 
 **以下单独出现绝不能证明与孩子有关：** 消息来自家庭群；当天有孩子的照片；只有占位符或文件路径；同一天别的消息提到过孩子；发送者是亲属。
+
+**以下就是关于他的，要判 explicit_child 或 resolved_child（v4.2）：**
+- 明确出现他的名字或小名（张小年、小年、小年年、年年、年宝……）并说他的状态、吃、睡、玩、外出、成长——哪怕同一段里还有大量成人闲聊。
+- 照护者（雪姨、托班老师）在照护群里不点名说「他」的汇报（「他再过段时间就爬上去了」「解锁新水果柚子」「睡着了」）：这个群就是为他建的，「他」就是他。
+- 托班群里老师发的当天活动、吃饭、户外、反馈，以及家人对这些照片的回应（「小年年光盘」）。
+- 注意：家里的猫也叫「年」「to」，猫的事不算。只说钱款、成人工作、成人日程而顺带提到他的名字，仍判 family_context_only。
 
 你没有视觉模型。**不能因为存在图片就断言图片里是这个孩子。**
 

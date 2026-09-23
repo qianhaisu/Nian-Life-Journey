@@ -194,6 +194,25 @@ export function coerceSubjectRelevance(raw: Record<string, unknown>, window: Evi
   return { subjectRelevance: "primary" };
 }
 
+/** 模型判无关、但确定性核对找到了他：需要复核。纯函数。 */
+export function needsSecondLook(gateAReason: string | undefined, bounded: BoundedSubjectResolution | undefined): boolean {
+  if (!bounded || bounded.level === "unresolved") return false;
+  return gateAReason === "gate_a_family_context_only" || gateAReason === "gate_a_unrelated";
+}
+
+/** 在原请求后追加一轮复核提示（不改原提示词，只多一条 user 消息）。纯函数。 */
+export function withSecondLook(requestBody: string, bounded: BoundedSubjectResolution): string {
+  const body = JSON.parse(requestBody) as { messages: Array<{ role: string; content: unknown }> };
+  const hint = `复核：确定性核对发现这一段里有关于孩子的消息（依据：${bounded.signals.join("、") || bounded.level}；来源 ${bounded.supportingSourceIds.slice(0, 8).join("、")}）。`
+    + "请只针对这些关于孩子的消息重新判断：如果它们说的是孩子本人的状态、吃睡、玩耍、成长、外出，或照护者对他的汇报，就用 explicit_child 或 resolved_child 并从这些消息抽取事实；"
+    + "只有这些消息实际说的是成人事务（钱款、成人工作、成人日程）、只是顺带提到他时，才判 family_context_only。其余成人闲聊不写。";
+  const first = body.messages[0];
+  body.messages = [{ role: "user", content: `${String(first.content)}
+
+${hint}` }];
+  return JSON.stringify(body);
+}
+
 export type MemoryEditorVariant = "v1" | "v2" | "v3" | "v4";
 
 export type DeepSeekEditorOptions = {
@@ -275,7 +294,7 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
       : isV3
       ? buildMemoryEditorPromptV3(window, this.subject, priors as SelectedPriorObservation[])
       : isV2 ? buildMemoryEditorPromptV2(window, this.subject, priors as PriorObservation[]) : buildMemoryEditorPrompt(window, this.subject);
-    const body = JSON.stringify({
+    let body = JSON.stringify({
       model: this.model,
       max_tokens: 4000,
       temperature: 0,
@@ -289,6 +308,7 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
     const startedAt = Date.now();
     let retries = 0;
     let lastError: DeepSeekEditorError | undefined;
+    let secondLookAsked = false;
 
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
       if (attempt > 0) { retries = attempt; await sleep(RETRY_DELAYS_MS[attempt - 1]); }
@@ -335,6 +355,14 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         const temporal = coerceTemporalStatus(raw.temporalStatus);
         raw.temporalStatus = temporal.temporalStatus;
         const { subjectRelevance, gateAReason } = coerceSubjectRelevance(raw, window, this.subject, boundedResolution);
+        // 2026-09-23 复核（第四轮主体判断抽查，误拒 25%）：确定性的主体核对已经找到了他（名字或照护者汇报），
+        // 模型却把整段判成无关——多半是被同一段里的成人闲聊带偏了。再问一次，指着那几条消息；第二次的回答算数。
+        if (!secondLookAsked && needsSecondLook(gateAReason, boundedResolution)) {
+          secondLookAsked = true;
+          body = withSecondLook(body, boundedResolution!);
+          attempt -= 1;
+          continue;
+        }
         raw.subjectRelevance = subjectRelevance;
         // H9 alignment: an unrelated/ambiguous subject may not carry subjectIds, and the contract
         // rejects subjectIds on "ambiguous" outright.

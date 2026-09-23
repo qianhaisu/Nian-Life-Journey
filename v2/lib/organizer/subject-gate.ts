@@ -98,7 +98,29 @@ const POLICIES: Record<string, SubjectGatePolicy> = {
   "conversation:8245344e70d2a1a24311ea3e": "group", // 老苏家, post-fix id
   "conversation:bfdcc142ba4c02f5aebec4c7": "private", // 阿静 (妈妈), post-fix id
   "conversation:6789abd45ba255751fd4d428": "private", // 陈亚萍 (奶奶), post-fix id
+
+  // 2026-09-23 第四轮主体判断抽查（.data/subject-gate-audit.md）：这几个 id 没登记，落到最严的 private，
+  // 只收点名他的消息——雪姨在作战部队里「他再过段时间就爬上去了」这类汇报被整段拒掉。
+  "conversation:4f8670546dd34b592448554d": "group", // 主群 (作战部队), WeFlow JSON, 12,574 条
+  "conversation:f4f28678abd80b3e391c0885": "all", // 2028届好奇星辰星班（乳儿班改名）每日切片，9/17 起
+  "conversation:7de4470980bab46455e15a31": "all", // 同上，9/19 起
+  "conversation:6a708760503a82492b62494b": "all", // 同上，9/14–9/17（与 JSON 部分重合，见 needs-dedupe）
+  "conversation:6a77e80c2c1d96dd24bfc523": "all", // 同上，9/16–9/18（与 JSON 部分重合，见 needs-dedupe）
+  "conversation:d64551c8e1cea882635e3969": "excluded", // 乳儿班最早的 id：99 条全部在 DAYCARE_CONVERSATION 里
 };
+
+/**
+ * 照护者在里面汇报他的会话（2026-09-23）：托班群（all）与因他而建的家庭群里的作战部队、张小年小群、小雪微信群。
+ * 在这些会话里，登记过的照护者（雪姨、老师）不点名说「他」，说的就是他——这个群就是为他建的。
+ * 私聊不在这里：夫妻私聊里的「他」可能是任何人。
+ */
+export const CARE_CONVERSATIONS: ReadonlySet<string> = new Set([
+  DAYCARE_CONVERSATION,
+  "conversation:f4f28678abd80b3e391c0885", "conversation:7de4470980bab46455e15a31", "conversation:6a708760503a82492b62494b", "conversation:6a77e80c2c1d96dd24bfc523",
+  "conversation:4f8670546dd34b592448554d", "conversation:856b8ec2b8f3ec2871782ca6", "conversation:a673c0e0563be6ecf1867094", "conversation:064d5dfbd798a5f27223c758", // 作战部队
+  "conversation:87c42fdc94895ff6b94222da", // 张小年小群
+  "conversation:e6adbcafc3c6e32be0494251", // 小雪微信群
+]);
 
 export function subjectGateFor(conversation: string): SubjectGate {
   // An unlisted conversation is treated as a private chat: eligibility has to be earned message by

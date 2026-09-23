@@ -20,6 +20,7 @@ import type { EvidenceWindow, EvidenceItem } from "./evidence/types";
 import type { IdentityRegistry } from "./identity";
 import { resolveSpeaker } from "./identity";
 import { firstPronounItem, resolveByConversationContinuity, type SubjectResolutionEvidence } from "./subject-continuity";
+import { CARE_CONVERSATIONS } from "./subject-gate";
 
 export type SubjectResolutionLevel = "explicit" | "contextually_resolved" | "unresolved";
 
@@ -94,6 +95,20 @@ export function resolveSubjectBounded(
   // pile of corroboration can never outvote a genuine ambiguity.
   if (COMPETING_PERSON.test(scopeText)) {
     return { level: "unresolved", signals: [], blockers: ["competing_person_in_scope"], supportingSourceIds: [] };
+  }
+
+  // 2026-09-23（第四轮主体判断抽查，误拒 25%）：照护者的汇报。在为他而建的照护会话里（托班群、作战部队、
+  // 张小年小群、小雪微信群），登记过的照护者（雪姨 nanny、老师 teacher、照护 caregiver）不点名说「他」，
+  // 说的就是他——这个群的存在理由就是汇报他。这是 Teddy 2026-09-23 指出的误拒规律之一。
+  // 只认照护者本人发的、带代词或照护话题的消息；competing person 的检查已在上面先跑过。
+  if (CARE_CONVERSATIONS.has(window.conversationId ?? "") && options.registry) {
+    const reports = window.items.filter((item) => {
+      const role = resolveSpeaker(item.senderDigest, options.registry, { conversationId: window.conversationId }).relationshipToSubject;
+      return (role === "nanny" || role === "teacher" || role === "caregiver") && (PRONOUN.test(item.text) || CHILD_CARE_TOPIC.test(item.text));
+    });
+    if (reports.length > 0) {
+      return { level: "contextually_resolved", signals: ["caregiver_report_in_care_conversation"], blockers: [], supportingSourceIds: reports.map((item) => item.sourceId) };
+    }
   }
 
   // Mandatory anchor: someone nearby named him. Without this there is no antecedent and the pronoun
