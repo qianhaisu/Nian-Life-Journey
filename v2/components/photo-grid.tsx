@@ -30,8 +30,10 @@ function Cell({
   overlay,
   label,
   alone = false,
+  large = alone,
 }: {
   alone?: boolean;
+  large?: boolean;
   photo: GalleryPhoto;
   onClick?: () => void;
   sizes: string;
@@ -60,7 +62,11 @@ function Cell({
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
     >
       <Image
-        src={isVideo ? (photo.posterSrc ?? photo.thumbnailSrc ?? photo.src) : photo.src}
+        // A grid cell is at most a third or a half of the reading column: the thumbnail (~480px wide)
+        // covers it at 2x on a phone, and the grid is now what every day shows by default — loading
+        // each day's full-size files there would put the whole month's weight in front of the reader.
+        // A picture standing alone (or the large cell of three) keeps the full file.
+        src={isVideo ? (photo.posterSrc ?? photo.thumbnailSrc ?? photo.src) : large ? photo.src : (photo.thumbnailSrc ?? photo.src)}
         alt={photo.alt}
         fill
         sizes={sizes}
@@ -150,7 +156,7 @@ export function PhotoGrid({
     return (
       <>
         <div className="pg pg-3">
-          <Cell key={displayed[0].id} photo={displayed[0]} onClick={() => openStill(0)} sizes={twoThirdSizes} priority={priority} />
+          <Cell key={displayed[0].id} photo={displayed[0]} onClick={() => openStill(0)} sizes={twoThirdSizes} priority={priority} large />
           <div className="pg-col">
             <Cell key={displayed[1].id} photo={displayed[1]} onClick={() => openStill(1)} sizes={thirdSizes} />
             <Cell key={displayed[2].id} photo={displayed[2]} onClick={() => openStill(2)} sizes={thirdSizes} />
