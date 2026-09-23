@@ -1,0 +1,550 @@
+{
+ "at": "2026-09-23T02:25:08.662Z",
+ "site": "https://nianlife.cn",
+ "results": [
+  {
+   "viewport": "desktop",
+   "item": "2026-09 没有「这个月的故事」「这个月的日子」",
+   "pass": true,
+   "detail": "html contains story heading: false, days heading: false",
+   "shots": [
+    "desktop-2026-09-top.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "2026-09 源码只含一周",
+   "pass": true,
+   "detail": {
+    "rawDays": [
+     "2026-09-22",
+     "2026-09-21",
+     "2026-09-18",
+     "2026-09-17",
+     "2026-09-16"
+    ]
+   },
+   "shots": []
+  },
+  {
+   "viewport": "desktop",
+   "item": "2026-09 第一条是本月最新的一天",
+   "pass": true,
+   "detail": {
+    "first": "2026-09-22"
+   },
+   "shots": []
+  },
+  {
+   "viewport": "desktop",
+   "item": "2026-09 「更多」依次加载到 9 月 1 日（倒序）",
+   "pass": true,
+   "detail": {
+    "count": 20,
+    "last": "2026-09-01",
+    "desc": true
+   },
+   "shots": [
+    "desktop-2026-09-more-1.png",
+    "desktop-2026-09-more-2.png",
+    "desktop-2026-09-more-3.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "2026-09 每一天：日期→标题→正文→照片网格→原记录，无缩略图条",
+   "pass": true,
+   "detail": {
+    "entries": 20,
+    "bad": []
+   },
+   "shots": []
+  },
+  {
+   "viewport": "desktop",
+   "item": "2025-12 首屏只有 12 月 1–7 日",
+   "pass": true,
+   "detail": {
+    "rawDays": [
+     "2025-12-01",
+     "2025-12-02",
+     "2025-12-03",
+     "2025-12-04",
+     "2025-12-06",
+     "2025-12-07"
+    ],
+    "first": "2025-12-01"
+   },
+   "shots": [
+    "desktop-2025-12-top.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "2025-12 没有「这个月的故事」",
+   "pass": true,
+   "detail": "",
+   "shots": []
+  },
+  {
+   "viewport": "desktop",
+   "item": "7 张以上的日子默认网格且带「+N」（12-04，12 张）",
+   "pass": true,
+   "detail": {
+    "cells": 6,
+    "overlay": "+6"
+   },
+   "shots": [
+    "desktop-grid-2025-12-04-collapsed.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "点击「+N」展开全部",
+   "pass": true,
+   "detail": {
+    "cellsAfter": 12
+   },
+   "shots": [
+    "desktop-grid-2025-12-04-expanded.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "点照片放大（ViewerModal）仍可用",
+   "pass": true,
+   "detail": "dialog.photo-viewer open",
+   "shots": [
+    "desktop-viewer-2025-12-04.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "2025-12 正序，「更多」一路加载到 12 月 31 日",
+   "pass": true,
+   "detail": {
+    "count": 28,
+    "last": "2025-12-31",
+    "asc": true
+   },
+   "shots": [
+    "desktop-2025-12-more-1.png",
+    "desktop-2025-12-more-2.png",
+    "desktop-2025-12-more-3.png",
+    "desktop-2025-12-more-4.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "2025-12 每一天版式顺序一致",
+   "pass": true,
+   "detail": {
+    "entries": 28,
+    "bad": []
+   },
+   "shots": []
+  },
+  {
+   "viewport": "desktop",
+   "item": "点未加载的周标签：先加载再跳转",
+   "pass": true,
+   "detail": {
+    "inView": true,
+    "days": 28
+   },
+   "shots": [
+    "desktop-2025-12-tab-week5.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "单日详情页用同一套网格（12-06，14 张全部显示）",
+   "pass": true,
+   "detail": {
+    "cells": 14,
+    "strip": 0
+   },
+   "shots": [
+    "desktop-day-detail-2025-12-06-grid.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "资料区「发言人E」为 0（2025-12-04）",
+   "pass": true,
+   "detail": {
+    "雪姨": 14,
+    "爸爸": 3,
+    "妈妈": 2
+   },
+   "shots": [
+    "desktop-speakers-2025-12-04.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "资料区「发言人E」为 0（2025-12-08）",
+   "pass": true,
+   "detail": {
+    "雪姨": 19,
+    "爸爸": 1,
+    "妈妈": 11,
+    "外公": 2
+   },
+   "shots": [
+    "desktop-speakers-2025-12-08.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "资料区「发言人E」为 0（2025-12-11）",
+   "pass": true,
+   "detail": {
+    "妈妈": 14,
+    "外公": 2,
+    "雪姨": 16,
+    "爸爸": 5
+   },
+   "shots": [
+    "desktop-speakers-2025-12-11.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "资料区「发言人E」为 0（2025-05-22）",
+   "pass": true,
+   "detail": {
+    "雪姨": 9,
+    "爸爸": 1,
+    "妈妈": 1
+   },
+   "shots": [
+    "desktop-speakers-2025-05-22.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "资料区「发言人E」为 0（2025-08-08）",
+   "pass": true,
+   "detail": {
+    "妈妈": 17,
+    "雪姨": 16,
+    "爸爸": 2,
+    "外公": 1
+   },
+   "shots": [
+    "desktop-speakers-2025-08-08.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "资料区「发言人E」为 0（2025-10-29）",
+   "pass": true,
+   "detail": {
+    "雪姨": 7,
+    "爸爸": 4,
+    "妈妈": 4
+   },
+   "shots": [
+    "desktop-speakers-2025-10-29.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "资料区「发言人E」为 0（2026-01-29）",
+   "pass": true,
+   "detail": {
+    "妈妈": 7,
+    "雪姨": 13
+   },
+   "shots": [
+    "desktop-speakers-2026-01-29.png"
+   ]
+  },
+  {
+   "viewport": "desktop",
+   "item": "资料区「发言人E」为 0（2026-03-24）",
+   "pass": true,
+   "detail": {
+    "外公": 1,
+    "妈妈": 3,
+    "雪姨": 5
+   },
+   "shots": [
+    "desktop-speakers-2026-03-24.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "2026-09 没有「这个月的故事」「这个月的日子」",
+   "pass": true,
+   "detail": "html contains story heading: false, days heading: false",
+   "shots": [
+    "mobile390-2026-09-top.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "2026-09 源码只含一周",
+   "pass": true,
+   "detail": {
+    "rawDays": [
+     "2026-09-22",
+     "2026-09-21",
+     "2026-09-18",
+     "2026-09-17",
+     "2026-09-16"
+    ]
+   },
+   "shots": []
+  },
+  {
+   "viewport": "mobile390",
+   "item": "2026-09 第一条是本月最新的一天",
+   "pass": true,
+   "detail": {
+    "first": "2026-09-22"
+   },
+   "shots": []
+  },
+  {
+   "viewport": "mobile390",
+   "item": "2026-09 「更多」依次加载到 9 月 1 日（倒序）",
+   "pass": true,
+   "detail": {
+    "count": 20,
+    "last": "2026-09-01",
+    "desc": true
+   },
+   "shots": [
+    "mobile390-2026-09-more-1.png",
+    "mobile390-2026-09-more-2.png",
+    "mobile390-2026-09-more-3.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "2026-09 每一天：日期→标题→正文→照片网格→原记录，无缩略图条",
+   "pass": true,
+   "detail": {
+    "entries": 20,
+    "bad": []
+   },
+   "shots": []
+  },
+  {
+   "viewport": "mobile390",
+   "item": "2025-12 首屏只有 12 月 1–7 日",
+   "pass": true,
+   "detail": {
+    "rawDays": [
+     "2025-12-01",
+     "2025-12-02",
+     "2025-12-03",
+     "2025-12-04",
+     "2025-12-06",
+     "2025-12-07"
+    ],
+    "first": "2025-12-01"
+   },
+   "shots": [
+    "mobile390-2025-12-top.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "2025-12 没有「这个月的故事」",
+   "pass": true,
+   "detail": "",
+   "shots": []
+  },
+  {
+   "viewport": "mobile390",
+   "item": "7 张以上的日子默认网格且带「+N」（12-04，12 张）",
+   "pass": true,
+   "detail": {
+    "cells": 6,
+    "overlay": "+6"
+   },
+   "shots": [
+    "mobile390-grid-2025-12-04-collapsed.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "点击「+N」展开全部",
+   "pass": true,
+   "detail": {
+    "cellsAfter": 12
+   },
+   "shots": [
+    "mobile390-grid-2025-12-04-expanded.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "点照片放大（ViewerModal）仍可用",
+   "pass": true,
+   "detail": "dialog.photo-viewer open",
+   "shots": [
+    "mobile390-viewer-2025-12-04.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "2025-12 正序，「更多」一路加载到 12 月 31 日",
+   "pass": true,
+   "detail": {
+    "count": 28,
+    "last": "2025-12-31",
+    "asc": true
+   },
+   "shots": [
+    "mobile390-2025-12-more-1.png",
+    "mobile390-2025-12-more-2.png",
+    "mobile390-2025-12-more-3.png",
+    "mobile390-2025-12-more-4.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "2025-12 每一天版式顺序一致",
+   "pass": true,
+   "detail": {
+    "entries": 28,
+    "bad": []
+   },
+   "shots": []
+  },
+  {
+   "viewport": "mobile390",
+   "item": "点未加载的周标签：先加载再跳转",
+   "pass": true,
+   "detail": {
+    "inView": true,
+    "days": 28
+   },
+   "shots": [
+    "mobile390-2025-12-tab-week5.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "单日详情页用同一套网格（12-06，14 张全部显示）",
+   "pass": true,
+   "detail": {
+    "cells": 14,
+    "strip": 0
+   },
+   "shots": [
+    "mobile390-day-detail-2025-12-06-grid.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "资料区「发言人E」为 0（2025-12-04）",
+   "pass": true,
+   "detail": {
+    "雪姨": 14,
+    "爸爸": 3,
+    "妈妈": 2
+   },
+   "shots": [
+    "mobile390-speakers-2025-12-04.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "资料区「发言人E」为 0（2025-12-08）",
+   "pass": true,
+   "detail": {
+    "雪姨": 19,
+    "爸爸": 1,
+    "妈妈": 11,
+    "外公": 2
+   },
+   "shots": [
+    "mobile390-speakers-2025-12-08.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "资料区「发言人E」为 0（2025-12-11）",
+   "pass": true,
+   "detail": {
+    "妈妈": 14,
+    "外公": 2,
+    "雪姨": 16,
+    "爸爸": 5
+   },
+   "shots": [
+    "mobile390-speakers-2025-12-11.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "资料区「发言人E」为 0（2025-05-22）",
+   "pass": true,
+   "detail": {
+    "雪姨": 9,
+    "爸爸": 1,
+    "妈妈": 1
+   },
+   "shots": [
+    "mobile390-speakers-2025-05-22.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "资料区「发言人E」为 0（2025-08-08）",
+   "pass": true,
+   "detail": {
+    "妈妈": 17,
+    "雪姨": 16,
+    "爸爸": 2,
+    "外公": 1
+   },
+   "shots": [
+    "mobile390-speakers-2025-08-08.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "资料区「发言人E」为 0（2025-10-29）",
+   "pass": true,
+   "detail": {
+    "雪姨": 7,
+    "爸爸": 4,
+    "妈妈": 4
+   },
+   "shots": [
+    "mobile390-speakers-2025-10-29.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "资料区「发言人E」为 0（2026-01-29）",
+   "pass": true,
+   "detail": {
+    "妈妈": 7,
+    "雪姨": 13
+   },
+   "shots": [
+    "mobile390-speakers-2026-01-29.png"
+   ]
+  },
+  {
+   "viewport": "mobile390",
+   "item": "资料区「发言人E」为 0（2026-03-24）",
+   "pass": true,
+   "detail": {
+    "外公": 1,
+    "妈妈": 3,
+    "雪姨": 5
+   },
+   "shots": [
+    "mobile390-speakers-2026-03-24.png"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,661 @@
+{
+ "checkedAt": "2026-09-23T02:25:14.111Z",
+ "site": "https://nianlife.cn",
+ "beforeCapturedAt": "2026-09-23T01:18:35.770Z",
+ "beforeSha": "ce08236",
+ "allOk": true,
+ "totals": {
+  "beforeDays": 580,
+  "beforeStories": 186,
+  "afterDays": 586,
+  "afterStoriesMerged": 177
+ },
+ "months": [
+  {
+   "month": "2025/01",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-01.20260919-045518.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 28,
+    "stories": 7
+   },
+   "after": {
+    "timelineDays": 28,
+    "contentDays": 28,
+    "storiesMerged": 7,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/02",
+   "ok": true,
+   "order": "asc",
+   "weeks": 4,
+   "contentFile": "2025-02.20260919-045519.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 27,
+    "stories": 13
+   },
+   "after": {
+    "timelineDays": 27,
+    "contentDays": 27,
+    "storiesMerged": 13,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/03",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-03.20260919-045521.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 27,
+    "stories": 15
+   },
+   "after": {
+    "timelineDays": 28,
+    "contentDays": 27,
+    "storiesMerged": 15,
+    "daysFromStoriesOnly": 1
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/04",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-04.20260919-045522.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 23,
+    "stories": 10
+   },
+   "after": {
+    "timelineDays": 26,
+    "contentDays": 23,
+    "storiesMerged": 10,
+    "daysFromStoriesOnly": 3
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/05",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-05.20260919-045524.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 24,
+    "stories": 9
+   },
+   "after": {
+    "timelineDays": 24,
+    "contentDays": 24,
+    "storiesMerged": 9,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/06",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-06.20260919-045552.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 20,
+    "stories": 7
+   },
+   "after": {
+    "timelineDays": 21,
+    "contentDays": 20,
+    "storiesMerged": 7,
+    "daysFromStoriesOnly": 1
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/07",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-07.20260919-045553.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 28,
+    "stories": 13
+   },
+   "after": {
+    "timelineDays": 28,
+    "contentDays": 28,
+    "storiesMerged": 13,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/08",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-08.20260919-045555.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 29,
+    "stories": 29
+   },
+   "after": {
+    "timelineDays": 29,
+    "contentDays": 29,
+    "storiesMerged": 29,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/09",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-09.20260919-045556.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 29,
+    "stories": 12
+   },
+   "after": {
+    "timelineDays": 29,
+    "contentDays": 29,
+    "storiesMerged": 12,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/10",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-10.20260919-045558.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 28,
+    "stories": 13
+   },
+   "after": {
+    "timelineDays": 28,
+    "contentDays": 28,
+    "storiesMerged": 13,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/11",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-11.20260919-045559.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 29,
+    "stories": 4
+   },
+   "after": {
+    "timelineDays": 29,
+    "contentDays": 29,
+    "storiesMerged": 4,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2025/12",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2025-12.20260923-091835.json",
+   "storiesNowWrittenByContent": [
+    {
+     "id": "event-v2-87c7f61feef57a7e16c83335badbd603",
+     "day": "2025-12-03"
+    },
+    {
+     "id": "event-v2-80360370ae8e81e9ea617c4a2d24a21b",
+     "day": "2025-12-04"
+    },
+    {
+     "id": "event-v2-65303546bc257919a7f28d487ffe357a",
+     "day": "2025-12-07"
+    },
+    {
+     "id": "event-v2-a935d7dfa1307001cf765bae5ea175f8",
+     "day": "2025-12-08"
+    },
+    {
+     "id": "event-v2-fe77a21be3bbc242b0b7043fefc5d8ff",
+     "day": "2025-12-09"
+    },
+    {
+     "id": "event-v2-8d1ee366c1ae34b146ae9b5cdd527611",
+     "day": "2025-12-14"
+    },
+    {
+     "id": "event-v2-0ad8d7e3b99dec28f70a180eeaba797c",
+     "day": "2025-12-23"
+    },
+    {
+     "id": "event-v2-f812ba32d2d0f814e40d5245e7535092",
+     "day": "2025-12-23"
+    },
+    {
+     "id": "event-v2-7531037d3d5db81d7abb15b680ae6d16",
+     "day": "2025-12-24"
+    }
+   ],
+   "before": {
+    "dayEntries": 28,
+    "stories": 9
+   },
+   "after": {
+    "timelineDays": 28,
+    "contentDays": 28,
+    "storiesMerged": 0,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2026/01",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2026-01.20260919-045629.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 31,
+    "stories": 4
+   },
+   "after": {
+    "timelineDays": 31,
+    "contentDays": 31,
+    "storiesMerged": 4,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2026/02",
+   "ok": true,
+   "order": "asc",
+   "weeks": 4,
+   "contentFile": "2026-02.20260919-045632.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 27,
+    "stories": 10
+   },
+   "after": {
+    "timelineDays": 27,
+    "contentDays": 27,
+    "storiesMerged": 10,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2026/03",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2026-03.20260919-045633.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 31,
+    "stories": 7
+   },
+   "after": {
+    "timelineDays": 31,
+    "contentDays": 31,
+    "storiesMerged": 7,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2026/04",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2026-04.20260919-045634.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 29,
+    "stories": 6
+   },
+   "after": {
+    "timelineDays": 29,
+    "contentDays": 29,
+    "storiesMerged": 6,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2026/05",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2026-05.20260919-045636.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 31,
+    "stories": 3
+   },
+   "after": {
+    "timelineDays": 31,
+    "contentDays": 31,
+    "storiesMerged": 3,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2026/06",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2026-06.20260919-045637.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 29,
+    "stories": 4
+   },
+   "after": {
+    "timelineDays": 30,
+    "contentDays": 29,
+    "storiesMerged": 4,
+    "daysFromStoriesOnly": 1
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2026/07",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2026-07.20260919-045639.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 31,
+    "stories": 2
+   },
+   "after": {
+    "timelineDays": 31,
+    "contentDays": 31,
+    "storiesMerged": 2,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2026/08",
+   "ok": true,
+   "order": "asc",
+   "weeks": 5,
+   "contentFile": "2026-08.20260920-150535.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 31,
+    "stories": 6
+   },
+   "after": {
+    "timelineDays": 31,
+    "contentDays": 31,
+    "storiesMerged": 6,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  },
+  {
+   "month": "2026/09",
+   "ok": true,
+   "order": "desc",
+   "weeks": 4,
+   "contentFile": "2026-09.20260923-002038.json",
+   "storiesNowWrittenByContent": [],
+   "before": {
+    "dayEntries": 20,
+    "stories": 3
+   },
+   "after": {
+    "timelineDays": 20,
+    "contentDays": 20,
+    "storiesMerged": 3,
+    "daysFromStoriesOnly": 0
+   },
+   "checks": {
+    "contentDaysMatch": true,
+    "oldDaysAllPresent": true,
+    "storiesAllAccounted": true,
+    "storiesAllMerged": true,
+    "noStoryShownTwice": true,
+    "storyDaysPresent": true,
+    "weeksSumToTimeline": true,
+    "noDuplicateDays": true,
+    "orderedAsDeclared": true
+   }
+  }
+ ]
+}

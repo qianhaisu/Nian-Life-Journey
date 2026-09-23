@@ -1,0 +1,46 @@
+[
+ {
+  "url": "/memory/2026/09",
+  "run": 0,
+  "firstGridMs": 14393,
+  "imageKB": 2783,
+  "sample": [
+   "media/wechat-media:68666aeb007dac103a49579e359caf91799bc8a918e70cbd973c897b27c6c0bd?variant=web",
+   "media/wechat-media:a956cb36aaeeafc35aae32fe445ffb9b445bdc6d570061030f5ba72c31de826f?variant=web",
+   "media/wechat-media:485969cf09758b910878662a279100166c8053110f9549a851010eb9497a5a24?variant=web"
+  ]
+ },
+ {
+  "url": "/memory/2026/09",
+  "run": 1,
+  "firstGridMs": 8292,
+  "imageKB": 1327,
+  "sample": [
+   "media/wechat-media:68666aeb007dac103a49579e359caf91799bc8a918e70cbd973c897b27c6c0bd?variant=web",
+   "media/wechat-media:a956cb36aaeeafc35aae32fe445ffb9b445bdc6d570061030f5ba72c31de826f?variant=web",
+   "media/wechat-media:485969cf09758b910878662a279100166c8053110f9549a851010eb9497a5a24?variant=web"
+  ]
+ },
+ {
+  "url": "/memory/2025/12",
+  "run": 0,
+  "firstGridMs": 8476,
+  "imageKB": 1156,
+  "sample": [
+   "media/wechat-media:53bfa94499bb91548535b4738bb2d2a8cc00ea71ff3c1634adb04155a743215f?variant=web",
+   "media/wechat-media:786720deb9f4f01eab728d33a5b344961549da0e6dbfbd1a6a513f2a506cd424?variant=web",
+   "media/media-quark-sha-3f15aea421a1928618e41eaeba3eb4dc57056b7499a6f4968d5f7abfcea17132?variant=web"
+  ]
+ },
+ {
+  "url": "/memory/2025/12",
+  "run": 1,
+  "firstGridMs": 8655,
+  "imageKB": 1156,
+  "sample": [
+   "media/wechat-media:53bfa94499bb91548535b4738bb2d2a8cc00ea71ff3c1634adb04155a743215f?variant=web",
+   "media/wechat-media:786720deb9f4f01eab728d33a5b344961549da0e6dbfbd1a6a513f2a506cd424?variant=web",
+   "media/media-quark-sha-3f15aea421a1928618e41eaeba3eb4dc57056b7499a6f4968d5f7abfcea17132?variant=web"
+  ]
+ }
+]

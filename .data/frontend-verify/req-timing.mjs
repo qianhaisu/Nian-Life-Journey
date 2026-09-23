@@ -1,0 +1,16 @@
+import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+const { chromium } = createRequire(path.resolve(here, "../../v2/package.json"))("playwright");
+const browser = await chromium.launch();
+const url = process.argv[2] ?? "/memory/2025/12";
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true });
+const page = await ctx.newPage();
+const t0 = Date.now(); const rows = [];
+page.on("requestfinished", async (r) => { const t = r.timing(); const res = await r.response(); rows.push({ at: Date.now() - t0, type: r.resourceType(), status: res?.status(), wait: Math.round(t.responseStart - t.requestStart), dl: Math.round(t.responseEnd - t.responseStart), url: r.url().replace("https://nianlife.cn", "").slice(0, 90) }); });
+await page.goto("https://nianlife.cn" + url, { waitUntil: "domcontentloaded" });
+await page.locator(".day-photos").first().scrollIntoViewIfNeeded();
+await page.waitForTimeout(25000);
+for (const r of rows.filter((r) => r.type === "document" || r.type === "image").sort((a, b) => a.at - b.at).slice(0, 30)) console.log(r.at, r.type, r.status, "wait", r.wait, "dl", r.dl, r.url);
+await browser.close();

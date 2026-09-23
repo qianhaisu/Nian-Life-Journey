@@ -16,6 +16,10 @@ const arg = (name, fallback) => { const i = process.argv.indexOf(name); return i
 const SITE = arg("--site", "https://nianlife.cn");
 const before = JSON.parse(readFileSync(arg("--before", "../.data/merge-before.json"), "utf8"));
 const OUT = arg("--out", "../.data/merge-count-check.json");
+// month → { file, represented: { eventId: day } }, read from the live content files (read-only). A story the
+// old page listed separately may since have been written into its day by the content file itself
+// (scripts/editor/backfill-events.mjs); it is then represented by that day, not merged — still not lost.
+const represented = JSON.parse(readFileSync(arg("--represented", "../.data/content-represented.json"), "utf8"));
 
 const getJson = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${url} → ${r.status}`); return r.json(); };
 const same = (a, b) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
@@ -32,21 +36,25 @@ for (const [ym, old] of Object.entries(before.months)) {
   const checks = {
     contentDaysMatch: old.dayEntries === s.contentDays,
     oldDaysAllPresent: old.days.every((d) => days.includes(d)),
-    storiesMatchBefore: same(old.storyIds, s.remainingStoryIds),
+    // Every story the old page listed is now in some day: merged into it, or written by the content file.
+    storiesAllAccounted: old.storyIds.every((id) => s.mergedStoryIds.includes(id) || days.includes(represented[ym]?.represented?.[id])),
     storiesAllMerged: same(s.remainingStoryIds, s.mergedStoryIds),
+    noStoryShownTwice: s.mergedStoryIds.every((id) => !represented[ym]?.represented?.[id]),
     storyDaysPresent: old.storyDays.every((d) => days.includes(d)),
     weeksSumToTimeline: got.length === s.timelineDays && s.timelineDays === s.contentDays + s.daysFromStoriesOnly,
     noDuplicateDays: new Set(days).size === days.length,
     orderedAsDeclared: days.join() === [...days].sort((a, b) => outline.order === "asc" ? a.localeCompare(b) : b.localeCompare(a)).join(),
   };
   const ok = Object.values(checks).every(Boolean);
+  const nowInContent = old.storyIds.filter((id) => !s.mergedStoryIds.includes(id) && represented[ym]?.represented?.[id]);
   rows.push({
-    month: ym, ok, order: outline.order, weeks: outline.weeks.length,
+    month: ym, ok, order: outline.order, weeks: outline.weeks.length, contentFile: represented[ym]?.file,
+    storiesNowWrittenByContent: nowInContent.map((id) => ({ id, day: represented[ym].represented[id] })),
     before: { dayEntries: old.dayEntries, stories: old.stories },
     after: { timelineDays: s.timelineDays, contentDays: s.contentDays, storiesMerged: s.mergedStoryIds.length, daysFromStoriesOnly: s.daysFromStoriesOnly },
     checks,
   });
-  console.log(`${ym} ${ok ? "OK " : "BAD"} before days=${old.dayEntries} stories=${old.stories} | after days=${s.timelineDays} (content ${s.contentDays} + story-only ${s.daysFromStoriesOnly}) merged=${s.mergedStoryIds.length} order=${outline.order}${ok ? "" : " " + JSON.stringify(checks)}`);
+  console.log(`${ym} ${ok ? "OK " : "BAD"} before days=${old.dayEntries} stories=${old.stories} | after days=${s.timelineDays} (content ${s.contentDays} + story-only ${s.daysFromStoriesOnly}) merged=${s.mergedStoryIds.length}${nowInContent.length ? ` now-in-content=${nowInContent.length}` : ""} order=${outline.order}${ok ? "" : " " + JSON.stringify(checks)}`);
 }
 const allOk = rows.every((r) => r.ok);
 const totals = rows.reduce((t, r) => ({ beforeDays: t.beforeDays + r.before.dayEntries, beforeStories: t.beforeStories + r.before.stories, afterDays: t.afterDays + r.after.timelineDays, afterStoriesMerged: t.afterStoriesMerged + r.after.storiesMerged }), { beforeDays: 0, beforeStories: 0, afterDays: 0, afterStoriesMerged: 0 });
