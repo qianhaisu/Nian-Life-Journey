@@ -19,6 +19,11 @@ set NIANLIFE_EDITOR_PUBLISH=1
 "C:\Program Files\nodejs\node.exe" --import tsx scripts\editor\nightly-editor.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\editor-%STAMP%.log 2>&1
 echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\editor-%STAMP%.log
 set EDITOR_EXIT=%ERRORLEVEL%
+rem Event backfill (added 2026-09-23, round 3): approved life_events that are on no month page yet go into
+rem the month content files, through the same validator as the editor. See scripts\editor\backfill-events.mjs.
+set NIANLIFE_BACKFILL_PUBLISH=1
+"C:\Program Files\nodejs\node.exe" --import tsx scripts\editor\backfill-events.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\backfill-%STAMP%.log 2>&1
+echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\backfill-%STAMP%.log
 rem Weekly reminders (added 2026-09-20): extract new todos with DeepSeek, then auto-approve them (Teddy chose
 rem full automation). Independent of the month editor above: either can fail without stopping the other.
 rem Needs the DB tunnel + env, so it goes through t20-run-env.mjs like the WeChat sync does.

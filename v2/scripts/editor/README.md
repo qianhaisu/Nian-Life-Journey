@@ -10,6 +10,8 @@
 | `plan.mjs` | 决策层，纯函数：今晚该写哪些天、消息过滤、敏感兜底、模型输出形状、时间词核对、失败计数 |
 | `validate-day.mjs` | 守门人：引语逐字对得上来源、**引语归在真正的发送人名下**、**点名有证据**、**不许「有人/大人/一位…的」**、引号配对、注册表外的称谓、真实姓名、技术字样、无来源的「第一次」 |
 | `identity-rules.mjs` | 称谓的唯一来源：允许的称谓 = family-registry 的 narrativeLabel；发送人 → 称谓按注册表解析（含会话范围） |
+| `regen-month.mjs` / `day-writer.mjs` / `day-pack.mjs` | 按新规则重写机器写的天；写一天 = 组材料（含照片与 DeepSeek 画面描述）→ 无头 Claude → 全部校验，最多 3 稿 |
+| `backfill-events.mjs` / `backfill-plan.mjs` | 每晚把审核通过、还不在任何月页上的 life_event 补进月内容（attach / rewrite / new-day），设计见 `.data/backfill-design.md` |
 | `mark-source.mjs` | 给月内容的每一天补 `_source`：与生成记录逐字相同 = machine；对不上 = 不标记（按人工保护） |
 | `append-day.mjs` | 只追加/替换一天，**绝不整体覆盖**月内容 |
 | `nightly-editor.mjs` | 编排：读库（只读）→ 选日 → 组材料 → 无头 Claude 写草稿 → 校验 → 追加 → 可选发布 → 留账 |
