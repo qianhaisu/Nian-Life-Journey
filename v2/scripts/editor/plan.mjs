@@ -134,16 +134,17 @@ const MAX_PARAGRAPHS = 6;
 
 /**
  * 模型给出的决定是否合乎形状与篇幅。不合就当作失败（进入重试/hold），而不是「凑合用」。
+ * kinds：允许的 kind。夜间编辑没有照片，只许 story/text-only；重写已有照片的天（regen-month）还许 visual-description。
  * @returns {{ok:true, decision:object}|{ok:false, error:string}}
  */
-export function checkDecision(decision, knownKeys) {
+export function checkDecision(decision, knownKeys, { kinds = ["story", "text-only"] } = {}) {
   if (!decision || typeof decision !== "object") return { ok: false, error: "模型没有给出可解析的 JSON" };
   if (decision.decision === "skip") {
     if (typeof decision.reason !== "string" || !decision.reason.trim()) return { ok: false, error: "skip 必须写明理由" };
     return { ok: true, decision };
   }
   if (decision.decision !== "write") return { ok: false, error: `decision 只能是 write 或 skip，实为 ${JSON.stringify(decision.decision)}` };
-  if (!["story", "text-only"].includes(decision.kind)) return { ok: false, error: `kind 只能是 story 或 text-only，实为 ${JSON.stringify(decision.kind)}` };
+  if (!kinds.includes(decision.kind)) return { ok: false, error: `kind 只能是 ${kinds.join(" 或 ")}，实为 ${JSON.stringify(decision.kind)}` };
   if (typeof decision.title !== "string" || !decision.title.trim()) return { ok: false, error: "缺标题" };
   if ([...decision.title].length > MAX_TITLE) return { ok: false, error: `标题超过 ${MAX_TITLE} 字` };
   const p = decision.paragraphs;

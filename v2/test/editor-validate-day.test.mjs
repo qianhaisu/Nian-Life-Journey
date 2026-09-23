@@ -96,6 +96,20 @@ test("「妈妈发来/拍下」要有妈妈自己发的消息；只有别人发�
   assert.match(validateDayText(day(["妈妈发来一段视频，他在跳舞。"]), [src("爸爸", "看他跳舞，妈妈拍的")]).errors.join(), /妈妈发来\/拍下/);
 });
 
+test("本人的文字自述算在场证据（self-report）；只发了照片、没有正文的不算", () => {
+  const ok = validateDayText(day(["奶奶到杭州了，陪他在楼下玩。"]), [src("奶奶", "到杭州了", "m-5")]);
+  assert.deepEqual(ok.errors, []);
+  assert.equal(ok.evidence.persons[0].basis, "self-report");
+  assert.match(validateDayText(day(["妈妈抱着他站在窗边。"]), [src("妈妈", "", "m-6")]).errors.join(), /点名了妈妈在场/);
+});
+
+test("说话动词更宽：总结、提议、担心，以及称谓和「说」之间隔着几个字", () => {
+  for (const text of ["妈妈笑着总结「好」。", "外婆提议「好」。", "奶奶又担心「好」。", "爸爸看着一张照片说「好」。"]) {
+    const label = text.slice(0, 2);
+    assert.deepEqual(validateDayText(day([text]), [src(label, "好")]).errors, [], text);
+  }
+});
+
 test("personMentions：区分说话、发送、在场", () => {
   const roles = personMentions("妈妈问「痛吗」，爸爸发来照片，奶奶抱着他。").map((m) => `${m.label}:${m.role}`);
   assert.deepEqual(roles, ["妈妈:speech", "爸爸:send", "奶奶:presence"]);

@@ -79,9 +79,9 @@ const FIRST_TIME = /第一次|首次|头一回/;
 const BAD_AGE = /两岁|2岁|二岁/;
 
 // 说话类动词：称谓后面跟着它，这个称谓就是一句话的说话人。
-const SPEECH_VERB = "说|问|回|答|讲|喊|叫|感叹|提醒|叮嘱|嘱咐|告诉|补充|夸|笑着说|接话|写道|留言|评论|吐槽|解释|发现";
+const SPEECH_VERB = "说|问|回|答|讲|喊|叫|感叹|感慨|提醒|叮嘱|嘱咐|交代|告诉|补充|夸|笑|接话|写道|留言|评论|吐槽|解释|发现|总结|提议|建议|担心|念叨|附和|回应|安慰|催|强调|报告|汇报|确认|猜";
 // 发送/拍摄类动词：称谓后面跟着它，说的是「这个人发了/拍了」——证据是这个人自己发的消息。
-const SEND_VERB = "发|拍|录|分享|转|晒|报|记录|在群里|上传|传";
+const SEND_VERB = "发|拍|录|分享|转|晒|记|在群里|上传|传";
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -102,12 +102,12 @@ export function personMentions(text, labels = registeredLabels()) {
   const re = new RegExp(`(${labelPattern(labels)})`, "g");
   const out = [];
   for (const m of s.matchAll(re)) {
-    const after = s.slice(m.index + m[0].length, m.index + m[0].length + 10);
+    const after = s.slice(m.index + m[0].length, m.index + m[0].length + 14);
     // 称谓与动词之间允许几个字的状语（「妈妈在群里说」「雪姨下午问」），但不能跨标点或引号。
     const head = after.split(/[，。；！？、　「」]/)[0];
     const before = s.slice(Math.max(0, m.index - 3), m.index);
     let role = "presence";
-    if (new RegExp(`^[^，。；！？]{0,5}?(${SPEECH_VERB})`).test(head)) role = "speech";
+    if (new RegExp(`^[^，。；！？]{0,8}?(${SPEECH_VERB})`).test(head)) role = "speech";
     else if (new RegExp(`^[^，。；！？]{0,5}?(${SEND_VERB})`).test(head)) role = "send";
     // 「爸爸问雪姨」「告诉奶奶」：被问、被告知的人。对话里点到，不是在场描述。
     else if (new RegExp(`(问|告诉|提醒|叮嘱|嘱咐|回复|跟|对|和|给)$`).test(before) && !head) role = "addressee";
@@ -204,6 +204,11 @@ export function validateDayText(entry, sources, opts = {}) {
         }
         const named = srcs.find((src) => mentionsOf(m.label).some((alias) => normalizeForQuote(src.text).includes(alias)));
         if (named) { evidence.persons.push({ where, label: m.label, role: m.role, basis: "mention", sourceId: named.id, snippet: String(named.text).slice(0, 80) }); continue; }
+        // 他自己用文字说了自己在做什么（「到杭州了」「我带他去小公园」）：本人的文字自述算证据。
+        // 只认有正文的消息——只发了照片的那条不算，发照片的人通常是拍照的人，不在画面里。
+        // 这类依据单独标成 self-report，验收时逐条人工抽读。
+        const self = srcs.find((src) => src.speaker === m.label && normalizeForQuote(src.text));
+        if (self) { evidence.persons.push({ where, label: m.label, role: m.role, basis: "self-report", sourceId: self.id, snippet: String(self.text).slice(0, 80) }); continue; }
         err(where, `点名了${m.label}在场，但这一段的来源里没有消息提到${m.label}（只凭照片外貌不算）：写「家人」或只写他自己`);
       }
     }
