@@ -14,7 +14,7 @@
 #   content-rollback <月> <版本文件名>|--withdraw
 #                            撤回一个月的编辑稿：指回 versions/ 里的某个旧版本，或整月撤下（软链改名保留，
 #                            页面回到没有编辑稿时的原样）。不删除任何版本文件。
-#   preflight <sha>          部署前固定动作：已跟踪文件无改动、git pull --rebase、<sha> = origin/main（upload 自动跑）
+#   preflight <sha>          部署前固定动作：git fetch、<sha> = origin/main（upload 自动跑）
 #   swap <short>             闸 a：线上 SHA 必须是 <short> 的祖先，否则 STOP（exit 11，无旁路）；
 #                            换 Web 容器，旧容器改名 nianlife-diag-web-pre-<short>-<时间> 保留；
 #                            闸 b：切换后真实页面冒烟（SMOKE_PAGES），失败自动 rollback-app 并 exit 12/13；
@@ -57,20 +57,17 @@ live_sha() {
   curl --noproxy '*' -s -m 20 "$SITE/api/health" | grep -o '"sha":"[0-9a-f]\{40\}"' | head -1 | cut -d'"' -f4 | grep .
 }
 
-# 部署前固定动作（upload 自动执行）：已跟踪文件无改动 → git pull --rebase → 要部署的 SHA 必须是 origin/main 最新提交。
-# 未跟踪文件只列出不拦（git archive 只打包提交内容，不会带上它们）。
+# 部署前固定动作（upload 自动执行）：git fetch → 要部署的 SHA 必须等于 origin/main（先 push 再部署）。
+# 工作区由两个 session 共用（Teddy 2026-09-23）：已跟踪文件的未提交改动只列出、不拦——部署包是
+# git archive <SHA>，这些改动进不去；也不在共享工作区里跑 git pull --rebase / stash 之类会动到别人文件的命令。
 preflight() {
   local want="$1"
-  if [ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no)" ]; then
-    echo "STOP(preflight): tracked files have uncommitted changes:"; git -C "$REPO_ROOT" status --short --untracked-files=no; exit 2
-  fi
-  local untracked; untracked=$(git -C "$REPO_ROOT" status --porcelain | grep -c '^??' || true)
-  [ "$untracked" = 0 ] || echo "preflight: $untracked untracked file(s) present (not deployed, not blocking)"
-  [ "$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)" = main ] || { echo "STOP(preflight): not on main"; exit 2; }
-  git -C "$REPO_ROOT" pull --rebase --quiet origin main || { echo "STOP(preflight): git pull --rebase failed"; exit 2; }
+  git -C "$REPO_ROOT" fetch --quiet origin || { echo "STOP(preflight): git fetch failed"; exit 2; }
   local head; head="$(git -C "$REPO_ROOT" rev-parse origin/main)"
-  [ "$want" = "$head" ] || { echo "STOP(preflight): $want is not origin/main HEAD ($head)"; exit 2; }
-  echo "PREFLIGHT_OK sha=$want (= origin/main, worktree clean)"
+  [ "$want" = "$head" ] || { echo "STOP(preflight): $want is not origin/main HEAD ($head); push first, deploy the pushed SHA"; exit 2; }
+  local dirty; dirty=$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no | wc -l | tr -d ' ')
+  [ "$dirty" = 0 ] || echo "preflight: $dirty tracked file(s) have uncommitted changes in the shared worktree (not in the package, not blocking)"
+  echo "PREFLIGHT_OK sha=$want (= origin/main)"
 }
 
 # 闸 a（防覆盖）：线上 SHA 必须是本次 SHA 的祖先（或就是它本身），否则这次部署会把线上已有的改动盖掉。

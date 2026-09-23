@@ -277,9 +277,18 @@ Codex 报告只在 importer / worker / R2 上有一票，别处一票都没有�
 
 同一时间只有 Teddy 指定的**一个** session 可以执行 upload / build / swap / rollback-app。其他 session 只往 main 推代码，**不部署**、不 SSH 改 ECS 上的容器。没被指定为部署 session，就不要跑这个脚本的写操作子命令，哪怕"只是重新部署一下"。
 
+### 两个 session 共用一个工作区（Teddy 2026-09-23）
+
+不建 worktree。前端/部署 session 与数据 session 共用 `C:\Users\teddy\Documents\Nianlife`：
+
+- 提交只 `git add` 自己改过的具体文件，绝不暂存别人的改动；禁止 `git add -A`。
+- 共享工作区里禁止会动到别人文件的命令：`git stash`、`git checkout -- <file>`、`git restore`、`git reset --hard`、`git clean`、`git pull --rebase`。
+- 文件归属：前端 session 改 `v2/app/`、`v2/components/`、`v2/app/globals.css`、`v2/scripts/deploy-ecs-public.sh` 和本文件的部署章节；`lib/organizer/`、`lib/ingest/`、`scripts/` 里的数据脚本、`docs/STATUS.md` 归数据 session。`lib/publication-moments.ts` 只有在 `git status` 里是干净的时候才能改，改完尽快提交。
+- 前端进度写 `.data/frontend-round-summary.md`，不写 `docs/STATUS.md`。
+
 ### 两道闸（脚本内置，没有旁路开关，不许绕过）
 
-- **部署前固定动作（`preflight`，`upload` 自动执行）**：已跟踪文件没有未提交改动 → `git pull --rebase` → 要部署的 SHA 必须等于 `origin/main` 最新提交。不满足就 STOP（exit 2）。未跟踪文件只提示，不拦。
+- **部署前固定动作（`preflight`，`upload` 自动执行）**：`git fetch` → 要部署的 SHA 必须等于 `origin/main` 最新提交（先 push 再部署），否则 STOP（exit 2）。共享工作区里别人未提交的改动只提示不拦——部署包是 `git archive <SHA>`，带不进去。
 - **闸 a · 防覆盖（`swap` 开头）**：取线上 `/api/health` 的 `build.sha`，要求 `git merge-base --is-ancestor <线上SHA> <本次SHA>` 成立。不成立说明这次部署会盖掉线上已有的改动 → STOP（exit 11）。取不到线上 SHA、本地没有该提交，同样 STOP。
 - **闸 b · 切换后真实页面冒烟（`swap` 切换之后）**：`/api/health` 的 SHA 必须是本次 SHA；`/` 含「最近怎么样」；`/health` 含「年度累计生病」和「资料截至」（前者只在真实病程数据存在时渲染，缺 HEALTH_MOUNTS 或空状态就没有）；`/memory/2025/12` 含「2025 年 12 月」；`/memory/2025/12/01` 含「12 月 1 日」。每页必须 200，最多试 3 次。任何一项失败 → 自动启动 ROLLBACK_CONTAINER 回滚，exit 12（回滚也失败则 exit 13）。
 - 保留策略（清理旧容器）放在闸 b 通过**之后**才跑。
