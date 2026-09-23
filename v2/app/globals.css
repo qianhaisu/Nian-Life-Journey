@@ -1154,6 +1154,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 .pg-cell img { object-fit: cover; }
 .pg-cell-video { cursor: default; aspect-ratio: 16 / 9; }
+/* Inside a grid a video is a cell like the rest: same square, poster cropped to fill it. */
+.pg-2 .pg-cell-video, .pg-4 .pg-cell-video, .pg-3-row .pg-cell-video { aspect-ratio: 1 / 1; }
+.pg-3 .pg-cell-video { aspect-ratio: unset; }
+.pg-cell-video video { width: 100%; height: 100%; object-fit: cover; display: block; background: var(--paper-dark); }
 
 /* 1 photo — centred, tall-capped */
 .pg-1 { max-height: 400px; }

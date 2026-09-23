@@ -51,12 +51,13 @@ export function MonthTimeline({ year, month, monthAgeLabel, weeks, initial }: {
     }
   }, [loaded.length, month, weeks, year]);
 
-  // A tab jump waits for the week to be on the page, then scrolls to it.
+  // A tab jump waits for the week to be on the page, then scrolls to it — instantly: a smooth scroll
+  // across three freshly loaded weeks takes long enough to be interrupted by the reader's next touch.
   useEffect(() => {
     if (!scrollTo) return;
     const index = weeks.findIndex((week) => week.id === scrollTo);
     if (index < loaded.length) {
-      document.getElementById(scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById(scrollTo)?.scrollIntoView({ block: "start" });
       setScrollTo(null);
     }
   }, [loaded.length, scrollTo, weeks]);

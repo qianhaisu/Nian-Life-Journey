@@ -29,7 +29,9 @@ function Cell({
   priority = false,
   overlay,
   label,
+  alone = false,
 }: {
+  alone?: boolean;
   photo: GalleryPhoto;
   onClick?: () => void;
   sizes: string;
@@ -41,7 +43,9 @@ function Cell({
   // A video under 「+N」 is drawn by its poster like a still: the cell's job there is to open the rest.
   if (isVideo && !overlay) {
     return (
-      <figure className="pg-cell pg-cell-video" style={videoFrameStyle(photo)}>
+      // Only a video standing alone keeps its own frame; inside a grid it takes the cell's shape like
+      // every other picture, or its row runs taller than its neighbours.
+      <figure className="pg-cell pg-cell-video" style={alone ? videoFrameStyle(photo) : undefined}>
         <VideoPlayer mediaId={photo.id} alt={photo.alt} durationSeconds={photo.durationSeconds} />
       </figure>
     );
@@ -122,7 +126,7 @@ export function PhotoGrid({
     return (
       <>
         <div className="pg pg-1">
-          <Cell photo={displayed[0]} onClick={() => openStill(0)} sizes="(max-width: 700px) 100vw, 760px" priority={priority} />
+          <Cell photo={displayed[0]} onClick={() => openStill(0)} sizes="(max-width: 700px) 100vw, 760px" priority={priority} alone />
         </div>
         {viewerIndex !== null ? <ViewerModal photos={stillPhotos} startIndex={viewerIndex} dateLabel={dateLabel} ageLabel={ageLabel} onClose={closeViewer} /> : null}
       </>
