@@ -192,7 +192,7 @@ export const FAMILY_REGISTRY: IdentityRegistry = {
       // Display name used for matching.
       //
       // Teddy reconfirmed 2026-09-23 (round 3): 鹿城筱薇 = 外婆, speaks in the family group but not often.
-      // Re-measured the same day against E:\WechatHis	exts: every sender record spells the name with the
+      // Re-measured the same day against E:/WechatHis/texts: every sender record spells the name with the
       // double space (919 JSON senderDisplayName rows); the single-space form occurs only inside system
       // lines (「"鹿城 筱薇" 撤回了一条消息」), never as a sender, so it needs no second entry.
       sourceParticipantDigest: senderDigestForDisplayName("鹿城  筱薇"),
