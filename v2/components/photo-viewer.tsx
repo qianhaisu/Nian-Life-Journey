@@ -19,6 +19,7 @@ export type GalleryPhoto = {
   // list of photographs keeps working untouched.
   type?: string;
   durationSeconds?: number | null;
+  posterSrc?: string | null;
 };
 
 // A video is not opened in the photo viewer: the viewer is a zoomable still reel, and a clip that

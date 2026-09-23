@@ -85,7 +85,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         photos={reading.photos}
         sources={reading.sources}
         sourceMedia={reading.sourceMedia}
-        speakerBySourceId={reading.content.speakerBySourceId}
+        speakerBySourceId={reading.speakers}
         deliverableIds={reading.sourceDeliverable}
         monthHref={reading.monthHref}
         monthLabel={reading.monthLabel}

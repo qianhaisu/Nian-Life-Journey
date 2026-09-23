@@ -1,98 +1,51 @@
 import Link from "next/link";
-import { DayHead } from "@/components/month-moment";
+import { DayHead } from "@/components/day-head";
 import { DayPhotos } from "@/components/day-photos";
-import { PhotoGallery } from "@/components/photo-viewer";
-import { pickLeadPhoto } from "@/lib/month-day-weight";
-import type { MediaRef } from "@/lib/memory-chapters";
+import type { TimelineDay } from "@/lib/month-timeline";
 
-// One day of an edited month: its date, one title, one piece of writing, then that day's pictures.
+// One day of an edited month, and the only shape a day has on the month page (2026-09-23):
 //
-// The shape is the point. Before this, a day could arrive in three places — as a story card, as a
-// separate 「这一天的照片」 group, and a third time inside the month-wide album at the bottom — so a
-// reader met 9 月 8 日 four times over and each meeting showed some of the same photographs. Here a
-// day happens once: one head, one body, one picture area holding every picture chosen for that day,
-// story-bound and same-day alike, already de-duplicated by the caller.
+//   date · age → title → the day's words → any story folded into this day → photo grid → 读这一天的原记录 →
 //
-// Where the pictures sit (2026-09-19 acceptance): they used to come AFTER all of a day's words, so a
-// day with four paragraphs put a whole phone screen of text between the title and its first picture —
-// the middle of a month page had no photographs in it at all. Now a day's pictures sit directly under
-// its title, and the words read on below them.
-//   - a LEAD day (lib/month-day-weight.ts picks a few per month) opens on one large photograph, then
-//     its words, then the rest of its pictures as a strip;
-//   - every other day keeps its strip but moves it up under the title.
-// Which day leads is a richness proxy until someone marks real milestones — see that file.
+// Every day, in that order. Before this a day's pictures moved around — above the words on an
+// ordinary day, a large photograph first on a "lead" day, and a strip that only became a grid once
+// expanded — so no two days read alike and 「这一天的照片」 sat sometimes before the text, sometimes
+// after it. A lead day (lib/month-day-weight.ts) is still marked, by a larger title; its pictures sit
+// where everyone's do.
 //
-// A day with no pictures still renders. 9 月 13 日 has words from the family and photographs that no
-// reviewer has cleared yet: the words belong in the timeline on their own, and nothing is borrowed
-// from the unreviewed set to fill the space.
-export function MonthDayEntry({
-  day,
-  dateLabel,
-  ageLabel,
-  monthAgeLabel,
-  year,
-  title,
-  paragraphs,
-  photos,
-  firstScreenCount,
-  eventHref,
-  lead = false,
-}: {
-  day: string;
-  dateLabel: string;
-  ageLabel?: string;
-  monthAgeLabel?: string;
+// Stories: a published memory that happened on a day the content file had already written is read
+// inside that day (lib/month-timeline.ts), under its own small heading, with only what the day did not
+// already say. Its photographs join the day's grid.
+//
+// A day with no pictures still renders: the words belong in the timeline on their own, and nothing is
+// borrowed from an unreviewed set to fill the space.
+//
+// No "use client": this renders on the server for the first week, and inside MonthTimeline (a client
+// component) for every week loaded after it.
+export function MonthDayEntry({ entry, year, monthAgeLabel }: {
+  entry: TimelineDay;
   year: string;
-  title: string | null;
-  paragraphs: string[];
-  photos: MediaRef[];
-  firstScreenCount: number;
-  eventHref?: string;
-  /** This day opens on one large photograph and a larger title. */
-  lead?: boolean;
+  monthAgeLabel?: string;
 }) {
-  // A lead day is led by a photograph that can carry a large frame: a still whose ORIGINAL is wide enough
-  // (pickLeadPhoto). Not any first photo — a 157px WeChat thumbnail stretched over a phone-wide frame is
-  // the blurry mess this replaced. With no such photograph the day simply is not a lead day.
-  const leadPhoto = lead ? pickLeadPhoto(photos) : undefined;
-  const isLead = Boolean(leadPhoto);
-  const rest = leadPhoto ? photos.filter((item) => item !== leadPhoto) : photos;
-  const previewCount = Math.max(1, Math.min(firstScreenCount, photos.length));
-  // The rest of a lead day's pictures: at least a small strip's worth, never the whole day.
-  const restPreview = Math.max(3, previewCount - 1);
-
   return (
-    <article className={isLead ? "month-moment moment-day-entry moment-day-lead" : "month-moment moment-day-entry"}>
-      <DayHead day={day} dateLabel={dateLabel} ageLabel={ageLabel} monthAgeLabel={monthAgeLabel} year={year} />
+    <article className={entry.lead ? "month-moment moment-day-entry moment-day-lead" : "month-moment moment-day-entry"}>
+      <DayHead day={entry.day} dateLabel={entry.dateLabel} ageLabel={entry.ageLabel} monthAgeLabel={monthAgeLabel} year={year} />
       <div className="moment-body">
-        {title ? <h3 className="serif day-entry-title">{title}</h3> : null}
-        {leadPhoto ? (
-          <PhotoGallery photos={[leadPhoto]} heroIndex={0} heroClassName="moment-hero day-lead-photo" dateLabel={dateLabel} ageLabel={ageLabel} />
-        ) : null}
-        {!isLead && photos.length > 0 ? (
-          <DayPhotos photos={photos} dateLabel={dateLabel} ageLabel={ageLabel} previewCount={previewCount} quietLabel />
-        ) : null}
-        {/* Paragraphs are paragraphs. Nothing here inserts a line break to make a line land a
-            certain way — the browser wraps, and the same text reads correctly at 390px and 1280px. */}
-        {paragraphs.map((text, index) => (
-          <p className="serif day-entry-text" key={index}>{text}</p>
+        {entry.title ? <h3 className="serif day-entry-title">{entry.title}</h3> : null}
+        {/* Paragraphs are paragraphs: the browser wraps, at 390px and at 1280px alike. */}
+        {entry.paragraphs.map((text, index) => <p className="serif day-entry-text" key={index}>{text}</p>)}
+        {entry.stories.map((story) => (
+          <div className="day-entry-story" key={story.id}>
+            {story.title ? <h4 className="serif day-entry-story-title"><Link href={story.href} prefetch={false}>{story.title}</Link></h4> : null}
+            {story.paragraphs.map((text, index) => <p className="serif day-entry-text" key={index}>{text}</p>)}
+          </div>
         ))}
-        {/* prefetch={false} (2026-09-20). A month page carries one of these per day — twenty-odd
-            links, all in the viewport as the reader scrolls. Next's default prefetch turns each one
-            into a real server render of that day's page, and a cold day render measured 4.3–5.0 s
-            against production. Opening one month therefore fired twenty-plus of them in the
-            background: the reader's photographs queued behind the pile (image p50 reached 12 s
-            measured in a real browser), and clicking 妈妈月报 took 15.2 s because its own request
-            waited its turn. Nobody opens twenty days at once, so the work was almost entirely
-            wasted. Clicking a day still costs that day's render, exactly as before — the prefetch
-            never made the click faster than the cache does (a warm day RSC is 10 ms). */}
-        {eventHref ? (
-          <p className="chapter-meta"><Link className="text-link" href={eventHref} prefetch={false}>读这一天的原记录 →</Link></p>
-        ) : null}
+        {entry.photos.length > 0 ? <DayPhotos photos={entry.photos} dateLabel={entry.dateLabel} ageLabel={entry.ageLabel} quietLabel /> : null}
+        {/* prefetch={false} (2026-09-20): a month page holds one of these per day, and Next's default
+            prefetch turned each into a real server render of that day — twenty-odd cold renders queued
+            in front of the reader's photographs. Clicking still costs exactly one render. */}
+        <p className="chapter-meta day-entry-more"><Link className="text-link" href={entry.href} prefetch={false}>读这一天的原记录 →</Link></p>
       </div>
-      {isLead && rest.length > 0 ? (
-        <DayPhotos photos={rest} dateLabel={dateLabel} ageLabel={ageLabel} previewCount={Math.min(restPreview, rest.length)} />
-      ) : null}
     </article>
   );
 }

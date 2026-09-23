@@ -525,8 +525,16 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .moment-day-lead .day-entry-title { margin-bottom: 14px; font-size: clamp(1.55rem, 4.6vw, 2.15rem); line-height: 1.28; }
 .moment-day-lead .day-lead-photo { margin: 6px 0 18px; }
 .moment-day-lead .day-photos { margin-top: 20px; }
-/* 标题下面紧跟着的缩略图带，和后面的文字之间留一点气口。 */
-.moment-day-entry:not(.moment-day-lead) .moment-body > .day-photos { margin: 4px 0 14px; }
+/* 2026-09-23：每一天同一个顺序——日期 → 标题 → 正文 → 照片网格 → 原记录链接。照片永远在文字后面。 */
+.moment-day-entry .moment-body > .day-photos { margin: 16px 0 0; }
+.day-entry-story { margin-top: 1.1em; }
+.day-entry-story-title { margin: 0 0 .4em; font-size: 1.02rem; font-weight: 600; line-height: 1.4; }
+.day-entry-story-title a { color: inherit; text-decoration: none; }
+.day-entry-more { margin: 12px 0 0; }
+.month-more { margin: clamp(28px, 5vw, 44px) 0 0; text-align: center; }
+.month-more .text-link { min-height: 44px; padding: 0 18px; border: 1px solid var(--color-border); border-radius: 999px; background: none; }
+.month-more .text-link[disabled] { opacity: .6; }
+.pg-cell:focus-visible { outline: 2px solid var(--color-secondary); outline-offset: 2px; }
 
 .month-week { scroll-margin-top: 88px; }
 .month-week > ol { margin-top: 4px; }

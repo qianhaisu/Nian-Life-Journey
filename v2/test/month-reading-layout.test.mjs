@@ -167,8 +167,21 @@ test("expand controls carry no counts", () => {
   const album = render(ArchiveExpander, { year: "2026", month: "08", foldedDayCount: 28, foldedPhotoCount: 521, visibleDays: [day("2026-08-30", 3)] });
   const button = album.match(/<button[^>]*>(.*?)<\/button>/s)?.[1] ?? "";
   assert.equal(button, "展开这个月其余的照片");
-  const group = render(DayPhotos, { photos: day("2026-08-19", 12).photos, dateLabel: "2026 年 8 月 19 日" });
-  const more = group.match(/<button[^>]*>(.*?)<\/button>/s)?.[1] ?? "";
-  assert.equal(more.trim(), "展开这一天的其他照片");
-  assert.doesNotMatch(button + more, /\d/);
+  assert.doesNotMatch(button, /\d/);
+});
+
+// 2026-09-23 (Teddy: 「图片排版要整齐」): a day's pictures are one grid from the first screen — at most
+// six cells, the sixth carrying 「+N」, tapping it lays out the rest. 「+N」 is the one number the
+// family asked for; there is no separate expand button (and so no count in any button's words).
+test("a day's pictures open as a six-cell grid with +N", () => {
+  const photos = Array.from({ length: 12 }, (_, i) => ref(`2026-08-19-${i}`, 1600, 1200));
+  const group = render(DayPhotos, { photos, dateLabel: "2026 年 8 月 19 日" });
+  assert.equal((group.match(/class="pg-cell"/g) ?? []).length, 6);
+  assert.match(group, /<span class="pg-overlay">\+6<\/span>/);
+  assert.match(group, /aria-label="还有 6 张，展开全部"/);
+  assert.doesNotMatch(group, /photo-strip/);
+  assert.doesNotMatch(group, /<button/);
+  const few = render(DayPhotos, { photos: photos.slice(0, 6), dateLabel: "2026 年 8 月 19 日" });
+  assert.equal((few.match(/class="pg-cell"/g) ?? []).length, 6);
+  assert.doesNotMatch(few, /pg-overlay/);
 });

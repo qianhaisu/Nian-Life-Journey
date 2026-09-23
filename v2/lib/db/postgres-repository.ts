@@ -1008,6 +1008,9 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         sourceType: t.rawSources.sourceType, contentTypes: t.rawSources.contentTypes, capturedAt: t.rawSources.capturedAt,
         text: t.rawSources.text, mediaIds: t.rawSources.mediaIds, sourceLabel: t.rawSources.sourceLabel,
         visibility: t.rawSources.visibility, deletedAt: t.rawSources.deletedAt,
+        // One scalar out of metadata, not the whole jsonb: the day page names each speaker through
+        // the family registry (lib/day-speakers.ts), and the digest is the only key it resolves on.
+        senderDigest: sql<string | null>`${t.rawSources.metadata}->>'senderDigest'`,
       }).from(t.rawSources).where(inArray(t.rawSources.id, wanted));
       const sources = guardRowCount(
         (sourceRows as unknown as RawSource[]).filter((item) => !item.deletedAt), "getSourcesByIds.sources");

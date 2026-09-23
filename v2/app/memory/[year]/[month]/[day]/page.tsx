@@ -37,7 +37,7 @@ export default async function DayPage({ params }: { params: Promise<{ year: stri
       photos={reading.photos}
       sources={reading.sources}
       sourceMedia={reading.sourceMedia}
-      speakerBySourceId={reading.content.speakerBySourceId}
+      speakerBySourceId={reading.speakers}
       deliverableIds={reading.sourceDeliverable}
       monthHref={reading.monthHref}
       monthLabel={reading.monthLabel}

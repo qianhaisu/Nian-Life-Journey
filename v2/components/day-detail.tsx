@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DayMaterial } from "@/components/day-material";
-import { PhotoGallery } from "@/components/photo-viewer";
+import { PhotoGrid } from "@/components/photo-grid";
 import type { MediaRef } from "@/lib/memory-chapters";
 import type { MonthContentDay } from "@/lib/month-content";
 import type { Media, RawSource } from "@/lib/types";
@@ -10,7 +10,7 @@ import type { Media, RawSource } from "@/lib/types";
 // whose several fragments were merged into one story).
 //
 // Photographs are ALL shown, not a first screen with a button. A month page is a place to skim, so
-// it opens three and folds the rest; a detail page is where somebody arrived to look at one day, so
+// it draws six and folds the rest behind 「+N」; a detail page is where somebody arrived to look at one day, so
 // folding anything there is asking them to click to get what they came for. "All" is the curated
 // set from MEMORY-03, re-gated on every render — never the day's whole raw roll.
 export function DayDetail({
@@ -53,18 +53,11 @@ export function DayDetail({
         </section>
       ) : null}
 
+      {/* The month page's grid (components/photo-grid.tsx), every photograph drawn: somebody came to
+          this page to look at one day, so nothing is folded behind a 「+N」 here. Tapping opens the viewer. */}
       {photos.length > 0 ? (
         <div className="reading-wrap detail-supporting day-detail-photos">
-          <PhotoGallery
-            photos={photos}
-            heroIndex={0}
-            heroClassName="detail-hero"
-            dateLabel={dateLabel}
-            ageLabel={ageLabel}
-            priority
-            heroSizes="(max-width: 700px) 100vw, 1120px"
-            stripSizes="(max-width: 700px) 30vw, 200px"
-          />
+          <PhotoGrid photos={photos} dateLabel={dateLabel} ageLabel={ageLabel} priority />
         </div>
       ) : null}
 

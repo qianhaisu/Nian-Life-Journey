@@ -8,9 +8,10 @@ import { DayPhotos } from "@/components/day-photos";
 import { SnapshotSummary } from "@/components/snapshot-summary";
 import { DayHead, MonthMoment } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
-import { MonthDayEntry } from "@/components/month-day-entry";
-import { groupIntoWeeks, pickLeadDays, pickLeadPhoto } from "@/lib/month-day-weight";
-import { loadMonthContent, resolveMonthContentMedia } from "@/lib/month-content";
+import { MonthTimeline } from "@/components/month-timeline";
+import { groupIntoWeeks } from "@/lib/month-day-weight";
+import { loadMonthContent } from "@/lib/month-content";
+import { buildMonthTimeline, weekEntries } from "@/lib/month-timeline";
 import { loadFamilyArchiveForIsr } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
@@ -56,7 +57,8 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const { year, month: monthSegment } = await params;
   if (!/^\d{4}$/.test(year) || !/^\d{2}$/.test(monthSegment)) notFound();
   const month = `${year}-${monthSegment}`;
-  const { chapters, store, media, eventIdentities, snapshots, privilege, traceEvents, birthDay } = await loadFamilyArchiveForIsr();
+  const archive = await loadFamilyArchiveForIsr();
+  const { chapters, store, snapshots, privilege, traceEvents, birthDay } = archive;
   const chapter = findMonth(chapters, month);
   if (!chapter) notFound();
 
@@ -79,59 +81,15 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   // groups has plenty to read even when 「这个月的照片」 is empty.
   const empty = composition.chapter.length === 0 && composition.chronicle.length === 0 && composition.quietDays.length === 0 && composition.totalPhotoCount === 0;
 
-  // An edited month reads as one column of days and nothing else: no story/chronicle split, no
-  // month-wide album, no per-day album link. Everything that month has to show is in the timeline,
-  // once. Months without edited content fall through to the original layout below, unchanged.
+  // An edited month is ONE timeline of days (lib/month-timeline.ts): month title → summary → days.
+  // Stories the content file did not already write are folded into their day there, so there is no
+  // second list — no 「这个月的故事」, no 「这个月的日子」 heading. Only the first week is rendered here;
+  // components/month-timeline.tsx loads the rest a week at a time. Months without edited content fall
+  // through to the original layout below, unchanged.
   if (content) {
-    const available = new Map(media.map((item) => [item.id, item]));
-    const eventIds = new Set(eventIdentities.map((item) => item.id));
-    // Edited month files are a reading arrangement, not a publication allow-list. They predate
-    // later Organizer runs, so treating them as the whole month made every subsequently approved
-    // story disappear from the month page. Keep the arranged days, then render every published
-    // memory that the file does not already represent.
-    const representedEventIds = new Set(content.days.flatMap((entry) => [
-      ...(entry.eventIds ?? []),
-      ...(entry.eventId ? [entry.eventId] : []),
-    ]));
-    const remainingMemories = composition.chapter.filter((moment) =>
-      moment.kind === "memory_led"
-      && Boolean(moment.memory)
-      && !representedEventIds.has(moment.memory!.id));
-    const entries = content.days
-      .slice()
-      .sort((a, b) => a.day.localeCompare(b.day))
-      .map((entry) => {
-        // The curated order is a proposal; these two gates decide. `available` is already
-        // deliverable and family-visible, `privilege.excluded` is the latest store_only.
-        const photos = resolveMonthContentMedia(entry.expandedMediaIds, available, privilege.excluded);
-        const firstScreen = resolveMonthContentMedia(entry.firstScreenMediaIds, available, privilege.excluded);
-        const eventId = (entry as { eventId?: string | null }).eventId ?? null;
-        return {
-          ...entry,
-          photos,
-          firstScreenCount: firstScreen.length,
-          // Every edited day now has an address. A day that kept a single original event keeps
-          // that URL (so an existing link stays the canonical one); a merged day and a day the
-          // Organizer never wrote an event for both point at the day's own page. Nothing points
-          // at a page that does not exist, and no day is left without a way in.
-          eventHref: eventId && eventIds.has(eventId)
-            ? `/events/${eventId}`
-            : `/memory/${year}/${monthSegment}/${entry.day.slice(8, 10)}`,
-        };
-      })
-      .filter((entry) => entry.title || entry.paragraphs.length > 0 || entry.photos.length > 0);
-
-    // 原则五：哪几天领头、按周分块（lib/month-day-weight.ts）。领头靠的是「家人写了多少、拍了多少」这个
-    // 代理信号，不是真正的重要性——内容文件里没有里程碑标记；某一天手写 emphasis 就压过它。
-    const leadDays = pickLeadDays(entries.map((entry) => ({
-      day: entry.day,
-      paragraphs: entry.paragraphs,
-      photoCount: entry.photos.length,
-      storyBound: (entry.storyBoundMediaIds?.length ?? 0) > 0,
-      emphasis: entry.emphasis,
-      leadable: Boolean(pickLeadPhoto(entry.photos)),
-    })));
-    const weeks = groupIntoWeeks(entries);
+    const timeline = await buildMonthTimeline(archive, year, monthSegment);
+    const first = timeline?.weeks[0];
+    const initial = timeline && first ? weekEntries(timeline, first.id) ?? [] : [];
 
     return <div className="month-page reading-wrap">
       <header className="chapter-masthead">
@@ -141,47 +99,13 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         {content.intro ? <p className="chapter-summary serif">{content.intro}</p> : null}
       </header>
 
-      {/* 一个月有二十多天、手机上是二十多屏，读到一半不知道自己在哪、也没法跳。这里给一排「跳到某一段」——
-          只有真的分成了两块以上才出现，不为一个只有几天的月份摆一个没用的控件。 */}
-      {weeks.length > 1 ? <nav className="month-jump" aria-label="跳到这个月的某一段">
-        {weeks.map((week) => <a key={week.id} href={`#${week.id}`}>{week.label}</a>)}
-      </nav> : null}
-
-      <section className="month-days month-days--edited" aria-labelledby="days-title">
-        <h2 id="days-title" className="section-mark">这个月的日子</h2>
-        {weeks.map((week) => <div className="month-week" id={week.id} key={week.id}>
-          {weeks.length > 1 ? <p className="week-mark">{week.label}</p> : null}
-          <ol>
-            {week.entries.map((entry) => <li className="month-day" key={entry.day}>
-              <MonthDayEntry
-                day={entry.day}
-                dateLabel={`${Number(entry.day.slice(5, 7))} 月 ${Number(entry.day.slice(8, 10))} 日`}
-                ageLabel={entry.ageLabel}
-                monthAgeLabel={chapter.ageLabel}
-                year={year}
-                title={entry.title}
-                paragraphs={entry.paragraphs}
-                photos={entry.photos}
-                firstScreenCount={entry.firstScreenCount}
-                eventHref={entry.eventHref}
-                lead={leadDays.has(entry.day)}
-              />
-            </li>)}
-          </ol>
-        </div>)}
-      </section>
-
-      {remainingMemories.length > 0 ? <section className="month-reading" aria-labelledby="more-memories-title">
-        <h2 id="more-memories-title" className="section-mark">这个月的故事</h2>
-        {remainingMemories.map((moment, index) => <MonthMoment
-          key={`${moment.day}-${moment.memory!.id}`}
-          moment={moment}
-          year={year}
-          monthAgeLabel={chapter.ageLabel}
-          priority={entries.length === 0 && index === 0}
-          continued={remainingMemories[index - 1]?.day === moment.day}
-        />)}
-      </section> : null}
+      {timeline && first ? <MonthTimeline
+        year={year}
+        month={monthSegment}
+        monthAgeLabel={chapter.ageLabel}
+        weeks={timeline.weeks}
+        initial={initial}
+      /> : null}
 
       {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}
       {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`} prefetch={false}>{item.shortLabel}</Link>)}</p></footer> : null}

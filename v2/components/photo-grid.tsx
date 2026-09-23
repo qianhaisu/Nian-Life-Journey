@@ -5,24 +5,21 @@ import { useState, useCallback } from "react";
 import { ViewerModal, videoFrameStyle, type GalleryPhoto } from "@/components/photo-viewer";
 import { VideoPlayer } from "@/components/video-player";
 
-// Smart grid layout for 1–9+ photos.
+// Smart grid layout for any number of photos.
 //
 // Layout rules:
 //   1 photo  — centred, max-height 400px
 //   2 photos — side by side, equal cropped height
 //   3 photos — 1 large left (2/3) + 2 small right (1/3, stacked)
 //   4 photos — 2 × 2
-//   5 photos — top row 3, bottom row 2
-//   6 photos — 2 rows of 3
-//   7–8      — top row 4, bottom row 3 / 4
-//   9        — 3 × 3
-//   10+      — 3 × 3 with last cell showing "+N"
+//   5+       — 3-column rows of squares
 //
-// object-fit: cover throughout, 4px gap.
-// Videos take the hero slot when present.
-// Clicking any still opens the shared ViewerModal.
-
-const GAP = 4; // px
+// `limit` (the month page uses 6): with more photos than that, only `limit` cells are drawn and the
+// last one carries 「+N」 (N = the photos not drawn); tapping it calls `onExpand`, which shows them all.
+// Without `limit` every photo is drawn (the day's own page, and a day the reader already opened).
+//
+// object-fit: cover throughout, 4px gap. Clicking any still opens the shared ViewerModal, whose reel
+// is always every still of the day — including the ones a limited grid has not drawn yet.
 
 // Grid cell: click → viewer (stills only), play in place (video)
 function Cell({
@@ -31,15 +28,18 @@ function Cell({
   sizes,
   priority = false,
   overlay,
+  label,
 }: {
   photo: GalleryPhoto;
   onClick?: () => void;
   sizes: string;
   priority?: boolean;
   overlay?: string;
+  label?: string;
 }) {
   const isVideo = photo.type === "video";
-  if (isVideo) {
+  // A video under 「+N」 is drawn by its poster like a still: the cell's job there is to open the rest.
+  if (isVideo && !overlay) {
     return (
       <figure className="pg-cell pg-cell-video" style={videoFrameStyle(photo)}>
         <VideoPlayer mediaId={photo.id} alt={photo.alt} durationSeconds={photo.durationSeconds} />
@@ -51,12 +51,12 @@ function Cell({
       className="pg-cell"
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
-      aria-label={onClick ? "打开照片" : undefined}
+      aria-label={onClick ? (label ?? "打开照片") : undefined}
       onClick={onClick}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
     >
       <Image
-        src={photo.src}
+        src={isVideo ? (photo.posterSrc ?? photo.thumbnailSrc ?? photo.src) : photo.src}
         alt={photo.alt}
         fill
         sizes={sizes}
@@ -74,11 +74,17 @@ export function PhotoGrid({
   dateLabel,
   ageLabel,
   priority = false,
+  limit,
+  onExpand,
 }: {
   photos: GalleryPhoto[];
   dateLabel: string;
   ageLabel?: string;
   priority?: boolean;
+  /** Draw at most this many cells; the last one becomes 「+N」. Only honoured for 5 or more cells. */
+  limit?: number;
+  /** Called when the 「+N」 cell is tapped. */
+  onExpand?: () => void;
 }) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const openViewer = useCallback((idx: number) => setViewerIndex(idx), []);
@@ -100,10 +106,9 @@ export function PhotoGrid({
     openViewer(viewerIdxFor(idx));
   }
 
-  // Limit display to 9, show "+N" on the 9th cell
-  const MAX_DISPLAY = 9;
-  const displayed = photos.slice(0, MAX_DISPLAY);
-  const extra = photos.length - MAX_DISPLAY;
+  const limited = limit !== undefined && photos.length > limit;
+  const displayed = limited ? photos.slice(0, limit) : photos;
+  const extra = photos.length - displayed.length;
 
   const n = displayed.length;
 
@@ -164,26 +169,21 @@ export function PhotoGrid({
     );
   }
 
-  // ── 5–6 photos: top row of 3, bottom row of 2–3 ──────────────────────────
-  if (n <= 6) {
-    return (
-      <>
-        <div className="pg pg-3-row">
-          {displayed.map((p, i) => <Cell key={p.id} photo={p} onClick={() => openStill(i)} sizes={thirdSizes} priority={priority && i === 0} />)}
-        </div>
-        {viewerIndex !== null ? <ViewerModal photos={stillPhotos} startIndex={viewerIndex} dateLabel={dateLabel} ageLabel={ageLabel} onClose={closeViewer} /> : null}
-      </>
-    );
-  }
-
-  // ── 7–9+ photos: 3 × 3 with optional +N overlay ───────────────────────────
+  // ── 5+ photos: 3-column rows, the last drawn cell carrying 「+N」 when limited ──
   return (
     <>
       <div className="pg pg-3-row">
         {displayed.map((p, i) => {
-          const isLast = i === MAX_DISPLAY - 1;
-          const overlay = isLast && extra > 0 ? `+${extra}` : undefined;
-          return <Cell key={p.id} photo={p} onClick={() => openStill(i)} sizes={thirdSizes} priority={priority && i === 0} overlay={overlay} />;
+          const isMore = limited && i === n - 1;
+          return <Cell
+            key={p.id}
+            photo={p}
+            onClick={isMore && onExpand ? onExpand : () => openStill(i)}
+            sizes={thirdSizes}
+            priority={priority && i === 0}
+            overlay={isMore ? `+${extra}` : undefined}
+            label={isMore ? `还有 ${extra} 张，展开全部` : undefined}
+          />;
         })}
       </div>
       {viewerIndex !== null ? <ViewerModal photos={stillPhotos} startIndex={viewerIndex} dateLabel={dateLabel} ageLabel={ageLabel} onClose={closeViewer} /> : null}

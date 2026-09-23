@@ -5,6 +5,7 @@ import { toMediaRef } from "@/lib/memory-chapters";
 import type { MediaRef } from "@/lib/memory-chapters";
 import { dayForDate, gateMaterialMedia, loadMonthContent, resolveMonthContentMedia, type MonthContent, type MonthContentDay } from "@/lib/month-content";
 import { formatMonth } from "@/lib/time-signature";
+import { resolveDaySpeakers } from "@/lib/day-speakers";
 import type { Media, RawSource } from "@/lib/types";
 
 export type DayReading = {
@@ -15,6 +16,8 @@ export type DayReading = {
   ageLabel?: string;
   photos: MediaRef[];
   sources: RawSource[];
+  /** source id → registry-resolved name (lib/day-speakers.ts); the content file's table is only a fallback. */
+  speakers: Record<string, string>;
   sourceMedia: Media[];
   sourceDeliverable: ReadonlySet<string>;
   monthHref: string;
@@ -72,6 +75,7 @@ export async function readDay(dayKey: string): Promise<DayReading | null> {
     ageLabel: ageLabelOn(dayKey, birthDay) ?? day.ageLabel,
     photos,
     sources,
+    speakers: resolveDaySpeakers(sources, content.speakerBySourceId),
     sourceMedia: gateMaterialMedia(material.media.filter((item) => item.visibility !== "private"), privilege.excluded),
     sourceDeliverable,
     monthHref: `/memory/${month.slice(0, 4)}/${month.slice(5, 7)}`,
