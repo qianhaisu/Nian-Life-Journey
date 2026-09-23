@@ -13,6 +13,7 @@
 //
 //   node --import tsx -r dotenv/config scripts/organizer-recall-run.mjs \
 //     --corpus=<worksheet>.json --labels=<labels>.json --out=<path>.json dotenv_config_path=.env.local
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import pg from "pg";
 import { buildEvidenceWindows } from "../lib/organizer/evidence/window.ts";
@@ -43,8 +44,8 @@ const OPTS = { registry: FAMILY_REGISTRY, singleChildHousehold: true };
 const NOW = new Date().toISOString();
 
 const dbUrl = process.env.CONTRACT_DATABASE_URL || process.env.DATABASE_URL;
-const apiKey = process.env.DEEPSEEK_API_KEY;
-if (!dbUrl || !apiKey) { console.error("Need DATABASE_URL and DEEPSEEK_API_KEY."); process.exit(1); }
+const apiKey = modelKey();
+if (!dbUrl || !apiKey) { console.error("Need DATABASE_URL and ZHIPU_API_KEY (AI_PROVIDER=zhipu)."); process.exit(1); }
 
 const { worksheet } = JSON.parse(readFileSync(CORPUS, "utf8"));
 const labelDoc = JSON.parse(readFileSync(LABELS, "utf8"));

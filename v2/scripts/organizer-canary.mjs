@@ -21,6 +21,7 @@
 //
 // Modes never widen: `run` on a window that already has an organizer run for its fingerprint is a
 // skip, not a rewrite.
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import pg from "pg";
@@ -62,10 +63,10 @@ if (MODE === "run" && !OUT) { console.error("--mode=run needs --out=<path>.json 
 if (MODE === "replay" && !FROM) { console.error("--mode=replay needs --from=<run output>.json"); process.exit(1); }
 
 const dbUrl = process.env.CONTRACT_DATABASE_URL || process.env.DATABASE_URL;
-const apiKey = process.env.DEEPSEEK_API_KEY;
-const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "").replace(/\/$/, "");
+const apiKey = modelKey();
+const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 if (!dbUrl) { console.error("Need DATABASE_URL."); process.exit(1); }
-if (MODE === "run" && !apiKey) { console.error("Need DEEPSEEK_API_KEY for --mode=run."); process.exit(1); }
+if (MODE === "run" && !apiKey) { console.error("Need ZHIPU_API_KEY (AI_PROVIDER=zhipu) for --mode=run."); process.exit(1); }
 
 const client = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false }, keepAlive: true });
 await client.connect();
@@ -162,7 +163,7 @@ async function callWriter(model, pkg) {
     messages: [{ role: "user", content: buildWriterV2Prompt(pkg) }],
   });
   const started = Date.now();
-  const res = await fetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
+  const res = await messagesFetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (!res.ok) throw new Error(`writer http ${res.status}`);
   const payload = await res.json();
   const tool = payload.content?.find((b) => b.type === "tool_use" && b.name === WRITER_V2_TOOL_NAME);

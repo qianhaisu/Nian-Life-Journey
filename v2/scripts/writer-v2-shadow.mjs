@@ -7,6 +7,7 @@
 // same day's evidence, which is exactly the comparison the Fable handoff needs. It does NOT mean
 // the Writer is re-deciding worthiness — selection here is "windows that are already Memories",
 // and the Writer's own judgement about worthiness is never consulted.
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { writeFileSync } from "node:fs";
 import pg from "pg";
 import { buildEvidenceWindows } from "../lib/organizer/evidence/window.ts";
@@ -30,9 +31,9 @@ const NOW = new Date().toISOString();
 const COLS = "id, profile_id, source_type, content_types, contributor_id, captured_at, text, media_ids, source_label, visibility, metadata";
 
 const dbUrl = process.env.CONTRACT_DATABASE_URL || process.env.DATABASE_URL;
-const apiKey = process.env.DEEPSEEK_API_KEY;
-const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "").replace(/\/$/, "");
-if (!dbUrl || !apiKey) { console.error("Need DATABASE_URL and DEEPSEEK_API_KEY."); process.exit(1); }
+const apiKey = modelKey();
+const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
+if (!dbUrl || !apiKey) { console.error("Need DATABASE_URL and ZHIPU_API_KEY (AI_PROVIDER=zhipu)."); process.exit(1); }
 
 const client = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false }, keepAlive: true });
 await client.connect();
@@ -85,7 +86,7 @@ async function callWriter(pkg) {
     messages: [{ role: "user", content: buildWriterV2Prompt(pkg) }],
   });
   const started = Date.now();
-  const res = await fetch(`${baseUrl}/v1/messages`, {
+  const res = await messagesFetch(`${baseUrl}/v1/messages`, {
     method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body,
   });
   if (!res.ok) throw new Error(`writer http ${res.status}`);

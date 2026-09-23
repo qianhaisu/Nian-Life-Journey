@@ -20,6 +20,7 @@
 //        --vision-cache=<vision.json> --out=<results.json> [--chunk=5] [--max-failures=15] [--limit=N]
 //        [--concurrency=N] [--run-label=<text naming this round in each new result's source>] [--retries=2]
 
+import { GLM_MODEL, isZhipu, messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -52,12 +53,15 @@ if (!groupsPath || !mediaDir || !visionCachePath || !outPath) {
   process.exit(1);
 }
 
-const MODEL = "deepseek-flash";
+let MODEL = "deepseek-flash"; // 2026-09-23 起 AI_PROVIDER=zhipu 时改用 glm-5.3-flash（见下）
 const env = {};
+// 2026-09-23：AI_PROVIDER=zhipu 时经 glm-messages.mjs 改发智谱 glm-5.3-flash。
+const mfetch = (url, init) => messagesFetch(url, init, env);
 for (const line of fs.readFileSync(path.join(process.cwd(), ".env.local"), "utf8").split(/\r?\n/)) {
   const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
   if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, "");
 }
+if (isZhipu(env)) MODEL = GLM_MODEL;
 if (env.AI_MODEL && env.AI_MODEL.trim() !== MODEL) {
   console.error(`MODEL_NOT_ALLOWED: AI_MODEL="${env.AI_MODEL}" is not ${MODEL}; nothing was sent.`);
   process.exit(1);
@@ -132,9 +136,9 @@ async function callModel(label, images, compare) {
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      const response = await fetch(`${BASE}/v1/messages`, {
+      const response = await mfetch(`${BASE}/v1/messages`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": env.DEEPSEEK_API_KEY,
+        headers: { "content-type": "application/json", "x-api-key": modelKey(env),
           "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: MODEL, max_tokens: 8000, messages: [{ role: "user", content }] }),
       });

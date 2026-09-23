@@ -4,7 +4,7 @@
 // Teddy 2026-09-20 明确决定：要真正的全自动，产品判断选「夜里提取 + 夜里批准」。
 //
 // 必须由 .data/t20-run-env.mjs 启动（它开 ECS→RDS 隧道并把 DATABASE_URL 只对本进程指向 RDS，且需要
-// --env-file=.env.local 提供 AI_PROVIDER=deepseek / DEEPSEEK_API_KEY）：
+// --env-file=.env.local 提供 AI_PROVIDER=zhipu / ZHIPU_API_KEY）：
 //   node --env-file=.env.local .data/t20-run-env.mjs -- scripts/editor/nightly-reminders.mjs
 //
 // 分工（不改一行既有代码）：
@@ -30,9 +30,11 @@ const LEDGER = path.join(OPS, "editor", "reminders-ledger.jsonl");
 const say = (m) => console.log(`[${new Date().toISOString()}] ${m}`);
 const ledger = (o) => { fs.mkdirSync(path.dirname(LEDGER), { recursive: true }); fs.appendFileSync(LEDGER, JSON.stringify({ at: new Date().toISOString(), reviewer: AUTO_REVIEWER, ...o }) + "\n"); };
 
-if (!process.env.DEEPSEEK_API_KEY || (process.env.AI_PROVIDER ?? "").toLowerCase() !== "deepseek") {
-  say("❌ 缺 AI_PROVIDER=deepseek / DEEPSEEK_API_KEY：请用 --env-file=.env.local 启动");
-  ledger({ event: "preflight-failed", reason: "no deepseek env" });
+// 2026-09-23 起模型走智谱（AI_PROVIDER=zhipu + ZHIPU_API_KEY）；DeepSeek 旧配置仍可用。
+const PROVIDER = (process.env.AI_PROVIDER ?? "").toLowerCase();
+if (!((PROVIDER === "zhipu" && process.env.ZHIPU_API_KEY) || (PROVIDER === "deepseek" && process.env.DEEPSEEK_API_KEY))) {
+  say("❌ 缺 AI_PROVIDER=zhipu / ZHIPU_API_KEY：请用 --env-file=.env.local 启动");
+  ledger({ event: "preflight-failed", reason: "no model env" });
   process.exit(2);
 }
 

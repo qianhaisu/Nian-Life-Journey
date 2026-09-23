@@ -70,7 +70,8 @@ test("media_subject_check is about a photograph, never a story; media_binding is
 
 test("an unknown provider protects (allow-list of automatic producers, fail closed)", () => {
   const e = aiEvent("event-v2-u");
-  assert.deepEqual([...AUTOMATIC_REVIEW_PROVIDERS], ["deepseek"]);
+  // "glm" = the same Organizer writer after the 2026-09-23 switch to 智谱 glm-5.3-flash.
+  assert.deepEqual([...AUTOMATIC_REVIEW_PROVIDERS], ["deepseek", "glm"]);
   for (const provider of ["nianlife-preview", "cowork-a6", "someone-new"]) {
     assert.equal(evaluateStoryProtection({ event: e }, [row("life_event_preview", e.id, "needs_human_review", provider, "x", "2026-09-11 00:00:00")]).protected, true, provider);
   }
@@ -179,10 +180,15 @@ test("2026-09-16 picture content version: checksum when there is one, a shape ha
 // 2026-09-23: the one automatic path that is allowed to call these entries is DeepSeek semantic review,
 // and only when it says so — every call must carry reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, so the
 // ledger records deepseek-semantic-review / deepseek-flash instead of impersonating Claude (Teddy's decision).
+// 2026-09-23 (GLM switch): the reviewer is whichever model actually judged — glm-semantic-review on
+// the default path, deepseek-semantic-review on the legacy one — chosen in one declared variable.
 const HONEST_MODEL_REVIEW = (text) => {
   const calls = text.match(/recordClaude(Story|Media)Decision\(\{|applyClaudeStoryCorrection\(\{/g) ?? [];
-  const labelled = text.match(/reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER/g) ?? [];
-  return calls.length > 0 && labelled.length >= calls.length && /DEEPSEEK_SEMANTIC_REVIEW_PROVIDER = "deepseek-semantic-review"/.test(text);
+  const labelled = text.match(/reviewer(: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER)?, reasonCodes/g) ?? [];
+  return calls.length > 0 && labelled.length >= calls.length
+    && /DEEPSEEK_SEMANTIC_REVIEW_PROVIDER = "deepseek-semantic-review"/.test(text)
+    && /GLM_SEMANTIC_REVIEW_PROVIDER = "glm-semantic-review"/.test(text)
+    && /const reviewer = glm \? GLM_SEMANTIC_REVIEW_PROVIDER : DEEPSEEK_SEMANTIC_REVIEW_PROVIDER;/.test(text);
 };
 
 test("no automatic code path references the Claude review methods, except DeepSeek semantic review that labels itself", () => {
@@ -218,10 +224,12 @@ test("no automatic code path references the human decision method", () => {
   assert.deepEqual(offenders, []);
 });
 
-test("DeepSeek model: one pinned id, no fallback, a substituted response is refused", () => {
-  assert.equal(NIANLIFE_DEEPSEEK_MODEL, "deepseek-flash");
-  assert.equal(resolveDeepSeekModel({}), "deepseek-flash");
+test("Model pin (2026-09-23 GLM switch): default glm-5.3-flash, legacy deepseek-flash still accepted, nothing else", () => {
+  assert.equal(NIANLIFE_DEEPSEEK_MODEL, "glm-5.3-flash");
+  assert.equal(resolveDeepSeekModel({}), "glm-5.3-flash");
+  assert.equal(resolveDeepSeekModel({ AI_MODEL: "glm-5.3-flash" }), "glm-5.3-flash");
   assert.equal(resolveDeepSeekModel({ AI_MODEL: "deepseek-flash" }), "deepseek-flash");
+  assert.throws(() => resolveDeepSeekModel({ AI_MODEL: "glm-4-plus" }), /MODEL_NOT_ALLOWED/);
   assert.throws(() => resolveDeepSeekModel({ AI_MODEL: "deepseek-v4-pro" }), /MODEL_NOT_ALLOWED/);
   assert.throws(() => resolveDeepSeekModel({ ORGANIZER_V2_MODEL: "deepseek-v4-pro" }, "ORGANIZER_V2_MODEL"), /MODEL_NOT_ALLOWED/);
   assert.equal(assertProviderModel("deepseek-flash", { model: "deepseek-flash" }), "deepseek-flash");
@@ -236,5 +244,8 @@ test("2026-09-23 DeepSeek semantic review is a model reviewer recorded truthfull
   assert.throws(() => g.modelReviewerOf("deepseek"), /REVIEWER_NOT_ACCEPTED|unknown model reviewer/);
   assert.equal(g.reviewerTypeOf("deepseek-semantic-review"), "claude");
   assert.equal(g.reviewerTypeOf("deepseek"), "automatic");
+  assert.deepEqual(g.modelReviewerOf("glm-semantic-review"), { provider: "glm-semantic-review", model: "glm-5.3-flash" });
+  assert.equal(g.reviewerTypeOf("glm-semantic-review"), "claude");
+  assert.equal(g.reviewerTypeOf("glm"), "automatic");
   assert.throws(() => g.assertHumanDecisionInput({ eventId: "e", decision: "approved", reviewedContentSha256: "a".repeat(64), operator: "deepseek-semantic-review", promptVersion: "p", policyVersion: "q" }), /not a human|OPERATOR/);
 });

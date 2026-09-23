@@ -70,6 +70,7 @@
 //   decision this script has no business making as a side effect of writing one new day. Its API
 //   calls also sit OUTSIDE --max-calls (one per 12 events), so with it on the ceiling is not a
 //   ceiling. Off by default; t20c-regrade-memories.mjs still exists for a deliberate re-grade.
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -180,10 +181,10 @@ const outPath = path.resolve(OUT);
 if (!path.relative(path.resolve(process.cwd(), ".."), outPath).startsWith("..")) { console.error("Refusing to write real chat content inside the repository."); process.exit(1); }
 
 const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
-const apiKey = process.env.DEEPSEEK_API_KEY;
+const apiKey = modelKey();
 const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 if (!dbUrl) { console.error("Need DATABASE_URL."); process.exit(1); }
-if (!apiKey) { console.error("Need DEEPSEEK_API_KEY."); process.exit(1); }
+if (!apiKey) { console.error("Need ZHIPU_API_KEY (AI_PROVIDER=zhipu)."); process.exit(1); }
 
 console.log(COMMIT ? "*** --commit set: passing days WILL be written as life_event rows ***" : "dry run (pass --commit to actually write)");
 
@@ -278,7 +279,7 @@ async function callWriter(pkg) {
     tool_choice: { type: "tool", name: WRITER_V2_TOOL_NAME },
     messages: [{ role: "user", content: buildWriterV2Prompt(pkg) }],
   });
-  const res = await fetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
+  const res = await messagesFetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (res.status === 429) { const err = new Error("writer http 429"); err.rateLimited = true; throw err; }
   if (!res.ok) throw new Error(`writer http ${res.status}`);
   const payload = await res.json();
@@ -613,10 +614,12 @@ if (SEMANTIC_REVIEW) {
   const reviewPool = getPool();
   const writtenEntries = results.filter((r) => r.writtenEventId);
   console.log(`\n── Semantic review: ${writtenEntries.length} newly written event(s) ──`);
-  const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
+  // 2026-09-23：AI_PROVIDER=zhipu 时语义审核走智谱 glm-5.3-flash；DeepSeek 只在旧配置下使用。
+  const zhipuApiKey = (process.env.AI_PROVIDER ?? "").toLowerCase() === "zhipu" ? process.env.ZHIPU_API_KEY : undefined;
+  const deepseekApiKey = zhipuApiKey ? undefined : modelKey();
   const deepseekBaseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
-  if (!deepseekApiKey) {
-    throw new Error("DEEPSEEK_API_KEY missing — semantic review is required after --commit; use --no-semantic-review to explicitly skip");
+  if (!zhipuApiKey && !deepseekApiKey) {
+    throw new Error("ZHIPU_API_KEY (AI_PROVIDER=zhipu) missing — semantic review is required after --commit; use --no-semantic-review to explicitly skip");
   } else {
     let srApproved = 0, srFlagged = 0, srCorrected = 0, srErrors = 0;
     for (const entry of writtenEntries) {
@@ -633,7 +636,7 @@ if (SEMANTIC_REVIEW) {
         captured_at: r.captured_at instanceof Date ? r.captured_at.toISOString() : String(r.captured_at),
         speaker: r.metadata?.senderDigest ? { displayName: r.metadata.senderDigest.slice(0, 8) } : undefined,
       }));
-      const outcome = await reviewEventStory(entry.writtenEventId, sources, reviewRepo, reviewPool, { deepseekApiKey, deepseekBaseUrl, dryRun: !COMMIT });
+      const outcome = await reviewEventStory(entry.writtenEventId, sources, reviewRepo, reviewPool, { zhipuApiKey, deepseekApiKey, deepseekBaseUrl, dryRun: !COMMIT });
       entry.semanticReview = outcome;
       if (outcome.kind === "approved") { srApproved++; console.log(`  ${entry.writtenEventId} approved`); }
       else if (outcome.kind === "corrected") { srCorrected++; console.log(`  ${entry.writtenEventId} corrected → ${outcome.newSha256?.slice(0, 8)}`); }

@@ -19,6 +19,7 @@
 // organizer-month-write.mjs which now calls it automatically after --commit). This script is kept
 // for manual re-runs (e.g. after a prompt fix or to regrade a month that was written before P1-3).
 // Idempotent: re-running always recomputes from current title/story and overwrites.
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
 import { gradeMonthEvents } from "./t20c-grade-events.mjs";
@@ -34,7 +35,7 @@ const MONTH = argOf("month", null);
 const COMMIT = hasFlag("commit");
 
 const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
-const apiKey = process.env.DEEPSEEK_API_KEY;
+const apiKey = modelKey();
 const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 const { resolveDeepSeekModel } = await import("../lib/organizer/deepseek-model.ts");
 const model = resolveDeepSeekModel(process.env);
@@ -42,7 +43,7 @@ const model = resolveDeepSeekModel(process.env);
 // outside the story write guard. Dry runs still work.
 if (COMMIT) { console.error("REFUSED: t20c-regrade-memories --commit is disabled (2026-09-14 story write guard)."); process.exit(1); }
 if (!dbUrl) { console.error("Need DATABASE_URL."); process.exit(1); }
-if (!apiKey) { console.error("Need DEEPSEEK_API_KEY."); process.exit(1); }
+if (!apiKey) { console.error("Need ZHIPU_API_KEY (AI_PROVIDER=zhipu)."); process.exit(1); }
 if (!MONTH || !/^\d{4}-\d{2}$/.test(MONTH)) { console.error("--month=YYYY-MM is required"); process.exit(1); }
 
 const { persistQualityReview } = await import("../lib/db/repository.ts");

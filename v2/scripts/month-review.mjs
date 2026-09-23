@@ -9,6 +9,7 @@
 // Months with fewer than 5 published life_events are skipped (T20-B's own rule: not enough
 // material to write a real review, and a thin one would read as invented). --commit persists;
 // without it, the draft prints and nothing is written — same dry-run/commit split as T7's writer.
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import pg from "pg";
@@ -40,7 +41,7 @@ const PROFILE_ID = "profile-zhangnian";
 if (!MONTH || !/^\d{4}-\d{2}$/.test(MONTH)) { console.error("--month=YYYY-MM is required"); process.exit(1); }
 
 const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
-const apiKey = process.env.DEEPSEEK_API_KEY;
+const apiKey = modelKey();
 const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 const model = resolveDeepSeekModel(process.env);
 // 2026-09-14: --commit was refused outright. persistMonthlySnapshot upserts (onConflictDoUpdate)
@@ -60,7 +61,7 @@ const model = resolveDeepSeekModel(process.env);
 // human decision and a content hash; this change does not pretend to provide one.
 // 未做（写在这里，免得下一个人以为它做过了）：更新已有月份的回顾。
 if (!dbUrl) { console.error("Need DATABASE_URL."); process.exit(1); }
-if (!apiKey) { console.error("Need DEEPSEEK_API_KEY."); process.exit(1); }
+if (!apiKey) { console.error("Need ZHIPU_API_KEY (AI_PROVIDER=zhipu)."); process.exit(1); }
 
 const pool = new pg.Pool({ connectionString: dbUrl });
 
@@ -97,7 +98,7 @@ async function callReviewer(events, month) {
     tool_choice: { type: "tool", name: TOOL_NAME },
     messages: [{ role: "user", content: `${month} 这个月已发布的记忆：\n\n${material}` }],
   });
-  const res = await fetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
+  const res = await messagesFetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (!res.ok) throw new Error(`reviewer http ${res.status}`);
   const payload = await res.json();
   assertProviderModel(model, payload);

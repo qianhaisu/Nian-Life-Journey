@@ -8,6 +8,7 @@
 // same as being evidence for this event.
 //
 //   node --import tsx scripts/deepseek-central-fact.mjs --out=<report.json> [--dry-run]
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -33,8 +34,8 @@ const PROFILE_ID = "profile-zhangnian";
 const BASE_URL = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 const { resolveDeepSeekModel, assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
 const MODEL = resolveDeepSeekModel(process.env);
-if ((process.env.AI_PROVIDER ?? "").toLowerCase() !== "deepseek" || !process.env.DEEPSEEK_API_KEY || !MODEL) {
-  console.error("Fail closed: AI_PROVIDER must be deepseek with DEEPSEEK_API_KEY and AI_MODEL set.");
+if (!["deepseek", "zhipu"].includes((process.env.AI_PROVIDER ?? "").toLowerCase()) || !modelKey() || !MODEL) {
+  console.error("Fail closed: AI_PROVIDER must be zhipu (ZHIPU_API_KEY) or deepseek (DEEPSEEK_API_KEY), with AI_MODEL set.");
   process.exit(1);
 }
 console.log(`Provider: deepseek model=${MODEL}`);
@@ -80,7 +81,7 @@ async function judgeSupport(centralFact, candidates) {
     tool_choice: { type: "tool", name: "emit_support" },
     messages: [{ role: "user", content: `## 中心事实\n${centralFact}\n\n## 候选消息\n${listing}\n\n请对每一条消息给出 supports 与 reason。` }],
   });
-  const res = await fetch(`${BASE_URL}/v1/messages`, { method: "POST", headers: { "x-api-key": process.env.DEEPSEEK_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
+  const res = await messagesFetch(`${BASE_URL}/v1/messages`, { method: "POST", headers: { "x-api-key": modelKey(), "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (res.status === 402) { console.error("DeepSeek 402 insufficient balance — stopping."); process.exit(2); }
   if (!res.ok) throw new Error(`http_${res.status}`);
   const payload = await res.json();
@@ -91,9 +92,9 @@ async function judgeSupport(centralFact, candidates) {
 }
 
 async function writeStory(input) {
-  const res = await fetch(`${BASE_URL}/v1/messages`, {
+  const res = await messagesFetch(`${BASE_URL}/v1/messages`, {
     method: "POST",
-    headers: { "x-api-key": process.env.DEEPSEEK_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    headers: { "x-api-key": modelKey(), "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: MODEL, max_tokens: 2000, temperature: 0.3, thinking: { type: "disabled" },
       system: `${FAMILY_WRITER_SYSTEM_PROMPT}\n\n这次额外要求：title 和 story 必须围绕「中心事实」展开。其他细节只能作为陪衬的具体细节出现，不能喧宾夺主，也不能成为标题。`,

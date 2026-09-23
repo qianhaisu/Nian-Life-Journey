@@ -14,6 +14,7 @@
 // updated in place so any decision can be revisited.
 //
 //   node --import tsx scripts/deepseek-evidence-narrow.mjs --out=<report.json> [--dry-run]
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -36,9 +37,9 @@ const { FAMILY_WRITER_PROMPT_VERSION, FAMILY_WRITER_SYSTEM_PROMPT, FAMILY_WRITER
 // story while narrowing to a freshly chosen window is how a memory about learning to stand ends up
 // citing an afternoon about sleep and teeth.
 async function writeStory(input) {
-  const res = await fetch(`${(process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "")}/v1/messages`, {
+  const res = await messagesFetch(`${(process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "")}/v1/messages`, {
     method: "POST",
-    headers: { "x-api-key": process.env.DEEPSEEK_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    headers: { "x-api-key": modelKey(), "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: WRITER_MODEL, max_tokens: 2000, temperature: 0.3, thinking: { type: "disabled" },
       system: FAMILY_WRITER_SYSTEM_PROMPT,

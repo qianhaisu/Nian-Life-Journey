@@ -148,10 +148,10 @@ async function main() {
           const res = await rds.client.query(
             `insert into content_quality_reviews (id, profile_id, target_kind, target_id, decision, reason_codes,
                provider, model, prompt_version, policy_version, review_fingerprint, reviewed_at)
-             select $1,$2,'media_subject_check',$3,$4,$5::jsonb,'deepseek',$6,$7,$8,$9, now() at time zone 'Asia/Shanghai'
+             select $1,$2,'media_subject_check',$3,$4,$5::jsonb,$10,$6,$7,$8,$9, now() at time zone 'Asia/Shanghai'
               where not exists (select 1 from content_quality_reviews where target_kind='media_subject_check' and target_id=$3)
              on conflict do nothing returning id`,
-            [id, profileId, w.id, w.decision, JSON.stringify(["basis:auto-deepseek-policy", `label:${w.preset}`, "authorized-by:teddy-2026-09-20"]), model, PROMPT_VERSION, POLICY_VERSION, `${id}:media_subject_check`]);
+            [id, profileId, w.id, w.decision, JSON.stringify(["basis:auto-deepseek-policy", `label:${w.preset}`, "authorized-by:teddy-2026-09-20"]), model, PROMPT_VERSION, POLICY_VERSION, `${id}:media_subject_check`, String(model).startsWith("glm") ? "glm" : "deepseek"]);
           inserted += res.rowCount;
         }
         const after = Number((await q(`select count(*)::int n from content_quality_reviews`))[0].n);

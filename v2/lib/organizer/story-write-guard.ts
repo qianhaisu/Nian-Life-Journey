@@ -38,7 +38,8 @@ export type WriteActor = "organizer";
  * `nianlife-preview`, `cowork-a6`, or any name not seen before — is treated as a human route.
  * Production distribution 2026-09-14: see NianlifeOps GUARD-ledger-shape-2026-09-14T03-12-50.json.
  */
-export const AUTOMATIC_REVIEW_PROVIDERS: ReadonlySet<string> = new Set(["deepseek"]);
+// "glm" = the same Organizer writer after the 2026-09-23 switch to 智谱 glm-5.3-flash.
+export const AUTOMATIC_REVIEW_PROVIDERS: ReadonlySet<string> = new Set(["deepseek", "glm"]);
 
 /**
  * 2026-09-16：Claude 审核是一个**独立的审核者类型**，既不是自动写手，也不是家庭人工决定。
@@ -67,12 +68,15 @@ export const CLAUDE_AUTHORIZATION_REASON = "authorized-by:teddy-2026-09-16";
  * 只是 provider/model 写真实的。它和 `deepseek`（Organizer 自动写手，永远不能批准）是两个不同的身份。
  */
 export const DEEPSEEK_SEMANTIC_REVIEW_PROVIDER = "deepseek-semantic-review";
+/** 2026-09-23 起语义审核改由智谱 glm-5.3-flash 做，账上如实写这个名字；旧的 deepseek 行保持原样。 */
+export const GLM_SEMANTIC_REVIEW_PROVIDER = "glm-semantic-review";
 /** 模型审核者 → 账上写的 model。Claude 那一栏历来为空，保持不变。 */
 export const MODEL_REVIEWERS: Readonly<Record<string, string | null>> = Object.freeze({
   [CLAUDE_REVIEW_PROVIDER]: null,
   [DEEPSEEK_SEMANTIC_REVIEW_PROVIDER]: "deepseek-flash",
+  [GLM_SEMANTIC_REVIEW_PROVIDER]: "glm-5.3-flash",
 });
-export type ModelReviewer = typeof CLAUDE_REVIEW_PROVIDER | typeof DEEPSEEK_SEMANTIC_REVIEW_PROVIDER;
+export type ModelReviewer = typeof CLAUDE_REVIEW_PROVIDER | typeof DEEPSEEK_SEMANTIC_REVIEW_PROVIDER | typeof GLM_SEMANTIC_REVIEW_PROVIDER;
 /** 输入里的 reviewer（缺省 = Claude）→ 账上的 provider 与 model。未知的 reviewer 拒收。 */
 export function modelReviewerOf(reviewer: string | undefined): { provider: string; model: string | null } {
   const provider = reviewer ?? CLAUDE_REVIEW_PROVIDER;

@@ -36,6 +36,7 @@ import { PRODUCTION_ADAPTER_VERSION, type AdapterPolicy } from "./production-ada
 import { WINDOW_POLICY_VERSION } from "./evidence/window";
 import { CONTRACT_POLICY_VERSION } from "./contract";
 import { resolveDeepSeekModel } from "./deepseek-model";
+import { NIANLIFE_GLM_MODEL } from "./glm-model";
 
 export const LEGACY_IMPLEMENTATION_ID = "legacy-rule-v2";
 export const V2_IMPLEMENTATION_ID = PRODUCTION_ADAPTER_VERSION;
@@ -117,6 +118,8 @@ export function selectProductionOrganizer(env: NodeJS.ProcessEnv = process.env):
     throw new OrganizerSelectionError("ORGANIZER_V2_ENABLED is on but neither ORGANIZER_V2_SOURCE_ALLOWLIST nor ORGANIZER_V2_NEW_INPUT_AFTER is set. V2 is bounded to named source ids or to work created after an activation instant; organizing the whole archive is a separate, explicitly scheduled change.");
   }
 
+  const zhipu = (env.AI_PROVIDER ?? "").toLowerCase() === "zhipu";
+  const v2Model = resolveDeepSeekModel(env, "ORGANIZER_V2_MODEL");
   const tiers = (env.ORGANIZER_V2_MEDIA_TIERS ?? "confirmed").split(",").map((t) => t.trim()).filter(Boolean);
   const adapterPolicy: AdapterPolicy = {
     organizerVersion: V2_IMPLEMENTATION_ID,
@@ -124,10 +127,12 @@ export function selectProductionOrganizer(env: NodeJS.ProcessEnv = process.env):
     writerVersion,
     promptVersion: env.ORGANIZER_V2_PROMPT_VERSION ?? WINDOW_POLICY_VERSION,
     policyVersion: CONTRACT_POLICY_VERSION,
-    provider: env.ORGANIZER_V2_PROVIDER ?? "deepseek",
-    // Recorded on every artifact and sent to the Writer: the pinned DeepSeek model, or a loud
-    // configuration error — never a silent other model.
-    model: resolveDeepSeekModel(env, "ORGANIZER_V2_MODEL"),
+    // 2026-09-23：AI_PROVIDER=zhipu → provider "glm" / model glm-5.3-flash，账上如实记录实际调用的模型。
+    provider: env.ORGANIZER_V2_PROVIDER ?? (zhipu ? "glm" : "deepseek"),
+    // Recorded on every artifact and sent to the Writer: the pinned model, or a loud
+    // configuration error — never a silent other model. A legacy ORGANIZER_V2_MODEL=deepseek-flash
+    // under zhipu is recorded as what is actually called (v2-pipeline.ts maps it the same way).
+    model: zhipu && v2Model === "deepseek-flash" ? NIANLIFE_GLM_MODEL : v2Model,
     allowedMediaTiers: tiers as AdapterPolicy["allowedMediaTiers"],
   };
 

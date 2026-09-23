@@ -36,6 +36,7 @@
 //
 //   node --import tsx -r dotenv/config scripts/organizer-verdict-replay.mjs --replay \
 //     --corpus=<worksheet>.json --labels=<labels>.json --store=<dir> dotenv_config_path=.env.local
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
@@ -71,7 +72,7 @@ const NOW = new Date().toISOString();
 
 const dbUrl = process.env.CONTRACT_DATABASE_URL || process.env.DATABASE_URL;
 if (!dbUrl) { console.error("Need DATABASE_URL."); process.exit(1); }
-if (CAPTURE && !process.env.DEEPSEEK_API_KEY) { console.error("Need DEEPSEEK_API_KEY to capture."); process.exit(1); }
+if (CAPTURE && !modelKey()) { console.error("Need ZHIPU_API_KEY (AI_PROVIDER=zhipu) to capture."); process.exit(1); }
 
 const { worksheet } = JSON.parse(readFileSync(CORPUS, "utf8"));
 const labelDoc = JSON.parse(readFileSync(LABELS, "utf8"));

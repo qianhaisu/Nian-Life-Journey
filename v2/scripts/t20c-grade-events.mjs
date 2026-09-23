@@ -16,6 +16,7 @@
 // Both callers (organizer-month-write.mjs and t20c-regrade-memories.mjs) import gradeMonthEvents.
 // The standalone t20c-regrade-memories.mjs is kept for manual re-runs (e.g. after prompt changes),
 // but it no longer needs to be run as a required follow-up step after the writer.
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 
@@ -66,7 +67,7 @@ export async function callGrader(batch, { apiKey, baseUrl, model }) {
     tool_choice: { type: "tool", name: TOOL_NAME },
     messages: [{ role: "user", content: `给下面这批记忆定级：\n\n${material}` }],
   });
-  const res = await fetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
+  const res = await messagesFetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (!res.ok) throw new Error(`grader http ${res.status}: ${await res.text()}`);
   const payload = await res.json();
   if (typeof payload?.model === "string" && payload.model !== model) throw new Error(`PROVIDER_MODEL_MISMATCH: requested ${model} but the provider answered as ${payload.model}`);

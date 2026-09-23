@@ -1,25 +1,30 @@
-// The one DeepSeek model Nianlife calls (Teddy, 2026-09-14: "all DeepSeek calls use V4.1 Flash").
+// 2026-09-23: Switched from DeepSeek to 智谱 GLM. See lib/organizer/glm-model.ts for the active config.
 //
-// The API id is `deepseek-flash`. Verified, not guessed: GET https://api.deepseek.com/models on this
-// account lists exactly `deepseek-flash` and `deepseek-v4-pro`, and a minimal synthetic request on both
-// the OpenAI-compatible and Anthropic-compatible surfaces returned `model: "deepseek-flash"`
-// (NianlifeOps timeline-2026-09-13-overnight/data/DEEPSEEK-models-2026-09-14T03-14-17.json).
+// Old (2026-09-14 – 2026-09-23): NIANLIFE_DEEPSEEK_MODEL = "deepseek-flash"
+//   API: https://api.deepseek.com/anthropic (Anthropic-compatible endpoint)
+//   Key: DEEPSEEK_API_KEY
 //
-// No fallback in either direction: an unset variable means this model; a variable naming any other
-// model is a configuration error that stops the call before anything is sent. A response that says
-// it came from a different model is refused too, so a provider-side substitution cannot pass silently.
-export const NIANLIFE_DEEPSEEK_MODEL = "deepseek-flash";
+// New (2026-09-23+): glm-5.3-flash via 智谱 OpenAI-compatible endpoint
+//   See NIANLIFE_GLM_MODEL in glm-model.ts
+//
+// This file is kept for reference and for callers that haven't migrated yet.
+// resolveDeepSeekModel now accepts both "deepseek-flash" (legacy) and the active GLM model.
+import { NIANLIFE_GLM_MODEL } from "./glm-model";
+// export const NIANLIFE_DEEPSEEK_MODEL = "deepseek-flash"; // old DeepSeek model, kept for reference
+export const NIANLIFE_DEEPSEEK_MODEL = NIANLIFE_GLM_MODEL; // re-exported active model
 
 export class DeepSeekModelError extends Error {
   constructor(readonly code: "MODEL_NOT_ALLOWED" | "PROVIDER_MODEL_MISMATCH", message: string) { super(`${code}: ${message}`); this.name = "DeepSeekModelError"; }
 }
 
 /** Resolves the model for a DeepSeek call from `env[variable]` (default AI_MODEL). */
+const ALLOWED_MODELS = new Set([NIANLIFE_DEEPSEEK_MODEL, "deepseek-flash"]);
+
 export function resolveDeepSeekModel(env: Record<string, string | undefined>, variable = "AI_MODEL"): string {
   const configured = env[variable]?.trim();
   if (!configured) return NIANLIFE_DEEPSEEK_MODEL;
-  if (configured !== NIANLIFE_DEEPSEEK_MODEL) {
-    throw new DeepSeekModelError("MODEL_NOT_ALLOWED", `${variable}="${configured}" is not the Nianlife DeepSeek model "${NIANLIFE_DEEPSEEK_MODEL}". Unset it or set it to ${NIANLIFE_DEEPSEEK_MODEL}; no call was made.`);
+  if (!ALLOWED_MODELS.has(configured)) {
+    throw new DeepSeekModelError("MODEL_NOT_ALLOWED", `${variable}="${configured}" is not an allowed model. Allowed: ${[...ALLOWED_MODELS].join(", ")}; no call was made.`);
   }
   return configured;
 }

@@ -22,6 +22,7 @@
 // **不通过**——HTTP 200，但图片在到达模型前被换成 `[Unsupported Image]`，模型开始猜。详见
 // lib/home-photo-quality.ts 顶部。所以今天跑这个脚本的正确结果就是「中止，未评估」，
 // 而不是一份填满了数字的缓存。
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import sharp from "sharp";
 import { loadFamilyArchive } from "../lib/family-archive.ts";
@@ -61,15 +62,17 @@ function env() {
 }
 
 const ENV = env();
+// 2026-09-23：AI_PROVIDER=zhipu 时经 glm-messages.mjs 改发智谱 glm-5.3-flash。
+const mfetch = (url, init) => messagesFetch(url, init, ENV);
 const MODEL = resolveDeepSeekModel(ENV);
 const BASE_URL = ENV.DEEPSEEK_BASE_URL;
-const API_KEY = ENV.DEEPSEEK_API_KEY;
+const API_KEY = modelKey(ENV);
 
 /** 一次模型调用。返回纯文本，失败抛错。调用计数由调用方累加，报告里要照实写。 */
 let callCount = 0;
 async function ask(content) {
   callCount += 1;
-  const res = await fetch(`${BASE_URL}/v1/messages`, {
+  const res = await mfetch(`${BASE_URL}/v1/messages`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": API_KEY, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({ model: MODEL, max_tokens: 400, messages: [{ role: "user", content }] }),

@@ -23,6 +23,7 @@ import { toV1WorthinessDimensionsV4, type WorthinessAxisV4 } from "./worthiness-
 import { resolveSubjectBounded, type SubjectResolution as BoundedSubjectResolution } from "./subject-resolver";
 import type { IdentityRegistry } from "./identity";
 import { DeepSeekModelError, assertProviderModel, resolveDeepSeekModel } from "./deepseek-model";
+import { NIANLIFE_GLM_BASE_URL, assertGlmProviderModel, resolveGlmModel, withSecondLookGlm, type GlmTool } from "./glm-model";
 
 export class DeepSeekEditorError extends Error {
   constructor(message: string, readonly code: string, readonly fatal = false) {
@@ -98,7 +99,8 @@ const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504]);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type AnthropicContentBlock = { type: string; name?: string; input?: unknown };
-type AnthropicResponse = { content?: AnthropicContentBlock[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number }; error?: { message?: string; type?: string } };
+type AnthropicResponse = { content?: AnthropicContentBlock[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number; prompt_tokens?: number; completion_tokens?: number }; error?: { message?: string; type?: string } };
+type GlmChatResponse = { model?: string; choices?: Array<{ message?: { tool_calls?: Array<{ function?: { name?: string; arguments?: string } }> } }> };
 
 // Gate A is enforced here, not left to the prompt: the fine-grained relevance label deterministically
 // decides the canonical subjectRelevance the validator sees. A model that labels a window
@@ -203,14 +205,18 @@ export function needsSecondLook(gateAReason: string | undefined, bounded: Bounde
 /** 在原请求后追加一轮复核提示（不改原提示词，只多一条 user 消息）。纯函数。 */
 export function withSecondLook(requestBody: string, bounded: BoundedSubjectResolution): string {
   const body = JSON.parse(requestBody) as { messages: Array<{ role: string; content: unknown }> };
-  const hint = `复核：确定性核对发现这一段里有关于孩子的消息（依据：${bounded.signals.join("、") || bounded.level}；来源 ${bounded.supportingSourceIds.slice(0, 8).join("、")}）。`
-    + "请只针对这些关于孩子的消息重新判断：如果它们说的是孩子本人的状态、吃睡、玩耍、成长、外出，或照护者对他的汇报，就用 explicit_child 或 resolved_child 并从这些消息抽取事实；"
-    + "只有这些消息实际说的是成人事务（钱款、成人工作、成人日程）、只是顺带提到他时，才判 family_context_only。其余成人闲聊不写。";
+  const hint = secondLookHint(bounded);
   const first = body.messages[0];
   body.messages = [{ role: "user", content: `${String(first.content)}
 
 ${hint}` }];
   return JSON.stringify(body);
+}
+
+export function secondLookHint(bounded: BoundedSubjectResolution): string {
+  return `复核：确定性核对发现这一段里有关于孩子的消息（依据：${bounded.signals.join("、") || bounded.level}；来源 ${bounded.supportingSourceIds.slice(0, 8).join("、")}）。`
+    + "请只针对这些关于孩子的消息重新判断：如果它们说的是孩子本人的状态、吃睡、玩耍、成长、外出，或照护者对他的汇报，就用 explicit_child 或 resolved_child 并从这些消息抽取事实；"
+    + "只有这些消息实际说的是成人事务（钱款、成人工作、成人日程）、只是顺带提到他时，才判 family_context_only。其余成人闲聊不写。";
 }
 
 export type MemoryEditorVariant = "v1" | "v2" | "v3" | "v4";
@@ -227,7 +233,9 @@ export type DeepSeekEditorOptions = {
 };
 
 export class DeepSeekMemoryEditor implements MemoryEditorProvider {
-  readonly name = "deepseek";
+  /** "glm" when AI_PROVIDER=zhipu (2026-09-23+), "deepseek" for the legacy transport. Written to the ledger as provider. */
+  readonly name: "deepseek" | "glm";
+  private readonly transport: "anthropic" | "glm";
   readonly model: string;
   readonly promptVersion: string;
   readonly variant: MemoryEditorVariant;
@@ -262,12 +270,21 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
     this.registry = options.registry;
     this.singleChildHousehold = options.singleChildHousehold ?? false;
     this.priorObservationsFor = options.priorObservationsFor;
-    if (!env.DEEPSEEK_API_KEY) throw new DeepSeekEditorError("DeepSeek is not configured: DEEPSEEK_API_KEY is missing", "missing_api_key", true);
-    // One pinned model (deepseek-model.ts): unset means deepseek-flash, anything else stops here.
-    try { this.model = resolveDeepSeekModel(env); }
-    catch (error) { throw new DeepSeekEditorError(error instanceof Error ? error.message : String(error), "model_not_allowed", true); }
-    this.apiKey = env.DEEPSEEK_API_KEY;
-    this.baseUrl = (env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
+    this.transport = (env.AI_PROVIDER ?? "").toLowerCase() === "zhipu" ? "glm" : "anthropic";
+    this.name = this.transport === "glm" ? "glm" : "deepseek";
+    if (this.transport === "glm") {
+      if (!env.ZHIPU_API_KEY) throw new DeepSeekEditorError("GLM is not configured: ZHIPU_API_KEY is missing", "missing_api_key", true);
+      try { this.model = resolveGlmModel(env); }
+      catch (error) { throw new DeepSeekEditorError(error instanceof Error ? error.message : String(error), "model_not_allowed", true); }
+      this.apiKey = env.ZHIPU_API_KEY;
+      this.baseUrl = (env.ZHIPU_BASE_URL ?? NIANLIFE_GLM_BASE_URL).replace(/\/$/, "");
+    } else {
+      if (!env.DEEPSEEK_API_KEY) throw new DeepSeekEditorError("DeepSeek is not configured: DEEPSEEK_API_KEY is missing", "missing_api_key", true);
+      try { this.model = resolveDeepSeekModel(env); }
+      catch (error) { throw new DeepSeekEditorError(error instanceof Error ? error.message : String(error), "model_not_allowed", true); }
+      this.apiKey = env.DEEPSEEK_API_KEY;
+      this.baseUrl = (env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
+    }
     this.timeoutMs = Math.max(1000, Number.parseInt(env.AI_TIMEOUT_MS ?? "60000", 10) || 60000);
     this.subject = subject;
   }
@@ -294,16 +311,26 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
       : isV3
       ? buildMemoryEditorPromptV3(window, this.subject, priors as SelectedPriorObservation[])
       : isV2 ? buildMemoryEditorPromptV2(window, this.subject, priors as PriorObservation[]) : buildMemoryEditorPrompt(window, this.subject);
-    let body = JSON.stringify({
-      model: this.model,
-      max_tokens: 4000,
-      temperature: 0,
-      thinking: { type: "disabled" },
-      system: systemPrompt,
-      tools: [{ name: toolName, description: "输出记忆编辑的结构化判断", input_schema: schema }],
-      tool_choice: { type: "tool", name: toolName },
-      messages: [{ role: "user", content: userPrompt }],
-    });
+    const glm = this.transport === "glm";
+    const tool: GlmTool = { name: toolName, description: "输出记忆编辑的结构化判断", input_schema: schema };
+    // GLM 是推理模型，reasoning token 也计入 max_tokens，所以上限开大；按实际用量计费。
+    let body = glm
+      ? JSON.stringify({
+        model: this.model, max_tokens: 16000, temperature: 0,
+        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+        tools: [{ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.input_schema } }],
+        tool_choice: { type: "function", function: { name: toolName } },
+      })
+      : JSON.stringify({
+        model: this.model,
+        max_tokens: 4000,
+        temperature: 0,
+        thinking: { type: "disabled" },
+        system: systemPrompt,
+        tools: [tool],
+        tool_choice: { type: "tool", name: toolName },
+        messages: [{ role: "user", content: userPrompt }],
+      });
 
     const startedAt = Date.now();
     let retries = 0;
@@ -315,22 +342,32 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
-        const response = await fetch(`${this.baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": this.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body, signal: controller.signal });
+        const response = glm
+          ? await fetch(`${this.baseUrl}/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${this.apiKey}`, "content-type": "application/json" }, body, signal: controller.signal })
+          : await fetch(`${this.baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": this.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body, signal: controller.signal });
         // Insufficient balance: stop the whole run, never keep burning retries.
-        if (response.status === 402) throw new DeepSeekEditorError("DeepSeek returned 402 insufficient balance", "insufficient_balance", true);
+        if (response.status === 402) throw new DeepSeekEditorError(`${this.name} returned 402 insufficient balance`, "insufficient_balance", true);
         if (!response.ok) {
-          if (TRANSIENT_STATUSES.has(response.status) && attempt < RETRY_DELAYS_MS.length) { lastError = new DeepSeekEditorError(`DeepSeek returned status ${response.status}`, `http_${response.status}`); continue; }
-          throw new DeepSeekEditorError(`DeepSeek returned status ${response.status}`, `http_${response.status}`);
+          if (TRANSIENT_STATUSES.has(response.status) && attempt < RETRY_DELAYS_MS.length) { lastError = new DeepSeekEditorError(`${this.name} returned status ${response.status}`, `http_${response.status}`); continue; }
+          throw new DeepSeekEditorError(`${this.name} returned status ${response.status}`, `http_${response.status}`);
         }
-        const payload = await response.json() as AnthropicResponse;
-        if (payload.error) throw new DeepSeekEditorError(`DeepSeek error: ${payload.error.type ?? "unknown"}`, "api_error");
+        const payload = await response.json() as AnthropicResponse & GlmChatResponse;
+        if (payload.error) throw new DeepSeekEditorError(`${this.name} error: ${payload.error.type ?? "unknown"}`, "api_error");
         // A response from another model is not retried into acceptance: fatal, the run stops.
-        try { assertProviderModel(this.model, payload as { model?: unknown }); }
-        catch (error) { if (error instanceof DeepSeekModelError) throw new DeepSeekEditorError(error.message, "provider_model_mismatch", true); throw error; }
-        const toolUse = payload.content?.find((block) => block.type === "tool_use" && block.name === toolName);
-        if (!toolUse || typeof toolUse.input !== "object" || toolUse.input === null) throw new DeepSeekEditorError("DeepSeek returned no tool_use block", "no_tool_use");
+        try { if (glm) assertGlmProviderModel(this.model, payload); else assertProviderModel(this.model, payload as { model?: unknown }); }
+        catch (error) { if (error instanceof Error && /PROVIDER_MODEL_MISMATCH/.test(error.message)) throw new DeepSeekEditorError(error.message, "provider_model_mismatch", true); throw error; }
+        let toolInput: unknown;
+        if (glm) {
+          const call = payload.choices?.[0]?.message?.tool_calls?.find((c) => c.function?.name === toolName);
+          if (!call?.function?.arguments) throw new DeepSeekEditorError("GLM returned no tool_calls", "no_tool_use");
+          try { toolInput = JSON.parse(call.function.arguments); } catch { throw new DeepSeekEditorError("GLM tool arguments are not JSON", "no_tool_use"); }
+          payload.usage = { input_tokens: payload.usage?.prompt_tokens ?? 0, output_tokens: payload.usage?.completion_tokens ?? 0 };
+        } else {
+          toolInput = payload.content?.find((block) => block.type === "tool_use" && block.name === toolName)?.input;
+        }
+        if (typeof toolInput !== "object" || toolInput === null) throw new DeepSeekEditorError(`${this.name} returned no tool_use block`, "no_tool_use");
 
-        const raw = { ...(toolUse.input as Record<string, unknown>) };
+        const raw = { ...(toolInput as Record<string, unknown>) };
         if (isV3 || isV4) {
           const worthinessAxis = raw.worthinessAxis as (WorthinessAxisV3 & WorthinessAxisV4) | undefined;
           const evidenceAxis = raw.evidenceAxis as EvidenceAxis | undefined;
@@ -359,7 +396,7 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
         // 模型却把整段判成无关——多半是被同一段里的成人闲聊带偏了。再问一次，指着那几条消息；第二次的回答算数。
         if (!secondLookAsked && needsSecondLook(gateAReason, boundedResolution)) {
           secondLookAsked = true;
-          body = withSecondLook(body, boundedResolution!);
+          body = glm ? withSecondLookGlm(body, secondLookHint(boundedResolution!)) : withSecondLook(body, boundedResolution!);
           attempt -= 1;
           continue;
         }
@@ -410,6 +447,6 @@ export class DeepSeekMemoryEditor implements MemoryEditorProvider {
 // hand the work to the rule-based organizer.
 export function createDeepSeekMemoryEditor(env: NodeJS.ProcessEnv, subject: { primaryName: string; aliases: string[] }, options: DeepSeekEditorOptions = {}) {
   const provider = (env.AI_PROVIDER ?? "").toLowerCase();
-  if (provider !== "deepseek") throw new DeepSeekEditorError(`AI_PROVIDER is "${provider || "unset"}", expected "deepseek"`, "wrong_provider", true);
+  if (provider !== "deepseek" && provider !== "zhipu") throw new DeepSeekEditorError(`AI_PROVIDER is "${provider || "unset"}", expected "zhipu" or "deepseek"`, "wrong_provider", true);
   return new DeepSeekMemoryEditor(env, subject, options);
 }

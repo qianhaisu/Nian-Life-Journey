@@ -22,6 +22,10 @@ const CLAUDE_AUTHORIZATION_REASON = "authorized-by:teddy-2026-09-16";
 // = story-write-guard.ts DEEPSEEK_SEMANTIC_REVIEW_PROVIDER (not imported: this module stays dependency-free).
 const DEEPSEEK_SEMANTIC_REVIEW_PROVIDER = "deepseek-semantic-review" as const;
 const DEEPSEEK_MODEL = "deepseek-flash";
+// 2026-09-23 起默认走智谱 glm-5.3-flash（OpenAI 兼容端点），账上 reviewer 写 glm-semantic-review。
+const GLM_SEMANTIC_REVIEW_PROVIDER = "glm-semantic-review" as const;
+const GLM_MODEL = "glm-5.3-flash";
+const GLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
 
 export type SemanticReviewVerdict = "approve" | "correct_needed" | "flag";
 
@@ -92,6 +96,7 @@ async function callDeepSeek(
   sources: SemanticReviewSource[],
   deepseekApiKey: string,
   deepseekBaseUrl: string,
+  glm = false,
 ): Promise<{ verdict: SemanticReviewVerdict; approved_people: string[]; corrections: Array<{ type: string; original_text: string; corrected_text: string }>; source_ids_checked: string[]; reasoning: string }> {
   const sourceBlock = sources.map((s, i) => {
     const speaker = s.speaker?.narrativeLabel ?? s.speaker?.displayName ?? "（未知）";
@@ -109,7 +114,14 @@ ${sourceBlock || "（无关联原始消息）"}
 
 请审核上述故事是否准确。如需修正，提供精确的original_text（必须是正文中存在的子串）和corrected_text。`;
 
-  const body = JSON.stringify({
+  const body = glm ? JSON.stringify({
+    model: GLM_MODEL,
+    max_tokens: 12000,
+    temperature: 0,
+    messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: userPrompt }],
+    tools: [{ type: "function", function: { name: REVIEW_TOOL_SCHEMA.name, description: REVIEW_TOOL_SCHEMA.description, parameters: REVIEW_TOOL_SCHEMA.input_schema } }],
+    tool_choice: { type: "function", function: { name: "review_verdict" } },
+  }) : JSON.stringify({
     model: DEEPSEEK_MODEL,
     max_tokens: 600,
     temperature: 0,
@@ -124,22 +136,29 @@ ${sourceBlock || "（无关联原始消息）"}
   for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt - 1]));
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const timeout = setTimeout(() => controller.abort(), glm ? 120_000 : 30_000);
     try {
-      const res = await fetch(`${deepseekBaseUrl}/v1/messages`, {
+      const res = await fetch(glm ? `${deepseekBaseUrl}/chat/completions` : `${deepseekBaseUrl}/v1/messages`, {
         method: "POST",
-        headers: { "x-api-key": deepseekApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        headers: glm ? { Authorization: `Bearer ${deepseekApiKey}`, "content-type": "application/json" } : { "x-api-key": deepseekApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
         body,
         signal: controller.signal,
       });
       clearTimeout(timeout);
       if (TRANSIENT_STATUSES.has(res.status)) { lastErr = new Error(`HTTP ${res.status}`); continue; }
       if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t.slice(0, 200)}`); }
-      const data = await res.json() as { model?: string; content?: Array<{ type: string; name?: string; input?: unknown }> };
-      if (data.model && data.model !== DEEPSEEK_MODEL) throw new Error(`Model mismatch: got ${data.model}`);
-      const toolBlock = data.content?.find((b) => b.type === "tool_use" && b.name === "review_verdict");
-      if (!toolBlock?.input) throw new Error("No tool_use block in response");
-      const v = toolBlock.input as { verdict?: string; approved_people?: unknown[]; corrections?: unknown[]; source_ids_checked?: unknown[]; reasoning?: string };
+      const data = await res.json() as { model?: string; content?: Array<{ type: string; name?: string; input?: unknown }>; choices?: Array<{ message?: { tool_calls?: Array<{ function?: { name?: string; arguments?: string } }> } }> };
+      const expectedModel = glm ? GLM_MODEL : DEEPSEEK_MODEL;
+      if (data.model && data.model !== expectedModel) throw new Error(`Model mismatch: got ${data.model}`);
+      let toolInput: unknown;
+      if (glm) {
+        const args = data.choices?.[0]?.message?.tool_calls?.find((c) => c.function?.name === "review_verdict")?.function?.arguments;
+        toolInput = args ? JSON.parse(args) : undefined;
+      } else {
+        toolInput = data.content?.find((b) => b.type === "tool_use" && b.name === "review_verdict")?.input;
+      }
+      if (!toolInput) throw new Error("No tool_use block in response");
+      const v = toolInput as { verdict?: string; approved_people?: unknown[]; corrections?: unknown[]; source_ids_checked?: unknown[]; reasoning?: string };
       if (!["approve", "correct_needed", "flag"].includes(v.verdict ?? "")) throw new Error(`Invalid verdict: ${v.verdict}`);
       return {
         verdict: v.verdict as SemanticReviewVerdict,
@@ -172,17 +191,24 @@ export async function reviewEventStory(
   sources: SemanticReviewSource[],
   repo: {
     getStoryContentVersion(eventId: string): Promise<{ eventId: string; contentSha256: string; content: { title?: string | null; story?: string | null } } | null>;
-    recordClaudeStoryDecision(args: { reviewer?: "deepseek-semantic-review"; eventId: string; decision: "approved" | "needs_human_review"; reviewedContentSha256: string; promptVersion: string; policyVersion: string; reasonCodes: string[] }): Promise<unknown>;
-    applyClaudeStoryCorrection(args: { reviewer?: "deepseek-semantic-review"; eventId: string; currentContentSha256: string; newStory?: string; newPeople?: string[]; promptVersion: string; policyVersion: string; reasonCodes: string[] }): Promise<{ newContentSha256: string }>;
+    recordClaudeStoryDecision(args: { reviewer?: "deepseek-semantic-review" | "glm-semantic-review"; eventId: string; decision: "approved" | "needs_human_review"; reviewedContentSha256: string; promptVersion: string; policyVersion: string; reasonCodes: string[] }): Promise<unknown>;
+    applyClaudeStoryCorrection(args: { reviewer?: "deepseek-semantic-review" | "glm-semantic-review"; eventId: string; currentContentSha256: string; newStory?: string; newPeople?: string[]; promptVersion: string; policyVersion: string; reasonCodes: string[] }): Promise<{ newContentSha256: string }>;
   },
   pool: { query(sql: string, params: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }> },
   options: {
-    deepseekApiKey: string;
+    /** 智谱 key。给了就走 GLM（默认路径），没给才用下面的 DeepSeek 旧配置。 */
+    zhipuApiKey?: string;
+    zhipuBaseUrl?: string;
+    deepseekApiKey?: string;
     deepseekBaseUrl?: string;
     dryRun?: boolean;
   },
 ): Promise<ReviewOutcome> {
-  const baseUrl = (options.deepseekBaseUrl ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
+  const glm = Boolean(options.zhipuApiKey);
+  const baseUrl = (glm ? (options.zhipuBaseUrl ?? GLM_BASE_URL) : (options.deepseekBaseUrl ?? "https://api.deepseek.com/anthropic")).replace(/\/$/, "");
+  const apiKey = glm ? options.zhipuApiKey! : options.deepseekApiKey;
+  if (!apiKey) return { kind: "error", error: "no model credential (zhipuApiKey / deepseekApiKey)" };
+  const reviewer = glm ? GLM_SEMANTIC_REVIEW_PROVIDER : DEEPSEEK_SEMANTIC_REVIEW_PROVIDER;
 
   try {
     const version = await repo.getStoryContentVersion(eventId);
@@ -196,8 +222,9 @@ export async function reviewEventStory(
       version.content.story,
       currentPeople,
       sources,
-      options.deepseekApiKey,
+      apiKey,
       baseUrl,
+      glm,
     );
 
     if (options.dryRun) {
@@ -211,7 +238,7 @@ export async function reviewEventStory(
         reviewedContentSha256: version.contentSha256,
         promptVersion: SEMANTIC_REVIEW_PROMPT_VERSION,
         policyVersion: SEMANTIC_REVIEW_POLICY_VERSION,
-        reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:approved"],
+        reviewer, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:approved"],
       });
       return { kind: "approved", contentSha256: version.contentSha256 };
 
@@ -238,7 +265,7 @@ export async function reviewEventStory(
           ...(peopleChanged ? { newPeople: verdict.approved_people } : {}),
           promptVersion: SEMANTIC_REVIEW_PROMPT_VERSION,
           policyVersion: SEMANTIC_REVIEW_POLICY_VERSION,
-          reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:correction-applied"],
+          reviewer, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:correction-applied"],
         });
         return { kind: "corrected", contentSha256: version.contentSha256, newSha256: result.newContentSha256 };
       }
@@ -249,7 +276,7 @@ export async function reviewEventStory(
         reviewedContentSha256: version.contentSha256,
         promptVersion: SEMANTIC_REVIEW_PROMPT_VERSION,
         policyVersion: SEMANTIC_REVIEW_POLICY_VERSION,
-        reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:correction-unapplied", anyMismatch ? "reason:correction_text_not_found" : "reason:no_actual_change"],
+        reviewer, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:correction-unapplied", anyMismatch ? "reason:correction_text_not_found" : "reason:no_actual_change"],
       });
       return { kind: "needs_human_review", contentSha256: version.contentSha256, reason: anyMismatch ? "correction_text_not_found" : "no_actual_change" };
 
@@ -261,7 +288,7 @@ export async function reviewEventStory(
         reviewedContentSha256: version.contentSha256,
         promptVersion: SEMANTIC_REVIEW_PROMPT_VERSION,
         policyVersion: SEMANTIC_REVIEW_POLICY_VERSION,
-        reviewer: DEEPSEEK_SEMANTIC_REVIEW_PROVIDER, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:flagged", verdict.reasoning?.slice(0, 80) ?? ""],
+        reviewer, reasonCodes: [CLAUDE_AUTHORIZATION_REASON, "semantic-review:flagged", verdict.reasoning?.slice(0, 80) ?? ""],
       });
       return { kind: "needs_human_review", contentSha256: version.contentSha256, reason: "flagged:" + (verdict.reasoning?.slice(0, 60) ?? "") };
     }

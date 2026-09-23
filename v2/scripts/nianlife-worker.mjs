@@ -32,6 +32,7 @@
 //
 // Source root is E:\WechatHis (not E:\WechatHis\texts — see STATE.md §3 for why).
 
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import path from "node:path";
 import {
   readFileSync,
@@ -74,8 +75,8 @@ if (!dbUrl) {
   process.stderr.write("[worker] DATABASE_URL is missing — check .env.local\n");
   process.exit(1);
 }
-if (!process.env.DEEPSEEK_API_KEY) {
-  process.stderr.write("[worker] DEEPSEEK_API_KEY is missing — check .env.local\n");
+if (!modelKey()) {
+  process.stderr.write("[worker] model key (ZHIPU_API_KEY) is missing — check .env.local\n");
   process.exit(1);
 }
 

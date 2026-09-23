@@ -13,6 +13,7 @@
 //        --groups=<g.json> --cache=<media dir> --out=<covers.json> [--top=8] [--ledger=<l.json>]
 //        [--ids=<media id,media id,...>]
 
+import { GLM_MODEL, isZhipu, messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -28,12 +29,15 @@ const outPath = arg("out");
 const top = Number(arg("top", "8"));
 const manifest = JSON.parse(fs.readFileSync(path.join(mediaDir, "_manifest.json"), "utf8"));
 
-const MODEL = "deepseek-flash";
+let MODEL = "deepseek-flash"; // 2026-09-23 起 AI_PROVIDER=zhipu 时改用 glm-5.3-flash（见下）
 const env = {};
+// 2026-09-23：AI_PROVIDER=zhipu 时经 glm-messages.mjs 改发智谱 glm-5.3-flash。
+const mfetch = (url, init) => messagesFetch(url, init, env);
 for (const line of fs.readFileSync(path.join(process.cwd(), ".env.local"), "utf8").split(/\r?\n/)) {
   const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
   if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, "");
 }
+if (isZhipu(env)) MODEL = GLM_MODEL;
 if (env.AI_MODEL && env.AI_MODEL.trim() !== MODEL) { console.error(`MODEL_NOT_ALLOWED: ${env.AI_MODEL}`); process.exit(1); }
 const BASE = (env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 
@@ -86,9 +90,9 @@ for (const candidate of ranked) {
   const entry = manifest[candidate.mediaId];
   const buffer = fs.readFileSync(path.join(mediaDir, entry.file));
   try {
-    const response = await fetch(`${BASE}/v1/messages`, {
+    const response = await mfetch(`${BASE}/v1/messages`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": env.DEEPSEEK_API_KEY, "anthropic-version": "2023-06-01" },
+      headers: { "content-type": "application/json", "x-api-key": modelKey(env), "anthropic-version": "2023-06-01" },
       // instructions first (shared by every candidate of the month, so the provider can reuse the prefix), then the picture
       body: JSON.stringify({ model: MODEL, max_tokens: 4000, messages: [{ role: "user", content: [
         { type: "text", text: PROMPT },

@@ -28,6 +28,7 @@ import type { WorthinessAxis } from "./worthiness-v2";
 import type { WorthinessAxisV3 } from "./worthiness-v3";
 import type { WorthinessAxisV4 } from "./worthiness-v4";
 import { assertProviderModel, resolveDeepSeekModel } from "./deepseek-model";
+import { NIANLIFE_GLM_BASE_URL, NIANLIFE_GLM_MODEL, assertGlmProviderModel, callGlmWithTools } from "./glm-model";
 
 /**
  * The frozen V6 router reads a V4 worthiness axis, and the editor's axis map is typed as any of the
@@ -137,9 +138,11 @@ export function createDeepSeekV2Pipeline(env: NodeJS.ProcessEnv, options: Pipeli
 
     async write({ window, windowFingerprint, judgment, birthDate }) {
       const versions = { promptVersion: WRITER_V2_PROMPT_VERSION, validatorVersion: NARRATIVE_VALIDATOR_VERSION };
-      const apiKey = env.DEEPSEEK_API_KEY;
-      const baseUrl = (env.DEEPSEEK_BASE_URL ?? "").replace(/\/$/, "");
-      if (!apiKey || !baseUrl) throw new V2PipelineError("Writer v2 needs DEEPSEEK_API_KEY and DEEPSEEK_BASE_URL.");
+      // 2026-09-23：AI_PROVIDER=zhipu → 智谱 glm-5.3-flash（OpenAI 兼容端点）；DeepSeek 旧配置保留为另一条分支。
+      const glm = (env.AI_PROVIDER ?? "").toLowerCase() === "zhipu";
+      const apiKey = glm ? env.ZHIPU_API_KEY : env.DEEPSEEK_API_KEY;
+      const baseUrl = (glm ? (env.ZHIPU_BASE_URL ?? NIANLIFE_GLM_BASE_URL) : (env.DEEPSEEK_BASE_URL ?? "")).replace(/\/$/, "");
+      if (!apiKey || !baseUrl) throw new V2PipelineError(glm ? "Writer v2 needs ZHIPU_API_KEY." : "Writer v2 needs DEEPSEEK_API_KEY and DEEPSEEK_BASE_URL.");
       const pkg: VerifiedMemoryEvidencePackage = buildEvidencePackage({
         window,
         windowFingerprint,
@@ -155,25 +158,40 @@ export function createDeepSeekV2Pipeline(env: NodeJS.ProcessEnv, options: Pipeli
       if (!packageHasAssertableMaterial(pkg)) return { wrote: false, reason: "nothing_assertable", ...versions, latencyMs: 0 };
 
       const started = Date.now();
-      const response = await fetch(`${baseUrl}/v1/messages`, {
-        method: "POST",
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        signal: AbortSignal.timeout(timeoutMs),
-        body: JSON.stringify({
-          model: writerModel, max_tokens: 3000, temperature: 0, thinking: { type: "disabled" },
-          system: WRITER_V2_SYSTEM_PROMPT,
+      let toolInput: unknown;
+      let latencyMs: number;
+      // A legacy ORGANIZER_V2_MODEL=deepseek-flash must not be sent to the other provider (and vice versa).
+      const model = glm ? (writerModel === "deepseek-flash" ? NIANLIFE_GLM_MODEL : writerModel) : (writerModel === NIANLIFE_GLM_MODEL ? "deepseek-flash" : writerModel);
+      if (glm) {
+        const result = await callGlmWithTools({
+          apiKey, baseUrl, model, systemPrompt: WRITER_V2_SYSTEM_PROMPT, userContent: buildWriterV2Prompt(pkg),
           tools: [{ name: WRITER_V2_TOOL_NAME, description: "输出这一页的标题、正文和逐句依据", input_schema: WRITER_V2_TOOL_SCHEMA }],
-          tool_choice: { type: "tool", name: WRITER_V2_TOOL_NAME },
-          messages: [{ role: "user", content: buildWriterV2Prompt(pkg) }],
-        }),
-      });
-      const latencyMs = Date.now() - started;
-      if (!response.ok) throw new V2PipelineError(`Writer v2 HTTP ${response.status}`);
-      const payload = await response.json() as { model?: unknown; content?: Array<{ type: string; name?: string; input?: unknown }> };
-      assertProviderModel(writerModel, payload);
-      const tool = payload.content?.find((block) => block.type === "tool_use" && block.name === WRITER_V2_TOOL_NAME);
-      if (!tool) throw new V2PipelineError("Writer v2 returned no tool_use block.");
-      const output = { contractVersion: "writer-v2-output-contract-v1", ...(tool.input as object) } as WriterV2Output;
+          toolName: WRITER_V2_TOOL_NAME, maxTokens: 16000, timeoutMs, signal: AbortSignal.timeout(timeoutMs),
+        }).catch((error: unknown) => { throw new V2PipelineError(`Writer v2 (glm): ${error instanceof Error ? error.message : String(error)}`); });
+        latencyMs = Date.now() - started;
+        assertGlmProviderModel(model, { model: result.responseModel });
+        toolInput = result.toolInput;
+      } else {
+        const response = await fetch(`${baseUrl}/v1/messages`, {
+          method: "POST",
+          headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+          signal: AbortSignal.timeout(timeoutMs),
+          body: JSON.stringify({
+            model, max_tokens: 3000, temperature: 0, thinking: { type: "disabled" },
+            system: WRITER_V2_SYSTEM_PROMPT,
+            tools: [{ name: WRITER_V2_TOOL_NAME, description: "输出这一页的标题、正文和逐句依据", input_schema: WRITER_V2_TOOL_SCHEMA }],
+            tool_choice: { type: "tool", name: WRITER_V2_TOOL_NAME },
+            messages: [{ role: "user", content: buildWriterV2Prompt(pkg) }],
+          }),
+        });
+        latencyMs = Date.now() - started;
+        if (!response.ok) throw new V2PipelineError(`Writer v2 HTTP ${response.status}`);
+        const payload = await response.json() as { model?: unknown; content?: Array<{ type: string; name?: string; input?: unknown }> };
+        assertProviderModel(model, payload);
+        toolInput = payload.content?.find((block) => block.type === "tool_use" && block.name === WRITER_V2_TOOL_NAME)?.input;
+      }
+      if (!toolInput) throw new V2PipelineError("Writer v2 returned no tool_use block.");
+      const output = { contractVersion: "writer-v2-output-contract-v1", ...(toolInput as object) } as WriterV2Output;
       const validation = validateNarrative({ pkg, output });
       // A rejected narrative is NOT downgraded into a trace or retried with a softer prompt. The page
       // simply is not written, the run records why, and the evidence stays available for a human.

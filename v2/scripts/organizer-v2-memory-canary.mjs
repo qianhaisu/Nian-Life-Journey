@@ -23,6 +23,7 @@
 //   node --import tsx -r dotenv/config scripts/organizer-v2-memory-canary.mjs \
 //     --window=<{caseId,windowId,sourceIds}>.json --out=<dir> --stage=plan|judge|write|predeclare|apply|replay \
 //     dotenv_config_path=.env.local
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -153,7 +154,7 @@ if (STAGE === "plan") {
 
 if (STAGE === "judge") {
   if (existsSync(JUDGMENT_FILE)) { console.error(`REFUSED: ${JUDGMENT_FILE} exists — the single live Judgment attempt has already been spent.`); await client.end(); process.exit(1); }
-  if (!process.env.DEEPSEEK_API_KEY) { console.error("Need DEEPSEEK_API_KEY."); await client.end(); process.exit(1); }
+  if (!modelKey()) { console.error("Need ZHIPU_API_KEY (AI_PROVIDER=zhipu)."); await client.end(); process.exit(1); }
   const editor = createDeepSeekMemoryEditor(process.env, SUBJECT, { variant: "v4", ...BASE_OPTS });
   console.log(`\neditor ${editor.name} ${editor.model} ${editor.promptVersion}  — ONE live call`);
   const started = Date.now();
@@ -189,8 +190,8 @@ if (STAGE === "write") {
   if (existsSync(WRITER_FILE)) { console.error(`REFUSED: ${WRITER_FILE} exists — the single Writer call has already been spent.`); await client.end(); process.exit(1); }
   const j = loadJudgment();
   if (j.outcome.action !== "life_event_candidate") { console.error("saved judgment is not a Memory route"); await client.end(); process.exit(2); }
-  const apiKey = process.env.DEEPSEEK_API_KEY; const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "").replace(/\/$/, "");
-  if (!apiKey || !baseUrl) { console.error("Need DEEPSEEK_API_KEY and DEEPSEEK_BASE_URL."); await client.end(); process.exit(1); }
+  const apiKey = modelKey(); const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
+  if (!apiKey || !baseUrl) { console.error("Need ZHIPU_API_KEY (AI_PROVIDER=zhipu)."); await client.end(); process.exit(1); }
   const pkg = buildEvidencePackage({
     window: w, windowFingerprint: fp, grounding: j.grounding,
     selectedBy: { policyId: j.routingPolicyId, action: j.outcome.action, worthinessScore: j.outcome.worthinessScore ?? 0 },
@@ -202,7 +203,7 @@ if (STAGE === "write") {
   if (!packageHasAssertableMaterial(pkg)) { console.log("nothing assertable — Writer not called"); writeFileSync(WRITER_FILE, JSON.stringify({ fingerprint: fp, skipped: "nothing_assertable", package: pkg }, null, 2)); await client.end(); process.exit(3); }
   const body = JSON.stringify({ model: selection.adapterPolicy.model, max_tokens: 3000, temperature: 0, thinking: { type: "disabled" }, system: WRITER_V2_SYSTEM_PROMPT, tools: [{ name: WRITER_V2_TOOL_NAME, description: "输出这一页的标题、正文和逐句依据", input_schema: WRITER_V2_TOOL_SCHEMA }], tool_choice: { type: "tool", name: WRITER_V2_TOOL_NAME }, messages: [{ role: "user", content: buildWriterV2Prompt(pkg) }] });
   const started = Date.now();
-  const res = await fetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
+  const res = await messagesFetch(`${baseUrl}/v1/messages`, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (!res.ok) throw new Error(`writer http ${res.status}`);
   const payload = await res.json();
   const tool = payload.content?.find((b) => b.type === "tool_use" && b.name === WRITER_V2_TOOL_NAME);

@@ -7,6 +7,7 @@
 // it hidden — publishing nothing is an acceptable outcome, publishing something invented is not.
 //
 //   node --import tsx scripts/deepseek-family-writer.mjs --audit=<report.json> --out=<report.json> [--max=30] [--dry-run]
+import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
@@ -32,8 +33,8 @@ const PROFILE_ID = "profile-zhangnian";
 const { resolveDeepSeekModel, assertProviderModel } = await import("../lib/organizer/deepseek-model.ts");
 const MODEL = resolveDeepSeekModel(process.env);
 const BASE_URL = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
-if ((process.env.AI_PROVIDER ?? "").toLowerCase() !== "deepseek" || !process.env.DEEPSEEK_API_KEY || !MODEL) {
-  console.error("Fail closed: AI_PROVIDER must be deepseek with DEEPSEEK_API_KEY and AI_MODEL set.");
+if (!["deepseek", "zhipu"].includes((process.env.AI_PROVIDER ?? "").toLowerCase()) || !modelKey() || !MODEL) {
+  console.error("Fail closed: AI_PROVIDER must be zhipu (ZHIPU_API_KEY) or deepseek (DEEPSEEK_API_KEY), with AI_MODEL set.");
   process.exit(1);
 }
 console.log(`Provider: deepseek model=${MODEL} promptVersion=${FAMILY_WRITER_PROMPT_VERSION}`);
@@ -50,7 +51,7 @@ async function writeStory(input) {
     messages: [{ role: "user", content: buildFamilyWriterPrompt(input) }],
   });
   const started = Date.now();
-  const response = await fetch(`${BASE_URL}/v1/messages`, { method: "POST", headers: { "x-api-key": process.env.DEEPSEEK_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
+  const response = await messagesFetch(`${BASE_URL}/v1/messages`, { method: "POST", headers: { "x-api-key": modelKey(), "anthropic-version": "2023-06-01", "content-type": "application/json" }, body });
   if (response.status === 402) { console.error("DeepSeek 402 insufficient balance — stopping."); process.exit(2); }
   if (!response.ok) throw new Error(`http_${response.status}`);
   const payload = await response.json();

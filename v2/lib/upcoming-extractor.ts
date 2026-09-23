@@ -11,6 +11,7 @@
 //   - an adult's own appointment is not the child's todo. Without that said explicitly, the
 //     mother's own hospital booking came back as a commitment about 张年.
 import { assertProviderModel, resolveDeepSeekModel } from "./organizer/deepseek-model";
+import { NIANLIFE_GLM_BASE_URL, assertGlmProviderModel, callGlmWithTools, resolveGlmModel } from "./organizer/glm-model";
 
 export const UPCOMING_PROMPT_VERSION = "upcoming-extract-v1";
 
@@ -176,9 +177,27 @@ export type UpcomingExtraction = {
 /** One bounded call. Fails closed on configuration, aborts at 90 s, and exits on 402 rather than
  *  retrying against an account that cannot pay. Retries are the caller's business. */
 export async function extractFromUnit(prompt: string, env: NodeJS.ProcessEnv = process.env): Promise<UpcomingExtraction> {
+  const provider = (env.AI_PROVIDER ?? "").toLowerCase();
+  // 2026-09-23：默认走智谱 glm-5.3-flash；DeepSeek 分支保留。
+  if (provider === "zhipu") {
+    if (!env.ZHIPU_API_KEY) throw new Error("upcoming extractor: AI_PROVIDER=zhipu needs ZHIPU_API_KEY");
+    const model = resolveGlmModel(env);
+    const result = await callGlmWithTools({
+      apiKey: env.ZHIPU_API_KEY, baseUrl: (env.ZHIPU_BASE_URL ?? NIANLIFE_GLM_BASE_URL).replace(/\/$/, ""), model,
+      systemPrompt: UPCOMING_SYSTEM_PROMPT, userContent: prompt,
+      tools: [{ name: UPCOMING_TOOL_NAME, description: "报告这一天里与张年有关的待办事项与状态更新", input_schema: UPCOMING_TOOL_SCHEMA }],
+      toolName: UPCOMING_TOOL_NAME, maxTokens: 16000, timeoutMs: 180_000, signal: AbortSignal.timeout(180_000),
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/HTTP 402/.test(message)) throw new Error("glm_402_insufficient_balance");
+      throw error;
+    });
+    assertGlmProviderModel(model, { model: result.responseModel });
+    return result.toolInput as UpcomingExtraction;
+  }
   const apiKey = env.DEEPSEEK_API_KEY;
-  if ((env.AI_PROVIDER ?? "").toLowerCase() !== "deepseek" || !apiKey) {
-    throw new Error("upcoming extractor: AI_PROVIDER must be deepseek with DEEPSEEK_API_KEY set");
+  if (provider !== "deepseek" || !apiKey) {
+    throw new Error("upcoming extractor: AI_PROVIDER must be zhipu (ZHIPU_API_KEY) or deepseek (DEEPSEEK_API_KEY)");
   }
   const model = resolveDeepSeekModel(env);
   const baseUrl = (env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");

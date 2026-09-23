@@ -15,6 +15,7 @@
  *     --out=<path>/R7-SEMANTIC-REVIEW-RESULTS.jsonl \
  *     [--dry-run] [--max-calls=100] [--concurrency=3]
  */
+import { GLM_MODEL, isZhipu, messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import { readFileSync, appendFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
@@ -71,10 +72,10 @@ const repo = createPostgresRepository();
 const pool = getPool();
 
 // ── DeepSeek config ──────────────────────────────────────────────────────
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_API_KEY = modelKey();
 const DEEPSEEK_BASE_URL = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
-const DEEPSEEK_MODEL = "deepseek-flash";
-if (!DEEPSEEK_API_KEY) { console.error("DEEPSEEK_API_KEY is required"); process.exit(1); }
+const DEEPSEEK_MODEL = isZhipu() ? GLM_MODEL : "deepseek-flash"; // 2026-09-23：zhipu → glm-5.3-flash
+if (!DEEPSEEK_API_KEY) { console.error("ZHIPU_API_KEY (AI_PROVIDER=zhipu) is required"); process.exit(1); }
 
 const CLAUDE_AUTHORIZATION_REASON = "authorized-by:teddy-2026-09-16";
 const PROMPT_VERSION = "r7-semantic-review-v1";
@@ -166,7 +167,7 @@ ${sourceBlock || "（无关联原始消息）"}
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
     try {
-      const res = await fetch(`${DEEPSEEK_BASE_URL}/v1/messages`, {
+      const res = await messagesFetch(`${DEEPSEEK_BASE_URL}/v1/messages`, {
         method: "POST",
         headers: { "x-api-key": DEEPSEEK_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
         body,

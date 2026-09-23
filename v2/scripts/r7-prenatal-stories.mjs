@@ -11,6 +11,7 @@
  * Usage:
  *  node --import tsx scripts/r7-prenatal-stories.mjs [--dry-run] [--commit]
  */
+import { GLM_MODEL, isZhipu, messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
 import { createHash, randomUUID } from "node:crypto";
@@ -20,10 +21,10 @@ loadDotenv({ path: path.resolve(process.cwd(), ".env.local"), quiet: true });
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run") || !args.includes("--commit");
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_API_KEY = modelKey();
 const DEEPSEEK_BASE_URL = (process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, "");
 
-if (!DEEPSEEK_API_KEY) { console.error("DEEPSEEK_API_KEY required"); process.exit(1); }
+if (!DEEPSEEK_API_KEY) { console.error("ZHIPU_API_KEY (AI_PROVIDER=zhipu) required"); process.exit(1); }
 
 const { openTunnel, tunnelDatabaseUrl } = await import("../.data/night-rds.mjs");
 const tunnel = await openTunnel();
@@ -70,7 +71,7 @@ ${sourceTexts.join("\n")}
 请为这段经历写一个标题和正文。`;
 
   const body = JSON.stringify({
-    model: "deepseek-flash",
+    model: isZhipu() ? GLM_MODEL : "deepseek-flash",
     max_tokens: 300,
     temperature: 0,
     thinking: { type: "disabled" },
@@ -92,14 +93,14 @@ ${sourceTexts.join("\n")}
     messages: [{ role: "user", content: USER }],
   });
 
-  const res = await fetch(`${DEEPSEEK_BASE_URL}/v1/messages`, {
+  const res = await messagesFetch(`${DEEPSEEK_BASE_URL}/v1/messages`, {
     method: "POST",
     headers: { "x-api-key": DEEPSEEK_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body,
   });
   if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t.slice(0, 200)}`); }
   const data = await res.json();
-  if (data.model !== "deepseek-flash") throw new Error(`Model mismatch: ${data.model}`);
+  if (data.model !== (isZhipu() ? GLM_MODEL : "deepseek-flash")) throw new Error(`Model mismatch: ${data.model}`);
   const tb = data.content?.find(b => b.type === "tool_use" && b.name === "write_story");
   if (!tb?.input) throw new Error("No tool_use block");
   return tb.input;
