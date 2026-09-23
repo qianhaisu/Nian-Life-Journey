@@ -27,7 +27,7 @@ export function dayMediaKind(shown: { type?: string }[]): string {
 // Always a grid now (2026-09-23, Teddy: 「图片排版要整齐」). The first screen used to be a strip of
 // thumbnails that only turned into a grid once expanded, so the same day looked like two different
 // designs depending on one click. Now it is one grid from the start: up to DAY_GROUP_PREVIEW_MAX
-// cells, the last one carrying 「+N」 when there are more, and tapping it lays the rest out in the
+// cells, the last one carrying 「展开」 (no count, 原则三) when there are more, and tapping it lays the rest out in the
 // same grid. Every picture that mounts is lazy, so the unexpanded day costs only what it draws.
 export function DayPhotos({
   photos,

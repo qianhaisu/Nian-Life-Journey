@@ -16,7 +16,8 @@ import { mediaDeliveryUrl } from "@/lib/media/paths";
 //   5+       — 3-column rows of squares
 //
 // `limit` (the month page uses 6): with more photos than that, only `limit` cells are drawn and the
-// last one carries 「+N」 (N = the photos not drawn); tapping it calls `onExpand`, which shows them all.
+// last one carries a light veil and 「展开」 — never a count (原则三); tapping it calls `onExpand`, which
+// shows them all.
 // Without `limit` every photo is drawn (the day's own page, and a day the reader already opened).
 //
 // object-fit: cover throughout, 4px gap. Clicking any still opens the shared ViewerModal, whose reel
@@ -28,8 +29,7 @@ function Cell({
   onClick,
   sizes,
   priority = false,
-  overlay,
-  label,
+  onMore,
   alone = false,
   large = alone,
 }: {
@@ -39,8 +39,8 @@ function Cell({
   onClick?: () => void;
   sizes: string;
   priority?: boolean;
-  overlay?: string;
-  label?: string;
+  /** This cell is the last one drawn: a light veil with a real 「展开」 button that opens the rest. */
+  onMore?: () => void;
 }) {
   const isVideo = photo.type === "video";
   // A grid cell is at most a third or a half of the reading column, and the grid is what every day
@@ -50,8 +50,8 @@ function Cell({
   // the large cell of three, gets the full file from the start.
   const [full, setFull] = useState(large);
   const src = isVideo ? (photo.posterSrc ?? mediaDeliveryUrl(photo.id, "poster")) : full ? photo.src : (photo.thumbnailSrc ?? mediaDeliveryUrl(photo.id, "thumbnail"));
-  // A video under 「+N」 is drawn by its poster like a still: the cell's job there is to open the rest.
-  if (isVideo && !overlay) {
+  // A video under 「展开」 is drawn by its poster like a still: the cell's job there is to open the rest.
+  if (isVideo && !onMore) {
     return (
       // Only a video standing alone keeps its own frame; inside a grid it takes the cell's shape like
       // every other picture, or its row runs taller than its neighbours.
@@ -63,11 +63,11 @@ function Cell({
   return (
     <figure
       className="pg-cell"
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      aria-label={onClick ? (label ?? "打开照片") : undefined}
-      onClick={onClick}
-      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      role={onClick && !onMore ? "button" : undefined}
+      tabIndex={onClick && !onMore ? 0 : undefined}
+      aria-label={onClick && !onMore ? "打开照片" : undefined}
+      onClick={onMore ? undefined : onClick}
+      onKeyDown={onClick && !onMore ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
     >
       <Image
         key={src}
@@ -80,7 +80,8 @@ function Cell({
         style={{ objectFit: "cover" }}
         onError={() => { if (!full) setFull(true); }}
       />
-      {overlay ? <span className="pg-overlay">{overlay}</span> : null}
+      {/* 原则三：展开控件只说它做什么，不报还剩几张。 */}
+      {onMore ? <button type="button" className="pg-more" onClick={onMore} aria-label="展开这一天的其他照片">展开</button> : null}
     </figure>
   );
 }
@@ -97,9 +98,9 @@ export function PhotoGrid({
   dateLabel: string;
   ageLabel?: string;
   priority?: boolean;
-  /** Draw at most this many cells; the last one becomes 「+N」. Only honoured for 5 or more cells. */
+  /** Draw at most this many cells; the last one becomes 「展开」. Only honoured for 5 or more cells. */
   limit?: number;
-  /** Called when the 「+N」 cell is tapped. */
+  /** Called when 「展开」 is tapped. */
   onExpand?: () => void;
 }) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -124,7 +125,6 @@ export function PhotoGrid({
 
   const limited = limit !== undefined && photos.length > limit;
   const displayed = limited ? photos.slice(0, limit) : photos;
-  const extra = photos.length - displayed.length;
 
   const n = displayed.length;
 
@@ -185,7 +185,7 @@ export function PhotoGrid({
     );
   }
 
-  // ── 5+ photos: 3-column rows, the last drawn cell carrying 「+N」 when limited ──
+  // ── 5+ photos: 3-column rows, the last drawn cell carrying 「展开」 when limited ──
   return (
     <>
       <div className="pg pg-3-row">
@@ -194,11 +194,10 @@ export function PhotoGrid({
           return <Cell
             key={p.id}
             photo={p}
-            onClick={isMore && onExpand ? onExpand : () => openStill(i)}
+            onClick={() => openStill(i)}
+            onMore={isMore ? onExpand : undefined}
             sizes={thirdSizes}
             priority={priority && i === 0}
-            overlay={isMore ? `+${extra}` : undefined}
-            label={isMore ? `还有 ${extra} 张，展开全部` : undefined}
           />;
         })}
       </div>

@@ -1186,17 +1186,22 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pg-3-row { grid-template-columns: repeat(3, 1fr); }
 .pg-3-row .pg-cell { aspect-ratio: 1 / 1; }
 
-/* +N overlay on the last cell */
-.pg-overlay {
+/* 「展开」 on the last drawn cell: a light veil, the photo still visible under it, and the words say
+   what the control does — never how many are left (原则三). */
+.pg-more {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  color: #fff;
-  font-size: 1.4rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  pointer-events: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgb(250 247 242 / .62);
+  color: var(--color-text);
+  font-size: 1rem;
+  letter-spacing: .12em;
+  cursor: pointer;
 }
+.pg-more:hover { background: rgb(250 247 242 / .5); }
+.pg-more:focus-visible { outline: 2px solid var(--color-secondary); outline-offset: -2px; }
