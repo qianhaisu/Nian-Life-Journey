@@ -123,10 +123,11 @@ test("the verified registry resolves all three confirmed speakers and nobody els
 });
 
 // The Markdown export escapes the nanny's trailing dot and the JSON export does not, so the same
-// person arrives under two digests. The plain spelling is mapped only inside the conversation the
-// equivalence was demonstrated in (2026-09-12, the nursery class group, where both exports cover
-// the same day); everywhere else it stays unknown.
-test("育儿嫂未转义的显示名只在被证实的那个会话里解析，别处仍是未知", async () => {
+// person arrives under two digests. Until 2026-09-22 the plain spelling was mapped only inside the
+// nursery class group, where the equivalence was first demonstrated; on 2026-09-22 Teddy confirmed
+// hxx. is 雪姨 in every group, and the scope was removed (family-registry.ts). Both spellings now
+// resolve everywhere, including 小雪微信群 (118 messages that used to read as unknown).
+test("育儿嫂的两种显示名在所有会话里都解析成雪姨（Teddy 2026-09-22 确认，取消会话范围）", async () => {
   const { FAMILY_REGISTRY } = await import("../lib/organizer/family-registry.ts");
   const { DAYCARE_CONVERSATION } = await import("../lib/organizer/subject-gate.ts");
   const plain = senderDigestForDisplayName("hxx.");
@@ -138,18 +139,15 @@ test("育儿嫂未转义的显示名只在被证实的那个会话里解析，�
   assert.equal(inDaycare.canonicalPersonId, "person-xueyi");
 
   const elsewhere = resolveSpeaker(plain, FAMILY_REGISTRY, { conversationId: "conversation:e6adbcafc3c6e32be0494251" });
-  assert.equal(elsewhere.known, false, "小雪微信群 carries the same digest and is NOT part of this mapping");
-  assert.equal(displayLabelFor(elsewhere), UNKNOWN_SPEAKER_LABEL);
-  assert.equal(resolveSpeaker(plain, FAMILY_REGISTRY).known, false, "a caller that does not say where it is gets nothing");
+  assert.equal(displayLabelFor(elsewhere), "雪姨", "小雪微信群 carries the same digest and now resolves too");
+  assert.equal(resolveSpeaker(plain, FAMILY_REGISTRY).known, true, "unscoped: resolves even without a conversation");
 
   // Resolved inside that conversation, the two spellings are one person: same canonical id, so the
   // same speakerKey, which is what corroboration counting groups on.
   assert.equal(inDaycare.speakerKey, resolveSpeaker(escaped, FAMILY_REGISTRY).speakerKey);
-  // distinctSpeakerCount() takes no conversation, so it cannot see a scoped entry and would count
-  // the two spellings as two speakers. That is not reachable today — an evidence window is built
-  // from one conversation, and each export writes only one of the two spellings — but it is the
-  // reason this assertion states the limit instead of pretending it away.
-  assert.equal(distinctSpeakerCount([plain, escaped], FAMILY_REGISTRY), 2);
+  // With the scope removed, distinctSpeakerCount() (which takes no conversation) sees both spellings
+  // as one canonical person — the limitation this test used to document is gone.
+  assert.equal(distinctSpeakerCount([plain, escaped], FAMILY_REGISTRY), 1);
 });
 
 test("父母与育儿嫂的转述都算亲历观察，未知发言人不算", async () => {

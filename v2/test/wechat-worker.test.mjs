@@ -568,8 +568,10 @@ test("capacity-audit CLI reports bounded metadata without importing or leaking s
 test("real (non-audit) CLI import fails closed instead of silently defaulting to the local JSON store when REPOSITORY_BACKEND is unset", async () => {
   const root = await createFixture();
   try {
-    const env = { ...process.env };
-    delete env.REPOSITORY_BACKEND;
+    // Blank, not deleted: the CLI loads .env.local with dotenv, which fills in any key that is ABSENT but never
+    // overrides one that is present. Since .env.local started carrying REPOSITORY_BACKEND and DATABASE_URL (2026-09),
+    // deleting the key let dotenv put them back and this test ran a real import against a live database URL.
+    const env = { ...process.env, REPOSITORY_BACKEND: "", DATABASE_URL: "" };
     const result = await execFileAsync(process.execPath, ["--import", "tsx", cliScript, "--source-root", root, "--profile-id", "profile-zhangnian"], { env }).catch((error) => error);
     assert.notEqual(result.code, 0);
     const report = JSON.parse(result.stdout);
@@ -583,7 +585,7 @@ test("real (non-audit) CLI import fails closed instead of silently defaulting to
 test("real (non-audit) CLI import fails closed when REPOSITORY_BACKEND is explicitly json, not just when it's unset", async () => {
   const root = await createFixture();
   try {
-    const env = { ...process.env, REPOSITORY_BACKEND: "json" };
+    const env = { ...process.env, REPOSITORY_BACKEND: "json", DATABASE_URL: "" };
     const result = await execFileAsync(process.execPath, ["--import", "tsx", cliScript, "--source-root", root, "--profile-id", "profile-zhangnian"], { env }).catch((error) => error);
     assert.notEqual(result.code, 0);
     const report = JSON.parse(result.stdout);
