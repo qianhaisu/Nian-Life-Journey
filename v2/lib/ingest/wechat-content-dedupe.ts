@@ -351,3 +351,52 @@ export function isDuplicateMarked(metadata: Record<string, unknown> | null | und
 
 /** SQL 条件：只读没有 duplicateOf 标记的行。与 isDuplicateMarked 同义，给直接写 SQL 的读取方用。 */
 export const NOT_DUPLICATE_MARKED_SQL = "coalesce(metadata->>'duplicateOf', '') = ''";
+
+// ── 写入前的内容去重（2026-09-23 第四轮，Teddy：从源头防止重复）──────────────────────────────
+//
+// 群改名、重新导出、每日切片，都会让同一条消息以新的会话 id、新的 providerExternalId 再来一次；
+// 原来的幂等键 (provider, providerExternalId) 挡不住。阿静私聊因此存了三份（去重前 2 万行冗余），
+// 作战部队三份（约 7,900 行）。这里给写入层一个与会话 id 无关的判断：
+//   发送秒 + 发送人（我 ≡ Ted：导出者本人的两种写法）+ normalizeAcrossExports(正文)
+// 库里已有一条活着的同键消息，这一条就不再新建，而是当作那一条（照片之类照常挂到它上面）。
+// 同一秒、同一人、同一句话在同一份导出里真的出现两次时按次数计：库里已有 n 条，只有第 n+1 条才新建。
+
+const EXPORTER_TED = senderDigestForDisplayName("Ted");
+const EXPORTER_ME = senderDigestForDisplayName("我");
+
+export type ContentKeyed = { capturedAt: string | Date; text?: string | null; metadata?: Record<string, unknown> | null; sourceType?: string };
+
+/** 一条消息的内容键；不是微信消息、没有发送人时返回 null（不参与内容去重）。 */
+export function contentKeyOf(source: ContentKeyed): string | null {
+  if (source.sourceType !== undefined && source.sourceType !== "wechat") return null;
+  const digest = typeof source.metadata?.senderDigest === "string" ? source.metadata.senderDigest : "";
+  if (!digest) return null;
+  const sender = digest === EXPORTER_TED ? EXPORTER_ME : digest;
+  return `${secondOf(source.capturedAt)}|${sender}|${normalizeAcrossExports(source.text)}`;
+}
+
+/**
+ * 哪些待写入的消息库里已经有了（按内容键，一对一、按次数）。
+ * @param incoming 待写入的消息（带调用方自己的 key，通常是 provider+providerExternalId）
+ * @param existing 库里同一批发送秒上的活着的消息（已去掉软删和带 duplicateOf 的）
+ * @returns incoming key → 已有的那一行
+ */
+export function matchArchivedByContent<T extends ContentKeyed & { id: string }>(
+  incoming: ReadonlyArray<{ key: string; source: ContentKeyed }>,
+  existing: ReadonlyArray<T>,
+): Map<string, T> {
+  const pool = new Map<string, T[]>();
+  for (const row of existing) {
+    const k = contentKeyOf(row);
+    if (!k) continue;
+    if (!pool.has(k)) pool.set(k, []);
+    pool.get(k)!.push(row);
+  }
+  const matched = new Map<string, T>();
+  for (const item of incoming) {
+    const k = contentKeyOf(item.source);
+    const rows = k ? pool.get(k) : undefined;
+    if (rows?.length) matched.set(item.key, rows.shift()!);
+  }
+  return matched;
+}

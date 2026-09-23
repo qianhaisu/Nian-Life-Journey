@@ -8,6 +8,7 @@ import { newId, organizerJobKey } from "./repository-interface";
 import { CANONICAL_PROFILE_ID } from "./config";
 import type { ChatImportTaskAcknowledgeInput, ChatImportTaskClaimInput, ChatImportTaskCompletionInput, ChatImportTaskCreateInput, ChatImportTaskFailureInput, ChatImportTaskLeaseInput, ChatImportTaskListFilter, ChatImportTaskWarningsInput, MonthArchiveInput, OrganizerWindowInput, Repository, Store, UploadPersistInput, UploadPersistResult } from "./repository-interface";
 import { normalizeSha256 } from "./chat-import-persistence";
+import { contentKeyOf, matchArchivedByContent } from "@/lib/ingest/wechat-content-dedupe";
 import { indexReviews, isEventPublishable, isTracePublishable, type QualityReview } from "@/lib/organizer/quality-review";
 import { createHash } from "node:crypto";
 import {
@@ -307,6 +308,25 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
 }
 
 
+  // 2026-09-23 写入前的内容去重（lib/ingest/wechat-content-dedupe.ts matchArchivedByContent）：同一条微信消息
+  // 以新的会话 id / providerExternalId 再来（群改名、重新导出、每日切片），不再新建一行，而是当作库里已有的那一条。
+  // 只看活着的、没有 duplicateOf 标记的微信消息，与会话 id 无关。
+  async function findArchivedByContent(tx: any, sources: ReadonlyArray<{ key: string; source: Pick<RawSource, "sourceType" | "capturedAt" | "provider" | "providerExternalId" | "metadata"> & { text?: string | null } }>): Promise<Map<string, RawSource>> {
+    const candidates = sources.filter((s) => s.source.sourceType === "wechat" && contentKeyOf(s.source as never));
+    if (!candidates.length) return new Map();
+    const seconds = [...new Set(candidates.map((s) => new Date(Math.floor(Date.parse(String(s.source.capturedAt)) / 1000) * 1000).toISOString()))];
+    const rows = (await tx.select().from(t.rawSources).where(and(
+      eq(t.rawSources.sourceType, "wechat"),
+      sql`${t.rawSources.deletedAt} is null`,
+      sql`coalesce(${t.rawSources.metadata}->>'duplicateOf', '') = ''`,
+      sql`date_trunc('second', ${t.rawSources.capturedAt}) = any(${`{${seconds.join(",")}}`}::timestamptz[])`,
+    ))) as unknown as RawSource[];
+    // 自己那一行（同 provider+providerExternalId）不算「另一份」，交给原来的幂等路径。
+    const own = new Set(candidates.map((s) => `${s.source.provider} ${s.source.providerExternalId}`));
+    const others = rows.filter((row) => !own.has(`${row.provider} ${row.providerExternalId}`));
+    return matchArchivedByContent(candidates, others as never) as unknown as Map<string, RawSource>;
+  }
+
   async function persistUpload(input: UploadPersistInput): Promise<UploadPersistResult> {
     return db.transaction(async (tx) => {
       const rejectedInput = await loadMediaRejections(
@@ -316,13 +336,14 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
       );
       const { assets: rejectedFilteredAssets, media: rejectedFilteredMedia, locations: rejectedFilteredLocations } =
         dropRejectedMedia(rejectedInput, input.assets ?? [], input.media, input.locations ?? []);
-      const [sourceIdRow] = await tx.select().from(t.rawSources).where(eq(t.rawSources.id, input.source.id));
+      const contentTwin = (await findArchivedByContent(tx, [{ key: "single", source: input.source as unknown as RawSource }])).get("single");
+      const [sourceIdRow] = contentTwin ? [undefined] : await tx.select().from(t.rawSources).where(eq(t.rawSources.id, input.source.id));
       if (sourceIdRow && input.source.provider && input.source.providerExternalId && (sourceIdRow.provider !== input.source.provider || sourceIdRow.providerExternalId !== input.source.providerExternalId)) throw new Error("RAW_SOURCE_ID_CONFLICT");
-      const sourceRows = input.source.provider && input.source.providerExternalId
+      const sourceRows = contentTwin ? [contentTwin] : input.source.provider && input.source.providerExternalId
         ? await tx.insert(t.rawSources).values(input.source as any).onConflictDoNothing({ target: [t.rawSources.provider, t.rawSources.providerExternalId] }).returning()
         : await tx.insert(t.rawSources).values(input.source as any).onConflictDoNothing({ target: t.rawSources.id }).returning();
       let sourceRow = sourceRows[0];
-      let sourceCreated = Boolean(sourceRow);
+      let sourceCreated = Boolean(sourceRow) && !contentTwin;
       if (!sourceRow) {
         const existingRows = input.source.provider && input.source.providerExternalId
           ? await tx.select().from(t.rawSources).where(and(eq(t.rawSources.provider, input.source.provider), eq(t.rawSources.providerExternalId, input.source.providerExternalId)))
@@ -420,8 +441,10 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
       // Strip null bytes and lone surrogates that PostgreSQL text columns cannot store.
       // Old WeChat XML app-messages (type 8, cdnurl content) sometimes carry embedded binary.
       const pgSafeText = (v: string | null | undefined) => v == null ? v : v.replace(/\x00/g, "").replace(/[\uD800-\uDFFF]/g, "");
-      const sourceInputs = [...sourceByKey.values()].map((s) => s.text != null ? { ...s, text: pgSafeText(s.text) } : s);
-      const insertedSourceRows = (await tx.insert(t.rawSources).values(sourceInputs as any).onConflictDoNothing({ target: [t.rawSources.provider, t.rawSources.providerExternalId] }).returning()) as unknown as RawSource[];
+      const allSourceInputs = [...sourceByKey.values()].map((s) => s.text != null ? { ...s, text: pgSafeText(s.text) } : s);
+      const contentTwins = await findArchivedByContent(tx, allSourceInputs.map((s) => ({ key: sourceKey(s), source: s })));
+      const sourceInputs = allSourceInputs.filter((s) => !contentTwins.has(sourceKey(s)));
+      const insertedSourceRows = !sourceInputs.length ? [] as RawSource[] : (await tx.insert(t.rawSources).values(sourceInputs as any).onConflictDoNothing({ target: [t.rawSources.provider, t.rawSources.providerExternalId] }).returning()) as unknown as RawSource[];
       const insertedSourceByKey = new Map(insertedSourceRows.map((row) => [sourceKey(row), row] as const));
       const missingSourceInputs = sourceInputs.filter((s) => !insertedSourceByKey.has(sourceKey(s)));
       const existingSourceRows = missingSourceInputs.length
@@ -430,6 +453,7 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
       const sourceRowByKey = new Map<string, { row: RawSource; created: boolean }>();
       for (const [key, row] of insertedSourceByKey) sourceRowByKey.set(key, { row, created: true });
       for (const row of existingSourceRows) if (!sourceRowByKey.has(sourceKey(row))) sourceRowByKey.set(sourceKey(row), { row, created: false });
+      for (const [key, row] of contentTwins) sourceRowByKey.set(key, { row, created: false });
       for (const key of sourceByKey.keys()) if (!sourceRowByKey.has(key)) throw new Error("RAW_SOURCE_CONFLICT");
 
       // --- MediaAsset: dedupe by normalized checksum (our callers derive the id from the checksum,
