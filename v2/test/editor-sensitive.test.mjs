@@ -39,6 +39,14 @@ test("照片：裸露、证件、单据、带患者信息的报告、无关第�
   ]) assert.match(decideSensitivePhoto({ ...base, ...patch }).reason, re, JSON.stringify(patch));
 });
 
+test("照片：截图、海报、商品页、检验报告不是家里拍的照片，不上页面；家里拍的照片与干净的 B 超影像可以", () => {
+  const ok = { category: "checkup", nudity: "none", document_type: "none", has_patient_identifiers: false, has_address_or_phone: false, third_party_only: false };
+  for (const kind of ["screenshot", "poster_or_ad", "document"]) assert.match(decideSensitivePhoto({ ...ok, image_kind: kind }).reason, /不是家里拍的照片/, kind);
+  assert.match(decideSensitivePhoto({ ...ok, image_kind: "camera_photo", document_type: "medical_report" }).reason, /妈妈本人的检查指标/);
+  assert.equal(decideSensitivePhoto({ ...ok, image_kind: "camera_photo", category: "bump" }).allow, true);
+  assert.equal(decideSensitivePhoto({ ...ok, image_kind: "ultrasound_image", category: "ultrasound", document_type: "medical_image" }).allow, true);
+});
+
 test("新入库的媒体（夜间照片流程）同样拦下证件、截图、医疗、裸露", () => {
   const ok = { kind: "life", child_present: true, reference_child: "yes", face_visible: true, children_count: 1, main_child_size: "large", other_children_identifiable: false, sensitive: "none" };
   assert.notEqual(decidePhoto({ ...ok, sensitive: "identity_document" }).decision, "approved");
