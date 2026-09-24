@@ -15,32 +15,12 @@ import { buildMonthTimeline, weekEntries } from "@/lib/month-timeline";
 import { loadFamilyArchiveForIsr } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
-import { findMonth, type MonthChapter } from "@/lib/memory-chapters";
+import { findMonth } from "@/lib/memory-chapters";
 import { buildMonthComposition, chronicleAlbumDays, dayAlbumDays } from "@/lib/publication-moments";
 import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
-import { ageAtMonth, formatMonth, monthAgeLine } from "@/lib/time-signature";
+import { formatMonth, monthAgeLine } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
-
-// A month whose content file exists but has no DB chapter (no media, events, or traces).
-// The month still has edited content worth reading; we supply a minimal chapter so the page
-// renders that content rather than 404ing. The month will not appear in the year index until
-// its first DB record arrives — this is intentional.
-function contentOnlyChapter(month: string, birthDay: string | undefined): MonthChapter {
-  const seg = month.slice(5, 7);
-  return {
-    month,
-    label: formatMonth(month),
-    shortLabel: `${Number(seg)} 月`,
-    ageLabel: ageAtMonth(birthDay, month),
-    memories: [],
-    traceDays: [],
-    photos: [],
-    photoCount: 0,
-    videoCount: 0,
-    photoDays: [],
-    withheldMediaCount: 0,
-  };
-}
+import { contentOnlyChapter } from "@/lib/edited-chapters";
 
 export const revalidate = 300;
 

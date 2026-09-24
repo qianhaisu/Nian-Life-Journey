@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 // An edited month — the words a family actually reads — loaded from outside the repository.
@@ -183,6 +183,17 @@ export async function loadMonthContent(month: string, nowMs: number = Date.now()
   }
   cache.set(month, { at: nowMs, content });
   return content;
+}
+
+/** Local content files only; no extra database query or raw-source read. */
+export async function listEditedMonthContents(): Promise<MonthContent[]> {
+  const dir = process.env.MONTH_CONTENT_DIR?.trim();
+  if (!dir) return [];
+  try {
+    const names = (await readdir(dir)).filter(name => /^\d{4}-\d{2}\.json$/.test(name));
+    const contents = await Promise.all(names.map(name => loadMonthContent(name.slice(0, 7))));
+    return contents.filter((content): content is MonthContent => content !== null && content.days.length > 0);
+  } catch { return []; }
 }
 
 /** The edited day an old event id now reads as, if any. Old links keep working through this. */

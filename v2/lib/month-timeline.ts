@@ -4,6 +4,7 @@ import { findMonth, toMediaRef, type MediaRef } from "@/lib/memory-chapters";
 import { pickLeadDays, pickLeadPhoto } from "@/lib/month-day-weight";
 import { loadMonthContent, resolveMonthContentMedia } from "@/lib/month-content";
 import { buildMonthComposition } from "@/lib/publication-moments";
+import { contentOnlyChapter } from "./edited-chapters";
 
 // An edited month as ONE timeline of days (2026-09-23, Teddy: 「故事和日子只能存在一个」).
 //
@@ -91,8 +92,8 @@ export function cutWeeks(days: readonly string[], order: "desc" | "asc"): Timeli
 
 export async function buildMonthTimeline(archive: FamilyArchive, year: string, monthSegment: string): Promise<MonthTimeline | null> {
   const month = `${year}-${monthSegment}`;
-  const chapter = findMonth(archive.chapters, month);
   const content = await loadMonthContent(month);
+  const chapter = findMonth(archive.chapters, month) ?? (content?.days.length ? contentOnlyChapter(month, archive.birthDay) : null);
   if (!chapter || !content) return null;
 
   const { media, eventIdentities, privilege, traceEvents, birthDay } = archive;

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { prenatalStoryForFamily } from "@/lib/prenatal-story";
 import { EvidenceList } from "@/components/evidence-list";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { TimeSignature } from "@/components/time-signature";
@@ -35,7 +36,10 @@ export const revalidate = 300;
 // Request-scoped memoization: generateMetadata and the page body both need the same event.
 // getEventDetail's reads are id-scoped (not unbounded — see the note above), but this page still
 // calls it twice per request (metadata + body); cache() collapses that into one actual fetch.
-const getCachedEventDetail = cache(getEventDetail);
+const getCachedEventDetail = cache(async (id: string) => {
+  const detail = await getEventDetail(id);
+  return detail ? { ...detail, event: prenatalStoryForFamily(detail.event) } : detail;
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;

@@ -15,6 +15,9 @@ import type { EventIdentity } from "@/lib/preview-reading";
 import { latestActivityDay, latestMemoryDay, latestTraceDay, productToday, type RecencyReference } from "@/lib/time-truth";
 import type { MediaPrivilege } from "@/lib/publication-moments";
 import type { LifeEvent, Media, MonthlySnapshot, RawSource } from "@/lib/types";
+import { listEditedMonthContents } from "./month-content";
+import { withEditedChapters } from "./edited-chapters";
+import { prenatalStoryForFamily } from "./prenatal-story";
 
 // The one set of clocks every page reads (lib/time-truth.ts). Pages never compute their own "now".
 export type ArchiveTime = RecencyReference & {
@@ -123,7 +126,7 @@ export function composeFamilyArchive(
   // recorded that it belongs to a story. getStore() already returns every review row for the
   // publication gate, so reading them here costs no extra query.
   const photoConfirmations = storyPhotoConfirmationsFrom(store.qualityReviews ?? []);
-  const chapters = buildChapters({ events, traces, media: familyMedia, deliverable, birthDay, photoConfirmations });
+  const chapters = buildChapters({ events: events.map(prenatalStoryForFamily), traces, media: familyMedia, deliverable, birthDay, photoConfirmations });
   const publishedMonths = new Set(events.map((event) => calendarMonthOf(event.occurredAt)).filter((value): value is string => Boolean(value)));
   const snapshots = store.monthlySnapshots.filter((item) => isSnapshotPublishable(item.month, publishedMonths));
   // Photographs somebody opened and recorded as being of this child (no story attached). Only the
@@ -279,11 +282,13 @@ export async function loadFamilyArchive(): Promise<FamilyArchive> {
   // path actually consults. Its rows are PARTIAL by design — see the type's doc comment before
   // reading a new field off store.mediaAssets, store.mediaLocations or store.rawSources here.
   const input = await getFamilyArchiveInput();
-  return composeFamilyArchive(
+  const archive = composeFamilyArchive(
     input.store,
     input.events,
     new Date(),
     input.eventIdentities as unknown as LifeEvent[],
     input.latestSourceCapturedAt,
   );
+  archive.chapters = withEditedChapters(archive.chapters, await listEditedMonthContents(), archive.birthDay);
+  return archive;
 }
