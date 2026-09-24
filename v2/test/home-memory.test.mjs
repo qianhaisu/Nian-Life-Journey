@@ -9,11 +9,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  selectHomeMemories, buildDayMemory, MEMORY_MIN_SLIDES, MEMORY_MAX_SLIDES, CROSS_DAY_PER_DAY_MAX,
+  selectHomeMemories as selectActualHomeMemories, buildDayMemory, MEMORY_MIN_SLIDES, MEMORY_MAX_SLIDES, CROSS_DAY_PER_DAY_MAX,
 } from "../lib/home-memory.ts";
 import { moodFor, MEMORY_TRACKS, pickTrack } from "../lib/home-memory-mood.ts";
 import { reminderInWindow, lastMentionedOn, windowStart, windowEnd } from "../lib/home-reminder-window.ts";
 import { lastMentionFrom } from "../lib/upcoming-contract.ts";
+import { CAROUSEL_THEMES } from "../lib/home-memory-topics.ts";
+
+// Existing composition fixtures now include explicit visual review scores.
+// Missing-cache behavior is tested against selectActualHomeMemories below.
+function selectHomeMemories(archive, labels = () => undefined) {
+  const photos = archive.chapters.flatMap(y => y.months.flatMap(m => m.photoDays.flatMap(d => d.photos)));
+  const byId = new Map(photos.map(p => [p.id, p]));
+  const keyOf = { '睡觉':'sleep', '笑':'laugh', '吃饭':'eat', '户外':'outdoor', '玩玩具':'toy', '抱着':'hold' };
+  return selectActualHomeMemories(archive, id => {
+    const old = labels(id) ?? { topic:'其他', value:0.9, confidence:0.9, water:false };
+    const matches = Object.fromEntries(CAROUSEL_THEMES.map(k => [k, ['spring','summer','autumn','winter'].includes(k) ? 90 : 0]));
+    if(keyOf[old.topic] && old.confidence >= 0.6) matches[keyOf[old.topic]] = 90;
+    if(old.water && ['泳池','海边','喷水戏水'].includes(old.waterKind) && old.swimming && old.childInFrame) matches.water=90;
+    return {...old, carousel:{promptVersion:'home-carousel-v4',takenAt:byId.get(id).takenAt,matches,clarity:80+old.value*20,expression:90,
+      qualified:old.value>=0.7,eyesOpen:old.topic!=='睡觉',sleeping:old.topic==='睡觉',childMain:true,faceClear:true,faceUnblocked:true,motionBlur:false,sensitive:false,approvedThemes:[...CAROUSEL_THEMES]}};
+  });
+}
 
 // ── 夹具 ──────────────────────────────────────────────────────────────────────
 
@@ -101,7 +118,7 @@ test("每组连拍取像素最大的那一张（微信压缩版不能顶替原�
   // 同一时刻两张：压缩版在前、原图在后。旧实现取「第一张够大的」＝压缩版。
   const day = "2026-09-09";
   const photos = [];
-  for (let i = 0; i < 7; i += 1) {
+  for (let i = 0; i < 8; i += 1) {
     const at = `${day} 1${i}:00:00`;
     photos.push(photo(`small-${i}`, at, { width: 960, height: 1280 }));
     photos.push(photo(`orig-${i}`, at, { width: 3120, height: 4160 }));
@@ -110,7 +127,7 @@ test("每组连拍取像素最大的那一张（微信压缩版不能顶替原�
     day, dateLabel: "d", photos, published: [story("e1", day, "标题")],
     privilege: { checked: new Set(photos.map((p) => p.id)) },
   });
-  assert.equal(memory.slides.length, 7);
+  assert.equal(memory.slides.length, 8);
   for (const slide of memory.slides) {
     assert.match(slide.media.id, /^orig-/, `取到了压缩版：${slide.media.id}`);
   }
@@ -139,6 +156,8 @@ test("首页保留跨日主题与季节，并交替展示", () => {
     monthOf("2026-09", [
       { day: "2026-09-09", photos: moments("a", "2026-09-09", 8) },
       { day: "2026-09-02", photos: moments("b", "2026-09-02", 8) },
+      { day: "2026-09-03", photos: moments("a", "2026-09-03", 8).map(p => ({...p,id:`a-third-${p.id}`})) },
+      { day: "2026-09-04", photos: moments("b", "2026-09-04", 8).map(p => ({...p,id:`b-fourth-${p.id}`})) },
     ], [story("e1", "2026-09-09", "他说了「打开」"), story("e2", "2026-09-02", "开始要说话了")]),
     monthOf("2026-08", [
       { day: "2026-08-20", photos: moments("c", "2026-08-20", 8) },
@@ -151,7 +170,7 @@ test("首页保留跨日主题与季节，并交替展示", () => {
   ];
   const { memories } = selectHomeMemories(
     archiveOf(months),
-    () => ({ topic: "睡觉", water: true, value: 0.9, confidence: 0.9 }),
+    id => ({ topic: /^[ab]-/.test(id) ? "睡觉" : "其他", water: false, value: 0.9, confidence: 0.9 }),
   );
   assert.ok(memories.length >= 2, `应当有多段，实得 ${memories.length}`);
   const kinds = new Set(memories.map((m) => m.kind));
@@ -210,6 +229,7 @@ test("跨天主题：同一天最多两张，一整季不能变成某一个下�
       { day: "2026-07-01", photos: moments("big", "2026-07-01", 20, 6) },
       { day: "2026-07-15", photos: moments("b", "2026-07-15", 6) },
       { day: "2026-07-28", photos: moments("c", "2026-07-28", 6) },
+      { day: "2026-07-30", photos: moments("d", "2026-07-30", 6) },
     ]),
   ];
   const { memories } = selectHomeMemories(archiveOf(months));
@@ -283,7 +303,7 @@ test("主题候选数超过 HOME_MEMORIES_MAX 时（day/topic×7/season×4），
   ]);
 
   const spread8 = (prefix, month) => ["01", "04", "08", "11", "15", "18", "22", "25"]
-    .map((d) => ({ day: `${month}-${d}`, photos: moments(`${prefix}${d}`, `${month}-${d}`, 3) }));
+    .map((d) => ({ day: `${month}-${d}`, photos: moments(`${prefix}${d}`, `${month}-${d}`, 3, 7 + ['wtr','slp','lgh','eat','out','toy','hld'].indexOf(prefix)*2) }));
 
   const dayMonths = ["2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09"]
     .map((m, i) => monthOf(m, [{ day: `${m}-10`, photos: moments(`d${i}`, `${m}-10`, 8) }],
@@ -453,11 +473,8 @@ test("季节/一周主题：同一天的名额也要顾话题多样性，不能�
     if (id === "d1-eat-b") return { topic: "吃饭", value: 0.93, confidence: 0.9, water: false };
     if (id === "d1-laugh") return { topic: "笑", value: 0.85, confidence: 0.9, water: false };
     if (id === "d1-out") return { topic: "户外", value: 0.8, confidence: 0.9, water: false };
-    // 其余陪衬的日子：value 故意压在 TOPIC_MIN_VALUE(0.7) 以下——2026-09-23 加了跨段去重之后，
-    // 如果这里给到 0.7 以上，d2/d3/d4 这 6 张会自己先凑成一段「玩玩具」主题（先建的段先挑），
-    // 把这条季节候选全部去重掉，季节反而因为供给耗尽建不出来。这条测试要测的是
-    // 「季节内部同一天的多样性」，不是跨段去重，所以让陪衬照片够不上任何主题的门槛。
-    return { topic: "玩玩具", value: 0.5, confidence: 0.9, water: false };
+    // 其余照片清楚但没有强动作主题，仍有季节画面依据。
+    return { topic: "其他", value: 0.85, confidence: 0.9, water: false };
   };
   const months = [monthOf("2026-07", [
     { day: "2026-07-01", photos: day1 },
@@ -544,13 +561,13 @@ test("价值分不够的照片进不了主题回忆——宁可没有这一段",
     "全部低于价值分下限时，一段主题回忆都不该出现");
 });
 
-test("读不到标注缓存时主题回忆一段都不出，天与季节照常", () => {
+test("读不到标注缓存时主题和季节均不出，日期不能代替画面依据", () => {
   const months = eightDays("n");
   // 不传 lookup ＝ 缓存缺失
-  const { memories } = selectHomeMemories(archiveOf(months));
+  const { memories } = selectActualHomeMemories(archiveOf(months));
   assert.equal(memories.some((m) => m.kind === "topic"), false,
     "不知道画面里是什么，就不能说这是一段玩水的回忆");
-  assert.ok(memories.some((m) => m.kind === "season"), "季节的依据是日期事实，不受影响");
+  assert.equal(memories.length, 0, "没有视觉评分不能放行季节");
 });
 
 test("选片：先按价值分砍掉差的一半，再沿时间铺开——两个都要", () => {
@@ -603,7 +620,7 @@ test("连拍折叠只看像素，不看价值分——压缩版分再高也不�
   // 一旦让价值分参与去重，压缩版侥幸高 0.01 分就又把原图顶掉了。
   const day = "2026-09-09";
   const photos = [];
-  for (let i = 0; i < 7; i += 1) {
+  for (let i = 0; i < 8; i += 1) {
     const at = `${day} 1${i}:00:00`;
     photos.push(photo(`small-${i}`, at, { width: 960, height: 1280 }));
     photos.push(photo(`orig-${i}`, at, { width: 3120, height: 4160 }));
@@ -666,7 +683,7 @@ test("同一段里同一场景（替代规则：同一天且拍摄时间相差 1
   const closeDay = "2026-07-01";
   // 3 分钟之内两张，替代规则判成同一场景；真正的同场景标注字段到位前，这条链式规则代它判。
   const scenePair = [photo("scene-low", `${closeDay} 09:00:00`), photo("scene-high", `${closeDay} 09:03:00`)];
-  const otherDays = ["2026-07-08", "2026-07-15", "2026-07-22", "2026-07-29", "2026-08-05"]
+  const otherDays = ["2026-07-08", "2026-07-15", "2026-07-22", "2026-07-29", "2026-08-05", "2026-08-08", "2026-08-11"]
     .map((day, i) => ({ day, photos: moments(`solo${i}`, day, 1) }));
   const months = [
     monthOf("2026-07", [{ day: closeDay, photos: scenePair }, ...otherDays.slice(0, 4)]),

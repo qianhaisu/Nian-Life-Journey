@@ -18,7 +18,7 @@ export const HOME_PHOTO_TOPICS_PATH_ENV = "HOME_PHOTO_TOPICS_PATH";
  * 读缓存。默认读随仓库发布的 `data/photo-topics.json`。
  *
  * 任何一步出问题都返回 undefined——首页照样渲染，只是主题回忆不出现
- * （天与季节不受影响，见 lib/home-memory.ts）。不抛错、不写空对象冒充读到了。
+ * （季节同样需要视觉评分）。不抛错、不写空对象冒充读到了。
  */
 export async function loadTopicCache(
   path?: string,

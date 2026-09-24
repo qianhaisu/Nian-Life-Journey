@@ -30,5 +30,10 @@ rem Needs the DB tunnel + env, so it goes through t20-run-env.mjs like the WeCha
 "C:\Program Files\nodejs\node.exe" --env-file=.env.local .data\t20-run-env.mjs -- scripts\editor\nightly-reminders.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\reminders-%STAMP%.log 2>&1
 echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\reminders-%STAMP%.log
 set REMINDERS_EXIT=%ERRORLEVEL%
+rem Refresh offline carousel scores after the nightly inputs; never call the model from a page.
+"C:\Program Files\nodejs\node.exe" --import tsx scripts\editor\nightly-home-carousel.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\carousel-%STAMP%.log 2>&1
+echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\carousel-%STAMP%.log
+set CAROUSEL_EXIT=%ERRORLEVEL%
 if not "%EDITOR_EXIT%"=="0" exit /b %EDITOR_EXIT%
+if not "%CAROUSEL_EXIT%"=="0" exit /b %CAROUSEL_EXIT%
 exit /b %REMINDERS_EXIT%

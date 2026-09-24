@@ -42,7 +42,7 @@
 //   2. **最终取哪几张看价值分**（pickSlides / capPerDay）。到这一步剩下的都是彼此不同的画面，
 //      问题变成「哪几张最值得给家人看」，那就该用逐张看过的价值分，而不是按时间均匀取。
 //
-// 没有价值分时（缓存缺失、这批还没标过）**退回沿时间均匀取**，不假装有依据。
+// 首页主题与季节只使用新版离线视觉评分；缺失评分的照片不进候选，不按日期凑数。
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // 照片门槛
@@ -57,12 +57,12 @@
 import type { FamilyArchive } from "@/lib/family-archive";
 import type { EditorialMemory, MediaRef, MonthChapter } from "@/lib/memory-chapters";
 import { burstGroups, isSubjectChecked, type MediaPrivilege } from "@/lib/publication-moments";
-import { thumbnailSized } from "@/lib/media/hero";
+import { heroSized } from "@/lib/media/hero";
 import { ageAtMonth, formatMonth } from "@/lib/time-signature";
 import { moodFor, type MemoryMood } from "@/lib/home-memory-mood";
-import { NO_TOPICS, type PhotoTopicLabel, type PhotoTopicLookup } from "@/lib/home-memory-topics";
+import { NO_TOPICS, carouselQualified, carouselValue, type CarouselTheme, type PhotoTopicLookup } from "@/lib/home-memory-topics";
 
-export const MEMORY_MIN_SLIDES = 6;
+export const MEMORY_MIN_SLIDES = 8;
 /**
  * 一段回忆最多取几张。
  *
@@ -143,7 +143,7 @@ const byTime = (a: MediaRef, b: MediaRef) =>
 
 /** 能进幻灯片的照片：主体核验通过 + 画得出来。 */
 function usable(photos: readonly MediaRef[], privilege: MediaPrivilege): MediaRef[] {
-  return photos.filter((item) => isSubjectChecked(item, privilege) && thumbnailSized(item));
+  return photos.filter((item) => isSubjectChecked(item, privilege) && heroSized(item));
 }
 
 /**
@@ -212,7 +212,13 @@ function sceneGroups(ordered: readonly MediaRef[]): MediaRef[][] {
 /** 每个场景（见 sceneGroups）留一张最值得展示的：按价值分，没有价值分退回像素/时间顺序。 */
 function sceneRepresentatives(reps: readonly MediaRef[], topics: PhotoTopicLookup): MediaRef[] {
   const better = byValue(topics);
-  return sceneGroups(reps).map((group) => [...group].sort(better)[0]);
+  const distinct = new Map<string, MediaRef>();
+  for (const photo of sceneGroups(reps).map(group => [...group].sort(better)[0])) {
+    const key = topics(photo.id)?.carousel?.sceneKey ?? photo.id;
+    const old = distinct.get(key);
+    if (!old || better(photo, old) < 0) distinct.set(key, photo);
+  }
+  return [...distinct.values()].sort(byTime);
 }
 
 /** 沿序列均匀取 max 个，保住开头、中段与结尾。**没有价值分时的退路。** */
@@ -470,69 +476,36 @@ export function buildDayMemory(input: {
  * 主题词表。**顺序就是首页「换一段」翻到的顺序**，Teddy 点名的三个排在前面。
  *
  * 标题刻意写成一句短的白话，不是分类名：家人读到的是「玩水的日子」，不是「topic=玩水」。
- * 每一条的依据都是逐张标注，可以回账本核对（provider='claude-code-vision'）。
+ * 依据为新版 GLM 离线评分，完整理由与版本保存在私有照片审查历史。
  */
-/** 「玩水」退一步也能接受的水。**洗澡和湖边河边两种口径下都不要**（Teddy 2026-09-17 第 2 条）。 */
-const WATER_OK: ReadonlySet<string> = new Set(["泳池", "海边", "喷水戏水"]);
-
-const TOPIC_THEMES: ReadonlyArray<{
-  key: string; title: string; basis: string;
-  match: (label: PhotoTopicLabel) => boolean;
-  /** 先按这个更窄的口径试；够得出一段就用它，不够再退回 `match`。 */
-  preferred?: (label: PhotoTopicLabel) => boolean;
-}> = [
-  // 这一条改过两次，两次都是看了线上之后改的：
-  //   2026-09-16 Teddy：「玩水的意思就是游泳，有水就行」-> 只看 water 布尔。
-  //   2026-09-17 Teddy：「尽量多换成泳池游泳 不要洗澡的 湖边河边的」。
-  // 为什么第一版看起来不像玩水：226 张有水的照片里 **109 张是湖边河边、19 张是洗澡**，
-  // 它们在 water 布尔那一层和泳池是同一个值，于是一段「玩水」里大半是在河边站着和在澡盆里。
-  // 现在先只用泳池和真的泡在水里游的（22 张，17 张高价值，够做一段）；
-  // 万一以后不够了才退回海边与喷水戏水。两种口径都不含洗澡和湖边河边。
-  {
-    key: "water",
-    title: "玩水的日子",
-    basis: "泳池，且这个孩子真的泡在水里（洗澡、婴儿澡盆、湖边河边、岸上抱着的都已排除）",
-    // **不要再用 `swimming === true` 把 kind 绕过去。** 2026-09-17 线上「玩水的日子」
-    // 第一张就是澡盆：室内瓷砖墙、戴洗头帽、坐在充气盆里。查账本，模型自己判的是
-    // kind=洗澡、why=「浴室浴缸，小孩泡在水中」——它说对了，是这条规则用 swimming 把它捞了回来。
-    // 审计里 10 张可疑的有 6 张都是 `kind=洗澡 swim=true` 这个形状。
-    // 洗澡和湖边河边现在是**无条件否决**，模型说它在游泳也不行。
-    // 还要求画面里真的有这个孩子：2026-09-17 查账本，45 张判为泳池的有 21 张没有孩子
-    // （酒店空泳池、只有水面、只有泳圈），而它们的 value 照样 ≥ 0.7——价值分没兜住这一条。
-    // 还要求 swimming：**「画面里有这个孩子」不等于「这个孩子在玩水」。**
-    // 2026-09-17 线上那一张是大人抱着 5 个月的张年站在湖边，背后是水面和远山——
-    // 模型判成 泳池 + child=true + swimming=false，前两项都对，人却根本没沾水。
-    // 账本里 泳池+有孩子 共 24 张，其中 18 张（8 天）是真的泡在水里的，
-    // 剩下 6 张全是这种"站在水边"。8 天高于 6 个瞬间的下限，所以这一条收得起。
-    preferred: (l) => l.water && l.waterKind === "泳池"
-      && l.childInFrame === true && l.swimming === true,
-    match: (l) => l.water && l.waterKind !== undefined && WATER_OK.has(l.waterKind)
-      && l.childInFrame === true && l.swimming === true,
-  },
-  { key: "sleep", title: "睡着的样子", basis: "主题判为「睡觉」", match: (l) => l.topic === "睡觉" && l.confidence >= TOPIC_MIN_CONFIDENCE },
-  { key: "laugh", title: "笑起来的时候", basis: "主题判为「笑」", match: (l) => l.topic === "笑" && l.confidence >= TOPIC_MIN_CONFIDENCE },
-  { key: "eat", title: "吃饭这件事", basis: "主题判为「吃饭」", match: (l) => l.topic === "吃饭" && l.confidence >= TOPIC_MIN_CONFIDENCE },
-  { key: "outdoor", title: "在外面的时候", basis: "主题判为「户外」", match: (l) => l.topic === "户外" && l.confidence >= TOPIC_MIN_CONFIDENCE },
-  { key: "toy", title: "和玩具在一起", basis: "主题判为「玩玩具」", match: (l) => l.topic === "玩玩具" && l.confidence >= TOPIC_MIN_CONFIDENCE },
-  { key: "hold", title: "被抱着的时候", basis: "主题判为「抱着」", match: (l) => l.topic === "抱着" && l.confidence >= TOPIC_MIN_CONFIDENCE },
+const TOPIC_THEMES: ReadonlyArray<{ key: CarouselTheme; title: string; basis: string }> = [
+  { key: "water", title: "玩水的日子", basis: "实际游泳或喷水戏水，排除岸边、空泳池和洗澡" },
+  { key: "sleep", title: "睡着的样子", basis: "确实睡着，允许闭眼" },
+  { key: "laugh", title: "笑起来的时候", basis: "自然笑容" },
+  { key: "eat", title: "吃饭这件事", basis: "实际正在吃饭" },
+  { key: "outdoor", title: "在外面的时候", basis: "可见的户外活动" },
+  { key: "toy", title: "和玩具在一起", basis: "实际正在玩玩具" },
+  { key: "hold", title: "被抱着的时候", basis: "实际被家人抱着" },
 ];
-
 function buildTopicMemory(input: {
   theme: (typeof TOPIC_THEMES)[number];
   photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup; birthDay?: string;
   /** 已经被更早的段用掉的照片（跨段去重，见 excludeUsedBursts）。 */
   usedIds?: ReadonlySet<string>;
 }): HomeMemory | undefined {
-  const { theme, photos, privilege, topics, birthDay } = input;
+  const { theme, photos, privilege, birthDay } = input;
+  const topics: PhotoTopicLookup = id => {
+    const label = input.topics(id);
+    return label?.carousel ? { ...label, value: carouselValue(label, theme.key) } : label;
+  };
   const usedIds = input.usedIds ?? new Set<string>();
 
   const attempt = (
-    match: (label: PhotoTopicLabel) => boolean,
     scope: string,
   ): HomeMemory | undefined => {
     const pool = usable(photos, privilege).filter((media) => {
       const label = topics(media.id);
-      return Boolean(label) && label!.value >= TOPIC_MIN_VALUE && match(label!);
+      return carouselQualified(label, theme.key, media.takenAt ?? undefined);
     });
     if (pool.length === 0) return undefined;
 
@@ -540,7 +513,7 @@ function buildTopicMemory(input: {
     const reps = capPerDay(sceneRepresentatives(representatives(ordered), topics), CROSS_DAY_PER_DAY_MAX, topics);
     if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
-    // 不传 diversify：这里的 pool 本来就只有同一个 topic 标签（match 筛出来的），
+    // 不传 diversify：这里的 pool 已逐张通过同一个主题的视觉评分，
     // "多样化" 在这里无从谈起——玩水的日子就该全是玩水，不需要也不该往里掺别的话题。
     const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
     // 跨天主题没有逐张可依据的文字，所以**一句配文都不写**。
@@ -550,7 +523,7 @@ function buildTopicMemory(input: {
       kind: "topic",
       key: `topic:${theme.key}`,
       title: theme.title,
-      subtitle: spanSubtitle(pool, birthDay),
+      subtitle: spanSubtitle(picked, birthDay),
       // 一个主题横跨很多个月，没有单一的去处——与其给一个「翻到 2026 年」这种对不上的链接，
       // 不如不给（原则八：标签必须跟着去处走）。
       slides: picked.map((media) => ({ key: `topic:${theme.key}|${media.id}`, media })),
@@ -558,17 +531,14 @@ function buildTopicMemory(input: {
       durationSeconds: picked.length * SLIDE_SECONDS,
       mood: mood.mood,
       moodReason: mood.reason,
-      reason: `主题「${theme.title}」（${scope}）：依据是${theme.basis}，价值分 ≥ ${TOPIC_MIN_VALUE}；`
+      reason: `主题「${theme.title}」（${scope}）：依据是${theme.basis}，主题匹配和清晰度均 ≥ 80，表情 ≥ 60；`
         + `符合的照片 ${pool.length} 张，每天最多取 ${CROSS_DAY_PER_DAY_MAX} 张得到 ${reps.length} 张，`
         + `先按价值分筛再沿时间铺开取 ${picked.length} 张，来自 ${days} 个不同的日子`,
     };
   };
 
-  // 先试最窄的口径（「玩水」= 只要泳池和真在游泳的）。它凑得出一段就用它——
-  // **宁可这一段更小众、更准，也不要为了凑数把河边和澡盆掺进来。**
-  // 只有窄口径连 6 个瞬间都凑不出时，才退回宽一点的口径；再不行这段主题就不出现。
-  return (theme.preferred ? attempt(theme.preferred, "严格口径") : undefined)
-    ?? attempt(theme.match, "放宽口径");
+  // 所有日期均已进入候选；不能为了凑够八张降低主题或清晰度标准。
+  return attempt("全日期范围的新视觉评分");
 }
 
 /**
@@ -634,9 +604,14 @@ function buildSpanMemory(input: {
   /** 已经被更早的段用掉的照片（跨段去重，见 excludeUsedBursts）。 */
   usedIds?: ReadonlySet<string>;
 }): HomeMemory | undefined {
-  const { kind, key, title, subtitle, href, linkLabel, photos, privilege, topics } = input;
+  const { kind, key, title, subtitle, href, linkLabel, photos, privilege } = input;
+  const theme = key.split("-").at(-1) as CarouselTheme;
+  const topics: PhotoTopicLookup = id => {
+    const label = input.topics(id);
+    return label?.carousel ? { ...label, value: carouselValue(label, theme) } : label;
+  };
   const usedIds = input.usedIds ?? new Set<string>();
-  const pool = usable(photos, privilege);
+  const pool = usable(photos, privilege).filter(photo => carouselQualified(topics(photo.id), theme, photo.takenAt ?? undefined));
   const ordered = excludeUsedBursts([...pool].sort(byTime), usedIds);
   // 两处都要 diversify: true——不只是最后"挑哪几张"要顾话题多样性，
   // 更前面"每天先留哪 2 张"要是已经把某一天拍得最清楚的两张饭都留下来了，
@@ -675,7 +650,7 @@ function buildSpanMemory(input: {
  * 另一种主题，而不是同一种主题的另一个日期。全程确定，无随机。
  *
  * `topics` 读不到时（缓存缺失）**主题回忆一段都不出**——不知道画面里是什么，就不能说
- * 这是一段玩水的回忆；周与季节照常，因为它们的依据是日期事实。
+ * 这是一段玩水的回忆；季节也需要画面依据，同样不展示。
  */
 export function selectHomeMemories(
   archive: FamilyArchive,
@@ -684,7 +659,6 @@ export function selectHomeMemories(
   const { chapters, privilege, birthDay } = archive;
   const today = archive.time.today;
 
-  const byMonth = new Map<string, MediaRef[]>();
   const allPhotos: MediaRef[] = [];
   let scannedDays = 0;
 
@@ -693,9 +667,6 @@ export function selectHomeMemories(
       for (const photoDay of month.photoDays) {
         if (photoDay.day > today) continue;
         scannedDays += 1;
-        const bucket = byMonth.get(month.month) ?? [];
-        bucket.push(...photoDay.photos);
-        byMonth.set(month.month, bucket);
         allPhotos.push(...photoDay.photos);
       }
     }
@@ -713,9 +684,21 @@ export function selectHomeMemories(
   // 这个名额**——被 spansMultipleDays 过滤掉的段（凑出来的照片全挤在一天里）没有上页面，
   // 不该白白挡住后面的段。
   const usedIds = new Set<string>();
+  // Global scene exclusion includes photos outside the next theme's filtered pool.
+  const globalScenes = sceneGroups([...allPhotos].sort(byTime));
+  const scenesById = new Map(globalScenes.flatMap(group => group.map(photo => [photo.id, group] as const)));
+  const visualScenes = new Map<string, MediaRef[]>();
+  for (const photo of allPhotos) {
+    const scene = topics(photo.id)?.carousel?.sceneKey;
+    if (scene) visualScenes.set(scene, [...(visualScenes.get(scene) ?? []), photo]);
+  }
   const keep = (memory: HomeMemory | undefined): memory is HomeMemory => {
     if (!memory || !spansMultipleDays(memory)) return false;
-    for (const slide of memory.slides) usedIds.add(slide.media.id);
+    for (const slide of memory.slides) {
+      for (const photo of scenesById.get(slide.media.id) ?? [slide.media]) usedIds.add(photo.id);
+      const scene = topics(slide.media.id)?.carousel?.sceneKey;
+      if (scene) for (const photo of visualScenes.get(scene) ?? []) usedIds.add(photo.id);
+    }
     return true;
   };
 
@@ -729,12 +712,12 @@ export function selectHomeMemories(
 
   // 季节主题
   const seasonPhotos = new Map<string, { label: string; year: number; photos: MediaRef[] }>();
-  for (const [month, photos] of byMonth) {
-    const season = seasonOf(month);
+  for (const photo of allPhotos) {
+    const season = seasonOf(monthOfMedia(photo));
     if (!season) continue;
     const key = `${season.year}-${season.key}`;
     const bucket = seasonPhotos.get(key) ?? { label: season.label, year: season.year, photos: [] };
-    bucket.photos.push(...photos);
+    bucket.photos.push(photo);
     seasonPhotos.set(key, bucket);
   }
   const seasonMemories: HomeMemory[] = [];

@@ -5,19 +5,19 @@
 // 为什么是缓存文件，不是渲染时查库
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// 标注本身由一个离线有界批次跑（视觉模型逐张看图），结果写进 content_quality_reviews
-// （target_kind='media_topic'），再导出成这个 JSON 随仓库发布。首页只读这个文件。
+// 标注由夜间有界批次生成，原始评分追加到私有 photo-reviews/home-carousel 历史。
+// 人工逐张复核后导出精简 JSON 随仓库发布。首页只读缓存，不调用模型。
 // 理由是 CLAUDE.md 里那条：**页面渲染路径不新增数据库读取**（loadFamilyArchive 误接
 // getOrganizerStore 那次，一天多花了 $87 出站流量）。lib/home-photo-quality.ts 是同一个做法。
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// 读不到缓存会发生什么：主题回忆消失，天与季节照常
+// 读不到新版缓存：主题与季节都不展示
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // 缓存缺失时 `topicLookup` 对每一张都返回 undefined。后果是明确的、也是想要的：
 //   · 「玩水 / 睡觉 / 笑」这类主题**一段都不出**——不知道画面里是什么，就不能说这是一段玩水的回忆；
-//   · 「某一天 / 某个季节」照常出，因为它们的依据是日期事实，不是画面判断；
-//   · 选片退回按时间均匀取，而不是假装有价值分。
+//   · 季节也必须有可见的画面线索，日期正确不能代替视觉评分；
+//   · 首页不使用未评分照片来补足八张。
 // 也就是说：没有依据的时候，少说话，而不是猜。
 //
 // **`why` 不在这份缓存里。** 批次里模型会写一句「在泳池里笑」这样的画面描述，那是关于一个孩子的
@@ -37,6 +37,8 @@ export type WaterKind = "泳池" | "海边" | "湖边河边" | "洗澡" | "婴�
 
 /** 一张照片的标注。前四项缺一不可——导出时就已经按这条筛过了。 */
 export type PhotoTopicLabel = {
+  /** Offline GLM review; missing/old scores cannot qualify a homepage slide. */
+  carousel?: CarouselScore;
   topic: PhotoTopic;
   /** 画面里有没有水。**和 topic 互相独立**：在泳池里笑，topic 是「笑」，water 仍然是 true。 */
   water: boolean;
@@ -62,6 +64,37 @@ export type PhotoTopicLabel = {
    */
   childInFrame?: boolean;
 };
+
+export const CAROUSEL_THEMES = ["water", "sleep", "laugh", "eat", "outdoor", "toy", "hold", "spring", "summer", "autumn", "winter"] as const;
+export type CarouselTheme = typeof CAROUSEL_THEMES[number];
+export type CarouselScore = {
+  promptVersion: "home-carousel-v4";
+  takenAt: string;
+  matches: Record<CarouselTheme, number>;
+  clarity: number; expression: number;
+  qualified: boolean; eyesOpen: boolean; sleeping: boolean; childMain: boolean;
+  faceClear: boolean; faceUnblocked: boolean; motionBlur: boolean; sensitive: boolean;
+  /** Reviewer exclusions stay distinct from the model's scores. */
+  excludedThemes?: CarouselTheme[];
+  approvedThemes?: CarouselTheme[];
+  sceneKey?: string;
+};
+
+export function carouselQualified(label: PhotoTopicLabel | undefined, theme: CarouselTheme, takenAt?: string): boolean {
+  const s = label?.carousel;
+  return !!s && s.promptVersion === "home-carousel-v4" && !!takenAt
+    && s.takenAt.slice(0, 10) === takenAt.slice(0, 10)
+    && s.qualified && s.childMain && s.faceClear && s.faceUnblocked && !s.motionBlur && !s.sensitive
+    && s.clarity >= 80 && s.expression >= 60 && s.matches[theme] >= 80
+    && (s.eyesOpen || (theme === "sleep" && s.sleeping))
+    && (theme !== "sleep" || s.sleeping) && !s.excludedThemes?.includes(theme)
+    && !!s.approvedThemes?.includes(theme);
+}
+
+export function carouselValue(label: PhotoTopicLabel, theme: CarouselTheme): number {
+  const s = label.carousel!;
+  return (s.matches[theme] * 0.5 + s.clarity * 0.35 + s.expression * 0.15) / 100;
+}
 
 export type PhotoTopicCache = {
   model: string;
@@ -100,6 +133,14 @@ function validLabel(raw: unknown): PhotoTopicLabel | undefined {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) return undefined;
   if (typeof confidence !== "number" || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) return undefined;
   const label: PhotoTopicLabel = { topic: topic as PhotoTopic, water, value, confidence };
+  const c = record.carousel as CarouselScore | undefined;
+  const score = (n: unknown) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 100;
+  if (c?.promptVersion === "home-carousel-v4" && typeof c.takenAt === "string"
+    && CAROUSEL_THEMES.every(k => score(c.matches?.[k])) && score(c.clarity) && score(c.expression)
+    && [c.qualified, c.eyesOpen, c.sleeping, c.childMain, c.faceClear, c.faceUnblocked, c.motionBlur, c.sensitive].every(v => typeof v === "boolean")
+    && (c.excludedThemes === undefined || (Array.isArray(c.excludedThemes) && c.excludedThemes.every(k => CAROUSEL_THEMES.includes(k))))
+    && (c.approvedThemes === undefined || (Array.isArray(c.approvedThemes) && c.approvedThemes.every(k => CAROUSEL_THEMES.includes(k))))
+    && (c.sceneKey === undefined || typeof c.sceneKey === "string")) label.carousel = c;
   // 这两项是可选的：没问过就没有。问过但值不合法，也当没问过，不猜。
   const { waterKind, swimming } = record;
   if (typeof waterKind === "string" && WATER_KINDS.has(waterKind)) {

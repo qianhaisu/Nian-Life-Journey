@@ -39,7 +39,7 @@ export default async function HomePage() {
   //
   // 主题与价值分来自一份**随仓库发布的标注缓存**（data/photo-topics.json），不是数据库查询——
   // 渲染路径一次新增读取都没有（CLAUDE.md 那条 $87 出站流量的规矩）。缓存读不到时
-  // 主题回忆自动消失，天与季节照常，见 lib/home-memory-topics.ts。
+  // 主题与季节回忆都不展示，见 lib/home-memory-topics.ts。
   const topics = topicLookupFrom(await loadTopicCache());
   const { memories, absence } = selectHomeMemories(archive, topics);
 
