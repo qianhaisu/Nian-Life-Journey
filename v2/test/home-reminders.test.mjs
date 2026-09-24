@@ -69,12 +69,14 @@ test("没有 note 也没有 sources 时不画一个点开什么都没有的「�
   assert.doesNotMatch(html, /<details/);
 });
 
-test("超出默认位的本周事项收在可展开处，一条都不会因为放不下而消失", () => {
-  const html = render({ reminders: [bare("r1", "第一条"), bare("r2", "第二条")], more: [bare("r3", "第三条")] });
-  assert.match(html, /<details class="weekly-more">/);
-  assert.match(html, /本周还记着的其他事/);
+test("所有本周事项直接展示，未完成事项排在已完成事实之前", () => {
+  const html = render({ reminders: [{ ...bare("done", "已完成事项"), actionable: false }, bare("r1", "第一条"), bare("r2", "第二条")], more: [bare("r3", "第三条")] });
+  assert.doesNotMatch(html, /weekly-more|本周还记着的其他事/);
+  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 3);
   assert.match(html, /第三条/);
-  assert.doesNotMatch(html, /还有 \d+ 条|共 \d+ 条/, "折叠标题不写数字（原则三）");
+  assert.ok(html.indexOf("第一条") < html.indexOf("第二条"));
+  assert.ok(html.indexOf("第二条") < html.indexOf("第三条"));
+  assert.ok(html.indexOf("第三条") < html.indexOf("已完成事项"));
 });
 
 test("statusLabel 有值时照常显示，不因为换了外壳就丢字", () => {

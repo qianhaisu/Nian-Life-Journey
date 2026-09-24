@@ -268,7 +268,11 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
     return [...reminders, ...more].find((reminder) => reminder.id === id)?.title;
   }
 
-  const shown = reminders.slice(0, 2);
+  // Keep every supplied item visible. Re-sort after saved checks load and each toggle;
+  // equal groups retain the feed's existing order, and facts remain below open tasks.
+  const shown = [...reminders, ...more].sort((a, b) =>
+    Number(!a.actionable || checked.has(a.id)) - Number(!b.actionable || checked.has(b.id)),
+  );
   const habits = new Set(habitIds);
   const reportable = shown.map((reminder) => reminder.id).filter((id) => habits.has(id));
 
@@ -286,15 +290,6 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
       ))}
     </ul> : null}
     <HomeHealthReminders />
-    {/* 超出默认位的**本周**事项收在这里，一条都不会因为放不下而消失。标题不写数字（原则三）。 */}
-    {more.length > 0 ? <details className="weekly-more">
-      <summary>本周还记着的其他事</summary>
-      <ul className="weekly-list">
-        {more.map((reminder) => (
-          <Row key={reminder.id} reminder={reminder} checked={checked.has(reminder.id)} onToggle={toggle} />
-        ))}
-      </ul>
-    </details> : null}
     {reportable.length > 0 ? <HabitShownReporter ids={reportable} /> : null}
     {/* 开始/结束日期，小字斜体（2026-09-17 第 5 条）。标题总画、这里也总画——留白本身也该说清楚
         「看的是哪一段时间」，不只是有内容时才交代依据。 */}
