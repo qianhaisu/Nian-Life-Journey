@@ -1,0 +1,58 @@
+{
+  "_comment": "旅行模块的地名册（docs/travel-module-plan.md §2）。手工维护，几十条；坐标只用来在地图上放点和把 EXIF 坐标归到最近的地方，精度到小数点后两位足够。homeZone 是「杭州市区及近郊」的经纬度框：落在框内的照片不算出行（Teddy：杭州市区不算旅行）；淳安/千岛湖、桐庐、建德在行政上属杭州，但在框外，算出行。adcode 是省级行政区划代码，第 2 期迷雾地图用它对上省级 GeoJSON。",
+  "homeZone": { "latMin": 30.05, "latMax": 30.50, "lngMin": 119.85, "lngMax": 120.45 },
+  "places": [
+    { "id": "cn", "name": "中国", "level": "country", "country": "CN", "lat": 35.0, "lng": 105.0 },
+    { "id": "us", "name": "美国", "level": "country", "country": "US", "lat": 39.8, "lng": -98.6 },
+
+    { "id": "cn-zj", "name": "浙江", "level": "province", "parent": "cn", "country": "CN", "adcode": "330000", "lat": 29.2, "lng": 120.1 },
+    { "id": "cn-zj-hangzhou", "name": "杭州", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 30.27, "lng": 120.15, "home": true, "aliases": ["杭州", "回杭"] },
+    { "id": "cn-zj-wenzhou", "name": "温州", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 28.00, "lng": 120.70, "livedIn": "2025-03-15/2025-06-14", "aliases": ["温州", "外公家", "鹿城"] },
+    { "id": "cn-zj-qiandaohu", "name": "千岛湖", "level": "spot", "parent": "cn-zj", "country": "CN", "lat": 29.60, "lng": 119.03, "aliases": ["千岛湖", "淳安"] },
+    { "id": "cn-zj-jiande", "name": "建德", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 29.48, "lng": 119.28, "aliases": ["建德", "新安江"] },
+    { "id": "cn-zj-tonglu", "name": "桐庐", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 29.80, "lng": 119.69, "aliases": ["桐庐"] },
+    { "id": "cn-zj-deqing", "name": "德清", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 30.54, "lng": 119.97, "aliases": ["德清", "奇幻谷"] },
+    { "id": "cn-zj-moganshan", "name": "莫干山", "level": "spot", "parent": "cn-zj", "country": "CN", "lat": 30.73, "lng": 119.90, "aliases": ["莫干山"] },
+    { "id": "cn-zj-anji", "name": "安吉", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 30.64, "lng": 119.68, "aliases": ["安吉"] },
+    { "id": "cn-zj-huzhou", "name": "湖州", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 30.89, "lng": 120.09, "aliases": ["湖州"] },
+    { "id": "cn-zj-shaoxing", "name": "绍兴", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 30.03, "lng": 120.58, "aliases": ["绍兴", "安昌", "安昌古镇"] },
+    { "id": "cn-zj-ningbo", "name": "宁波", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 29.87, "lng": 121.55, "aliases": ["宁波", "慈溪"] },
+    { "id": "cn-zj-yuyao", "name": "余姚", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 30.04, "lng": 121.15, "aliases": ["余姚", "四明山"] },
+    { "id": "cn-zj-zhoushan", "name": "舟山", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 30.02, "lng": 122.10, "aliases": ["舟山", "普陀山", "朱家尖"] },
+    { "id": "cn-zj-jinhua", "name": "金华", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 29.10, "lng": 119.65, "aliases": ["金华"] },
+    { "id": "cn-zj-lanxi", "name": "兰溪", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 29.21, "lng": 119.46, "aliases": ["兰溪", "水上森林"] },
+    { "id": "cn-zj-yiwu", "name": "义乌", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 29.31, "lng": 120.07, "aliases": ["义乌"] },
+    { "id": "cn-zj-jiaxing", "name": "嘉兴", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 30.75, "lng": 120.76, "aliases": ["嘉兴", "乌镇", "西塘", "平湖"] },
+    { "id": "cn-zj-taizhou", "name": "台州", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 28.66, "lng": 121.42, "aliases": ["台州"] },
+    { "id": "cn-zj-lishui", "name": "丽水", "level": "city", "parent": "cn-zj", "country": "CN", "lat": 28.47, "lng": 119.92, "aliases": ["丽水"] },
+
+    { "id": "cn-sh", "name": "上海", "level": "province", "parent": "cn", "country": "CN", "adcode": "310000", "lat": 31.23, "lng": 121.47 },
+    { "id": "cn-sh-shanghai", "name": "上海", "level": "city", "parent": "cn-sh", "country": "CN", "lat": 31.23, "lng": 121.47, "aliases": ["上海", "迪士尼"] },
+
+    { "id": "cn-js", "name": "江苏", "level": "province", "parent": "cn", "country": "CN", "adcode": "320000", "lat": 32.9, "lng": 119.5 },
+    { "id": "cn-js-suzhou", "name": "苏州", "level": "city", "parent": "cn-js", "country": "CN", "lat": 31.30, "lng": 120.62, "aliases": ["苏州", "常熟", "昆山"] },
+    { "id": "cn-js-nanjing", "name": "南京", "level": "city", "parent": "cn-js", "country": "CN", "lat": 32.06, "lng": 118.78, "aliases": ["南京"] },
+    { "id": "cn-js-wuxi", "name": "无锡", "level": "city", "parent": "cn-js", "country": "CN", "lat": 31.49, "lng": 120.31, "aliases": ["无锡"] },
+
+    { "id": "cn-ah", "name": "安徽", "level": "province", "parent": "cn", "country": "CN", "adcode": "340000", "lat": 31.8, "lng": 117.2 },
+    { "id": "cn-ah-hefei", "name": "合肥", "level": "city", "parent": "cn-ah", "country": "CN", "lat": 31.82, "lng": 117.23, "aliases": ["合肥"] },
+    { "id": "cn-ah-huangshan", "name": "黄山", "level": "city", "parent": "cn-ah", "country": "CN", "lat": 29.71, "lng": 118.34, "aliases": ["黄山"] },
+
+    { "id": "cn-sc", "name": "四川", "level": "province", "parent": "cn", "country": "CN", "adcode": "510000", "lat": 30.6, "lng": 102.7 },
+    { "id": "cn-sc-chengdu", "name": "成都", "level": "city", "parent": "cn-sc", "country": "CN", "lat": 30.57, "lng": 104.07, "aliases": ["成都", "熊猫基地", "熊猫繁育基地"] },
+    { "id": "cn-sc-west", "name": "川西", "level": "spot", "parent": "cn-sc", "country": "CN", "lat": 31.06, "lng": 103.45, "aliases": ["都江堰", "汶川", "雪山"] },
+
+    { "id": "cn-sn", "name": "陕西", "level": "province", "parent": "cn", "country": "CN", "adcode": "610000", "lat": 35.2, "lng": 108.9 },
+    { "id": "cn-sn-xian", "name": "西安", "level": "city", "parent": "cn-sn", "country": "CN", "lat": 34.34, "lng": 108.94, "hometown": true, "aliases": ["西安", "爷爷奶奶家"] },
+
+    { "id": "cn-gd", "name": "广东", "level": "province", "parent": "cn", "country": "CN", "adcode": "440000", "lat": 23.4, "lng": 113.4 },
+    { "id": "cn-gd-guangzhou", "name": "广州", "level": "city", "parent": "cn-gd", "country": "CN", "lat": 23.13, "lng": 113.26, "aliases": ["广州", "大湾区"] },
+    { "id": "cn-gd-shenzhen", "name": "深圳", "level": "city", "parent": "cn-gd", "country": "CN", "lat": 22.54, "lng": 114.06, "aliases": ["深圳"] },
+
+    { "id": "us-ca", "name": "加利福尼亚", "level": "province", "parent": "us", "country": "US", "lat": 36.8, "lng": -119.4 },
+    { "id": "us-ca-losangeles", "name": "洛杉矶", "level": "city", "parent": "us-ca", "country": "US", "lat": 34.05, "lng": -118.24, "birthplace": true, "aliases": ["洛杉矶", "LA", "美国"] },
+    { "id": "us-ca-frazier", "name": "洛杉矶北面的雪山（Frazier Park）", "level": "spot", "parent": "us-ca", "country": "US", "lat": 34.77, "lng": -119.04, "aliases": ["Frazier Park"] },
+    { "id": "us-ca-monterey", "name": "蒙特雷", "level": "city", "parent": "us-ca", "country": "US", "lat": 36.60, "lng": -121.89, "aliases": ["蒙特雷", "Monterey"] },
+    { "id": "us-ca-sanfrancisco", "name": "旧金山", "level": "city", "parent": "us-ca", "country": "US", "lat": 37.62, "lng": -122.38, "aliases": ["旧金山", "三藩", "湾区"] }
+  ]
+}
