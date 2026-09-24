@@ -85,7 +85,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   if (!chapter) notFound();
 
   const ageLine = monthAgeLine(month, productToday(), chapter.ageLabel);
-  const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay);
+  const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay, content?.coverMediaId);
   const summary = snapshots.find((item) => item.month === month);
   const focusGoals = summary ? focusGoalsForSnapshot(store.monthlyFocusGoals, month) : [];
   const yearChapter = chapters.find((item) => item.year === year);

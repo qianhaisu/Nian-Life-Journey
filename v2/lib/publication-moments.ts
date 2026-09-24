@@ -458,7 +458,7 @@ export function buildTraceNotes(events: LifeEvent[], birthDay?: string): TraceNo
   return notes;
 }
 
-export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPrivilege = NO_PRIVILEGE, traceEvents: LifeEvent[] = [], birthDay?: string): MonthComposition {
+export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPrivilege = NO_PRIVILEGE, traceEvents: LifeEvent[] = [], birthDay?: string, pinnedCoverId?: string): MonthComposition {
   // 2026-09-16: a picture a reviewer classified as not a life photo (menu, document, screenshot, or
   // clearly not him) leaves every photo surface built below. Only an explicit decision does this --
   // see excludedPhotoIdsFrom. A day whose pictures were ALL excluded has nothing left to show; a day
@@ -747,7 +747,11 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
     }
   }
   const coverCandidate = memoryLead && isSubjectChecked(memoryLead, privilege) ? memoryLead : undefined;
-  const cover = coverCandidate ?? vouched.find((item) => heroEligibleRef(item, privilege) && isSubjectChecked(item, privilege));
+  // A pinned cover overrides dynamic selection: the content editor chose a specific photo for this
+  // month, and it stays until they change it. It must still pass the subject-check gate — a pin
+  // written before a reviewer excluded a picture is silently dropped and the next best fills in.
+  const pinnedRef = pinnedCoverId ? vouched.find((item) => item.id === pinnedCoverId && isSubjectChecked(item, privilege)) : undefined;
+  const cover = pinnedRef ?? coverCandidate ?? vouched.find((item) => heroEligibleRef(item, privilege) && isSubjectChecked(item, privilege));
   // The preview strip is the cover's own shortlist — the same index surfaces, the same claim — so
   // it asks the same question of every picture in it, not only of the first.
   const preview: MediaRef[] = [];
