@@ -16,6 +16,7 @@
 import { GLM_MODEL, isZhipu, messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import fs from "node:fs";
 import path from "node:path";
+import { COVER_RULES, passesCoverRules } from "./editor/cover-rules.mjs";
 
 const arg = (name, fallback) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -75,13 +76,14 @@ const ranked = wantedIds
 
 const [coverYear, coverMonth] = String(curation.month).split("-").map(Number);
 const PROMPT = [
+  COVER_RULES.split("按每张图片前")[0],
   `这张照片可能被用作一个家庭档案「${coverYear} 年 ${coverMonth} 月」月份卡片的封面。`,
   "封面会被裁成横向的宽幅画框（手机约 2:1，桌面约 1.4:1），裁切时上下会被切掉一部分。",
   "请回答三件事：",
   "1) face_visible：画面里孩子的脸是否清楚可见（布尔值）。",
   "2) focal_y：如果要保证脸和下巴都不被切掉，画面纵向的焦点应该落在从上往下百分之几的位置（0 到 100 的整数）。",
   "3) cover_note：一句话说明这张适合或不适合做封面的理由，只依据画面里看得见的内容。",
-  "最后单独输出一行 JSON，不加代码块标记，顶层对象含键 face_visible、focal_y、cover_note。",
+  "最后单独输出一行 JSON 对象，不加代码块标记。包含 face_visible、focal_y、cover_note，以及 childMain、adultFace、otherChild、faceHeightRatio（0到1）、frontalOrThreeQuarter、eyesOpen、sharp、bright、unobstructed、sensitive、score。",
 ].join("\n");
 
 const results = [];
@@ -118,6 +120,8 @@ for (const candidate of ranked) {
       description: candidate.description, stats: candidate.stats,
       derivativeSize: `${candidate.width}x${candidate.height}`,
       faceVisible: parsed?.face_visible ?? null,
+      eligibleForCover: parsed ? passesCoverRules(parsed) : false,
+      hardCriteria: parsed,
       focalYPercent: parsed?.focal_y ?? null,
       coverNote: parsed?.cover_note ?? null,
       truncated: payload.stop_reason === "max_tokens",
