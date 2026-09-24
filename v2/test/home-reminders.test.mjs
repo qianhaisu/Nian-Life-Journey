@@ -69,9 +69,11 @@ test("没有 note 也没有 sources 时不画一个点开什么都没有的「�
   assert.doesNotMatch(html, /<details/);
 });
 
-test("所有本周事项直接展示，未完成事项排在已完成事实之前", () => {
+test("未完成事项全部展示在前，已完成事实默认折叠", () => {
   const html = render({ reminders: [{ ...bare("done", "已完成事项"), actionable: false }, bare("r1", "第一条"), bare("r2", "第二条")], more: [bare("r3", "第三条")] });
-  assert.doesNotMatch(html, /weekly-more|本周还记着的其他事/);
+  assert.match(html, /<details class="weekly-more weekly-completed"><summary>已完成<\/summary>/);
+  assert.doesNotMatch(html, /<details[^>]*weekly-completed[^>]* open/);
+  assert.doesNotMatch(html.slice(0, html.indexOf("weekly-completed")), /已完成事项/);
   assert.equal((html.match(/type="checkbox"/g) ?? []).length, 3);
   assert.match(html, /第三条/);
   assert.ok(html.indexOf("第一条") < html.indexOf("第二条"));

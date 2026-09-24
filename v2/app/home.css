@@ -111,14 +111,13 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  /* cover 而不是 contain：这是一块沉浸的画面，不是缩略图，留黑边会把它变成一个播放器控件。
-     object-position 偏上，因为人脸通常在画面上半部（和 .photo-strip 的既有约定一致）。 */
-  object-fit: cover;
-  object-position: 50% 38%;
+  /* 完整展示已复核的照片；运镜在画框内进行，避免竖照在桌面裁掉脸。 */
+  object-fit: contain;
+  object-position: 50% 50%;
   opacity: 0;
   transition: opacity 800ms ease-in-out;
-  /* 静止时也保持放大起点，避免切换瞬间画面"跳"一下回到 1.0。 */
-  transform: scale(1.08);
+  /* 为平移与推拉预留边缘，整张照片始终留在画框内。 */
+  transform: scale(.92);
 }
 /* Ken Burns（Teddy 2026-09-16 裁定：做到明显，8%）。
    Apple 的回忆把静态照片做成"动起来"靠的就是这个——缓慢推拉 + 交叉淡化，
@@ -150,22 +149,22 @@
 .memory-frames img[data-fx="3"] { transition-duration: 650ms; }
 
 @keyframes memoryKenBurnsIn {
-  from { transform: scale(1.02) translate3d(0, 0, 0); }
-  to   { transform: scale(1.12) translate3d(-1.4%, -1.8%, 0); }
+  from { transform: scale(.88) translate3d(0, 0, 0); }
+  to   { transform: scale(.96) translate3d(-1.4%, -1.8%, 0); }
 }
 @keyframes memoryKenBurnsOut {
-  from { transform: scale(1.12) translate3d(1.4%, 1.2%, 0); }
-  to   { transform: scale(1.02) translate3d(0, 0, 0); }
+  from { transform: scale(.96) translate3d(1.4%, 1.2%, 0); }
+  to   { transform: scale(.88) translate3d(0, 0, 0); }
 }
 /* 横移：尺度不变，只平移——和推拉是两种明显不同的感觉。 */
 @keyframes memoryPanRight {
-  from { transform: scale(1.09) translate3d(-2.4%, 0, 0); }
-  to   { transform: scale(1.09) translate3d(2.4%, -0.6%, 0); }
+  from { transform: scale(.92) translate3d(-2.4%, 0, 0); }
+  to   { transform: scale(.92) translate3d(2.4%, -0.6%, 0); }
 }
 /* 上升：画面缓缓抬起来一点，同时轻微推近。 */
 @keyframes memoryRiseUp {
-  from { transform: scale(1.05) translate3d(0, 2.6%, 0); }
-  to   { transform: scale(1.13) translate3d(0, -1.4%, 0); }
+  from { transform: scale(.88) translate3d(0, 2.6%, 0); }
+  to   { transform: scale(.96) translate3d(0, -1.4%, 0); }
 }
 
 /* 只有压字的那一条给局部遮罩，照片本身不加任何全局滤镜（任务书三：照片保持原色）。 */
@@ -183,8 +182,7 @@
    56px 的圆，远超 44px 的触达下限；焦点环走站点全局那一支。 */
 /* 播放键放**右下角**（Teddy 2026-09-17 第 1 条：「播放按钮放右下角 不够精致」）。
    先说不能放哪：**不能放正中**——2026-09-16 真机截图（390×844）实测，居中时这个圆正好压在
-   张年的嘴和下巴上；人脸在这份档案里几乎总是落在画面中上部（object-position: 50% 38% 就是
-   按这个规律定的）。所以正中和上半部都是不该放东西的地方，右下角是这类竖构图里最安全的一块。
+   张年的嘴和下巴上；完整展示时人脸的位置随照片变化。所以正中和上半部都是不该放东西的地方，右下角是这类竖构图里最安全的一块。
 
    「精致」落到三处具体改动，不是换个说法：
    1. 实心白圆 -> 毛玻璃。白饼盖在照片上像个贴纸；半透明 + backdrop-filter 让它浮在画面上，
@@ -485,7 +483,7 @@
    2026-09-16 的第一版用的是 contain（一寸不裁），代价是竖照上下两条黑边，
    看起来像个播放器控件而不是一段回忆。Teddy 看过线上截图后裁定：裁。
    所以这里和首页预览统一成 cover——播放器本来就该是沉浸的那一个。
-   `object-position` 偏上，理由和预览、以及站里既有的 .photo-strip 一致：人脸通常在画面中上部，
+   播放器同样完整展示照片，
    横构图在这个竖长的舞台里会被上下裁，居中裁就容易把脸切掉。 */
 /* 铺满整个屏幕——不再是 head/controls 之间"剩下的那一块"。见上面 .memory-player 的注释。 */
 .memory-player-stage { position: absolute; inset: 0; z-index: 1; }
@@ -517,8 +515,8 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: 50% 38%;
+  object-fit: contain;
+  object-position: 50% 50%;
 }
 /* 播放器里也要有运镜（Teddy 2026-09-17 第 3 条：「点击播放按钮后没有运镜了，只有没点的时候有」）。
    这一条之前**确实漏了**：Ken Burns 只挂在 .memory-frame（首页预览）上，
@@ -583,8 +581,7 @@
      taito 实测（1440×900）：右图约 777×721——**占宽 54%、占高 80%、近方形（约 1.08:1）**，
      左栏约占宽 38%，两者之间一条细竖线；标题与说明字号约 3:1。照片是这一屏的主角，不是配图。
 
-     竖照裁成近方形会不会裁穿人脸？.memory-frames img 的 object-position 是 50% 38%（人脸通常在
-     画面上半部，见上面注释），4:5 的竖照裁到 1.1:1 保留约七成画面，脸留在里面。
+     照片使用 contain 完整展示，并为运镜预留边缘；不以人脸通常在上半部来猜裁切位置。
      另外给了一个上限：照片列宽 = min(60%, 照片高 × 1.12)。矮屏（720 高）上照片高只有 530，
      再按 60% 去撑会变成 1.3:1 的扁条、竖照被裁得太狠，所以宽度跟着高度收，多出来的宽度还给文字栏。 */
   .home-sheet {
@@ -655,10 +652,6 @@
     max-height: none;
     margin-inline: 0;
   }
-  /* 取景点上移：手机上照片是 4:5 竖构图，50% 38% 刚好；桌面裁成 1.1:1 后，同一个取景点会把
-     孩子的头顶顶到画面上沿（2026-09-19 私有站 1440x900 / 1280x720 都看到了头发贴边）。
-     人脸在竖照里偏上，裁掉的应该是下半部的桌面和餐盘，不是头顶。 */
-  .memory-frames img { object-position: 50% 20%; }
   .memory-actions { max-width: none; margin-inline: 0; }
 }
 

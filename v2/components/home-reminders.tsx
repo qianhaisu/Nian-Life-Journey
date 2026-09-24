@@ -205,6 +205,7 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
   rangeStart: string;
   rangeEnd: string;
 }) {
+  const [completedOpen, setCompletedOpen] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
   /**
    * 挂载之后家人自己点过的那几条，以及点成了什么。
@@ -268,27 +269,27 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
     return [...reminders, ...more].find((reminder) => reminder.id === id)?.title;
   }
 
-  // Keep every supplied item visible. Re-sort after saved checks load and each toggle;
-  // equal groups retain the feed's existing order, and facts remain below open tasks.
-  const shown = [...reminders, ...more].sort((a, b) =>
-    Number(!a.actionable || checked.has(a.id)) - Number(!b.actionable || checked.has(b.id)),
-  );
+  // Open tasks stay visible; completed tasks keep their original feed order below them.
+  const all = [...reminders, ...more];
+  const pending = all.filter((item) => item.actionable && !checked.has(item.id));
+  const completed = all.filter((item) => !item.actionable || checked.has(item.id));
   const habits = new Set(habitIds);
-  const reportable = shown.map((reminder) => reminder.id).filter((id) => habits.has(id));
+  const reportable = [...pending, ...(completedOpen ? completed : [])]
+    .map((item) => item.id).filter((id) => habits.has(id));
+  const rows = (items: HomeReminder[]) => <ul className="weekly-list">
+    {items.map((reminder) => <Row key={reminder.id} reminder={reminder}
+      checked={checked.has(reminder.id)} onToggle={toggle}
+      habitId={habits.has(reminder.id) ? reminder.id : undefined} />)}
+  </ul>;
 
   return <section className="weekly" aria-labelledby="weekly-heading">
     <h2 className="weekly-heading" id="weekly-heading">每周提醒</h2>
-    {shown.length > 0 ? <ul className="weekly-list">
-      {shown.map((reminder) => (
-        <Row
-          key={reminder.id}
-          reminder={reminder}
-          checked={checked.has(reminder.id)}
-          onToggle={toggle}
-          habitId={habits.has(reminder.id) ? reminder.id : undefined}
-        />
-      ))}
-    </ul> : null}
+    {pending.length > 0 ? rows(pending) : null}
+    {completed.length > 0 ? <details className="weekly-more weekly-completed"
+      open={completedOpen} onToggle={(event) => setCompletedOpen(event.currentTarget.open)}>
+      <summary>已完成</summary>
+      {rows(completed)}
+    </details> : null}
     <HomeHealthReminders />
     {reportable.length > 0 ? <HabitShownReporter ids={reportable} /> : null}
     {/* 开始/结束日期，小字斜体（2026-09-17 第 5 条）。标题总画、这里也总画——留白本身也该说清楚
