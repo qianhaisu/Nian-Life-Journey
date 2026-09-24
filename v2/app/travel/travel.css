@@ -1,0 +1,50 @@
+/* 旅行（docs/travel-module-plan.md §4）。沿用站里的暖纸、墨色、鼠尾草与陶土，和 /memory 的月卡同一套卡片语言；
+   只在 .travel-page 作用域里生效，不改任何别的页面。 */
+.travel-page { padding-bottom: clamp(48px, 8vw, 96px); }
+
+.travel-head { display: grid; gap: 12px; padding: clamp(28px, 5vw, 56px) 0 clamp(8px, 2vw, 16px); }
+.travel-head h1 { margin: 0; font-size: clamp(2.2rem, 7vw, 3.6rem); font-weight: 800; line-height: 1.08; }
+.travel-lead { margin: 0; max-width: 32em; color: var(--color-text); font-size: clamp(1.05rem, 2.6vw, 1.25rem); line-height: 1.7; }
+
+.travel-year { margin-top: clamp(28px, 5vw, 48px); }
+.travel-year-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 16px; font-size: 1.1rem; font-weight: 800; color: var(--color-text); }
+.travel-year-head small { color: var(--muted); font-size: .8rem; font-weight: 600; }
+
+.travel-when { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; color: var(--clay-ink); font-size: .85rem; font-weight: 600; }
+.travel-tag { display: inline-flex; padding: 2px 10px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--sage) 22%, #fff); color: var(--sage-ink); font-size: .75rem; font-weight: 700; letter-spacing: .04em; }
+.travel-age { white-space: nowrap; }
+.travel-places { margin: 0; color: var(--muted); font-size: .9rem; }
+
+.travel-cards { display: grid; gap: clamp(14px, 2.5vw, 20px); }
+.travel-card { display: block; overflow: hidden; background: #fff; border-radius: var(--r-card); box-shadow: var(--shadow); transition: transform .4s var(--ease-hover), box-shadow .4s var(--ease-hover); }
+.travel-card:active { transform: scale(.98); }
+@media (hover: hover) { .travel-card:hover { box-shadow: var(--shadow-hover); } }
+/* 4:3 而不是固定矮高度：大多数照片是竖拍的，矮条会把他裁出画面（2026-09-25 苏州那张只剩大人）。 */
+.travel-card-photo { position: relative; aspect-ratio: 4 / 3; max-height: 420px; width: 100%; overflow: hidden; background: var(--card-soft); }
+.travel-card-photo .photo-crop { position: absolute; inset: 0; margin: 0; }
+.travel-card-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
+.travel-card-body { display: grid; gap: 6px; padding: 18px 22px 22px; }
+.travel-card-title { margin: 2px 0 0; font-size: 1.35rem; font-weight: 800; color: var(--color-text); }
+.travel-card-summary { margin: 6px 0 0; color: var(--color-text); font-size: .95rem; line-height: 1.7; }
+
+.travel-shorts { display: grid; gap: 2px; margin: 16px 0 0; padding: 0; list-style: none; }
+.travel-short { display: flex; align-items: center; gap: 14px; padding: 10px 4px; border-bottom: 1px solid var(--color-border); }
+.travel-short-thumb { position: relative; flex: 0 0 56px; width: 56px; height: 56px; overflow: hidden; border-radius: 14px; background: var(--card-soft); }
+.travel-short-thumb .photo-crop { position: absolute; inset: 0; margin: 0; }
+.travel-short-thumb .photo-crop img { width: 100%; height: 100%; object-fit: cover; }
+.travel-short-body { display: grid; gap: 2px; min-width: 0; }
+.travel-short-body strong { color: var(--color-text); font-size: 1rem; font-weight: 700; }
+.travel-short .travel-when { font-size: .8rem; }
+
+.travel-trip .detail-head { padding-bottom: clamp(16px, 3vw, 24px); }
+.travel-trip .detail-head h1 { max-width: none; }
+.travel-trip-cover .photo { margin: 0; overflow: hidden; border-radius: var(--r-card); }
+.travel-trip .story-layer { margin-top: clamp(20px, 4vw, 32px); }
+
+.travel-days { display: grid; gap: clamp(32px, 6vw, 48px); margin-top: clamp(28px, 5vw, 44px); padding: 0; list-style: none; }
+.travel-day { display: grid; gap: 10px; padding-top: clamp(20px, 4vw, 28px); border-top: 1px solid var(--color-border); }
+.travel-day-title { margin: 0; font-size: 1.25rem; font-weight: 800; line-height: 1.35; }
+.travel-day-title a { color: var(--color-text); }
+.travel-day-lead { margin: 0; color: var(--color-text); line-height: 1.8; }
+.travel-day-more { justify-self: start; color: var(--sage-ink); font-size: .9rem; font-weight: 700; }
+.travel-day-more::after { content: " →"; }

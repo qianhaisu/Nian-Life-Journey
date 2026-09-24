@@ -1,0 +1,188 @@
+{
+  "_comment": "张年的旅程（docs/travel-module-plan.md §2）。每条都经 Teddy 2026-09-25 确认。一条旅程只是索引：它的每一天都指回已发布的日页（/memory/YYYY/MM/DD），正文与来源由日页承担，这里只多一段综述和证据摘要。kind：birthplace 出生地 / hometown 回老家 / travel 出去玩（过夜）/ daytrip 一日短途。evidence 写给核对的人看，页面不显示。coverDay 是封面取哪一天的首屏照片。",
+  "schema": "nianlife.travel-trips/1",
+  "trips": [
+    {
+      "id": "2025-01-losangeles", "title": "从美国回家", "kind": "birthplace",
+      "from": "2025-01-03", "to": "2025-02-12",
+      "placeIds": ["us-ca-losangeles", "us-ca-monterey", "us-ca-sanfrancisco", "us-ca-frazier"],
+      "coverDay": "2025-02-09",
+      "summary": "他出生在洛杉矶。出生半个月里，跟着全家北上去了蒙特雷和旧金山；满月之后，又去了洛杉矶北面的山里。二月上旬一家人离开美国，经成都转机，回到了杭州的家。",
+      "evidence": ["洛杉矶一带带坐标照片五百多张", "1 月 15、16 日蒙特雷、旧金山坐标，Teddy 确认全家同行", "2 月 10 日「我们已经登机了」，11 日「我们落地成都了」", "2 月 12 日日页「到了杭州」"]
+    },
+    {
+      "id": "2025-06-qiandaohu", "title": "千岛湖", "kind": "daytrip",
+      "from": "2025-06-21", "to": "2025-06-21", "placeIds": ["cn-zj-qiandaohu"], "coverDay": "2025-06-21",
+      "summary": "回杭州一个星期后，去了千岛湖，被抱在水边看风景。",
+      "evidence": ["千岛湖坐标 1 张", "日页「在千岛湖的水边被抱着看风景」"]
+    },
+    {
+      "id": "2025-07-wenzhou", "title": "回温州", "kind": "hometown",
+      "from": "2025-07-04", "to": "2025-07-06", "placeIds": ["cn-zj-wenzhou"], "coverDay": "2025-07-05",
+      "summary": "半岁这几天回了一趟温州。晚上到了外公家，第二天傍晚在水边看晚霞，回杭州的路上睡了两觉。",
+      "evidence": ["7 月 4 日日页「晚上到了外公家」", "7 月 6 日「我们已经到杭州了」"]
+    },
+    {
+      "id": "2025-09-xian", "title": "回西安过国庆", "kind": "hometown",
+      "from": "2025-09-28", "to": "2025-10-06", "placeIds": ["cn-sn-xian"], "coverDay": "2025-09-29",
+      "summary": "坐飞机去西安，在爷爷奶奶家过了一个国庆。两颗牙在那几天冒了出来，也学会了拍手欢迎。",
+      "evidence": ["9 月 28 日「登机了」「落地西安了」", "10 月 6 日「我们已经起飞了」，当天西安坐标"]
+    },
+    {
+      "id": "2025-11-yuyao", "title": "余姚", "kind": "daytrip",
+      "from": "2025-11-16", "to": "2025-11-16", "placeIds": ["cn-zj-yuyao"], "coverDay": "2025-11-16",
+      "summary": "一个星期天，和爸爸妈妈开车去余姚玩，坐在驾驶座上握着方向盘大笑。",
+      "evidence": ["余姚坐标 4 张，均被日页选用", "外公说小年年和爸妈去游玩了"]
+    },
+    {
+      "id": "2025-11-suzhou", "title": "苏州", "kind": "travel",
+      "from": "2025-11-21", "to": "2025-11-23", "placeIds": ["cn-js-suzhou"], "coverDay": "2025-11-22",
+      "summary": "在苏州住了两晚。湖边和古塔下走了一整天，第二天坐在河边的红桌子旁。",
+      "evidence": ["苏州坐标 28 张"]
+    },
+    {
+      "id": "2025-12-shanghai", "title": "上海看圣诞装饰", "kind": "daytrip",
+      "from": "2025-12-06", "to": "2025-12-06", "placeIds": ["cn-sh-shanghai"], "coverDay": "2025-12-06",
+      "summary": "去上海静安寺的商场，看圣诞树和精灵。",
+      "evidence": ["上海坐标 8 张", "「今天去上海了」"]
+    },
+    {
+      "id": "2025-12-sichuan", "title": "四川跨年", "kind": "travel",
+      "from": "2025-12-26", "to": "2026-01-01", "placeIds": ["cn-sc-chengdu", "cn-sc-west"], "coverDay": "2025-12-28",
+      "summary": "快满一岁时，全家带他去四川跨年。晚上在飞机上捧着纸杯，第二天起一路看熊猫，在雪山下的湖边被抱着看风景。出门在外，每天照样吃辅食。年末那天抱着熊猫逛街、看蒸汽火车头，元旦回到杭州。",
+      "evidence": ["川西坐标 6 张、成都 5 张", "「每天早上在酒店早餐」", "「一号回杭州」", "12 月 26 日无坐标，按日页「晚上在飞机上」计入（Teddy 确认）"]
+    },
+    {
+      "id": "2026-01-shanghai-bund", "title": "上海北外滩", "kind": "daytrip",
+      "from": "2026-01-10", "to": "2026-01-10", "placeIds": ["cn-sh-shanghai"], "coverDay": "2026-01-10",
+      "summary": "满一岁那几天，傍晚去上海北外滩看江景。",
+      "evidence": ["上海坐标 4 张", "日页「傍晚去北外滩看江景」"]
+    },
+    {
+      "id": "2026-01-anchang", "title": "安昌古镇", "kind": "daytrip",
+      "from": "2026-01-24", "to": "2026-01-24", "placeIds": ["cn-zj-shaoxing"], "coverDay": "2026-01-24",
+      "summary": "去绍兴安昌古镇，老街上挂满了腊味，他在腊肉摊前伸手去抓。",
+      "evidence": ["绍兴坐标 19 张", "「去绍兴」「一个古镇」"]
+    },
+    {
+      "id": "2026-01-anji", "title": "安吉看雪", "kind": "daytrip",
+      "from": "2026-01-31", "to": "2026-01-31", "placeIds": ["cn-zj-anji"], "coverDay": "2026-01-31",
+      "summary": "去安吉看雪。被牵着手在雪地里走，还仰面躺在了雪里。",
+      "evidence": ["安吉坐标 10 张"]
+    },
+    {
+      "id": "2026-02-shanghai-lights", "title": "上海灯会", "kind": "daytrip",
+      "from": "2026-02-07", "to": "2026-02-07", "placeIds": ["cn-sh-shanghai"], "coverDay": "2026-02-07",
+      "summary": "年前去上海逛商场里的灯会，怀里搂着一只熊猫玩偶。",
+      "evidence": ["上海坐标 11 张"]
+    },
+    {
+      "id": "2026-02-newyear", "title": "回温州、西安过年", "kind": "hometown",
+      "from": "2026-02-13", "to": "2026-02-19", "placeIds": ["cn-zj-wenzhou", "cn-sn-xian"], "coverDay": "2026-02-14",
+      "summary": "贴好春联，先回温州，在广场上被牵着走，晚上去看了大灯。然后坐飞机去西安，在爷爷奶奶家过年，大年初二去大雁塔晒太阳。过完年告别奶奶，坐飞机见到了妈妈。",
+      "evidence": ["温州坐标 48 张", "2 月 16 日「上飞机了」「落地了」", "2 月 18 日日页「去大雁塔晒太阳」"]
+    },
+    {
+      "id": "2026-02-shanghai", "title": "年后去上海", "kind": "travel",
+      "from": "2026-02-20", "to": "2026-02-22", "placeIds": ["cn-sh-shanghai"], "coverDay": "2026-02-21",
+      "summary": "过完年又去上海玩了三天。路上趴在车窗边笑，在面包房吃早餐，傍晚在乐高醒狮前玩。",
+      "evidence": ["上海坐标 45 张", "Teddy 确认：先去上海旅游再回杭州"]
+    },
+    {
+      "id": "2026-03-shanghai", "title": "上海", "kind": "daytrip",
+      "from": "2026-03-15", "to": "2026-03-15", "placeIds": ["cn-sh-shanghai"], "coverDay": "2026-03-15",
+      "summary": "在上海啃法国面包，在大厅里张开手跑。",
+      "evidence": ["上海坐标 6 张"]
+    },
+    {
+      "id": "2026-03-nanjing", "title": "南京", "kind": "travel",
+      "from": "2026-03-21", "to": "2026-03-22", "placeIds": ["cn-js-nanjing"], "coverDay": "2026-03-21",
+      "summary": "去南京住了一晚。车上睡了一觉，傍晚笑着朝镜头走来；第二天去了一趟图书馆。",
+      "evidence": ["南京坐标 13 张"]
+    },
+    {
+      "id": "2026-04-shanghai", "title": "清明去上海", "kind": "travel",
+      "from": "2026-04-06", "to": "2026-04-07", "placeIds": ["cn-sh-shanghai"], "coverDay": "2026-04-06",
+      "summary": "清明假期的最后一天去了上海，第二天回杭州。",
+      "evidence": ["上海坐标 3 张", "「我们昨日去上海了 今天回杭州」"]
+    },
+    {
+      "id": "2026-04-deqing-valley", "title": "德清奇幻谷", "kind": "daytrip",
+      "from": "2026-04-12", "to": "2026-04-12", "placeIds": ["cn-zj-deqing"], "coverDay": "2026-04-12",
+      "summary": "在德清奇幻谷看小羊和羊驼，冲着草地上的羊驼张嘴笑。",
+      "evidence": ["德清坐标 14 张"]
+    },
+    {
+      "id": "2026-04-tonglu", "title": "桐庐", "kind": "daytrip",
+      "from": "2026-04-18", "to": "2026-04-18", "placeIds": ["cn-zj-tonglu"], "coverDay": "2026-04-18",
+      "summary": "去桐庐的街上溜达，逛了一家书店。",
+      "evidence": ["桐庐坐标 7 张"]
+    },
+    {
+      "id": "2026-04-moganshan", "title": "莫干山", "kind": "daytrip",
+      "from": "2026-04-26", "to": "2026-04-26", "placeIds": ["cn-zj-moganshan"], "coverDay": "2026-04-26",
+      "summary": "去莫干山脚下，在路边坐一坐，下午在海洋球池里玩。",
+      "evidence": ["莫干山坐标 9 张", "Teddy 确认德清四次都算出游"]
+    },
+    {
+      "id": "2026-05-labourday", "title": "五一：嘉兴、德清、上海", "kind": "travel",
+      "from": "2026-05-02", "to": "2026-05-05", "placeIds": ["cn-zj-jiaxing", "cn-zj-deqing", "cn-sh-shanghai"], "coverDay": "2026-05-03",
+      "summary": "五一假期在外面走了四天。先去儿童乐园坐小猪摇摇马，又去湿地公园坐船、看兔子，在上海和布朗熊合影，假期最后一天去江边看挖掘机。",
+      "evidence": ["嘉兴 2、德清 8、上海 24 张坐标，逐日一处", "「湿地公园」"]
+    },
+    {
+      "id": "2026-05-moganshan", "title": "莫干山", "kind": "daytrip",
+      "from": "2026-05-16", "to": "2026-05-16", "placeIds": ["cn-zj-moganshan"], "coverDay": "2026-05-16",
+      "summary": "又去了莫干山脚下，在海洋球池里玩了一下午。",
+      "evidence": ["莫干山坐标 24 张"]
+    },
+    {
+      "id": "2026-05-shaoxing", "title": "绍兴", "kind": "travel",
+      "from": "2026-05-23", "to": "2026-05-24", "placeIds": ["cn-zj-shaoxing"], "coverDay": "2026-05-24",
+      "summary": "去绍兴住了一晚。第二天在石板巷里牵着手走，午饭时戴上了墨镜。",
+      "evidence": ["绍兴坐标 37 张", "5 月 24 日「七点半下楼吃早饭」"]
+    },
+    {
+      "id": "2026-05-deqing", "title": "德清", "kind": "daytrip",
+      "from": "2026-05-31", "to": "2026-05-31", "placeIds": ["cn-zj-deqing"], "coverDay": "2026-05-31",
+      "summary": "坐车去了一趟德清。",
+      "evidence": ["德清坐标 3 张", "Teddy 确认德清四次都算出游"]
+    },
+    {
+      "id": "2026-06-shanghai", "title": "上海江边", "kind": "daytrip",
+      "from": "2026-06-06", "to": "2026-06-06", "placeIds": ["cn-sh-shanghai"], "coverDay": "2026-06-06",
+      "summary": "在上海的江边跑道上，张开双臂往前走。",
+      "evidence": ["上海坐标 20 张"]
+    },
+    {
+      "id": "2026-06-moganshan", "title": "莫干山", "kind": "daytrip",
+      "from": "2026-06-28", "to": "2026-06-28", "placeIds": ["cn-zj-moganshan"], "coverDay": "2026-06-28",
+      "summary": "第三次去莫干山脚下，在海洋球池里抓着浅绿色的球。",
+      "evidence": ["莫干山坐标 13 张"]
+    },
+    {
+      "id": "2026-07-lanxi", "title": "兰溪、义乌", "kind": "travel",
+      "from": "2026-07-04", "to": "2026-07-05", "placeIds": ["cn-zj-lanxi", "cn-zj-yiwu"], "coverDay": "2026-07-04",
+      "summary": "一岁半刚过，去兰溪坐船看水上森林，第二天去碰喷泉的水，回程路上睡着了。",
+      "evidence": ["兰溪 27、义乌 10 张坐标", "「我们在售票处喂鱼这里」"]
+    },
+    {
+      "id": "2026-07-suzhou", "title": "苏州玩水", "kind": "daytrip",
+      "from": "2026-07-25", "to": "2026-07-25", "placeIds": ["cn-js-suzhou"], "coverDay": "2026-07-25",
+      "summary": "开车一个多小时去苏州玩水。",
+      "evidence": ["苏州坐标 3 张", "「苏州 玩水呢」"]
+    },
+    {
+      "id": "2026-08-shanghai", "title": "上海", "kind": "travel",
+      "from": "2026-08-01", "to": "2026-08-02", "placeIds": ["cn-sh-shanghai"], "coverDay": "2026-08-01",
+      "summary": "去上海住了一晚，戴着泳帽在泳池里仰躺着玩水。",
+      "evidence": ["上海坐标 25 张", "「上海」「明天回去」"]
+    },
+    {
+      "id": "2026-08-ningbo", "title": "宁波", "kind": "travel",
+      "from": "2026-08-15", "to": "2026-08-16", "placeIds": ["cn-zj-ningbo"], "coverDay": "2026-08-16",
+      "summary": "去宁波住了一晚。看了满屋子的 TOMICA 小汽车，晚上吃梭子蟹，第二天凑近玫瑰闻花。",
+      "evidence": ["宁波坐标 15 张", "「带去吃梭子蟹了」"]
+    }
+  ]
+}

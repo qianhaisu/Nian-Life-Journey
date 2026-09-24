@@ -51,7 +51,7 @@
 
     { "id": "us-ca", "name": "加利福尼亚", "level": "province", "parent": "us", "country": "US", "lat": 36.8, "lng": -119.4 },
     { "id": "us-ca-losangeles", "name": "洛杉矶", "level": "city", "parent": "us-ca", "country": "US", "lat": 34.05, "lng": -118.24, "birthplace": true, "aliases": ["洛杉矶", "LA", "美国"] },
-    { "id": "us-ca-frazier", "name": "洛杉矶北面的雪山（Frazier Park）", "level": "spot", "parent": "us-ca", "country": "US", "lat": 34.77, "lng": -119.04, "aliases": ["Frazier Park"] },
+    { "id": "us-ca-frazier", "name": "弗雷泽帕克", "level": "spot", "parent": "us-ca", "country": "US", "lat": 34.77, "lng": -119.04, "aliases": ["Frazier Park"] },
     { "id": "us-ca-monterey", "name": "蒙特雷", "level": "city", "parent": "us-ca", "country": "US", "lat": 36.60, "lng": -121.89, "aliases": ["蒙特雷", "Monterey"] },
     { "id": "us-ca-sanfrancisco", "name": "旧金山", "level": "city", "parent": "us-ca", "country": "US", "lat": 37.62, "lng": -122.38, "aliases": ["旧金山", "三藩", "湾区"] }
   ]
