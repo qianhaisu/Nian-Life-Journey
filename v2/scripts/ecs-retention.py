@@ -11,6 +11,7 @@ import subprocess
 import urllib.request
 
 ROLLBACK = re.compile(r"nianlife-diag-web-pre-[0-9a-f]+-(\d{8}-\d{6})")
+FAILED = re.compile(r"nianlife-diag-web-failed-\d{8}-\d{6}")
 APP_IMAGE = re.compile(r"nianlife-web:([0-9a-f]{7,40})")
 
 
@@ -30,11 +31,13 @@ def plan(items):
     if not APP_IMAGE.fullmatch(live["Config"]["Image"]):
         raise RuntimeError("Unexpected current image")
     candidates = [c for c in items if ROLLBACK.fullmatch(c["Name"].lstrip("/"))]
-    for c in candidates:
+    failed = [c for c in items if FAILED.fullmatch(c["Name"].lstrip("/"))]
+    for c in candidates + failed:
         if c["State"]["Status"] != "exited" or not APP_IMAGE.fullmatch(c["Config"]["Image"]):
             raise RuntimeError("Unexpected rollback state/image: " + c["Name"])
     candidates.sort(key=lambda c: ROLLBACK.fullmatch(c["Name"].lstrip("/")).group(1), reverse=True)
-    keep, remove = [live], []
+    # Failed releases are never rollback candidates; remove only after live health checks.
+    keep, remove = [live], failed
     seen = {live["Image"]}
     for c in candidates:
         if c["Image"] not in seen and len(keep) < 3:
