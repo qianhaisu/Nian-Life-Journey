@@ -4,7 +4,7 @@
 // in v2/lib/types.ts. Array-of-id and embedded-metadata fields (mediaIds, organizerRun, ...) are kept
 // as jsonb rather than normalized: the app only ever reads/writes them as a whole object today, and
 // mirroring the JSON shape exactly is what makes the JSON/Postgres repository contract tests meaningful.
-import { pgTable, text, timestamp, integer, boolean, real, jsonb, primaryKey, unique, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, boolean, real, doublePrecision, jsonb, primaryKey, unique, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { OrganizerRunMetadata } from "@/lib/types";
 
@@ -121,6 +121,25 @@ export const mediaRejections = pgTable("media_rejections", {
   byMediaId: uniqueIndex("media_rejections_media_id_unique").on(table.mediaId),
   byChecksum: uniqueIndex("media_rejections_checksum_unique").on(table.checksum),
 }));
+
+// Where a photograph was taken, read from the original file's EXIF GPS block (2026-09-24, travel
+// module phase 0 — docs/travel-module-plan.md §1.3). One row per asset, only when the original
+// really carries coordinates: WeChat strips EXIF (1,500 exported images probed, 0 with GPS), Quark
+// iPhone originals keep it (71% of 2,023). `takenAtExif` is DateTimeOriginal as the camera wrote it —
+// local wall clock of wherever the phone was, NOT Shanghai and NOT UTC — kept beside the coordinates
+// because the two were written by the same device at the same moment. `sourceFileSha256` names the
+// bytes the EXIF was read from (the HEIC before conversion, when the stored asset is the converted
+// JPEG), so a coordinate can always be re-derived from an archived original.
+export const mediaGeo = pgTable("media_geo", {
+  mediaAssetId: text("media_asset_id").primaryKey().references(() => mediaAssets.id),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  altitude: doublePrecision("altitude"),
+  takenAtExif: text("taken_at_exif"),
+  source: text("source").notNull(),
+  sourceFileSha256: text("source_file_sha256"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
 
 // Display-layer records (src/thumbnailSrc/alt/...), distinct from MediaAsset/MediaLocation's
 // storage-provenance layer. Never had a table before this slice.
