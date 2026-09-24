@@ -155,6 +155,11 @@ test("a curated id list never outvotes a later store_only, and never repeats a p
   assert.deepEqual(resolveMonthContentMedia(["b"], available, excluded), []);
 });
 
+test("portrait framing is opt-in and refuses unknown layout values", () => {
+  for (const coverFrame of [undefined, "square", "full"]) assert.ok(validateMonthContent(doc({ coverFrame }), MONTH));
+  for (const coverFrame of [null, "", "wide", "url(example)", {}, 1]) assert.equal(validateMonthContent(doc({ coverFrame }), MONTH), null);
+});
+
 test("a cover focal point is two plain percentages, or the month is refused", () => {
   // It ends up inside a CSS value on the /memory card, so it is checked like every other field.
   assert.ok(validateMonthContent(doc({ coverFocal: { mobilePercent: 30, desktopPercent: 45 } }), MONTH));

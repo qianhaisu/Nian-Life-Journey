@@ -37,7 +37,7 @@ export default async function MemoryPage() {
   // gates the card already applied: the cover must be one of the pictures `preview` holds (i.e.
   // subject-checked and deliverable), and an unknown id simply leaves the card as it was.
   const editedCards = new Map<string, {
-    line?: string; cover?: (typeof media)[number]; coverFocal?: { mobilePercent: number; desktopPercent: number };
+    line?: string; cover?: (typeof media)[number]; coverFocal?: { mobilePercent: number; desktopPercent: number }; coverFrame?: "square" | "full";
   }>();
   const mediaById = new Map(media.map((item) => [item.id, item]));
   for (const year of index.years) {
@@ -57,6 +57,7 @@ export default async function MemoryPage() {
         line: content.cardLine,
         cover: allowed ? candidate : undefined,
         coverFocal: allowed ? content.coverFocal : undefined,
+        coverFrame: allowed ? content.coverFrame : undefined,
       });
     }
   }
@@ -119,6 +120,7 @@ export default async function MemoryPage() {
                     blurb={editedCards.get(month.chapter.month)?.line ?? snapshotBlurb.get(month.chapter.month)}
                     cover={editedCards.get(month.chapter.month)?.cover}
                     coverFocal={editedCards.get(month.chapter.month)?.coverFocal}
+                    coverFrame={editedCards.get(month.chapter.month)?.coverFrame}
                   />
                 ))}
               </div>

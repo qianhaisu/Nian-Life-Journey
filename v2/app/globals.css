@@ -939,6 +939,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-card-photo { position: relative; height: clamp(160px, 40vw, 240px); overflow: hidden; background: var(--card-soft); }
 .month-card-photo .photo-crop { position: absolute; inset: 0; }
 .month-card-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% var(--card-focal-mobile, 30%); }
+.month-card-photo--square { height: auto; aspect-ratio: 1; }
+.month-card-photo--full { height: auto; }
 /* The card is a wide letterbox, so the vertical focal point decides whether a chin survives the
    crop. 30% was measured against the phone card (a 400x200-ish box, MEMORY-02 R2.2); the desktop
    card is shorter relative to its width, and the same 30% rides too high there. Verified in the

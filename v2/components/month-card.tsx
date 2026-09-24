@@ -9,10 +9,11 @@ import { productToday } from "@/lib/time-truth";
 // One month as a tappable card on /memory: a cropped cover photo, the month and age, and the first
 // line of the month's snapshot (or the first memory's title). No counts — the card is an invitation,
 // not a summary.
-export function MonthCard({ entry, blurb, cover, coverFocal }: {
+export function MonthCard({ entry, blurb, cover, coverFocal, coverFrame }: {
   entry: MonthIndexEntry; blurb?: string; cover?: MediaRef;
   /** Where an edited cover's crop sits, measured for that photograph in the real card at both widths. */
   coverFocal?: { mobilePercent: number; desktopPercent: number };
+  coverFrame?: "square" | "full";
 }) {
   const { chapter, href, preview, featured } = entry;
   // The month's face comes from `preview`, and only from `preview`.
@@ -45,7 +46,7 @@ export function MonthCard({ entry, blurb, cover, coverFocal }: {
     <Link href={href} className={`month-card scroll-reveal${compact ? " month-card--compact" : ""}`}>
       {coverPhoto ? (
         <div
-          className="month-card-photo"
+          className={`month-card-photo${cover && coverFrame ? ` month-card-photo--${coverFrame}` : ""}`}
           // Only an edited cover carries its own focal point; every other card keeps the stylesheet's
           // 30% / 45%, which were measured on September's face and are not a rule for other photos.
           style={cover && coverFocal ? {
@@ -55,8 +56,8 @@ export function MonthCard({ entry, blurb, cover, coverFocal }: {
         >
           <Photo
             media={coverPhoto}
-            variant="thumbnail"
-            fit="crop"
+            variant={cover && coverFrame ? "web" : "thumbnail"}
+            fit={cover && coverFrame === "full" ? "natural" : "crop"}
             sizes="(max-width: 720px) calc(100vw - 32px), 340px"
           />
         </div>

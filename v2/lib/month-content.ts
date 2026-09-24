@@ -52,6 +52,8 @@ export type MonthContent = {
   intro?: string;
   coverMediaId?: string;
   coverFocal?: { mobilePercent: number; desktopPercent: number };
+  /** Opt-in framing for a reviewed portrait; omitted keeps existing cards unchanged. */
+  coverFrame?: "square" | "full";
   /**
    * How to name the person behind each source, keyed by source id.
    *
@@ -152,6 +154,7 @@ export function validateMonthContent(parsed: unknown, month: string): MonthConte
   if (doc.intro !== undefined && !isNonEmptyString(doc.intro)) return null;
   if (doc.coverMediaId !== undefined && !isNonEmptyString(doc.coverMediaId)) return null;
   if (doc.coverFocal !== undefined && !isCoverFocal(doc.coverFocal)) return null;
+  if (doc.coverFrame !== undefined && doc.coverFrame !== "square" && doc.coverFrame !== "full") return null;
   if (doc.speakerBySourceId !== undefined) {
     const map = doc.speakerBySourceId as Record<string, unknown>;
     if (!map || typeof map !== "object" || Array.isArray(map)) return null;
