@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DayPhotos } from "@/components/day-photos";
 import { Photo } from "@/components/photo";
+import { TravelTripMap } from "@/components/travel-trip-map";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { KIND_LABEL, whenAge, formatRange, placeNames, tripById } from "@/lib/travel/model";
 import { readTrip } from "@/lib/travel/reading";
@@ -37,6 +38,8 @@ export default async function TripPage({ params }: { params: Promise<{ tripId: s
         <h1 className="serif">{trip.title}</h1>
         {places !== trip.title ? <p className="travel-places">{places}</p> : null}
       </header>
+
+      <div className="reading-wrap travel-trip-mapwrap"><TravelTripMap trip={trip} /></div>
 
       {cover ? <div className="reading-wrap travel-trip-cover"><Photo media={cover} sizes="(max-width: 760px) 100vw, 728px" priority /></div> : null}
 

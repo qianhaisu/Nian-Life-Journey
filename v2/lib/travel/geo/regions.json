@@ -1,0 +1,190 @@
+{
+ "cn-zj-hangzhou": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330100",
+  "prefectureName": "杭州市"
+ },
+ "cn-zj-wenzhou": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330300",
+  "prefectureName": "温州市"
+ },
+ "cn-zj-qiandaohu": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330100",
+  "prefectureName": "杭州市"
+ },
+ "cn-zj-jiande": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330100",
+  "prefectureName": "杭州市"
+ },
+ "cn-zj-tonglu": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330100",
+  "prefectureName": "杭州市"
+ },
+ "cn-zj-deqing": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330500",
+  "prefectureName": "湖州市"
+ },
+ "cn-zj-moganshan": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330500",
+  "prefectureName": "湖州市"
+ },
+ "cn-zj-anji": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330500",
+  "prefectureName": "湖州市"
+ },
+ "cn-zj-huzhou": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330500",
+  "prefectureName": "湖州市"
+ },
+ "cn-zj-shaoxing": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330600",
+  "prefectureName": "绍兴市"
+ },
+ "cn-zj-ningbo": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330200",
+  "prefectureName": "宁波市"
+ },
+ "cn-zj-yuyao": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330200",
+  "prefectureName": "宁波市"
+ },
+ "cn-zj-zhoushan": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330900",
+  "prefectureName": "舟山市"
+ },
+ "cn-zj-jinhua": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330700",
+  "prefectureName": "金华市"
+ },
+ "cn-zj-lanxi": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330700",
+  "prefectureName": "金华市"
+ },
+ "cn-zj-yiwu": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330700",
+  "prefectureName": "金华市"
+ },
+ "cn-zj-jiaxing": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "330400",
+  "prefectureName": "嘉兴市"
+ },
+ "cn-zj-taizhou": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "331000",
+  "prefectureName": "台州市"
+ },
+ "cn-zj-lishui": {
+  "province": "330000",
+  "provinceName": "浙江省",
+  "prefecture": "331100",
+  "prefectureName": "丽水市"
+ },
+ "cn-sh-shanghai": {
+  "province": "310000",
+  "provinceName": "上海市",
+  "prefecture": "310101",
+  "prefectureName": "黄浦区"
+ },
+ "cn-js-suzhou": {
+  "province": "320000",
+  "provinceName": "江苏省",
+  "prefecture": "320500",
+  "prefectureName": "苏州市"
+ },
+ "cn-js-nanjing": {
+  "province": "320000",
+  "provinceName": "江苏省",
+  "prefecture": "320100",
+  "prefectureName": "南京市"
+ },
+ "cn-js-wuxi": {
+  "province": "320000",
+  "provinceName": "江苏省",
+  "prefecture": "320200",
+  "prefectureName": "无锡市"
+ },
+ "cn-ah-hefei": {
+  "province": "340000",
+  "provinceName": "安徽省",
+  "error": "缺 340000_full.json"
+ },
+ "cn-ah-huangshan": {
+  "province": "340000",
+  "provinceName": "安徽省",
+  "error": "缺 340000_full.json"
+ },
+ "cn-sc-chengdu": {
+  "province": "510000",
+  "provinceName": "四川省",
+  "prefecture": "510100",
+  "prefectureName": "成都市"
+ },
+ "cn-sc-west": {
+  "province": "510000",
+  "provinceName": "四川省",
+  "prefecture": "513200",
+  "prefectureName": "阿坝藏族羌族自治州"
+ },
+ "cn-sn-xian": {
+  "province": "610000",
+  "provinceName": "陕西省",
+  "prefecture": "610100",
+  "prefectureName": "西安市"
+ },
+ "cn-gd-guangzhou": {
+  "province": "440000",
+  "provinceName": "广东省",
+  "error": "缺 440000_full.json"
+ },
+ "cn-gd-shenzhen": {
+  "province": "440000",
+  "provinceName": "广东省",
+  "error": "缺 440000_full.json"
+ },
+ "us-ca-losangeles": {
+  "state": "us-ca"
+ },
+ "us-ca-frazier": {
+  "state": "us-ca"
+ },
+ "us-ca-monterey": {
+  "state": "us-ca"
+ },
+ "us-ca-sanfrancisco": {
+  "state": "us-ca"
+ }
+}

@@ -6,35 +6,77 @@
 .travel-head h1 { margin: 0; font-size: clamp(2.2rem, 7vw, 3.6rem); font-weight: 800; line-height: 1.08; }
 .travel-lead { margin: 0; max-width: 32em; color: var(--color-text); font-size: clamp(1.05rem, 2.6vw, 1.25rem); line-height: 1.7; }
 
-.travel-year { margin-top: clamp(28px, 5vw, 48px); }
-.travel-year-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 16px; font-size: 1.1rem; font-weight: 800; color: var(--color-text); }
-.travel-year-head small { color: var(--muted); font-size: .8rem; font-weight: 600; }
-
 .travel-when { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; color: var(--clay-ink); font-size: .85rem; font-weight: 600; }
 .travel-tag { display: inline-flex; padding: 2px 10px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--sage) 22%, #fff); color: var(--sage-ink); font-size: .75rem; font-weight: 700; letter-spacing: .04em; }
 .travel-age { white-space: nowrap; }
 .travel-places { margin: 0; color: var(--muted); font-size: .9rem; }
 
-.travel-cards { display: grid; gap: clamp(14px, 2.5vw, 20px); }
-.travel-card { display: block; overflow: hidden; background: #fff; border-radius: var(--r-card); box-shadow: var(--shadow); transition: transform .4s var(--ease-hover), box-shadow .4s var(--ease-hover); }
-.travel-card:active { transform: scale(.98); }
-@media (hover: hover) { .travel-card:hover { box-shadow: var(--shadow-hover); } }
-/* 4:3 而不是固定矮高度：大多数照片是竖拍的，矮条会把他裁出画面（2026-09-25 苏州那张只剩大人）。 */
-.travel-card-photo { position: relative; aspect-ratio: 4 / 3; max-height: 420px; width: 100%; overflow: hidden; background: var(--card-soft); }
-.travel-card-photo .photo-crop { position: absolute; inset: 0; margin: 0; }
-.travel-card-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
-.travel-card-body { display: grid; gap: 6px; padding: 18px 22px 22px; }
-.travel-card-title { margin: 2px 0 0; font-size: 1.35rem; font-weight: 800; color: var(--color-text); }
-.travel-card-summary { margin: 6px 0 0; color: var(--color-text); font-size: .95rem; line-height: 1.7; }
+/* ── 迷雾地图（2026-09-25 重做：地方为主，可爱的手绘风） ───────────────────── */
+.travel-atlas { display: grid; gap: clamp(18px, 4vw, 28px); margin-top: clamp(12px, 3vw, 20px); }
+.travel-map-tabs { display: inline-flex; justify-self: start; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card-soft); }
+.travel-map-tabs button { min-height: 36px; padding: 0 18px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: .9rem; font-weight: 700; cursor: pointer; }
+.travel-map-tabs button.is-on { background: #fff; color: var(--color-text); box-shadow: 0 2px 0 rgba(156,132,104,.18); }
+.travel-map { position: relative; overflow: hidden; padding: clamp(8px, 2vw, 16px); border-radius: 28px; background: radial-gradient(120% 90% at 50% 20%, #FFFDF8 0%, #F6F0E6 70%, #F1E9DC 100%); box-shadow: inset 0 0 0 2px #EFE6D8; scroll-margin-top: 80px; }
+.travel-map-svg { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--font-body); }
+.travel-map-svg [role="button"]:focus { outline: none; }
+.travel-map-svg [role="button"]:focus-visible path { stroke: var(--brand-accent); }
+.travel-map-selected { animation: travel-pop .45s var(--ease-out); transform-box: fill-box; transform-origin: center; }
+.travel-map-back { position: absolute; top: 12px; left: 12px; z-index: 1; min-height: 36px; padding: 0 14px; border: 2px solid #EFE6D8; border-radius: 999px; background: #fff; color: var(--color-text); font: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.travel-map-loading { aspect-ratio: 1; }
 
-.travel-shorts { display: grid; gap: 2px; margin: 16px 0 0; padding: 0; list-style: none; }
-.travel-short { display: flex; align-items: center; gap: 14px; padding: 10px 4px; border-bottom: 1px solid var(--color-border); }
-.travel-short-thumb { position: relative; flex: 0 0 56px; width: 56px; height: 56px; overflow: hidden; border-radius: 14px; background: var(--card-soft); }
-.travel-short-thumb .photo-crop { position: absolute; inset: 0; margin: 0; }
-.travel-short-thumb .photo-crop img { width: 100%; height: 100%; object-fit: cover; }
-.travel-short-body { display: grid; gap: 2px; min-width: 0; }
-.travel-short-body strong { color: var(--color-text); font-size: 1rem; font-weight: 700; }
-.travel-short .travel-when { font-size: .8rem; }
+.travel-cloud { transform-box: fill-box; }
+.travel-cloud-a { animation: travel-drift-a 26s ease-in-out infinite alternate; }
+.travel-cloud-b { animation: travel-drift-b 34s ease-in-out infinite alternate; }
+.travel-mist { transform-box: fill-box; transform-origin: center; }
+.travel-mist-0 { animation: travel-mist-a 18s ease-in-out infinite alternate; }
+.travel-mist-1 { animation: travel-mist-b 23s ease-in-out infinite alternate; }
+.travel-mist-2 { animation: travel-mist-c 29s ease-in-out infinite alternate; }
+@keyframes travel-drift-a { from { translate: -14px 0; } to { translate: 18px -4px; } }
+@keyframes travel-drift-b { from { translate: 12px 2px; } to { translate: -16px -2px; } }
+@keyframes travel-mist-a { from { translate: -6% -2%; opacity: .55; scale: 1; } to { translate: 8% 3%; opacity: .95; scale: 1.15; } }
+@keyframes travel-mist-b { from { translate: 7% 2%; opacity: .9; scale: 1.1; } to { translate: -8% -3%; opacity: .5; scale: .95; } }
+@keyframes travel-mist-c { from { translate: 0 4%; opacity: .6; scale: .95; } to { translate: 5% -4%; opacity: .9; scale: 1.2; } }
+@keyframes travel-pop { 0% { scale: 1; } 45% { scale: 1.04; } 100% { scale: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .travel-cloud, .travel-mist, .travel-map-selected { animation: none; }
+}
+
+.travel-panel { display: grid; gap: 12px; }
+.travel-panel-head h2 { margin: 0; font-size: 1.3rem; font-weight: 800; color: var(--color-text); }
+.travel-panel-head p { margin: 4px 0 0; color: var(--clay-ink); font-size: .85rem; font-weight: 600; }
+.travel-postcards { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 62%); gap: 14px; margin: 0 -16px; padding: 6px 16px 14px; overflow-x: auto; scroll-snap-type: x mandatory; list-style: none; scrollbar-width: none; }
+.travel-postcards::-webkit-scrollbar { display: none; }
+@media (min-width: 720px) { .travel-postcards { grid-auto-columns: minmax(200px, 30%); } }
+.travel-postcards li { scroll-snap-align: start; }
+.travel-postcards li:nth-child(odd) .travel-postcard { rotate: -1.2deg; }
+.travel-postcards li:nth-child(even) .travel-postcard { rotate: 1deg; }
+.travel-postcard { display: grid; gap: 10px; height: 100%; padding: 8px 8px 14px; border-radius: 16px; background: #fff; box-shadow: 0 3px 0 rgba(156,132,104,.16), 0 10px 22px rgba(138,121,102,.1); transition: rotate .3s var(--ease-hover), translate .3s var(--ease-hover); }
+.travel-postcard:active { translate: 0 2px; }
+@media (hover: hover) { .travel-postcard:hover { rotate: 0deg; translate: 0 -3px; } }
+.travel-postcard-photo { position: relative; display: block; aspect-ratio: 1; overflow: hidden; border-radius: 10px; background: var(--card-soft); }
+.travel-postcard-photo .photo-crop { position: absolute; inset: 0; margin: 0; }
+.travel-postcard-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
+.travel-postcard-body { display: grid; gap: 4px; padding: 0 4px; }
+.travel-postcard-body .travel-tag { justify-self: start; }
+.travel-postcard-body strong { color: var(--color-text); font-size: 1.05rem; font-weight: 800; }
+.travel-postcard-when { color: var(--clay-ink); font-size: .78rem; font-weight: 600; line-height: 1.5; }
+.travel-postcard-age { color: var(--muted); font-size: .76rem; font-weight: 600; }
+
+.travel-section-title { margin: 0 0 12px; font-size: 1.1rem; font-weight: 800; color: var(--color-text); }
+.travel-stamps { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 14px 10px; margin: 0; padding: 0; list-style: none; }
+.travel-stamp { --stamp: #F2C4A4; display: grid; place-items: center; align-content: center; gap: 3px; width: 100%; aspect-ratio: 1; padding: 10px; border: 2px dashed color-mix(in srgb, var(--stamp) 70%, #8a7560); border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--stamp) 55%, #fff) 0 62%, #fff 63%); color: var(--color-text); font: inherit; text-align: center; cursor: pointer; transition: rotate .3s var(--ease-hover), scale .3s var(--ease-hover); }
+.travel-stamps li:nth-child(3n+1) .travel-stamp { rotate: -4deg; }
+.travel-stamps li:nth-child(3n+2) .travel-stamp { rotate: 3deg; }
+.travel-stamp.is-on { scale: 1.06; border-style: solid; }
+@media (hover: hover) { .travel-stamp:hover { rotate: 0deg; } }
+.travel-stamp-name { font-size: 1rem; font-weight: 800; line-height: 1.2; }
+.travel-stamp-first { color: var(--clay-ink); font-size: .68rem; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.travel-stamp-age { color: var(--muted); font-size: .66rem; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.travel-stamp-dots { display: flex; gap: 3px; min-height: 5px; }
+.travel-stamp-dots i { width: 5px; height: 5px; border-radius: 50%; background: color-mix(in srgb, var(--stamp) 60%, #6b5a48); }
+
+.travel-trip-mapwrap { margin-bottom: clamp(18px, 4vw, 28px); }
+.travel-trip-map { max-width: 420px; margin: 0 auto; padding: 8px; border-radius: 24px; background: radial-gradient(120% 90% at 50% 20%, #FFFDF8 0%, #F6F0E6 75%); box-shadow: inset 0 0 0 2px #EFE6D8; }
 
 .travel-trip .detail-head { padding-bottom: clamp(16px, 3vw, 24px); }
 .travel-trip .detail-head h1 { max-width: none; }

@@ -1,27 +1,71 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Photo } from "@/components/photo";
+import { TravelAtlas, type AtlasPlace, type AtlasTrip, type AtlasUnit } from "@/components/travel-atlas";
+import { HOME_COLOR, STICKER_COLORS } from "@/components/travel-map-svg";
 import { renderOnDemand } from "@/lib/render-on-demand";
+import { ageOn, formatMonth } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
-import { KIND_LABEL, whenAge, TRIPS, formatRange, leadLine, placeNames } from "@/lib/travel/model";
-import { readTravelIndex, type TripCard } from "@/lib/travel/reading";
+import chinaGeo from "@/lib/travel/geo/china.json";
+import { KIND_LABEL, PLACES, TRIPS, formatRange, leadLine, unitOf, whenAge, type Unit } from "@/lib/travel/model";
+import { readTravelIndex } from "@/lib/travel/reading";
 import "./travel.css";
 
 export const metadata: Metadata = { title: "旅行" };
 
-// 旅行（docs/travel-module-plan.md §4.1）：记忆的地理章节。第一句读得出张年去过哪；下面按年倒序，
-// 过夜的旅程是大卡，一日短途是窄条（原则五：四川跨年和去德清看羊一眼分得出）。
-// 迷雾地图是第 2 期，这一期不放占位；「接下来」是第 3 期，没有数据就整块不出现（原则六：不写「暂无」）。
+// 旅行（docs/travel-module-plan.md §4–5）。2026-09-25 按 Teddy 的意见重做：第一版按年排卡片，
+// 「和记忆页的形式太像了」；现在以地方为主——迷雾地图、点地方看那里的旅程、足迹印章。
+// 旅程页（/travel/<id>）不变，仍是逐日指回日页的索引。
 export default async function TravelPage() {
   // 与 /memory 同理：不在构建时用 mock 数据预渲染（lib/render-on-demand.ts）。
   await renderOnDemand();
   const { cards, birthDay } = await readTravelIndex();
   const today = productToday();
-  const years = new Map<string, TripCard[]>();
-  for (const card of cards) {
-    const year = card.trip.from.slice(0, 4);
-    years.set(year, [...(years.get(year) ?? []), card]);
+
+  // 地图上的格子：中国按地级市、美国按城市。颜色按第一次去的先后轮换；家那一格用固定的绿。
+  // 家那一格（杭州市域）也放进来：千岛湖、桐庐的旅程要能在地图上点到，只是它不算进「去过几个城市」。
+  const firstTrip = new Map<string, (typeof TRIPS)[number]>();
+  const visits = new Map<string, number>();
+  const unitMeta = new Map<string, Unit>();
+  for (const trip of [...TRIPS].sort((a, b) => a.from.localeCompare(b.from))) {
+    const keys = new Set<string>();
+    for (const id of trip.placeIds) { const u = unitOf(id); if (u) { keys.add(u.key); unitMeta.set(u.key, u); } }
+    for (const key of keys) { if (!firstTrip.has(key)) firstTrip.set(key, trip); visits.set(key, (visits.get(key) ?? 0) + 1); }
   }
+  let colorIndex = 0;
+  const units: AtlasUnit[] = [...firstTrip.entries()].map(([key, trip]) => {
+    const meta = unitMeta.get(key)!;
+    const age = ageOn(birthDay, trip.from);
+    return {
+      key, name: meta.name, kind: meta.kind, province: meta.province,
+      color: meta.home ? HOME_COLOR : STICKER_COLORS[colorIndex++ % STICKER_COLORS.length],
+      firstMonth: formatMonth(trip.from.slice(0, 7)), firstAge: age === "出生的那天" ? "出生那天" : age,
+      visits: visits.get(key) ?? 1,
+    };
+  });
+  const provinceColors: Record<string, string> = {};
+  for (const u of units) if (u.province && !provinceColors[u.province] && !unitMeta.get(u.key)?.home) provinceColors[u.province] = u.color;
+  // 家所在的省即使别处没去过也要亮（旅程都从那里出发）
+  const homePlace = PLACES.find((p) => p.home);
+  const homeUnit = homePlace ? unitOf(homePlace.id) : undefined;
+  if (homeUnit?.province && !provinceColors[homeUnit.province]) provinceColors[homeUnit.province] = HOME_COLOR;
+
+  const provinceNames: Record<string, string> = {};
+  for (const p of (chinaGeo as { provinces: { adcode: string; name: string }[] }).provinces) {
+    provinceNames[p.adcode] = p.name.replace(/(维吾尔自治区|壮族自治区|回族自治区|自治区|特别行政区|省|市)$/, "");
+  }
+
+  const places: AtlasPlace[] = PLACES.filter((p) => p.level === "city" || p.level === "spot")
+    .map((p) => ({ id: p.id, name: p.name, unitKey: unitOf(p.id)?.key, home: p.home }));
+  const cardById = new Map(cards.map((c) => [c.trip.id, c]));
+  const trips: AtlasTrip[] = TRIPS.map((t) => {
+    const card = cardById.get(t.id);
+    const tripUnits = t.placeIds.map(unitOf).filter((u): u is Unit => !!u);
+    return {
+      id: t.id, title: t.title, kind: t.kind, tag: KIND_LABEL[t.kind], from: t.from,
+      rangeLabel: formatRange(t.from, t.to), ageText: whenAge(card?.ageLabel), cover: card?.cover,
+      unitKeys: [...new Set(tripUnits.map((u) => u.key))],
+      provinces: [...new Set(tripUnits.map((u) => u.province).filter((x): x is string => !!x))],
+    };
+  });
 
   return (
     <div className="travel-page">
@@ -29,53 +73,9 @@ export default async function TravelPage() {
         <h1 className="serif">旅行</h1>
         <p className="travel-lead">{leadLine(TRIPS, birthDay, today)}</p>
       </header>
-
-      {[...years].map(([year, list]) => {
-        const big = list.filter((c) => c.trip.kind !== "daytrip");
-        const small = list.filter((c) => c.trip.kind === "daytrip");
-        return (
-          <section key={year} className="reading-wrap travel-year" aria-labelledby={`travel-${year}`}>
-            <h2 id={`travel-${year}`} className="travel-year-head">
-              <span>{year} 年</span>
-            </h2>
-            {big.length ? <div className="travel-cards">{big.map((card) => <TripCardView key={card.trip.id} card={card} />)}</div> : null}
-            {small.length ? (
-              <ul className="travel-shorts" aria-label={`${year} 年的一日短途`}>
-                {small.map(({ trip, cover, ageLabel }) => (
-                  <li key={trip.id}>
-                    <Link href={`/travel/${trip.id}`} className="travel-short">
-                      <span className="travel-short-thumb">{cover ? <Photo media={cover} variant="thumbnail" fit="crop" sizes="72px" /> : null}</span>
-                      <span className="travel-short-body">
-                        <strong>{trip.title}</strong>
-                        <span className="travel-when">{formatRange(trip.from, trip.to)}<span className="travel-age">{whenAge(ageLabel)}</span></span>
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
-function TripCardView({ card }: { card: TripCard }) {
-  const { trip, cover, ageLabel } = card;
-  const tag = KIND_LABEL[trip.kind];
-  return (
-    <Link href={`/travel/${trip.id}`} className="travel-card scroll-reveal">
-      {cover ? <div className="travel-card-photo"><Photo media={cover} variant="web" fit="crop" sizes="(max-width: 760px) 100vw, 728px" /></div> : null}
-      <div className="travel-card-body">
-        <p className="travel-when">
-          {tag ? <span className="travel-tag">{tag}</span> : null}
-          {formatRange(trip.from, trip.to)}<span className="travel-age">{whenAge(ageLabel)}</span>
-        </p>
-        <h3 className="travel-card-title">{trip.title}</h3>
-        {placeNames(trip) !== trip.title ? <p className="travel-places">{placeNames(trip)}</p> : null}
-        <p className="travel-card-summary">{trip.summary}</p>
+      <div className="reading-wrap">
+        <TravelAtlas trips={trips} units={units} places={places} provinceColors={provinceColors} provinceNames={provinceNames} homeUnitKey={homeUnit?.key} />
       </div>
-    </Link>
+    </div>
   );
 }

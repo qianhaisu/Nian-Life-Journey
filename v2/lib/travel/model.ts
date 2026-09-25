@@ -6,6 +6,7 @@
 // 也不需要任何线上写权限才能更新。夜间增量（第 3 期）上线时再考虑挪到内容目录。
 import placesFile from "./places.json";
 import tripsFile from "./trips.json";
+import regionsFile from "./geo/regions.json";
 import { ageOn, formatDay } from "@/lib/time-signature";
 
 export type PlaceLevel = "country" | "province" | "city" | "spot";
@@ -121,25 +122,57 @@ function ancestorAt(place: Place, level: PlaceLevel): Place | undefined {
   return p;
 }
 
-export type TravelStats = { countries: Place[]; provinces: Place[]; cities: Place[]; spots: Place[] };
+/**
+ * 地图上「解锁」的单位（第 2 期）：中国按地级市（直辖市整个算一个），美国按城市本身。
+ * 哪个去处落在哪个地级市，由 scripts/travel-geo-build.mjs 用点在多边形内算好写进 geo/regions.json，这里只查表。
+ */
+export type Region = { province?: string; provinceName?: string; prefecture?: string; prefectureName?: string; state?: string; error?: string };
+const REGIONS = regionsFile as Record<string, Region>;
+const MUNICIPALITIES = new Set(["110000", "120000", "310000", "500000", "810000", "820000"]);
+export type UnitKind = "cn" | "us";
+export type Unit = { key: string; name: string; kind: UnitKind; province?: string; provinceName?: string; home: boolean };
+
+/** 「阿坝藏族羌族自治州」→「阿坝」，「湖州市」→「湖州」，「上海市」→「上海」。 */
+export function shortRegionName(name: string): string {
+  return name.replace(/(藏族羌族自治州|自治州|特别行政区|地区|盟|市|省)$/, "") || name;
+}
+
+export function regionOf(placeId: string): Region | undefined { return REGIONS[placeId]; }
+
+/** 一个去处所在的解锁单位；地名册里有但没算出区域的（比如缺边界文件的省）返回 undefined。 */
+export function unitOf(placeId: string): Unit | undefined {
+  const place = PLACE_BY_ID.get(placeId);
+  const r = REGIONS[placeId];
+  if (!place || !r) return undefined;
+  if (place.country === "US") return { key: `us:${place.id}`, name: place.name, kind: "us", home: false };
+  if (!r.province) return undefined;
+  if (MUNICIPALITIES.has(r.province)) return { key: `cn:${r.province}`, name: shortRegionName(r.provinceName ?? place.name), kind: "cn", province: r.province, provinceName: r.provinceName, home: false };
+  if (!r.prefecture) return undefined;
+  const homePrefecture = PLACES.find((x) => x.home) ? REGIONS[PLACES.find((x) => x.home)!.id]?.prefecture : undefined;
+  return { key: `cn:${r.prefecture}`, name: shortRegionName(r.prefectureName ?? place.name), kind: "cn", province: r.province, provinceName: r.provinceName, home: r.prefecture === homePrefecture };
+}
+
+export type TravelStats = { countries: Place[]; provinces: string[]; cities: Unit[] };
 
 /**
- * 去过的国家、省级地区、城市、景点。家（杭州）不算。
- * 「城市」只数 city 层级；千岛湖、莫干山、川西这类 spot 单独列，不冒充城市数。
+ * 去过的国家、省级地区、城市。「城市」= 地图上亮起来的格子：中国的地级市（直辖市算一个）、美国的城市。
+ * 家所在的地级市（杭州）不算——千岛湖、桐庐虽然出了市区，仍在杭州市域里，地图上它们是家那一格里的小旗子。
+ * 景点（莫干山、川西、弗雷泽帕克）不单独算城市，它们落进所在的地级市。
  */
 export function travelStats(trips: readonly Trip[]): TravelStats {
-  const countries = new Map<string, Place>(), provinces = new Map<string, Place>(), cities = new Map<string, Place>(), spots = new Map<string, Place>();
+  const countries = new Map<string, Place>(), provinces = new Set<string>(), cities = new Map<string, Unit>();
   for (const trip of trips) for (const id of trip.placeIds) {
     const place = PLACE_BY_ID.get(id);
     if (!place || place.home) continue;
     const country = ancestorAt(place, "country");
-    const province = ancestorAt(place, "province");
     if (country) countries.set(country.id, country);
-    if (province) provinces.set(province.id, province);
-    if (place.level === "city") cities.set(place.id, place);
-    if (place.level === "spot") spots.set(place.id, place);
+    const unit = unitOf(id);
+    if (unit?.province) provinces.add(unit.province);
+    if (place.country === "US") provinces.add("us-ca");
+    // 中国的景点落进它的地级市（川西 → 阿坝）；美国的景点自己不是城市。
+    if (unit && !unit.home && (unit.kind === "cn" || place.level !== "spot")) cities.set(unit.key, unit);
   }
-  return { countries: [...countries.values()], provinces: [...provinces.values()], cities: [...cities.values()], spots: [...spots.values()] };
+  return { countries: [...countries.values()], provinces: [...provinces], cities: [...cities.values()] };
 }
 
 /** 一条旅程的去处，按名字连起来：「成都、川西」。 */

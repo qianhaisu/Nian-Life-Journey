@@ -5,7 +5,7 @@
 //   · 时间同时读得出「什么时候」和「当时几岁」（原则二）。
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PLACES, TRIPS, validateTrips, travelStats, formatRange, daysOf, leadLine, tripAge, placeNames } from "../lib/travel/model.ts";
+import { PLACES, TRIPS, validateTrips, travelStats, unitOf, formatRange, daysOf, leadLine, tripAge, placeNames } from "../lib/travel/model.ts";
 
 test("旅程文件整体有效，且新的在前", () => {
   assert.ok(TRIPS.length > 0);
@@ -29,13 +29,18 @@ test("Teddy 的决定：没有合肥，没有温州三个月的长旅程", () =>
   assert.ok(us && us.placeIds.includes("us-ca-losangeles"));
 });
 
-test("统计：家不算，景点不算城市", () => {
+test("统计：城市按地级市算；家那一格不算；景点落进所在城市", () => {
   const stats = travelStats(TRIPS);
   assert.deepEqual(stats.countries.map((c) => c.id).sort(), ["cn", "us"]);
-  assert.ok(!stats.cities.some((c) => c.id === "cn-zj-hangzhou"));
-  assert.ok(!stats.cities.some((c) => c.level !== "city"));
-  assert.ok(stats.spots.some((s) => s.id === "cn-zj-moganshan"));
-  assert.ok(stats.provinces.some((p) => p.id === "cn-sn"));
+  const names = stats.cities.map((c) => c.name);
+  assert.ok(!names.includes("杭州"), "杭州是家，千岛湖、桐庐在杭州市域里也不算");
+  assert.ok(names.includes("湖州"), "德清、安吉、莫干山都算湖州一处");
+  assert.ok(!names.includes("德清") && !names.includes("莫干山"));
+  assert.ok(names.includes("阿坝"), "川西（景点）落进阿坝");
+  assert.ok(!names.includes("弗雷泽帕克"), "美国的景点自己不是城市");
+  assert.ok(stats.provinces.includes("610000"));
+  assert.equal(unitOf("cn-sh-shanghai").key, "cn:310000", "直辖市整个算一个");
+  assert.equal(unitOf("cn-zj-qiandaohu").home, true);
 });
 
 test("日期区间：同月、跨月、跨年、单日", () => {
