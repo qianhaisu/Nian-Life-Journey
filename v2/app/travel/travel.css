@@ -87,8 +87,6 @@
 .travel-stamp-dots { display: flex; gap: 3px; min-height: 5px; }
 .travel-stamp-dots i { width: 5px; height: 5px; border-radius: 50%; background: color-mix(in srgb, var(--stamp) 60%, #6b5a48); }
 
-.travel-trip-mapwrap { margin-bottom: clamp(18px, 4vw, 28px); }
-.travel-trip-map { max-width: 440px; margin: 0 auto; padding: 10px; border: 5px solid #FFFDF8; border-radius: 26px; background: #E3EEEA; box-shadow: 0 3px 0 rgba(156,132,104,.18), 0 12px 26px rgba(138,121,102,.1); }
 
 .travel-trip .detail-head { padding-bottom: clamp(16px, 3vw, 24px); }
 .travel-trip .detail-head h1 { max-width: none; }

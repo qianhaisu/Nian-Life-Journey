@@ -152,6 +152,16 @@ export function unitOf(placeId: string): Unit | undefined {
   return { key: `cn:${r.prefecture}`, name: shortRegionName(r.prefectureName ?? place.name), kind: "cn", province: r.province, provinceName: r.provinceName, home: r.prefecture === homePrefecture };
 }
 
+/**
+ * 足迹印章按「一个去处」合并，不按行政区（Teddy 2026-09-25）：美国的几处都盖进「洛杉矶」一个章，
+ * 成都和阿坝（川西）是同一次四川之行，盖一个章。地图上的格子不受影响，仍然各自亮。
+ */
+const STAMP_MERGE: Record<string, string> = { "cn:513200": "cn:510100" };
+export function stampKeyOf(unitKey: string): string {
+  if (unitKey.startsWith("us:")) return "us:us-ca-losangeles";
+  return STAMP_MERGE[unitKey] ?? unitKey;
+}
+
 export type TravelStats = { countries: Place[]; provinces: string[]; cities: Unit[] };
 
 /**

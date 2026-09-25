@@ -24,13 +24,15 @@ export type AtlasTrip = {
   cover?: MediaRef; unitKeys: string[]; provinces: string[];
 };
 export type AtlasUnit = { key: string; name: string; kind: "cn" | "us"; province?: string; color: string; firstMonth: string; firstAge?: string; visits: number };
+/** 足迹印章：一枚章可以盖住几格（美国几处 → 洛杉矶，成都 + 阿坝 → 成都）。 */
+export type AtlasStamp = { key: string; name: string; unitKeys: string[]; color: string; firstMonth: string; firstAge?: string; visits: number };
 export type AtlasPlace = { id: string; name: string; unitKey?: string; home?: boolean };
 
 type View = { kind: "china" } | { kind: "province"; code: string } | { kind: "us" };
-type Selection = { kind: "recent" } | { kind: "province"; code: string } | { kind: "unit"; key: string } | { kind: "us" };
+type Selection = { kind: "recent" } | { kind: "province"; code: string } | { kind: "unit"; key: string } | { kind: "stamp"; key: string } | { kind: "us" };
 
-export function TravelAtlas({ trips, units, places, provinceColors, provinceNames, homeUnitKey }: {
-  trips: AtlasTrip[]; units: AtlasUnit[]; places: AtlasPlace[];
+export function TravelAtlas({ trips, units, stamps, places, provinceColors, provinceNames, homeUnitKey }: {
+  trips: AtlasTrip[]; units: AtlasUnit[]; stamps: AtlasStamp[]; places: AtlasPlace[];
   provinceColors: Record<string, string>; provinceNames: Record<string, string>; homeUnitKey?: string;
 }) {
   const [view, setView] = useState<View>({ kind: "china" });
@@ -66,29 +68,47 @@ export function TravelAtlas({ trips, units, places, provinceColors, provinceName
     else setView({ kind: "china" });
     setSel({ kind: "unit", key });
   };
+  const pickStamp = (stamp: AtlasStamp) => {
+    const first = unitByKey.get(stamp.unitKeys[0]);
+    if (!first) return;
+    if (first.kind === "us") setView({ kind: "us" });
+    else if (first.province && !municipal(first.province)) setView({ kind: "province", code: first.province });
+    else setView({ kind: "china" });
+    setSel({ kind: "stamp", key: stamp.key });
+  };
+  const stampByKey = useMemo(() => new Map(stamps.map((s) => [s.key, s])), [stamps]);
 
-  // 下面那一栏：标题 + 旅程
+  // 下面那一栏：标题 + 旅程。一个地方的旅程从第一次排到最新（Teddy 2026-09-25）；
+  // 只有默认的「最近去的地方」是最新的在前——它回答的就是「最近」。
   const panel = useMemo(() => {
-    const newest = (list: AtlasTrip[]) => [...list].sort((a, b) => b.from.localeCompare(a.from));
+    const oldest = (list: AtlasTrip[]) => [...list].sort((x, y) => x.from.localeCompare(y.from));
+    const newest = (list: AtlasTrip[]) => [...list].sort((x, y) => y.from.localeCompare(x.from));
+    const firstLine = (x: { firstMonth: string; firstAge?: string }) => "第一次来：" + x.firstMonth + (x.firstAge ? " · " + x.firstAge : "");
     if (sel.kind === "unit") {
       const unit = unitByKey.get(sel.key);
-      return { title: unit?.name ?? "", sub: unit ? `第一次来：${unit.firstMonth}${unit.firstAge ? ` · ${unit.firstAge}` : ""}` : "", trips: newest(trips.filter((t) => t.unitKeys.includes(sel.key))) };
+      return { title: unit?.name ?? "", sub: unit ? firstLine(unit) : "", trips: oldest(trips.filter((t) => t.unitKeys.includes(sel.key))) };
     }
-    if (sel.kind === "province") return { title: provinceNames[sel.code] ?? "", sub: "", trips: newest(trips.filter((t) => t.provinces.includes(sel.code))) };
-    if (sel.kind === "us") return { title: "美国", sub: "", trips: newest(trips.filter((t) => t.unitKeys.some((k) => k.startsWith("us:")))) };
+    if (sel.kind === "stamp") {
+      const stamp = stampByKey.get(sel.key);
+      return { title: stamp?.name ?? "", sub: stamp ? firstLine(stamp) : "", trips: oldest(trips.filter((t) => t.unitKeys.some((k) => stamp?.unitKeys.includes(k)))) };
+    }
+    if (sel.kind === "province") return { title: provinceNames[sel.code] ?? "", sub: "", trips: oldest(trips.filter((t) => t.provinces.includes(sel.code))) };
+    if (sel.kind === "us") return { title: "美国", sub: "", trips: oldest(trips.filter((t) => t.unitKeys.some((k) => k.startsWith("us:")))) };
     return { title: "最近去的地方", sub: "", trips: newest(trips).slice(0, 3) };
-  }, [sel, trips, unitByKey, provinceNames]);
+  }, [sel, trips, unitByKey, stampByKey, provinceNames]);
 
-  const selectedUnitKey = sel.kind === "unit" ? sel.key : undefined;
+  // 选中的格子：点格子是一格，点印章是这枚章盖住的所有格子
+  const selectedUnits = new Set(sel.kind === "unit" ? [sel.key] : sel.kind === "stamp" ? stampByKey.get(sel.key)?.unitKeys ?? [] : []);
+  const selectedUnitKey = [...selectedUnits][0];
   const pinsFor = (geoPins: { placeId: string; x: number; y: number }[]): MapPin[] => geoPins.flatMap((gp) => {
     const place = placeById.get(gp.placeId);
     if (!place) return [];
     const unit = place.unitKey ? unitByKey.get(place.unitKey) : undefined;
     // 中国地图上城市本身已经亮了、有名字，不再插旗；旗子只给城市里的小地方（莫干山、千岛湖、川西……）
     if (!place.home && unit?.kind === "cn" && unit.name === place.name) return [];
-    return [{ ...gp, name: place.name, home: place.home, color: unit?.color ?? "#A85D43" }];
+    return [{ ...gp, name: place.name, home: place.home, color: unit?.color ?? "#A85D43", unit: place.unitKey?.startsWith("cn:") ? place.unitKey.slice(3) : undefined }];
   });
-  const activePinsOf = (pins: MapPin[]) => new Set(pins.filter((p) => placeById.get(p.placeId)?.unitKey === selectedUnitKey).map((p) => p.placeId));
+  const activePinsOf = (pins: MapPin[]) => new Set(pins.filter((p) => selectedUnits.has(placeById.get(p.placeId)?.unitKey ?? "")).map((p) => p.placeId));
 
   const homePin = CHINA.pins.find((p) => placeById.get(p.placeId)?.home);
   const provinceGeo = provinceCode ? geo[provinceCode] : undefined;
@@ -108,7 +128,7 @@ export function TravelAtlas({ trips, units, places, provinceColors, provinceName
         ) : null}
         {view.kind === "china" ? (
           <ChinaSvg geo={CHINA} id="atlas-cn" lit={litProvinces} home={homePin} homeProvince={homeUnitKey ? unitByKey.get(homeUnitKey)?.province : undefined} onPick={pickProvince}
-            selected={sel.kind === "unit" ? unitByKey.get(sel.key)?.province : sel.kind === "province" ? sel.code : undefined}
+            selected={selectedUnitKey ? unitByKey.get(selectedUnitKey)?.province : sel.kind === "province" ? sel.code : undefined}
             title="张年去过的中国省份" />
         ) : view.kind === "us" ? (
           (() => {
@@ -160,10 +180,10 @@ export function TravelAtlas({ trips, units, places, provinceColors, provinceName
       <section className="travel-stamps-wrap" aria-labelledby="travel-stamps-title">
         <h2 id="travel-stamps-title" className="travel-section-title">足迹</h2>
         <ul className="travel-stamps">
-          {units.map((u) => (
+          {stamps.map((u) => (
             <li key={u.key}>
-              <button type="button" className={`travel-stamp${selectedUnitKey === u.key ? " is-on" : ""}`} style={{ "--stamp": u.color } as React.CSSProperties}
-                onClick={() => { pickUnit(u.key); mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
+              <button type="button" className={`travel-stamp${u.unitKeys.some((k) => selectedUnits.has(k)) ? " is-on" : ""}`} style={{ "--stamp": u.color } as React.CSSProperties}
+                onClick={() => { pickStamp(u); mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
                 <span className="travel-stamp-name">{u.name}</span>
                 <span className="travel-stamp-first">{u.firstMonth}</span>
                 {u.firstAge ? <span className="travel-stamp-age">{u.firstAge}</span> : null}

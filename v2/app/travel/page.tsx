@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { TravelAtlas, type AtlasPlace, type AtlasTrip, type AtlasUnit } from "@/components/travel-atlas";
+import { TravelAtlas, type AtlasPlace, type AtlasStamp, type AtlasTrip, type AtlasUnit } from "@/components/travel-atlas";
 import { HOME_COLOR, STICKER_COLORS } from "@/components/travel-map-svg";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { ageOn, formatMonth } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
 import chinaGeo from "@/lib/travel/geo/china.json";
-import { KIND_LABEL, PLACES, TRIPS, formatRange, leadLine, unitOf, whenAge, type Unit } from "@/lib/travel/model";
+import { KIND_LABEL, PLACES, TRIPS, formatRange, leadLine, stampKeyOf, unitOf, whenAge, type Unit } from "@/lib/travel/model";
 import { readTravelIndex } from "@/lib/travel/reading";
 import "./travel.css";
 
@@ -41,6 +41,23 @@ export default async function TravelPage() {
       visits: visits.get(key) ?? 1,
     };
   });
+  // 足迹印章：按去处合并格子（美国 → 洛杉矶，成都 + 阿坝 → 成都），名字和颜色取合并到的那一格，
+  // 「第一次」取这几格里最早的一次，小圆点数的是去过几次（同一次旅程只算一次），印章按第一次的先后排。
+  const unitByKey = new Map(units.map((u) => [u.key, u]));
+  const stampUnits = new Map<string, string[]>();
+  for (const u of units) { const k = stampKeyOf(u.key); stampUnits.set(k, [...(stampUnits.get(k) ?? []), u.key]); }
+  const stamps: (AtlasStamp & { firstDay: string })[] = [...stampUnits.entries()].map(([key, keys]) => {
+    const head = unitByKey.get(key) ?? unitByKey.get(keys[0])!;
+    const visited = TRIPS.filter((t) => t.placeIds.some((id) => keys.includes(unitOf(id)?.key ?? "")));
+    const first = [...visited].sort((x, y) => x.from.localeCompare(y.from))[0];
+    const age = first ? ageOn(birthDay, first.from) : undefined;
+    return {
+      key, name: head.name, unitKeys: keys, color: head.color, firstDay: first?.from ?? "",
+      firstMonth: first ? formatMonth(first.from.slice(0, 7)) : head.firstMonth,
+      firstAge: age === "出生的那天" ? "出生那天" : age, visits: visited.length,
+    };
+  }).sort((x, y) => x.firstDay.localeCompare(y.firstDay));
+
   const provinceColors: Record<string, string> = {};
   for (const u of units) if (u.province && !provinceColors[u.province] && !unitMeta.get(u.key)?.home) provinceColors[u.province] = u.color;
   // 家所在的省即使别处没去过也要亮（旅程都从那里出发）
@@ -74,7 +91,7 @@ export default async function TravelPage() {
         <p className="travel-lead">{leadLine(TRIPS, birthDay, today)}</p>
       </header>
       <div className="reading-wrap">
-        <TravelAtlas trips={trips} units={units} places={places} provinceColors={provinceColors} provinceNames={provinceNames} homeUnitKey={homeUnit?.key} />
+        <TravelAtlas trips={trips} units={units} stamps={stamps} places={places} provinceColors={provinceColors} provinceNames={provinceNames} homeUnitKey={homeUnit?.key} />
       </div>
     </div>
   );

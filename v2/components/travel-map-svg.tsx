@@ -207,7 +207,8 @@ function PinGlyph({ x, y, color, active }: { x: number; y: number; color: string
   );
 }
 
-export type MapPin = { placeId: string; x: number; y: number; name: string; home?: boolean; color?: string };
+/** unit：图钉所在格子的 adcode（地级市），用来判断这一格的名字要不要让给图钉。 */
+export type MapPin = { placeId: string; x: number; y: number; name: string; home?: boolean; color?: string; unit?: string };
 
 function Pins({ pins, activePins, onPickPin, size }: { pins: MapPin[]; activePins?: ReadonlySet<string>; onPickPin?: (pin: MapPin) => void; size: number }) {
   // 被选中的画在最上面
@@ -358,8 +359,9 @@ export function ProvinceSvg({ geo, id, lit, homeUnit, selected, onPickUnit, pins
           to={litUnits.filter((a) => a.adcode !== homeUnit).map((a) => ({ x: a.label[0], y: a.label[1] + 16 }))} />
       </>}
       top={<>
-        {/* 选中的城市若插着亮起的图钉，它自己的名字让给图钉（下方栏标题已经写着这个城市） */}
-        {litUnits.filter((a) => a.adcode !== homeUnit && !(a.adcode === selected && (activePins?.size ?? 0) > 0)).map((a) => (
+        {/* 一格里插着亮起的图钉时，这一格的名字让给图钉（湖州：莫干山、安吉、德清的名字会压住「湖州」）；
+            图钉在别的格子里就不让（点「成都」章时亮的是阿坝格子里的川西，成都的名字照常显示） */}
+        {litUnits.filter((a) => a.adcode !== homeUnit && !pins.some((p) => p.unit === a.adcode && activePins?.has(p.placeId))).map((a) => (
           <g key={a.adcode} {...labelTap(onPickUnit ? () => onPickUnit(a.adcode) : undefined)}>
             <Pill x={a.label[0]} y={a.label[1]} text={short(a.name)} size={17} tone={selected === a.adcode ? "ink" : "paper"} />
           </g>

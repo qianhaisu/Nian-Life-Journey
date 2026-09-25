@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DayPhotos } from "@/components/day-photos";
 import { Photo } from "@/components/photo";
-import { TravelTripMap } from "@/components/travel-trip-map";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { KIND_LABEL, whenAge, formatRange, placeNames, tripById } from "@/lib/travel/model";
 import { readTrip } from "@/lib/travel/reading";
@@ -15,7 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ tripId: s
   return { title: trip ? `${trip.title} · 旅行` : "旅行" };
 }
 
-// 一次旅程（docs/travel-module-plan.md §4.2）。它只是索引：综述是这里唯一新写的文字，每一天都是
+// 一次旅程（docs/travel-module-plan.md §4.2）。打开的是故事，不再放地图（Teddy 2026-09-25），地图在旅行页上。它只是索引：综述是这里唯一新写的文字，每一天都是
 // 已发布日页的标题、首段和首屏照片，点进去读全文。日页不存在的日子不出现。
 export default async function TripPage({ params }: { params: Promise<{ tripId: string }> }) {
   await renderOnDemand();
@@ -38,8 +37,6 @@ export default async function TripPage({ params }: { params: Promise<{ tripId: s
         <h1 className="serif">{trip.title}</h1>
         {places !== trip.title ? <p className="travel-places">{places}</p> : null}
       </header>
-
-      <div className="reading-wrap travel-trip-mapwrap"><TravelTripMap trip={trip} /></div>
 
       {cover ? <div className="reading-wrap travel-trip-cover"><Photo media={cover} sizes="(max-width: 760px) 100vw, 728px" priority /></div> : null}
 

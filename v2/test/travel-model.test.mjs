@@ -72,3 +72,10 @@ test("封面：只收合格、张年是主体、脸清楚的照片；户外加�
   assert.equal(whenAge("11 个月"), " · 当时 11 个月");
   assert.equal(whenAge(undefined), "");
 });
+
+test("足迹印章按去处合并：美国几处 → 洛杉矶，阿坝 → 成都；其余不动", async () => {
+  const { stampKeyOf } = await import("../lib/travel/model.ts");
+  for (const id of ["us-ca-losangeles", "us-ca-monterey", "us-ca-sanfrancisco", "us-ca-frazier"]) assert.equal(stampKeyOf(unitOf(id).key), "us:us-ca-losangeles");
+  assert.equal(stampKeyOf(unitOf("cn-sc-west").key), unitOf("cn-sc-chengdu").key);
+  assert.equal(stampKeyOf(unitOf("cn-zj-ningbo").key), unitOf("cn-zj-ningbo").key);
+});
