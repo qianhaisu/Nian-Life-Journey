@@ -6,7 +6,8 @@
 // 只有 GLM 判为「好看的风景、没有陌生人大脸、没有截图单据、没有隐私」的照片，才进 lib/travel/scenery.json，
 // 旅行页（且只有旅行页）凭这份名单放它们出来。
 //
-// 范围有界：只看旅程覆盖的那些天；主体核查不是 approved 的照片，加上 approved 但首页评分说他不是画面主体（或未评分）的。
+// 范围有界：只看旅程覆盖的那些天；主体核查不是 approved 的照片，加上 approved 但首页评分说他不是画面主体（或未评分）的，
+// 加上自家相册原片（family_photo）的全部照片。
 // 复用：每张的结论记在 data/photo-scenery.json（含模型名，随仓库提交），再跑只补缺的，不重复付费识图。
 // 能力门：先给模型看两张纯色图，答错颜色整批中止，什么都不写。连续失败 5 次停。
 //
@@ -106,6 +107,8 @@ const rows = (await client.query(`
     // 主体核查 approved = 照片里有他。其中首页评分说「他不是主体」或还没评过的，常常是风景里远远站着一个他
     // （Teddy 2026-09-25：「风景照具体行程可以多放一些」）——也交给 GLM 看一眼；他是主体的不看。
     if (r.decision !== "approved") return true;
+    // 自家相册原片全部看一遍（Teddy 2026-09-25：「把自家相册里旅程那些天的所有照片都交给 GLM 再看一遍」）
+    if (r.source_type === "family_photo") return true;
     const carousel = TOPICS[r.id]?.carousel;
     return !carousel || carousel.childMain !== true;
   });

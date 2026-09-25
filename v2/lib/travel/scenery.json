@@ -3,7 +3,7 @@
  "model": "glm-5.3-flash",
  "promptVersion": "travel-scenery-v1",
  "scenePromptVersion": "travel-scenery-scenes-v2",
- "assessedAt": "2026-09-25T05:02:40.494Z",
+ "assessedAt": "2026-09-25T06:55:12.242Z",
  "rule": "kind ∈ {scenery, landmark} · scenic ≥ 70 · sharp · no stranger faces · not text-heavy · sensitive none · 来源：自家相册原片或爸爸妈妈在微信发的 · 同一场景只留一张 · 不设总数",
  "byDay": {
   "2025-01-16": [
