@@ -29,7 +29,6 @@ const MANIFEST = option("--manifest") ?? path.join(BATCH_ROOT, "manifests/quark-
 const DOWNLOADS = path.join(BATCH_ROOT, "downloads");
 const OUT = path.join(BATCH_ROOT, "ingest");
 const SOURCE_LABEL = "Quark 历史素材 2026-09-25";
-const BIRTH = "2025-01-03";
 const mode = hasFlag("--apply") ? "apply" : "dry-run";
 const limit = option("--limit") ? Number(option("--limit")) : undefined;
 
@@ -39,11 +38,10 @@ if (mode === "apply") requireQuarkStorageProvider();
 
 const rows = (await readFile(MANIFEST, "utf8")).split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l));
 
-// 分流：仅照片（date_authority=exif + 在出生日期后） vs 其他
+// 分流：仅照片（takenAt_source=exif_datetime_original，不限时间窗口，孕期/新生儿也收录） vs 其他
 const photoEligibleRows = rows.filter((r) =>
   r.media_type === "photo" &&
-  r.date_authority === "photo_exif_datetime_original" &&
-  (r.takenAt ?? "") >= BIRTH
+  r.takenAt_source === "exif_datetime_original"
 );
 const otherRows = rows.filter((r) => !photoEligibleRows.includes(r));
 
