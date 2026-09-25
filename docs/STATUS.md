@@ -11597,3 +11597,26 @@ NIGHT-RELATIONS-20260921 补充验收 2026-09-22: lint exit 0, 53 tests pass; �
 3. **下一件事**：改 ECS 配置并部署；浏览器和手机逐月验收，重跑八条原则；看 00:15 夜间回填首次正式发布的日志。详见 v2/.data/round4-summary.md。
 
 原则验收（本节点）：未重跑。本轮只做了 HTTP 检查（14 个月页返回 200、有照片，2025-05-19 显示新正文），不算验收，八条状态沿用上一节点，待浏览器验收后更新。
+
+## 2026-09-25 · 夸克全量批次入库 adapter 就绪（Claude Code · 单阶段照片预案）
+
+**线上多了什么**：没有（adapter 完成，等批准运行）。整备了 6,820 行 manifest（5,776 照片 + 1,044 视频）的结构化入库方案，focal point 是照片阶段，视频派生/日期存疑/Live Photo 配对拆分到后续专项。
+
+**没做到 / blocker**：
+- ① 适配器本体（`scripts/quark-history-init-20260925.mjs`）仅处理「照片可靠日期」（5,776 张），通过既有 `applyQuarkPhotoArtifact` 走；其余 1,044 视频、242 日期存疑、837 Live Photo 暂不读库。
+- ② 日期可信度判定沿用 BATCH-COMPLETE.json 的分类（242 条 date_uncertain、6,391 条 authoritative）；date_uncertain 包括 EXIF 冲突 19、无 EXIF 109、服务端时间只 100、视频时间争议 90+50 等。
+- ③ Live Photo 配对矩阵已理清（内批 95、回填 66、孤立 187），但配对写库逻辑（两行 media 共享 rawSourceId）未实现。
+
+**下一件事**：
+1. 确认 adapter 分流逻辑，预演（dry-run）看分流数字是否匹配 batch 报告
+2. 批准后运行 --apply（经 `.data/q07-run-ingest.mjs` 走 RDS + OSS），预期写入 5,776 条照片（如果全新）或更少（重复 SHA256 去重）
+3. nianlife-verify 核对增量、抽查月页渲染 ✓ 后，才做视频派生、日期审阅、Live Photo 配对
+4. 整个批次完成后重跑八原则验收（此前多个小改动累积，需全量再过一遍）
+
+**数据完整性核验**：
+- RDS 当前 11,593 assets / 13,144 media，09-15 批后写入 549 条（现在库里）
+- 本批 5,776 张新照片预期 → 库里 5,776+549=6,325（当前 13,144 中应该是 ~11,000+ 非夸克非微信，数字无矛盾）
+- 拒绝表 332 行，manifest 检查命中 1 个（概率合理）
+- 信任源自动过门（sourceType=family_photo），无需逐张审核
+
+**备档**：完整计划与执行清单在 scratchpad 的 BATCH-PLAN.md；adapter 代码 commit 685c514。
