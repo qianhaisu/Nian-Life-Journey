@@ -83,6 +83,21 @@ Definitions:
 - other_children_identifiable: true if any OTHER child's face (even partly, even in the background, e.g. classmates) is visible.
 - sensitive "nudity_or_bath": undressed child, bath, toilet/potty. "health": wounds, rashes, medicine, clinics, medical records.`;
 
+const PREGNANCY_PROMPT = `You are classifying photos from a family archive taken during a pregnancy period (before the baby was born).
+Answer about the LAST image only. Output ONLY one JSON object with exactly these keys:
+{"kind": "pregnancy" | "family_life" | "document" | "screenshot" | "scenery_object",
+ "subtype": "belly" | "ultrasound" | "prenatal" | "nursery" | "baby_items" | "family_activity" | "parents_daily" | "other" | null,
+ "quality": "good" | "ok" | "poor",
+ "note": "<=12 words"}
+Definitions:
+- kind "pregnancy": clearly related to the pregnancy or preparations for the baby. Includes: pregnant belly, ultrasound images, prenatal clinic visits, nursery room setup, baby clothes/diapers/gear being bought or prepared, family/friends celebrating the upcoming birth, hospital admission.
+- kind "family_life": ordinary family daily life not specifically pregnancy-related (parents at home, meals, outings).
+- kind "document": paper documents, forms, receipts, printed text, menus.
+- kind "screenshot": phone screen, app, social media, CCTV, computer screen captures.
+- kind "scenery_object": scenery, food, pets, products, interiors with no people visible.
+- subtype: fill only when kind is "pregnancy". Otherwise null.
+- quality "good": clear, well-lit, emotionally meaningful moment. "ok": acceptable but ordinary. "poor": blurry, very dark, visually empty, or nearly identical to another photo in a burst.`;
+
 /**
  * 这一天的配图选哪张：把标题和这一天已放行的照片一起给 DeepSeek，让它挑最能说明这句标题的一张。
  *
@@ -155,6 +170,56 @@ Output ONLY JSON: {"sameScene": true|false, "keep": [<index integers 0-${items.l
     } catch { if (attempt === 2) return null; }
   }
   return null;
+}
+
+/**
+ * 孕期照片分类：不带参考孩子照片，判定该照片是否属于孕期档案。
+ * @param {{id:string, file:string}[]} items
+ * @returns {Promise<{model:string, calls:number, inputTokens:number, outputTokens:number, results:Record<string,object>}>}
+ */
+export async function classifyPregnancyPhotos(items, { concurrency = 6 } = {}) {
+  const ENV = loadEnv();
+  const cfg = modelConfig(ENV);
+  const { KEY } = cfg;
+  if (!KEY) throw new Error("no model credential in env (ZHIPU_API_KEY / DEEPSEEK_API_KEY)");
+  let calls = 0; let inTok = 0; let outTok = 0;
+  async function ask(content, maxTokens = 8000) {
+    calls += 1;
+    const r = await askModel(cfg, content, maxTokens);
+    inTok += r.inputTokens; outTok += r.outputTokens;
+    return r.text;
+  }
+  // 能力门（色块识别）
+  for (const [rgb, name] of [[{ r: 255, g: 140, b: 0 }, "orange"], [{ r: 20, g: 60, b: 230 }, "blue"]]) {
+    const png = await sharp({ create: { width: 96, height: 96, channels: 3, background: rgb } }).png().toBuffer();
+    const say = await ask([img(png, "image/png"), { type: "text", text: "Reply with ONLY the colour word on the first line." }], 2000);
+    const v = judgeVisionProbe(say, name);
+    if (!v.capable) throw new Error(`capability gate failed (${name}): ${v.reason}`);
+  }
+  async function classify(item) {
+    const target = await shrink(item.file, 768);
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const say = await ask([img(target), { type: "text", text: PREGNANCY_PROMPT }]);
+        if (looksBlind(say)) throw new Error("blind answer");
+        const json = JSON.parse(say.slice(say.indexOf("{"), say.lastIndexOf("}") + 1));
+        for (const k of ["kind", "subtype", "quality"]) if (!(k in json)) throw new Error(`missing ${k}`);
+        return json;
+      } catch (error) { if (attempt === 3) return { error: String(error.message ?? error).slice(0, 160) }; }
+    }
+  }
+  const results = {};
+  let next = 0; let consecutiveFail = 0;
+  await Promise.all(Array.from({ length: concurrency }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      const r = await classify(item);
+      results[item.id] = r;
+      consecutiveFail = r.error ? consecutiveFail + 1 : 0;
+      if (consecutiveFail >= 5) { next = items.length; }
+    }
+  }));
+  return { model: cfg.MODEL, calls, inputTokens: inTok, outputTokens: outTok, results };
 }
 
 /**

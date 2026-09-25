@@ -21,6 +21,22 @@ export const PROMPT_VERSION = "deepseek-photo-auto-v1";
 export const POLICY_VERSION = "auto-photo-2026-09-20-subject-v1";
 
 /**
+ * 孕期照片的识别结果 → 决定（配合 classifyPregnancyPhotos）。
+ * 孕期档案不判"是不是张年"，判"是不是有价值的孕期记录"。
+ * @returns {{decision:"approved"|"store_only"|"needs_human_review", preset:string, why?:string}}
+ */
+export function decidePregnancyPhoto(r) {
+  if (!r || r.error) return { decision: "needs_human_review", preset: "unclear", why: "model-error" };
+  if (r.kind === "screenshot") return { decision: "store_only", preset: "shot" };
+  if (r.kind === "document") return { decision: "store_only", preset: "doc" };
+  if (r.kind === "scenery_object") return { decision: "store_only", preset: "object" };
+  if (r.kind === "pregnancy" && r.quality !== "poor") return { decision: "approved", preset: r.subtype ?? "pregnancy" };
+  if (r.kind === "family_life" && r.quality === "good") return { decision: "approved", preset: "family_life" };
+  if (r.kind === "family_life") return { decision: "store_only", preset: `family_life:${r.quality}` };
+  return { decision: "store_only", preset: `${r.kind ?? "unknown"}:${r.quality ?? "unknown"}` };
+}
+
+/**
  * 一张照片的识别结果 → 决定。
  * @returns {{decision:"approved"|"store_only"|"needs_human_review", preset:string, why?:string}}
  */

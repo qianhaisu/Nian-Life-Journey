@@ -92,6 +92,16 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
     const first = timeline?.weeks[0];
     const initial = timeline && first ? weekEntries(timeline, first.id) ?? [] : [];
 
+    // Photos that exist in the archive but are NOT yet selected into story days.
+    // These are deliverable, trusted photos the reader has not seen in the narrative above.
+    const storyMediaIds = new Set(content.days.flatMap((d) => d.expandedMediaIds ?? []));
+    const unstoriedArchiveDays = composition.archiveDays
+      .map((day) => ({ ...day, photos: day.photos.filter((p) => !storyMediaIds.has(p.id)) }))
+      .filter((day) => day.photos.length > 0);
+    const unstoriedPhotoCount = unstoriedArchiveDays.reduce((sum, d) => sum + d.photos.length, 0);
+    const unstoriedHasVideo = unstoriedArchiveDays.some((d) => d.photos.some((p) => p.type === "video"));
+    const unstoriedLabel = unstoriedHasVideo ? "这个月的照片与视频" : "这个月的照片";
+
     return <div className="month-page reading-wrap">
       <header className="chapter-masthead">
         <Link className="back-link" href={`/memory/${year}`}>← {year} 年</Link>
@@ -107,6 +117,17 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         weeks={timeline.weeks}
         initial={initial}
       /> : null}
+
+      {unstoriedPhotoCount > 0 ? <details className="month-archive" id="month-photos">
+        <summary><span className="serif">{unstoriedLabel} · {unstoriedPhotoCount} 张</span></summary>
+        <ArchiveExpander
+          year={year}
+          month={monthSegment}
+          foldedDayCount={0}
+          visibleDays={unstoriedArchiveDays}
+          monthAgeLabel={chapter.ageLabel}
+        />
+      </details> : null}
 
       {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}
       {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`} prefetch={false}>{item.shortLabel}</Link>)}</p></footer> : null}
