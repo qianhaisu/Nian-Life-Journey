@@ -52,5 +52,5 @@ export async function TravelTripMap({ trip }: { trip: Trip }) {
   const homeProvince = homePlace ? unitOf(homePlace.id)?.province : undefined;
   if (homeProvince && !lit.has(homeProvince)) lit.set(homeProvince, HOME_COLOR);
   const home = CHINA.pins.find((p) => p.placeId === homePlace?.id);
-  return <figure className="travel-trip-map"><ChinaSvg geo={CHINA} id={`trip-${trip.id}`} lit={lit} home={home} title={title} clouds={false} /></figure>;
+  return <figure className="travel-trip-map"><ChinaSvg geo={CHINA} id={`trip-${trip.id}`} lit={lit} home={home} homeProvince={homeProvince} routesTo={provinces} title={title} clouds={false} /></figure>;
 }

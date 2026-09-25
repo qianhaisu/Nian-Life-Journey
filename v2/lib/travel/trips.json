@@ -145,6 +145,7 @@
     {
       "id": "2026-05-deqing", "title": "德清", "kind": "daytrip",
       "from": "2026-05-31", "to": "2026-05-31", "placeIds": ["cn-zj-deqing"], "coverDay": "2026-05-31",
+      "coverMediaId": "media-quark-sha-ed41282282e1d86a85b6e65fe3f0d313d10cebf9c0993ec4414dd94890d03c48",
       "summary": "坐车去了一趟德清。",
       "evidence": ["德清坐标 3 张", "Teddy 确认德清四次都算出游"]
     },

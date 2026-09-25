@@ -107,7 +107,7 @@ export function TravelAtlas({ trips, units, places, provinceColors, provinceName
           <button type="button" className="travel-map-back" onClick={() => { setView({ kind: "china" }); setSel({ kind: "recent" }); }}>← 全国</button>
         ) : null}
         {view.kind === "china" ? (
-          <ChinaSvg geo={CHINA} id="atlas-cn" lit={litProvinces} home={homePin} onPick={pickProvince}
+          <ChinaSvg geo={CHINA} id="atlas-cn" lit={litProvinces} home={homePin} homeProvince={homeUnitKey ? unitByKey.get(homeUnitKey)?.province : undefined} onPick={pickProvince}
             selected={sel.kind === "unit" ? unitByKey.get(sel.key)?.province : sel.kind === "province" ? sel.code : undefined}
             title="张年去过的中国省份" />
         ) : view.kind === "us" ? (
