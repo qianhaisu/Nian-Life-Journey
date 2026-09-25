@@ -1,0 +1,397 @@
+{
+ "trips": {
+  "2025-01-losangeles": {
+   "model": "glm-5.3-flash",
+   "promptVersion": "travel-scene-tags-v1",
+   "assessedAt": "2026-09-25T08:43:01.594Z",
+   "rule": "同一种场景（在哪里·在做什么）整段最多 2 张；生活画面只收我们自己拍的、清楚、无隐私无陌生人大脸、有意思分 ≥ 50",
+   "byDay": {
+    "2025-01-03": [
+     {
+      "id": "media-quark-sha-d7c420406469305b40abe8ff919d1d29a04a2cb240947d27ed551d5574962611",
+      "pool": "A",
+      "scene": "医院·被抱着",
+      "appeal": 88,
+      "caption": "爸爸抱着刚出生的宝宝"
+     }
+    ],
+    "2025-01-05": [
+     {
+      "id": "wechat-media:3c01a681b2d4f631e8875cb7f54194433592662a4bd789d2c7caa60c512a2b3d",
+      "pool": "B",
+      "scene": "医院·喝奶",
+      "appeal": 78,
+      "caption": "爸爸的奶瓶喂养初体验"
+     },
+     {
+      "id": "media-quark-sha-cc4a784c5851dea526ef00ffd95f7101db8ece4d3c7a210718797d4d514aa2cc",
+      "pool": "A",
+      "scene": "医院·睡觉",
+      "appeal": 92,
+      "caption": "医院襁褓中的第一场甜睡"
+     }
+    ],
+    "2025-01-06": [
+     {
+      "id": "media-quark-sha-20a1119f47060e2af54809e5479ad41726554b80ecd12da61d6295f0457acbfb",
+      "pool": "A",
+      "scene": "车内·睡觉",
+      "appeal": 88,
+      "caption": "戴着医院小帽酣睡"
+     }
+    ],
+    "2025-01-07": [
+     {
+      "id": "media-quark-sha-7aa0b0a63c2288e0635ca26946a997621a5fb69c833e12366465d218ee64cb53",
+      "pool": "A",
+      "scene": "客厅·喝奶",
+      "appeal": 62,
+      "caption": "爸爸抱着宝宝喝奶"
+     }
+    ],
+    "2025-01-08": [
+     {
+      "id": "media-quark-sha-67754735149651bd3837e2665d312ec5646610494dffff49cc7dcb3c5b671dc5",
+      "pool": "A",
+      "scene": "卧室·看镜头",
+      "appeal": 88,
+      "caption": "满月前醒着看镜头"
+     },
+     {
+      "id": "media-quark-sha-fbd648ebc0ea0519089d1d0aa56d5e171bf058bf57c7db1051a9e49c02388b25",
+      "pool": "A",
+      "scene": "卧室·被抱着",
+      "appeal": 84,
+      "caption": "新手爸爸的温柔怀抱"
+     },
+     {
+      "id": "media-quark-sha-469f1537f7662e3e31983253b9a7011578e36f332e54ea36e90f4f39456ba904",
+      "pool": "A",
+      "scene": "卧室·和大人互动",
+      "appeal": 85,
+      "caption": "新手爸爸温柔照料宝宝"
+     }
+    ],
+    "2025-01-09": [
+     {
+      "id": "wechat-media:4682e145e70f319ed5dd685258aecc7489ecb747bd56138019958888e9dee21d",
+      "pool": "A",
+      "scene": "卧室·喝奶",
+      "appeal": 80,
+      "caption": "小家伙闭眼喝奶"
+     }
+    ],
+    "2025-01-10": [
+     {
+      "id": "media-quark-sha-e7defc8e3bef7bae287a93c1a0cd6b385ca9d2d89a84880d8cff1270826ac8e1",
+      "pool": "A",
+      "scene": "医院·躺着醒着",
+      "appeal": 75,
+      "caption": "戴白帽的新生儿安静躺着"
+     }
+    ],
+    "2025-01-11": [
+     {
+      "id": "media-quark-sha-39115045b64117717de8532d11062e3a615a834936ccd737906b4b9b60c380a1",
+      "pool": "A",
+      "scene": "医院·看镜头",
+      "appeal": 88,
+      "caption": "戴着小帽初睁眼看世界"
+     }
+    ],
+    "2025-01-12": [
+     {
+      "id": "media-quark-sha-6130f239a1f3f0e8aa3556f416387d820ec2ff80dc618d76356e8caed26e03ce",
+      "pool": "A",
+      "scene": "卧室·睡觉",
+      "appeal": 90,
+      "caption": "戴熊耳帽的小睡宝"
+     },
+     {
+      "id": "media-quark-sha-91b788c1a56ea33fdd60a621a68cb9be5c797a5eec1785814291770b3187bbdc",
+      "pool": "A",
+      "scene": "卧室·躺着醒着",
+      "appeal": 88,
+      "caption": "一只眼偷偷看世界"
+     },
+     {
+      "id": "wechat-media:da26c923691f052380e9410672ab97036ad398928f258998bddf63efdefa1b38",
+      "pool": "B",
+      "scene": "客厅·物品",
+      "appeal": 50,
+      "caption": "宝宝的座驾已就位"
+     }
+    ],
+    "2025-01-13": [
+     {
+      "id": "wechat-media:36cd785aad2b25513443c160329663375dd49543a4c2b63b9d55b4766f827c35",
+      "pool": "B",
+      "scene": "其他室内·食物",
+      "appeal": 52,
+      "caption": "月子里的营养骨头汤"
+     }
+    ],
+    "2025-01-16": [
+     {
+      "id": "wechat-media:ff6e5d89199a59260c1bc9ef4599d999f1e6521a4fb20f2d9b47b064fc864214",
+      "pool": "B",
+      "scene": "户外·风景",
+      "appeal": 52,
+      "caption": "洛杉矶郊外牧场日落"
+     },
+     {
+      "id": "media-quark-sha-69f961b7e8d7220d4aa3776e19151393f5a5f9dca4fb753c3803a486fd9c4138",
+      "pool": "A",
+      "scene": "医院·睡觉",
+      "appeal": 88,
+      "caption": "戴着小帽熟睡的你"
+     }
+    ],
+    "2025-01-17": [
+     {
+      "id": "wechat-media:b039f38904aff311ab61af56c2e019159651edecb00f3e11420c21bb6ddc0218",
+      "pool": "B",
+      "scene": "车内·风景",
+      "appeal": 50,
+      "caption": "车窗外的城市街景"
+     }
+    ],
+    "2025-01-18": [
+     {
+      "id": "media-quark-sha-65d2c320e7325e7b20294f08761d44219a55b1fc2f68d17e187b59661640f405",
+      "pool": "A",
+      "scene": "医院·被抱着",
+      "appeal": 82,
+      "caption": "眯眼吐舌小表情"
+     }
+    ],
+    "2025-01-20": [
+     {
+      "id": "media-quark-sha-de013c88b6a1a370d2a40e5187a9d27469824902691db72e9b1792276ab49081",
+      "pool": "A",
+      "scene": "卧室·睡觉",
+      "appeal": 90,
+      "caption": "圣诞灯下酣睡的小宝贝"
+     }
+    ],
+    "2025-01-21": [
+     {
+      "id": "media-quark-sha-808acf6cfe5a50849867424a2a1701c62d024602f7ad69e251850e3f2b66f38e",
+      "pool": "A",
+      "scene": "医院·躺着醒着",
+      "appeal": 72,
+      "caption": "小家伙睁眼看世界"
+     }
+    ],
+    "2025-01-23": [
+     {
+      "id": "media-quark-sha-efb7c3e13e46196412f844ac97e841a3ace35c3298b94db42df0e706cc9262cc",
+      "pool": "A",
+      "scene": "客厅·看镜头",
+      "appeal": 82,
+      "caption": "睁眼望镜头的小宝宝"
+     }
+    ],
+    "2025-01-25": [
+     {
+      "id": "media-quark-sha-c633b8bb86a5ad452875e54a9ded135024644ae059227bb2609ac1c13980b373",
+      "pool": "A",
+      "scene": "客厅·躺着醒着",
+      "appeal": 85,
+      "caption": "小宝宝惬意的笑"
+     }
+    ],
+    "2025-01-27": [
+     {
+      "id": "media-quark-sha-b265803ada64de7111626b7cc891037389e47a134f90bdfa55af1609124fa5cb",
+      "pool": "A",
+      "scene": "客厅·睡觉",
+      "appeal": 82,
+      "caption": "裹着白毛毯熟睡的小宝贝"
+     }
+    ],
+    "2025-01-28": [
+     {
+      "id": "wechat-media:c16ae13f971b9de85a366694d36dc08fd91c180a49450d8a013fc4e750589d27",
+      "pool": "B",
+      "scene": "客厅·食物",
+      "appeal": 62,
+      "caption": "洛杉矶家中的火锅局"
+     }
+    ],
+    "2025-01-29": [
+     {
+      "id": "media-quark-sha-010916d1da70258a1cea814e4a285c15a6ac56b42b46d6d1f7eeda0f2ed882ab",
+      "pool": "A",
+      "scene": "卧室·被抱着",
+      "appeal": 75,
+      "caption": "趴在肩头打量世界"
+     },
+     {
+      "id": "media-quark-sha-9322a4b299338b28bb98d74894ee373e33221e642a29cf51ecfa0321fd03eba3",
+      "pool": "A",
+      "scene": "卧室·喝奶",
+      "appeal": 48,
+      "caption": "晨光里靠怀喝奶"
+     }
+    ],
+    "2025-01-30": [
+     {
+      "id": "media-quark-sha-a34cecba610bf3506e370641f50ca97bf5ef607114d95932a23044c40765cfff",
+      "pool": "A",
+      "scene": "客厅·被抱着",
+      "appeal": 82,
+      "caption": "满月前张嘴的小萌脸"
+     }
+    ],
+    "2025-01-31": [
+     {
+      "id": "media-quark-sha-c73bb5b460fa2831042c655da3a51159ca0ec83804046265c75d28ad41e95ed1",
+      "pool": "A",
+      "scene": "其他室内·推车里",
+      "appeal": 75,
+      "caption": "安抚奶嘴小宝宝"
+     },
+     {
+      "id": "media-quark-sha-1ba42e26d2ca93df9c2ab8c4f9fb8dc10c281fff49d6b311f69cf45f4d4b538c",
+      "pool": "A",
+      "scene": "客厅·看镜头",
+      "appeal": 88,
+      "caption": "满月宝宝看镜头"
+     },
+     {
+      "id": "media-quark-sha-515b1b82357822b70f7780b0dc4edacbabe425b77edf1ef5cd7efec750faed3b",
+      "pool": "A",
+      "scene": "卧室·和大人互动",
+      "appeal": 85,
+      "caption": "小手紧握大人手指"
+     }
+    ],
+    "2025-02-01": [
+     {
+      "id": "media-quark-sha-4510e99f98ed97c5b8e856f4209c5d62b188ac54a6afef3f2f61c55ca769f512",
+      "pool": "A",
+      "scene": "卧室·看镜头",
+      "appeal": 88,
+      "caption": "睁眼看世界的小可爱"
+     }
+    ],
+    "2025-02-02": [
+     {
+      "id": "media-quark-sha-3afec02bc6b4d66fd6cae4191d97b18e030a8a0dc19c4f1de43462b4cdb789d2",
+      "pool": "A",
+      "scene": "医院·看镜头",
+      "appeal": 88,
+      "caption": "戴着医院小帽的新生儿"
+     }
+    ],
+    "2025-02-04": [
+     {
+      "id": "media-quark-sha-ff85587f244f84548cd97f79b42ef92caa1a44a10e97325ba10fa283e9df6767",
+      "pool": "A",
+      "scene": "卧室·躺着醒着",
+      "appeal": 88,
+      "caption": "月子里的小笑脸"
+     }
+    ],
+    "2025-02-07": [
+     {
+      "id": "media-quark-sha-39b6fd26183f934af3a34f3bc35748411fd124d7517e5dcbf4a4f2065185d6db",
+      "pool": "A",
+      "scene": "客厅·被抱着",
+      "appeal": 85,
+      "caption": "爸爸怀里的新生儿"
+     }
+    ],
+    "2025-02-08": [
+     {
+      "id": "media-quark-sha-5b8761b4942f6146d63278fe57e8b6bdcd15c8c7ffe3065224b8558f9ad61abb",
+      "pool": "A",
+      "scene": "车内·睡觉",
+      "appeal": 88,
+      "caption": "安全座椅里安睡的小宝贝"
+     },
+     {
+      "id": "media-quark-sha-3f786a969a52239962696d39e2f1f6649247f5d8cd3410cf7834b9d663e49470",
+      "pool": "A",
+      "scene": "客厅·躺着醒着",
+      "appeal": 88,
+      "caption": "小手一指，睁眼看世界"
+     }
+    ],
+    "2025-02-09": [
+     {
+      "id": "media-quark-sha-093063dcd538d1710fe99232db974984fe679ae872936a22e13c2a88cc4832ca",
+      "pool": "A",
+      "scene": "客厅·睡觉",
+      "appeal": 88,
+      "caption": "怀里酣睡的小宝贝"
+     }
+    ],
+    "2025-02-10": [
+     {
+      "id": "wechat-media:05b3bc00b60cc7b417e2812fb24e726468ead5de35700d4c2bd8aa2cf73d3658",
+      "pool": "B",
+      "scene": "客厅·物品",
+      "appeal": 60,
+      "caption": "行李打包好，准备回国"
+     },
+     {
+      "id": "wechat-media:9dac13d690a941c91410986df920351fc335626a4b8b8c3433a32aa4ca782568",
+      "pool": "B",
+      "scene": "机场·推车里",
+      "appeal": 60,
+      "caption": "满月后启程回国啦"
+     }
+    ],
+    "2025-02-11": [
+     {
+      "id": "media-quark-sha-00a6460b21a11a6d157eaf86627c17199bf8e3940e6ae69c0c6ad3b772832f21",
+      "pool": "A",
+      "scene": "车内·喝奶",
+      "appeal": 82,
+      "caption": "飞机上瓶喂小宝宝"
+     },
+     {
+      "id": "media-quark-sha-27ef3471cc9a1176d38332da92cce5c5da5b15d92f3b8c9ddf21e348d99c0157",
+      "pool": "A",
+      "scene": "车内·被抱着",
+      "appeal": 75,
+      "caption": "戴白帽含奶嘴的乖宝宝"
+     },
+     {
+      "id": "media-quark-sha-9b1a5e26611afb8722fe2b485bc5dba4c4b1076adbe37fdf6f1a766b2d774cd7",
+      "pool": "A",
+      "scene": "其他室内·被抱着",
+      "appeal": 90,
+      "caption": "宝宝第一次坐飞机回家"
+     },
+     {
+      "id": "media-quark-sha-b4826f58d6542a29039a39025014dae1ff9f2a432e8904ed25e909fb4ddf0849",
+      "pool": "A",
+      "scene": "车内·看镜头",
+      "appeal": 82,
+      "caption": "兔耳帽小萌宝"
+     }
+    ],
+    "2025-02-12": [
+     {
+      "id": "media-quark-sha-ab04b64219253aaca2298cb9eb7ecfe9050fb3bf8a47525fbc77deb96508146a",
+      "pool": "A",
+      "scene": "车内·看镜头",
+      "appeal": 78,
+      "caption": "小白帽配粉奶嘴出门啦"
+     },
+     {
+      "id": "wechat-media:5a20c4a14560c07df7f2f34cc9ff30bed94ecff4f930e6da43e57f0cfd4e4766",
+      "pool": "B",
+      "scene": "其他室内·食物",
+      "appeal": 60,
+      "caption": "月子里街边买早餐"
+     }
+    ]
+   }
+  }
+ },
+ "_comment": "旅程页的照片精选，由 scripts/editor/travel-curate.mjs 生成（GLM 贴场景标签，本地按标签配额挑选），不要手改。旅程页用它替代这段旅程每天的首屏照片。"
+}

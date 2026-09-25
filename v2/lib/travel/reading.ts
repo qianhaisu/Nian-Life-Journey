@@ -16,6 +16,14 @@ import { ageOn } from "@/lib/time-signature";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
 import { coverScore, daysOf, TRIPS, tripById, type CoverScore, type Trip } from "./model";
 import sceneryFile from "./scenery.json";
+import curationFile from "./curation.json";
+
+// 旅程照片精选（scripts/editor/travel-curate.mjs）：有精选的旅程，每天的照片按它来，不再用日页首屏那一组。
+// 目前只有「从美国回家」有（Teddy 2026-09-25：「洛杉矶的照片不行，重复场景去掉一些，多放一些其他的」）。
+// pool A = 他本人的照片，照常过主体核查那道门；pool B = 那段日子的生活画面，GLM 判过清楚、无隐私、无陌生人大脸，
+// 且来自我们自己（自家相册或爸爸妈妈发的）——和风景白名单同一个道理，只在旅行页放行。
+type CuratedItem = { id: string; pool: "A" | "B"; caption: string };
+const CURATION = ((curationFile as { trips?: Record<string, { byDay: Record<string, CuratedItem[]> }> }).trips ?? {});
 
 type SceneryEntry = { id: string; scenic: number; caption: string };
 const SCENERY_BY_DAY = ((sceneryFile as { byDay?: Record<string, SceneryEntry[]> }).byDay ?? {});
@@ -124,6 +132,13 @@ export async function readTrip(id: string): Promise<{ trip: Trip; ageLabel?: str
   const range = daysOf(trip);
   const months = await monthsFor(range);
   const days: TripDay[] = [];
+  const curated = CURATION[trip.id];
+  const available = new Map(archive.media.map((item) => [item.id, item]));
+  const curatedOf = (items: CuratedItem[], title: string): MediaRef[] => items.flatMap((it) => {
+    if (it.pool === "A") return photosOf([it.id], title);
+    const media = available.get(it.id);
+    return media && media.type !== "video" ? [toMediaRef(media, it.caption)] : [];
+  });
   for (const day of range) {
     const entry = dayForDate(months.get(day.slice(0, 7)) ?? null, day);
     if (!entry) {
@@ -135,7 +150,8 @@ export async function readTrip(id: string): Promise<{ trip: Trip; ageLabel?: str
     const title = entry.title ?? dateLabelOf(day);
     days.push({
       day, href: hrefOf(day), dateLabel: dateLabelOf(day), ageLabel: ageOn(archive.birthDay, day) ?? entry.ageLabel,
-      title, lead: entry.paragraphs[0], photos: interleave(photosOf(entry.firstScreenMediaIds, title), sceneryOf(archive, day)),
+      title, lead: entry.paragraphs[0], // 有精选的旅程：精选里已经包括风景候选并按场景去过重，不再叠加风景名单（否则同一片牧场会出现四次）
+      photos: curated ? curatedOf(curated.byDay[day] ?? [], title) : interleave(photosOf(entry.firstScreenMediaIds, title), sceneryOf(archive, day)),
     });
   }
   const cover = pickCover(trip, months, photosOf, scores);
