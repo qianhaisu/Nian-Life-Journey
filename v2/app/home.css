@@ -111,14 +111,24 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  /* 完整展示已复核的照片；运镜在画框内进行，避免竖照在桌面裁掉脸。 */
+  /* 完整展示已复核的照片，不裁脸（90230d6）。照片没盖到的地方由下面的虚化底垫满，
+     所以运镜只往上推（scale ≥ 1），不再缩小——缩到 .92 会在四周露出一圈底色，看起来像边框
+     （Teddy 2026-09-25：「不是填充的，有边框不好看」）。 */
   object-fit: contain;
   object-position: 50% 50%;
   opacity: 0;
   transition: opacity 800ms ease-in-out;
-  /* 为平移与推拉预留边缘，整张照片始终留在画框内。 */
-  transform: scale(.92);
+  transform: scale(1);
 }
+/* 虚化底：同一张照片铺满、放大、糊开，只负责把画框填满。它不动，只跟着换片淡入淡出。 */
+.memory-frames img.memory-backdrop {
+  object-fit: cover;
+  object-position: 50% 40%;
+  transform: scale(1.18);
+  filter: blur(22px) saturate(1.15) brightness(.96);
+  animation: none;
+}
+.memory-frames img.memory-backdrop.is-current { opacity: 1; }
 /* Ken Burns（Teddy 2026-09-16 裁定：做到明显，8%）。
    Apple 的回忆把静态照片做成"动起来"靠的就是这个——缓慢推拉 + 交叉淡化，
    而我第一版是纯淡入淡出，一点运镜都没有，这是"质感差太远"里最直接的一条。
@@ -148,23 +158,24 @@
 .memory-frames img[data-fx="1"] { transition-duration: 1150ms; }
 .memory-frames img[data-fx="3"] { transition-duration: 650ms; }
 
+/* 推拉幅度仍是 Teddy 2026-09-16 定的约 8%，只是从 1 往上推，不再从 .88 起步。 */
 @keyframes memoryKenBurnsIn {
-  from { transform: scale(.88) translate3d(0, 0, 0); }
-  to   { transform: scale(.96) translate3d(-1.4%, -1.8%, 0); }
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to   { transform: scale(1.08) translate3d(-1.2%, -1.4%, 0); }
 }
 @keyframes memoryKenBurnsOut {
-  from { transform: scale(.96) translate3d(1.4%, 1.2%, 0); }
-  to   { transform: scale(.88) translate3d(0, 0, 0); }
+  from { transform: scale(1.08) translate3d(1.2%, 1%, 0); }
+  to   { transform: scale(1) translate3d(0, 0, 0); }
 }
 /* 横移：尺度不变，只平移——和推拉是两种明显不同的感觉。 */
 @keyframes memoryPanRight {
-  from { transform: scale(.92) translate3d(-2.4%, 0, 0); }
-  to   { transform: scale(.92) translate3d(2.4%, -0.6%, 0); }
+  from { transform: scale(1.06) translate3d(-2%, 0, 0); }
+  to   { transform: scale(1.06) translate3d(2%, -0.5%, 0); }
 }
 /* 上升：画面缓缓抬起来一点，同时轻微推近。 */
 @keyframes memoryRiseUp {
-  from { transform: scale(.88) translate3d(0, 2.6%, 0); }
-  to   { transform: scale(.96) translate3d(0, -1.4%, 0); }
+  from { transform: scale(1.01) translate3d(0, 2%, 0); }
+  to   { transform: scale(1.08) translate3d(0, -1.2%, 0); }
 }
 
 /* 只有压字的那一条给局部遮罩，照片本身不加任何全局滤镜（任务书三：照片保持原色）。 */

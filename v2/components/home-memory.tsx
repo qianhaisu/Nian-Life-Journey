@@ -1,5 +1,6 @@
 "use client";
 
+import { mediaDeliveryUrl } from "@/lib/media/paths";
 import Image from "next/image";
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -77,6 +78,16 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
         SLIDE_SECONDS×1000——**是巧合，不是约束**。不把变量传下去的话，哪天改了 SLIDE_SECONDS，
         推拉时长和换片节奏会悄悄错开，而且看起来一切正常。 */}
     <div className="memory-frames" style={{ "--memory-slide-ms": `${MEMORY_TIMING.slideSeconds * 1000}ms` } as React.CSSProperties}>
+      {/* 虚化底（Teddy 2026-09-25：「运镜效果现在不是填充的，有边框不好看」）。照片本身仍然完整显示、不裁脸
+          （90230d6 的初衷），画框里照片没盖到的那一点，用同一张照片放大虚化垫满——看起来是满的，没有边框。
+          用缩略图就够了：反正要糊掉，省流量。 */}
+      {memory.slides.map((slide, i) => (
+        isNear(i, index, memory.slides.length)
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img key={`bg-${slide.key}`} className={i === index ? "memory-backdrop is-current" : "memory-backdrop"}
+            src={slide.media.thumbnailSrc ?? mediaDeliveryUrl(slide.media.id, "thumbnail")} alt="" aria-hidden="true" />
+          : null
+      ))}
       {memory.slides.map((slide, i) => (
         // 只挂当前与前后各一张，见 isNear——全挂会让 12 张一起抢连接。
         isNear(i, index, memory.slides.length) ? <Image
