@@ -162,6 +162,21 @@ export function stampKeyOf(unitKey: string): string {
   return STAMP_MERGE[unitKey] ?? unitKey;
 }
 
+/**
+ * 去过几个城市 = 足迹印章有几枚（Teddy 2026-09-25：「跟着印章改成 13 个」）。
+ * 一枚章是一个去处：美国几处算洛杉矶一个，成都和阿坝算一个；千岛湖、桐庐那几次落在杭州这一枚上。
+ */
+export function stampCount(trips: readonly Trip[]): number {
+  const keys = new Set<string>();
+  for (const trip of trips) for (const id of trip.placeIds) {
+    const place = PLACE_BY_ID.get(id);
+    const unit = unitOf(id);
+    if (!place || place.home || !unit) continue;
+    keys.add(stampKeyOf(unit.key));
+  }
+  return keys.size;
+}
+
 export type TravelStats = { countries: Place[]; provinces: string[]; cities: Unit[] };
 
 /**
@@ -198,7 +213,7 @@ export function leadLine(trips: readonly Trip[], birthDay: string | undefined, t
   const stats = travelStats(trips);
   const age = ageOn(birthDay, today);
   const latest = trips.filter((t) => t.from <= today).sort((a, b) => b.from.localeCompare(a.from))[0];
-  const head = `${age ? `张年 ${age}，` : "张年"}去过 ${stats.countries.length} 个国家、${stats.cities.length} 个城市。`;
+  const head = `${age ? `张年 ${age}，` : "张年"}去过 ${stats.countries.length} 个国家、${stampCount(trips)} 个城市。`;
   if (!latest) return head;
   const [y, m] = ymd(latest.from);
   const [ty] = ymd(today);

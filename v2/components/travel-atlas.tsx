@@ -21,7 +21,7 @@ const US = usGeoFile as UsGeo;
 
 export type AtlasTrip = {
   id: string; title: string; kind: string; tag?: string; from: string; rangeLabel: string; ageText: string;
-  cover?: MediaRef; unitKeys: string[]; provinces: string[];
+  cover?: MediaRef; scenery?: MediaRef; unitKeys: string[]; provinces: string[];
 };
 export type AtlasUnit = { key: string; name: string; kind: "cn" | "us"; province?: string; color: string; firstMonth: string; firstAge?: string; visits: number };
 /** 足迹印章：一枚章可以盖住几格（美国几处 → 洛杉矶，成都 + 阿坝 → 成都）。 */
@@ -164,7 +164,10 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
           {panel.trips.map((t) => (
             <li key={t.id}>
               <Link href={`/travel/${t.id}`} className="travel-postcard">
-                <span className="travel-postcard-photo">{t.cover ? <Photo media={t.cover} variant="thumbnail" fit="crop" sizes="220px" /> : null}</span>
+                <span className="travel-postcard-photo">
+                  {t.cover ? <Photo media={t.cover} variant="thumbnail" fit="crop" sizes="220px" /> : null}
+                  {t.scenery ? <span className="travel-postcard-scenery"><Photo media={t.scenery} variant="thumbnail" fit="crop" sizes="96px" /></span> : null}
+                </span>
                 <span className="travel-postcard-body">
                   {t.tag ? <span className="travel-tag">{t.tag}</span> : null}
                   <strong>{t.title}</strong>

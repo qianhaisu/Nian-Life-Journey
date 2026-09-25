@@ -1,0 +1,71 @@
+{
+ "wechat-media:37626d88b674abf2e6c009779195eb278bcaab24fa4922c288cba1d48f5fc3e2|wechat-media:bdfe9d57f39ef7c48c4f6f4075d3c31aec1e7a8ffd20225720165e7c32aa5f24|wechat-media:c60f7449e9a78d4c5d96ce01dfdfaa47a9a2473047e0593ac82907c13ac9cc16|wechat-media:ff6e5d89199a59260c1bc9ef4599d999f1e6521a4fb20f2d9b47b064fc864214": {
+  "keep": [
+   "wechat-media:ff6e5d89199a59260c1bc9ef4599d999f1e6521a4fb20f2d9b47b064fc864214",
+   "wechat-media:c60f7449e9a78d4c5d96ce01dfdfaa47a9a2473047e0593ac82907c13ac9cc16"
+  ],
+  "why": "1、2同树同景留2；0、3疑同场留0",
+  "model": "glm-5.3-flash",
+  "promptVersion": "travel-scenery-scenes-v2",
+  "at": "2026-09-25T04:59:31.988Z"
+ },
+ "wechat-media:258a0998ccd86ddb88444abc91dc997a942cd22b91b39148f37241f5feaae45e|wechat-media:b039f38904aff311ab61af56c2e019159651edecb00f3e11420c21bb6ddc0218": {
+  "keep": [
+   "wechat-media:258a0998ccd86ddb88444abc91dc997a942cd22b91b39148f37241f5feaae45e"
+  ],
+  "why": "同一街景望向旧金山市政厅，第二张构图更干净清晰。",
+  "model": "glm-5.3-flash",
+  "promptVersion": "travel-scenery-scenes-v2",
+  "at": "2026-09-25T04:59:45.808Z"
+ },
+ "wechat-media:083de760d0cadc8d3c5d5c7fd130e4819bfc0f6bfe6fe8aff455fb0dc0888d74|wechat-media:0d40702487f2f5267475ab0048500e021044f93bc0b65a53e57d8dba6ee3bca8|wechat-media:12e1d7d51d20d1febf64148e6524fa55bcb01fdfced76d1485df13e2a6cf7082|wechat-media:31bf192f7e313d66e2c8e59cbd1d46fce101b507d4bf2b048464ecb0f2237edf|wechat-media:641943c02c1da242eb9e0b64d02e20e4d95be1bfae8418f96c2f059a9e19700e|wechat-media:8a7b131c31697188ae417892b359c1c66b92f9d64e9c84d1c9086c03afaf4938|wechat-media:ce8e8f85f5c8df766cdc7942816eec2cc9d9815c460375822681ae3ff9f29654|wechat-media:d2a395c6e57fede752c0405ab3a8c6d429cd34f3f2ec4a1f9d1a877037176c4a|wechat-media:f291b7523e06213e695bc8137308ffb71226718250434a463b5f68934c1b69c7|wechat-media:f5c1f48ec6cdceddb188a48fdae3f65b409e24148b88d47136b6b8c07d25c72a": {
+  "keep": [
+   "wechat-media:0d40702487f2f5267475ab0048500e021044f93bc0b65a53e57d8dba6ee3bca8",
+   "wechat-media:083de760d0cadc8d3c5d5c7fd130e4819bfc0f6bfe6fe8aff455fb0dc0888d74",
+   "wechat-media:ce8e8f85f5c8df766cdc7942816eec2cc9d9815c460375822681ae3ff9f29654",
+   "wechat-media:d2a395c6e57fede752c0405ab3a8c6d429cd34f3f2ec4a1f9d1a877037176c4a",
+   "wechat-media:f5c1f48ec6cdceddb188a48fdae3f65b409e24148b88d47136b6b8c07d25c72a",
+   "wechat-media:8a7b131c31697188ae417892b359c1c66b92f9d64e9c84d1c9086c03afaf4938"
+  ],
+  "why": "沙滩两组泳池四景，各留构图光线最佳",
+  "model": "glm-5.3-flash",
+  "promptVersion": "travel-scenery-scenes-v1",
+  "at": "2026-09-25T04:50:37.621Z"
+ },
+ "wechat-media:6880dca64f9cd783a029593b9cf2b0de3f9594609345e33a23b6b1eeecb34322|wechat-media:a4f02092d0e4a4acaec1cb44531d6609d85e733af9c4cb256d99e29a29c8989a": {
+  "keep": [
+   "wechat-media:6880dca64f9cd783a029593b9cf2b0de3f9594609345e33a23b6b1eeecb34322"
+  ],
+  "why": "同是西安钟楼夜景，图1无车遮挡更佳",
+  "model": "glm-5.3-flash",
+  "promptVersion": "travel-scenery-scenes-v2",
+  "at": "2026-09-25T04:59:51.827Z"
+ },
+ "wechat-media:dd1d643f189b277fa394da7228e2fa6079d13a6dab5411cbfc79af4a6b484d06|wechat-media:e9a22284ca97a987cf5af1326a8b6b01b3fed8311cc142e41f8e83044f54d731": {
+  "keep": [
+   "wechat-media:e9a22284ca97a987cf5af1326a8b6b01b3fed8311cc142e41f8e83044f54d731"
+  ],
+  "why": "同一山脉与桥，留构图光线更佳者",
+  "model": "glm-5.3-flash",
+  "promptVersion": "travel-scenery-scenes-v2",
+  "at": "2026-09-25T05:00:05.670Z"
+ },
+ "wechat-media:37d4991506be426fc8e1586f9ef0fd956274b1fa7ad338479c9da63be1da4142|wechat-media:581a9039f624af48862930803ce09731499d772089bec9271e79294cc0b9a586|wechat-media:b9094c0c83893a4d5f7880c6aab1dbe3b83116449e8f508d3ca08d18e7f49f66|wechat-media:e456d18861356513e86d99cc87014cfd9a3780af6adece6dceb5ba3d7a2f17f8": {
+  "keep": [
+   "wechat-media:581a9039f624af48862930803ce09731499d772089bec9271e79294cc0b9a586"
+  ],
+  "why": "四张同属兵马俑一号坑，保留军阵全景",
+  "model": "glm-5.3-flash",
+  "promptVersion": "travel-scenery-scenes-v2",
+  "at": "2026-09-25T05:01:39.007Z"
+ },
+ "wechat-media:4bcb4e91bb4cee75ae62a8fbe093246f707f6589fbab7e2c5fc7af2511b9f546|wechat-media:65f69bbd889620f15488ac9e5debcc7129f2dc9ba9583274742924455d6a78b6|wechat-media:9f9a909736a47fcd0f1cec81dac5ae572bf0cae24e16090a68f515402250369d": {
+  "keep": [
+   "wechat-media:4bcb4e91bb4cee75ae62a8fbe093246f707f6589fbab7e2c5fc7af2511b9f546"
+  ],
+  "why": "同一外滩夜景，1与2重复，0构图最佳",
+  "model": "glm-5.3-flash",
+  "promptVersion": "travel-scenery-scenes-v2",
+  "at": "2026-09-25T05:01:56.607Z"
+ }
+}

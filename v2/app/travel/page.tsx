@@ -78,7 +78,7 @@ export default async function TravelPage() {
     const tripUnits = t.placeIds.map(unitOf).filter((u): u is Unit => !!u);
     return {
       id: t.id, title: t.title, kind: t.kind, tag: KIND_LABEL[t.kind], from: t.from,
-      rangeLabel: formatRange(t.from, t.to), ageText: whenAge(card?.ageLabel), cover: card?.cover,
+      rangeLabel: formatRange(t.from, t.to), ageText: whenAge(card?.ageLabel), cover: card?.cover, scenery: card?.scenery,
       unitKeys: [...new Set(tripUnits.map((u) => u.key))],
       provinces: [...new Set(tripUnits.map((u) => u.province).filter((x): x is string => !!x))],
     };

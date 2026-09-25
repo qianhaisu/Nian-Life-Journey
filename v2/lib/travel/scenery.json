@@ -1,0 +1,76 @@
+{
+ "_comment": "旅行风景白名单，由 scripts/editor/travel-scenery.mjs 生成（GLM 判定 + GLM 同场景去重），不要手改。只有旅行页读它。",
+ "model": "glm-5.3-flash",
+ "promptVersion": "travel-scenery-v1",
+ "scenePromptVersion": "travel-scenery-scenes-v2",
+ "assessedAt": "2026-09-25T05:02:40.494Z",
+ "rule": "kind ∈ {scenery, landmark} · scenic ≥ 70 · sharp · no stranger faces · not text-heavy · sensitive none · 来源：自家相册原片或爸爸妈妈在微信发的 · 同一场景只留一张 · 不设总数",
+ "byDay": {
+  "2025-01-16": [
+   {
+    "id": "wechat-media:ff6e5d89199a59260c1bc9ef4599d999f1e6521a4fb20f2d9b47b064fc864214",
+    "scenic": 85,
+    "caption": "夕阳下的牧场，牛群吃草"
+   },
+   {
+    "id": "wechat-media:c60f7449e9a78d4c5d96ce01dfdfaa47a9a2473047e0593ac82907c13ac9cc16",
+    "scenic": 82,
+    "caption": "橡树下的牧场牛群吃草"
+   }
+  ],
+  "2025-01-17": [
+   {
+    "id": "wechat-media:258a0998ccd86ddb88444abc91dc997a942cd22b91b39148f37241f5feaae45e",
+    "scenic": 72,
+    "caption": "旧金山市政厅街景"
+   }
+  ],
+  "2025-09-29": [
+   {
+    "id": "wechat-media:b4e0eac5960702bc9e6b103d2442c93de8729f5523709447152044a5260eadc7",
+    "scenic": 75,
+    "caption": "交通大学标志性校门"
+   }
+  ],
+  "2025-10-04": [
+   {
+    "id": "wechat-media:6880dca64f9cd783a029593b9cf2b0de3f9594609345e33a23b6b1eeecb34322",
+    "scenic": 88,
+    "caption": "西安钟楼夜景灯光璀璨"
+   }
+  ],
+  "2025-10-05": [
+   {
+    "id": "wechat-media:e9a22284ca97a987cf5af1326a8b6b01b3fed8311cc142e41f8e83044f54d731",
+    "scenic": 86,
+    "caption": "木栈道远眺华山群峰"
+   },
+   {
+    "id": "wechat-media:581a9039f624af48862930803ce09731499d772089bec9271e79294cc0b9a586",
+    "scenic": 88,
+    "caption": "西安秦始皇兵马俑一号坑"
+   }
+  ],
+  "2025-12-06": [
+   {
+    "id": "media-quark-sha-4272f405396ce4e7cb2e0aac53a0f04605c46d59c9e414f7d184599a5955d06e",
+    "scenic": 75,
+    "caption": "安福路路牌前的母子合影"
+   }
+  ],
+  "2026-01-10": [
+   {
+    "id": "wechat-media:4bcb4e91bb4cee75ae62a8fbe093246f707f6589fbab7e2c5fc7af2511b9f546",
+    "scenic": 78,
+    "caption": "上海外滩夜景东方明珠"
+   }
+  ],
+  "2026-02-21": [
+   {
+    "id": "media-quark-sha-b025ab759bc777147b86c3683677f0bb59bcdbd6c3b6027e9e2482d301f5a567",
+    "scenic": 72,
+    "caption": "上海张园热气球艺术装置"
+   }
+  ]
+ }
+}

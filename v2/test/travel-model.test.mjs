@@ -53,7 +53,7 @@ test("日期区间：同月、跨月、跨年、单日", () => {
 
 test("第一句：年龄、国家和城市、最近一次", () => {
   const line = leadLine(TRIPS, "2025-01-03", "2026-09-25");
-  assert.match(line, /^张年 1 岁 8 个月，去过 2 个国家、\d+ 个城市。/);
+  assert.match(line, /^张年 1 岁 8 个月，去过 2 个国家、13 个城市。/, "城市数跟着足迹印章走（Teddy 2026-09-25）");
   assert.match(line, /最近一次是 8 月的宁波。$/);
   assert.equal(tripAge({ from: "2025-12-26" }, "2025-01-03"), "11 个月");
   assert.equal(placeNames({ placeIds: ["cn-sc-chengdu", "cn-sc-west"] }), "成都、川西");

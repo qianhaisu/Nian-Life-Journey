@@ -68,6 +68,12 @@
 .travel-postcard-photo { position: relative; display: block; aspect-ratio: 1; overflow: hidden; border-radius: 10px; background: var(--card-soft); }
 .travel-postcard-photo .photo-crop { position: absolute; inset: 0; margin: 0; }
 .travel-postcard-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
+/* 明信片右下角叠一张小风景，像夹在明信片上的拍立得 */
+.travel-postcard-photo { overflow: visible; }
+.travel-postcard-photo > .photo { border-radius: 10px; overflow: hidden; }
+.travel-postcard-scenery { position: absolute; right: -6px; bottom: -10px; z-index: 1; width: 42%; aspect-ratio: 1; padding: 4px 4px 12px; border-radius: 6px; background: #fff; box-shadow: 0 4px 12px rgba(107,86,62,.22); rotate: 5deg; }
+.travel-postcard-scenery .photo-crop { position: relative; inset: auto; width: 100%; height: 100%; margin: 0; overflow: hidden; border-radius: 3px; }
+.travel-postcard-scenery .photo-crop img { width: 100%; height: 100%; object-fit: cover; }
 .travel-postcard-body { display: grid; gap: 4px; padding: 0 4px; }
 .travel-postcard-body .travel-tag { justify-self: start; }
 .travel-postcard-body strong { color: var(--color-text); font-size: 1.05rem; font-weight: 800; }

@@ -49,17 +49,17 @@ export default async function TripPage({ params }: { params: Promise<{ tripId: s
           {days.map((d) => (
             <li key={d.day} className="travel-day">
               <p className="travel-when"><time dateTime={d.day}>{d.dateLabel}</time><span className="travel-age">{whenAge(d.ageLabel)}</span></p>
-              <h2 className="travel-day-title"><Link href={d.href}>{d.title}</Link></h2>
+              {d.href ? <h2 className="travel-day-title"><Link href={d.href}>{d.title}</Link></h2> : null}
               {d.lead ? <p className="travel-day-lead">{d.lead}</p> : null}
               <DayPhotos photos={d.photos} dateLabel={d.dateLabel} ageLabel={d.ageLabel} quietLabel />
-              <Link className="travel-day-more" href={d.href}>读这一天</Link>
+              {d.href ? <Link className="travel-day-more" href={d.href}>读这一天</Link> : null}
             </li>
           ))}
         </ol>
       ) : days[0] ? (
         <div className="reading-wrap travel-days">
           <DayPhotos photos={days[0].photos} dateLabel={days[0].dateLabel} ageLabel={days[0].ageLabel} quietLabel />
-          <Link className="travel-day-more" href={days[0].href}>读这一天：{days[0].title}</Link>
+          {days[0].href ? <Link className="travel-day-more" href={days[0].href}>读这一天：{days[0].title}</Link> : null}
         </div>
       ) : null}
     </article>
