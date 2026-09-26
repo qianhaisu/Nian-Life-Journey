@@ -26,6 +26,10 @@ const known = loadVisionDescriptions();
 const store = fs.existsSync(STORE) ? JSON.parse(fs.readFileSync(STORE, "utf8")) : { schema: 1, items: {} };
 const fileFor = (id) => path.join(FILES, `${createHash("sha256").update(id).digest("hex").slice(0, 20)}.img`);
 const todo = wanted.filter((id) => !known.has(id) && !store.items[id]?.description);
+for (const id of todo.filter((x) => !fs.existsSync(fileFor(x)))) {
+  const res = await fetch(`https://nianlife.cn/api/media/${encodeURIComponent(id)}?variant=web`, { signal: AbortSignal.timeout(60_000) }).catch(() => null);
+  if (res?.ok) fs.writeFileSync(fileFor(id), Buffer.from(await res.arrayBuffer()));
+}
 const missingFile = todo.filter((id) => !fs.existsSync(fileFor(id)));
 const items = todo.filter((id) => fs.existsSync(fileFor(id))).map((id) => ({ id, file: fileFor(id) }));
 console.log(`[describe ${content.month}] 已挂上 ${wanted.length} 张，已有描述 ${wanted.length - todo.length}，待描述 ${items.length}，缺缩略图 ${missingFile.length}`);
