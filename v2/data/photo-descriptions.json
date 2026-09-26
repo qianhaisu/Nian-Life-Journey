@@ -1,0 +1,1021 @@
+{
+ "schema": 1,
+ "items": {
+  "media-quark-sha-6642a90a63d17e572ab6344edc82a957c6a45436c75d1a1a37f07e215ac97081": {
+   "mediaKind": "photo",
+   "description": "一张人物裸露背部的特写照片，背部皮肤上散布着多处红色小疹点和局部泛红的痕迹，人物下身穿白色衣物，肩部上方露出花纹布料，背景可见白色床品。",
+   "bytesSha256": "30f64cd9f053af0414e8b330793a333eeae0c7cfe0f894aa2d1250d223cac83c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-b81f9c6ea51c16b20e6d39e819dcfc902ab34885915489fa320468df12f819f5": {
+   "mediaKind": "photo",
+   "description": "一栋白色建筑外的人行道上立着写有“SUN CLINICAL LAB 旭日化验所”的指示牌和一块蓝色无障碍停车标志牌，路边种有灌木和龙舌兰等植物。远处一名穿深色衣服的人站在入口附近，旁边有垃圾桶，背景可见停放的车辆、棕榈树和蓝天。",
+   "bytesSha256": "9bccd41b7c02600433676cfaa8e79dbfc4f7f4c2796b3a76e2c4abda2c4a3035",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-6f11723ae5cfd801361d48e52b5be6d1753f2eaf1dea81a702efead71f5cc261": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿黑色外套内搭米色连帽衫的人站在一扇黑色玻璃门前，手里握着一个粉色杯子，门前有金属长把手。玻璃门上印有'AltaMed Pacific IPA'和'加联泰平医疗网'的字样并贴着一张白色告示，玻璃反射出天空、树木和停放的车辆，门上方装有监控摄像头。",
+   "bytesSha256": "48390f85ae300ea90ca5271c250318cd63f7b422c794da62f829f6a5b388800a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-5a7794b08a63d15df5b79bea5ce6700fbe1827a5d36eb6bd62baa40c800ef46f": {
+   "mediaKind": "photo",
+   "description": "画面主体是一栋白色外墙的建筑，墙上有'Allied Pacific IPA'及中文字样的招牌和门牌号101，建筑前种植着灌木丛和干枯的观赏草，左侧有树枝、路灯和道路标识，背景是远处的山脉和飘着薄云的蓝天，画面右下角露出一小部分汽车车身。",
+   "bytesSha256": "b638e430fa00e5e573c3dace161c740f62ba31341a305d2cd01728600412a10d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-45b8e98e31def6528d7c5a06257e5f06a81d5cb98fe87a3ef66cbc3107734237": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿米色连帽卫衣的男子坐在餐厅棕色皮制卡座里，双手握着手机低头查看，手腕戴着智能手表。他面前的木桌上放着一大碗越南牛肉河粉，碗里插着黑色筷子，旁边的小盘中有豆芽、罗勒等香草和青柠角。",
+   "bytesSha256": "942eadde1c66fb13491593f1aafb70781bac74405d55625a763584acad2b07b0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-6eee00aa996c1dcb0990148a5d444e5679a52fd87d76b2cd15f0a31c65c0d882": {
+   "mediaKind": "document",
+   "description": "一只手拿着一份装在透明塑料套里的打印文件，标题为“Dr. Paddy Jim Baggot's Vitamin Protocol”，上面列有注册FullScript账户的步骤说明，以及一个孕期推荐营养品的表格（Nutrient 950多种维生素、钙镁锌、Omega-3 DHA、NAC 500mg及每日服用量）。画面下方可见拍摄者穿着的米色针织衣物和一颗白色纽扣，背景是台面，上面放有纸张和一支笔。",
+   "bytesSha256": "500120461ff6ee138ccdd5f334b338ee8723df94c041fdd9b2bc5b9f41cdb266",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-3cb7210a4148c129904eab2bb3a6924e6476d1198a1c523e81f26a104cdd7384": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜的人坐在白色餐桌旁，右手拿着筷子，面前的泡沫餐盒里装着米饭，旁边有一碗汤和一盒盛有红烧肉、豆腐等菜肴的餐食及白色塑料勺。背景可见灰色墙壁和一把木质椅子。",
+   "bytesSha256": "bd860c2b6c78065126185e2b8e2d57cfe174b57b0d1ebcd1d8bc5b4e9a15955a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "wechat-media:03fea74aa2e44f4db77bc1e2600351e0ab8d077689714fa36e12061e443ac37d": {
+   "mediaKind": "photo",
+   "description": "照片中是一台Voluson超声诊断设备，主屏幕上显示着医疗中心的胎儿生物测量报告和左侧排列的多幅超声图像，下方操作台配有背光键盘、多个旋钮按键和一块触控屏，机身左侧立着一支超声探头、旁边放有耦合剂瓶，右侧背景可见检查床一角和一扇带金属把手的门。",
+   "bytesSha256": "e45d91ca617d876ba393eef0accd37ee1b5b2724a79c1d63dd16177019b9c4b1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-1c92932ab01b03da8946e9be3c7dad1557a37e795be9bf2d300e0bcfe202ca93": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿黑色外套内搭米色连帽衫、浅色牛仔裤和黑色拖鞋的人站在铺红砖的门廊上，右手伸向一扇白色铁艺纱门的金色门把手，门上挂有花纹蝴蝶结装饰。房屋外墙为米色灰泥配石块贴面，门前有黑色地垫，背景可见另一栋房屋和院子。",
+   "bytesSha256": "8635d321e1d30489b393224340cd7a2e064a8fd4699c874cc3b89a65f3acdaed",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-b692dbf4559527ebcfa5ed1ee9de7fd13b459a64e7032451d9e010db84a1e936": {
+   "mediaKind": "photo",
+   "description": "一张皮肤（疑似背部）的近距离照片，皮肤上散布着多颗痣和小斑点，左下方有一片淡红色斑块，右上方有一处带深色结痂的红晕皮损。",
+   "bytesSha256": "fe700af4251b4c03166bfd16dce70db21b9bca97053fc90c99b223b9fef497c7",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-acb6ea5d6bdfddcd2893132f5cd84e775b34cd62371a4ce84418033e2dc77c2c": {
+   "mediaKind": "photo",
+   "description": "一男一女在夜晚的户外喷泉广场自拍，两人均戴眼镜、面向镜头，男子身穿深色外套内搭米色连帽衫，女子穿浅色外套。背景是亮着灯光的喷泉水池，周围有挂满灯饰的大树、节日装饰的红色小屋和建筑，左侧有红色花卉。",
+   "bytesSha256": "3bc2f96968a7ac307464d5c94aca773e685cc7b2d105c4ec754177153f62fb4a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-28ad3f907eb63841d19f977e61f99fe36a7633b766aade9366224b796b0a7c42": {
+   "mediaKind": "photo",
+   "description": "夜晚的户外广场上，两位戴眼镜的人并肩站在喷泉水池前，左侧的人穿米色大衣和浅色长裤，右侧的人穿深色外套和浅蓝色牛仔裤；身后喷泉水花四溅，树木缠绕着灯串，旁边石盆里立着一棵螺旋造型的绿树并点缀红白花朵，远处是亮灯的多层建筑、圆顶凉亭和来往的人群。",
+   "bytesSha256": "7840fc62348cdbbf44e44da3f805ee7d4dbb55c3762100ac10efd1e197dd490f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-400dc7048a6a692f381a45c79087a018311d17a4ae81aacd784bfd47e57e5c7b": {
+   "mediaKind": "photo",
+   "description": "夜晚的户外圣诞主题活动场景：一座挂有绿色花环、彩灯、红色大蝴蝶结和\"NORTH POLE\"招牌的小屋式建筑，旁边立着红白条纹的柱子。周围树木缠绕着成串的白色小灯，许多游客聚集在建筑前方站立或走动，其中包括一个雪人造型装饰。",
+   "bytesSha256": "bfac62ac7f0b4a38664455194109fb3f44f936f01414ee33d84f9c9fdd14188f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-dc2326fdd5f447f9654c877240ef925001099b7ac005ef4521f7ae43ab65f781": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿深色外套内搭米色连帽衫的人坐在餐馆卡座的木桌前，双手正拿着一个鸡蛋剥壳，面前放着一碗盛有勺子的深色汤豆花，桌上还有一根油条和一部手机。背景可见红色皮质卡座、圆桌与椅子，以及贴着中文字样的玻璃窗。",
+   "bytesSha256": "7bf89d76cc06455ace4b046de4d0c28e2c18b1651ba607ca5867b64e35d79332",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-31f872d1a1c90070ec5e561f4f075a906ff2016af37994be2b728a22fb196662": {
+   "mediaKind": "photo",
+   "description": "照片拍摄于一家商店的服务区，红色墙面上写有\"Exchanges & Returns\"，旁边的木纹墙上方挂着\"Order Pickup / Registry\"的指示牌。前景中一名穿深色连帽外套的男子背对镜头望向服务台方向，身旁有一名女子，近处停放着几辆装有花卉和物品的红色购物车，远处可见数名顾客站在柜台前，天花板上排列着照明灯。",
+   "bytesSha256": "2b4bb63fb827dac214789f93e06490c6e91c04b6532761305f18027d6e2e97fa",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-c9d4657e8e89140b6ac83314436c4f042eabd1c1b10a331dad5650a1baa7c522": {
+   "mediaKind": "photo",
+   "description": "照片拍摄于一家超市内部，前景是穿着红白条纹毛衣和牛仔裤的白色人体模型服装展示台，底座为红白条纹礼盒样式，旁边立着一张印有“Taylor Swift”字样的宣传立牌，背景中多名顾客推着购物车在货架间走动，天花板上装有照明灯和红色节日装饰。",
+   "bytesSha256": "69e9ccf4d5a0a4981b5e4806bc8aa0dc316ed29cee1b12b565edabad642cbb0a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-fb15c933d4a6d59c4a5f97a5898fda98adf7341d4cd4617a4e6594c85cf493f5": {
+   "mediaKind": "photo",
+   "description": "夜晚街边，一辆边缘装有白色灯带的镜面小拖车停在路旁，镜面上贴着'TOO COLD? ORDER ONLINE'和'OPEN'字样的招牌；人行道上站着一名穿深色外套的人，身旁有红色椅子和一张小桌子，面前立着写有'YOU LOOK PRETTY HUNGRY'的粉色招牌，背景是砖墙建筑、垃圾桶和'2小时停车'标志牌，画面带有车窗反光。",
+   "bytesSha256": "1f8893c9ea1d34c4cdc04db6bf0a00721807955dac145375d03868d2a20ad366",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "wechat-media:c132810927780f87bf5536dbbd667e031534f2f57153d4dd4bd02b84f9e519b4": {
+   "mediaKind": "photo",
+   "description": "一名身穿黑色外套、内搭米色连帽衫和浅蓝色牛仔裤的男子背对镜头站在红砖门廊上，正伸手操作面前白色铁艺纱门的门把手，门上挂着一个绿红相间的装饰蝴蝶结，房屋外墙为米黄色灰泥并带石砌墙基，脚边铺有黑色地垫，背景可见院落泥土和远处的另一栋房屋。",
+   "bytesSha256": "530e378c42bc3d6b9a23de69a7ac27b07637758d1277b1b8d0bef601b9ee53e5",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-5fa3d6906935e0fff1f9e0afdb830ba954e770013800be4545db3b4d7f6c016a": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿深色连帽外套的人坐在餐厅的木质桌前，低着头双手拿着手机观看；桌上立着写有数字96的白色号码牌，旁边有白色餐巾和勺子。背景可见开放式餐厅环境，天花板上装有多个不锈钢排烟罩和螺旋形灯具，周围摆放着木质餐桌椅，还有带几何花纹装饰的立柱和卡座沙发。",
+   "bytesSha256": "e0017db2e9ed0883c7656d010ba5b164b7f04f28b4af2c52381ac9e271c6d28f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-29f1de1a1aa0020a72a06950ec32b2ef3ad3f8ab9900ba93a82dcfd18552a52a": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿米色连帽衫的人坐在木质书桌前，正低头使用面前的笔记本电脑。墙上挂着一幅带金色边框的蒙娜丽莎画像，桌面上放有深蓝色背包、插着笔的深蓝色杯子、金属花盆里的绿植和几张卡片，房间左侧的木凳上摆放着一盆绿植，地面铺着地毯。",
+   "bytesSha256": "95470c642b63d124b02b299a903ac7bea2a8dd5a41754c2653633e3d794500ea",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-4d21464609b6247b4578c3e33a33580da8cb3571988842d70fa25725c4e9726f": {
+   "mediaKind": "photo",
+   "description": "夜晚的“海底捞火锅”餐厅门口，招牌灯光明亮，门口摆放着数个立式取暖灯和室外餐桌，一些顾客坐在桌边，门口有两三人站立或走动，石墙上有品牌标志，旁边设有圣诞老人装饰、花环和菜单立牌，画面左侧可见棕榈树和相邻店铺的部分招牌。",
+   "bytesSha256": "ca52619f9f91d58f7a36c067232ecad5da244c23a569dfd3d4b0d9cfacc543cc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-72d7dd6c9cea70e7ddc8aa1814926296958b3f0022a172fcb71890e3fa1cec1e": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿深色外套的人坐在火锅店的黑色大理石纹餐桌前，右手持筷子，低头对着手里的小碗，桌中央的锅灶冒着热气。桌面上摆放着吃剩的蔬菜拼盘、蘸料小碗、带白勺的汤碗、水壶、纸杯、叠放的空盘和剥开的橘子皮，背景可见店内座椅、吧台和远处就座的其他顾客。",
+   "bytesSha256": "322958c70511898c70622f8da394b05307c6dc83540a9d0017372b85d97bce69",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-2a98d06c9a3ad9dbd47ea9efd4d8534b168268075924ac47e49e8700e92af8b9": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿深色外套的男子双手握方向盘驾驶汽车，车内中控屏显示中文导航界面，前挡风玻璃外是晴朗天气下的多车道高速公路，可见多辆行驶中的车辆、路旁树木和远处的山。",
+   "bytesSha256": "55a15ba912c9edd502943a1076c3ca094eafafcb431b968be8c51b8d76cef0b5",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-14d8061a4db1df2a6c3fdd53507c64438a659862661a8da8772e5a1210ade774": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿深色外套的男子双手握着方向盘驾驶汽车，车内中控屏上显示着导航地图和行车信息，仪表盘可见速度表。透过前挡风玻璃可以看到蜿蜒的山间公路、护栏、一辆前方行驶的汽车，以及远处干燥的黄褐色山坡。",
+   "bytesSha256": "90ac25e8f1e4d732563f5198326db7a1006ba8131eac4d3d8391a457660fb8c8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-c602fd2fc55d50f6fc510fd6f4ceaa84db26231550da2c0eb6c0fe0cbc53c08c": {
+   "mediaKind": "photo",
+   "description": "一名戴黑色毛线帽、穿深灰色连帽衫和短裤的男子右手拿着一个白色杯子，左手插在衣兜里走过商店的木地板。画面前景是摆满竖立钓鱼竿和渔具的展示台，背景可见百事自动售货机、挂满商品的货架、天花板吊扇和裸露的木梁。",
+   "bytesSha256": "5fd7afa17319d3a7bc13012a8d7024578e8add709362b42485b0dd5b30ba9e73",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-127981ffebe967f92089c6ea395104d4a1be988112abab923b5eacf4d1e574f2": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿黑色连帽卫衣和牛仔裤的人闭着眼靠在深色皮沙发上，双臂交叉抱在胸前，似乎在休息；沙发上铺着白色毛绒毯和红白色花纹毯子。背景是米色墙面，靠墙的白色柜子上放着一盆种在编织花盆里的绿植、一个浅色水壶，旁边墙上挂有带文字的装饰画。",
+   "bytesSha256": "452f7c23ba157a52217c1d3bdf1fa7020b5a60abefcc306c2ea59e41dcd4cd07",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-01edb431418adc7db0c88f562c5149b6aecd64625ef6a160279e3a1461fb9684": {
+   "mediaKind": "photo",
+   "description": "一个人背对镜头站立，上身裸露，下身穿白色罗纹下装，背部皮肤上可见数颗深色小痣、左侧腰背处一片淡紫色印记以及脊柱旁一个带红晕的小黑点，背景为浅色墙壁和地面。",
+   "bytesSha256": "b6fa1040220c2f6fc946e2db9584d77eb24dd30200cdf45bdd561e47cec0292f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-46a126b9e3b7ca04bc86afea4b739bb6d3a5a822962e0e246a9c92f950519081": {
+   "mediaKind": "photo",
+   "description": "一名穿着带白色标识的黑色连帽卫衣的年轻人，帽子戴在头上，双眼闭合、面部贴近镜头自拍，背景为浅色墙壁和深色沙发。",
+   "bytesSha256": "0f7e2054269380cf9f034e687235eae20151540068bfb12eb80d2af1a833c555",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-ccb1059aaf5dfadb5bff1b777bbbb5feef7217526fddb7e6dd41708fd700ff3c": {
+   "mediaKind": "photo",
+   "description": "一栋浅色外墙配紫色装饰柱的建筑外景，墙面标有“GRAND MEDICAL CENTER II”字样和门牌号500，中央是玻璃双开自动门入口，门前有金属垃圾桶和锥形路障，右侧一扇门上贴有黄色警示标识，墙边排列着修剪整齐的灌木，画面左侧远处可见棕榈树。",
+   "bytesSha256": "a02dbef00d192d9d452378f606c740e882633b5716a85c16565e147b20c94bfc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-734ded595702dfba6e85c9806c3a84e03d46384c91c09cae3b5ff46a99960ada": {
+   "mediaKind": "photo",
+   "description": "照片显示安装在橙黄色墙面上的银色楼层索引牌，顶部标有\"500\"和\"GRAND MEDICAL CENTER II\"，牌面以英文和韩文并列列出各医疗机构名称及其房间号（101至505），底部注明\"1st Floor LOBBY\"。",
+   "bytesSha256": "9e91e436174e5927390331d04d3d093bdeda8f346ab4f4473e720d48a777c6cb",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-311b8c7ea34f6d97bfc29a6384ea40d9dcdf35f523a9c93a1f42f9e451ee2526": {
+   "mediaKind": "photo",
+   "description": "米黄色墙面上贴着一块蓝色标识牌，印有黄色心形图案和'Guadalupe Medical Center'字样，下方列出两位医生的姓名、周二至周四9点至14点的就诊时间、隔周周五周六需预约以及电话号码213-386-2606，光滑的牌面上可见拍摄者的反光倒影。",
+   "bytesSha256": "a8afa155af6c81bba6e2ddc4c653ccb7699dda0816a4732d45559ba6c25d9d99",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-8dd9f6e56f8e90046816bb91c9c66c77c19f1a0c99c165dd3239ade64c302c0a": {
+   "mediaKind": "photo",
+   "description": "一只手握着一个带橙色螺旋盖的透明塑料样本杯，杯身贴有写着'STERILE'和'SAMPLE COLLECTION'字样的标签，标签上有多项手写内容。背景是白色瓷砖地面和一扇浅色房门。",
+   "bytesSha256": "28627eaeb62aff2dbb11ed29117a908191b99795ae24e7e62be306870273add8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-cc034929360c0dc79ac53e930cc408e17f141dbcc378be3f4829731cfb51c664": {
+   "mediaKind": "photo",
+   "description": "一家餐厅内部，木质条板天花板上装有多盏花朵造型吊灯，窗户上挂着圣诞花环，窗边和室内摆放绿植，左侧有水族箱。近处深色餐桌上放有是拉差辣椒酱和蚝油瓶，右侧一位穿深红色衣服、戴花帽子的顾客坐在餐桌旁，背景还有几位顾客正在用餐，墙上挂着的电视正在播放画面。",
+   "bytesSha256": "fd3c6d19e243006fb211af306412db4fb7fa9ee5950413012252a3cf2f152e6c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-7f4550817ae0daecd852d60364374ee54be3a9eeb1906c3926f9f560000d36b2": {
+   "mediaKind": "photo",
+   "description": "一名身穿黑色连帽外套、蓝色牛仔裤和凉拖的人站在路缘石上，一只手抬到嘴边，另一只手垂在身侧，身旁是一根粗大的树干。背景是米色围墙、灌木丛、棕榈树和一栋红瓦屋顶的房屋，左侧有一块带棕榈树图案的招牌，左下角地面散落着一些白色纸团，天空晴朗。",
+   "bytesSha256": "99be3867d4c392892fdb22c23af0c342ff7ecfb35bfba4b93d0023af0cd7b7a7",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-faacef80c4df2a1bedf1e91bb507814f1e83a184230665e4b24a2dc2f39545b9": {
+   "mediaKind": "photo",
+   "description": "一名身穿黑色连帽外套、蓝色牛仔裤和拖鞋的人正低头走在人行道上，身旁是一棵粗壮的树干。背景是水泥围墙、灌木丛和棕榈树，左侧立着一块写有“ROSEMEAD EAST”的招牌，天空湛蓝，画面中还能看到车窗反光的痕迹。",
+   "bytesSha256": "30483dff4acddc13bd6f1e53d4a81281629510a5f6a8affb381e326f8cc52a3d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-f17f0a629f7e0d13ffaa9515a8beb606ac1a63b6c42b2f8bbb2a0c58c1985e7c": {
+   "mediaKind": "photo",
+   "description": "一名穿深色外套的人坐在汽车驾驶座上，左手握方向盘、右手抬起在胸前，车辆处于D挡且时速为零。挡风玻璃上带有水滴，车窗外是街道，路边有树木、帐篷、停放的白色轿车和Carl's Jr招牌，车内中控台上的手机正显示导航地图，标有'400英尺 500 S Virgil Ave'。",
+   "bytesSha256": "5d9551655477056806d605b05395f7997ebf80a7fe8841eb2b0936cb6f55b8d1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-0c2b48bcb6ca038ba9dd65da987a53b15ef6ba05a0f27114d9e4239a94af26bd": {
+   "mediaKind": "photo",
+   "description": "白色桌面上放着一台paramed电子血压计，屏幕显示血压118/80和脉搏96，机身连着一根灰色管子，前景露出穿着米色针织毛衣的手臂一角。背景中可见绿色花纹纸巾盒、插着笔的黑色笔筒、透明洗手液瓶、黄色便签纸、印有女性照片的台历，右侧放着一只带金属链的米色手提包，窗户百叶窗透进光线。",
+   "bytesSha256": "9897672474b092748d51a67c67c5cdadee0d432e88f112cac2dfa9d542847bca",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-28343d7d1a38fff04c4c007841f871fd374308e3d398af463589cab1799e2436": {
+   "mediaKind": "photo",
+   "description": "一台Voluson Expert OLED超声诊断仪的屏幕，上面显示产科超声检查界面：上方是胎儿的二维超声图像，下方是彩色多普勒频谱波形，屏幕角落标注孕周36周4天、胎心率152bpm以及检查日期时间等信息。",
+   "bytesSha256": "857e8a7d893762d15b3e03edbd41adb958b0df437ad17357c5806357fd538d6a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-2907d8a2ec7c590a229ab5522713bbbccf66fa8e5fb176e0a4f3357d2f2f6f7b": {
+   "mediaKind": "photo",
+   "description": "一只手拿着一张产科超声检查打印纸，纸上有超声黑白影像、多普勒波形图和检查参数文字，显示来自医疗中心的报告。背景是室内诊所环境，可见淡绿色墙面、白色装饰线、瓷砖地板、一扇带出口标志的门、椅子和柜台上的杂物。",
+   "bytesSha256": "f32bdb98526b179ce775c1f43df3cf92764947179d51e125d578ff49d0697320",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-782644e09a541568513b4d185ecb750cb67960b2a9c40edd0ed31d78f82be656": {
+   "mediaKind": "photo",
+   "description": "照片显示一台挂在浅橄榄绿色墙面上的三星显示器，屏幕上呈现超声检查界面：上方是一幅黑白超声影像，下方是波动的频谱波形，周围显示时间、频率、增益等参数和操作图标。画面中没有出现人物。",
+   "bytesSha256": "3c5f2eb50bc7cdd317b88cf47bba7fa354617e1ae8fc689100e85b66f26242c2",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-e8b4f1c2842761377c22c44e33abfb887938a5b3d78b6808d7c414f4f5cf9aac": {
+   "mediaKind": "photo",
+   "description": "一台三星显示器上显示着胎儿超声检查画面，屏幕中央是胎儿的超声影像，左侧排列着多张缩略图，右上角标注有孕周36周5天、时间8:45:38等检查参数。屏幕下缘可见操作按钮图标，周围环境较暗，屏幕呈倾斜角度摆放。",
+   "bytesSha256": "d5d8d8353663e577082012a91f7f6064c597c9548b19180d6581947c6292d22f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-fe47f0fb7d533f1b59b26baa951068d104f3122da76cfa2d599f398480e2d628": {
+   "mediaKind": "photo",
+   "description": "暗光环境中一台超声诊断仪的显示器，屏幕上显示胎儿的超声影像，影像上标注有“HAND R”字样，屏幕右上角显示时间“8:50:56 AM”和孕周等检查参数，左侧排列着多幅缩略图像，底部可见仪器的操作按键和旋钮界面。",
+   "bytesSha256": "31bc322a72731434ba45e27e17cd3272ffc76972f759722a8ec8192f6f6c74f0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-3617c855b1ccdc4e6a5e29cabc5b46c0a1aacafa1d22cd83c05301116d87886c": {
+   "mediaKind": "photo",
+   "description": "一张拍摄电脑显示器屏幕的照片，屏幕上显示Guadalupe Medical Center的超声检查测量界面，包含患者信息栏、孕周与预产期数据，以及BPD、HC、FL等胎儿生物测量数值和对应的百分比列表。屏幕左侧边缘还可见几张超声图像缩略图。",
+   "bytesSha256": "b7156dba5d2a1ee8f459ce240751dfe3f7bf03edf5615cfc86fa474e2f1e1f1e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-564f533b3b343d250f4a6d06d94bb77fb1a1fca5e02d10fb56afbff957a6a0f3": {
+   "mediaKind": "photo",
+   "description": "这是一间医疗检查室，左侧摆放着一台带显示屏和探头的超声诊断设备，中间是一张检查床，窗户装有灰色遮光卷帘；右侧墙上挂着一块显示超声图像数据的大屏幕，墙边有黑色落地灯架、红色医疗废物桶和一张放着手套盒、消毒湿巾等用品的白色桌子。",
+   "bytesSha256": "226e6e673f2ba56fc35ddcb93c1f2eba62ad69050a21425962ca601b0e327a4a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-136949497d5e8a936c75bb4098c2fcd1f1e6248f9e1682e9f21a4019281a6efa": {
+   "mediaKind": "photo",
+   "description": "前景是一碗盛在蓝白花纹瓷碗里的牛肉拉面，汤中有面条、肉片、白萝卜片和绿色葱花香菜，一双黑色筷子搭在碗沿。背景中一名穿深色衣服的人坐在浅色木桌旁，手持筷子从另一只相似的蓝白碗里夹起面条，桌上还放着一个白色小碟。",
+   "bytesSha256": "e83404b7bcb0769290824d5e625f258e4528812b959cd0be215244183cee54f0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-c538a1330d23261cad374916b196e8fbf73304f3777ab8af29ee3b7dcea512bf": {
+   "mediaKind": "photo",
+   "description": "一名戴着黑色粗框眼镜的人近距离特写镜头中低头看向下方，背景是模糊的室内场所，隐约可见浅色椅背和桌面上摆放的物品。",
+   "bytesSha256": "b7e369e0d4286487dad6a872c8afe4ab521ab37ffab5480d7295d6361ea12664",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-c40c265b8d2d97b01f8b03ff642f7a4882266308ad815b75aff3f8e6682938af": {
+   "mediaKind": "document",
+   "description": "一张打印的医疗超声检查报告单斜放在浅色绒面桌布上，纸面印有表格、数值和英文与中文字段，照片视角旋转了约九十度。背景中可见模糊的桌面和反光物体，画面中没有人。",
+   "bytesSha256": "50535a556569543a6bb2cc6fa15b7560bd799664861222a201ad32e146c3d284",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-7ff70b522addd78535ab52f0ac8ee9de604457c1a4725d1d57beb4b4ca3a4ff5": {
+   "mediaKind": "photo",
+   "description": "一只手的拇指和食指拿着两张打印的产检超声照片，照片上显示胎儿的黑白B超影像以及医院名称和日期等文字信息。背景是浅色地毯，画面下方露出一个人的腿部和部分手指。",
+   "bytesSha256": "4e5421b48706d1182f45dc3c75181ebbed9b110f8019f59a82788d9838ceb297",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-119b7327bf3c303d730cdd3655cb597e25f70ef49012dccb0419d1b416017c6c": {
+   "mediaKind": "photo",
+   "description": "一片开阔的草坪上聚集了许多人，他们弯腰俯身或在垫子上做伸展动作，似乎在进行集体健身或瑜伽；左侧有一棵大树，草地上立着几盏路灯，远处可见棕榈树、树木、建筑和一片水域，天空略带雾霾，左上方有一道飞机尾迹云，画面右侧有一道明亮的竖直光晕。",
+   "bytesSha256": "d253e806ce95774badb184b1d1e930d50df89948809b4695811fc7a155a70fed",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-123df09d502cf35fb6771e77bc0161e38c38c808c0606be638e7cef3c4ae460e": {
+   "mediaKind": "photo",
+   "description": "临海的公园草坪上有一群人正在做伸展或瑜伽动作，前景停着几辆浅蓝色的共享单车，左侧有光桌椅和一棵枝干裸露的大树，远处可见路灯、围栏和海面。",
+   "bytesSha256": "3499881646327062e7957f19737e32f0a4789b0c1bf3bc885c69aa71aa2af096",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-d0582b051ecb56528bb09b25a4792f1df6b1a699fa361a8236440fc7b8dd0e6e": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜和口罩的女子正手持手机对着玻璃拍照，玻璃上映出她的身影，同时透出室外停放的几辆汽车、燃烧着火焰的火盆以及远处的树木和山坡，玻璃另一侧可见带靠枕的沙发座和垂吊的绿植。",
+   "bytesSha256": "296e4166754444ccf49f0b0c388379811913b27f5b963f900a3a1238d5900986",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-9fe326cd1e7d8ba494725f41a4eb738adcedf214554983e2ba5164b21dea4423": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿米色连帽卫衣和牛仔裤的年轻人站在路边一辆白色现代轿车旁，右手握着手机，头部微转向左侧；汽车停在人行道边一棵棕榈树旁，背景可见带绿植的房屋、围栏和停放的其他车辆。",
+   "bytesSha256": "03705d71a259bd6a1c1b53f23f79d5d6bb3c0c86e232e75118557847c908c4e3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-40e0ad167f4db43455669392308cad99932a30a581f71933e9b289f93dd75b30": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿米白色长款针织毛衣裙的女士站在海边步道上，一只手抬起挡在额前，斜挎一个浅色小包。步道旁长着成片开红色花穗的植物和绿丛，左侧草坪上停着房车，远处是水面和石砌防波堤，天空晴朗有云。",
+   "bytesSha256": "e3ce6ccba199bfc3ed35894285fa6c672abb56e4b87afa7edb280071ea5f7edd",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-144e19802fbdbae26be3ae498ccebde15fc20c69995a03cee1bd50d498a487d3": {
+   "mediaKind": "photo",
+   "description": "一名长发女子光脚走在砖铺人行道上，身穿浅蓝色上衣和绿色格纹短裙，肩上挎着白色包；路边停着白色SUV和白色轿车，旁边有停车计费器、草地和红色路缘，背景是棕榈树和多层住宅楼，天空晴朗。",
+   "bytesSha256": "0b439703b44f493f6fdd495a0bd2a243994c8692a5a39dc5aa082202a407803f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-906b022d15105ab2298ff8647a2041f2093a0eb10e5acb0d01c558f86427d55e": {
+   "mediaKind": "photo",
+   "description": "一个留着长发、身穿米白色长款外套和浅色裤袜的人背对镜头站在砖石步道上，右手高举比出'V'字手势，斜挎着深色小包。背景是低垂的太阳、泛着光的海面、延伸入海的栈桥、几棵高大的棕榈树和步道旁的草坪，人影投在地面上。",
+   "bytesSha256": "275ebf24f142071c5aa23aef3ef211ba2509ced2056be927b97a3707ce37678c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-fec1f5f80b7e93def1e3a899f2bef72a06893cbc8afbc98ddbbf1a4da5abbcef": {
+   "mediaKind": "photo",
+   "description": "一位身穿米白色长款针织连衣裙的女子背对镜头走在砖石步道上，右手高举比出'V'字手势；背景是夕阳下的海边景色，可见几棵高大的棕榈树、伸入海面的长栈桥、草地和远处的建筑。",
+   "bytesSha256": "a7ed7a61b0e9894f8eaa683db9c013d3535decccdd708d15ab2631e2ce41e7e4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-2cd7fc8dfa28c4f4682b4f983907c940c8831cc281d888def7b2e0970a7cedf9": {
+   "mediaKind": "photo",
+   "description": "一位身穿米白色长款针织衫和浅蓝色打底裤的人背对镜头走在砖石步道上，右臂高举比出'V'字手势。背景有草坪、几棵高大的棕榈树、延伸入海的栈桥，太阳低垂在云层间，海面反射着阳光。",
+   "bytesSha256": "9684b1feae37f2b5b8c8696928a9e4c5ef40b5d655c9d4a60ea7f39e5cfc3718",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-758a9e745d491b55c65e3856b760b487ce76eac4064eaf6eb10f2fded4108c03": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿浅色上衣的男子坐在汽车驾驶座上开车，一只手扶方向盘、另一只手臂搭在方向盘上方，车窗外是橙黄色晚霞的天空、树木和公路上的车辆，包括一辆黑色SUV；车内仪表台上的导航屏显示着中文路线信息。",
+   "bytesSha256": "2947f77a81298d62de4e17494a1e52c40e22e871a7f38869227c773c261bf133",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-8750dd5da7e477b7ce1c74c05e37f532a1a03404ca2d9007c4a8a9aa1f0f2818": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜的男子坐在汽车驾驶座上，双手握着方向盘正在驾驶，车窗外是橙黄色的晚霞和公路上行驶的其他车辆。",
+   "bytesSha256": "b0d0dadffec55bb08fa9765b03b365775d17ec5b70bf38d35241553a20169166",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-65b7fd0fa5bd890688fd48751bee1d795b35da9d38bf003f8cb469c2f54978e2": {
+   "mediaKind": "photo",
+   "description": "一名短发男子坐在汽车驾驶座上，右手扶在方向盘上方，左手握在方向盘下部，正在公路上驾驶。挡风玻璃外可见橙红色晚霞的天空、路灯和旁边车道的白色轿车，车内仪表盘亮着，中控屏幕显示导航界面，后视镜和侧后视镜也在画面中。",
+   "bytesSha256": "4928a4af5458c546b1ea96f43ef84a397066fffea89b3ea79f677fd4f2b91a9d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "wechat-media:ebcffe97f65411303c6acf0843635fc18f150d3186c3971faadc30a31bdecdb4": {
+   "mediaKind": "photo",
+   "description": "一名戴细框眼镜、穿深色外套内搭米色连帽衫的男子侧身站在海边木栈桥上，头发被风吹起，面带笑容望向画面右侧；桥上有白色栏杆、路灯和一辆装着水桶与箱子的推车，远处还有人站在栏杆边，太阳低垂在云层间的海面上方。",
+   "bytesSha256": "c5acba5fa1de6b6b95345f89579ea84e2904bd4d994d56878c2365d1e94d1056",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "wechat-media:91ae1a31e85db331e1416a1dd988fad2657fb327d9a2106c548e8cc1fe854f82": {
+   "mediaKind": "photo",
+   "description": "车内，一位戴眼镜的人坐在驾驶座上，手靠在脸侧，透过挡风玻璃看向外面布满橙红色晚霞的天空。前方道路上有多辆行驶中的车，尾灯亮着红色，车内可见方向盘、后视镜和中控屏幕。",
+   "bytesSha256": "745302e39384ad690dce66e8bf8763056b2ca37e3755fa76e4c8d12f326c835a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-770cc3f765e26efe65dd5d6caa9dff2729e04732aa6fc4ba8cd9a9efdac19c8b": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿米白色大衣、浅色连衣裙和灰色裤袜的女士坐在公园的棕色木长椅上，双手在腿间握着手机；背景是矮墙、草地、树木和一栋红瓦白墙建筑，天空有云，前景地面上可见拍照者的影子。",
+   "bytesSha256": "07178bd8723736c94c64a92e7359af2cf5b29b4597bc0234e6dfb15878b35fbb",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-5b9fedd892ca700c6d246e79604e95357d3b2f7edf4e9212cb19337bf49105ba": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、头发扎起的女士穿着米白色大衣、白色连衣裙和浅灰色连裤袜，坐在公园的深棕色木质长椅上，双手握着手机放在腿上，头部转向画面左侧。长椅后方是米色矮墙，周围有草地、大树和灌木丛，远处可见白墙红顶的建筑和蓝天白云。",
+   "bytesSha256": "8cbb037ce30e803db5188f88c0f076cb0be07810dc892561a2a5917e84fe952b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-c411423b68042503d4e6f231e9ceb3d1dc7a9bf6b25d9b94f186dcd3d3aa9d02": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、扎马尾、穿米白色大衣和灰色打底裤的女士侧身坐在棕色木质长椅上，双腿前伸，双手放在腿上，头转向画面左侧。背景是铺砖步道、绿篱和高大的松树，远处可见一栋带拱门和爬藤的浅色多层建筑，天空晴朗。",
+   "bytesSha256": "5f069f9449c3c3c08c5cedc64fee8765302466cb99df8408b0af1cfba2330e2d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-4d94d939c163c63cb1ddd99ad0936a1ff55ca17f82f33c80726da5edb94c0ca4": {
+   "mediaKind": "photo",
+   "description": "一家餐厅内部，铺着白色桌布的餐桌配雕花木椅，天花板悬挂彩色马赛克玻璃吊灯，墙上挂有画作、装饰盘和乐器，窗边有蕾丝窗帘，右侧有一位穿黑色上衣的女士背对镜头坐在桌旁。",
+   "bytesSha256": "13b5f12a9ebed1e22d1bc96242f22b04da051f75087f46a943a9d49eb44f3c83",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-26c30cb53be2103a1c0b5ab50198ab6ba85b67e269207ffb77f8288e53a3891f": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、身穿米白色针织长毛衣和灰色打底裤的女士坐在海边观景处的木栏杆上，一手扶着栏杆，身上斜挎着一个包；背景是蓝色的海面、沿岸的峭壁与灌木丛，远处有房屋和树木，天空晴朗。",
+   "bytesSha256": "69799cff77eb148bfdf9722ca250f509a0e20d5908a643163897fdbaeb5e4113",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-c9c95026616e175c275242af3bf2efa09b8df53e22b462cd57e61dc022b11cfc": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿米白色长款毛衣和灰色裤子的女士侧身坐在海边崖边的木栏杆上，一只手抬起靠近脸部，身背棕色小包。背景是晴朗的天空、平静的海面、长满灌木和枯草的坡地以及远处的棕榈树和海岸线。",
+   "bytesSha256": "e5bfc8d20a595d7bc927bfa64730dbd3fd0d73bd89da324f4093f0e821cdd56a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-fd9b64ac5e99e9769844478c00d8f5f396867b84d1d440e82384f7d7d22f184e": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、身穿米白色针织长款上衣和灰色打底裤的女士侧身坐在海边观景处的木质栏杆上，双手扶着栏杆，脚穿浅色平底鞋。背景是海岸悬崖、低矮灌木、远处的树林和广阔的蓝色海面，天空晴朗。",
+   "bytesSha256": "f9576b011beb4db8f6a7abf0db4648943320ea4bb51fe2d864c0e2a59d69b023",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-1dc52b0daa91500b9aeea470a262b4f5767a036627a06cf869c54c7b92ceff7d": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、身穿白色长款针织毛衣和灰色裤袜的女士站在海边木制平台上，一只手搭在原木栏杆上，另一只手抬向脸旁，身侧斜挎着一个浅色小包。背景是悬崖、灌木、枯草以及开阔的蓝色海面和远处的山峦，天空晴朗。",
+   "bytesSha256": "71cca27014429e7545cb0b33dbe498292b9e4f2a028f0e4d5a8e31a5e6339d7c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-92fa04eb136daf39d182448047e3d5efe477cb73e97102e168343bdfa8ef1e65": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、身穿米白色长款针织连帽衫和浅灰色打底裤的女士站在海边观景处的木质栏杆前，双手扶着栏杆，斜挎米色小包，面带微笑看向镜头。背景是蔚蓝的大海、海岸悬崖、灌木和仙人掌，远处山坡上有房屋和树木，天空晴朗。",
+   "bytesSha256": "44f3eab8f5c8d47dec37336eea5659582daae177cd1772dc86d8093a5a1e8d4f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-4a217b770778a09f145cd620cbf0a5fcf3b620ce0761bd693fc0d3804070821d": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿白色长款针织连衣裙和灰色打底裤的女士站在木制栏杆围成的观景平台上，双手扶着栏杆，身背一只浅色斜挎小包。背景是蔚蓝的海洋、长满灌木的悬崖海岸线和远处的山脉，天空晴朗。",
+   "bytesSha256": "dabad3428492dabf2dcfd0d71e4005a791fda14844dee0b8784b328ae0963f9e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-37591b6a8b6a695b4615187d1aaab714293d80e54304951125ea3524b7230a90": {
+   "mediaKind": "photo",
+   "description": "一位扎马尾、戴眼镜、穿浅色针织毛衣的女子侧身坐在黑色金属长椅上，望向远处的海岸线、城镇和pier；周围有灌木、树木和沙土空地，右侧另有黑色长椅和一根绘有蓝色花卉图案的白色柱子，天空晴朗。",
+   "bytesSha256": "80d70c4ba1c6b74c58c583b69ce4b8b2ef0574f58fcdbb440bc596b715f1fc00",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-4601d508835429f4d53c74977d5bdcdc85b8b914148edbc698fc3e150e88cb37": {
+   "mediaKind": "photo",
+   "description": "一名穿米白色针织毛衣的人背对镜头坐在黑色金属长椅上，一只手臂抬起放在脑后，手腕戴着手表；背景是高处观景台俯瞰的海面和山下小镇，旁边有大树、垃圾桶、其他长椅、停着的汽车，车旁站着几个人，画面左侧有手指部分遮挡镜头。",
+   "bytesSha256": "c7a7d144cc6a8306edaeefaffcc4676abe80ad4bdc7b9ba5f13878273adbc463",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-dfeb390ad9c5383948bf0d371fa6dc4c993c1bcf91792e457f478be3b2bc9cb1": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿白色针织长裙的女士侧身坐在海边观景处的黑色金属长椅上，一只手抬起放在脑后整理头发，手腕戴着智能手表。背景是晴朗天空下的大海与山坡下的城镇，附近有树木、步道、长椅、垃圾桶和停放的汽车，远处还有其他人。",
+   "bytesSha256": "a6755c211f9a93504817141419ec44da3e54dea6db3fdce0a1790755d480355c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-07a373d3053ed7bee91013bc44857f7c8158d09b00abe667d70f99bff2c9f11c": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿米白色针织长裙的孕妇坐在海边观景平台的黑色金属长椅上，侧身回头看向镜头，一只手放在隆起的腹部，另一只手拿着一件小包装食品。背景可见蓝天、大海、山坡小径、大树、垃圾桶、其他长椅以及停在路边的几辆汽车。",
+   "bytesSha256": "97ac7782de5d714b8d20df4a9c7960365972d006509f100f8ec0527c6e5113a3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-a7a17d141d6fb2ec412a4e1e862435fff78817453afcef7e4ffc667ab1e89d91": {
+   "mediaKind": "photo",
+   "description": "一个人赤脚双腿伸展，脚踝交叉，裤脚挽起露出蓝色牛仔布，坐在户外的地面上。背景虚化，可见阳光下的海面、绿色灌木丛和石阶，天空晴朗。",
+   "bytesSha256": "866e351ec8db547d0a19c8138ad79056f4ce3d8936b2fb8aa13aff44d662d671",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-9d87f7377ec0cb342f5fecb409b3969d565f5c2d8419d3d2cc8d5d8398637a7e": {
+   "mediaKind": "photo",
+   "description": "逆光下，一座高大的木十字架竖立在石砌平台上，背景是蓝天、明亮太阳、远处海面和小岛。平台上有一人戴帽坐着、一人蹲在旁边、一人站立并拿着一件衣物，前景是石阶和矮石墙。",
+   "bytesSha256": "2f383f8fa714ce1f1129e10715526d44f12bd8b3808ad4a46f8c1803b8e436db",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-35431e064ad433d4c2aab6bc01532e40704a79632fdfb6f13d210c13f084ebe0": {
+   "mediaKind": "photo",
+   "description": "一名穿深色短袖和黑色长裤的男子背对镜头站在湖边，双手握着钓鱼竿垂钓，脚边地面放着一顶绿色折叠椅、一个白色箱子和一个黑色包。湖水平静，两侧有枝叶繁茂的大树，远处可见山脉、树木和晴朗的蓝天。",
+   "bytesSha256": "a750e53b7d2949fc41c5424dbccb60140704af3c7d0000d1b42b1e52ec3067eb",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-bff0c45452324a7354c02ff62940be75ae63a421588efeefdf73deddb69e1060": {
+   "mediaKind": "photo",
+   "description": "两名身穿深色衣服的人站在湖边草地上，左侧的人戴着浅蓝色帽子低头摆弄手中的物品，右侧的人手持鱼竿，两人脚边的地上放着几个包。背景是平静的湖面、沿岸的芦苇和树木，远处有连绵的山脉，天空晴朗。",
+   "bytesSha256": "f902da5f6220da47818230e4801b18c7966668a80c369f201b41fc8f67d1591d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-6d32aedce1f3dadc2775c0c6266a2f77602c5ea06772f9ebf2b5637ce22ab6e0": {
+   "mediaKind": "photo",
+   "description": "一名身穿深色外套（内衬浅色连帽）和牛仔裤的人双手背后，沿着湖边的混凝土岸堤行走。背景是平静宽阔的湖面、对岸的树木、连绵的山脉和飘着薄云的蓝天，画面右侧有一棵棕榈树，前景岸边有枯黄的杂草。",
+   "bytesSha256": "cc0ea8d94518e297d7042f2326c277065dafb9928f9a6875225f7d7e00d9dd0a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-7287bd900e27424f5c976142771e568299f8866adce95bdea426b344620f9d8f": {
+   "mediaKind": "photo",
+   "description": "一只手握着一个带绿色螺旋盖的透明标本杯，杯身贴着印有Name/Time/Date等栏目的标签，上面有手写的姓名和日期信息；背景中可见蓝色托盘、白色纸巾、沙发一角，地面有黑色垃圾桶和一只棕色鞋子。",
+   "bytesSha256": "cf30515755103003690eab7390cb4fe503ab170915c2fef03f5ca66393292a2a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-00ef8b1889eedf95dcdfbf4dcea7eb0ea610942bace1c2f18be9b594b80b77f5": {
+   "mediaKind": "photo",
+   "description": "一张放在深色皮革纹理表面上的打印照片，内容为三维超声影像，画面中可见胎儿的面部和身体轮廓，纸张右侧印有医院名称、日期和编号等文字。",
+   "bytesSha256": "d1c70176d57cf84797ac5c13746e835a10222ecdb23db09465fde60f4d10e283",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-586f75cf244c2bfe20e12d199ed3aeeca209c2d5b66ebf46116c4ac92c781a89": {
+   "mediaKind": "photo",
+   "description": "一只手拿着一张打印的产检超声报告单，纸上显示黑白胎儿超声图像和多普勒波形图，并印有医院名称、日期及检查参数等文字信息。",
+   "bytesSha256": "6b770e1a2223787cb8136a99b61125fe360b244cc81ffb6cfea028de2e4062e0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-b81d7ce00807dd56d1c9abf93d33284ffc92715b12e8a1c6053b0a701f639d0b": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿深色外套和牛仔裤的男子正走在停车场通道上，背景是日落时分橙黄色的天空，路边停有多辆汽车，右侧是多层停车楼，上方悬挂着写有'DANGER: MAXIMUM CLEARANCE'的限高警示牌，远处可见棕榈树和一名穿浅色衣服的行人，画面底部有深色遮挡物。",
+   "bytesSha256": "50696bb50dfe9967d8b76f5144cad6cc84ee9ecdbcaa6ff7ccf9a6ee4b1b64f0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-b1fccfc32b2cfb4a6d55ae3002517b406f58c50e7aa3808d59822ffe6b7ddced": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、留黑色短发的男子身穿深色连帽衫面向镜头自拍，背景是黄昏时分的停车场，低空中有一架飞机正在飞行，场内停着银色SUV等多辆汽车，路边立着高大的棕榈树和带禁烟标志的立柱，左侧可见带红色遮阳篷的建筑及几名坐着的人。",
+   "bytesSha256": "4c4722994972706b7bdf38c7b8fd2d5a66ccf49184c67f56efc4d4bbdf731e58",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-85eded8ceb7ffa2f304b95661c1749b4f37db60661ec96e2d8890ce489d2027a": {
+   "mediaKind": "photo",
+   "description": "一名戴黑框眼镜、留齐刘海短发的男子身穿深色连帽衫面对镜头微笑自拍，背景是一个停车场，停着银色SUV等多辆汽车。天空呈黄昏色彩，几棵高大的棕榈树立在停车场中，一架起落架放下的客机正低空从楼宇上空飞过，画面右侧的立柱上贴有禁止吸烟标志，左侧可见带红色招牌的建筑。",
+   "bytesSha256": "dcb3d0bffdf51f12b9138517aa340c0751f629df8743ee270b0d7d5d0c5eb554",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-34f30ab59b9ee6396d396fc82ae586117c8a179bb5167f9749522a0dab35ed27": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿米色毛衣的女士在卫生间镜子前自拍，一只手举着棕色外壳的手机，另一只手撩起上衣露出隆起的孕肚；前景是洗手台，台面上有银色水龙头、叶形皂碟中的白色香皂、绿色叶形小碟、插着牙刷的黑色杯子和毛巾，镜中还能看到浴缸和瓷砖墙面。",
+   "bytesSha256": "4aa91e285f10292a231315b7adbf43f1132c5e76e8de39a95dc39df5d16185b0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-64af03ccc508cfe005229ad7a238c6fd9b104a88ecd961db8d0e47f2ffc37777": {
+   "mediaKind": "photo",
+   "description": "画面是一台Voluson Expert OLED超声诊断仪的屏幕，显示产科超声检查界面：上方为扇形超声图像，下方为蓝白色多普勒频谱波形，屏幕右侧有测量选项列表，并显示检查日期、孕周等信息，左下角写有'无检查历史'字样。",
+   "bytesSha256": "c3adb11a53abf0d4355d8621c9a42f7e0decbacb0cc451533dc86d99f11828dd",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-f5f0664e1f9b6cda1fde0bd27e7a861c3de8d6c38b6c07537463a5567735dada": {
+   "mediaKind": "photo",
+   "description": "一只手举着一支带粉红色盖子的采样管，管身标签印有字样并有马克笔手写的内容，右下角标有类似日期的数字；背景中一名穿深色衣裤和运动鞋的人站在白色瓷砖地面上，画面右侧可见被塑料袋包裹的物品。",
+   "bytesSha256": "892abb12f718cded5d74aa91fa9ad4b924700ed24e26b65e4a25fc01d06ebc32",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-3fcbf00fa27a107efec818fb971ff21c520cf6e7f1d629d33cc94f647857ba62": {
+   "mediaKind": "photo",
+   "description": "在一处带白色顶棚的露天车站台上，一辆车身绘有龙虾和红色星形图案的单轨列车停靠在护栏旁，一位穿米色风衣的女士举着手机正对列车拍照，旁边站着几位候车的乘客，其中一人手中拿着纸质读物，背景可见绿树和明亮的天空。",
+   "bytesSha256": "750a96daacb874472c2a86cb018396d355ab08144bf37efa8d66bc46ae7a3b19",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-082ca22cdaaaf75e12996ca97bbd0a23604f2de8f32cb418bbb7e860152430f4": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、留黑色短发、穿深色连帽外套的男子站在户外高处，微微眯眼看向镜头方向。背景是开阔的城市景观，远处有高楼天际线、道路和成片树木，天空布有云层。",
+   "bytesSha256": "87c73f1e63914d8b711a4beeba00a7bd2b4d60c50cb0e9917e90713954e5d64e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-49685fca0fd74875fcb1c90f621b0dfc1e26b8fd303fd16657866d318d3d3c49": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿黑色连帽外套、黑色内搭、蓝色牛仔裤和黑色凉拖的男子侧身站立，左手扶在一面米黄色纹理石墙上，目光看向墙面，脚下是木地板。",
+   "bytesSha256": "3fc24b89124aaa0d67b18bbd4eccb4fff16c219b1afa648ff36d8b6311bd2bfe",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-8a36a9aab164ba7378d0f9a4449dc54847075a6c2619d9a25e1aa04d59ef7b9b": {
+   "mediaKind": "photo",
+   "description": "晴朗的天空布满丝状云，明亮的太阳带有镜头光晕，背景雾气弥漫，远处矗立着一座白色救生员瞭望塔，旁边旗杆上飘扬着一面旗帜；前景草地上有许多人的剪影，他们坐在长椅或野餐桌旁休息，也有人站立或走动，画面右下角可见一辆汽车的车顶一角。",
+   "bytesSha256": "8b94b691257f07f2d0aef8e47fead0af9ebf19c9cd06ea4c7300870ebcec3f12",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-771a2c8e91d28b4bc125d6dc5fdc56d2300943dacf99c1ad3463cd088a597333": {
+   "mediaKind": "photo",
+   "description": "黄昏时分的海边木栈桥上，一棵挂满暖黄色灯饰和装饰球的大型圣诞树立于白色小栅栏围起的区域中央，树顶有星形灯饰；左侧一名男子背对镜头面向海面持竿垂钓，另有一人举着设备朝圣诞树方向拍摄，右侧栏杆边有几人站立或蹲坐，背景是由橙色渐变到深蓝的天空与海平面。",
+   "bytesSha256": "284b406067f4a2384dc901c7d5f8ffdb7a35703d1f1b2a59af86e9ddc7118ad7",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-e86318d7939a97daa030027b52f08d3598121362bf8b4d812a41218719e36755": {
+   "mediaKind": "photo",
+   "description": "傍晚的木栈桥上，一名穿黑色外套的人靠在灯柱旁，一手拿着白色杯装饮品用吸管喝，另一手握着手机；栈桥上有白色栏杆、陶土色大花盆和点亮的路灯，远处可见美国旗、其他行人，以及水面对岸山坡上连片的城镇建筑。",
+   "bytesSha256": "8b4f2ae33436a189222673dca21c051ffa06b86ba3eb87c46d710c7e9c6f7720",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-11e79dc575527e21e6ba25a5893d90de7f3ec0eface688a9f876535ae6e4e3b7": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿黑色连帽拉链外套和牛仔裤的人站在海边木栈桥上，双手垂在身侧，面向镜头；左侧可见栈桥白色栏杆和照明灯，背景是暮色天空下沿山坡分布、亮着点点灯光的小镇海岸与平静的海面。",
+   "bytesSha256": "7b8f1e613c3633c98b29c07cfc4fcbcb7935763ad84d48199b1957be44dc40c7",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-046b57d96cb20f57c4dde65fb747e1f6e452d10ffc660e1a1988a3e5b2be318f": {
+   "mediaKind": "photo",
+   "description": "日落时分的海滩上，一个人以剪影形式坐在湿沙与海浪交界处附近，身旁似乎放有少量物品；天空呈橙黄到深蓝的渐变，海面平缓，前景沙滩整体呈深色。",
+   "bytesSha256": "40e9f9fb215fcb603d77034da3e8c872f30d4773459ac4a6a4d56d03f4820444",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-247b8688974a7dfaf6a239e5acb4f1c1aa72d3542159327e41e0594aea36d3fa": {
+   "mediaKind": "photo",
+   "description": "夜间车内，一名戴金属框眼镜的人坐在驾驶座上，左手搭在方向盘上，头部朝向镜头方向噘着嘴，镜片上反射出红色灯光；透过前挡风玻璃可见前方一辆白色SUV亮着尾灯，画面右下角露出部分仪表盘。",
+   "bytesSha256": "25e45f7026f5ad9f9eda25b7e71af84981675c185f33b600212497ccf3773071",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-a0244bccb965b2562c95487b9cb0ce3cdb5eb4087146f111d6b0722fa1ce3f75": {
+   "mediaKind": "photo",
+   "description": "室内大厅的穹顶天窗下立着一棵装饰有红、绿、金、银色球饰和丝带的圣诞树，两侧各有一座银白色的大号胡桃夹子士兵雕像，地面圆形徽章图案上带有星形和字母装饰。一名穿深绿色上衣和牛仔裤的女子背对镜头站在树旁，右侧边缘还有一名穿白衣的人，背景柜台上有一名工作人员，墙上可见“PRESIDENT”字样。",
+   "bytesSha256": "2f2336c04d40421935199fd70ec3a44a2d4ed7eccc7b573c9f01cdf7cd402367",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-623d1d42bd692a6504be56e21b8ca44c69f2f53e349e8542e02e65762bbfcbdc": {
+   "mediaKind": "photo",
+   "description": "一群孩子和一名成年人站在一间仿椭圆形办公室房间的大木桌后方，面朝镜头方向，桌面上摆放着电话等物品，桌前有两把条纹扶手椅。房间内有三扇挂着金黄色窗帘的窗户，右侧立着美国国旗和其他几面旗帜，地面铺着带星形图案的蓝色地毯，墙边可见壁灯、挂画和摆有花束的边桌。",
+   "bytesSha256": "9f740fc2693161bbf9708d4cb24f10860c50377cbefe7005adc06f147a6d2490",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-d7bdaadab395f443ad4907d9dddade1bbc3096dd2ad8725309e16c97a701f047": {
+   "mediaKind": "photo",
+   "description": "一名穿黑色连帽卫衣和牛仔裤的人站在户外展区右侧，低头看着双手捧着的手机。他身旁隔着拉绳围栏停放和展示着几辆军绿色老式吉普车等军用车辆，背景是高大的树木和晴朗的天空，阳光刺眼。",
+   "bytesSha256": "d08cb777339e01bb7950119e5222ca3bf25c9d48adfd97d16fe4c46b8b0ccfdd",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-0e99b4c759e0bd9cac212b5a8c9f8ca5b08165d73281233cee156e7d8dc05df8": {
+   "mediaKind": "photo",
+   "description": "一位孕妇在浴室镜子前自拍，她穿着黑白条纹长袖上衣并将衣摆撩起露出隆起的孕肚，一只手扶在肚子上，另一只手举着带装饰壳的手机挡在脸前。洗手台上摆放着插有牙刷和牙膏的黑色漱口杯、香皂碟与绿植，墙上挂着毛巾和纸巾架，背景可见淋浴间玻璃门。",
+   "bytesSha256": "8fdff875869e97f5dde64f3102d7f4cdd493a7980260da5150afb583fadb73d6",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-acaccd4c96fd290b0f3dcc83e0b2b4a476c116ed7f4072e9afe9d3381f378f6e": {
+   "mediaKind": "photo",
+   "description": "照片拍摄于一条铺砖的人行道上，路边是一家挂有墨西哥国旗和节日装饰的'Cafe Coyote'餐馆，绿色瓷砖吧台前有顾客和工作人员。前景右侧一把蓝色大遮阳伞下，一名戴黑帽、穿黑衣系围裙的男子低头看着手中的手机，人行道上有几名行人背对镜头走动，旁边立着黄色的警示牌，还有红色遮阳伞和其他沿街店面。",
+   "bytesSha256": "aef279b24f20529f750848563500677a5094e343aafd6767c2f956a0dd4c3147",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-1ed2ec45eeb8571625d98daa594c6705c2e1f79bc9e02dbb9355c297a27ffc80": {
+   "mediaKind": "photo",
+   "description": "一名赤裸上身、穿着花色短裤的男子在木质栈桥上迈步行走，栈桥边设有黑色铁栅栏门、高杆路灯和黄色消防栓。画面左侧停靠着船只，远处可见海面、码头桅杆和多云的天空。",
+   "bytesSha256": "3b5279f7d377fc28b82b143c8d592a1f088b5d4c562416cdcd6ba32e31d78c93",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-4b113925655f513ad370941de9e284d767d59a300df92312c91dc2f7fce495b7": {
+   "mediaKind": "photo",
+   "description": "一名头戴浅色帽子、身穿深色上衣的人背对镜头站在右侧的岩石上，望向海面上的日落。前景有礁石和枯黄的草丛，中景是石块垒成的防波堤，远处沙滩上有不少人活动，天空呈现橙黄色的晚霞，画面右侧还停着一辆白色车辆。",
+   "bytesSha256": "a2c2f18b883cbaa025b9b39d65314cb7d8f934c53585d4771f45d5273005ad14",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-10a6045578a0fa46c8e33756eafa837c0857d25fd6447e45c4a46f6c9609c717": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、留黑色短发的男子坐在汽车驾驶座上，侧对镜头，嘴巴张开露出牙齿；车内可见方向盘、车门把手和后视镜，镜中映出一辆白色汽车。车窗外是黄昏时分粉橙色的天空，路边停着其他车辆，几棵缠着灯饰的高大棕榈树立在背景中，前挡风玻璃上可见水珠。",
+   "bytesSha256": "63b04e7bd3c9a10ea4c9325d907c9237f1edcca7c9d94ab0614af03b87ed0733",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-acbbdc6d1efb77aaf7a681a2f6d375852ea27852c2b7e0e3f7b6b46537ef74c1": {
+   "mediaKind": "photo",
+   "description": "夜晚户外，一棵挂满白色灯饰的大型圣诞树立于画面中央，顶部有亮起的星形装饰；树下周围有几名人物剪影，其中一人站在树右侧举起一只手臂，前景处有一辆婴儿车，旁边还有人影站立，树的右侧空中悬挂着一个发光的球形装饰，地面为草坪，背景较暗且隐约可见建筑物轮廓。",
+   "bytesSha256": "f67270104d5b82862d10ff74884909219890141a6b24d0b2371049151e5962ff",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-b29e8cebaf41c5abdfe39c8bed03612dcc3714fefd6484146f59f27e93362d08": {
+   "mediaKind": "photo",
+   "description": "夜晚的户外场景，左侧矗立着一棵挂满暖黄色灯饰的大型圣诞树，背景是亮着灯的楼房建筑和缠绕灯串的棕榈树；前景中一名穿着深色连帽衫的人低头用双手捧着手机查看，周围是草地、步道和灌木丛。",
+   "bytesSha256": "7cbf14806978d5bcf89b4d86764cae584cf0eb53c1b7072d895218797dd6cf66",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-2f04aac2a1161ab5d8b1d65c7619b2e00520229d216bc4487edfff5e9c6f77f2": {
+   "mediaKind": "photo",
+   "description": "夜间从车内透过挡风玻璃拍摄，画面中可见车内后视镜与车柱，前方一栋住宅外墙装饰着圣诞主题饰品，包括姜饼屋造型板、糖果装饰、圣诞老人与人物立牌，屋前小道两侧排列着糖果拐杖造型的灯饰，旁边还有挂满彩灯的圣诞树灯饰，路边站着一名穿深色衣服的人，远处另有房屋和灯光。",
+   "bytesSha256": "d21052f81e4686d5db0340f704737fb2dce2332f894fbd828df5e04ce2530629",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-5545b17c0b7504840070cf542355a23d51c32bcbba6f164a84f67022e1e0f7c0": {
+   "mediaKind": "photo",
+   "description": "夜晚，一栋屋檐挂着彩色灯串的单层住宅前，一名戴眼镜、穿深色衣服的人提着白色塑料袋等物品，正从门前门廊旁走过；住宅有石块贴面的外墙、带铁艺栅栏门的入口、亮着的壁灯，窗内可见灯饰和窗帘。",
+   "bytesSha256": "90a7615adee37b48992dd1947153f67a16752eeb7805690859dbcfa67cd40270",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-2fd102d4c50adaa3b483d1812b5321add56137d22d143afd784dc51d6c2cfad7": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿黑色拉链夹克和蓝色牛仔裤的男子站在铺有六边形砖的庭院中央，双臂向两侧平伸展开。他身后有一棵装饰着红色蝴蝶结和彩灯的圣诞树，周围是米白色拱窗建筑、蓝绿色遮阳篷，上方连廊挂有花环装饰，地面铺有马赛克瓷砖图案。",
+   "bytesSha256": "8874f2f3f0612a26672b4516a370dec9c96d07f8b645eeff12f51178abec7e83",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-f0393cd3b1fde12820870471176264468291e837a05931e6be4208dc5174998b": {
+   "mediaKind": "photo",
+   "description": "一片开阔的草地上竖立着立在石堆底座上的木制十字架，前景有一男一女并肩沿着土路朝镜头方向走来，女子手里提着包；背景是红瓦白墙的建筑、山坡上的茂密树木、停在路边的一辆白色MPV和几位行人，天空布满条状云。",
+   "bytesSha256": "35eb3d9617b4bc6d1053b2eea6ae987a598aa5c7b232e50020dfbb368a030944",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-9a7fefc079d57be053cee8eb7f6a4d2e4370b41e9807df5bb598e033ccc42ce0": {
+   "mediaKind": "photo",
+   "description": "铺满干草的围栏里站着两头驴，前面一头棕白花色的驴低头靠着铁丝网和木杆围栏，后面一头灰褐色的驴站在木棚旁，棚内可见身着彩衣的人像或雕像。围栏右侧挂着带蓝色蝴蝶结的松枝装饰，背景中有不少人走在小路上或隔着木栅栏驻足，远处有一栋带红门的白色建筑。",
+   "bytesSha256": "a2a801da073dc3fa445fe85172b00e9eda736ca79abafe9763e7a5adbc510b44",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-ba4ae7696a2f7c685f6697c484ba84817fc59908bef53e6faa97ee309c85645a": {
+   "mediaKind": "photo",
+   "description": "画面中是一座双塔教堂式建筑，塔顶有圆顶和十字架，墙面上挂着花环，前方空地上搭建了一座茅草顶木质棚子，里面摆放着人物塑像。棚子周围的围栏边和空地上聚集了许多人，有的站着观望，有的在走动，背景是多云的天空、树木和远处的山坡。",
+   "bytesSha256": "4bdbab2745efb19d6dd68f824fc9d5f29f573c417e0fe26fc2d94af9763925dc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-1277c353c2d4018c710c7d3376f0f7ec7577483cc9bf687c709e2cbd6703d216": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、身穿米色开衫和同色系长裤的孕妇在浴室镜子前自拍，她一手举着带花纹手机壳的手机，另一手撩起上衣露出隆起的腹部。浴室洗手台上放着黑色漱口杯、电动牙刷、牙膏和皂碟，墙面挂有纸巾卷，右侧可见铺瓷砖的浴缸和淋浴喷头。",
+   "bytesSha256": "388ab5e2be9976c309cfe3d42536be54c31d5b6b1d28fd14c0c2679274af929c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-b30f4e5997ce096442a2ffc4c03d0de85b5888d09cecdcd3057661214d661785": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、留黑色头发的男子穿着深色上衣，手托着下巴低头注视面前几张打印的超声影像照片，照片下方另有一只手扶着纸片；背景为室内，可见深色皮沙发、墙上的挂画和窗边的浅色窗帘。",
+   "bytesSha256": "6c016ac06446a0bb2fd7c57e5360012ce92ff3ae2c313af588759577e541d0f8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-27900d52f276979d4ebfc4eeb5ed1413122b47aa94e50251acce18078062d327": {
+   "mediaKind": "photo",
+   "description": "一张从背后拍摄的照片，画面主体是一个留着黑色短发、身穿黑色外套并叠穿米色连帽衫的人的后脑勺和肩背，似乎在展示新剪的发型。背景是户外的商业街店面，店铺招牌上有韩文字样（如'여기요'和'전...'），屋檐下装有监控摄像头，玻璃门旁摆放着盆栽和一个黄色的警示牌。",
+   "bytesSha256": "7028eefe8393d131e9b70178e2e47029ad6bde8d3f1ef1841ecd66cb2b6b614f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-657911f333642c064228d2ac3dbab1a2aa65291f4527f372c26607328ad6a698": {
+   "mediaKind": "photo",
+   "description": "桌上摆着两碗盛在不锈钢碗里的越南牛肉河粉，汤面可见牛肉片、洋葱圈、香菜和葱花，中间放着一盘豆芽和罗勒等配菜，右侧有加冰的水杯和印着竹子图案的筷子纸套。背景中一位穿深色衣服的人正用筷子从碗中夹取食物，碗里冒着热气。",
+   "bytesSha256": "d9d1d567fb25569585703db14b6463acfcb34d036dea2a7fc4e2b4b8718a74df",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-87296ba508cf7aeffe09fdb5f54a359fb021fc8f6763c3c1fbf3ae47891a61bd": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿黑色外套的男子站在商场停车场里低头看着手中的手机，身后停着多辆汽车，其中包括一辆白色轿车。背景是标有\"Landmark Plaza\"及中文招牌的商业建筑，前景是一排绿色灌木丛。",
+   "bytesSha256": "26a1a6ccbcdbbfbd02f565ff702b40de0d47d68b6530a64ff3f964ffb5e81e1a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-488adfbe25611cbef000ff08c8ae8b5149b2b36bd2ae7a77f53612d72c2ca1e8": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿黑色外套和牛仔裤的男子站在户外的矮墙旁，双手捧着手机低头查看。他身后停着一辆白色轿车，背景是一栋红白相间的建筑和一些绿色植物。",
+   "bytesSha256": "ebafcf365bfc30c18992548bd98a7c1f7499a34c28702e7e10ef6a92359cf0fc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-5044d171afcface2df2f9b85808f7e6d1d9250e07f5a117959b9040cb5991dd6": {
+   "mediaKind": "photo",
+   "description": "一位戴黑框眼镜、穿黑色连帽外套的男子站在加油站加油机旁，右手扶着打开的汽车车门边缘。加油机屏幕显示金额和升数，机身标有Gasoline、BioDiesel B20及87、89等油品按钮，旁边可见输油软管和砖墙。",
+   "bytesSha256": "85c249b66dcf9f2d6d006df277b62c61536ad7e4a49f93b234d71e75e3c1890b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-551ff4325f3ec9e598c269f61cc7c826e31e3e78ed55a822a6292afd49382868": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿深色外套连帽衫的男子站在加油站加油机旁，一只手扶着打开的车门边缘，面向镜头方向。加油机显示屏上显示数字，机身标有“Gasoline”“BioDiesel B20”和“B20”“87”等油品标识，背景可见砖墙和黑色软管。",
+   "bytesSha256": "e08e476d084ffc9b08e368ff639f7ca3616661e6d1cc954e87d776ca90585fc3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-98352171e7ced9faa7a01df3587c735fdb2cd230593dd532a52b0d72f3884420": {
+   "mediaKind": "photo",
+   "description": "傍晚的停车场，夕阳低垂，天空中有一道飞机云迹，通道两侧停满汽车并立着购物车棚和路灯杆。两名行人背对镜头走在通道上，其中一人推着购物车，地面上映出两人被夕阳拉长的影子。",
+   "bytesSha256": "2bc55207faa313bba1792e7f4eca3e77afc4b26f599e6161464dafb85258ccd7",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-d127eed3fe6b726ee27a53d97c51dab26dad5f6e743f71f9827ce27da7010e9f": {
+   "mediaKind": "photo",
+   "description": "夜晚，一栋单层平房的屋檐和窗沿挂着彩色串灯，庭院中央的大树树干底部围着一圈矮砖，一名穿深色衣服的人正走在房前车道上，右侧车棚下停着一辆白色汽车。",
+   "bytesSha256": "ed20e071c900925a0f605e64f38bc1435f65edeace8f56fe57dc5515aadbb949",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-d58db644b560dce5bc051ff9444872ad7ed50190554b458169cea6217cc296d3": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜的孕妇躺在深棕色皮沙发上，穿着米白色针织毛衣，毛衣撩起露出隆起的腹部，左手腕戴着智能手表，双手放在胸前。背景是客厅环境，可见白色矮柜、柜上的编织篮和杂物，以及左侧的红色座椅一角。",
+   "bytesSha256": "3248ef16b7f810364d76ea2d69eafc27131cf709b0913755d06a89de64dbe35a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  },
+  "media-quark-sha-21fb4621aa3fd7e2ee3a8b275e7d1af65716e9fb40e530d7e0b041856110b88d": {
+   "mediaKind": "photo",
+   "description": "在一间绿墙装修的餐馆里，一名戴眼镜、穿黑色连帽衫的男子低头用筷子从金属碗中夹起面条，他面前放着一碗配有豆芽的汤粉、青柠角、一杯冰水和一部手机。背景中还有多位顾客正在用餐，其中包括一名穿荧光黄绿色外套的人，店内墙上有装饰画，环境显得热闹。",
+   "bytesSha256": "570971cfb35b3dddf4021b9fe0a7fa29465b2907f88f56fd3f9c409596899ae5",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T00:09:57.218Z"
+  }
+ }
+}

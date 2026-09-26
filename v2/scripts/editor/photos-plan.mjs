@@ -19,6 +19,8 @@ export const MIN_SAMPLE_FOR_RATE = 40;
 
 export const PROMPT_VERSION = "deepseek-photo-auto-v1";
 export const POLICY_VERSION = "auto-photo-2026-09-20-subject-v1";
+export const PREGNANCY_PROMPT_VERSION = "pregnancy-photo-v1";
+export const PREGNANCY_POLICY_VERSION = "auto-photo-2026-09-26-pregnancy-v1";
 
 /**
  * 孕期照片的识别结果 → 决定（配合 classifyPregnancyPhotos）。
@@ -31,8 +33,9 @@ export function decidePregnancyPhoto(r) {
   if (r.kind === "document") return { decision: "store_only", preset: "doc" };
   if (r.kind === "scenery_object") return { decision: "store_only", preset: "object" };
   if (r.kind === "pregnancy" && r.quality !== "poor") return { decision: "approved", preset: r.subtype ?? "pregnancy" };
-  if (r.kind === "family_life" && r.quality === "good") return { decision: "approved", preset: "family_life" };
-  if (r.kind === "family_life") return { decision: "store_only", preset: `family_life:${r.quality}` };
+  // 妈妈孕期的日常也是孕期档案（Teddy 2026-09-26），只挡糊掉的。
+  if (r.kind === "family_life" && r.quality !== "poor") return { decision: "approved", preset: r.subtype ?? "family_life" };
+  if (r.kind === "family_life") return { decision: "store_only", preset: "family_life:poor" };
   return { decision: "store_only", preset: `${r.kind ?? "unknown"}:${r.quality ?? "unknown"}` };
 }
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decidePhoto, pickPhotos, mergeDayMedia, batchLooksBroken, spread } from "../scripts/editor/photos-plan.mjs";
+import { decidePhoto, decidePregnancyPhoto, pickPhotos, mergeDayMedia, batchLooksBroken, spread } from "../scripts/editor/photos-plan.mjs";
 
 const life = { kind: "life", child_present: true, reference_child: "yes", face_visible: true, children_count: 1, main_child_size: "large", other_children_identifiable: false, sensitive: "none" };
 
@@ -64,4 +64,15 @@ test("applyLead：已经在最前 / 不在这一天 / 没这天 → null", () =>
   assert.equal(applyLead(c, "2026-09-18", "a"), null);
   assert.equal(applyLead(c, "2026-09-18", "zz"), null);
   assert.equal(applyLead(c, "2026-09-19", "a"), null);
+});
+
+test("孕期：孕肚、B 超、产检、待产准备、妈妈的日常放行；糊掉的不放行", () => {
+  for (const subtype of ["belly", "ultrasound", "prenatal", "nursery", "baby_items"]) assert.equal(decidePregnancyPhoto({ kind: "pregnancy", subtype, quality: "ok" }).decision, "approved");
+  assert.equal(decidePregnancyPhoto({ kind: "family_life", subtype: null, quality: "ok" }).decision, "approved");
+  assert.equal(decidePregnancyPhoto({ kind: "pregnancy", subtype: "belly", quality: "poor" }).decision, "store_only");
+  assert.equal(decidePregnancyPhoto({ kind: "family_life", subtype: null, quality: "poor" }).decision, "store_only");
+});
+test("孕期：截图、证件、无关风景随手拍不放行；模型出错拿不准", () => {
+  for (const kind of ["screenshot", "document", "scenery_object"]) assert.equal(decidePregnancyPhoto({ kind, subtype: null, quality: "good" }).decision, "store_only");
+  assert.equal(decidePregnancyPhoto({ error: "x" }).decision, "needs_human_review");
 });

@@ -92,11 +92,18 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
     const first = timeline?.weeks[0];
     const initial = timeline && first ? weekEntries(timeline, first.id) ?? [] : [];
 
-    // Photos that exist in the archive but are NOT yet selected into story days.
-    // These are deliverable, trusted photos the reader has not seen in the narrative above.
+    // dayPhotoGroups is merged back because this layout never renders it; only subject-checked
+    // (latest verdict approved) photos qualify, so store_only documents/screenshots and unjudged
+    // photos never reach this page.
     const storyMediaIds = new Set(content.days.flatMap((d) => d.expandedMediaIds ?? []));
-    const unstoriedArchiveDays = composition.archiveDays
-      .map((day) => ({ ...day, photos: day.photos.filter((p) => !storyMediaIds.has(p.id)) }))
+    const albumByDay = new Map<string, (typeof composition.archiveDays)[number]>();
+    for (const day of [...composition.dayPhotoGroups, ...composition.archiveDays]) {
+      const held = albumByDay.get(day.day);
+      albumByDay.set(day.day, held ? { ...held, photos: [...held.photos, ...day.photos] } : day);
+    }
+    const unstoriedArchiveDays = [...albumByDay.values()]
+      .sort((a, b) => a.day.localeCompare(b.day))
+      .map((day) => ({ ...day, photos: day.photos.filter((p) => privilege.checked?.has(p.id) === true && !storyMediaIds.has(p.id)) }))
       .filter((day) => day.photos.length > 0);
     const unstoriedPhotoCount = unstoriedArchiveDays.reduce((sum, d) => sum + d.photos.length, 0);
     const unstoriedHasVideo = unstoriedArchiveDays.some((d) => d.photos.some((p) => p.type === "video"));

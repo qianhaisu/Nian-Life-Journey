@@ -7,16 +7,17 @@
 //    没判过的交给 deepseek-flash 看图（photo-classify.mjs，与夜间照片、月页照片描述同一个模型；视频用封面帧），
 //    decidePhoto（主体、截图、证件、医疗、裸露……）不放行的不收，拿不准的不收；结论照夜间照片的格式写回核验行。
 // 3. 排列：aggregateDayMedia——按拍摄时间，首屏 6 格，有视频至少一格是视频。
-// 4. 只改机器写的天（_source:"machine"）的媒体清单，正文一个字不动；人工/来源不明的天不碰；
-//    有放行媒体但这个月还没有这一天的，记下来不新建（新的一天由回填/夜间编辑去写）。
+// 4. 全月所有天都参与判定（出生前走孕期分类器）。只改机器写的天（_source:"machine"）的媒体清单，正文一个字不动；
+//    人工/来源不明的天不碰；有放行媒体但这个月还没有这一天的，新建空白机器条目（正文由改写流程写）。
+//    每次模型判定存进 v2/data/media-subject-verdicts.json，同一张图同一版提示词复用、不重复付费。
 // 5. --write：写核验行（一个事务，核对增量）→ 备份线上文件 → content-install。
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { classifyPhotos, classifyPregnancyPhotos, curateScene } from "./photo-classify.mjs";
-import { decidePhoto, decidePregnancyPhoto, PROMPT_VERSION, POLICY_VERSION } from "./photos-plan.mjs";
+import { classifyPhotos, classifyPregnancyPhotos, curateScene, visionModel } from "./photo-classify.mjs";
+import { decidePhoto, decidePregnancyPhoto, PROMPT_VERSION, POLICY_VERSION, PREGNANCY_PROMPT_VERSION, PREGNANCY_POLICY_VERSION } from "./photos-plan.mjs";
 import { aggregateDayMedia } from "./day-media.mjs";
 import { groupScenes, applySceneCuration, applyDailyCap, sceneKeyOf, DAY_MEDIA_CAP } from "./scene-curation.mjs";
 
@@ -33,14 +34,17 @@ const REPO_V2 = path.resolve(new URL("../..", import.meta.url).pathname.replace(
 const say = (m) => console.log(`[media ${MONTH}] ${m}`);
 const scp = (dest) => spawnSync("scp", ["-q", "-o", "BatchMode=yes", "-i", ECS.key, `${ECS.ssh}:/srv/nianlife-content/${MONTH}.json`, dest], { encoding: "utf8" }).status === 0;
 
-// 出生日期（上海时区日期字符串）。出生前走孕期分类器，出生当天及之后走常规分类器。
+// 出生日（上海日期）：之前的天走孕期分类器，当天起走「照片里是不是张年」。
 const BIRTH_DAY = "2025-01-03";
-
-// 某天是否属于孕期（严格早于出生日）
 const isPreBirth = (day) => day < BIRTH_DAY;
-
-// 这个月是否全月孕期（月份字符串 YYYY-MM < 2025-01）
-const isFullPregnancyMonth = (month) => month < "2025-01";
+const VERDICT_STORE = path.join(REPO_V2, "data/media-subject-verdicts.json");
+// 写前重读合并：两个月份同时跑时，互不覆盖对方刚存的判定。
+function saveStore(store) {
+  const disk = fs.existsSync(VERDICT_STORE) ? JSON.parse(fs.readFileSync(VERDICT_STORE, "utf8")) : { items: {}, scenes: {} };
+  store.items = { ...disk.items, ...store.items };
+  store.scenes = { ...(disk.scenes ?? {}), ...(store.scenes ?? {}) };
+  fs.writeFileSync(VERDICT_STORE, JSON.stringify(store, null, 1) + "\n", "utf8");
+}
 
 async function main() {
   if (!/^\d{4}-\d{2}$/.test(MONTH ?? "")) throw new Error("--month=YYYY-MM");
@@ -61,88 +65,87 @@ async function main() {
          and not exists (select 1 from media_rejections x where x.media_id = m.id)`, [MONTH]);
     const machineDays = new Set(content.days.filter((d) => d._source === "machine").map((d) => d.day));
 
-    // 孕期月份：处理全月所有照片（不限于有 content 条目的天），因为照片来源是夸克不是微信，大多数天没有条目。
-    // 混合月（2025-01）：按天分流，出生前走孕期分类器，出生当天及之后走常规分类器。
-    const usePregnancyForAll = isFullPregnancyMonth(MONTH);
-    const isMixedMonth = MONTH === "2025-01";
-    const inScope = (usePregnancyForAll || isMixedMonth) ? rows : rows.filter((r) => machineDays.has(r.day));
+    // 全月所有天都参与（Teddy 2026-09-26）：没有微信文字的日子，照片也要能进故事。
+    // 出生前的天走孕期分类器，出生当天起走常规分类器。
+    const inScope = rows;
     const allTodo = inScope.filter((r) => !r.decision);
     const todo = allTodo.slice(0, LIMIT);
-    say(`媒体 ${rows.length}（范围内 ${inScope.length}，机器写的天 ${rows.filter((r) => machineDays.has(r.day)).length}），待判定 ${allTodo.length}${allTodo.length > todo.length ? `（本次只判 ${todo.length}，剩下留给下一次）` : ""}${usePregnancyForAll ? "【孕期模式-全月】" : isMixedMonth ? "【孕期模式-混合月】" : ""}`);
+    const preBirthCount = inScope.filter((r) => isPreBirth(r.day)).length;
+    say(`媒体 ${rows.length}（落在已有机器条目的天 ${rows.filter((r) => machineDays.has(r.day)).length}，出生前 ${preBirthCount}），库里已有判定 ${inScope.length - allTodo.length}，待判定 ${allTodo.length}${allTodo.length > todo.length ? `（本次只判 ${todo.length}，剩下留给下一次）` : ""}`);
 
     // 判定：下载网页版（视频用封面）交给看图模型
     const fileFor = (r) => path.join(OUT, "files", `${createHash("sha256").update(r.id).digest("hex").slice(0, 20)}.img`);
     async function ensureFile(r) {
       const file = fileFor(r);
-      if (fs.existsSync(file)) return file;
-      const res = await fetch(`https://nianlife.cn/api/media/${encodeURIComponent(r.id)}?variant=${r.type === "video" ? "poster" : "web"}`, { signal: AbortSignal.timeout(60_000) }).catch(() => null);
-      if (!res?.ok) return null;
+      if (fs.existsSync(file)) return { file };
+      const res = await fetch(`https://nianlife.cn/api/media/${encodeURIComponent(r.id)}?variant=${r.type === "video" ? "poster" : "web"}`, { signal: AbortSignal.timeout(60_000) }).catch((e) => ({ ok: false, status: `fetch-error:${e?.name ?? e}` }));
+      if (!res?.ok) return { file: null, status: res?.status };
       fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
-      return file;
+      return { file };
     }
     const verdict = new Map(inScope.filter((r) => r.decision).map((r) => [r.id, r.decision]));
-    // verdictMeta 记录每个新判定的原始模型输出，用于事后对照页
     const verdictMeta = new Map();
+    const unavailable = [];
     const newRows = [];
+
+    // 每次模型判定都存进仓库（v2/data/media-subject-verdicts.json），同一张图同一版提示词不再重复付费。
+    const store = fs.existsSync(VERDICT_STORE) ? JSON.parse(fs.readFileSync(VERDICT_STORE, "utf8")) : { schema: 1, items: {} };
+    const versionsFor = (day) => isPreBirth(day)
+      ? { mode: "pregnancy", promptVersion: PREGNANCY_PROMPT_VERSION, policyVersion: PREGNANCY_POLICY_VERSION, decide: decidePregnancyPhoto }
+      : { mode: "subject", promptVersion: PROMPT_VERSION, policyVersion: POLICY_VERSION, decide: decidePhoto };
+    let reused = 0;
+
     if (todo.length) {
-      // 分流：孕期照片 vs 常规照片
-      const preBirthItems = [];
-      const postBirthItems = [];
+      const toClassify = { pregnancy: [], subject: [] };
       for (const r of todo) {
-        const file = await ensureFile(r);
-        if (!file) { verdict.set(r.id, "unavailable"); continue; }
-        if (isPreBirth(r.day)) { preBirthItems.push({ id: r.id, file, day: r.day }); }
-        else { postBirthItems.push({ id: r.id, file, day: r.day }); }
-      }
-
-      // 孕期分类
-      if (preBirthItems.length) {
-        const { results, model } = await classifyPregnancyPhotos(preBirthItems, { concurrency: 6 });
-        for (const it of preBirthItems) {
-          const v = results[it.id];
-          const d = decidePregnancyPhoto(v);
-          verdictMeta.set(it.id, { raw: v, decision: d });
-          if (!v || v.error || d.decision === "needs_human_review") { verdict.set(it.id, "needs_human_review"); continue; }
-          verdict.set(it.id, d.decision);
-          newRows.push({ id: it.id, decision: d.decision, preset: d.preset, model, mode: "pregnancy" });
+        const v = versionsFor(r.day);
+        const held = store.items[r.id];
+        if (held && held.promptVersion === v.promptVersion && !held.raw?.error) {
+          const d = v.decide(held.raw);
+          verdictMeta.set(r.id, { raw: held.raw, decision: d, model: held.model, mode: v.mode });
+          verdict.set(r.id, d.decision);
+          if (d.decision !== "needs_human_review") newRows.push({ id: r.id, decision: d.decision, preset: d.preset, model: held.model, promptVersion: v.promptVersion, policyVersion: v.policyVersion });
+          reused += 1;
+          continue;
         }
+        const got = await ensureFile(r);
+        if (!got.file) { verdict.set(r.id, "unavailable"); unavailable.push({ id: r.id, day: r.day, type: r.type, status: got.status ?? null }); continue; }
+        toClassify[v.mode].push({ id: r.id, file: got.file, day: r.day });
       }
-
-      // 常规分类（出生后）
-      if (postBirthItems.length) {
-        const refFiles = fs.readdirSync(REFS).filter((f) => /\.(webp|jpe?g|png)$/i.test(f)).map((f) => path.join(REFS, f));
-        const { results, model } = await classifyPhotos(postBirthItems, refFiles, { concurrency: 6 });
-        for (const it of postBirthItems) {
-          const v = results[it.id];
-          const d = decidePhoto(v);
-          verdictMeta.set(it.id, { raw: v, decision: d });
-          if (!v || v.error || d.decision === "needs_human_review") { verdict.set(it.id, "needs_human_review"); continue; }
+      const refFiles = toClassify.subject.length ? fs.readdirSync(REFS).filter((f) => /\.(webp|jpe?g|png)$/i.test(f)).map((f) => path.join(REFS, f)) : [];
+      for (const mode of ["pregnancy", "subject"]) {
+        const items = toClassify[mode];
+        if (!items.length) continue;
+        const { results, model } = mode === "pregnancy"
+          ? await classifyPregnancyPhotos(items, { concurrency: 6 })
+          : await classifyPhotos(items, refFiles, { concurrency: 6 });
+        const judgedAt = new Date().toISOString();
+        for (const it of items) {
+          const v = versionsFor(it.day);
+          const raw = results[it.id] ?? { error: "no-result" };
+          store.items[it.id] = { mode, promptVersion: v.promptVersion, policyVersion: v.policyVersion, model, raw, judgedAt };
+          const d = v.decide(raw);
+          verdictMeta.set(it.id, { raw, decision: d, model, mode });
+          if (raw.error || d.decision === "needs_human_review") { verdict.set(it.id, "needs_human_review"); continue; }
           verdict.set(it.id, d.decision);
-          newRows.push({ id: it.id, decision: d.decision, preset: d.preset, model });
+          newRows.push({ id: it.id, decision: d.decision, preset: d.preset, model, promptVersion: v.promptVersion, policyVersion: v.policyVersion });
         }
+        saveStore(store);
       }
     }
+    if (reused) say(`复用仓库里已存的判定 ${reused} 条`);
 
-    // 孕期月份：为有入选照片但没有 content 条目的天，自动创建空白机器写入条目
-    if (usePregnancyForAll || isMixedMonth) {
+    // 有入选照片但这个月还没有这一天的：新建空白机器条目（正文留给改写流程）
+    {
       const existingDays = new Set(content.days.map((d) => d.day));
-      const dayApproved = new Map();
-      for (const [id, dec] of verdict) {
-        if (dec !== "approved") continue;
-        const row = inScope.find((r) => r.id === id);
-        if (!row) continue;
-        if (!dayApproved.has(row.day)) dayApproved.set(row.day, []);
-        dayApproved.get(row.day).push(id);
-      }
-      for (const [day] of dayApproved) {
-        if (existingDays.has(day)) continue;
-        // 仅孕期月份或出生前日期才自动建条目；2025-01 里 Jan 3+ 交给现有流程
-        if (isMixedMonth && !isPreBirth(day)) continue;
-        content.days.push({ _source: "machine", day, title: "", paragraphs: [], firstScreenMediaIds: [], expandedMediaIds: [] });
+      const dayOf = new Map(inScope.map((r) => [r.id, r.day]));
+      const newDays = new Set();
+      for (const [id, dec] of verdict) if (dec === "approved" && dayOf.has(id) && !existingDays.has(dayOf.get(id))) newDays.add(dayOf.get(id));
+      for (const day of newDays) {
+        content.days.push({ _source: "machine", _sourceBasis: "photos-only", day, kind: "visual-description", title: null, paragraphs: [], firstScreenMediaIds: [], expandedMediaIds: [], storyBoundMediaIds: [], sourceIds: [] });
         machineDays.add(day);
-        existingDays.add(day);
-        say(`自动新建孕期日条目：${day}`);
       }
+      if (newDays.size) say(`新建空白机器条目 ${newDays.size} 天：${[...newDays].sort().join(", ")}`);
       content.days.sort((a, b) => a.day.localeCompare(b.day));
     }
 
@@ -167,19 +170,31 @@ async function main() {
     }
     curation.scenesChecked = multiGroups.length;
     const decisions = new Map();
+    // 场景精选的模型判断同样存库复用：同一组成员（按 id 排序）只问一次。
+    store.scenes ??= {};
+    const sceneStoreKey = (group) => createHash("sha256").update(group.map((m) => m.id).sort().join("|")).digest("hex").slice(0, 24);
+    let scenesReused = 0;
+    for (const { group } of multiGroups) {
+      const held = store.scenes[sceneStoreKey(group)];
+      if (held) { decisions.set(sceneKeyOf(group), { sameScene: held.sameScene, keep: held.keep, why: held.why }); scenesReused += 1; }
+    }
     if (multiGroups.length) {
       let next = 0;
       await Promise.all(Array.from({ length: 6 }, async () => {
         while (next < multiGroups.length) {
           const { group } = multiGroups[next++];
+          if (decisions.has(sceneKeyOf(group))) continue;
           const withFiles = [];
-          for (const m of group) { const file = await ensureFile(m); if (file) withFiles.push({ id: m.id, file }); }
+          for (const m of group) { const { file } = await ensureFile(m); if (file) withFiles.push({ id: m.id, file }); }
           if (withFiles.length < 2) continue; // 图取不全就不精选，全部保留
           const decision = await curateScene(withFiles);
           if (!decision) continue; // 判不出来：全部保留
           decisions.set(sceneKeyOf(group), decision);
+          store.scenes[sceneStoreKey(group)] = { members: group.map((m) => m.id), sameScene: decision.sameScene, keep: decision.keep, why: decision.why ?? "", model: visionModel(), judgedAt: new Date().toISOString() };
         }
       }));
+      saveStore(store);
+      if (scenesReused) say(`场景精选复用已存判断 ${scenesReused} 组`);
     }
     for (const { day, group } of multiGroups) {
       const decision = decisions.get(sceneKeyOf(group));
@@ -218,12 +233,23 @@ async function main() {
       if (!d.title && !d.paragraphs.length && !agg.expandedMediaIds.length) continue;
       changedDays.push(d.day);
     }
-    // 写 verdictMeta（含模型原始输出 + 决定）供对照页使用
+    // 每一张的判定明细（对照页用）与每天的统计
     const verdictMetaOut = [];
+    const attached = new Set(next.days.filter((d) => d._source === "machine").flatMap((d) => d.expandedMediaIds ?? []));
+    const perDay = new Map();
     for (const r of inScope) {
       const meta = verdictMeta.get(r.id);
-      if (!meta) continue;
-      verdictMetaOut.push({ id: r.id, day: r.day, type: r.type, decision: verdict.get(r.id), raw: meta.raw, preset: meta.decision?.preset });
+      const decision = verdict.get(r.id) ?? "unjudged";
+      verdictMetaOut.push({ id: r.id, day: r.day, type: r.type, decision, source: meta ? "model" : r.decision ? "db" : "none", mode: meta?.mode ?? (isPreBirth(r.day) ? "pregnancy" : "subject"), model: meta?.model ?? null, raw: meta?.raw ?? null, preset: meta?.decision?.preset ?? null, why: meta?.decision?.why ?? null, attached: attached.has(r.id) });
+      const p = perDay.get(r.day) ?? { day: r.day, total: 0, approved: 0, rejected: 0, uncertain: 0, unavailable: 0, attached: 0, reasons: {} };
+      p.total += 1;
+      if (decision === "approved") p.approved += 1;
+      else if (decision === "unavailable") p.unavailable += 1;
+      else if (decision === "needs_human_review" || decision === "unjudged") p.uncertain += 1;
+      else p.rejected += 1;
+      if (decision !== "approved" && decision !== "unavailable") { const k = meta?.decision?.why ?? meta?.decision?.preset ?? decision; p.reasons[k] = (p.reasons[k] ?? 0) + 1; }
+      if (attached.has(r.id)) p.attached += 1;
+      perDay.set(r.day, p);
     }
     fs.writeFileSync(path.join(OUT, "verdict-meta.jsonl"), verdictMetaOut.map((v) => JSON.stringify(v)).join("\n") + "\n", "utf8");
 
@@ -232,7 +258,7 @@ async function main() {
     fs.writeFileSync(candidate, JSON.stringify(next, null, 1));
     const approvedIds = newRows.filter((r) => r.decision === "approved").map((r) => r.id);
     const rejectedSample = verdictMetaOut.filter((v) => v.decision !== "approved").slice(0, 30);
-    const summary = { month: MONTH, judged: newRows.length, approvedNew: approvedIds.length, approvedIds, rejectedSample, newPhotos: photos, newVideos: videos, changedDays, daysWithoutEntry, curation };
+    const summary = { month: MONTH, total: rows.length, judgedThisRun: verdictMeta.size - reused, reusedFromStore: reused, judgedBeforeInDb: inScope.length - allTodo.length, approvedTotal: [...verdict.values()].filter((d) => d === "approved").length, dayCap: DAY_MEDIA_CAP, unavailable, perDay: [...perDay.values()].sort((a, b) => a.day.localeCompare(b.day)), judged: newRows.length, approvedNew: approvedIds.length, approvedIds, rejectedSample, newPhotos: photos, newVideos: videos, changedDays, daysWithoutEntry, curation };
     fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 1));
     say(`新挂上 照片 ${photos} / 视频 ${videos}，改动 ${changedDays.length} 天；判定写回 ${newRows.length} 条（通过 ${approvedIds.length}，拒绝 ${newRows.length - approvedIds.length}）`);
     if (!WRITE) return;
@@ -243,13 +269,13 @@ async function main() {
       await rds.client.query("begin");
       let inserted = 0;
       for (const w of newRows) {
-        const id = `subj-autophoto-${createHash("sha256").update(`${POLICY_VERSION}\n${w.id}`).digest("hex").slice(0, 20)}`;
+        const id = `subj-autophoto-${createHash("sha256").update(`${w.policyVersion ?? POLICY_VERSION}\n${w.id}`).digest("hex").slice(0, 20)}`;
         const res = await rds.client.query(
           `insert into content_quality_reviews (id, profile_id, target_kind, target_id, decision, reason_codes, provider, model, prompt_version, policy_version, review_fingerprint, reviewed_at)
            select $1,$2,'media_subject_check',$3,$4,$5::jsonb,$10,$6,$7,$8,$9, now() at time zone 'Asia/Shanghai'
             where not exists (select 1 from content_quality_reviews where target_kind='media_subject_check' and target_id=$3)
            on conflict do nothing returning id`,
-          [id, profileId, w.id, w.decision, JSON.stringify(["basis:auto-deepseek-policy", `label:${w.preset}`, "authorized-by:teddy-2026-09-23-round4-media"]), w.model ?? "deepseek-flash", PROMPT_VERSION, POLICY_VERSION, `${id}:media_subject_check`, String(w.model ?? "deepseek-flash").startsWith("glm") ? "glm" : "deepseek"]);
+          [id, profileId, w.id, w.decision, JSON.stringify(["basis:auto-deepseek-policy", `label:${w.preset}`, "authorized-by:teddy-2026-09-23-round4-media"]), w.model ?? "deepseek-flash", w.promptVersion ?? PROMPT_VERSION, w.policyVersion ?? POLICY_VERSION, `${id}:media_subject_check`, String(w.model ?? "deepseek-flash").startsWith("glm") ? "glm" : "deepseek"]);
         inserted += res.rowCount;
       }
       const after = Number((await q(`select count(*)::int n from content_quality_reviews`))[0].n);

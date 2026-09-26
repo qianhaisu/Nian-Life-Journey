@@ -3,6 +3,7 @@
 // 每次调用开始先过能力门（合成色块）：答错就整批中止，不写任何东西。凭据只在进程内读，不打印。
 // 需要 node --import tsx 运行（引用了 .ts）。
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { judgeVisionProbe, looksBlind } from "../../lib/home-photo-quality.ts";
 import { assertProviderModel, resolveDeepSeekModel } from "../../lib/organizer/deepseek-model.ts";
@@ -30,6 +31,9 @@ function modelConfig(ENV) {
   }
   return { glm: false, MODEL: resolveDeepSeekModel(ENV), BASE: (ENV.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/anthropic").replace(/\/$/, ""), KEY: ENV.DEEPSEEK_API_KEY };
 }
+
+/** 当前看图模型的 id（记录判定来源用）。 */
+export const visionModel = () => modelConfig(loadEnv()).MODEL;
 
 const toGlmPart = (b) => b.type === "image" ? { type: "image_url", image_url: { url: `data:${b.source.media_type};base64,${b.source.data}` } } : b;
 
@@ -170,6 +174,43 @@ Output ONLY JSON: {"sameScene": true|false, "keep": [<index integers 0-${items.l
     } catch { if (attempt === 2) return null; }
   }
   return null;
+}
+
+// 与 scripts/month-vision-analyze.mjs 的 description 规则同一套措辞，单张图版本。
+export const DESCRIBE_PROMPT_VERSION = "photo-describe-v1";
+const DESCRIBE_PROMPT = [
+  "你在为一个家庭生活档案描述照片。",
+  "用一到两句中文客观描述画面里实际看得见的内容——人物动作、姿势、手里和面前的物品、环境。",
+  "只描述画面里真实可见的东西。不要推测姓名、亲属关系、情绪原因、动作先后、是不是第一次，也不要描述没拍到的事。",
+  "只输出一行 JSON，不要代码块：{\"media_kind\": \"photo\"|\"screenshot\"|\"document\"|\"video_frame\", \"description\": \"...\"}",
+].join("\n");
+
+/**
+ * 画面描述（给写稿用）。每张一次调用，失败的返回 {error}。
+ * @param {{id:string, file:string}[]} items
+ */
+export async function describePhotos(items, { concurrency = 6 } = {}) {
+  const cfg = modelConfig(loadEnv());
+  if (!cfg.KEY) throw new Error("no model credential in env (ZHIPU_API_KEY / DEEPSEEK_API_KEY)");
+  const results = {};
+  let next = 0;
+  await Promise.all(Array.from({ length: concurrency }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      const target = await shrink(item.file, 1024);
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const { text } = await askModel(cfg, [img(target), { type: "text", text: DESCRIBE_PROMPT }], 8000);
+          if (looksBlind(text)) throw new Error("blind answer");
+          const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+          if (!json.description) throw new Error("missing description");
+          results[item.id] = { mediaKind: json.media_kind ?? null, description: String(json.description), bytesSha256: createHash("sha256").update(target).digest("hex") };
+          break;
+        } catch (error) { if (attempt === 3) results[item.id] = { error: String(error.message ?? error).slice(0, 160) }; }
+      }
+    }
+  }));
+  return { model: cfg.MODEL, results };
 }
 
 /**
