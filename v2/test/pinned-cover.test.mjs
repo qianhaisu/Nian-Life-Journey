@@ -98,3 +98,11 @@ test("pinnedCoverId with no matching photo in the month falls back gracefully", 
   const composition = buildMonthComposition(monthOf([only]), reviewed([only]), [], BIRTH, "nonexistent-id");
   assert.equal(composition.cover?.id, "only", "falls back to dynamic when pinned id not found");
 });
+
+test("a reviewed pinned frame survives automatic burst representative selection", () => {
+  const first = photo("first", "2024-12-10T08:00:00.000Z");
+  const chosen = photo("chosen", "2024-12-10T08:00:01.000Z");
+  const composition = buildMonthComposition(monthOf([first, chosen], "2024-12"), reviewed([first, chosen]), [], BIRTH, chosen.id);
+  assert.equal(composition.cover?.id, chosen.id);
+  assert.equal(composition.preview[0]?.id, chosen.id);
+});

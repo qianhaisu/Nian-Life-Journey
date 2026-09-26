@@ -773,9 +773,11 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   // A pinned cover overrides dynamic selection: the content editor chose a specific photo for this
   // month, and it stays until they change it. It must still pass the same gate as everything else
   // here (pinnedCoverAllowed: subject-checked, not excluded, taken this month) — a pin written before
-  // a reviewer excluded a picture is silently dropped and the next best fills in. `vouched` holds only
-  // this month's privileged, drawable pictures, so the pin is looked up there.
-  const pinnedRef = pinnedCoverId ? vouched.find((item) => item.id === pinnedCoverId && pinnedCoverAllowed(item, privilege, chapter.month)) : undefined;
+  // a reviewer excluded a picture is silently dropped and the next best fills in. Look through the
+  // original month pictures: burst selection may have picked a different frame from the same burst.
+  const pinnedRef = pinnedCoverId ? photoDaysAsc.flatMap((day) => day.photos).find((item) =>
+    item.id === pinnedCoverId && isPrivileged(item, privilege) && thumbnailSized(item)
+    && pinnedCoverAllowed(item, privilege, chapter.month)) : undefined;
   const cover = pinnedRef ?? coverCandidate ?? vouched.find((item) => heroEligibleRef(item, privilege) && isSubjectChecked(item, privilege));
   // The preview strip is the cover's own shortlist — the same index surfaces, the same claim — so
   // it asks the same question of every picture in it, not only of the first.
