@@ -87,11 +87,13 @@ Definitions:
 - other_children_identifiable: true if any OTHER child's face (even partly, even in the background, e.g. classmates) is visible.
 - sensitive "nudity_or_bath": undressed child, bath, toilet/potty. "health": wounds, rashes, medicine, clinics, medical records.`;
 
+// v2（2026-09-27）：加 sensitive。v1 放行过皮肤症状特写和裸露孕肚（Teddy 撤下 12 月 5 张）；这两类现在由模型点名，规则层直接拒绝。
 const PREGNANCY_PROMPT = `You are classifying photos from a family archive taken during a pregnancy period (before the baby was born).
 Answer about the LAST image only. Output ONLY one JSON object with exactly these keys:
 {"kind": "pregnancy" | "family_life" | "document" | "screenshot" | "scenery_object",
  "subtype": "belly" | "ultrasound" | "prenatal" | "nursery" | "baby_items" | "family_activity" | "parents_daily" | "other" | null,
  "quality": "good" | "ok" | "poor",
+ "sensitive": "none" | "skin_symptom" | "bare_belly" | "nudity_or_bath" | "health" | "finance" | "identity_document",
  "note": "<=12 words"}
 Definitions:
 - kind "pregnancy": clearly related to the pregnancy or preparations for the baby. Includes: pregnant belly, ultrasound images, prenatal clinic visits, nursery room setup, baby clothes/diapers/gear being bought or prepared, family/friends celebrating the upcoming birth, hospital admission.
@@ -100,7 +102,28 @@ Definitions:
 - kind "screenshot": phone screen, app, social media, CCTV, computer screen captures.
 - kind "scenery_object": scenery, food, pets, products, interiors with no people visible.
 - subtype: fill only when kind is "pregnancy". Otherwise null.
-- quality "good": clear, well-lit, emotionally meaningful moment. "ok": acceptable but ordinary. "poor": blurry, very dark, visually empty, or nearly identical to another photo in a burst.`;
+- quality "good": clear, well-lit, emotionally meaningful moment. "ok": acceptable but ordinary. "poor": blurry, very dark, visually empty, or nearly identical to another photo in a burst.
+- sensitive "skin_symptom": a close-up of skin with rashes, spots, stretch marks, scars or any skin condition, whoever it belongs to. "bare_belly": a pregnant belly with the skin exposed (shirt lifted, underwear, bare torso) — a belly under clothing is "none". "nudity_or_bath": undressed person, bath, toilet. "health": medicine, wounds, medical records, test results. "finance": bills, payments, bank/app balances. "identity_document": passports, ID cards, visas, tickets with names.`;
+
+// 家庭生活分支（Teddy 2026-09-27：1 月除了大头照外生活场景不够多）。不带参考照片、不判身份：
+// 只回答「这是不是一张有信息的家庭生活照」——吃饭、出游、居住环境、家人互动/照料、旅程。身份与来源由调用方另判。
+// v2（family-life-photo-v2，Codex 复核 2026-09-27）：family_care 只指大人真的在照料 / 互动；宝宝自己睡觉、睁眼、哭、
+// 看镜头、躺在推车里都是 portrait，不是生活场景（v1 把这些算进 family_care，会把大头照继续塞进来）。
+const FAMILY_PROMPT = `You are sorting a private family photo archive (a couple and their newborn baby). Answer about this ONE image only. Output ONLY one JSON object with exactly these keys:
+{"scene": "meal" | "outing" | "home" | "family_care" | "travel" | "celebration" | "portrait" | "none",
+ "who": "baby_only" | "baby_and_adult" | "adults_only" | "nobody",
+ "quality": "good" | "ok" | "poor",
+ "stranger_faces": true | false,
+ "commercial": true | false,
+ "sensitive": "none" | "skin_symptom" | "bare_belly" | "nudity_or_bath" | "health" | "finance" | "identity_document",
+ "caption": "<=12 Chinese characters"}
+Definitions:
+- scene "meal": food being eaten or cooked, a table, a restaurant. "outing": outdoors — streets, parks, beach, sights, a walk, and the surroundings are a real part of the picture. "home": the family's living space — rooms, the crib, the nursery, things arranged for the baby — where the room itself is what the picture shows (a person may be in it, but is not the whole picture). "family_care": an adult is visibly holding, feeding, bathing (dressed), soothing, dressing, changing or playing with the baby — an actual interaction between a caregiver and the baby, with the adult at least partly in frame. "travel": airport, car, train, luggage, hotel, on the road. "celebration": a birthday, holiday decorations, a festive gathering. "portrait": a person is the whole picture and nothing else is going on — this INCLUDES the baby alone sleeping, lying awake, crying, looking at the camera, or lying in a stroller/crib with nothing of the surroundings to see. "none": a product shot, a screenshot, a document, a random object, a pet alone, a blank or unreadable frame.
+- who: who is visible. A newborn counts as baby. "adults_only" if only grown-ups are visible. Answer exactly one of the four values.
+- quality "good": clear, well-lit, a moment worth keeping. "ok": ordinary but usable. "poor": blurry, very dark, cut off, or nothing to see.
+- stranger_faces: true if a person who is clearly NOT family (staff, passers-by, other patients) has a recognisable face that takes a noticeable part of the frame.
+- commercial: true if the image is a product photo, an advertisement, a shop listing, a menu board or a screen capture.
+- sensitive: "skin_symptom" close-up of rashes/spots/skin condition; "bare_belly" a pregnant belly with skin exposed; "nudity_or_bath" undressed person or bath/toilet; "health" medicine, wounds, medical records; "finance" bills or balances; "identity_document" passports, IDs, visas.`;
 
 /**
  * 这一天的配图选哪张：把标题和这一天已放行的照片一起给 DeepSeek，让它挑最能说明这句标题的一张。
@@ -150,6 +173,9 @@ Output ONLY JSON: {"best": <integer 0-${pool.length - 1}>, "why": "<=10 words"}`
  * @param {{id:string, file:string}[]} items  同一个候选场景里的媒体，2 张以上；视频传封面帧
  * @returns {Promise<{sameScene:boolean, keep:string[]}|null>} keep 是原始 id，按优先级从高到低；判不出来返回 null
  */
+// v2（2026-09-27）：同一串里既有他的人像、又有饭菜/地方/家人的画面时，这些是不同的主题，各留一张——
+// 之前的偏好顺序把「脸清楚」排第一，生活场景在连拍里会被大头照挤掉。
+export const CURATE_PROMPT_VERSION = "scene-curate-v2";
 export async function curateScene(items) {
   const ENV = loadEnv();
   const cfg = modelConfig(ENV);
@@ -158,7 +184,8 @@ export async function curateScene(items) {
   const shots = await Promise.all(items.map((it) => shrink(it.file, 512)));
   const text = `These ${items.length} photos/video-frames were all taken within a few minutes of each other on the same day, numbered 0 to ${items.length - 1} in time order.
 Decide: are they the SAME scene and SAME moment/action (e.g. a burst of shots of one activity), not genuinely different activities or moments?
-If yes, pick which to KEEP for a family album page, at most 3, best first. Preference order: (1) the boy's face is clearly visible, (2) a lively, natural expression or recognisable action, (3) good composition — not blurry, not over/under-exposed. If several are near-identical (a burst of the same instant), keep only ONE of them.
+If yes, pick which to KEEP for a family album page, at most 3, best first. If several are near-identical (a burst of the same instant), keep only ONE of them.
+Treat a picture of the surroundings, the meal, the room, the road, or of family members with the baby as a DIFFERENT subject from a close portrait of the baby: when the set mixes such subjects, keep one of each subject (a portrait AND a scene shot) rather than three portraits. Among pictures of the same subject prefer: (1) a clearly visible face or a recognisable action, (2) a lively, natural expression, (3) good composition — not blurry, not over/under-exposed.
 Output ONLY JSON: {"sameScene": true|false, "keep": [<index integers 0-${items.length - 1}, best first, at most 3>], "why": "<=16 words, why you kept those and dropped the rest"}`;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
@@ -214,11 +241,11 @@ export async function describePhotos(items, { concurrency = 6 } = {}) {
 }
 
 /**
- * 孕期照片分类：不带参考孩子照片，判定该照片是否属于孕期档案。
+ * 单张图、固定提示词的分类（孕期 / 家庭生活共用）：先过能力门，每张最多 3 次，连续失败 5 次整批停。
  * @param {{id:string, file:string}[]} items
- * @returns {Promise<{model:string, calls:number, inputTokens:number, outputTokens:number, results:Record<string,object>}>}
+ * @param {{prompt:string, required:string[], concurrency?:number}} p
  */
-export async function classifyPregnancyPhotos(items, { concurrency = 6 } = {}) {
+async function classifySingle(items, { prompt, required, concurrency = 6 }) {
   const ENV = loadEnv();
   const cfg = modelConfig(ENV);
   const { KEY } = cfg;
@@ -241,10 +268,10 @@ export async function classifyPregnancyPhotos(items, { concurrency = 6 } = {}) {
     const target = await shrink(item.file, 768);
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
-        const say = await ask([img(target), { type: "text", text: PREGNANCY_PROMPT }]);
+        const say = await ask([img(target), { type: "text", text: prompt }]);
         if (looksBlind(say)) throw new Error("blind answer");
         const json = JSON.parse(say.slice(say.indexOf("{"), say.lastIndexOf("}") + 1));
-        for (const k of ["kind", "subtype", "quality"]) if (!(k in json)) throw new Error(`missing ${k}`);
+        for (const k of required) if (!(k in json)) throw new Error(`missing ${k}`);
         return json;
       } catch (error) { if (attempt === 3) return { error: String(error.message ?? error).slice(0, 160) }; }
     }
@@ -261,6 +288,24 @@ export async function classifyPregnancyPhotos(items, { concurrency = 6 } = {}) {
     }
   }));
   return { model: cfg.MODEL, calls, inputTokens: inTok, outputTokens: outTok, results };
+}
+
+/**
+ * 孕期照片分类（pregnancy-photo-v2）：不带参考孩子照片，判定该照片是否属于孕期档案，并点名敏感项。
+ * @param {{id:string, file:string}[]} items
+ * @returns {Promise<{model:string, calls:number, inputTokens:number, outputTokens:number, results:Record<string,object>}>}
+ */
+export function classifyPregnancyPhotos(items, { concurrency = 6 } = {}) {
+  return classifySingle(items, { prompt: PREGNANCY_PROMPT, required: ["kind", "subtype", "quality", "sensitive"], concurrency });
+}
+
+/**
+ * 家庭生活分类（family-life-photo-v2，版本号在 photos-plan.mjs FAMILY_PROMPT_VERSION）：不判身份，只判「是不是有信息的家庭生活照」。
+ * 只给主体规则没放行、且来源是自家的照片用；结果由 photos-plan.mjs 的 decideFamilyLifePhoto 消费。
+ * @param {{id:string, file:string}[]} items
+ */
+export function classifyFamilyLifePhotos(items, { concurrency = 6 } = {}) {
+  return classifySingle(items, { prompt: FAMILY_PROMPT, required: ["scene", "who", "quality", "stranger_faces", "commercial", "sensitive"], concurrency });
 }
 
 /**

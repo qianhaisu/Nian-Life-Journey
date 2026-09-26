@@ -134,10 +134,13 @@ export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy
 // Month pictures are the composition's vouched preview, same rule as /memory.
 export type YearMonthEntry = { chapter: MonthChapter; titles: EditorialMemory[]; hiddenMemoryCount: number; traceDayCount: number; href: string; preview: MediaRef[] };
 
-export function buildYearView(year: YearChapter, policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY, privilege: MediaPrivilege = NO_PRIVILEGE): { months: YearMonthEntry[]; memoryCount: number; traceDayCount: number; photoCount: number } {
+// `pinnedCovers` (2026-09-27): each edited month's own `coverMediaId`, so the year strip opens with the
+// same face the /memory card shows. The pin passes the same gate as the card (subject-checked, not
+// excluded, taken that month — lib/publication-moments.ts pinnedCoverAllowed); nothing else is relaxed.
+export function buildYearView(year: YearChapter, policy: MemoryIaPolicy = DEFAULT_MEMORY_IA_POLICY, privilege: MediaPrivilege = NO_PRIVILEGE, pinnedCovers?: ReadonlyMap<string, string>, birthDay?: string): { months: YearMonthEntry[]; memoryCount: number; traceDayCount: number; photoCount: number } {
   const months = year.months.map((chapter): YearMonthEntry => {
     const titles = curateMemories(chapter.memories, policy.yearTitlesPerMonth);
-    return { chapter, titles, hiddenMemoryCount: chapter.memories.length - titles.length, traceDayCount: chapter.traceDays.length, href: monthHref(chapter.month), preview: buildMonthComposition(chapter, privilege).preview };
+    return { chapter, titles, hiddenMemoryCount: chapter.memories.length - titles.length, traceDayCount: chapter.traceDays.length, href: monthHref(chapter.month), preview: buildMonthComposition(chapter, privilege, [], birthDay, pinnedCovers?.get(chapter.month)).preview };
   });
   return { months, memoryCount: months.reduce((sum, month) => sum + month.chapter.memories.length, 0), traceDayCount: months.reduce((sum, month) => sum + month.traceDayCount, 0), photoCount: months.reduce((sum, month) => sum + month.chapter.photoCount, 0) };
 }

@@ -8,6 +8,7 @@ import { loadFamilyArchiveForIsr } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { buildMemoryIndex, buildYearView } from "@/lib/memory-index";
+import { loadMonthContent } from "@/lib/month-content";
 import { monthAgeQualifier } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
 
@@ -37,11 +38,19 @@ export async function generateMetadata({ params }: { params: Promise<{ year: str
 export default async function YearPage({ params }: { params: Promise<{ year: string }> }) {
   const { year } = await params;
   if (!/^\d{4}$/.test(year)) notFound();
-  const { chapters, privilege } = await loadFamilyArchiveForIsr();
+  const { chapters, privilege, birthDay } = await loadFamilyArchiveForIsr();
   const chapter = chapters.find((item) => item.year === year);
   if (!chapter) notFound();
 
-  const view = buildYearView(chapter, undefined, privilege);
+  // Each edited month's chosen face, read from the same content files /memory reads (cached 300s,
+  // no database read): the strip opens with the pinned cover, gated exactly as on /memory
+  // (subject-checked, not excluded, taken in that month — lib/publication-moments.ts pinnedCoverAllowed).
+  const pinnedCovers = new Map<string, string>();
+  for (const month of chapter.months) {
+    const content = await loadMonthContent(month.month);
+    if (content?.coverMediaId) pinnedCovers.set(month.month, content.coverMediaId);
+  }
+  const view = buildYearView(chapter, undefined, privilege, pinnedCovers, birthDay);
   const { nav } = buildMemoryIndex(chapters);
   const today = productToday();
 

@@ -95,6 +95,29 @@ export function isSubjectChecked(ref: Pick<MediaRef, "id">, privilege: MediaPriv
   return Boolean(privilege.checked?.has(ref.id));
 }
 
+/**
+ * May a content file's `coverMediaId` stand as the month's face (the /memory card, the year strip, the
+ * month page)?
+ *
+ * Three claims, all required, none substitutable for another:
+ *   - somebody opened THIS file and recorded what is in it (`checked`: the latest approved
+ *     `media_subject_check`);
+ *   - no later review took it back (`excluded`, the latest `store_only` — how the 12 月 withdrawals stay
+ *     withdrawn);
+ *   - the picture was taken in THIS month. A pin may not borrow another month's face.
+ *
+ * Source trust is not a review and does not stand in for the first claim: the 12 月 withdrawals were
+ * the family's own originals. A pre-birth month gets its cover the same way as any other — the
+ * pregnancy review (scripts/editor/photos-plan.mjs decidePregnancyPhoto) answers "safe, and worth keeping
+ * as a pregnancy/family picture", not "is this the child", and writes `media_subject_check = approved`,
+ * which is exactly what `checked` reads. There is no pre-birth bypass (Codex review, 2026-09-27).
+ */
+export function pinnedCoverAllowed(ref: Pick<MediaRef, "id" | "takenAt">, privilege: MediaPrivilege, month: string): boolean {
+  if (privilege.excluded?.has(ref.id)) return false;
+  if (!isSubjectChecked(ref, privilege)) return false;
+  return calendarMonthOf(ref.takenAt) === month;
+}
+
 // A hero is a page-width image: it must be big enough AND vouched for.
 export function heroEligibleRef(ref: MediaRef, privilege: MediaPrivilege): boolean {
   return heroSized(ref) && isPrivileged(ref, privilege);
@@ -748,9 +771,11 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   }
   const coverCandidate = memoryLead && isSubjectChecked(memoryLead, privilege) ? memoryLead : undefined;
   // A pinned cover overrides dynamic selection: the content editor chose a specific photo for this
-  // month, and it stays until they change it. It must still pass the subject-check gate — a pin
-  // written before a reviewer excluded a picture is silently dropped and the next best fills in.
-  const pinnedRef = pinnedCoverId ? vouched.find((item) => item.id === pinnedCoverId && isSubjectChecked(item, privilege)) : undefined;
+  // month, and it stays until they change it. It must still pass the same gate as everything else
+  // here (pinnedCoverAllowed: subject-checked, not excluded, taken this month) — a pin written before
+  // a reviewer excluded a picture is silently dropped and the next best fills in. `vouched` holds only
+  // this month's privileged, drawable pictures, so the pin is looked up there.
+  const pinnedRef = pinnedCoverId ? vouched.find((item) => item.id === pinnedCoverId && pinnedCoverAllowed(item, privilege, chapter.month)) : undefined;
   const cover = pinnedRef ?? coverCandidate ?? vouched.find((item) => heroEligibleRef(item, privilege) && isSubjectChecked(item, privilege));
   // The preview strip is the cover's own shortlist — the same index surfaces, the same claim — so
   // it asks the same question of every picture in it, not only of the first.

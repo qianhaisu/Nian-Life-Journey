@@ -4,6 +4,7 @@ import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildMemoryIndex } from "@/lib/memory-index";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { loadMonthContent } from "@/lib/month-content";
+import { pinnedCoverAllowed } from "@/lib/publication-moments";
 import { YearNavHighlight } from "@/components/year-nav-highlight";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
@@ -44,14 +45,14 @@ export default async function MemoryPage() {
     for (const month of year.months) {
       const content = await loadMonthContent(month.chapter.month);
       if (!content) continue;
-      // The chosen cover has to clear the same bar `preview` is built behind, stated here rather
-      // than borrowed: deliverable and family-visible (it is in `media` at all), somebody opened the
-      // file and recorded that it is of this child (`checked`), and no later review took it back
-      // (`excluded`). A cover that fails any of these is dropped and the card keeps its own.
+      // The chosen cover has to clear the same bar `preview` is built behind, stated once in
+      // pinnedCoverAllowed rather than borrowed: deliverable and family-visible (it is in `media` at
+      // all), somebody opened the file and recorded what is in it (`checked`), no later review took it
+      // back (`excluded`), and it was taken in this month (`mediaById` spans the whole archive, so the
+      // month match is checked here, not assumed). A cover that fails is dropped and the card keeps
+      // its own. Pre-birth months are no exception: their pregnancy review writes the same `checked`.
       const candidate = content.coverMediaId ? mediaById.get(content.coverMediaId) : undefined;
-      const allowed = candidate
-        && privilege.checked?.has(candidate.id)
-        && !privilege.excluded?.has(candidate.id);
+      const allowed = candidate && pinnedCoverAllowed(candidate, privilege, month.chapter.month);
       // The focal point belongs to the chosen photograph: it travels with the cover and is dropped with it.
       editedCards.set(month.chapter.month, {
         line: content.cardLine,
@@ -63,6 +64,11 @@ export default async function MemoryPage() {
   }
 
   const newestYear = index.years[0]?.year;
+  const firstPrebirthYear = index.years.find((year) => Number(year.year) < birthYear)?.year;
+  const firstPostbirthYear = index.years.find((year) => Number(year.year) >= birthYear)?.year;
+  const birthDateLabel = birthDay
+    ? `${Number(birthDay.slice(0, 4))} 年 ${Number(birthDay.slice(5, 7))} 月 ${Number(birthDay.slice(8, 10))} 日`
+    : undefined;
 
   return (
     <div className="memory-page">
@@ -82,7 +88,13 @@ export default async function MemoryPage() {
           {/* The newest year is only the opening state: YearNavHighlight moves the mark to
               whichever year is actually being read. */}
           <nav className="memory-year-nav reading-wrap" aria-label="按年份导航">
-            {index.years.map((y) => {
+            {[{ label: "出生后", prebirth: false }, { label: "出生前", prebirth: true }]
+              .filter((group) => index.years.some((y) => (Number(y.year) < birthYear) === group.prebirth))
+              .map((group) => (
+              <div className="memory-year-nav-group" key={group.label}>
+                <span className="memory-year-nav-label">{group.label}</span>
+                <div className="memory-year-nav-links">
+            {index.years.filter((y) => (Number(y.year) < birthYear) === group.prebirth).map((y) => {
               const isPrebirth = Number(y.year) < birthYear;
               return (
                 <a
@@ -99,6 +111,9 @@ export default async function MemoryPage() {
                 </a>
               );
             })}
+                </div>
+              </div>
+            ))}
           </nav>
           <YearNavHighlight />
 
@@ -106,11 +121,29 @@ export default async function MemoryPage() {
             const isPrebirth = Number(year.year) < birthYear;
             return (
             <section key={year.year} id={`year-${year.year}`} className={`memory-year-section${isPrebirth ? " memory-year-section--prebirth" : ""}`} aria-labelledby={`year-heading-${year.year}`}>
+              {year.year === firstPostbirthYear && (
+                <header className="memory-life-chapter reading-wrap">
+                  <p className="memory-life-label">出生后</p>
+                  <p className="serif memory-life-title">一起长大的日子</p>
+                </header>
+              )}
+              {year.year === firstPrebirthYear && (
+                <header className="memory-birth-boundary reading-wrap">
+                  <p className="memory-birth-milestone">
+                    {birthDateLabel && <time dateTime={birthDay}>{birthDateLabel} · </time>}张年出生
+                  </p>
+                  <p className="memory-birth-note">出生月里，也留着见面前的最后几天。</p>
+                  <div className="memory-prenatal-chapter">
+                    <p className="memory-life-label">出生前</p>
+                    <p className="serif memory-life-title">等待你的日子</p>
+                  </div>
+                </header>
+              )}
               {/* 2026-09-16 视觉验收：这个 section 原来只有 id、没有可见标题。两年的卡片在同一条
                   瀑布流里，滚过 2026 年 1 月就静默进入 2025 年，读的人不知道自己换了年份——
                   上面那排年份按钮又长得像筛选器（其实是锚点），会让人以为筛选失效了。 */}
               <h2 className="section-mark memory-year-heading" id={`year-heading-${year.year}`}>
-                {year.year} 年{isPrebirth && <span className="prebirth-cue" aria-label="出生前">出生前</span>}
+                {year.year} 年
               </h2>
               <div className="memory-month-grid reading-wrap">
                 {year.months.map((month) => (
