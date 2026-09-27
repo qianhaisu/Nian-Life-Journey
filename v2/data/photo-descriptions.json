@@ -1464,6 +1464,1550 @@
    "model": "glm-5.3-flash",
    "promptVersion": "photo-describe-v1",
    "analysedAt": "2026-09-26T00:40:16.120Z"
+  },
+  "wechat-media:da26c923691f052380e9410672ab97036ad398928f258998bddf63efdefa1b38": {
+   "mediaKind": "photo",
+   "description": "室内米色地毯上停放着一辆灰色婴儿推车，带皮质把手和睡篮，背景墙挂着一幅城市夜景的带框照片，墙角立着一个红色花瓶，里面插着干枝装饰，画面中没有人。",
+   "bytesSha256": "a80ad1f4ce9349f2cad40504ffe2c204e24a46a05bc0d4ceb0ceaf3ca2ce4af7",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:28:22.100Z"
+  },
+  "wechat-media:36cd785aad2b25513443c160329663375dd49543a4c2b63b9d55b4766f827c35": {
+   "mediaKind": "photo",
+   "description": "一只碗中盛着奶白色的骨头汤泡饭，汤里有一块带肉的筒骨、米饭和几粒橙色枸杞，一双深色木筷搭在碗沿上，碗垫在铺开的报纸或杂志页面上。",
+   "bytesSha256": "fba4d6adeaaf32ed8f6f525102f6ac8063b1c3738275ce692dae3f727ff49431",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:28:22.100Z"
+  },
+  "wechat-media:37626d88b674abf2e6c009779195eb278bcaab24fa4922c288cba1d48f5fc3e2": {
+   "mediaKind": "photo",
+   "description": "一片长满绿草的牧场上立着一棵高大的橡树，几头黑色的牛散布在草地上低头吃草，背景是起伏的草坡，前景有几根竖立的铁丝围栏柱。",
+   "bytesSha256": "24c42c1907b5663960746b2903460ae42428b58b853df947bd5dee8e59b87bf9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:28:22.100Z"
+  },
+  "wechat-media:258a0998ccd86ddb88444abc91dc997a942cd22b91b39148f37241f5feaae45e": {
+   "mediaKind": "photo",
+   "description": "从车内视角拍摄的一条陡峭城市街道，道路两侧种满树木并停有车辆，路面上有多辆行驶中的汽车。街道尽头是带巨大穹顶的旧金山市政厅，背景中可见多栋高层建筑和晴朗的蓝天。",
+   "bytesSha256": "fc262b6002bdd98c5611c9d4a251bfc3ddace19f5a2a86e08813f018ba18ee6f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:28:22.100Z"
+  },
+  "wechat-media:b66e2e46e45aad4a0a70d95e216118711905252467511b9eb44c6e64d8b08db8": {
+   "mediaKind": "photo",
+   "description": "客厅里电视屏幕正播放一个戴帽子的人伸手采摘树上黄色果实的画面，左侧立着一棵装饰有金色饰球和彩灯的圣诞树。前景玻璃茶几上摆着多个遥控器、黄色篮子、罐装零食、橘子、粉色保温杯、纸巾盒和套着塑料袋的碗等杂物，背景是灰色窗帘。",
+   "bytesSha256": "9deaa86bed1178d72c6ddceddd5f8a95bc1e68a5921d325be89b1dbc958bb63f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:28:22.100Z"
+  },
+  "wechat-media:c16ae13f971b9de85a366694d36dc08fd91c180a49450d8a013fc4e750589d27": {
+   "mediaKind": "photo",
+   "description": "客厅里电视正播放CCTV 13新闻（画面为冰雪场景），近处茶几上摆放着肉片、青菜、豆腐、面条等火锅食材以及橘子和零食。一旁的白色小圆桌上有起泡酒瓶、碗盘、深色玻璃杯和保温锅具，背景可见深色窗帘、白色房门、墙上的城市夜景装饰画和座椅，画面中没有人。",
+   "bytesSha256": "e456fc0bbfd8ee0acad96d7569e930f0cc0df16431de45f8257b62d962af929d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:28:22.100Z"
+  },
+  "media-quark-sha-b96140574b4197ce7fbdfbb4718cb8f7c7150c25afd547d3d0bc9144f1aa20ea": {
+   "mediaKind": "photo",
+   "description": "照片以斜角拍摄了一台超声诊断仪的屏幕，屏幕上显示黑白超声影像，可见孕囊及内部的胚胎回声，左上角有LOGIQ E9标识，左侧露出部分菜单文字，右侧有黄色标记线条。",
+   "bytesSha256": "196b092fec31b1e2e1ee49aa77ce842d6d065df7fef37001b06e685b56cfa98d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:40:22.610Z"
+  },
+  "media-quark-sha-8095cebbd4dd5ef76fb8873d099a7f4a09f2f03672fb935e53e3db1789a028e2": {
+   "mediaKind": "photo",
+   "description": "一名穿浅色短袖和米色围裙的男子站在黑色圆形升降美容台旁，双手按住台上一只灰色虎斑猫，猫面朝镜头趴在台面上。背景是白色瓷砖墙的宠物美容室内，墙上装有空调和监控摄像头，右侧有白色宠物浴缸和摆放洗护用品的置物架，画面有玻璃反光。",
+   "bytesSha256": "007ddf729103b4dbdff3413f8e6489eca2a209a9fa6a99294e6075c368e9f46d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:40:22.610Z"
+  },
+  "media-quark-sha-be31f9a41148bab8bfb4c9194bc8810388078d8e1915406287f09b65fac08f7b": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿白色短袖的男子正将一只灰色虎斑猫竖着抱在身前，他手腕上戴着黑色智能手表；画面左侧有另一个人的手握着一把红色毛刷，照片似隔着玻璃拍摄，玻璃上倒映出树木和街景。",
+   "bytesSha256": "f89780940ae80127b4d60bddb9f59535f46b408b0b975263173137b944c3738f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:40:22.610Z"
+  },
+  "media-quark-sha-8174e19b549348679699d411648dfb543062623d560ae2f89facef90af02b1c5": {
+   "mediaKind": "photo",
+   "description": "黄昏时分的天空布满橙红色与粉紫色的云霞，下方是城市高层住宅楼的深色剪影，右侧可见一台塔式起重机的轮廓，楼宇间有零星灯光点亮。",
+   "bytesSha256": "0f3755ef2ded42fb1f9175d92976e2d081fa75c5febe24414b404f4c7b2234ee",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:40:31.855Z"
+  },
+  "media-quark-sha-09584953e0982e643648511c4c3e17ffb197f545a07eb847ceed0042827015fc": {
+   "mediaKind": "photo",
+   "description": "一名戴黑框眼镜、手腕戴智能手表的人仰躺在床上，身旁的床面上趴着一只灰白相间的短毛猫，前景有蓝白花纹的织物。背景可见木地板、一张摆着显示器和杂物的桌子、办公椅以及墙面的百叶帘。",
+   "bytesSha256": "463f822b4cf1b09bfe2ee69d289ea05817f36e8d2aa4e5f1c9e93c5203a5ec50",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:40:31.855Z"
+  },
+  "media-quark-sha-dfefc33c17ba6107b3a03ba1c6ae6e3dddfb34c8a21ff53262354b43beac5763": {
+   "mediaKind": "photo",
+   "description": "晴朗天气下，几艘木船停泊在宽阔的绿色江面上，一块白色带孔的跳板从近处搭到中间较大的船上，船上放有网具等杂物。远处是覆盖着茂密植被的连绵青山，天空湛蓝，右上角有树叶垂入画面。",
+   "bytesSha256": "750db9871948b22ab31016bb956ebeddb9f7bbe268084fca572dac9655d9770e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:40:35.184Z"
+  },
+  "wechat-media:eae11bdcbee8c7cfdbeda49f087010f031223da671ee299aef5bcc14247944c0": {
+   "mediaKind": "photo",
+   "description": "一只手握着红色筷子伸向餐桌，桌上摆放着三道菜：白盘里的青椒炒土豆丝、奶油色盘中的豆腐烧鱼，以及蓝色碗中的蚕豆。背景里还有一个插着饭勺的白色电饭锅内胆、绿色玻璃瓶、纸巾盒，以及一只部分可见的猫。",
+   "bytesSha256": "37c1d54a8bf8fe4fc8899624cbd3a97115e90c9485a0029b3f52678fa21de841",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:40:44.852Z"
+  },
+  "media-quark-sha-9651869bdb7b98c8b4b942d94f149a5120e36803cf805f692920ef7317056b3a": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿黑色短袖的男子坐在餐厅餐桌前张着嘴做表情，左手按在桌上的手机上，桌上摆放着不锈钢碗、切好的土豆片、插着吸管的瓶装饮料、罐头和一碗米饭；背景是红砖墙的用餐环境，可见几位正在用餐的顾客、一名抱臂站立的蓝衣男子以及一台落地扇。",
+   "bytesSha256": "66753e59124f10471a2ae12aa1c04c3f815e02dbe2fb701c4d1d6ab23a401b06",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:40:44.852Z"
+  },
+  "media-quark-sha-42dcc0b521b43bcf96e03111582fe24ab8671d80001ac5ed3eb10e27fe9404b1": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿黑色上衣的男士坐在餐厅的圆桌旁，张着嘴，手持筷子伸向桌上的菜肴。桌上摆着多碗汤面、蒸笼点心、煎蛋和面包，还有两杯橙汁、一杯牛奶和一部手机；周围是绿色软包卡座、木质墙面、盆栽和高窗，背景可见餐厅其他桌椅和吊顶灯具。",
+   "bytesSha256": "45aa60bff8006142178274f131e4d0f601c6705225ef2e7c050aab660c76c0c0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:40:44.852Z"
+  },
+  "media-quark-sha-e30c5616753d4ddcde77bee59241fecc5660ad7eb0354bb74166ee1ddd499b74": {
+   "mediaKind": "photo",
+   "description": "床上摆放着一批母婴用品，包括一只灰色考拉毛绒玩具、装着婴儿衣物的粉色礼盒、婴幼儿纯棉起绒毯包装盒、枕头、婴儿清洁棉片和几包棉柔巾等，背景为衣柜和浅绿色墙面。",
+   "bytesSha256": "201da32daaae7e2af0aa2af0667ca689fccab4b0c999c4693118b7e6ea1aaade",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "wechat-media:690d9fecb8563500ff620a2a1a0dc27305468bc098c4f57b6d453a8b87397ac7": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿条纹上衣外搭深色外套的女士坐在紫色餐桌旁，右手举起一杯黄色饮品。桌上摆放着煮熟的螃蟹、一盘红色菜肴、一碗蔬菜蛋汤以及多个碗碟和蘸料小碗，背景是墙上挂有电视的客厅和吧台区域。",
+   "bytesSha256": "2854972871d882b20763b64f637a24eefa56b194f79cbd69c4aac60d78478d18",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-23768f772d01c2841b410a21d840fd31b24fc38f21982b04ffb8b89d2a232996": {
+   "mediaKind": "photo",
+   "description": "室内客厅铺着木地板，右前方一只狸花猫坐在地板上看向镜头；左侧有一张玻璃台面的深色茶几，上面放着纸盒、粘毛器和袋子等物品。透过门框可见一名穿黑色上衣、灰色长裤的人正弯腰在卫生间里靠近地面的盆具旁，脚边还有一只猫，右侧里屋的窗边立着猫爬架和一个黑色行李箱，窗外可见楼房。",
+   "bytesSha256": "ea730189152e5831ff4412860bbaf918fc21bcf020d829f2b58aa451348a6a09",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-ea7b0b81d7a03bd17d129e6840c428552ea304120e9e76dd1cbd4fb9f433c8ca": {
+   "mediaKind": "photo",
+   "description": "在类似机场值机大厅的玻璃隔断前，四人并排站立面向镜头：左侧穿红色羽绒服的女士面带笑容，她身旁是穿米白色长大衣、围浅蓝色围巾的女士，中间穿黑色外套的年轻男子手里提着一个白色手提袋，右侧穿黑色外套、内搭花纹毛衣的年长男士站立微笑。背景可见值机柜台、堆叠的行李车、写有'Passenger Safety'的提示牌、蓝色无障碍标识和白色服务台，右侧地面停着一辆轮椅，左下角露出部分黑色行李箱。",
+   "bytesSha256": "63465e53fd60bf678b6e4d37b33ba6657cbdc115f757edea50b7a865e703f708",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-208de7d59d6881cdc09cfb2555fc851585885e350e5382cfc58310e6c701079f": {
+   "mediaKind": "photo",
+   "description": "一位穿红色棉服、戴眼镜、挎黑色单肩包的老年女士与一位穿黑色羽绒服、内搭几何花纹毛衣的老年男士在机场航站楼内挽着手臂面向镜头站立微笑。背景是白色流线型吊顶、编号为N04至N07的值机柜台、航班显示屏、蓝色隔离带，左侧还有一名穿制服的工作人员。",
+   "bytesSha256": "bacf96d979401f4b4900529a93b0ca4a51c81c491f7fdffc5f5bf528991c5abc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-5dee9edc9c3fe42fb83969614ab5349c5fe334ff2fe1f2d5bcbc4883374a9cdd": {
+   "mediaKind": "photo",
+   "description": "三人在机场航站楼值机大厅面对镜头站立合影，左侧女士穿红色外套和红裤、手拿小包，中间女士穿米白色大衣、围绿色围巾、斜挎粉色小包，右侧男士穿深色外套配花纹毛衣，三人站在黑色隔离带围出的通道前；背景是带有白色树状立柱的挑高天花板、亮着的值机柜台屏幕、自助值机设备和红色地毯，远处可见其他旅客。",
+   "bytesSha256": "68296c85e4efba0e994a2ab29807125c4a13aefa4d1aeb2c59e6078f61c27b08",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-43156061990358e57551a461348e7d0621cacbbd609ef14bfde34c8b2ac9558f": {
+   "mediaKind": "photo",
+   "description": "在一座有着白色流线型穹顶和天窗的机场航站楼内，一位穿黑色外套、内搭格子衬衫的老年男子面带笑容，双手扶在行李推车把手上，手腕戴着串珠手链；他身后站着一位戴眼镜、穿红色棉服的女士，背景可见值机柜台和电子屏幕。",
+   "bytesSha256": "3e1fc006d854e9e00122c8a6093a1a97a46ca37095253e3443a0ab21e534b4bf",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "wechat-media:b8fc0a6c874c462958cca695aa081652314d80b8ad5c7aa85d59af9dc9ba77be": {
+   "mediaKind": "photo",
+   "description": "四人并排站在类似机场航站楼的大厅里面对镜头，左侧女士穿红色羽绒服配红色长裤斜挎包，第二位女士穿米白色长大衣、围蓝色围巾并提着米色手提包，第三位戴眼镜的男士穿黑色外套内搭米色连帽衫，右侧年长男士穿黑色外套配花纹毛衣；背景可见值机柜台、玻璃隔断、无障碍标识牌和一辆轮椅。",
+   "bytesSha256": "28cefce783dce37a385f854ab1ed55484f8d220a6bf9d88dfa370706e88414b1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-63780693944d2c78a23284e2bb847348e820109dcd6153961599ce5e84eea7c8": {
+   "mediaKind": "photo",
+   "description": "飞机客舱内，蓝色座椅套着印有卡通熊猫图案的头枕巾，过道里站着许多乘客，前景一名戴眼镜、穿黑色外套的男子低头看着手机，上方行李架内放置着黑色行李箱等行李。",
+   "bytesSha256": "7a966670171038dff7248eb5f87a8f2cf24a302bec7bbd06a285e92a22148dab",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-13a74d46e56c257e41d4b1ad1556a61e93953bcc9d76b71d6ad96fad4eb77323": {
+   "mediaKind": "photo",
+   "description": "室内大堂中，一名戴浅色毛线帽、穿夹克和深色长裤的人背对镜头站在台阶上，正对平台上放置的聚光灯和一幅大幅人物肖像画面，右侧立着一棵装饰金色白色饰品的圣诞树，树下摆放着多个包装好的礼物盒，周围有粗大立柱、休息座椅和楼梯扶手，上方是带栏杆的二层回廊。",
+   "bytesSha256": "902194c726cffdb5309ba0785c2202cf6312efcea40d28af85b8ba0487f956bc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-6f0fa0d926cabe8efa85ee8751def98f58f798c31b1036d7eb07c67a16d396f7": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿黑色外套配米色连帽衫的年轻男子坐在餐厅木桌前，一只手搭在桌上的白色纸盘上，另一只手靠近一杯啤酒；桌上摆着铺在牛皮纸上的意大利辣香肠披萨、一杯深色可乐、一部手机和两个玻璃调味罐，背景可见餐厅的木桌椅、可口可乐冰箱和窗外夜景。",
+   "bytesSha256": "af011ba2ef2deefeadb7b9eb24807f3a0992e2656bcc34e0be62ef3b2014240f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "wechat-media:d7df93da1f2a23cff4d33ef2143e638913207fedaf18b73e7a996164c9080d3e": {
+   "mediaKind": "photo",
+   "description": "在飞机客舱内，一名戴眼镜、穿浅棕色连帽卫衣的男子举着手机自拍，身旁一名戴眼镜、穿米白色针织毛衣的女子低头看着手中的手机；座椅头枕套印有卡通熊猫图案，后排还坐着其他乘客，头顶行李舱敞开并放有行李。",
+   "bytesSha256": "61a75a3d15b98e317e8cafabe34f6a3c1763003268e8a5c21162df642044505e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-910748d705aaca2757775d73723e523a7b37ed2fc8bd2f710470b34f9a82a05b": {
+   "mediaKind": "photo",
+   "description": "第一人称视角低头拍摄，画面中一双赤脚并拢踩在深色地垫上，脚边放着一双凉拖鞋，人物身穿红色衣物；右侧可见金属踏板或固定件，环境疑似车厢或房车内部。",
+   "bytesSha256": "07660631c4e318797436aac33c6d2fd3324ae9dc83a64f6679b9b86b01c5a02e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-530f9f7e89375959639d99cafe92eade0d8ebb952f65c93ebc9725f6a2319cc6": {
+   "mediaKind": "photo",
+   "description": "一位长发女性侧躺着，头贴在前方物体上，身上盖着浅色针织织物，眼睛半睁看向镜头。背景是一个室内房间，阳光从窗户照入，右侧桌台上放着一个蓝色的包，墙上挂着一幅画。",
+   "bytesSha256": "52d8f57ac56634f1d2f125d2b06fcb474daff1e5d502f2cc5b20a020fa855da3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-d1d3260174ee2aa57543ea5a9bc01b3c39932315283840d3cda5531c9d1fcf97": {
+   "mediaKind": "photo",
+   "description": "一位戴黑框眼镜、脖子挂着蓝白色U型枕的女士坐在飞机靠窗座位，对着镜头比出剪刀手，胸前垂着红色耳机线，手腕戴有串珠和手表；身旁的舷窗外可见机翼与天空，舱内被粉红色灯光笼罩。",
+   "bytesSha256": "062db91ec2981716886c21928ce8b4db8b7c5c2a62b4651e09943cb53f4fedc4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-2f7e28888e6b5295b1af4ff63cfb987c4767faff657bbb3e0c899c39ef40dd95": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿米色连帽卫衣的人坐在驾驶座上，双手握着方向盘驾驶一辆日产汽车，车辆行驶在有停车标志和其他车辆的路口附近。车内中控台上有充电线和手机等物品，阳光透过车窗照进车内。",
+   "bytesSha256": "7292eda60dbb0b874ddae07c8e4ad2fa294473c0a96246491da06841871d68b1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-814691f1ec8f7bf7b78107a4a35c3f9260f3b67781edf8056417ef736b26e49f": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿米色连帽衫的男子坐在汽车驾驶座上，双手握着方向盘开车，面前的中控屏显示着导航地图。车窗外是晴朗天气下的高速公路，道路上有包括一辆黑色SUV在内的多辆行驶中的汽车。",
+   "bytesSha256": "92181f87178726f686229f226328b9e44789748725e6b653701d067b0be7a302",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-8fde1182af9878cfd502b35b8fcfb77c4410fec16f563e851728741fcd05f266": {
+   "mediaKind": "photo",
+   "description": "夜晚飞机客舱内，一名戴眼镜、穿深色外套和浅色连帽衫的人侧身坐在舷窗旁，转头望向窗外夜景，窗外可见大片城市灯光，机舱内呈蓝紫色调。",
+   "bytesSha256": "2f1de7bd796297488641fd74340448db4fce8c0038e1fbc0c183d9102dbc1339",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "wechat-media:cbc237c1d9bc6c06484d2c51cc5c4fb7a43dabbd850daebfbb0a973039df7f22": {
+   "mediaKind": "photo",
+   "description": "飞机客舱内，前景一名戴眼镜、穿黑色外套配米色连帽衫的短发乘客低头看手机，周围蓝色座椅的头枕套上印有卡通熊猫图案；过道里站着多名乘客，有人在看手机或交谈，上方行李舱敞开，里面放着黑色行李箱和银色行李。",
+   "bytesSha256": "b15417e3cbc8eb79f3159ed17a2eedf35a1cb75967c7e01ed44491010c602803",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-93da15a2518cf697fa9faaa309a8be80940a847c7688f311e38aca75c3ad1312": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿米色连帽卫衣的人坐在餐厅卡座里，右手用筷子夹起碗里长长的面条，左手扶着桌上的一部手机，面前摆着一大碗牛肉粉汤。桌上还有一杯加冰的深色饮料、吸管和印有中文广告的桌垫，背景可见餐厅内其他座位和顾客。",
+   "bytesSha256": "9d64bacaff270f648b9728dc6e3e844a24d2fc66699cf13d1ff1fc3f86f9dff1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-c0c734ba85cef422d7606afad52156fb7dd9fec57264100365edfd4981fec0b0": {
+   "mediaKind": "photo",
+   "description": "餐厅深色木桌上摆着一盘垫有蔬菜丝的肉菜、一碗撒着葱花的汤（筷子搭在碗沿）、另一碗汤和一把汤勺，旁边还有小碟酱料、一杯冰饮、摊开的中文报纸和装有单据的小托盘。画面上方可见一位穿米色上衣、手腕戴着黑色手表的人搭在桌边的手臂。",
+   "bytesSha256": "8fbf626ba43758e22d7459693a623518d1bc3d4d4a42b81f541de6ea5a758fa6",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "media-quark-sha-da4a524e745a3be3e4733c678f912251ad91cc2d8ae9a3e830f806d942322fff": {
+   "mediaKind": "photo",
+   "description": "一张近距离自拍，一位黑色长发的女性仰面躺着，双眼半闭、嘴唇微张，未化妆，身穿深色上衣，背景是浅色的床头板或沙发靠背。",
+   "bytesSha256": "d0189b35f112d6c54467b10e8045f8d856ff78007682430f9365233c82f59958",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:41:28.146Z"
+  },
+  "wechat-media:765ac7e7f19d105f926d85c9f90f3aff48b1aacc8fe23d5fdb4bfb269241e41e": {
+   "mediaKind": "photo",
+   "description": "一名穿着黑白条纹按扣连体衣的新生儿仰面躺着，一只成年人的手伸在婴儿胸前，指尖轻触其下巴下方。婴儿身下是黑白条纹的软垫，背景模糊处可见一块亮着的屏幕。",
+   "bytesSha256": "0b47a675de3b85dae69fc3fba26cc8a8a584ba6e1dae7d97c6c2b028edc365cf",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:c37a349784ee7c10a7b8373c83ae29fd03afaa7bc3dd777082b23be515d51d4e": {
+   "mediaKind": "photo",
+   "description": "一个新生儿趴在大人胸口，穿着深色带图案的衣服，浓密的黑发，眼睛闭着似乎在睡觉，大人的一只手臂托着婴儿。背景是床铺，可见蓝色和白色的枕头及床品。",
+   "bytesSha256": "44942b8b2da04e554986702803f7d5f84319ddc0a931014b94f23f15257da574",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:a2d3d35c8e2081403088b5211b28c59fb8d9a4cc992253b588e1f390f4044c56": {
+   "mediaKind": "photo",
+   "description": "一个穿着深色条纹上衣的婴儿躺着，头部靠在带有蓝色图案的白色枕头上，画面略模糊。",
+   "bytesSha256": "104f3c5238e76af4bd697cf5a3cdef611ed7cd72947030f3d9ad3c4201ac4d06",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-fbd1daed2a866f24be319328e8785462c955dc2c4e2f51439fe7cb5f45e62541": {
+   "mediaKind": "photo",
+   "description": "一名短发女子侧躺在床上，头枕花纹枕头，双手拿着一部黑色手机低头看；她身旁一个穿条纹连体衣、含着安抚奶嘴的婴儿躺在床上。画面左侧前景有另一人抬起的腿，床上铺着灰色被子，背景可见窗户和窗帘、墙上的花卉画、蓝色床头，以及柜子上摆放的黄色篮子和瓶罐。",
+   "bytesSha256": "a9929da200f38ee6a4e236e4ea33043d78d06dfe05de6c34c454207ec09ff1e1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:37224e03cfce8181db65e17f6ec3affdf1a8a6a4822645386ed9ddee8dfe6466": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰躺在铺着白色被褥的床上，穿着灰白条纹上衣，双眼闭着似乎在睡觉，头部旁边有浅色的枕头或被子。",
+   "bytesSha256": "5d1798b767a1a2d79e4acf6f048d48cbd47ad96691ad8d67e8c8d87d242841ab",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-f9298cb2ebb7edebfbfc00c07b9195da9c778b15be51bba81157dda21f718a8a": {
+   "mediaKind": "photo",
+   "description": "画面是一个晴朗天气下的街道路口，路边生长着多棵高大的棕榈树和茂密的阔叶树，左侧是一栋白色建筑。路口灯杆上悬挂着交通信号灯和写有“Laguna Cyn”的绿色路牌，前方柏油路面上可见人行横道、停止线和自行车道标线，路旁是平整的草坪。",
+   "bytesSha256": "07f201b7e36d5bab69c6e9d5da90592c6afbca83b457dbf17a407b6f656deaec",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-89e470ddf1363d8266dce885961d3f57c8af9c97da884b83901e1666f61f4bf5": {
+   "mediaKind": "photo",
+   "description": "一辆黑色皮卡的后排车窗中探出一只棕白相间的狗的头部，狗朝车外张望；背景中可见粗壮的树干、金属围栏和绿色灌木丛。",
+   "bytesSha256": "bc24e42a92f63127653f1f383fb11b2164473fdb7008c4058fda691dd652dd36",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-6dcde62d697caffaad9464208d806839a472a24f918eaead1d0852d5a3a9c10d": {
+   "mediaKind": "photo",
+   "description": "从行驶车辆中拍摄的黄昏高速公路景象，画面因移动而模糊，天空呈粉橙色晚霞，远处有一栋亮着灯的高层建筑，右侧路面上一辆亮着尾灯的汽车正在行驶，画面右上角可见一块蓝色发光的广告牌。",
+   "bytesSha256": "5521804ab6b1eef64e5267c952f3b3459493c231e64f7d9a6eb9c7056a1f1398",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:1f7f84283de917efc32773b0a929e5096e75e484c4c15a54249711bc6426adb3": {
+   "mediaKind": "photo",
+   "description": "一名闭着眼睛的新生儿被白色包被包裹着躺卧，画面右侧有一只成人的手搭在婴儿身旁，背景是带有白色花纹的深色布料。",
+   "bytesSha256": "6a35340ff84b2af7afb963a7a3a6ca105d5e4864ef84dc3bcb84ed944dd8326a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-744f7e7e0530fb9dd704b2e74264a8554934b3eb74cabb509564bb78d0aa5ab0": {
+   "mediaKind": "photo",
+   "description": "一位戴金属细框眼镜、穿深色卫衣的人坐在餐厅的浅色木桌旁，低头用右手拿着勺子往面前的蓝白花纹碗中加东西，碗里是配有青菜和豆芽的汤粉，桌上还放着一部手机。背景可见玻璃门窗、青绿色凳子、一把黑色高脚椅和一个白色桶，地面为灰色瓷砖。",
+   "bytesSha256": "2450e3483ef8c7aab0bd7d6e622f6ba93b3a7a9f6a4a88d967d88937ed19f22c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:308b8e6308d9be4dbffe589ad6e015cda60002702665de146ff821c4441c0157": {
+   "mediaKind": "photo",
+   "description": "一张新生儿特写照片，婴儿闭着眼睛、头发稀疏，被白色襁褓包裹着，背景模糊呈浅米色调。",
+   "bytesSha256": "8500f26e0023e55737e7b64b474c84a2a2803149487d51b4e4129190d73ada11",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-4897261ad2b554e4aa956a1728423c647a4b4c74c3122836c7b4f803e656d07a": {
+   "mediaKind": "photo",
+   "description": "一只成年人的手指正轻轻触碰婴儿光裸的脚趾，婴儿的脚放在白色褶皱毯子上；背景是居家客厅，左侧电视开着，沙发上有人，旁边可见小桌、纸巾盒等杂物。",
+   "bytesSha256": "68ee314438ca5f1780878a0083ae6c3ef92866f7f5eb5093bd53dcb9de9ac173",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:4dbd40e28ada92a779cb5ddc9b438b33be1684d540761219c92e8f7ddfe2ea09": {
+   "mediaKind": "photo",
+   "description": "一个新生儿躺在床上，睁着眼睛，微微张着嘴，身穿印有小猫图案的白色连体衣，头枕在带有灰色几何纹路的枕头和床品上，身上盖着深灰色的织物。",
+   "bytesSha256": "b032b9f2bc28d158d8d2e695df4094ad0e259ef33b6de352e18e5675a3abc44d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:d569ddec70640cf35677994a5f3031bcf82d3935af4ee8329d992037e661dd3e": {
+   "mediaKind": "photo",
+   "description": "一个新生儿躺在床上，穿着印有卡通小猫图案的白色连体衣，双眼微睁、嘴巴微张，身上盖着深灰色绒毯。背景是棕色与白色波浪纹图案的床品。",
+   "bytesSha256": "ecdf789f1e70b74a6607d198733cd1d6c1dbb02f90ce7bdbece811f756ca81cf",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:56c9874a7d8a800c4c043115650dd3a3d30c08093f71b85d95997000b05d76f4": {
+   "mediaKind": "photo",
+   "description": "一个新生儿闭着眼睛躺在床上睡觉，身穿印有黑色星星图案的白色衣服，一只手臂弯曲靠近脸部，头枕在灰白花纹的床单上。背景中可见灰色窗帘、床头板，旁边桌上放着矿泉水瓶、纸巾盒、按压瓶和一个碗。",
+   "bytesSha256": "e75b99f78a9bb639f8b13fe5bb4d9702334dec6a1f7d4a8f8c6c81a3c945df0c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-3aa1c87990092f839a33d60372bf7087b8db8e6c42de8c8787775911a5966faf": {
+   "mediaKind": "video_frame",
+   "description": "一名戴眼镜、穿黑色外套内搭米色连帽衫的男子站在室内，双手扶着婴儿车把手低头看向车篮，车篮里铺着白色毯子和织物；画面右侧是一棵挂满金色银色球形挂饰和灯串的圣诞树，背景白墙上的置物架摆放着白色大象摆件和绿色盆栽。",
+   "bytesSha256": "33af033d32da1acfbe122a0c8532939e1cfb2c1df2d3b236a9d6f874d8ee58e3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:2e19e6a41e2876f37922f4746e94259fa8ac53c7d3bbe026d5096f6b8c102b7f": {
+   "mediaKind": "photo",
+   "description": "一个穿着带深色小图案的白色衣服的小宝宝正躺着，头部微微偏向一侧，躺在粉色的枕头或床品上，画面上方还能看到部分深色的织物。",
+   "bytesSha256": "d9ce0006d80e2b85bebb1a50a4442ed0c1ef653c0fea7d316cd4d40ec14c71eb",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-34d1255e3ab4b937bcaf5be3da183515a5ad0311119b709cc711310edf752ef9": {
+   "mediaKind": "photo",
+   "description": "一只成人的手握成拳头，与一只婴儿的小手轻轻相抵，两人身下是白色毛绒毯子，画面下方还露出一角粉色织物。背景是铺着地毯的地面，散落着白色电线、插头和电源设备，右侧可见金色家具腿的一部分。",
+   "bytesSha256": "3588f4a70c8315c7d51cde6b83b66b9228ff1b99f043a5237990b6749c64ee4e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-63f9222faf35d6df2dd83afaf7e59f3d7d41022678b23037f9167e88df1c64a1": {
+   "mediaKind": "photo",
+   "description": "画面左上角可见一名婴儿的部分脸部，嘴边含着安抚奶嘴，躺在白色毛绒毯子上；婴儿伸出一条胖乎乎的手臂，握拳的小手搭在画面下方一只成年人的手上。",
+   "bytesSha256": "b628667c760fcd67623a0010996a8f43e2f970e360623408b498ed7e2185d2a8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:9b6699f3becae214a973d2042cf97b87f352c273a73142734eb0b47f8836c3ef": {
+   "mediaKind": "photo",
+   "description": "画面是一个婴儿的脸部特写，婴儿闭着或半闭着眼睛躺着，上身裹着或穿着黑白花纹的布料，画面下方有一块浅粉色的织物或表面。",
+   "bytesSha256": "33bb1d07deaa3412fa80a235aa4a47c3f4d29c5e1d5569951f44b3041553082e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:b98f62719858add024ed516f1a4825f889aa870917f433ede6d884f40d8e5c83": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜的短发大人坐在棕色皮沙发上，怀里抱着一个闭眼熟睡、身穿带彩色圆点白色连体衣的婴儿，身上搭着米色布料和粉色毛毯；背景中可见藤编篮里的绿色盆栽、墙上的装饰画、图案座椅和天花板的圆形顶灯。",
+   "bytesSha256": "1f7edbb8d451cafce8e55ad1bcdaa1eac075e2a13a737981dbdcebdca7f930e0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:52791470872573a44da9517f0658351ca0577aa19ce3d61dd1e4f75d24c4dd64": {
+   "mediaKind": "photo",
+   "description": "一个闭着眼睛的小婴儿，穿着带有细小图案的白色连体衣，似乎在睡觉，头部微微低垂，身前有一块深绿色的布料或垫子，背景模糊呈浅色调。",
+   "bytesSha256": "3966b739e9dee27fd175678a73d4f8e5419480d2a61163fe2298efb5392561c5",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-f5b539df4a89df41fe9f08ced4d213fe21ee9b85ac3f11f760cbb526af250efd": {
+   "mediaKind": "photo",
+   "description": "一名戴口罩、穿黑色外套的人站在机场航站楼外的路边，一只手扶着红色行李箱拉杆，身旁停着一辆载有被褥和包的婴儿车，旁边还有一个黑色行李箱；背景可见立柱、行驶的车辆和其他拖着行李箱的行人。",
+   "bytesSha256": "c8b6c234f4a93d825a2a2385508add771b530cc3b5558f85d72bb6c076268365",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-1fd41d5af47463fa43ef5d4c783f8814be02ede7157a3b9c461d520fdafd7d47": {
+   "mediaKind": "photo",
+   "description": "夜晚透过机场候机厅的玻璃窗拍摄，玻璃上倒映出一名坐在黄色行李推车上的人，怀里抱着物品，旁边还有另一个人；窗外停机坪上可见地面作业车辆、白色皮卡以及远处停放的阿拉斯加航空客机。",
+   "bytesSha256": "75454302653b9da823ab25f99b6d120e92b020238a651f68db52805a40d5f40a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-4b7e8718d87589420b0303aebe8448065a9a0e91060ffed0716f0699ac4f4fc2": {
+   "mediaKind": "photo",
+   "description": "一名婴儿戴着白色帽子，盖着印有兔子图案的白色被子，躺在灰色顶棚的STOKKE婴儿车里睡觉，车前装有棕色皮质扶手；背景中一名背着印花背包、穿黑色上衣和牛仔裤的女子站在行李箱旁，周围是金属门、蓝色指示牌和黄色地面标线，看起来像机场或交通场所。",
+   "bytesSha256": "4ace7c8f376490d0d8b5075bfbc848a7c24a7a509f5ea042bc71c969624e1d85",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:253a0617247b54fc871ce72dc0af882659cea01a5817029c1b517d3dbdab9e4d": {
+   "mediaKind": "photo",
+   "description": "一张画质模糊的照片，一个被白色毛巾或毯子包裹着的新生儿闭着眼睛躺着，头部略偏向一侧，身下和周围是白色的布料。",
+   "bytesSha256": "b421701dd90fadfbbca0e1a157624a458143121938186a705e64dec690d00389",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-5b3ee5a7335670a7d242062349c7393e9c7e09cee7e077f9b2fcac956c450dd5": {
+   "mediaKind": "photo",
+   "description": "这是从飞机舷窗向外拍摄的夜景照片，右侧可见舷窗黑色边框和机舱内壁，窗外深蓝色的夜空与暗色海面旁，沿海岸线延伸着大片连绵的城市灯光。",
+   "bytesSha256": "2361449b09e808507759fd1d7be2168c64fc1d03e0611929179016faaa9fe0ce",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-45860295e5286b7e565d762fc65ace9d7b684d7f909cc8cdbff1fb671eb39f07": {
+   "mediaKind": "photo",
+   "description": "一张从飞机舷窗拍摄的照片，画面左侧可见飞机发动机的一部分，左下角有红色反光。窗外是夜晚的高空景色，深蓝色天空下俯瞰着广阔的地面，城市灯光呈黄白色散布在黑暗的大地上，远处天空与地平线相接。",
+   "bytesSha256": "d11e758961a014bc1ab7c122fd844b278147766ade18b1c4ae91b91940bf8ad1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-0dbb625f9cc690eac3b3626fad6eac26d50c410b60f31a36ffeaf71945fc0367": {
+   "mediaKind": "photo",
+   "description": "从飞机舷窗向外拍摄的夜景，画面左侧可见被红色灯光照亮的飞机发动机，下方是高空俯瞰的大片城市灯火，地面布满密集的点点灯光，上方是漆黑的夜空。",
+   "bytesSha256": "119cf122999cbe725cef500f386220876c40d30d0336f1e0b06d738714524687",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:f19cca89c7870de66e68c0711938d6942c52f8af6b25a768a3c6498751382514": {
+   "mediaKind": "photo",
+   "description": "画面近处一辆灰色Stokke婴儿车里，戴白色帽子的婴儿盖着印有兔子图案的被子躺着。背景是金属电梯门前，一名戴帽子的男子背着包站在黑色拉杆箱旁，另一名背着碎花双肩包的女子推着行李站在电梯口。",
+   "bytesSha256": "d5b992ee988a3d137488fe54268dc21cf47771867a5f8f4b82d193ed24942611",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:9dac13d690a941c91410986df920351fc335626a4b8b8c3433a32aa4ca782568": {
+   "mediaKind": "photo",
+   "description": "一位身穿米白色大衣的女子背对镜头推着一辆深灰色婴儿车走在机场航站楼大厅内，车内放有白色包裹，前方是带有'DUTY FREE'和'TOBACCO'标识的免税店，周围站着不少背背包等候的旅客。",
+   "bytesSha256": "aff639b09ce40c5543936fffcfd8ded3cef27485aae76cf677670b8ab95aee8b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:a282b04bcdd811ff966c7f2ad955a895a9c5972cb904b552abb2a2a1a86b482f": {
+   "mediaKind": "photo",
+   "description": "一名戴白色小帽的新生儿闭眼躺在婴儿车内睡觉，身上盖着印有兔子和小花图案的白色包被，头旁垫着蓝白条纹布料。婴儿车前是一根棕色皮质扶手，右侧挂着一张带条形码的白色标签。",
+   "bytesSha256": "22ccbe06a8f851b3a3d3d4e71636592380ac119ef6aad199b0fd0198eca103b1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-b70bb06172acab91860fb9698d513c829b1f1dfcb78b63bf7534cdc487959de3": {
+   "mediaKind": "photo",
+   "description": "一名戴黑框眼镜、穿米色连帽卫衣的人正低头用手中的透明婴儿奶瓶喂奶，怀中的婴儿裹着白色印花包被、戴着印有橙色字样的白色帽子，身穿带云朵图案的白衣；背景可见蓝色座椅和其他乘客，场景似在列车车厢内。",
+   "bytesSha256": "d3501865575d1d7dc6c878160e544f1b7eacb23ca5e8b7166384119695bc51e8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-b3f5ceb17637c5863dea3008fce6a5e64b6beeb31631205b983910af2b65520b": {
+   "mediaKind": "photo",
+   "description": "一名穿浅粉色连帽衫的成人侧躺着，手持一个透明奶瓶倾斜着给怀里的婴儿喂奶；婴儿闭着眼睛，戴着绣有橙色字样的白色帽子，穿着带图案的白色衣服，一只小手搭在胸前。",
+   "bytesSha256": "a4acfa418f5e3d0f0c5cfba427932c9f89200ff9f9261f15f5301dd52031aa8f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-0ad0f5206f89b292987f95e1ea9b06a7bf091792664af8bcedd834ffa8dc0d8b": {
+   "mediaKind": "photo",
+   "description": "一名身穿黑色夹克、内搭米色连帽衫和蓝色牛仔裤的男子背对镜头，推着一辆灰色婴儿车走在商业街上，车内可见用白色织物包裹的婴儿。街道两侧是带有中文招牌和熊猫装饰的店铺，路上有几名行人，远处还有更多店铺和树木。",
+   "bytesSha256": "a15e496241d6dbb6a92524225a427ab8921065342949e7fa17e66f8f0727fca6",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:ce48e73be652c30a4397e92932231520dc2e8e1e04feb4a2b58fbc244fd98136": {
+   "mediaKind": "photo",
+   "description": "一名戴着白色帽子、身穿印有蓝色图案的白色衣服的婴儿被大人抱在怀中，婴儿张着嘴看向画面左侧，画面右侧有一只手扶着婴儿的头部附近，背景可见飞机舷窗，窗外是天空和云层。",
+   "bytesSha256": "a022461af3533014f847fbd6d1d15dc925722c5a37375d86f0813bb6e939c002",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-187a7ff890b1c964771898f2aa5bd01649791225d9588125c0c9a5a0bc2d3267": {
+   "mediaKind": "photo",
+   "description": "一名身穿黑色外套、内搭米色连帽衫、蓝色牛仔裤和黑色拖鞋的男子背对镜头，正推着一辆灰色的婴儿推车走在铺装路面上，车内可见盖着白色织物的婴儿。背景是一条商业街，两侧有店铺招牌、红色灯笼、宣传道旗和行道树，远处有行人走动。",
+   "bytesSha256": "0dd29705682230c0564284df280006b692b330d08cc4337b6a893cf733a87453",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:fa72aab8e5d774c96dc8dbf725b96c2667a220665f570c6e69831ca4b00d20c1": {
+   "mediaKind": "photo",
+   "description": "一个婴儿躺着，头戴带耳朵的白色针织帽，身穿黑白格纹外套，一只手臂抬起，张着嘴，背景是灰蓝色的床品。",
+   "bytesSha256": "9468620f242b4deee488d482d2702c64c8a3a891987b1fb0b262549a10092810",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-cee9fd5a40daf5f27162b83174c8afe79ee3d88176f2e333d7f744f832458391": {
+   "mediaKind": "photo",
+   "description": "一名穿白衣的人正用长柄夹子从圆柱形炉口取出一张圆形烧饼，炉边叠放着几张烙好的饼。右侧金属托盘的网架上摆着油条、芝麻球和三角形炸饼，前景处放着数袋带黄色瓶盖的袋装豆浆。",
+   "bytesSha256": "2f5846989751a843b1170558910b2eeb17e898f76a16f11f744f6a1a79172e62",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:fadf09cd1acf799e538bc18ef5d046d842213c905ed454d539c8df994d5a2941": {
+   "mediaKind": "photo",
+   "description": "一个婴儿躺在床上闭眼睡觉，含着粉色安抚奶嘴，头部两侧靠着两个印有小鸡图案和'Piyo Piyo'字样的黄色圆柱形枕头，身上盖着印有兔子和花草图案的被子。",
+   "bytesSha256": "7fa0c7099696c38b2b132f09071df6762abf37216dd8822122b4339a8e4d385c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-5cd8c4bfb72ee36ed79db2cbe69e943d56e6d0585d4dc10a582d1d53651f6b75": {
+   "mediaKind": "photo",
+   "description": "一位戴深蓝色针织帽和眼镜、穿灰色毛衣的女子坐在白色纹理沙发上，怀里抱着一只灰色虎斑猫；她身旁的沙发上躺着一个裹着黑白格纹毯子的婴儿，画面左侧有窗户，背景搭着灰色毯子。",
+   "bytesSha256": "dd4b518f162c54bff251422f379985bd9d36d85e4a6875ec85676ce72ba8c642",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-8612be1979bde944733ff64a5fca2e7973cb950bf412efa08c7d00857e1030d6": {
+   "mediaKind": "photo",
+   "description": "从汽车后排拍摄的车内场景：前排两个黑色座椅之间可见中控台、架在出风口处的导航手机和一件收起的婴儿推车，右侧后座上放着带米色遮阳篷的婴儿提篮和格子毯子，左侧座椅靠背上搭着蓝色衣物和零散物品，车内有全景天窗，车窗外可见树木和道路护栏。",
+   "bytesSha256": "b04895e55cc9d60ed46da665e716ec349bf197f1bf8eecbca07c1f78ba7e36e2",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:be2b0f1601915425112f4edb7ed801706f2b18cc6292b32533ffb2652fa94e89": {
+   "mediaKind": "photo",
+   "description": "一个婴儿躺在床上，身上盖着带有橙色图案的白色毯子，嘴里含着一个印有'Babycare'字样的粉色安抚奶嘴，眼睛看向镜头。背景是木质地板或床头，旁边有粉色床单，上方放着一双红色拖鞋。",
+   "bytesSha256": "ed092e8ba729fdf57bc813f582b80d0dcfa001358ca0114dad8d78c5b27a7b1b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:3051bde4dd4a99803b39cd75aa65d7b5a576f4b23ee0380aff28166fefafe42f": {
+   "mediaKind": "photo",
+   "description": "一个新生儿平躺在粉色夹棉床褥上，穿着米灰色带扣子的夹棉连体衣，胸口有棕色小熊图案，双臂向两侧张开；画面下方有一双大人的手正在触碰婴儿的裤腿，右上角可见粉色缎面靠枕，顶部有一块白色布料。",
+   "bytesSha256": "bf0d3b36956de650a4be60385fd8b0ea9a3a56b9446d8eb8f00835b94001980b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-e0f414ed17e1f04dd2137191760c545fb159ba5876a9fc6e481153ef8db824b8": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅灰色连体衣的婴儿平躺在铺着粉色床单的床上，两名女子俯身弯腰在床边，似乎在为婴儿整理衣裤和袜子；左侧女子穿深色碎花上衣，右侧女子穿红色外套。床上放有缎面枕头和被子，背景可见白色衣柜、一扇白色房门、拉开的抽屉里放着婴儿用品，左侧还有一个白色电器。",
+   "bytesSha256": "4d04bcc7f343480f7b461800d9dd006947722311010b4d2f05bd26743752312b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-8859dd19821c9d491449f14b9e924f2af58f4eacb063c09c6b4b1911d64b60fd": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅灰色连体衣和浅蓝色袜子的婴儿闭着眼睛平躺在灰色布艺沙发上，一只手臂张开，旁边放着灰色抱枕，背景是浅色墙面和地面。",
+   "bytesSha256": "b5f89bf9f05b8b0ee03fba84d709e10700752db7ef986eb98df5f4db34d12aa6",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-63d3e473ae37da5364f4f6e7915104f496091a6e889657fcbb3f47cf8f526207": {
+   "mediaKind": "photo",
+   "description": "一名穿着米白色连体衣、浅蓝色袜子的小婴儿闭着眼睛，仰躺在灰色布艺沙发上，双臂向两侧张开，正在睡觉；沙发旁可以看到浅色瓷砖地面。",
+   "bytesSha256": "a0bcb27507cff071878a653dc0875cce52a175df5fd20be48d09c56e88a5c2d3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-bd81646ffd2df6a0621671827a68ec0e417d849a4bbcee17ee91925973452536": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅蓝色带扣上衣的婴儿张开嘴巴，斜靠在他人手臂或腿上；背景墙上挂着一台黑色电视，旁边堆放着包袋等杂物。",
+   "bytesSha256": "41ed62f6c6e1a3fd58768efca137e074754dbbeb56e86a269c5fd6a2ae766713",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-901a9b59b62c0a0524724278d94281a11d4a4aae7e1b6e79be605ca5060883ab": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅蓝色带白色按扣连体衣的婴儿被大人抱在怀中，双眼眯起、张着嘴露出笑容，画面右侧有一只成年人的手指贴在婴儿脸颊旁，左侧可见大人的手臂。背景为浅色墙壁，墙边堆放着衣篮、衣物等杂物，左上方露出一角黑色电器。",
+   "bytesSha256": "e6c10c232b7d957b2a953a8677e668a943ff212250d517f1150a795bb534ad08",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-b5b30d51a94f7a4e0470ac901be8fd5a9de8c43135dc0ab471dabb34d69c8591": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅蓝色竖条纹衣服的婴儿被大人抱在怀里，婴儿面朝镜头，画面右侧可见一只成人的手扶在婴儿身旁。背景中有一把堆放着衣物的木椅、一个白色网状婴儿床，地面为木地板，墙上可见部分黑色屏幕。",
+   "bytesSha256": "bb01f10ead0bb34f42cfc79a189beb1e5836a0211c825b53d9ea94bb419f8ff0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:cb1cb13a282589087169a98e12dddc40fa93d61546a1187d9d67ca2264f5e5ae": {
+   "mediaKind": "photo",
+   "description": "在一家餐馆里，一名穿深色外套的男子正用筷子把面条送入口中，面前摆着一碗面条；右侧一名穿棕色外套的女子手持白瓷勺，伸向面前的碗。桌上放有盛着白色圆子的碗、一瓶红色酱料、纸巾和印有图案及二维码的垫纸，背景可见窗户、凳子和贴着海报的墙面。",
+   "bytesSha256": "c845b574c340bfdd406e8fe248be33066a392e39a9d8e41498c978f01f9add8d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:dbfff5c5558ecf41d6d0fd399a82a741d72266318192fd4ff392a70611329fd5": {
+   "mediaKind": "photo",
+   "description": "铺着白色蕾丝桌布的桌上摆放着多个装有杂物的塑料袋、一本《Feeding Bottles》包装盒、粉色八角形礼盒、玻璃瓶、木碗、藤编篮和台灯等物品，画面上用红色马克笔标注了数字（如2、4、5）和勾选记号，右侧白色袋子中露出包装盒和绳带。",
+   "bytesSha256": "5c64bb52cb5bd6f742409115482ab769ba8633ed33e72edad6c97efe77f4ba79",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:f0f7d8e720a7fb52a7809e8d00cfdf48a4152d6034aedcfcad3797d66db7ceaf": {
+   "mediaKind": "photo",
+   "description": "一名婴儿躺在床上，身穿带小熊图案的浅色连体衣，头部侧向一边，看向头顶悬挂的蓝色月亮和黄色星星布艺玩具，手臂向上伸展。婴儿身下铺着印有图案的绿色毯子，背景墙上挂有一台黑色电视，画面左侧前景有一个模糊的黄色星星玩具。",
+   "bytesSha256": "175142d429c1ab766a1b34ca806379bd52281e095c61d1b0a0d24dd533c4b6e9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:9d00ae1e0c585ab29ea196373ab52d86504dea8b623d76a5e9c06b46d386aa19": {
+   "mediaKind": "photo",
+   "description": "一个穿着米白色夹棉连体衣的婴儿仰面躺在床上，双臂向两侧张开，腿上穿着浅蓝色袜子，身下是粉色床单，头部上方是一块带有暗纹的粉色缎面被子或枕头。",
+   "bytesSha256": "8aaf5c67746ce7df917ce892ac58f3881b865c62f2c75f0bf9964c030e1cfb73",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:101250f2a440027e017063bb003cf85588c27b993f8f4dd3c6c63a80b917e294": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅灰色连体衣和浅蓝色袜子的婴儿仰躺在灰色布艺沙发上睡觉，双臂摊开，头朝沙发一角，旁边放着一个灰色抱枕。背景为白色墙壁和浅色地面。",
+   "bytesSha256": "81adc863d19689aac341a51b17fba2b628889cd506ba27f9f2700d26659dc84e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-c74453de6a01584588caaafc4ee6de868e74a6a70e7fafc49c85c58bcf719f4b": {
+   "mediaKind": "photo",
+   "description": "一个戴着白色尖顶帽子、穿浅灰色连体衣的新生儿仰躺在灰色布艺沙发上闭眼睡觉，头部两侧各放一个印有小黄鸭图案的黄色圆柱形定型枕，身上盖着印满黄色小鸭图案的白色纱布毯，画面左上角露出一个包袋的一角。",
+   "bytesSha256": "9f6d702bd37e2597a3238269edf2de2b32eb64f902b0844a031cb14ae3d87398",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-7b66f458219bddaf7ed75ca845c189a9d03c6917a812bb10f5448e88c2bccfa2": {
+   "mediaKind": "photo",
+   "description": "一个穿着黄色上衣、身上裹着白色布巾的婴儿躺在床上，嘴里含着白色奶瓶喝奶，旁边有一只大人的手臂托着婴儿，床上铺着棕色床品，画面左上方还露出一副眼镜。",
+   "bytesSha256": "22c791fbc5367dd3b0313908b6ecbcf3bf95ee9f9140113e7e193950c33d4de3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-47f80182d409a5313c30e198fe89b70aa6655cb5fc09aa8d6a2d48c101f16b61": {
+   "mediaKind": "photo",
+   "description": "一个穿着黄色长袖连体衣的婴儿仰躺在条纹毯子上，头枕着印有小动物图案的青绿色枕头，正看向面前悬挂着的黄色毛绒星星玩具。",
+   "bytesSha256": "9851fa1a3855fa1c106261cf1efd74d86f86bb5a7a2c0181a0783de5bf464ace",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:ab71ecc251835d381af5f38a88596b4f389079514ce8cf87d92e85371802f830": {
+   "mediaKind": "photo",
+   "description": "一个戴着白色针织帽、穿着白色衣服的小婴儿睁着眼睛，似乎躺在婴儿座椅或提篮里，背景模糊，隐约可见蓝灰色的环境。",
+   "bytesSha256": "b593634be148a7408d123621a24bfbd6a85ce7b621ae54d8eedc6a24b4a89c79",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:82f386c5a762dbadf678702e974ed31ae19490c689c6a5956d2b2c19e92dad30": {
+   "mediaKind": "photo",
+   "description": "一位戴紫红色针织帽和眼镜的老年女性坐在桌旁，手里举着一张带黑色椭圆形和放射线条的黑白卡片，朝向躺在白色软垫上的婴儿，婴儿穿浅色衣服、戴白帽并盖着条纹毯子。桌面上还放着粉色安抚奶嘴、黑白图案卡片套装包装盒、透明小盒和白色盆，背景可见灰色沙发、餐桌椅和厨房区域。",
+   "bytesSha256": "543df6d20107bb4d2c0e0dca124b9cb22b7a674c52c0779f1291456a4864d92a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:491579b014fd7a4df3d6673968cc8999df50aac87d9f58724acf67c2300ac5c6": {
+   "mediaKind": "photo",
+   "description": "一名新生儿穿着米白色连体衣仰卧在床上，身上盖着印有兔子图案的被褥，头枕在蓝白格纹枕头上，眼睛半睁；画面上方可见浅绿色针织毛衣和几件婴儿衣物。",
+   "bytesSha256": "be84035d5c6b0a860b3c57f264f44b5015b14cd9c4f4c6c7ac5584125c8d4383",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:faf5aabc7c85a7b6c8c0fe8616095b773aed293aa0224954812208893f2789e7": {
+   "mediaKind": "photo",
+   "description": "一名新生儿躺在铺着粉色床品的床上，身穿米白色带扣上衣，双眼半睁望向镜头，画面右侧露出成人的手臂，背景中可见一个透明塑料收纳筐和一些堆放的物品。",
+   "bytesSha256": "edfc8f5182854341119a68a52a6843ffe5fe62f450963727b248dc3918b21d7a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-5a1976599bcd555863f7b25a4e8e9e2056b5c3a3d77da407bb5c4deeb098bdd5": {
+   "mediaKind": "photo",
+   "description": "一名穿着米白色长袖连体衣的新生儿闭眼侧躺在铺有粉色床单的床上，一只手臂伸出、手指弯曲，身上盖着带有花卉刺绣图案的香槟色缎面被子，背景隐约可见墙面和家具。",
+   "bytesSha256": "b0d833b6f3172f314fe0a657affda44a5d7595f0d6717ff2ca4777220ad78739",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:d325643c9be1466219f88132525003d712e2e3ab03747dd1bb8952f853ba2a22": {
+   "mediaKind": "photo",
+   "description": "一名穿着带有小熊图案的白色衣服的新生儿躺在手臂上，睁眼朝向镜头方向，背景是铺着粉色缎面床品的床，远处可见灰色网状收纳筐、晾衣架和几个塑料袋等杂物。",
+   "bytesSha256": "b5724b3a951689b6600b38bcd1a6a6974e6266c1768c4bf265255a21a67cef3f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:1729caa13d56ba057e3cfd7bd2c94005ea69b437fb0badcaf62625c252421242": {
+   "mediaKind": "photo",
+   "description": "一名戴着白色帽子的新生儿躺在婴儿摇椅里，嘴含粉色安抚奶嘴，身上盖着米色印花薄毯，头下垫着蓝黄条纹毛巾。背景可见白色墙壁、灰色椅架和一盆绿植。",
+   "bytesSha256": "f4d94d85a53b6a3bc707aecc56cbfe1b311dbb1aefb4922d4f1301aadb878909",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-3243206f8e5799a6a9fcaafaaa39611298a36d7b46deb9078e5a2cd9954a2ce7": {
+   "mediaKind": "photo",
+   "description": "一名新生儿躺着，头戴白色帽子，嘴里含着粉色安抚奶嘴，身穿米白色衣物，眼睛睁开望向镜头，身下是白色软垫和织物，旁边有蓝黄条纹毛巾。",
+   "bytesSha256": "c2eeb6277f7909a5f0716db7494e6ed28c4320b44c1ca69e472e7dafc6de2656",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:a553ffb43cef427e965dd816f462cb1feaef4d24433666b987841fa85a537714": {
+   "mediaKind": "photo",
+   "description": "一名穿着黑白条纹短袖连体衣的婴儿仰面躺着，双眼闭合、嘴巴微张，一只小手抬起、手指张开，头部枕在大人的手臂上。背景中可见铺有花纹床单的床、木地板，以及墙角处放有衣物的木凳和一个深绿色袋子。",
+   "bytesSha256": "961978916bd9c67fbf17524540f87fd5f26ee2d3fe93ec6414a20606f71147aa",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:ef41baf28c59bc7c06eadde23dddf1a8cc928aa77212ef94f1013676b31838e8": {
+   "mediaKind": "photo",
+   "description": "一名幼儿仰面躺在铺有粉色花纹被子的床上，双眼闭合，身穿深色条纹短袖上衣，一只成年人的手臂从画面右侧伸出搭在其胸前，床上还可见穿着印花睡裤的成年人伸出的双腿。背景是一把堆放着衣物和枕头的木椅，地面为木地板，室内光线昏暗偏暖。",
+   "bytesSha256": "7325672317691afead59f1568764680c16fb84cf587750a2628a8fc900168e3d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:86f04cbdf5ddc5e016caf9afd3a002c2ca8fe9bd27c3715adc6bbcf3f99fb3c4": {
+   "mediaKind": "photo",
+   "description": "桌面上放着一个装有约100毫升奶液的透明塑料奶瓶，瓶身标有刻度和品牌字样，旁边还有一个塑料盖。背景里有一个印有'三胖蛋'字样的圆罐，罐后盘子里放着几块点心，桌上还有些水果，远处可见窗帘和窗户。",
+   "bytesSha256": "f842e44d00ba314de39c35221ad289ab3b76f324475da3c1829ba94b00a27d9f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:90f5f8a195a597fa88dc5c572a5812a9be977b90956eae670fe612602e31e7ed": {
+   "mediaKind": "photo",
+   "description": "桌上放着一碗棕色汤汁的甜品，里面有银耳、黄色果实（似白果或莲子）等食材，碗中插着一把白色勺子。碗的旁边有一个蓝白花纹的瓷盘和一台合上的银色笔记本电脑，桌面为玻璃材质。",
+   "bytesSha256": "72302dc6c17b03f929fe83a9e1ce3cf69dcc021e9e0a3098dc07e2b9a0a2c264",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:eb74ee0a1e170622c0061eb2dffc2ba8da2c092a3ca4161202348c9511197409": {
+   "mediaKind": "photo",
+   "description": "一个戴着带耳朵装饰的白色帽子、含着安抚奶嘴的婴儿躺在铺有绿色卡通垫子的婴儿床里，身上盖着白色被子，床铃上挂着黄色星星和蓝色月亮玩偶。背景墙上电视正播放一名穿军装男子的画面，旁边有窗户、绿植和红色花束。",
+   "bytesSha256": "fea7582e53508a1cf015de4ea2331988adaff2018a95a35979738773982d4988",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:dd6fb11b0b63c5244561219888e874a7d69790bcde2cc2e0165c069de34ceb49": {
+   "mediaKind": "photo",
+   "description": "一名戴白色帽子、穿米白色衣服的新生儿闭眼躺在婴儿床里睡觉，一只手臂伸过头顶，身下是绿色印花枕头和条纹毯子，旁边放着黑白太阳图案卡片、黄色玩具和安抚奶嘴，背景可见窗帘、绿植和白色电器。",
+   "bytesSha256": "c8aa7f6d61795143088d5863973f1ba7255d2071225a3329900a6f72c2a202c9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-ae5febe8830d34e16fb02d2b8118364d1fca212c160df56a98e32db2e98c2bb4": {
+   "mediaKind": "photo",
+   "description": "一名戴着白色帽子、穿着米白色衣服的新生儿闭眼躺在婴儿床里睡觉，一只手举在头部旁边，手腕处似乎戴有带子，身上盖着白色纱布被。床上铺着绿色印花床单，画面左侧有一个黄色星星形状的毛绒玩具，右侧有一个蓝色毛绒玩具，左上角还有一个蓝色小物件。",
+   "bytesSha256": "4000c1a318026d1fc4a4f28099e32c7d3fbaffe79bdfe363d5312b6014a796b3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:218b47104ca994dd71b1660d3faa796d2df4c50074c9202cfddb5aa0ee1da17a": {
+   "mediaKind": "photo",
+   "description": "一个戴着白色小帽、穿着米白色衣服的新生儿闭着眼睛躺在婴儿床里睡觉，一只手臂举起放在头旁，身上盖着白色纱布毯。婴儿躺在带图案的绿色床品上，画面左侧有一个黄色星形毛绒玩具，右侧有一个蓝色毛绒物品。",
+   "bytesSha256": "c2931fff8e03d65b4e4a7fdc633e3be6515b17eeaa5b3f32dc701c8f3696b5f9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-8db2abe872ce4b09f88af9cb8e1995eceb8fb392196e2840538344aaf2db3430": {
+   "mediaKind": "photo",
+   "description": "一位身穿红色花纹外套和格子长裤的老人双手横抱着一个穿米白色衣服、戴白色帽子的小宝宝，背景墙上挂着饰有金色\"福\"字的红色中国结。画面前方有一个浅绿色婴儿摇篮，篮内铺着毛巾和衣物，侧边挂着一个黄色星星玩具，右侧可见深色座椅和窗户。",
+   "bytesSha256": "c8a62daebae13131d09fc29cd15b948a9b30c4c19bcda2673b7dad7978def38e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:5f50b05bd66713514222181c417ac94eae619c16a402986cc85d87cde6de5f64": {
+   "mediaKind": "photo",
+   "description": "一个戴着白色帽子、穿着米白色夹棉衣服的婴儿含着粉色安抚奶嘴，一只小手抬在胸前，被身旁穿着格子衣物的成人抱在怀中，成人的手指上贴着创可贴。背景是浅色瓷砖地面、木质柜子以及上面的白色物品。",
+   "bytesSha256": "790fe46e9a5f62f8b06c2d421b3b3483495804a9970962c546f2831cde081ba6",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:5f7f6640e58942161f387bccd48419c0099086247e1bcbe00fd4b88e95909176": {
+   "mediaKind": "photo",
+   "description": "一个婴儿闭着眼睛躺在床上睡觉，身上盖着印有小皇冠图案的白色被子，穿着灰色衣服，床单为粉红色花纹样式，旁边有蓝白格纹的被子，画面上方有一块浅蓝色的布。",
+   "bytesSha256": "ba355fece1a21ff5b3f9a0b1eaa27c15a0dc3a56db37621437e91e55aeb5c797",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-2d00eb21c8ebef4e8bf85e2217c4251b94b2d9cd18b6111beb46f31d14336958": {
+   "mediaKind": "photo",
+   "description": "一个婴儿闭着眼睛躺在床上睡觉，身穿灰白条纹衣物，身上盖着印有皇冠图案的白色布料。婴儿头部靠在粉红色花纹的床品上，旁边是蓝灰色格纹的被子。",
+   "bytesSha256": "199aab9815e494e5d98227e2c6302e135711d3f942c6bddecc3e192f40dbc63c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:1521b3e5fc15504465b0cd9181334166f62ebe0be3ba1455d61e2101f111e14c": {
+   "mediaKind": "photo",
+   "description": "一名戴着白色帽子、身穿浅灰色带小熊图案连体衣和蓝色袜子的婴儿闭眼平躺，身下是带有绿色印花毛巾和黄色毯子的台面，旁边有纸巾、灰色绑带和一张印着月亮星星的黑色卡片。上方悬挂着黄色星星和蓝色月亮等毛绒挂饰。",
+   "bytesSha256": "c6742cd7a38655d638a0fa0d53a4b1ad57f39eb4457056c25e73f3201e92a357",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-87c5fc96523331488cc1f5c33a3ba11248f619d5882062168410240ec3fd76dc": {
+   "mediaKind": "photo",
+   "description": "一名穿浅灰色连体衣的婴儿闭眼趴睡在深色沙发上的粉色夹棉毯子上，双腿向上翘起，穿着印有彩色圆点的白裤，旁边伸出一只成年人的手，手指张开放在婴儿腿边的圆点布料上。背景为客厅，可见浅灰色组合沙发、白色大理石茶几、蓝白花纹花盆和窗帘，右侧沙发远处还坐着一位穿深绿色衣服的人。",
+   "bytesSha256": "425fc235a6df8347d5ec1198806f07568fd2684da2e9674dbfe423de39ff806b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:c23b17017b0603e6a81cfd40a58cc0056e18d99096ae12eaed0207dc1a339464": {
+   "mediaKind": "screenshot",
+   "description": "卧室监控画面里，一张铺着白色花卉图案床品的大床上，两只灰色猫分别蜷卧在床头枕边和床中间，床左侧搭着一条米色毯子；床头后方是竖条纹壁纸，左侧有带玻璃门的木衣柜（柜边小桌上摆着摆件等杂物），右侧床边放着一个英国国旗图案的小冰箱，上面摆着抽纸、水瓶和红色杯子，旁边地上有个白色塑料袋。",
+   "bytesSha256": "37146cb85afddd5b323724a2aa27de9cefc87a546bce8e55cef3791ddf27050a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:854df2720370305e833490de41a83a6dbadf07bbd02c14d62006b2dc3d67c799": {
+   "mediaKind": "photo",
+   "description": "一个穿黄色上衣、含着粉色安抚奶嘴的婴儿侧躺在灰色布面上，头枕着印有小鸭图案的黄色枕头，身上盖着白色带花纹的毯子，画面左下角有一只模糊的手。",
+   "bytesSha256": "2090adfaa841f31cb7e23195a73a664c62b94fea158e0540090a21e9e0a52860",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:9445ed054c4c1086ad3c2f1f9d4ee91e287f1360f62ce1e3ddcbd7886efd3174": {
+   "mediaKind": "photo",
+   "description": "一名穿着黄色上衣的婴儿仰面躺着，身前盖着粉白条纹的毛巾，画面两侧隐约可见大人手臂。背景是室内环境，有带花卉图案的粉色枕头、悬挂的毛巾和杂物。",
+   "bytesSha256": "52e9713ea4cfd55b50876829740beee09594ccee6f872575e873b9df84d2ca39",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:e0b11b9fdff03caf7fa058c128b7aacb11e91bf2815bc581e220f944219b50b4": {
+   "mediaKind": "photo",
+   "description": "一位穿着灰色外套的老人坐着，低头用奶瓶给怀中裹着白色毯子、穿黄色上衣的婴儿喂奶，双手托着婴儿。背景是室内环境，可见带窗帘的窗户、摆放着瓶子的白色柜子、一盆开黄色花朵的盆栽和放有纸张的桌子。",
+   "bytesSha256": "0a79f5128f0302cc648da3bcd43f58ef31ede1b911f49da9a707e3af03683091",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:4e83aef3d4e45d47474227ba257a15e7de8cf38eb56a7853c4d56d206f033f54": {
+   "mediaKind": "photo",
+   "description": "一名穿深灰色上衣和格子睡裤的男子躺在灰色沙发上，身边一个穿黄色衣服、含着安抚奶嘴的婴儿枕着黄色小枕头、盖着带图案的白色小被子。背景墙上挂着正在播放节目的电视，下方深色电视柜上摆放着饮水机和红色装饰花，沙发扶手上放着一顶粉色帽子。",
+   "bytesSha256": "852342a8a71b7ce48728a2682dd5de03dbef5a6719d26432a7bd0159e443c114",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:46a899a5f3944281397bf3c2b4f4269f20d1d22efcc27f40302c6803cad41d61": {
+   "mediaKind": "photo",
+   "description": "一名穿着米白色衣服的新生儿仰面躺着，头部偏向一侧，位于灰色纹理的表面上。",
+   "bytesSha256": "2c323a0cd82d61483fc22472880cde704a30f049e9ed10ebc568b7c8f3cd2f1b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:73708a1ca97989b033ab5cf2630899e114c61f790b4cc14279b3b8eceacdcea0": {
+   "mediaKind": "photo",
+   "description": "一名穿着黄色衣服的婴儿闭眼侧躺在婴儿床内，身上盖着印有兔子与花卉图案的白色被子，床头悬挂着黄色星星和月亮等布艺挂饰。画面右侧可见一台黑色按摩椅，背景中有窗户。",
+   "bytesSha256": "31f7bda2a439776f70233e58f17c1505ea57843ea2ef887afeb67a0d00563487",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-12026c29c8fcf4cfe1111e25897c5b24d6c4782a3b3ae07bd044186ece214dc4": {
+   "mediaKind": "photo",
+   "description": "一名婴儿闭着眼睛躺在印有花朵和兔子图案的白色被子里睡觉，身穿黄色上衣，一只手臂露出被子外，画面左上角有一个黄色毛绒玩具。",
+   "bytesSha256": "188789b7dfa0ab60e32b5afaf73ee36bfceac74ee5b03d35b4bfd69a9cb46125",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:46412e39059e16ab43d9f03c33e9ce315b5f62f2a8380dc1f270bdcdfb0192aa": {
+   "mediaKind": "photo",
+   "description": "客厅沙发上，一名戴眼镜、穿灰色毛衣的男子坐着，手里似乎拿着手机；旁边一名戴眼镜、穿灰色针织开衫的女子怀抱着一名穿米白色衣服的婴儿，婴儿躺在她腿上。沙发上放着红色毯子，背景墙上挂着一幅红色画作，远处可见厨房和冰箱。",
+   "bytesSha256": "455f16a9bd647a432e0b47c75b3e2017cd7a1ccb471c62ca5686245e31d6e32d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-3f3cb670a037f07ba9f3373bf89ae9ea3b22672417a3607bce43980017eccfa7": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿灰色毛衣的人侧身坐着，怀里抱着一名穿米白色衣服的婴儿，婴儿面朝镜头方向。背景是室内客厅，可见摆着酒瓶、绿色瓶器和相框的置物架，旁边桌上放有水果和杂物，还有婴儿座椅和搭着的白色织物。",
+   "bytesSha256": "419d10aaf51fd2aa10bf180df7c6766707103450f51c383d1a4b0f35cf5f70b1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:70ba8e6b00773c02085f3039bbe331a19c58fdaa3e1da1c4012d698455ec8906": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿灰色毛衣的短发者背对镜头坐着，怀里抱着一名穿白衣的婴儿，婴儿侧脸朝向镜头。室内窗前挂着带'福'字的红色中国结，左侧深色柜上摆着插有红黄色花朵的花瓶，右侧可见婴儿健身架和一位戴眼镜坐着的人。",
+   "bytesSha256": "1a6081ca837adab38fcbe0a4cf19e571d56d89ed55debb8bc098e60687ed3cf6",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-9a3beb2e87fcb1da7f7ee97cdf8ac5f9d006ebac2fa3bc122c7eb63a729ec52b": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰面躺在印有紫红色花朵图案的浅色床单上，穿着印满灰色小鱼纹样的白色短袖连体衣，嘴巴微张，一只手臂弯曲握拳抬起，另一只手在身前挥动，画面右侧边缘露出白色织物。",
+   "bytesSha256": "acdf2bfb49546eb476e708592139b8af090ef8564f617c4145a600262bb61a6c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-6e2bc7d97c4ab5c99e9522cc19b728f80f66ea8a9156253a1f7c3923827c4ce6": {
+   "mediaKind": "photo",
+   "description": "一名婴儿仰卧在铺有粉红色花卉图案床单的床上，身穿印满鲸鱼图案的白色短袖连体衣，双臂向两侧伸展，头微微抬起朝向镜头方向。",
+   "bytesSha256": "f422636c9b1db18332ef7b7221c97cfc92da3c8c073ac73879a32e8e594017c4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-d6d2968b8d74538a899555809d10c9945351bff8eed1b4aaff9da06c0da44314": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰面躺在铺有浅粉色床单的床上，身穿印满鲸鱼图案的白色短袖连体衣，双臂向身体两侧张开，头部摆正、眼睛看向镜头；床上方铺着带有紫红色大花卉图案的床品。",
+   "bytesSha256": "ba9193ea2a7c07d8cb2a00032bb84cab3688f0aa07c54ceab13c075a29474aac",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-ff90e48b43efe0dc1b8bfa61b7cc4e0592c8c5cc16b05df558870eb2f780c1d7": {
+   "mediaKind": "photo",
+   "description": "一名戴深蓝色针织帽和眼镜、穿浅灰色毛衣的男子坐在浅灰色布艺沙发上，怀里抱着一名穿白色衣服的婴儿，婴儿双脚裸露朝下，男子手腕戴着手表，身旁有同色系大靠垫。背景是白色墙面，墙上贴着数块灰色色板，左侧可见深色门框，右上方有一个黑色相框。",
+   "bytesSha256": "f73aeff3f6eda76165fa13ebda334821628c18be383fce1f97094d338d34aed9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:3cd985acf803d9f6662753d46e7a94e2386fca7c1d4eee564b874a685230bbe7": {
+   "mediaKind": "photo",
+   "description": "一名穿粉色家居服的大人坐在灰色沙发上，双腿间靠着一名穿米白色连体衣的婴儿，大人一只手扶着婴儿的手臂，婴儿望向镜头。沙发座位上放着一部亮着音乐播放界面的手机和一团纸巾，背景可见换尿布台、绿植、书架、按摩椅和桌椅等家居物品。",
+   "bytesSha256": "74c894d917d8cef67829aef8ca5f90e3e6e94aa125ab32cfe79a0214325b36bc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-b91d76136870b2b23a05deb2707cd506d5f4f96a17daef629d1a0c66b148a2d8": {
+   "mediaKind": "photo",
+   "description": "一个新生儿侧躺着，头偏向一侧，眼睛睁开，身上裹着带有黄色和橙色图案的白色纱巾，躺在灰色的布艺表面上。",
+   "bytesSha256": "6ae46aeb96656a16dfc86a76bd3fbbc05227189027277fdadcbb5d0a5d658b76",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-e7c3bc54749130d575449845dfb57f5101bd8f0dfb9166b38a9cf6cc14f27707": {
+   "mediaKind": "photo",
+   "description": "一名新生儿躺在灰色织物表面上，身上裹着印有橙色和黄色小图案的白色襁褓巾，穿着白色衣服，头发稀疏乌黑，眼睛微闭，正对镜头。",
+   "bytesSha256": "8c3d78515249fb45ea1fe37c4031f05685d1edca71dbe784ec07f3e28a7f67d8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-6c307a4442837605830e056e1b1ff44996564ddd6c3b8a9cedd40a510e90170e": {
+   "mediaKind": "photo",
+   "description": "一名婴儿平躺着，头部正对镜头，眼睛睁开、嘴巴微张，身穿米白色上衣，身上包裹着一条印有橙色、黄色和棕色小图案的白色纱布包巾，背景是灰色织物表面。",
+   "bytesSha256": "1ab7fdfab996582c517d09471398970bc2ef3d122f8c749d7f6204841bc8232c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-19a120fa6f39f8a3e0e2de32fd8ebcfed585b94393c75718f10387061a0c11e2": {
+   "mediaKind": "photo",
+   "description": "一名戴深色针织帽和眼镜、穿浅灰色毛衣的人站在室内大窗前，低头看着面前带悬挂玩具拱架和印花布料的白色尿布台。窗户上挂着一个带“福”字的红色中国结装饰，窗外可见树木和阴天的天空，右侧是白色柜体和窗帘。",
+   "bytesSha256": "d023c35a5658b847f28fdcb683465955d463ea644d81a1a407a0b2608704c5fe",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:59eff048f6a13f35dfabb2589cf18ddcd744654d3b391bdd0cda943a40cc26ee": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰躺在灰色织物表面上，身穿米白色上衣，身上盖着带有橙色、黄色和灰色小图案的白色夹棉包被，眼睛半睁，嘴巴微张。",
+   "bytesSha256": "4c91db50f95d0a52aa6a36af55781d0e67049df711ee5f9792adba68d63ea46f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-53142e7857a6847c44cdaa9d12b48a76848dac7417e5f57c4c06afc7cd250d45": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰卧在床上，身上盖着带有黄色小花图案的白色被子，头枕着印有小鸭子图案的浅色枕头，睁着眼睛。床边放着绿色被子、条纹毛巾、白色布巾和一个黄色星形物品。",
+   "bytesSha256": "8c7bb2ac431169f52bc6d99efa816326baccfc83b3883b8d808cbb9a0ee9cb92",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-641a269674040b7a0cd9ca89eef7d8976173615c18c46554a219fc55c7c1dce7": {
+   "mediaKind": "photo",
+   "description": "深灰色桌面上放着一只白瓷碗，碗里盛着黄色的浓汤，汤中可见褐色圆形食材和蛋花状物，碗内插着一把白瓷汤匙，碗下垫着一只带蓝白花卉纹样的瓷盘。",
+   "bytesSha256": "fbc885f0ca5e466ef080e387de1760dccf4a5c999168af66833c49c6368bfdb9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-12770af13719a6649fb25baee6f63771b1be0b8e6ac2769536a3e1c52e2c4c6e": {
+   "mediaKind": "photo",
+   "description": "一个闭眼熟睡的新生儿侧脸躺在婴儿床内，身上裹着带有橙色和黄色圆点图案的白色襁褓，头枕着印有黄色卡通图案的枕头，周围可见浅黄色床品和蓝黄色条纹的布料。",
+   "bytesSha256": "3a80c09fb9b0f2475cc3d871c0b50ef2ec662cf274289d3b1dd24abb7ec19508",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-2cc450ad31c3c3348135a53128bf54c9f97f16acf3ee94f016ccd9d5bcfd4b8c": {
+   "mediaKind": "photo",
+   "description": "一个婴儿闭着眼睛仰卧熟睡，头枕在带图案的黄色枕头上，身穿米白色上衣，身上盖着点缀有橙色、棕色图案的白色被子。旁边放着绿色印花布料，婴儿躺在铺有织物的床铺上。",
+   "bytesSha256": "021b4373b7c5fdf2ffa0ef275900d2f7c89ae55d69037f568bf549f76e2d1fcf",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-19036141f455cbe9199794e93ccf7e886380e587ecb423b5e1cd79d32314ed53": {
+   "mediaKind": "photo",
+   "description": "一个婴儿闭着眼睛躺着睡觉，身穿浅黄色衣服，头部枕在黄白色枕头上，身上盖着印有小图案的白色被子，身旁有绿色被褥，画面下方可见一个黄色物品。",
+   "bytesSha256": "3cc6bcb7d6bc2b401c799ea095e549dbdb79624159a2d07e7acbeb14f4c91874",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-e8130111009f77b1b419a1d582e866a96ad8f330482c7d9d695dde7dd9e12fb5": {
+   "mediaKind": "photo",
+   "description": "一名婴儿闭着眼睛躺在床上，嘴里含着一个粉色安抚奶嘴，身穿米白色带图案的上衣，头枕白色枕头，周围是毛绒毯子和被褥。",
+   "bytesSha256": "6171cb50554ff359116ae96c8e442bcfdfeb30b2eede18359b0c5f272d8b0d04",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-4bb6bd674020657bc70a871f62e08d7c3cd19e6228ee26773cc1d4c4dc010e7e": {
+   "mediaKind": "photo",
+   "description": "一个穿着米白色连体衣的婴儿仰面躺在小床上，头枕浅黄色小枕头，身上盖着带小图案的白色薄被，头旁放着一个粉色安抚奶嘴，画面左侧有一个绿色印花枕头，右下角露出一个黄色星形玩具，周围铺着条纹毯子。",
+   "bytesSha256": "39a29ad3eb89ce7ea727c1f35579f09dcc1dd3cd4447ba157f0cd6f253bd70ff",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-e515a61b56e6945e7c8700c0bbb205ed0cda052303b939215e1e60baf3ed0904": {
+   "mediaKind": "photo",
+   "description": "一个婴儿闭着眼睛仰卧在印有黄色图案的枕头上，身穿白色衣服，头朝向画面右侧。婴儿身旁铺着带斑点的白色被子、绿色印花布料和白色毛巾，右侧可见浅色的床栏边缘及角落里的深色物品。",
+   "bytesSha256": "3986b796168d8d2467a65559a8cdc4f362ffeeff6d4d8a62e350fe1b771ae2dc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-bf2af9a3cf49adc7224a6f1a1ae73878349cb95bb3e96f5ac713b9261a9b6e51": {
+   "mediaKind": "photo",
+   "description": "一个闭着眼睛、嘴巴微张的婴儿躺在带黄色图案的枕头上睡觉，身穿浅色衣服，身上盖着浅色被子，背景的窗台上可见绿色盆栽和粉色花枝。",
+   "bytesSha256": "74611f96f98450913644c49a71116ecb451be5331b6a5b90cf28332bc62ca649",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:8fe474d0362593a70b346cfbccfb43c093deb84ad72b59811e31f9ac317041cf": {
+   "mediaKind": "photo",
+   "description": "一个穿着白色衣服的新生儿躺着，头部偏向一侧，头发浓密，身旁放着一个粉色小物件，背景模糊，隐约可见一些设备。",
+   "bytesSha256": "528f7a676ce9f17720d773fdad1f743be5f8599f781c1e5175dc189eafe322e4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:71f9ea1539460cc6eb5fa2e0be15a822488dde40e640f2ab541b837e625dfc6a": {
+   "mediaKind": "photo",
+   "description": "一名婴儿躺在灰色布面上，含着粉色安抚奶嘴，身穿米白色带小熊形状按扣的连体衣，一只手臂抬起、另一只手臂向外伸展，睁着眼睛看向前方。",
+   "bytesSha256": "84083d63a1f9de9863eb358cc8e2ecb02f6d1f86e890cd8efeb155db4aca2e57",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-c0892037a46335cc20e5472a36d73811dfe61b234c42b72efe6e17a1ae6da79e": {
+   "mediaKind": "photo",
+   "description": "一个穿白色衣服的婴儿闭着眼睛趴在穿深色衣服的大人肩上，画面左侧露出该大人部分侧脸；背景为客厅，浅色布艺沙发和茶几上摆放着靠垫、红色织物、纸巾盒和纸张等物品。",
+   "bytesSha256": "284a04a38e59c25b6c42cf543495e281e1c8c847b5a462ddad4f9f1ce443043e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-7e05ca82a6a2727a080a6aef71fda7ae65da55e75d3f7c462a730becdc326eb6": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰面躺着，睁着眼睛看向镜头，身穿浅色衣服，头部靠在浅色枕头上；背景可见黄蓝白相间的条纹毯子和一角带图案的黄色枕头。",
+   "bytesSha256": "2d7df085771c744c710377a942bfca0641bbe881eb0c18630697852634489846",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-0773a9700d61341892015b179198b21f02a7cbed15436dd2ad0ee47dee39c22f": {
+   "mediaKind": "photo",
+   "description": "一名婴儿仰躺在灰色布面上，双臂向两侧张开，一只手握拳抬起，身穿带小熊贴布的米白色连体衣，裆部按扣敞开处露出印花尿布，脚穿灰色袜子，画面底部露出一角粉色织物。",
+   "bytesSha256": "2c21a716a5cf11327ee0825d89fc930d540f06e346aeb448941f20d5633d3d12",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-1d6a2dc06bdab0b07252d744ec459062349d1f35614234f0028f7f62ab5cf138": {
+   "mediaKind": "photo",
+   "description": "一个婴儿躺着，穿着印有鲸鱼图案的白色短袖连体衣，睁着眼睛看向镜头方向；婴儿头顶上方是一块印有兔子图案的白色包巾，画面右上角有一只成人的手抓着包巾一角，婴儿躺在浅色的床面上。",
+   "bytesSha256": "eccd5892fd6555b3666ab6ef6a60eed5754592b3d6aaacf91abf117390e30e46",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-846fe016c8ec965119abe9d7ae32275c1b83dcc146dbab25ddfcaaf11167231b": {
+   "mediaKind": "photo",
+   "description": "一个婴儿侧躺着，身穿米白色带按扣的上衣，头枕在有黄色图案的枕头上，眼睛半睁看向镜头方向。婴儿身处浅绿色围栏的婴儿床内，身旁铺着白色印花被褥，背景有一块印着大象图案的绿色布料，床边窗台附近可见白色窗帘和红色浆果装饰。",
+   "bytesSha256": "098d375ebadefbcf8cddc949825b6cdbce6c171146dcb249b845e41a0106aa09",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-24d404cd8d969667c13ed569579249bd8a6ca3f7a612b91928f69c5e3730a5f0": {
+   "mediaKind": "photo",
+   "description": "一名婴儿躺着，双眼眯起、嘴角上扬，穿着带有按扣的白色连体衣，背景可见绿色织物和浅色布料。",
+   "bytesSha256": "10c38294f452926edd6c2f904edf16929ac5f3d2b2409dde27d9f44d20323d3a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-b3ba5d241d414bd8b7fc34ac896e98fe17ae76bb5475bdcfeeee8e6ab23d2f9f": {
+   "mediaKind": "photo",
+   "description": "一名新生儿仰面躺着睡觉，穿着印有小熊图案的米白色连体衣，嘴里含着紫色安抚奶嘴，头枕在黄色小枕头上，一只手臂弯曲抬起。婴儿身旁盖着白色绗缝小被子，旁边放着绿色印花毯子和黄色布料，看起来是在婴儿床内。",
+   "bytesSha256": "914dbcdf37a8a24c3076ff1c44b40880651b29aa3f4be2d1b34c02d1c7331383",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-78873cfb146aa2ed4ca165c77ed017a1af7425b79a45a310daa3d96a8993c99f": {
+   "mediaKind": "photo",
+   "description": "一个闭着眼睛睡觉的新生儿侧躺，穿着带有小熊图案的米白色连体衣，胸前放着一个紫色安抚奶嘴，一只小手举起在头部旁边，周围铺着白色毛巾和被褥，背景有一条绿色带大象图案的布料和浅色床栏。",
+   "bytesSha256": "e9b45e8248b5f36571fc54dc7c8cb9b14821c363a9aa5ed52d85d9bd0ca8973f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-3bf92955230a082b4110ea4b00cc9734e9badbd543ec84ca25f2ef77e92635d6": {
+   "mediaKind": "photo",
+   "description": "一名婴儿侧卧在床上闭眼睡觉，嘴里含着一个紫色带粉色奶嘴的安抚奶嘴，穿着白色长袖衣服，一只手蜷在胸前，另一只手靠近奶嘴。床上铺着粉紫色床单，婴儿身上盖着印有花朵图案的白色被子，画面左下角露出一个黑色物品的边缘。",
+   "bytesSha256": "04038b319544017c05a181099df9dfc2495e42faaf5e49564d44bf927ff1aab5",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-d9e0ca0fd5fb79e03bf37a37cbc2c359f29071c32a0b2d0ea83a5672c5958be6": {
+   "mediaKind": "photo",
+   "description": "一名含着安抚奶嘴的婴儿侧卧在铺有粉色条纹床单的床上，身穿米白色衣服，身上盖着印有兔子图案的被子，婴儿手边的床上放着一副黑色眼镜，床头有靠垫，背景处可见白色被子和柜子。",
+   "bytesSha256": "30df0c7310a351f5816befb5a8fef0508886c74df39ed07db0f8bb847bd56316",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:a34321b9f538250e18f13860721fb7860fb617b92d0ff9ba7a2c6b1727a93531": {
+   "mediaKind": "screenshot",
+   "description": "摄像头应用截图显示一间卧室，深色木质床头的床上被褥和枕头凌乱未整理，左侧是带玻璃门的木质衣柜，右侧有一个英国国旗图案的床头柜，上面放着纸巾盒和瓶装物品，画面带有时间水印及方向控制、静音、截图等功能图标。",
+   "bytesSha256": "cfd70e1dd9cf525220ebfa28b1b33b3da83b6687bdc72fb2d3f343c75de68e39",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-83b6d2f3ffe49c5aa12699df06672bc8be2546861879d37a7dc5d5eee58ed8e5": {
+   "mediaKind": "photo",
+   "description": "一名新生儿平躺着，双眼微睁，身穿带有小熊刺绣图案的浅灰色按扣上衣，头部枕在印有小动物图案的绿色枕头上，身下铺着条纹毯子，画面右侧有一只成年人的手轻触婴儿的下巴。",
+   "bytesSha256": "4b955746a756a9d2b0ef421cecf587a0e1b5a269e9087ff62cf45e45b74c130a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-ec44ce4a648f64c59492784ae9b720328e536e6902f1cae52d084652d43447a6": {
+   "mediaKind": "photo",
+   "description": "一名新生儿仰面躺着，双眼闭合，身穿带有小熊刺绣图案和按扣的浅色连体衣，头部枕在有图案的绿色枕头上，一根成年人的手指轻触婴儿下巴附近，背景可见条纹布料。",
+   "bytesSha256": "4aec4ebace14f9cb249ef95218e0c89f1b55b162f12b0805222b82338764716b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-60b05b35f86c09f761169b09b1522413c12fa98a52c9148e0bbb2bb566903fb6": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰面躺着，头枕在有动物图案的绿色枕头上，身穿印有小熊贴布的米色按扣连体衣，微微张嘴吐舌。画面右下方有一只成人的手轻搭在婴儿肩部附近，背景可见黄蓝相间的条纹毯子。",
+   "bytesSha256": "2bbd7d716f4879aca6343788ab5b327e5eff65ad4ea5ae700223fd2d6760f2cb",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-bdcb20fd97e385289e88000d4d51762a023f5b60163213fabf147768d85d2c91": {
+   "mediaKind": "photo",
+   "description": "一位穿着深色花纹毛衣和格子睡裤的老人俯身在灰色沙发上，双手整理盖在婴儿身上的白色薄被，婴儿躺在沙发上的黄色小枕头间；沙发上还放着几本书、红色毯子、湿巾包装和遥控器，背景可见瓷砖地面和摆有红色装饰物的电视柜。",
+   "bytesSha256": "f6532eb5dc4ff311787c69f4350d5926f6ecfc213323a9e6254258c5043d3aba",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-c9f50291d7187a1490d46dd52f6428efc514277e6276c1a9b0414e483785878f": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅蓝色条纹衣服的新生儿被印有图案的白色毯子包裹着，双手交叠放在胸前，画面右侧有一只成人的手托着婴儿的头部。背景是室内环境，可见窗户、暖气片、柜子上的咖啡机、插着红黄花朵的花瓶、晾衣架和电视一角。",
+   "bytesSha256": "7e45e589a5eb8bd8f4b44dad45c8f6b055332b13de26f9511a10011ee379310d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-6664fd62b78a725cd063577bad6abb96c977eccf4c0862ce769335fba8b4df90": {
+   "mediaKind": "photo",
+   "description": "一位身穿棕色灯芯绒外套、灰色长裤的老人侧身站在瓷砖地面上，双手扶着一辆黑色婴儿车的把手，车上罩着一块红底花纹布料，婴儿车有三个黑色轮子。背景是灰色石材墙面，远处可见带栏杆的窗户。",
+   "bytesSha256": "14a068217ec120fbe6db71c4e86aee8c6279bb34b10a80141246c80607b93036",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-53145f86dde9e1ea782fdb0bf43c479447cb1a16c4301126ed9014117c16bd10": {
+   "mediaKind": "photo",
+   "description": "一名戴着白色帽子的婴儿闭着眼睛躺着，嘴里含着粉白色安抚奶嘴，身上盖着印有黄色小鸭图案的白色盖毯。婴儿上方是深色的遮阳篷，篷顶搭着带红色等图案的布料。",
+   "bytesSha256": "e257704a0460f73645ea377b2fd70b33b291fa9207b65ca0dffe2c8b380bc6dc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-e2c1e8947f5e3f49980c6374197ef376e21b860705bb5ab1bf2a092c5dbdeb7b": {
+   "mediaKind": "photo",
+   "description": "一名婴儿闭着眼睛躺着睡觉，头戴印有小猫头鹰图案的白色帽子，嘴里含着粉色安抚奶嘴，身上盖着印有小鸭子、爱心等图案的白色纱布毯，头顶两侧露出深红色带花纹的布料。",
+   "bytesSha256": "1a99e806cc496c1c178782c92f41c6af90b4139dfcc4b602cef71e110a85e64c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-52e83e15c496590dc977eac16d620632e89ee66bb6ac93d3a8399ee40ff97b82": {
+   "mediaKind": "photo",
+   "description": "一个闭着眼睛熟睡的婴儿戴着印有小蓝色图案的白色针织帽，嘴里含着一个粉色安抚奶嘴，身上盖着带有橙色小图案的白色织物。",
+   "bytesSha256": "6ea8a7f4afb5bb001e50bb15898a282695840d9ba9f14cbade87af18bb83281e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-18e6b357dc248812fa58c06a0c576a96f514b362a14e38ffe812aea209bbd463": {
+   "mediaKind": "photo",
+   "description": "一个婴儿躺在灰色布艺软垫上，穿着白色连体衣和带有小熊贴布的白色开衫外套，目光朝向镜头，身旁散放着白色布料，背景为浅色室内环境。",
+   "bytesSha256": "cc9da319473e50d2111c16fa7d4fbc2ef2d7e528d0da3c4444ea384115365e1f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-b9d5b839240afe264d7dc03c5f7a549aada65668a488e6e4ba32a2a788f07c90": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅蓝色带扣连体衣的小宝宝仰躺在灰色布艺沙发上，嘴巴微张，目光望向上方，画面右侧边缘可见一只手靠近婴儿的手臂。",
+   "bytesSha256": "5c0b74617d408dd3d63d5e3c23bfaff760ddd23e8acb4ae9f2709f925fd04916",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-2761d254e9a45e758dd3809d9364c97c7c3e988f8fe2c7f99d212f76b2db1585": {
+   "mediaKind": "photo",
+   "description": "室内窗前挂着带有“福”字的大红色中国结，下方是一张印有“honey baby”字样的婴儿护理台，台上支着圆点图案的遮挡篷，篷内隐约可见婴儿头部，台架侧面挂有布艺收纳袋，下层摆放着蓝色筐和成包的纸尿裤，右侧是一把灰色按摩椅，窗外可见树木、建筑和红色浆果盆栽。",
+   "bytesSha256": "35029a19a189728a9bba6630837c5c3282faa9f6e4e925543e106b5273d7a9af",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-80b5c3ddbae5e5f3100c4dfa18bbb47b28d862d3317b673ea1122caff4b67542": {
+   "mediaKind": "photo",
+   "description": "一位戴着粉色渔夫帽、穿着印满彩色小鱼骨头图案深色外套的人侧坐在米色沙发上，低头怀抱着一个裹着白色印花襁褓的婴儿。背景木桌上放着红色塑料袋、橘子、罐子和纸张，旁边是挂着灰色窗帘的窗户，窗外可见光秃的树枝。",
+   "bytesSha256": "01a1282cc7424508fb103ce97a62e3d45815315240a2ac25d5ffd3a58afaafba",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-e99a697843de30df3a04258471fe5c673948b174e59737e2cdc7fcc1ba5f04f7": {
+   "mediaKind": "photo",
+   "description": "一个婴儿闭着眼睛张大嘴巴，穿着带有小熊贴布图案的浅蓝色衣服，身上搭着白色毯子，一只成年人的手臂环在其身旁。画面左侧有粉色格纹被子，右侧是带圆点图案的白色毯子，背景为灰色布面。",
+   "bytesSha256": "d74832b058858c855b8ee307a3752c0d56b061000b1274606d004ef0af239198",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-513c9f5f859d7d8d40bf6e7ce554efcecffacf2ad45951ed4f1678f4c33bd148": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰面躺在灰色布艺表面上，双臂向两侧张开，穿着浅灰色带按扣的夹棉连体衣，胸口有棕色小熊图案，脚穿灰色袜子，嘴巴微张。画面左下角有一块蓝白色布料，左上角可见白色衣物，右上角有一个带拉链的灰色靠垫。",
+   "bytesSha256": "f0aa2a9316a95fcb1683d518e2a22f814b2d6d2991b43afe62f2bc9af2aebb64",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-c795aa11e91a3b5920d71d1546229f39a8fbf7d9b76e327a6187a1368f2b5ad6": {
+   "mediaKind": "photo",
+   "description": "一名闭着眼睛躺卧的婴儿身体盖着白色多层纱布毯，只露出脸部，头上方搭着一块印有红、蓝、橙色花卉图案的彩色布料。",
+   "bytesSha256": "65bc0f3ecf0b0f98a7e1fe584f88302a6c8841b151c77cea7a1860e1f16ba913",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:b3eba97e48445a91a14fd0f7d24ddda4d31bf1ea6a1629f5f33c46c36af0e598": {
+   "mediaKind": "photo",
+   "description": "一名穿黑色绗缝外套、灰色长裤的男子背对镜头站在江边步道上，双手扶着一辆盖有花色罩布的婴儿推车；步道由灰色砖地和红色塑胶跑道组成，一侧有护栏，远处可见江面、跨江大桥、树木和其他行人，地面有些许水渍。",
+   "bytesSha256": "c35dda79bc5ad0abe709d06f1dc414efabb2a281ffbba62dc5cebfd479db30c9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-a5b7ebe3100fc95c2d5addac36f4d3bc2249a6232a4480a2d94f4faa377a1514": {
+   "mediaKind": "photo",
+   "description": "一名闭着眼睛睡觉的婴儿躺在婴儿车深色的睡篮里，头戴带小耳朵的白色帽子，头枕带有黄色图案的浅色小枕头，身上盖着白色纱布毯。画面上方是浅色遮阳篷，下方横着棕色的推车扶手。",
+   "bytesSha256": "341060881367dbf2257ceb58af72753c7c6fcff42ebca0749329487ca3232655",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-39fc80129ba9f1cc76360aa1d49f9dd6373dae82f32a5c362d72615760580ef5": {
+   "mediaKind": "photo",
+   "description": "一个新生儿躺在铺着白色薄被的环境中，头部靠在印有粉色和红色圆点的白色毯子上，闭着或半闭着眼睛。背景中可见深色柜子上放着咖啡机、插有红色花束的黑色花瓶，旁边有白色暖气片和透着室外绿植的窗户。",
+   "bytesSha256": "02419584d411d641924c8bf26c06f0a1e82bc2481ed829b3ab7eea85f8286ca4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-cd6cd53f672cbf65c9b25bb05b3c71afdb869e12a42c0001bb1459f6f480b3cf": {
+   "mediaKind": "photo",
+   "description": "一个婴儿躺在灰色布面上，身穿浅蓝色长袖上衣，嘴里含着粉色安抚奶嘴，一只手臂抬起、手握拳举在头旁。婴儿下半身盖着印有彩色小图案的白色薄毯，背景可见灰色沙发靠垫和白色物品。",
+   "bytesSha256": "713e8142b816b102c1da6bc114464d08a5c147168e3ede62a29ba1ee77a28a45",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-cacf555827fdb55cf4ec9e7fc6776a307f0bbcc9ff00f7943fdb9d6888b08168": {
+   "mediaKind": "photo",
+   "description": "一位头发花白的成年男子侧身将一名婴儿抱在肩头，婴儿身穿浅蓝色衣服，目光看向镜头方向。背景为白色墙壁的室内，右侧墙上挂着的电视屏幕正显示蓝调商品广告画面。",
+   "bytesSha256": "1e86b94b669db1a6cdf4594e4dd7ba0a83a8a00cd413f2ec45c3f38411ab33d4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:c420b6751f6dac4e9653a378f0f875b6a6af59a2832de5222101759b41702d18": {
+   "mediaKind": "photo",
+   "description": "窗边悬挂着红色中国结，前景是一张浅灰色围栏的婴儿床，围栏上架着挂有蓝色玩偶和黄色星星的床铃，床内有一名婴儿躺卧，头部和身体被白色被褥部分遮挡，画面右侧围栏边缘露出一名男子的脸，背景是窗外的枯树和绿树。",
+   "bytesSha256": "2e73b7d100d12f54fe7fd8df57bc2db5a6842db8073e5152d5a430a107edf04f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:7b6718f701a0e2ec18685f57a71bf335780b816b4ee0c40af07d3995ca724f10": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰面躺着，头部枕在一个带褶边装饰的红色枕头上，穿着浅蓝色衣服，眼睛睁开看向镜头方向；婴儿身下是彩色条纹的毛巾被，画面下方放着一个紫色安抚奶嘴。",
+   "bytesSha256": "b3b5650c0b4a9f50dd82a5137ecee0f6b84d1669ca82c760da3201427d360c2b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:2f0c6cec82eeb84018feb91bd2ee8e3b6bd2d9e92606ed62224be18f406100af": {
+   "mediaKind": "photo",
+   "description": "一名新生儿躺在带白色围栏的婴儿床内，头部枕着红色枕头，身穿浅蓝色衣服，身上盖着印有小图案的白色包被。床内散落着黄蓝绿相间的毛绒毯子，床的上方悬挂着黄色星形等布艺挂件，背景是窗户，窗外可见绿植。",
+   "bytesSha256": "88327fd5ce22278795454c02f57afbd045faad475d0413d80b98ab3d32d06c79",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "wechat-media:b0ba6e0742358110071a242f2c4a6b50159abd341ca38f2252df36f29fc9aee3": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅蓝色长袖衣服的新生儿仰躺在铺有白色花纹毯子的软垫上，头枕红色枕头，张着嘴眯眼笑着，一只小手抬起握拳。画面前方挂着黄色星星形状的布艺玩具，左上角还有另一个黄色星星玩具，周围是浅绿色的软垫边缘。",
+   "bytesSha256": "aaa560fd7b8249b3c24f5516e78b7ea24cf8190e61d804f12c1049d5c606460e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-ca83a8dfe5916a969d6d4f028540bb0ae2c270677f49d41efcd4889b432835ce": {
+   "mediaKind": "photo",
+   "description": "一个婴儿躺着，头戴一顶带两只兔耳和小卡通图案的白色帽子，眼睛睁开望向前方，身上穿着浅色衣物并被浅色包被裹住，头后方枕着一个印有黄色图案的枕头。",
+   "bytesSha256": "64f5db89bb03e4d26d88faabda04ebfa6b66e91200b18e7f72e9e0e86926f768",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-bd48124420706fb902a3153f86c176c4b0a514485e04dfc1f219866a917a3d50": {
+   "mediaKind": "photo",
+   "description": "一位戴紫红色渔夫帽、穿黑色上衣的女士站在浅绿色婴儿床旁，低头看向床内躺着的婴儿，床拱架上挂着黄色星星和蓝色月亮吊饰。背景是居家客厅，可见开放式厨房、深色冰箱、墙上的红色装饰画、餐桌椅和天花板灯带。",
+   "bytesSha256": "0f4077a0d3d0d981772d282e14208cae607152538cb23cfd26ee53f9a40829a2",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-297cebc7f39cf1fbc6e19834ea587314680d466a624ce3f47b1453ee62080597": {
+   "mediaKind": "photo",
+   "description": "深灰色瓷砖桌面上，一只带花纹的白碗放在蓝白花卉图案的瓷盘上，碗里盛着黄色的小米南瓜粥，粥上有几块白色食材，一只白色瓷勺斜搭在碗中，碗旁的桌面上有一团揉皱的纸巾，画面右上角露出一角棕色器物。",
+   "bytesSha256": "32dd7884e94fea725aca686000b8a2581268ea77c21ceca695b4a26b1ce03c90",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-ddb360231e70357461f08d85826e5022532dc8726b80b74d00072e0d87ff30fd": {
+   "mediaKind": "photo",
+   "description": "一名婴儿躺在灰色的婴儿睡篮里，头戴一顶带兔耳装饰的白色帽子，身穿白色上衣，身上盖着带有橙色小图案的白色毯子。婴儿头部右侧放着一个印有黄色卡通图案的枕头，睡篮顶部可见拉链边沿。",
+   "bytesSha256": "89778e7205de8444f57feae910cf6aa5a042376b9b895caaca0277844a732525",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-a6e4bf981d4a380c47234f9213d0bc06d19c2171add4f23858ca333129287f97": {
+   "mediaKind": "photo",
+   "description": "一个戴着白色帽子、穿着米白色带小熊图案连体衣的婴儿闭着眼睛躺在灰色婴儿推车的卧篮里，身前有一根棕色皮质扶手，阳光照在婴儿身上。推车位于室内窗边，画面右下角可见浅色织物。",
+   "bytesSha256": "8b65f50ee8f36a6109e3c3f8156db943e059760917025eff4ddcf82e06246d38",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-aceed2a3f87105d265d0c67072a1ccd493fbfe04ab37778e5d3d73f2b8150415": {
+   "mediaKind": "photo",
+   "description": "一个闭眼躺着睡觉的婴儿，头戴带有蓝色小熊图案的白色帽子，身穿米黄色带扣连体棉服，一只小手抬在胸前，周围是灰色的座椅或推车布料，旁边可见黄色和粉色的织物细节。",
+   "bytesSha256": "8b1e9774bef35f1b1558d086391d088d9f8860181b9929a04347be2bfea6d886",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-ef3cf2afc28d5b2abb3e049686c618edb0e004ced4a728a0c1ea79c6eaaf8de9": {
+   "mediaKind": "photo",
+   "description": "一个婴儿闭着眼睛躺着，头戴印有卡通脸的白色针织帽，身穿米黄色带纽扣的夹棉连体衣，身处灰色的座椅或婴儿车内，阳光照在其身上，画面上方露出一角黄色物品。",
+   "bytesSha256": "337cdde82a8c221c401eb061db97178ca7fd0eaeaa5e5f45861f99b82b0215e8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
+  },
+  "media-quark-sha-29ed9a039cfe8ea1a13d0494c9c1fc6822310518fac7c2963c5bdb7ae58169c8": {
+   "mediaKind": "photo",
+   "description": "一名穿着米白色外套、内搭浅蓝色衣服的婴儿被抱着，睁眼看向镜头，画面右侧有一只手拿着纸巾；背景可见带白色坐垫的木椅、垃圾桶和室内物品，婴儿身下垫着有格纹和几何图案的织物。",
+   "bytesSha256": "08db4c2087a4278e57765a7d56b3ae366884666fbbc48f88e2b82c59a05eb18b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-26T23:59:42.331Z"
   }
  }
 }
