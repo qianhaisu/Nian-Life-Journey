@@ -175,7 +175,9 @@ Output ONLY JSON: {"best": <integer 0-${pool.length - 1}>, "why": "<=10 words"}`
  */
 // v2（2026-09-27）：同一串里既有他的人像、又有饭菜/地方/家人的画面时，这些是不同的主题，各留一张——
 // 之前的偏好顺序把「脸清楚」排第一，生活场景在连拍里会被大头照挤掉。
-export const CURATE_PROMPT_VERSION = "scene-curate-v2";
+// v3（2026-09-27，Teddy）：同一场景、同一主体最多只留 1 张（原来最多 3 张）；不同主体混在一起时
+// 仍然各留一张（v2 的例外不变），但每个主体最多 1 张，不再有「最多 3 张挑最好的几张」这条路。
+export const CURATE_PROMPT_VERSION = "scene-curate-v3";
 export async function curateScene(items) {
   const ENV = loadEnv();
   const cfg = modelConfig(ENV);
@@ -184,9 +186,9 @@ export async function curateScene(items) {
   const shots = await Promise.all(items.map((it) => shrink(it.file, 512)));
   const text = `These ${items.length} photos/video-frames were all taken within a few minutes of each other on the same day, numbered 0 to ${items.length - 1} in time order.
 Decide: are they the SAME scene and SAME moment/action (e.g. a burst of shots of one activity), not genuinely different activities or moments?
-If yes, pick which to KEEP for a family album page, at most 3, best first. If several are near-identical (a burst of the same instant), keep only ONE of them.
-Treat a picture of the surroundings, the meal, the room, the road, or of family members with the baby as a DIFFERENT subject from a close portrait of the baby: when the set mixes such subjects, keep one of each subject (a portrait AND a scene shot) rather than three portraits. Among pictures of the same subject prefer: (1) a clearly visible face or a recognisable action, (2) a lively, natural expression, (3) good composition — not blurry, not over/under-exposed.
-Output ONLY JSON: {"sameScene": true|false, "keep": [<index integers 0-${items.length - 1}, best first, at most 3>], "why": "<=16 words, why you kept those and dropped the rest"}`;
+If yes, pick which to KEEP for a family album page: normally just ONE, the best.
+Treat a picture of the surroundings, the meal, the room, the road, or of family members with the baby as a DIFFERENT subject from a close portrait of the baby: only when the set mixes such subjects, keep one of each subject (a portrait AND a scene shot) — never more than one per subject, and never more than one portrait even if several show the baby well. Among pictures of the same subject prefer: (1) a clearly visible face or a recognisable action, (2) a lively, natural expression, (3) good composition — not blurry, not over/under-exposed.
+Output ONLY JSON: {"sameScene": true|false, "keep": [<index integers 0-${items.length - 1}, best first — 1 entry normally, at most one per distinct subject if the set mixes subjects>], "why": "<=16 words, why you kept those and dropped the rest"}`;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const { text: say } = await askModel(cfg, [...shots.map((b) => img(b)), { type: "text", text }], 8000);
