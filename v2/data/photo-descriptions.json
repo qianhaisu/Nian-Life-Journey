@@ -11880,6 +11880,1846 @@
    "model": "glm-5.3-flash",
    "promptVersion": "photo-describe-v1",
    "analysedAt": "2026-09-27T01:40:34.627Z"
+  },
+  "media-quark-sha-7377d8d70f669d6f00413677abf2cd5695664e7057b15aceaeeb25c265c0c3b0": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿深色上衣的男子站在一辆黑色轿车旁微笑着双手向前伸出；一个穿条纹领上衣、深色外套和深色裤子的幼儿趴在光亮的引擎盖上，双手和一只脚撑着车身。背景是露天停车场，停着白色轿车、灰色SUV等车辆，远处有树木、路灯和围栏，天空阴沉。",
+   "bytesSha256": "31f5196c2b7e09a4c3d5bce6a37af86103348105ebd3ed0e8d0f409ef938802c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-daae26db2ea8e90028e0a8d4439386075422234cd10be8832551e33d144d8da5": {
+   "mediaKind": "photo",
+   "description": "一名穿着深紫色针织上衣、肩部带条纹披肩式围嘴的幼儿背对镜头，趴在汽车车门上，手臂伸向车窗方向，旁边有一只大人的手臂扶着；车窗外可见街道、绿化带、树木、过往车辆和人行道上的行人。",
+   "bytesSha256": "5c99e1c97d4c7a98af5d7838ea2591bb1ff8efaf47a332e5b76a76db853d6bc1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-8cd72c866c995b4c915ce3b7d9e511088196e1646f5c8324021d23677a40c2a5": {
+   "mediaKind": "photo",
+   "description": "照片拍摄的是汽车后视镜中的景象：镜中一个幼儿趴在车窗边探头张望，双手扶着车窗下沿，其身后有人举着棕色格纹外壳的手机对着镜面拍摄，镜内还映出黑色车身、道路和后方的车辆；后视镜外可见路边的树木绿植与远处的街景。",
+   "bytesSha256": "97fd631d415fc3f9312cc07cf37aa29714db6743e4f6878f397b78c107a22025",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:50a4b12f1fd4d9a7c8c17ffef984cdd5e7f05113cc752451e92b69ac3f2ef433": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿深色上衣的男子站在一辆黑色汽车旁，面带笑容伸出一只手，护着趴在车盖上的幼儿，幼儿穿着带条纹帽领的深色上衣、深色裤子和白色袜子，双手撑在车面上。背景是室外停车场，可见多辆停放的汽车、一辆绿白色大巴、路灯、树木和阴沉的天空。",
+   "bytesSha256": "6ef351290f553a2757e7d73b507a1be642c7a9762164da10028faee8a9c0b26b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-bbf80dc1b7559bf330f8791573f2f4814ed7ec8cbb3babbd4812424fb6e3fb50": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿深色上衣的男子面带笑容，用灰色婴儿背带将一个穿浅色连帽衣的婴儿抱在胸前，婴儿侧头看向画面左侧，背景是绿色灌木丛和米灰色瓷砖墙。",
+   "bytesSha256": "39091818281487d56acd4b81879b54a2b2218f4549aa01a5e0f97df26b33dbea",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-7b6ddf6c0d3f2b1acadb748b4a64743d6a8bc4a720e62ae59733015993b0cb9c": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿黑色上衣和牛仔裤的男子用灰色胸前婴儿背带抱着一个戴浅绿色围兜、穿白裤白袜的婴儿，婴儿双手举起，两人站在铺白色瓷砖的台阶上；身后是青绿色墙面的橱窗，玻璃上贴着戴巫师帽的幽灵、史努比举'HAPPY HALLOWEEN'牌子和'Happy 万圣节'等万圣节贴纸，橱窗内陈列着多款手提包，左侧墙上有编号1362的绿色门牌和一盏复古壁灯。",
+   "bytesSha256": "eb33735caa43036778c2e4c59a43dcb847056afd7874910bfbdf24fa5ed595e4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-bef3b292b7b9df4c6c290a87dde3b9118de60de333b35c527cab73efaa315c6d": {
+   "mediaKind": "photo",
+   "description": "一位戴黑框眼镜、穿黑色上衣的男子面带微笑，胸前用深灰色婴儿背带背着一个婴儿，婴儿穿深色衣服、戴浅绿色围兜，一只手举起、头转向右侧，男子的手扶着婴儿的胳膊。背景是蓝绿色墙面，贴有“Happy Halloween”字样、樱桃图案和卡通南瓜头等万圣节装饰。",
+   "bytesSha256": "38c8e846c5b97aeb92a32a8bfd458fcc3dc7c819cd577f685695d2f247789161",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-656102a3da287ac169f6329f293b6132d68d716b730254c601947ef6046a0fc2": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿黑色T恤和牛仔裤的男子用灰色婴儿背带把婴儿抱在胸前，婴儿戴着浅绿色围嘴、穿深色裤子和白色长袜，侧头看向一旁。两人站在贴有史努比、巫师幽灵贴纸和'Happy Halloween'标语的商店橱窗前，橱窗内陈列着手提包等商品，旁边是蓝色墙面和格子地砖。",
+   "bytesSha256": "5959a3bf2986d83ad64266f58bb90165501478e95960f275267b0bc319d85275",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-a3a3364bd1006ea3d170a077df20cde6369e2013ba1ed1179d2404a1bf0ef714": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿深色上衣的男子坐着，胸前用灰色婴儿背带抱着一个围白色围兜的婴儿，手腕佩戴智能手表；身后是一幅万圣节主题海报，绘有骑扫帚的女巫、多盏南瓜灯和幽灵图案，右侧可见玻璃窗。",
+   "bytesSha256": "c7456366c65f7caf7c899f633b28aa0d54e7d4393a77a8f9eb2fb703a737c8f1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:8be091c7fe6e102d0fea856dc98325c4212eedc9fc1739e2c19a45e2e00272ec": {
+   "mediaKind": "photo",
+   "description": "一个穿着带绿色毛绒耳朵浅灰色连帽羽绒服的婴儿坐在米色皮沙发上，张着嘴，左侧一只穿米白针织衫的手扶着婴儿的身体。沙发上放有带吊牌的衣物和透明塑料袋，墙上挂着一幅印有英文文字的装饰画。",
+   "bytesSha256": "6ab8d0165822d4fc4133dde73a85952c678bbe90d7d10b8f67a2823a74370eba",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-822cd5ad9433f557be29cd21f494aae82a21071f4393b666aa4183e9e0518d69": {
+   "mediaKind": "photo",
+   "description": "一个婴儿坐在带灰色餐盘的餐椅里，双手捧着一段玉米凑在嘴边啃咬，胸前围着浅绿色围兜，餐盘上散落着几粒玉米粒。背景是明亮的窗户，窗外的景物虚化。",
+   "bytesSha256": "33bd22a87e1ebb1c940a259ccb3faf36c2119d8a851dd563be01d0381fa4616c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-e6d1f37693a9f35895b2d2506d7188016b7592280f80bfacd815ab149aadb179": {
+   "mediaKind": "photo",
+   "description": "画面是一片被郁郁葱葱的山林环绕的静谧湖泊，湖水碧绿，倒映着远处的青山和略带薄雾的天空。画面右前方有竹子般的枝叶和灌木丛，左侧近岸的浅水处可见水下的植被。",
+   "bytesSha256": "aa4e4e8fa9b505dcc11ba793b443a73941839b91b4fa7cccf17e64139efaba36",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-1510733f5156b549e62947c371ff281d388bcf8b311c28997e31f4deb4936324": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿米白色连帽衫和牛仔裤的人站在湖边，用身前深蓝色婴儿背带抱着一名穿浅黄色上衣和白色裤袜的婴儿，一只手扶着背带上的孩子。背景是平静的湖水和覆盖着茂密植被的连绵青山，天空略带薄雾，岸边有泥土、枯草和树木。",
+   "bytesSha256": "06fe2414146c85372071fa87d5dcb10409b38adb42c55e150e5addebb3ec1674",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-0cd01c4b15bcf417f82e3864c8d9076add76a45c9ba69c6d86e97c7880754e31": {
+   "mediaKind": "photo",
+   "description": "一名穿白色短袖和牛仔裤的男子胸前用婴儿背带抱着一个小孩，正沿着林间铺有石块的土路向上走，一只手抬起靠近脸旁。周围是茂密的树木和落叶，他身后不远处还有一名女子，左侧坡下也有行人，右侧树枝上系着红布条。",
+   "bytesSha256": "ba83a3efc118d99663ee9eca2332bd74269c257cfb1ba57fa8f2d10bae68e683",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:398b18169ce8de11f827fdd7fc2e7299d1beb722612da0fe759eb39f438eb64b": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿白色短袖和牛仔裤的男子站在林间小路上，胸前用蓝灰色婴儿背带抱着一名穿浅黄色上衣的婴儿，背带外搭着一件白色外套；男子右手举起比出V字手势，背景是茂密的树木和铺满落叶的地面。",
+   "bytesSha256": "c2483462b8993d92ffd7d104d3c14ae4d4a7a7296a3a60f1cdd12f0abbf68fd8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-5913618122cab40f963ea1ccf313bcaf2c0639a3f764374d146198a2104342b2": {
+   "mediaKind": "photo",
+   "description": "一位戴黑框眼镜、留黑色短发的成年人身穿白色T恤，胸前用深蓝色婴儿背带抱着一名闭眼熟睡的婴儿，婴儿侧头靠在其手臂上，成年人低头看向怀中，手腕上戴着一块大表盘智能手表。背景是户外的绿色树木和阳光，似乎在林间小路上。",
+   "bytesSha256": "a10ae63776fe37d90bc75051895fc33754101266034db2b6361bb03b6697683c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-ac05c4be78854c517e8c333b782cf63287871532d148c1e54bfe368b6f226762": {
+   "mediaKind": "photo",
+   "description": "一张自然风景照片，透过前景的树枝和绿叶可见一泓碧绿色的湖水，湖面平静倒映着周围茂密的山林，四周山丘被浓密的树木覆盖，画面中无人出现。",
+   "bytesSha256": "f88afd3facf6c86e418a9b59675d52c9f1c9f045d931654dd400bbf93c990243",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:dfb11c2d2756ddf2a063404e43501b8e918b6e5818efe99db9acc9e3978b8ddf": {
+   "mediaKind": "photo",
+   "description": "一个穿着白色上衣、头发浓密的婴儿被大人抱在怀里，婴儿面向镜头。抱着婴儿的人身穿灰色上衣和深色长裤，裤子上有白色抽绳，背景为浅色的室内环境。",
+   "bytesSha256": "d851d862793bf5b47ecb980b814a2c3e406e4b6c182725b91080abe63b03c6e0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:d8fff2e9e0ac40f677526e695b9eedd8403af025a4269ccbf1137891fd14fa07": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿米色连帽衫的男子在户外停车场推着一辆金属购物车，车内的橙色儿童座椅上坐着一名穿格子衬衫、蓝色袜子的幼儿，座椅前装有白色小桌板；背景可见绿树、停放的黑色轿车和其他车辆，以及远处的玻璃幕墙高层建筑。",
+   "bytesSha256": "37c4e29b6ab22b45f326b4a15da177c1cffe380e3b41b08b02874bb1bff42ea2",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:041ac71beac39a2db7f5e5d8432fdd6ec823bfaa7466c2332474a2ecd73cd123": {
+   "mediaKind": "photo",
+   "description": "一名穿着格纹外套、蓝色袜子的幼儿坐在超市购物车的座位上，腿前放着一袋印有'Dried apple'字样的零食包装袋，车筐内还放着白色布袋和一件粉色包装的物品。背景是摆放着商品纸箱的货架区，一名穿白色上衣的人正举着一个黄色纸盒查看，旁边还有几名顾客。",
+   "bytesSha256": "97523fede2aedede2f831d5d3920d34037160ce9248820c05008bdd1b58fbf4f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:4c4aacd1cda0792c22903dbf0ba8a6e0bbb4147cc21cf263242a49ddfe377861": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜的女子站在林间的泥土小路上，双手举起比出剪刀手，胸前用灰色婴儿背带抱着一名穿黄色衣服和白色袜子的婴儿。周围是茂密的树木和绿色植物，背景小路远处还能看到几个人影。",
+   "bytesSha256": "db48b184290c23b8575654caf4583b1ed6c634b57d37fb7905db55e3d8da78ac",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:6e373f0f9fa648ad94d2914d0fe897fecd5dc5063379fbf2ec00f4de943e5a24": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜的女士站在山间泥土小路上，身前用蓝灰色婴儿背带背着一名面向镜头、穿白色袜子的婴儿，女士双手举起两个浅色小物件。背景是茂密的树木与蕨类植物，远处可见一片碧绿的水潭和山坡。",
+   "bytesSha256": "24f7a2b8e55c661210a8f3ebac898b39e797733de323b002093c4c46e64ceef1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:de1dedb9f546ee2546991527c97b51c0200c46937943c8b8161091acd5ddfb99": {
+   "mediaKind": "photo",
+   "description": "一名头顶用蓝色发圈扎着一小撮头发的幼儿，身穿深蓝色针织毛衣、脖子上围着印有小熊图案的白色围兜，双手扶着米色皮质沙发靠背站立；背景为室内木地板，可见桌上摆放的显示器、椅背上搭着的米色外套、桌边的彩色玩具，以及窗外的高层城市景观。",
+   "bytesSha256": "6818ab4b4960270ba9ac0a1234afa83f8a307d2ddb4f8e06516759aa54265188",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:04c43711f4cef3c7c2ff873c78dc729f7dc4f1ccb462881fc1ff191f9c6b6f3d": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿白色短袖T恤和牛仔裤的成年人站在林间土路上，右手比出V字手势，胸前用深灰色婴儿背带抱着一名穿黄色上衣的婴儿，背带外搭着一件米白色外套，背景是高大的树木和地面的落叶。",
+   "bytesSha256": "c2483462b8993d92ffd7d104d3c14ae4d4a7a7296a3a60f1cdd12f0abbf68fd8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:5359ae410cb8fed6abc8ea96d3d1cbacc0c0621b8eada831db82c4d1f5ddae01": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿深蓝色卫衣和灰色长裤的女子站在木质观景平台上，怀中抱着一名穿黄色连体衣和白色袜子的婴儿，婴儿一只手抓着女子的衣领。平台上木栏杆旁放着一个迷彩背包和一根登山杖，背景是连绵的青山、山谷中的湖泊和多云的蓝天。",
+   "bytesSha256": "c611ba449fc5a04ed2fe08551c7046fbd0e86c5740c4281aa58b9022d37bcf1f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:0bf64143b9b9d3634595564efd5e3fb8d3f64ec652b61c6c63788f5715cd616c": {
+   "mediaKind": "photo",
+   "description": "一个头发乌黑的婴儿低着头看向下方，身穿带卡通图案的浅黄色长袖上衣和白色背心式围兜，坐在红色座椅上，面前是一张印有小鸭子图案的白色桌面。背景是铺木地板的室内，左侧有木质衣柜和粉色垫子，远处木门旁的地板上摆放着几双鞋。",
+   "bytesSha256": "6dd87f9ab86ac2896f281d13227a20320e782ecbf033a6ccc47620370f1e3922",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:0686823435c4a4724683221500b7f9650bc5c54aa13fbc2698d1cace89e27243": {
+   "mediaKind": "screenshot",
+   "description": "聊天截图里有两段客厅视频画面：墙上电视正播放古装剧，一名穿浅色衣服的人蹲坐在茶几旁陪着一个幼儿，屋内可见沙发、书桌电脑和带百叶窗的落地窗，第二段画面左上角显示时间2025/11/05 16:29:35。底部一条文字消息写着电视从中午看到现在、长时间让婴幼儿接触屏幕对孩子不好等内容。",
+   "bytesSha256": "f93ffcfc272718565a087b68465e6fc42ec32601d2e370a377c3b604d3a0a383",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:066dc09d9467d81a6f37b9dfcfa5ec7a1a5381a1214b720e2ba47508a4574293": {
+   "mediaKind": "photo",
+   "description": "一个穿着灰色连帽连体衣的婴儿坐在椅子上咧嘴笑，帽子上带有类似耳朵的装饰，身前有托盘，背景是室内的木质家具和竖条栏杆。",
+   "bytesSha256": "4b9c1d6f8b9820773a65985f4a8198b173364ab4187f5a6ad8ccc744aa165143",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:342df921767ea3aa0341881162d6cbbf23198d95cee7211fb412a3c4c9df5f75": {
+   "mediaKind": "photo",
+   "description": "一名穿浅灰色连帽衫的大人抱着一个婴儿，婴儿围着灰色针织围巾、戴着白色围兜，身穿米色针织上衣和白色裤子，一只手向前伸出；背景可见红棕色长椅和灰色地砖。",
+   "bytesSha256": "60e922fcd9b5b1871c9ec7a019065e009b6458ed511dc665047f205818badc07",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:8d9ad8bf6feb7ef9bde175453e252f9a9d2f93bfe2226d43b023a43bfa493daf": {
+   "mediaKind": "photo",
+   "description": "一名穿着深蓝色针织毛衣、围着灰色针织围巾、胸前戴着印有大象图案白色围嘴的幼儿侧身而坐，手扶在深红色的木质栏杆或长椅上。背景是户外街道边，可见一辆粉色电动车、绿色灌木丛、道路、停放的非机动车和建筑物，天色偏暗。",
+   "bytesSha256": "f7a2c6da9ca26ed1155d9c9ee49764f9b422e041ae80af9687744cbb4d3ae6e4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-923f57472d10b511d6a6c25b92eb373444db40935b1cff608ac44dc5ace7831a": {
+   "mediaKind": "photo",
+   "description": "一名穿着深蓝色针织毛衣的婴儿俯卧在浅色床面上，头偏向一侧、嘴巴微张，双手撑在身前。背景虚化处有一位穿白色外套的成年人坐着，室内光线柔和。",
+   "bytesSha256": "a5aed310138adefff0bec00193c328aa9d61663e70e8f54bd53387f1c8bc7514",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-6fe845bc877b71be6af6f69ed30500414295106be86b980d34217b26a908a8d7": {
+   "mediaKind": "photo",
+   "description": "夜晚的室内，一名戴黑框眼镜、穿浅色开衫粉色上衣的女子坐在米色沙发上，一只手扶着站在沙发上的幼儿；幼儿穿着藏青与米色拼接的针织连体衣和白色裤袜，张着嘴，身体向后靠向女子。背景是深色的窗户和一盏球形吊灯，右侧墙上有开关面板，窗边垂着白色线缆，沙发右侧放着红色织物。",
+   "bytesSha256": "138d4b1125ca45a1561f20869f90704c59843e6aeb816815b0d5169d4795fd9a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:92a6e996b7086e51d036c0411da7ac35c66734b9770c417a210d128fa8ba1936": {
+   "mediaKind": "photo",
+   "description": "一个穿着印有小动物图案的浅色连体衣的婴儿坐在床上，双手握着一个深色小物件，身后是白色枕头和蓝灰色拼接的床头软包，背景为棕褐色墙面，左侧木质置物架上摆放着收纳盒、瓶子和毛绒物品。",
+   "bytesSha256": "ed1fbd66d46e45c560ffa6babf5fd71cac5b3e9915b0c98b2b84a8d5cef40a0d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:21a16576dfd29bc3e066a50de8e00be1d37b0c30688f1a988977ea075fd9d029": {
+   "mediaKind": "photo",
+   "description": "一名穿着白色印花连体衣和纸尿裤的婴儿躺在蓝色床单上，一条腿伸直着，一只成人的手握住婴儿的小腿下端，画面右下方还露出另一名儿童的腿。",
+   "bytesSha256": "8abe03f10c7d754100a3766fb441efb031f8f7d5faefa7e2f170fbb098e74327",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:8cc755e44d8e22d7815d47c719c4407e193f8adca5a8ab231d56145c2bfa731a": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅灰色绒面上衣的婴儿坐在白色桌板前低头看着桌面，双手伸向桌上一件蓝黄配色带图案的玩具和一个红色小物件，周围还散落着几个小物品；画面左上角背景中隐约可见一名戴眼镜成年人的部分面部，场景为室内。",
+   "bytesSha256": "61d2696334f4b49d86c51045ed08689d35feb1be731afe36ef1dd35fe3a48aba",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-2073906535d201e81c22e8c0ec2d5857302580e5e47def3f482aa3f5e095e8f5": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿米色连帽衫的男子微微弯腰，一只手扶着膝盖，胸前用深灰色婴儿背带背着一个穿浅灰蓝色针织衣的婴儿。他们站在林间的石板台阶小路上，周围是茂密的树木和落叶。",
+   "bytesSha256": "24dc8215aeed51c1551f0c874eb4976f8f96b273e8cc44a6fb4e25647199d080",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-98b18d90a8f09eae3a96326a24a03a3c5b3e4eb765279415ae4f9c0b86172a83": {
+   "mediaKind": "photo",
+   "description": "阴天视角下的山林风光，前景两侧有深色树叶枝条伸入画面，中景是覆盖着茂密绿树的山谷，右下方可见层层梯田状茶园，远处山峦之间隐约露出一片水域和雾气笼罩的城市高楼轮廓。",
+   "bytesSha256": "c48f65b0cc2cf71d3049e480455e09f0e19ba8ca05bd1006c7dba2f9d2fd86a0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-bdc241cffec2f880dd46771021ec0d35564e714c21b70d7c9f0510d00433d542": {
+   "mediaKind": "photo",
+   "description": "餐厅内一张木桌上摆放着碗碟、茶杯、茶壶、筷子和手机等物品，一位女士俯身面向桌边的小孩，另有一人坐在桌旁，地面是黑白斑点的水磨石地面，周围可见木质座椅和天花板上的圆形顶灯。",
+   "bytesSha256": "c7d939520a1d2b213912a5c042dc0ef902cfc83939ef73769211996ea6103bab",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:4f0caaf8ac3fdbc383b7f08fac48df78b61a8a012cd7f81711430c6f25d36136": {
+   "mediaKind": "photo",
+   "description": "一个婴儿闭着眼睛张嘴大哭，嘴周和下巴沾有紫红色污渍并滴落，脖子上系着绿橙条纹围兜，身穿米白色带深棕袖子的外套，左下角有一双成人的手扶着婴儿的手。婴儿面前是带卡通图案的白色餐盘托盘，背景是橙色墙面，墙上木质搁架上摆着各色小瓶装饰品，周围还有其他就座的人，环境像是一家餐厅。",
+   "bytesSha256": "92d8621fde58c83f10c5b5d5ba0c1ced081977ed624bb480921e2996bd1e3b3e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:6b5960c8bb21f1770a402e11a5232ef97298559fddd0c7efe82f260b778f4050": {
+   "mediaKind": "photo",
+   "description": "一个穿米色棉马甲、内搭条纹长袖的幼儿张大嘴巴，身旁一只大人的手伸向他，似乎在扶住或整理他身上的衣物。背景是橙红色墙面和摆放着杯子的架子，前方桌面上有纸张类物品，后方还有其他人。",
+   "bytesSha256": "9c3ffbcfc94ab32579c1e054171f629ef023c801997bbde47905dc4735b902a9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-41e19c923b69b10544261fc444ebaa73ad1a73f29828184998057a5ad5e12eb8": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅灰色连体衣的宝宝坐在铺着深蓝色床单的床上，低着头，一只手搭在身前的浅蓝色毛绒玩具上，腿上搭着一块绿色印花布料。宝宝身后靠着一个白色大枕头，右侧放着粉白条纹毛巾，背景是木质柜门。",
+   "bytesSha256": "e6f13cef54a6df8e1909578aba1f64826f0bb7ba431503eac27aeb72bee596ee",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:b6571a0779895fb77f5f5067722b0c3968bf558968fac6b831369e53a03ee292": {
+   "mediaKind": "photo",
+   "description": "一名戴着带绒球的白色针织帽的幼儿躺在灰色婴儿车里，身穿米色马甲、深色长裤和白袜，头侧向一边，推车扶手旁挂着橙色玩具。背景是铺有花纹地砖的户外地面，远处可见店铺和堆放的货物。",
+   "bytesSha256": "03995e70f73b82981a28fd3211b9a21c21174b576359b89c86ea79fe06ddf6c7",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:39f088b3c2cb71f657f0fe73c5dc1a970cd6f35010daeb12de31863b5a7b3876": {
+   "mediaKind": "photo",
+   "description": "一名戴着白色小熊耳朵绒帽、穿蓝色针织开衫的婴儿坐在黑色婴儿车里，低头看着面前有人递来的一盒三文鱼刺身切片（净含量100g），婴儿手扶棕色扶手，身旁挂着彩色玩具，背景是商店货架。",
+   "bytesSha256": "a0fca7dbb0dedde53c37a0f63a545b35ce6c44a4e03dee408cddc270aa049013",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:8d59651f4836ee0d2a35a3fa81aa3940822de12d5ac0178c029ae810e0899a4c": {
+   "mediaKind": "photo",
+   "description": "一名婴儿坐在灰色婴儿车里，戴着带棕色小耳朵的米白色绒线帽，穿米色连体衣和灰色围嘴，被黑色安全带固定，双腿交叠，双手扶在身前的棕色扶手上，车侧挂着彩色布书玩具。婴儿车停在画有白色标线的柏油马路上，头顶撑着灰色遮阳篷。",
+   "bytesSha256": "56c108a146a506e280cfb7fa0d4b2b0e09e133780bb9a772e3afa760835c98ab",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:06e8d3fecc29c9038c3c7118ab770d4c6a82bfb159387beb69f05fb74f40729a": {
+   "mediaKind": "photo",
+   "description": "一名婴儿坐在灰色婴儿车里，头戴带小耳朵装饰的白色绒帽，身穿米白色衣服和浅色袜子，胸前系着安全带和灰色围兜，一只手扶着棕色扶手，另一只手抓着一个彩色布标签玩具。婴儿车停在画有白色标线的柏油路上，车篷已撑开。",
+   "bytesSha256": "099374324117b3dbb6446a651d3474a2c59bdd61abc023bd1e361827b0a023b2",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:071923cdc6c14ba9d6d8aa014e5cda1c75595c5d60406bb40fefb169a2f0d4f4": {
+   "mediaKind": "screenshot",
+   "description": "监控画面显示一间卧室，一只灰色猫咪站在床上白色枕头旁，床上铺着深蓝色床单并散落着被褥和衣物，床头是蓝灰色拼接软包靠垫，床尾围有白色床围栏并搭着毛巾衣物。画面左侧有置物架、饮水机和木质架子，上面堆放着衣物杂物，地面放有金属垃圾桶，右侧是木质衣柜，左上角显示时间为2025/11/13 17:24:57。",
+   "bytesSha256": "001326f34f6bf8287cb57dcea82b68841d4480de84f86fc093d6452edc94da31",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:e8f7d4c6318041959679049888c49df61f0400f513d90a38fe580a94c260ed37": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅灰色针织连体衣、戴着浅蓝色花瓣边围嘴的幼儿双手扶在深色圆木餐桌边缘，低头看向桌上的一盘炒菜和一碗汤，画面右侧露出另一个人的手臂。背景是明亮的室内，有大幅玻璃窗、窗外城市景观、窗边小桌及墙上的电视。",
+   "bytesSha256": "66185480c600a61f3a159bcff87b0408c8fea4e289a4bac443551161ac06f735",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:59b9505d538e45515bc8ce6f8f0e07d806dec6b7e18867c4c01d4c0d9c811859": {
+   "mediaKind": "photo",
+   "description": "一名大人从身后抱着穿深色上衣、浅色裤子的婴儿，婴儿伸出一只手去够木桌上白色花盆里的黄色花束，背景是带窗户的房屋外墙。",
+   "bytesSha256": "2561fa520961c091f92c9ec630e5c39c3c224d9f0dc5381d7f97734b156cf980",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:0d084a61b2931c06872874f287c624456bfd1193da01fc8cb150016b8ff52614": {
+   "mediaKind": "photo",
+   "description": "一名幼儿被身后大人的手扶着，身体前倾伸手去够桌上白色花瓶里插着的黄色花束，背景可见类似餐厅的桌面和一处鱼缸。",
+   "bytesSha256": "5ff3ee47b3af1d80bfcd34f98e2ae856ce042c8a2bb532d965b258ebf7a3ee6d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:6251268691ad1033e9c9fc7fd0aa894a2f72c1f03bfc271356deddc5d9af0a73": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅色上衣的幼儿坐在汽车驾驶座上，一只手扶在方向盘上，车窗外隐约可见天空和地面。",
+   "bytesSha256": "c407212e675e7e86f8b2c59ed4cba32be58ad241afcbfd6700bb374dfa304285",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:101a014922b114af75e7a7833c4275a97556e490c9c3fbf81de2265368fce274": {
+   "mediaKind": "photo",
+   "description": "一名幼儿坐在汽车驾驶座上，身穿米白色带帽外套，一只手朝镜头方向伸出，身后可见方向盘和仪表盘，挡风玻璃外光线明亮。",
+   "bytesSha256": "18ed780d64ed9c230312e450bc8117bce349fe8fe52b97eea3c46807b0d5ea1c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:cc5083547996f3b2217f29e79a184ecfeb5d58f03bc860a794ccfdecde0f6375": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅色外套的幼儿坐在汽车驾驶座上，双手伸向方向盘，似乎在触碰方向盘，前挡风玻璃外可见道路和路边景物。",
+   "bytesSha256": "0124f63534f03ae451680b16304edfa7204b2fd4fd93d8c19e85347c93b45093",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:76b7cb56e6d916a04cad1392e637164c2777f31ab02a7049b854535c38e0ef46": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅色衣服的婴儿坐在带白色托盘的餐椅上，低头看向托盘，托盘上有一个绿色的叶状物品，画面右下角一只成年人的手伸向婴儿，背景是棕色沙发和靠垫。",
+   "bytesSha256": "b2a351798c0fa54ba1a0696602d8c2c701a4f643677903fd7c4e522fc576fa3b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:fe423e4cc7467b9634812f5d6dd2479478b569e16ad061438184c762573e08ac": {
+   "mediaKind": "photo",
+   "description": "一名穿着深棕色外套、围着白色围兜的婴儿坐在车内安全座椅上，双手举过头顶握着一把勺子状的物品，咧嘴笑着；车窗外可见树木、蓝天、建筑和一块蓝色路牌，画面右侧露出一名成人的手臂。",
+   "bytesSha256": "0e527da669134ed8f37b10c7fb912f7ec26e5232538b96357a5ce05104c4eca9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-c6311b55d078a709e1d5b31612e08f0c2f9c4bc54dc5415074020a1f10297513": {
+   "mediaKind": "photo",
+   "description": "一名幼儿站在汽车驾驶座上，双手扶着方向盘，张着嘴侧脸朝向方向盘方向，身穿深灰色上衣，戴着印有小熊图案的白色围兜。方向盘中央有奔驰标志，车窗外可见绿色围栏，阳光照进车内。",
+   "bytesSha256": "a00c865a53c191d1a280905b161a3c3b0ec67a7190d8bd171b423f3c97d5ae4b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:afc44b6dfd75bc0a36f333dee8fe4f6cb5e34bb56ccb6d5dd822b0ad5a99bb36": {
+   "mediaKind": "photo",
+   "description": "一个穿着深灰色上衣、白色围兜和印花白裤子的幼儿站在汽车驾驶座上，右手扶着方向盘，张嘴眯眼笑着。车窗外可见绿色铁丝网围栏、蓝天和远处的山。",
+   "bytesSha256": "05b511cdd4af9fdccaaf829c8b63b0984309166a239484ea40cd6828d22a0048",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:63f46ac806bea3e0914322a07c0d10a62efc6cbdf2cc5c52a04a022478a88203": {
+   "mediaKind": "photo",
+   "description": "一名戴黑框眼镜、穿蓝色卫衣的男子低头看向怀中抱着的婴儿，婴儿闭着眼睛，身穿深色外套和图案围兜，双臂抬起，男子手腕佩戴一块智能手表。背景是户外环境，有绿树和一座中式亭子。",
+   "bytesSha256": "3fc98166dc02dbe245541d8d87b752bfdb1bebe6653a6aff15e13ba89520e046",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-d4fe305368e131a6ac92e30ed6e434983ae4bb590b52f52301223da0996f6276": {
+   "mediaKind": "photo",
+   "description": "俯拍视角下，一名穿灰色粗针织毛衣、深色裤子和白袜子的幼儿坐在浅色座椅上低头向下看，下方玻璃顶棚上一只银色虎斑猫正仰面翻身打滚、尾巴翘起。场景位于阳台，可见黑色金属栏杆、搭在角落的白色毛巾，阳光在玻璃上投下条纹状阴影。",
+   "bytesSha256": "d9c35757aad8375bb1fdf248ee4c41b0cfa312f4ee57fd66333ec9086977eac9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-b99255da6ae8a1dfd9eea15f05d2acf0b75b1f8e61d25dc2b7653fd10c4f537c": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿棕红色格纹外套和红色裤子的老年女性坐在铺白色床单的床上，双手握着手机看向镜头方向；前景有一个穿灰色针织上衣和深色裤子的小孩背对镜头趴在床上，背景可见棕色窗帘、墙上的装饰画，以及放有台灯和杂物的桌子。",
+   "bytesSha256": "51e914bb3bc148d473135767516ed92c5fb0638fc0c91f05037e7a0b52857b6c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-05c8cd7d204f4d91f604c9b1fc4f56c8626eb5797fee87327f65a9423d51c657": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿棕色格子外套配丝巾的年长女性坐在铺白床单的床上，低头看着身前的幼儿。幼儿穿灰色针织上衣和浅色袜子，坐着低头双手握着一个黑色圆筒状物品，背景是棕色窗帘和放有衣物的座椅。",
+   "bytesSha256": "2d6ffb4068d778dd2ddf79b14713f39bcbc7848c8d622e457b5fb3d8da948258",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-c1f8244b67cb0dc800bc690bebcfac1c4ec81fba0bef55d449565e49a7dd046f": {
+   "mediaKind": "photo",
+   "description": "一位穿蓝色外套和棕色裤子的老人坐在米色布面卡座沙发上，双手扶着坐在身前的婴儿；婴儿穿浅蓝色衣服、灰白色围兜和白袜子，低着头。旁边可见白色桌面边缘，背景为米色墙面。",
+   "bytesSha256": "6b596f2f5377efcd4a85ec873149b3069ea010783e465e9af29a6deb8c5a5cfb",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-11a37d1b517dae11ecccc3bba939e385bdf55a676c9c639657f8d52ad6e04076": {
+   "mediaKind": "photo",
+   "description": "一位穿蓝色开衫、棕色裤子的老人坐在汽车后排座位上，腿上躺着一名穿浅蓝色衣服的婴儿，他的左手扶在婴儿背上。车窗外可见楼房建筑，车内为黑色真皮座椅，前排座椅上放着一件灰色衣物，左侧座位上放有包和外套。",
+   "bytesSha256": "42fb76a1c24610b7121759beca1c0a9a9431db36b1ea70cf4f11171a79d4d4c1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-39b8bef8991c7399f7e770d7273723a0d68e79934d6999cfa6959b414dce2c7c": {
+   "mediaKind": "photo",
+   "description": "一条铺着红砖的林荫步道向远方延伸，两侧种满高大树木，右侧树下一辆黄色共享单车靠在路边，左侧有灌木和球形石墩。远处有两名行人正在步道上行走。",
+   "bytesSha256": "97c15237a6e3fabec43893be9890fed09cf1c0a7f58c758906acd805c7242dc0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-50d2af4c8dbbebeab9475b3054836baa49d5379da7d4a8f4a2c4c6d3a70d2753": {
+   "mediaKind": "photo",
+   "description": "户外树林景色，晴朗蓝天下多棵树木呈现绿色、黄色和少量红色叶片，上方有几条电线穿过画面，地面覆盖着草地并带有部分干燥裸露区域，画面中没有人物。",
+   "bytesSha256": "438b22730c917e24b49977913c72fc7acd0d65ec7aba2f3aa61a69ee18ae9214",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-0cbbfb8b1656f9d71091a9cd0e9719322e475585ba9a9f2cb9cbf037f97b1ae6": {
+   "mediaKind": "photo",
+   "description": "画面中是一棵枝叶茂密的石榴树，深红色的石榴果实挂满枝头，树干粗壮、树皮纹理粗糙，树下有宽大的芭蕉叶。背景右上角露出淡蓝色天空和一栋带阳台的浅色建筑，部分被树叶遮挡。",
+   "bytesSha256": "5f941536629d0be2f61e322fafa1924557c20f106dd368f39caf54d2331fc6bc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-b72b74f41e862944927151cf489163d1750aa19033292753f6c6b9d8a854a285": {
+   "mediaKind": "photo",
+   "description": "画面中一座砖石结构的多层古塔矗立在树木之间，塔身略显倾斜，各层开有拱形窗洞，被茂密的绿色树冠部分遮挡。前景是一片枯黄的草地、几棵矮树和一条石板铺就的小路，天空呈淡蓝色，无人物出现。",
+   "bytesSha256": "402da460d3b03cf0516aa626a654d6d4bebde393756a87dc3bbb723dc9cf7167",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-c9bf27774cab0af7f9b2d784470de262efba9cca6f22854b9e45c876897a4ef9": {
+   "mediaKind": "photo",
+   "description": "夜晚的城市广场上有一片灯光游乐区，右侧立着装饰满灯饰的小型埃菲尔铁塔造型装置和圆顶旋转木马，旁边停着红色电动玩具车，远处有行人走动、有人推婴儿车，背景是蓝色玻璃幕墙高楼和树木，前景是一排带红色条纹的石球隔离墩和一块箭头指示牌。",
+   "bytesSha256": "aa0700d19c3a027c0e09c807b53e394d30a56abb158f995c2271e31b9623d0c4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:85f86c3b3554867a25c4b2b7dba39a5a01f111472fb7b89b596895c1ff46da71": {
+   "mediaKind": "photo",
+   "description": "一名戴着白色针织帽、穿米色马甲的婴儿坐在灰色婴儿车里，面带笑容，画面下方一只手扶着婴儿车的推杆；背景是户外的红色步道、草地和护坡，远处可见楼房、树木和路灯。",
+   "bytesSha256": "de0de47abe36cf3f8a9640b2e962f28a40c2b4a6713433306ec5f5c433432d26",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-066079a1753f58672d73e3e31566020d14f882201521b8e30b5b514591d7d9ad": {
+   "mediaKind": "photo",
+   "description": "道路上有两辆白色轿车，路边立着白色路灯杆、蓝底右转箭头标志和红白相间的柱子，路旁是茂密的树林，树林上方露出一个巨大的绿色卡通兽头雕塑，带有米色角状装饰和红色鼻子，背景是植被稀疏的山坡和晴朗的蓝天。",
+   "bytesSha256": "04790cdac740e85b09d7a8be1b89863a326f659186aecc00903db87f94bd7b71",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-1c502b3c354db1ec02a93ae50fe0b69b991d75aef6d62507523ba72fe0e12442": {
+   "mediaKind": "photo",
+   "description": "仰视角度拍摄的一棵大树，深褐色的粗壮树干树皮纹理粗糙，多条弯曲的粗枝向上伸展并交错。枝头长满翠绿的叶片，天空从树叶的缝隙中隐约透出。",
+   "bytesSha256": "429932157b1c9dcae0c4cbd58cdcec2ffb63b0c6f4b1fbfa00098aa502b33bd3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-9c41f6d8ce33d67a6f72d9929d8dc2db916c6808b190706339c5d75187ef4b06": {
+   "mediaKind": "photo",
+   "description": "玻璃餐桌上的一只白盘里放着一只煮熟的橙红色螃蟹，旁边小碟盛有深色蘸料，桌上还摆着白瓷碗、纸巾盒和杯子，背景处另有一盘蟹壳残骸，画面上方隐约可见一只手和黑色衣袖。",
+   "bytesSha256": "2af0a8b2e6bd316617bf39dd0ebc71a382c5ab223ab9b2c0e7db7fdf0d54a018",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-b68d28d15b32217e46f82ef079e4a092659174f3f5c861485f66bd5086de96f1": {
+   "mediaKind": "photo",
+   "description": "一位身穿深棕色外套、手腕戴木珠手串的老人坐在汽车后座，怀里抱着一个穿浅灰色针织毛衣和白色小熊袜子的幼儿，低头看着孩子，幼儿手中握着一个小物件；车内有全景天窗透进光线，左侧座位上放着一件米白色毛绒外套，车窗外可见树木和天空。",
+   "bytesSha256": "01bebaaca12a71d7612c95f7443cf7c4e4b5d28a2cba539ec724eda675c84690",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-8ef424c4ef83e07e5bec04804938fed24239100101f651a989db5770cccc9ebb": {
+   "mediaKind": "photo",
+   "description": "汽车后排座位上，一位戴眼镜的老年女性侧身坐在左侧，中间的老年男子怀抱着一名穿灰色针织衫的婴儿，婴儿正吸吮着一个红色奶瓶；两人身后有白色毛绒物品，车窗外可见道路护栏和远处的楼房。",
+   "bytesSha256": "5718cdbdf27e326ffcbe3251ae598dea8f8efa35c67942c602db052f193e6db4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:acc639f76cd3afdd84698d4495362034bf774a23f03f89cd844e12c6201dff52": {
+   "mediaKind": "photo",
+   "description": "在铺有米黄色瓷砖的室内走廊里，一位戴帽子眼镜、穿米白色外套的女士一手抱着穿灰色上衣的婴儿，另一手拿着带吸管的杯子，她面前的婴儿车上堆放着白色大塑料袋和绿色条纹包等物品，推车扶手杯架里插着一瓶带黄色瓶盖的深色瓶子，背景可见电梯门、广告屏和墙上的卡通兔子装饰。",
+   "bytesSha256": "d0c5061c53bffdddc462d481d0d808b5ed6a06a441f3767b44eae6a54a8d196c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:dc5260ca4b63f18f50d02fc1bfea9c3ded98d40ae1ea6c03261c9bd971337ae3": {
+   "mediaKind": "photo",
+   "description": "一名戴白色针织帽的幼儿坐在黑色婴儿车里，位于地铁2号线金家渡站站台的屏蔽门前，地面画有黄色箭头并贴有“下车通道 请勿站人 Keep clear”标识；玻璃门上贴着广告，门外可见停靠的列车车厢。",
+   "bytesSha256": "73c091f266e372c000975acb5f7bb12c34a701c98fdbff7af065c15090ad8507",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:13051ee3f6f632c00fbcbea557070e1c475bcd7134e1316022baed0c27c66338": {
+   "mediaKind": "photo",
+   "description": "木桌上放着一碗汤面，碗里有面条、几片牛肉、虾仁、煎蛋和绿色青菜，汤色偏深，碗中斜插着一把浅色汤勺，一双黑色筷子搭在碗沿上，画面左上角露出一个深色物体边缘。",
+   "bytesSha256": "26779acd8b761f9218b71bb4b63cc55b468244f341a54bf528bceb725c948a5b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:0ba597d15549340a4354641944fa77b5f52f4eca49a9d0f98fe3d803300ead76": {
+   "mediaKind": "photo",
+   "description": "一位老人怀抱着头戴白色绒线帽、身穿灰色上衣和白色靴子的幼儿，站在粗壮的大树前，右手指向树干上悬挂的金属铭牌；铭牌上印有“香樟”字样、编号、英文说明和二维码，背景可见带遮阳篷的建筑和庭院物品。",
+   "bytesSha256": "23fe470829411809a338fe2bd3c19e84538df2512f96fd8d8776b83029dcedc5",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:ce3d0113fde5529be2f6c549adf804254a3a861be147dcf1360314090a953880": {
+   "mediaKind": "photo",
+   "description": "一名穿深色上衣的男子坐在汽车后座上，怀中抱着一个穿浅粉色衣服的婴儿，低头看着孩子，画面可见车门内侧和车窗。",
+   "bytesSha256": "d4ca7b3b9d4b385ca1b278263e1216558d0e229a7af05bacc01119e77bf2ccf2",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:3941deddb5b66246c53254679a50cd5e22534ef8c0c57fe45a54cbaa58594313": {
+   "mediaKind": "photo",
+   "description": "一位穿深色马甲的老人怀抱着戴白色针织帽、穿灰色毛衣的幼儿，站在树干粗壮的大树前，树干上挂着一块写有“香樟”并带二维码的金属标识牌。背景可见带窗户的建筑、绿色遮阳篷、黄色箱子和一些杂物。",
+   "bytesSha256": "50d663d1c1518bef32e6e620c9a3c636c1d51d136962bc09e201ea2cf630c424",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:5233d38011e0d53bb67c9705423f5dc66778b9315771969f9cf96ef0bb0184ea": {
+   "mediaKind": "photo",
+   "description": "一位穿蓝色外套、深色长裤的年长男子坐在米色布艺卡座沙发上，面带笑容，用一只手扶着身旁穿浅蓝色衣服、白袜子的婴儿，婴儿低头看向下方；背景是米色大理石纹墙面，右侧可见一张白色桌子的一角。",
+   "bytesSha256": "248cda78f918ae33d4b8388962845e17a6a6660752df6cfc6811445954ff599e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:362312ba6f3d42ceb9c022523ea2aff94294442d78529721e8ed13c0135a8f25": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿棕色格纹外套的老年女性坐在床上，低头看着身前穿灰色毛衣、戴浅色围兜的幼儿，幼儿手里拿着一个类似遥控器的物品；左侧一位穿深色衣服的老年男性趴在床上望向孩子，背景可见深色窗帘、壁灯和一把堆着衣物的沙发。",
+   "bytesSha256": "847e09e34bcd2693b2a50e3ac39a09873a93b1935cb472fd2153b7fba1ced73a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:80aca1885af0163769fd131ff6cd6db6f594cb261b3fa1c113022555b53a4b08": {
+   "mediaKind": "photo",
+   "description": "汽车后座内，一位身穿深色外套的老年男子低头看向面前伸出手臂的幼儿，幼儿穿着灰色针织上衣，前景处放着一只系有红色饰带的黑色行李箱。",
+   "bytesSha256": "2a73d8371daa8c4af60dfef3667f423a872ca7c878e54c2508a6fe301421b57e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:3fa65c0620d3608e978587c87c5c89b93f40dcccd47458ba137406bf959f067a": {
+   "mediaKind": "photo",
+   "description": "夜间的汽车后排座位上，一位穿深色外套的年长男子面带笑容，怀里抱着一个穿浅色毛衣、戴围兜的幼儿，幼儿手里握着一个粉红色环形玩具。画面下方的深色座椅靠背上放着红色小包、蓝色袋子、纸巾等物品，车窗外隐约可见夜晚的灯光。",
+   "bytesSha256": "9f83123422b16cdd21cbfae78357d820504049b14ae3d12fc9245d29bc3d199a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:8566c5500e3cfd1e4210c80f548641676d02ed4d24805ca76783e7c567950a53": {
+   "mediaKind": "photo",
+   "description": "夜晚轿车后排座位上，左侧一位戴眼镜、围丝巾的老年女性张着嘴笑，右侧一位穿深灰色外套的老年男子怀中抱着一个戴浅色围嘴、穿浅色毛衣的婴儿，婴儿张着嘴，一只手举起，另一只手向前伸出，背景可见座椅头枕和车窗外夜色中的灯光。",
+   "bytesSha256": "2f13de85ec0e62392268ee123138ef5b03b9890d1ac58bbecbf3c6c92e308337",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:54e683fb2524c3bdecefda456d08871ebffe9351287437f9a0455804fb41847e": {
+   "mediaKind": "photo",
+   "description": "一个穿着印有灰色鲸鱼图案浅色连体衣的婴儿躺在床上，双手捧着奶瓶喝奶，身侧铺着一条带紫色圆盒的软尺，画面上方有一只穿黄色衣袖的手搭在婴儿脚上，床的一侧放着白色枕头。",
+   "bytesSha256": "d2fd515eff486e7cd8740264d61d874e64198052712fb3a822c88f7452d43921",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:b4d42d607843c7bf0d1058c3fecbd2ea6d88e1d9e581524b6e245a37a1a46c3e": {
+   "mediaKind": "photo",
+   "description": "婴儿面部特写，双眼眯起、张嘴露出上下排牙齿，嘴部左侧被一个红色圆圈标注圈出上牙龈附近的位置；婴儿身穿浅色衣物，下巴前有一块带湿痕的浅色布巾，背景为虚化的室内环境，隐约可见金属支架。",
+   "bytesSha256": "74a58d0c16acdb43a680d7c8d69c32c28eb74854b1a79a3d24b21ac6ce399327",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:fc3e4332acb9bdd4685b07df7e84eb23152260d07adb9717237a2168fcdcba8d": {
+   "mediaKind": "photo",
+   "description": "一个婴儿的特写照片，婴儿躺着闭眼咧嘴笑，露出上下排牙齿和牙床，下牙床一侧被红圈标注，身上围着带图案的白色围兜，背景为室内环境。",
+   "bytesSha256": "f1ff66f637ef97b84e7cad7f37761af8d8fb2bfa5b7b277356a5bd42c752e734",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:b98d567223b252615b78258ec9419b992bd410d4cc1016625e7132a7e034557d": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅米色棉服的婴儿躺在深灰色婴儿车里，一只手扶着棕色的扶手栏杆，车侧挂着橙色小玩具；背景是室内走廊，两侧有房门，尽头窗户透进光亮，前景可见婴儿车把手。",
+   "bytesSha256": "d8de445063ae6b6b65dd2723796871b8c04bb6281414792fc26fb5ea2ca590d9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:b428588ed67f56392bc1b0bf6c03928b3e029b1d827d5f23194f60368449a396": {
+   "mediaKind": "photo",
+   "description": "一个穿白色羽绒服的婴儿坐在灰色婴儿推车里，手扶着棕色扶手，身旁有白色毛绒玩具，扶手上挂着橙色铃铛等小玩具。推车停在有红棕色木柱的廊亭下，外面是阳光下的公园，可见树木、铺满落叶的草地和小路。",
+   "bytesSha256": "9b66cd662cea3ac124255313cf964d92684af1317ae2631c87e5cc0c90cb25ca",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:d751a1785c0f70dd7e6c7d97d73c62111022f3a5d0371310272d13cc7b004009": {
+   "mediaKind": "photo",
+   "description": "一个戴着白色帽子、穿着浅色衣服的婴儿坐在深色的婴儿车座椅里，双手拿着一个蓝色和橙色相间的物品，身前横着婴儿车的深色扶手。",
+   "bytesSha256": "d4f057674d55e4cca181c4e320363f7ca49fef5e7424cf6c361f6be32f0a3f96",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:c195280862831b11d7985d748779c71624e20ef628dbab8e20057048c3ea9b1f": {
+   "mediaKind": "photo",
+   "description": "画面是一名婴儿的脸部特写，婴儿闭着眼睛、张大嘴巴大笑并露出上排牙齿，身穿浅色衣服，下巴附近有白色毛绒物，背景模糊无法辨认具体环境。",
+   "bytesSha256": "7c370bca58a35519b413645503cefceaf09fd684e7c1dbfe6f2076bec6d0b443",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:6f1fe184e92073d571961d50bab313280bcf58966cb86120b48a8a2e254fa6fa": {
+   "mediaKind": "photo",
+   "description": "一个戴着米白色针织帽的婴儿躺在深色婴儿车里，手边放着一本蓝色和橙红色页面的婴儿布书，婴儿穿着白色衣服，似乎正伸手触碰书本。",
+   "bytesSha256": "5e36b78a4bbd81b9ec0d243e830702f5d75ae159b392233073513cde9bde202d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:78259a0c2a949d5e3e28214cc578aa338c5bf0fb6b828e68f87572b72e717a57": {
+   "mediaKind": "photo",
+   "description": "一个婴儿咧嘴大笑，眼睛眯起，露出上排牙齿，脸旁和前景有白色织物，背景较暗。",
+   "bytesSha256": "7c370bca58a35519b413645503cefceaf09fd684e7c1dbfe6f2076bec6d0b443",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:dbf771c4a14d16cd6509a937c1d54854657356eea1401a2f27765621da97e12c": {
+   "mediaKind": "photo",
+   "description": "一个穿着印有鲸鱼图案的浅色连体衣的婴儿仰躺在深蓝色床单上，双手捧着半透明奶瓶正在喝奶，身旁放着一条带紫色圆形卷尺盒的白色软尺。画面上方可见一个大人赤脚按着婴儿的腿部，右侧露出白色枕头和被褥。",
+   "bytesSha256": "11a47cc47641d515b87e60484b85ce5cf51ac9e1e8a1e78b84021122c87960c8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:74d9e26cd870bfeefda388d6602fb0a52dae9ccfef2a8b7b4e82edb1e6ef0bc5": {
+   "mediaKind": "photo",
+   "description": "一个戴着白色针织帽（帽上有两个棕色小圆球）的婴儿坐在灰色遮阳篷的婴儿车里，身穿浅色羽绒服，双手捧着一盒蓝色包装、标签写有“冰鲜三文鱼刺身切片”的透明托盘，低头看着里面的橙色三文鱼片；婴儿车前有棕色扶手，背景可见店铺的货架和地面。",
+   "bytesSha256": "6bc957bad9bb41a406050873152469237a754934ee1d5c324717a809fa20f144",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:59c71aa253d74f0e88af1ce66032706b77a4868a40adaa007831976bbc379977": {
+   "mediaKind": "photo",
+   "description": "一个穿着深蓝色针织毛衣和米色棉马甲、戴着绣有狐狸图案围嘴的婴儿被一只成人的手从身侧扶着，婴儿张着嘴。背景左侧是木质衣柜，右侧是蓝色软包床头和床上的被褥。",
+   "bytesSha256": "110564bc1e3e01a2dabfe926cc057be149c9a19c1bda87279f678d6976de1189",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:78155def5eb2af1f9801d7500292eec530795fa6b8c9ecb02f643380bfe54ef5": {
+   "mediaKind": "photo",
+   "description": "一名头发浓黑的婴儿闭着眼睛躺卧着，似乎在睡觉，脖子围着一条带彩色图案的白色围兜，身穿浅色衣物，头后上方是灰黑色的婴儿车遮阳篷，画面左上角背景处可见蓝色标志牌和绿树。",
+   "bytesSha256": "be4acc1a98dcdf9df3d8f57ca7ead58d3c10144c943ad69b25bc8cdb03157b35",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:c9cf3c55345f527acf06dbb98a81233d51b3ae34c2f4661113e597255b19dba7": {
+   "mediaKind": "photo",
+   "description": "一名婴幼儿坐在灰色婴儿车里，头部朝向画面左侧，穿着白色袜子和白色围兜，手扶着棕色扶手。婴儿车停在路边，旁边停放着一辆黑色Jeep汽车，背景是人行道、树木、灌木和建筑物。",
+   "bytesSha256": "955362221f050c0e70a2fbc7f4feff5704379f234b2323b09b791ffbd09f6034",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "media-quark-sha-1963b98c9ae52a79ff825fdb0e61329b22665d8b86981c68b3fc93cbb66a1e43": {
+   "mediaKind": "photo",
+   "description": "画面主体是一棵叶子金黄的银杏树，背景为高层住宅楼、带绿色雨棚和玻璃门窗的沿街商铺，天空晴朗呈蓝色。画面右下前景停着一辆深色SUV和一辆银色汽车的车头部分，树下有灌木丛、裸枝小树和铁栅栏，画面中无人出现。",
+   "bytesSha256": "312b2766d1d3695056361a21c39b0942a81836efe874b76c3c235ef2fbcb3e67",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T01:59:18.338Z"
+  },
+  "wechat-media:db063eb079e8e5fa8b7763632f64d12d8f51d02aed6c01d50956957aa4616fb5": {
+   "mediaKind": "photo",
+   "description": "一名穿着白色罗纹连体衣的婴儿靠在灰色靠垫上，张嘴露出下排牙齿笑着，背景为浅米色墙面；画面左下角带有水印相机的时间水印，显示打卡时间为2025年10月1日06:50，右下角有“水印相机”字样。",
+   "bytesSha256": "8efe76f396e84cf859abfce27270c956117892e011b9299f04f04ae2cbece6aa",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:317f4f88717af84748bda6f26078a987380bd30ff7ae9f8f283296a3b5d748fe": {
+   "mediaKind": "photo",
+   "description": "一名穿着印有小动物图案的白色连体衣的婴儿躺在床上，双手捧着一个浅绿色奶瓶正在喝奶，身后靠着一只棕色大号毛绒熊玩偶，床上铺着蓝白格子床品；画面左下角有“打卡记录 07:02 2025-10-01 星期三”的水印，右下角显示“水印相机”字样。",
+   "bytesSha256": "649808ffd8bad0061782a5a51175d2b2ae5e9368ee090901f82a1040cc986c41",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-ec42ef10ed36ab029b17355608cbb3f383d8e4877f2d9c1ae87be1a30099805e": {
+   "mediaKind": "photo",
+   "description": "从汽车内部拍摄的雨天行车画面：前挡风玻璃外是一条湿漉漉的乡村公路，路旁有黄墙民居、院门、树木和电线杆，远处山峦被浓雾笼罩，画面下方可见汽车仪表台与空调出风口。",
+   "bytesSha256": "9645cde2562a0499a14bf669f49af91bad74f556974f8ca37aefcabd672eabc2",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-de499ca80965cf8c1313e76e87df6fb3215991903f21dbd4dc14c30d6bcec83f": {
+   "mediaKind": "photo",
+   "description": "透过车窗拍摄的画面，玻璃上有雨滴和污渍，左下角可见车内后视镜。远处是山丘上茂密的树林，天空阴沉有雾，山脚下的坡地上有几座砖砌和混凝土的平顶房屋，周围长满杂草和树木，一根树干和电线从画面前方穿过。",
+   "bytesSha256": "0bb1eb0f76e0914a9f1eed86111005bf607cefdb454ee214c6c76b30868cb781",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-3c5c6abf66045dc560c84fa126cb44f141bea0b1de6b22d69c62a81b189eb8ac": {
+   "mediaKind": "photo",
+   "description": "画面中是被薄雾笼罩的连绵山林，山坡上覆盖着茂密的绿色树木，其间点缀着少量黄色和橙色的叶片。画面底部有一条模糊的灰白色横向边缘，可能是窗框或护栏，前景是多层次的绿色树木和灌木。",
+   "bytesSha256": "901437cc67b029e1dc0755170937a174e0dd8d39204c85059c405bf12a501729",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-ee520e44d7623a2a4c57c21727229a1365ce7f79c005d7dd01c0b942b2f14a57": {
+   "mediaKind": "photo",
+   "description": "阴雨天的一处路边场地，一辆红色高栏半挂货车停在湿滑的地面上，周围摆放着数个交通锥，左侧停着白色SUV，右侧停着白色轿车。背景是低矮的临街建筑（其中一块绿色招牌写有“陈德商店”）、被雾气笼罩的青山、电线杆与架空电线，画面中未见明显人物。",
+   "bytesSha256": "7148ec466b7286a6de64ab7ba027f9e3448ac51461946984eebf65b6aa32be90",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-727a1e5924f063e64e5fc96de47b63337111a2cf0c33cc56259c1a8c77495d05": {
+   "mediaKind": "photo",
+   "description": "雨后湿滑的街边，一家挂着“京味鲜卤味烤鸭店”红色招牌和“蓝月亮茶行”绿色招牌的店铺前摆放着烤炉、饮料箱，有人坐在门前雨伞下的躺椅上休息；路边停着白色小轿车和几辆电动车，前景立着写有热米皮、菜豆腐、手工水饺等字样的红色菜单牌，远处街上有撑伞的行人经过，背景是绿树和贴白瓷砖的楼房。",
+   "bytesSha256": "9b5a3e627149297abeb638404686837ef56b9fab1c554bdac9527297add991a6",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-32583bd4c61eacada7309e1228fd6b01550d59f96509088cb711a51734da9c8f": {
+   "mediaKind": "photo",
+   "description": "从车内透过挡风玻璃拍摄，雨雾笼罩的山间公路向前蜿蜒，两侧山坡覆盖茂密的绿色树木，路边设有绿色护栏，路面湿滑，画面左侧有一道模糊的深色竖直阴影遮挡部分视野。",
+   "bytesSha256": "e01b600594a2a8aa9eeb23a679ffaaf53e4d83a4c27089515153a3e4b2454361",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-db5748f836396a20c0fb1eb7711b53ebc395a04534e95d153fe62bfbd9e0daaa": {
+   "mediaKind": "photo",
+   "description": "街道旁是一排挂着中文招牌的临街餐馆和店铺，上方为装有空调外机和防盗网的居民楼，人行道边有树木、红白条纹交通锥和搭着棚子的摊位，棚下有人坐着。路面上有一辆银色轿车和几名骑电动车的人，右侧一名穿深色衣服的男子提着红色袋子正在横穿马路。",
+   "bytesSha256": "c47263c16f42d50b4542ee4b4e7788c2ea72ff9188ab8029c4c525d80975446d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-bfa959253140fe2eae95668fe2c3dec83e58e30be0ef60d210f357c81f79a71e": {
+   "mediaKind": "photo",
+   "description": "一家挂红色招牌的荞麦面馆门前，店内多名顾客坐在桌旁用餐，一名穿暗红色上衣的女子提着包站在店门口，一名白衣女子从路边树旁走过。门前路边停放着一排电动车，左下角有一辆灰色汽车驶过。",
+   "bytesSha256": "005a4c41be485c63e06b862db35349289a48e6d6751323d2d32d5965a388d148",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-31d0f0fdb4b31ab08917e922cdfdd8e5824126f4049d3fdb6bba5597110cfbd3": {
+   "mediaKind": "photo",
+   "description": "画面中央挂着一只灰色长毛绒玩偶，有兔耳、彩色虹膜的大眼睛和白色价格标签，悬挂架上还挂着蓝色、红色等多只毛绒玩具和一个装圆球的网兜；下方摊位摆放着各种小玩具，背景可见白色汽车、蓝色塑料箱和一名站立的人。",
+   "bytesSha256": "7a9c7e7a317b356e31a6e5498dcb6eeb4f0407bdecb3f485c9e6a305b9381034",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-65cda1b4aadf4da9f16b4de54224ef8b5c51a1589de46d58f78ee3868a9aa85c": {
+   "mediaKind": "photo",
+   "description": "夜晚的江边码头，一艘红白色的游船停靠在岸边，对岸一排亮着灯光的传统风格建筑倒映在水面上。岸边广场上有不少行人散步或驻足，近处立着黄色灯笼式路灯和红色告示牌，旁边停着几辆电动车。",
+   "bytesSha256": "19db1543c8026b953b3c68cd80e027bcae3b01734b1dfac96b1713add34a4684",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-c110ce20ae2a49708f8699365eadb82ee2e94a36431af479df1a604214eb9a4b": {
+   "mediaKind": "photo",
+   "description": "阴天的公路服务区，停车场内停满各色轿车，几名行人在车辆间行走；白色服务楼上有\"秦岭服务区\"\"餐厅\"\"超市\"\"洗手间\"等标牌，楼后是覆盖茂密绿植的高山。",
+   "bytesSha256": "85cdd4bc7b968d00b96f3534e3c92ab4415e5518f7b9459207b91997d853d349",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-4551dc061d4867f29e23049e670e48ebd14b4ffaa64548903c040ae390dbc9a8": {
+   "mediaKind": "photo",
+   "description": "阴天里，一条山间公路两侧种满绿树，远处山腰被云雾笼罩，路上画有黄黑相间的隔离线。一名长发女子背对镜头沿道路右侧步行，左侧人行道上有几个人站立或行走，远处可见红白色的加油棚建筑和停放的车辆。",
+   "bytesSha256": "4cf40de7d110e2755ed395626e3c35443cef818f2adb4a7de51041bc57bdfed3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-4a30355c0b42f8363d0253bba43f55fb14a4f4b547c0f6b17cc351d05510e753": {
+   "mediaKind": "photo",
+   "description": "一名戴浅蓝色棒球帽和黑框眼镜、穿深青色长袖上衣与牛仔裤的男子坐在铺有粉紫彩条纹盖布的沙发上，左臂环抱着一个穿格子衬衫、黄色内搭和深色裤子的婴儿，右手扶着奶瓶让婴儿喝奶，婴儿手腕上戴着一块手表状物品，男子脚穿灰色拖鞋。",
+   "bytesSha256": "565b04980a916e5a1ff879054a3bb2fe4aefe654881e7be2df0618c983ba82ed",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-93998120fb63d84b314e84e66a27123e6e1044194bc5af7615b02208d8f4f6fb": {
+   "mediaKind": "photo",
+   "description": "一名穿深色上衣的大人坐在铺有紫色花纹床品的床上，怀中抱着一个穿格子衬衫、内搭黄色上衣、深蓝色裤子的婴儿，大人一只手扶着浅灰色奶瓶喂婴儿喝奶，手腕上戴着一块手表。",
+   "bytesSha256": "2614d8e9df815237f04d4b3d4dd105b26b86b7241e49c9d89e60abc60585a413",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-e31d174bff4f13b2c4ce24b2484206e324c65f0b893a5cdc6fdc5407dd80fb21": {
+   "mediaKind": "photo",
+   "description": "一个短发婴儿坐着面向镜头，身穿白色长袖上衣和卡其色背带裤，脖子上围着印有彩色小帆船图案的白色三角围嘴，一只手握着黄色小物件，画面下方可见一个橙色物品。背景是上半部分米白、下半部分深橄榄色的墙面。",
+   "bytesSha256": "a21cb10418fe298de0ce06297656aa5968c98858c86beb33d481a94c2e11fa85",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-401d33810007bf32519dda2c1edd8e76be7fa11e3b1435db0cc9ea82cd4456df": {
+   "mediaKind": "photo",
+   "description": "一个穿着米白色上衣、围兜、军绿色裤子和白色连裤袜的婴儿坐在铺有蓝白格纹床单的床上，怀里抱着一只黄色毛绒玩具，一只手抓着玩具，另一只手把黄色的东西放进嘴里啃咬，背景可见浅色墙壁和深绿色床头板。",
+   "bytesSha256": "bd826d4361160b9816b371be456411371dd228b01ef39fbe4808d81e8d08b48e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-94455699af5db7ad5fde1819c26f6c53742d62f0526d405debea0ed82a880e2a": {
+   "mediaKind": "photo",
+   "description": "一个穿着白色长袖上衣、卡其色背带裤、脖子围着印花围嘴的婴儿坐在床上，双手抱着一只黄色大嘴鸭子毛绒玩具，张着嘴；背景可见浅色墙面、橄榄绿色床头板和左侧的棕色织物，身下是格纹床品。",
+   "bytesSha256": "ba64c4fc84074c5d9f7f7fd134dc31cf0c7d96f0e4da0fc1d8fd74d095f10be3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-09325e53a27187728e3253adce35e898db5036ce091b0f3d208cfc9430a53840": {
+   "mediaKind": "photo",
+   "description": "一名穿着白色长袖上衣和印有黄色鸭子图案的绿色围兜的婴儿张着嘴，双手扶在灰色布艺围栏上，围栏右侧搭着一块白布，背景是浅色墙壁，画面左侧可见一些家具和物品。",
+   "bytesSha256": "fc5b9fb39cfb46c077190f7cbddcd089ea5bbbce66c9f37e79c5fecfca99e078",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-568406fea058f383da8cbcce9ca498eacf8b1b336d9e1b99e36b103fa46b9537": {
+   "mediaKind": "photo",
+   "description": "一个穿着白色长袖衣和印有卡通鸭子图案绿色围兜的婴儿张着嘴大笑，站在灰色沙发靠背后方，一只手抓着一块浅蓝色布料；画面左侧伸出一只成年人的手，拿着一块白色布巾伸向婴儿，背景是浅色墙面。",
+   "bytesSha256": "cfee83fd0e6d7a34b891e38bba81597e0d260e828863cc5c7715e5d07bdd388f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:8fc80a18dcfb8863c985d45f3e07099f437df3052ba0dcdc7cf5e36e677e0a15": {
+   "mediaKind": "photo",
+   "description": "一个婴儿坐在铺有花纹床单的床上，身穿白色长袖上衣、带图案的围嘴和军绿色背带裤，张着嘴笑；婴儿的手扶着一只黄色大嘴鸭子毛绒玩具，身后可见深绿色靠垫和一件棕色毛绒物品。",
+   "bytesSha256": "06c99c220739ee75e640b36afd8a14c6ff92788d1106b5e4a3a557c402d95902",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:bd73cd03f4cc2f66778f97474b36dc1dc93bd77dc83e39f3d7fc34a4580c2dec": {
+   "mediaKind": "photo",
+   "description": "一名穿牛仔裤的大人抱着一个穿着格子衬衫、黄色内搭和深蓝色裤子的小孩坐在腿上，大人一只手戴着金属表带手表，另一只手靠近小孩的嘴边，画面下方还可见另一只手。",
+   "bytesSha256": "959476e6d0a848091ebbe1c65b8899493e742d6e1a77bb0ef126be040332df23",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:977707fdf2c606f745f28834b92b076e1a4dc38db4c9148b7dbcb5619c9f69cf": {
+   "mediaKind": "photo",
+   "description": "车内，一位戴灰色宽檐遮阳帽的女子坐在座位上，腿上抱着一个穿蓝色短袖连体衣的婴儿，婴儿的纸尿裤露出，一只手伸向自己的膝盖；阳光照在婴儿腿上，车窗外可见模糊的绿色景物。",
+   "bytesSha256": "cbc7d40f88d94c11153a8d0eba2f856fb8aea968e50b3c4bd4a41d5da489d562",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-fc1611ea8eef1547c1666c9b4b027795213cadfbc22a7204bcd982bc5da43685": {
+   "mediaKind": "photo",
+   "description": "在室内浅色墙壁前的深棕色皮沙发上，一位穿深色外套的老年男子坐着，怀里抱着一名穿米白色衣服的婴儿；他身旁一位戴眼镜、穿棕色格子连帽外套和红色裤子的老年女子正用右手拿着一块带馅的食物吃。画面左下角可见一个黄色毛绒玩具，墙上露出电源插座。",
+   "bytesSha256": "c0d39028eb1af9dcf8491b3f55dc84edb81a6f5ba57b64efae9675de0fcfa19b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-be5fc096dd839a08cd482b03caa84bf250b500f15396eaa52b4bd7c247b3d496": {
+   "mediaKind": "photo",
+   "description": "一位穿深色外套的老年男子坐在深棕色皮沙发上，怀里抱着一个穿米白色衣服、一只手靠近嘴边的婴儿；旁边一位戴眼镜、穿彩色条纹上衣和橙棕色格纹外套的老年女子侧头注视着婴儿，三人身后是米黄色墙面和沙发靠背。",
+   "bytesSha256": "f40f3445c4a1f07a34b64161c3fd79c01258253e58a98c33a2804d4b485098a4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:3a12544217b699774519556a6d5271231c02ca5e5b0434b0cb4c4a79d8ff0131": {
+   "mediaKind": "photo",
+   "description": "一位身穿酒红色条纹毛衣、深色长裤和蓝色拖鞋的男士站在客厅里，右手伸向躺在浅色沙发床上的婴儿，婴儿仰面躺着，双手靠近脸旁，身边放着一个黄色玩具；背景可见木框玻璃门、悬挂的吊灯、图案床品和浅色瓷砖地面。",
+   "bytesSha256": "c09af69d4930ac0e0b7776d95fd280fe8eb5fc2269b0ea9a9df30fbc6ad2740a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:761ae2163745c35940d48157308aefb183e97c8154c625b5f8971b6f739352a6": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿棕色格子外套和红色裤子的老年女性坐在深色皮沙发上，怀中抱着一个穿米白色连体衣和白袜子的婴儿。旁边的茶几上摆放着粉色花束、玻璃果盘、杯子和毛巾，背景是米色墙壁和深色窗帘。",
+   "bytesSha256": "bf92249648d65af2c719ed73a6cc9592483a8ee4fd8133f6750eecb80036ca85",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-505295bde28c61075921ac1552d03797d312d33e1e473039b9540001d9195f69": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿格子外套的老年女士挽着一位穿深色外套的老年男士站在绿篱前面向镜头合影，女士肩上挎着橙红色链条包。背景是阴天的街道，可见行驶的汽车、围栏和一座多层中式塔楼建筑，塔楼上有电子屏幕和红旗。",
+   "bytesSha256": "d71b4bb5e3321edb9e52465cc51fcbd0512d718324cb61d97c13d8048ddf2b0f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-66e3cfcaeb0121b05e621627e95df303fe7a11610b8496ea2f6e1433590dd554": {
+   "mediaKind": "photo",
+   "description": "一位穿着深色外套和深色衬衫的老年男子站在铺砖广场上面向镜头微笑，双手自然垂在身侧。他身后有石质矮栏和绿树，栏后聚集着许多游客，远处树丛间露出一座多层砖塔的轮廓。",
+   "bytesSha256": "280d9c25be715466a7920f52f9ef13b72c05adceedf808f9fc387392eed48d53",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-ab35e0d2179c4a27e2ab05170d1cc09326057670326780af7fd9e3a8ed9a240b": {
+   "mediaKind": "photo",
+   "description": "阴天里，一段宽大的砖石台阶沿着高耸的灰色城墙向上延伸，右侧有砖砌护栏。一位穿红格上衣红裤子的老人和一位提着米色袋子的深色外套老人正在往上走，一个穿白色马甲、黄色长袖和牛仔裤的男孩正向下走，台阶顶端还有几个人。",
+   "bytesSha256": "204e2a472ad462b623e04fec9d646aa7fda296fd7d50a175c9ca914a33e8ae03",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-82bab0cbc8e42b5d70a725e6095fc87401b225271e1986fecc95a710cfe3beb3": {
+   "mediaKind": "photo",
+   "description": "一位身穿深色外套、深色长裤的男士站在灰色砖石台阶上，一只手扶着身旁高大的砖墙，另一只手放在身后，面带笑容看向镜头，背景是阴天的天空，画面呈低角度仰拍。",
+   "bytesSha256": "1f295eb2f8e55b07edb81a7aba84ed2f9bbefcc6797d4324184b0e468461f0a6",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:965be6f776cad45db4bf606b9c85bb8ce2229a089b81708be10f80d73e149bdf": {
+   "mediaKind": "photo",
+   "description": "一位穿深色外套的男士和一位穿花色上衣的女士紧靠在一起自拍，两人面向镜头，背景是一座传统中式多层楼阁，周围有绿植、花卉、水面和其他游客。",
+   "bytesSha256": "1a4c479c0e2e484a79317315a0a4d550310681e2807f93b7658796cc732779e6",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:ccf6689a77ab17203156237e342ee92a052f23f0b192c84273cc7fb76b6978bb": {
+   "mediaKind": "photo",
+   "description": "一名身穿深色外套的男子站在户外，面对镜头。背景中可见一座白色佛塔式建筑、树木以及远处的一些行人。",
+   "bytesSha256": "b5d33c02d7e50aa4da4ea64801687ec325f01a812059560ceff9767ed1ed812f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-4ef347d0e545162d194548b2ee83970e469f0a2493e8406e6c982b46f6894ba1": {
+   "mediaKind": "photo",
+   "description": "一名穿深色衣服的成年人背对镜头抱着一个穿米白色外套的婴儿，婴儿把手放在嘴边啃咬，背景是有玻璃门、石材墙面和天花板灯具的室内大堂。",
+   "bytesSha256": "3f17fde34cf72cc05ddf4bf81a6d41a8999e1a324fb82705280296197d737ee3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-b88325e9389f37f6a2e28724990c067ed7c8bcc05c91d3d5dd4105bc4c81ffca": {
+   "mediaKind": "photo",
+   "description": "一个婴儿仰躺着，双手捧着一个浅灰蓝色的奶瓶正在喝奶，身穿带黄色图案的白色上衣。背景是橙黑虎纹图案的枕头、左侧带有蓝色花纹的白色布料，以及蓝白格纹的床品。",
+   "bytesSha256": "451eaf316f6fa1a5daac620484a1136934b4e888d3a6f17e3147ef37f0b6db8e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:84783ebf8a07736620169d78aac32f5c5456a520cc175487968f8492094cb355": {
+   "mediaKind": "photo",
+   "description": "室内沙发上，一个穿白色带黄色图案上衣的幼儿站着张开手臂，旁边一位深色长发、穿深色衣服的女子面带笑容靠近孩子，背景可见窗帘和沙发靠垫。",
+   "bytesSha256": "e1a41d2ed45ec870b4a2caf271079586e5ab4742444098976486d66b313663cc",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:d79299883aa509e964b67b014584c7327d1a3ae986b42493c3bf5a610937e3a7": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅黄色衣服的婴儿躺卧着，头部靠近深色靠垫，面带笑容，画面较模糊，背景为浅色墙面。",
+   "bytesSha256": "c322249658e17521eebf95f448c5c8064839c0e4c98ae313ab65c70966b97875",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-6d3e4377913d41a24de5df89c78b09b1ce79b15b1e06f35beb7a7fa0db8d6edd": {
+   "mediaKind": "photo",
+   "description": "一条柏油公路蜿蜒穿过两侧陡峭的峡谷，山体覆盖着茂密的绿色植被并露出大片灰白色岩石，天空阴沉多云。远处路面上可见几辆汽车，道路右侧设有混凝土护栏，左侧路边有黄黑相间的隔离墩和一根电线杆。",
+   "bytesSha256": "5cdafb850e6d33a0fea50a3731a9896c7199891d4e2564669fe3681ac0d782bb",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-ab76095a45c6504cdab3ae5f34319a501cd1b3c898269013a5e514a05c9a8d02": {
+   "mediaKind": "photo",
+   "description": "在一座外墙刻有\"秦岭博物馆\"金色大字的深色纹理建筑前，一位戴眼镜、穿格纹外套和红色长裤的女士挽着一位穿深色外套、粉色上衣的男士，两人并排站在红白相间的斑马线上，女士肩上挎着一个橙红色小包，背景是阴天的天空和远处的居民楼与树木。",
+   "bytesSha256": "8f21c5951933b96a347a2a0266a96fb3c7e267f3bd725a991e7404130a6b8cd4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-4d654f8663f41093502877581ecd158c7f82a27e91185ba5dfe5a655b972117b": {
+   "mediaKind": "photo",
+   "description": "照片展示了一个博物馆动物标本场景：前景有红腹锦鸡、雉鸡、野兔、豹猫和鸬鹚等标本，中景池塘边立着两只白天鹅和两只白色鹤类，周围布置着岩石、蕨类植物和枯草，右侧有一截粗大的树干，背景是绘制的青山绿林布景。",
+   "bytesSha256": "f0ad3303acc385ea5c529d0c325792c1a5278b66ef47dd2bc1223f50bed85d74",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:43a3ddcbaaeb46ab89f78ec80c116a9cf376cb3e3fe9b6aed887a0b244abe574": {
+   "mediaKind": "photo",
+   "description": "三位老人并肩站在山间公路上合影，两人穿深色衣服、中间一人穿浅色上衣；背景是覆盖绿植的陡峭山崖，崖壁上可见瀑布流水，路面潮湿，右侧有白色护栏。",
+   "bytesSha256": "e71a3ab5f609aa94d12922e66452a6f5a4797e65cf990cb8adfc451b6044175c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-f14891daf7d3a324c26716d712163293e276521cfc9cee447ce9007d3d2e09a2": {
+   "mediaKind": "photo",
+   "description": "一男一女并肩靠在山间的石质矮墙前，男子穿深色外套内搭粉色上衣，女子戴眼镜、穿橙红色格纹外套，手中拿着红色物品。背景是云雾缭绕的青山与茂密树林，山间隐约可见一段盘山公路。",
+   "bytesSha256": "f41de542e4d124815d9dbb433799f3aba9a0b70414eee5692024f483cc299ab5",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-1984b0dc839919cb7952730f4218e8b1f978f2b0d555618c50d11390c4cf2682": {
+   "mediaKind": "photo",
+   "description": "一个婴儿躺在婴儿车里，双眼眯起、嘴巴大张，一只小手举在脸颊旁；他穿着米白色衣服，戴着印有卡通图案和白色星星的绿色围兜，围兜上有一个浅色小玩偶，胸前斜着一条黑色织带。头顶上方是深灰绿色的婴儿车遮阳篷，背景模糊处可见红色和绿色的色块。",
+   "bytesSha256": "4e1d81ecc62c2b8bd2fe462135048e115ccea345f5fc3c9f2cb7c702556524f3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-e46785891c5373b41f873c19846f1bc153b7551f95c55c7e9502a49da1036063": {
+   "mediaKind": "photo",
+   "description": "夜景照片中，一段古城墙在灯光照射下呈现，墙顶垛口由灯带勾勒，其上的中式角楼屋檐亮着金黄色的灯，墙沿挂有红灯笼和旗帜；前景是树木的深色剪影和地面的步道灯光，天空呈灰黑色。",
+   "bytesSha256": "5b0153a5a5c01f8f88f605dafdaf0e2e8ee4416130d2d7cc2d8a0ad71bf349dd",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-c244d763b4a896a033fa6d0d4c581e4a63ac54de47982bfe20bb66090ee827e9": {
+   "mediaKind": "photo",
+   "description": "夜晚一座被灯光照亮的中式古建筑钟楼，绿色琉璃瓦屋顶和顶部金色塔刹可见，城台边缘插着一排红旗，台阶上有行人。前景是道路上的车流，近处有银灰色、白色等多辆汽车，路面有反光。",
+   "bytesSha256": "42af9dfaa99226627644f6caabf7d7c2a019bce3be9dfcfba475f5658ce22aa4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:6880dca64f9cd783a029593b9cf2b0de3f9594609345e33a23b6b1eeecb34322": {
+   "mediaKind": "photo",
+   "description": "夜晚的城市路口处，一座多层中国传统楼阁建筑亮着灯光，绿色琉璃瓦攒尖顶上有金色宝顶，楼身挂有红灯笼，石砌基座中央开有拱形门洞，基座平台插着多面红旗并有行人走动，两侧有带白色栏杆的台阶，前景是画有白色直行箭头和车道线的空旷马路。",
+   "bytesSha256": "9f236a4a2f91e0b623affee17432807373ba1cd0575d076b79da8387454dbb29",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-0065f4003540c13be5e08e79264bb7f403cdcf4fb802acdaa6f5706870e49dae": {
+   "mediaKind": "photo",
+   "description": "夜晚，一对年长男女并肩站在喷泉前合影，女士穿波点上衣外搭格纹外套，男士穿深色外套内搭粉色衬衫，两人手臂相挽面向镜头。背景是亮着紫色和彩色灯光的喷泉、装饰着彩绘灯柱的广场，远处有许多行人，部分人撑着伞。",
+   "bytesSha256": "7c84fc9890238d0412033bfaf0e6a3fc04f0eb14277e824872feb5d19d894d22",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:2e55f9013fa904d0e935dc6db22290f9abf4020070fc5a2aba88f9f8acc204eb": {
+   "mediaKind": "photo",
+   "description": "夜晚的广场上，一位戴眼镜的老年女性和一位老年男性并肩挽臂站在镜头前，面向镜头微笑。他们身后是蓝色灯光映照的喷泉水柱，两旁矗立着饰有彩色图案的高大灯柱和成排路灯，远处可见雕塑、灯笼及不少游客，部分人撑着伞。",
+   "bytesSha256": "4d925235923d3aeed7e13c12c14716995d089ce315bcd4c7917c52cd5912ca87",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:dd1d643f189b277fa394da7228e2fa6079d13a6dab5411cbfc79af4a6b484d06": {
+   "mediaKind": "photo",
+   "description": "一幅自然风光照片：天空布满云朵，远处群山峰峦陡峭，前景是宽阔平静的水面，水面下方有一排深色的拱形结构（疑似桥梁或水坝闸孔），左侧岸边长有绿色植被，山与云在水中形成倒影。",
+   "bytesSha256": "774c0df845eb5c596c743035e1a6b9610cb41cbf7f5db68a03066fd30b60e7b1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:ecf374c5af66302ed712f57947595410555ed1e0bbe7b95132f4e69f55ae3714": {
+   "mediaKind": "photo",
+   "description": "一位女士站在木质栈桥上，身穿浅绿色外套和黑色长裤，脚穿白色运动鞋，斜挎黑色小包，一只手插在裤袋里，另一只手抬起做出手势。背景是连绵的山峰、垂柳、栏杆，天空湛蓝并带有云彩。",
+   "bytesSha256": "09c456203610e106b488f81984be505f1f91344289cab018f85dc2aa50e75893",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-ddd754208dcaf1976d8cffcde8de6c4640b036ea0bef3a7d26f27f7bbee3f80b": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜的短发女士身穿红橙格纹外套，双手扶着身前的红色挎包站立在镜头前。她身后是一块刻有红色“华山”字样和线路图案的巨大灰白色岩石，岩石底部有石块砌成的矮墙，周围环绕树木，画面左侧边缘可见停放的车辆。",
+   "bytesSha256": "eba643882a091a233dda8170bd3ab7ab86561e8bad021a320712f6aaf237366f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-954745fcb43c7f18ec90a3e603b56e4342c8e9a38905be99cb58176b4b749abb": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜的女士站在一块刻有红色汉字和地图线条的大型景观石前拍照，她身穿格纹外套，双手在身前拿着一个红色小包。石块下方是石块垒成的矮墙和鹅卵石地面，周围有树木，左侧可见停放的车辆，右侧有红色建筑结构。",
+   "bytesSha256": "8b08832205ed5fa239e5f8d481437abd4f9f40a7c7f5c5591bf8d4af619a739c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-bb7a5fd9017564db5b588c75b39458f5d34125c6d39fc1aaa5e6fb238613a60c": {
+   "mediaKind": "photo",
+   "description": "阴天里，一座红底嵌绿黄琉璃图案、覆橙黄琉璃瓦顶的传统影壁立在广场上，地面湿滑有积水倒映着墙体，墙前摆放着开有黄红色花朵的花坛和几块红色圆形标牌。右侧石质围栏边立着一面红旗，远处可见路灯、树木和建筑物，右下角围栏旁有行人经过。",
+   "bytesSha256": "2772cb13e4e57db7a2d8acb62b4031ecf46930f27f3d76d1f5859cd775c4432d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-f37343c88615c866473ded03f3146298305321cee53356c3f22acc363afb2aef": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、穿橙色格纹外套并挎红色挎包的女士与一位穿深色外套、格纹衬衫的男士，站在一座红柱亭内的大型龟驮石碑前，两人均伸手触摸碑座上的龙头雕塑。背景可见红色殿宇建筑、黄琉璃瓦屋顶和石栏杆。",
+   "bytesSha256": "0c9beedbe96c8cc605bc00ea2e12dbfa6db59fcbebdae76bd0e11e0b4e68d532",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:158b0fd276415afe89dac65a1e57015e4f42b76168f75edcae9a3ef6126b0055": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、身穿格子外套和红裤子的女士站在一块刻有线路图和红色题字的大型景观石前，手中提着带背带的红色小包，石头安置在石块垒成的矮基座上，周围有树木、鹅卵石地面，左侧隐约可见停放的车辆。",
+   "bytesSha256": "e263dcefe95b09e49aa04690d7700991418d5ae42efa9d35ba36787beb8752e9",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:96e46bfd79e25eee8cda58e428dc6f6600577bdf8ca14cf584e087b2766bd27c": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅色连体衣的幼儿站在深色皮沙发上，身体靠向沙发靠背，面带笑容；背景是米色墙面，画面左侧可见深色窗帘。",
+   "bytesSha256": "9551f70e43f7017623c6e2135f0923c848bc1fd3228aad51b3f357491576ed75",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-aac9de260df5b1bc9b4784fc769127a8bf663f1fa3e87598dc0cf1dcd146b07d": {
+   "mediaKind": "photo",
+   "description": "阴天的一处园区车道口，路边立着\"第2车道\"\"第1车道\"、无障碍停车位、卫生间和出口等蓝色指示牌，背景红色横幅上写有\"西安千古情\"字样；湿滑的地面上有行人和孩子撑伞或步行经过，路旁停着几辆车，近处有黑色垃圾桶和印字的红色锥筒。",
+   "bytesSha256": "63834d8c9f549a5cf76a7badb2b5163d1e1fc0287a5145fb326f6519f80514a3",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-075451ed33261a67049ba691bf04f9cea0c0e1f5c7922507670bea73f5c00124": {
+   "mediaKind": "photo",
+   "description": "照片拍摄于兵马俑一号坑展厅内，巨大的土坑中整齐排列着成千上万尊陶俑士兵，坑内保留着夯土隔墙和棚木痕迹，许多陶俑头部缺失、姿态各异。背景高处的参观廊道上站满了凭栏俯瞰坑底的游客，展厅为带钢架屋顶和玻璃窗的大型建筑。",
+   "bytesSha256": "a462d44d283c8a8356c64a5bb3b457579d5d1cf6f1fdc9be4c998a9d4546519d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:37d4991506be426fc8e1586f9ef0fd956274b1fa7ad338479c9da63be1da4142": {
+   "mediaKind": "photo",
+   "description": "照片拍摄于室内大型展厅内的俑坑，坑中成排站立着大量陶制士兵俑，多为立姿，部分俑体由金属支架支撑固定，地面为泥土质地并投有阴影。背景较高处也排列着陶俑和马形陶俑，远处可见参观的人群，场馆上方是带采光窗的钢结构顶棚。",
+   "bytesSha256": "e7a42cdc38976704610b353ad4bf7fd3f374f3173239f90f1358b0ac2fe467bb",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-4af6a0ab7a92a2d38ac7f59b20a73845f0987a880ea39314b5fa60c1f38137ef": {
+   "mediaKind": "photo",
+   "description": "在飞机客舱内，一名穿着白色细罗纹带小图案拉链连体衣的婴儿坐着，嘴巴微张、舌头略露，右下方有一只成年人的手扶在其身侧，背景可见舷窗和机舱内壁。",
+   "bytesSha256": "ffa3bc17b3c4129fb334b40557c7d289dea62ac02ee9a2b4553cfffaa4a8a705",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-8060fd752e28b8db7a23f2b216d37bb8cdd0d8ae7b89ef378bb54073ae5e581b": {
+   "mediaKind": "photo",
+   "description": "一位深色头发的女子侧坐着，肩上趴着一个闭眼入睡的婴儿，婴儿穿着印有斑马图案的白色连体衣，嘴微张，脸颊靠在女子肩头；画面右侧可见蓝色靠垫和白色椅背，背景为室内环境。",
+   "bytesSha256": "efb13b279b08f3c7cf5da6296f924d5d8e270529ac00e3d0504c66424568941c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:ef5d8b5b98dd0eea947950d386040940ca07adb34b7f70286330f868d9b95dff": {
+   "mediaKind": "photo",
+   "description": "一个穿着白色短袖上衣、黄色背带短裤和灰色袜子的宝宝坐在灰色婴儿车里，双手交握放在棕色扶手前，嘴巴微张；婴儿车后站着一位穿米色T恤的成年人，单手叉腰；背景可见写有“Anti-Explosion detection（防爆炸检测）”的提示牌、蓝色塑料筐、金属护栏和灰白斑点地砖，场景像是安检区域。",
+   "bytesSha256": "870d4148b051a5408b05ea10533eb183b23b9dff5d0ae80cc189747da845872d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-4d22e95af3deab53f732779250394edee76886fa2ad50a7b02c265a651b87a16": {
+   "mediaKind": "photo",
+   "description": "一名短发幼儿趴在大人肩头，脸朝向镜头，舌头微微伸出，一只小手抓着大人深色衣服，前景有一只成人的手扶着。背景是类似机场的环境，竖立着带左向箭头、写有“逾重行李收费”（Excess Baggage Charge）的黑色指示牌，远处还有一位戴口罩的女士。",
+   "bytesSha256": "f642f37ae5bfdb517280b097407ae772f8668569be3a82ead8926d0fea9d58c4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-4936a4b3d80783721ba616f150c624d7f094e65de372ad16b15d4d4917679361": {
+   "mediaKind": "photo",
+   "description": "在有大玻璃窗的室内餐厅里，一位戴黑色棒球帽和眼镜的成年人怀抱着正在用奶瓶喝奶的婴儿，旁边穿绿色T恤的小孩伸手摸婴儿的头，另一名穿黑色T恤的孩子坐在旁边低头看，前景是木桌，背景可见其他顾客。",
+   "bytesSha256": "bd004fad975c6ec1a7574436400dbd5d115cb86fa97cfe447fb67bfd5e1255b7",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-1a0109792fff6e03d3f8bb6859830549d27f8d070b1bfbba1b5c0d8ad6e99be0": {
+   "mediaKind": "photo",
+   "description": "一名幼儿坐在灰色Stokke婴儿推车里，身穿白色长袖上衣和卡其色背带裤，脚穿灰色袜子，一只手扶在棕色扶手横杆上，目光看向镜头方向；推车带有灰色遮阳篷，背景是室内带斑点纹理的地面。",
+   "bytesSha256": "417f55e1fa7dc0836a2b54306eabacdff5b816220279e60611256f16a232982e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-7e446f8160a23a87e8731883bd375b320f48617c7a714c8dc3558b59fbbd98f1": {
+   "mediaKind": "photo",
+   "description": "一位戴黑色阿迪达斯棒球帽和眼镜、穿浅色T恤的成年人坐在室内，双手扶着坐在木桌上的婴儿；婴儿穿着黄色背带裤，系着带图案的绿色围嘴，脚穿白袜，低头看向画面右侧。背景是带大玻璃窗的室内空间，窗外可见绿树，天花板上装有照明灯，远处还有其他人。",
+   "bytesSha256": "a13c31d8b64a4abe571fc1c53135ac9a1b79f0988c38ecf1e0b125ba07f2ab6b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-23fa6a1711066879e261dd5e5b71568b33b1c460b2f7be41188c020f572df31c": {
+   "mediaKind": "photo",
+   "description": "一位戴黑色棒球帽和透明框眼镜的女士坐在室内，怀里抱着一个正用奶瓶喝奶的婴儿，婴儿围着带图案的绿色围兜，穿着黄绿色背带裤，女士手腕上戴着智能手表。背景是大面积玻璃窗，窗外可见树木，店内有其他顾客就座，前景是一张木桌。",
+   "bytesSha256": "282ce371cbe63ebc823742b9798ba4cdb1704512b42306c18b5efae073afd476",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-5544f83dbf2140b8d5263ffe80ca1bc6a5e3eefc31b5c1f9ef51c327ed4b85d2": {
+   "mediaKind": "photo",
+   "description": "一位戴黑框眼镜、穿细条纹衬衫的成年男子正怀抱一名幼儿，低头朝孩子方向微笑。幼儿穿着白色长袖上衣、绿色围兜和卡其色背带裤，视线向下；背景是深蓝与浅木色相间的竖条纹墙面。",
+   "bytesSha256": "dea0a0706d3a69e02db40f7c4a0ece8616cd2c8e28a110bd3a71560f89bcaa52",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-c75225877dee7d2ae040eddf2488cddcc8c53420b78a8ae2bbc68e986ae1a57b": {
+   "mediaKind": "photo",
+   "description": "一个穿着白色长袖上衣、绿色围兜和卡其色背带裤的婴儿坐在木桌上，双手捧着一个白色纸杯，一个穿黑色T恤的女孩在身后低头看着他并面带笑容。背景是木质条纹墙面、天花板灯和墙上的海报。",
+   "bytesSha256": "d7a6e4809a2c53a0473919b42e700e852d8bc039e9c8c97fc4fd87186445a085",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-9cd3a59ea428622947fb9077c497673388169f3d05fa3eb979f17f616d7f3a57": {
+   "mediaKind": "photo",
+   "description": "一名闭着眼睛、似乎正在睡觉的婴儿被一位戴黑框眼镜、头发扎起的成年人抱在肩头，成年人穿着黄灰黑相间的条纹上衣，婴儿穿着浅色上衣并系着黄色的带子。背景是室内环境，透过窗户可以看到户外的绿植、桌椅和遮阳伞。",
+   "bytesSha256": "5badab1412a3d88aa8b6f3c99d359bdee9dfd994323a66a24363d70823df281a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-e8f17e79af344c2789afde2595b886e2dfd926480803a38fd3d65d2aae1f9853": {
+   "mediaKind": "photo",
+   "description": "一位戴眼镜、头发用黑色发圈挽起的女士身穿黄灰条纹上衣，怀中靠着一名闭眼的婴儿，婴儿穿米白色上衣和卡其色背带裤。背景为室内大厅，可见弧形吊顶、窗外的绿植、墙上的装裱展板，以及远处桌旁坐着的人。",
+   "bytesSha256": "3a3ebc1d16f280d84e5554f90708ab4b733b2462dafb95d3b42ee557ab3e1c8d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-5d6c87789a00cc193165239629cedf266ad6b7e0109d7bd5b27073d64354e285": {
+   "mediaKind": "photo",
+   "description": "在暖黄色灯光的餐厅内，一位戴眼镜、穿条纹上衣的女士仰头大笑，怀中抱着一名穿卡其色衣服的婴儿，婴儿面带笑容。前景餐桌上摆放着放在卡式炉上的一锅红色汤品、绿色啤酒瓶、砂锅菜肴和碗碟，背景可见餐厅的桌椅与绿植。",
+   "bytesSha256": "4c32722c9465a91c9c85c95e19e9918e36cb9d285c3d516c8655af50e4f1ae08",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-f599b5be958337f10937f21f057269080007ce3475c20024088757c3f8c3d12e": {
+   "mediaKind": "photo",
+   "description": "在灯光温暖的餐厅内，一位穿条纹短袖、眼镜推到头顶的大人抱着一名穿卡其色背带裤的婴儿，两人头部后仰、嘴张开；近处桌上摆放着玻璃杯、碗盘和餐具，前景有一个橙色大锅，背景可见绿植、柜台、桌椅和天花板上的安全出口指示牌。",
+   "bytesSha256": "70fd8ab51bb75528bbafd428c8fcbaabf45f3298fffcf314c14eb01a941aa27a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:34410d615f9dd65bc644e94e49b9525be8d02d898c3879faaee91d20cb29c8e1": {
+   "mediaKind": "photo",
+   "description": "一名戴深色棒球帽的成年人坐着怀抱一个穿浅绿色衣服的婴儿，画面左侧还有一个小孩，背景是室内环境，可见桌椅、大面积玻璃窗和天花板的深色横梁结构。",
+   "bytesSha256": "f24f23c9d49aadfc505701b4ae0d8d8775f2ef89340d513cba54f220242a024c",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:2fbf95a321d9b15c90092214c9a3b071ac27da38a4ac62fa93fb76d1dd18ea6d": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅色连体衣的婴儿坐在木质桌面上，身体前倾伸出手，面前放着一个黄色物品；婴儿身后有一位穿深色衣服的成年人部分入镜，背景为木条装饰的墙面。",
+   "bytesSha256": "4435643f045176871ce0dccc08db9de07f401703f8d3c2569da72c0e37fa6b35",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-5ca190f0bf6ee5507e7f98a88210af532ceb7959b12c89b3d26a6a29c4e69037": {
+   "mediaKind": "photo",
+   "description": "在室内镜子前，左边戴眼镜、穿浅色短袖的人一手叉腰站立，右边戴灰色棒球帽和眼镜的人举着带花纹手机壳的手机对镜自拍，同时身前深蓝色婴儿背带里抱着一个穿白衣、系围兜的婴儿，手里拿着纸巾擦拭婴儿嘴部。背景玻璃上可见\"08-1110\"指示牌、红色数字显示屏和顶灯，还有其他人的倒影。",
+   "bytesSha256": "eb127ee316d4abf554c52706c690a9f8ab5b9ad1d32e7a0fa752efbe6867fa4e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-1ee4a8ee50d322991ffff081d0ccfe96dca4fd5a1d77d8b8fc363c5c03bec8dc": {
+   "mediaKind": "photo",
+   "description": "镜面自拍照片：一名戴眼镜、穿灰色T恤的男子单手叉腰站着，身旁一名戴灰色棒球帽的人举着棕色手机壳的手机拍摄，胸前用深蓝色婴儿背带背着一个穿白衣、戴绿色图案围兜的婴儿，婴儿抬头看向上方。背景是玻璃门，门上贴有楼层编号指示牌、红色数字显示屏和一张粉色告示，玻璃反射出室内灯光与人影。",
+   "bytesSha256": "b35c854a7e392e97796a3b05851f96a3f1e5fabda94ee90450354652148cf2c8",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-337a08a1ebfff3a25ab8f738374c2e8bfd71e313645ad193d40ca5e36bee8c78": {
+   "mediaKind": "photo",
+   "description": "画面中一位穿灰色短袖的成年人背对镜头抱着一名婴儿，婴儿戴着印有绿色圆点的白色围兜，一只小手扶在成年人的后背上。背景是城市街边人行道，停放和行驶着多辆电动车（其中一辆为黄色，一辆装有黑色外卖箱），路边挂着蓝色印花布袋，远处马路上有汽车、树木和行人。",
+   "bytesSha256": "958c35c01816d7f89e8191b09165bc4d9ff0a6b4b837a5202e54d2173f7ad37f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:c34afeb21738a081283b89b8e4b9e14335ed767ab079b7df8b99234bd28c398d": {
+   "mediaKind": "screenshot",
+   "description": "夜间监控截图（时间显示2025/10/09 00:27:01），卧室床上两人正在睡觉，左侧一人侧躺盖着白色被子，右侧一人枕花纹枕头盖碎花被子，床头为多色拼接软包。画面左侧有置物架，上面摆放叠好的衣物、毛巾、镜子和瓶罐，旁边折叠架上放着一个电热水壶，地面有垃圾桶，窗边挂着窗帘。",
+   "bytesSha256": "f54dfcea0cbef898ae218a80ecf374c868b4fdd72e4022d722ad87e4f4081447",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:996648d9b815b5892332f035289d09c6b74f8b52ebafdb59243c7b7d10ae8610": {
+   "mediaKind": "photo",
+   "description": "一个穿着带图案白色连体衣的婴儿被抱在怀里，一只手把一块绿色小物品放进嘴里，旁边可见穿粉色上衣、蓝色牛仔裤的成年人手臂和手。背景地面铺着白色爬行垫，上面散落着多种玩具，旁边还有沙发和一个黑白玩偶。",
+   "bytesSha256": "51195557c43cc1b0ca2fc5f030524a9cfdc705a9cfe95d78a9562588cced7302",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:d49b42d00088d15cbf478e0ced40bbdc5eb0d978fed6aa3f72e6ed088dbb92fc": {
+   "mediaKind": "photo",
+   "description": "一个婴儿趴在铺有拼接地垫的地板上，双手撑地，嘴里含着蓝色安抚奶嘴，脖子上戴着印有图案的绿色围兜。画面左侧地面放着一个黄色网状收纳筐，地垫上散落着蓝色物品，背景可见挂墙电视、置物架和窗帘。",
+   "bytesSha256": "9016754b4858c3493df7775c408a6c886264004128886af14213a0d94cf0c592",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:9feb1101909c7c992dbce9bc5c0371c67ddee4f8b9021b3a17e82dc014f8c508": {
+   "mediaKind": "photo",
+   "description": "一个穿着白色连体衣和白色袜裤的宝宝坐在橙色带白色餐盘的儿童餐椅上，低着头，双手搭在餐盘上，一条腿向下伸。背景是米色皮质沙发，上面放有纸巾和电线，木地板上散落着彩色玩具，前方有一个黑白配色的奶牛玩具。",
+   "bytesSha256": "2e0e120e97e2aa9864d4a2d43a33eb4906af562743467309591725de95530446",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:615c2ebacb3360230a8ea9c24fdf7c54973a28522aa49377161ffbb8801fa0dc": {
+   "mediaKind": "photo",
+   "description": "一个穿着白色长袖上衣和印有字母的卡其色背带裤的婴儿闭着眼睛侧头睡着，靠在旁边的人的手臂上，画面下方可见一只涂有美甲的成年人的手，背景为黑色的汽车座椅内饰。",
+   "bytesSha256": "37bbd6967ac8bc0816580d65d5d3a5458b722e07ba585e815cb90504908a4e78",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:01b62f6d6009ee519af56173a991a3ac6766deb16ecf3ff8db3ef569e8956ef4": {
+   "mediaKind": "photo",
+   "description": "一个闭着眼睛熟睡的婴儿，穿着带有紫色'SPRING'字样刺绣的卡其色背带裤，靠在一个穿灰白条纹针织衫的人身旁，背景是带有白色缝线的深色汽车内饰。",
+   "bytesSha256": "7c3cd10e68206eb225a9c281b858bb79ca0bf70e13472327a0fa960d064e67eb",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:3818f55542387a4d60d38a831f7606b0275a73a8bbfd793b2d34852b03d4ab85": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅色上衣和裤子的婴儿坐在灰色婴儿车里，张着嘴笑，车前的木质横杆托架上放着一个小玩具。背景是户外的人行道，旁边有绿植、树木和停放的车辆，左侧可见建筑物的一角。",
+   "bytesSha256": "f2c4a33eecdd7f537958cd6cfabbdfd4bd8d4397024f7b3b22da7b336fe83c31",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:62f05845d2567b7a98ccbbd90bb984ee1641bae462300868a42b97abffb5c01b": {
+   "mediaKind": "photo",
+   "description": "一名婴儿仰面躺着，穿着蓝绿色带图案的上衣或围兜，似乎躺在木地板上，身侧有棕色的物体，背景昏暗处隐约可见家具和浅色的柜子。",
+   "bytesSha256": "8fd556266fb03ae6deb6391e0ec70c78e66a45d818b27a3a62c78292cb6a662d",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:80128862e877fa5fe714069d9ff3cc2a7a850df79467e944b2f217ae29cfd722": {
+   "mediaKind": "photo",
+   "description": "一名穿着带动物图案白色上衣、系绿色围兜的婴儿坐在米白色高脚餐椅里，双手交握搭在面前的白色餐盘上，张嘴笑着；餐盘右下角放着一支带青绿色瓶盖的软管物品，背景是虚化的室内家居环境。",
+   "bytesSha256": "10704f24d0fa0305681d72980692a54303c93882fd1f354a23f65d8647538196",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:5833dd960d1a9a55d4c434bd127cecc7b7d3979aaf9e82921c8acb75ed28efcb": {
+   "mediaKind": "photo",
+   "description": "一名穿着黄色印有小鸟图案连体衣的婴儿侧躺在床上熟睡，头枕白色枕头，双手合拢放在脸前；床单带有碎花图案，旁边散落着白色衣物，整体光线昏暗偏暖。",
+   "bytesSha256": "0a9cc61d2f13d945c41d178fb5484e8901ffeb425287e2559502f3158ea41731",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:8e5717c62c66b64252b784a18c351b0cb2b9670ef1d14b9a6d7bf58d6d58f032": {
+   "mediaKind": "photo",
+   "description": "一个穿着黄色带图案衣服、戴着绿白色围兜的婴幼儿站在白色网状护栏后方，右手扶着深色木质门框，背景是室内房间，可见浅色家具、蓝色靠枕和米色墙面。",
+   "bytesSha256": "f066090e781d757acba55f65d3f5a5649239cce0aa869bc6f820e85dc16e44e1",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:70112a74f23d5d7eaffea611dbc22388386e3f470697b8cc131187201b613e09": {
+   "mediaKind": "photo",
+   "description": "一名穿着黄色印花衣服的婴儿趴卧着，一只手抓住一台白色电子设备，背景是铺着碎花床单的床、彩色针织毯和木质衣柜。",
+   "bytesSha256": "60fa965111f99a745f5197a23f6cc266fa33453cbb3461be77504cfce89126d0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:3726f0261bae521012d2dc6566c2820c50f5aa304310864aeb3462ce64e3fa79": {
+   "mediaKind": "photo",
+   "description": "两位老人并肩站在山间公路边面向镜头，女士戴眼镜、穿格子外套配红裤，身侧挎着红色包，男士穿深色外套内搭粉色上衣；背景是被绿树覆盖的群山和雾气，左侧护栏上有红色字样，右侧弯道处可见隧道口和一辆驶来的红色卡车。",
+   "bytesSha256": "b0e66032fbafcc61fd3ee44009a6ce93db187edceba71bad7601db35f6690477",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-162fe49902b34306cbb9503dd407b0d9dd98104002b08d32e7f1c74b7cc11931": {
+   "mediaKind": "photo",
+   "description": "一名穿深色上衣、白色长裤的男子怀抱一名穿浅色上衣的幼儿，与身旁戴眼镜、穿浅蓝色上衣和浅色长裤的女子并肩站立，女子对着镜头比出V字手势。背景是铺着木地板的展厅式空间，左侧墙上悬挂着多个包袋并摆放着藤椅和木凳，右侧木质衣架上挂着多件衣物和布艺装饰，天花板装有轨道射灯。",
+   "bytesSha256": "9dea8c6fc92f3ade05c6f94b78df0cc3397887ce8e4d31b0d582f8fe82b6d379",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-345b6de499fa64f4e4ff4596fad3fc2354fa4a0f33e9fdc83a75d949657eeadc": {
+   "mediaKind": "photo",
+   "description": "在一家陈列着衣架、白色童装、布艺鸟挂件和藤椅、木桌等物品的服装店内，一名穿深蓝色T恤短裤的男子竖起大拇指，旁边一名穿深色polo衫的男子怀抱一名穿浅黄色衣服的婴儿，右侧一名戴眼镜、穿浅蓝色上衣和牛仔裤的女子站在他们身旁，三人面对镜头合影。",
+   "bytesSha256": "2c73604a2df18e19bb5421f7562f7c6ff5dc0e8401d1af8b8d95720d64585b46",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-40aa59e85da2c3a796a9980a922b5e489a3e819d5561309337620048838ab369": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅蓝色竖纹拉链连体衣的婴儿闭着眼睛仰躺在床上睡觉，双臂张开，脖子上戴着系有金色小坠饰的红绳。婴儿头枕白色枕头，身下是米色带碎花枝图案的床单，背景可见深色床头板。",
+   "bytesSha256": "a4e2f9f7302712dc02b8c3ce2d76477d6faaf94a271299b93f0d2eedfce70324",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-4d61682ad8a33ce5fbe4b641430b9f4e7593f5bdcf0702530bb9f09d0c0e5440": {
+   "mediaKind": "photo",
+   "description": "一个穿白色长袖上衣、戴蓝色花纹围兜和红绳项链的婴儿坐在白色餐椅里，一只成年人的手端着装有浅绿色勺子和少量食物残留的不锈钢碗伸到婴儿面前，婴儿一只手扶着碗沿。背景是木地板，后方隐约可见黑色椅子和深色家具。",
+   "bytesSha256": "53abaa719a38aa4c20f16c59862a45e7bdb64dd3e4abf0edc80d2cb061c16c1e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-252200e2c0dd8e6e20858168d54e9a1b1bf0ae417f4283f92589d7e515e32a36": {
+   "mediaKind": "photo",
+   "description": "一名穿浅蓝色针织连体衣、围黄色印花围兜、脚穿白袜的婴儿坐在灰色婴儿推车里，系着黑色安全带，一只手抬起靠在头侧；推车装有棕色皮质扶手和灰色遮阳篷，背景是石板路面和白墙，墙上贴着粉色告示。",
+   "bytesSha256": "cac8d5c803b165892ca4e9499b807d6de0c64968b5bab47387d2605210b6bdbd",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-2e42751e6a068878c447bc938f46d9ddcdd8a1e9f5ec89283b3043360920e0a1": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅蓝色针织上衣和裤子、白色袜子的婴儿坐在灰色婴儿车里，闭着眼睛咧嘴笑，双手合在胸前，身前有棕色皮质扶手。背景是铺着石砖的路面和一面上白下砖的墙壁。",
+   "bytesSha256": "1f5c4728dbc4b249327b18d5240c5eda3eeb14acc1139f543f23424bff5f386e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-436c4f2094b6d8c843a5e161cbca7001f8144c19e96e0a45840ca9fe7b740e75": {
+   "mediaKind": "photo",
+   "description": "一个穿白衣、戴绿色草莓图案围兜的婴儿张大嘴巴笑着坐在前景，右侧一位戴黑框眼镜、穿米色针织衫的女士靠在浅色沙发上，手臂前伸似乎在自拍。背景是室内的木质楼梯和金属栏杆，栏杆上搭着一块白布。",
+   "bytesSha256": "987e7ab4a90699e6a18b05dba846f62c2b4be10df5627b3bbcbb523e5bc74530",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:6aadba34738361dc47b84496cb5fedfa6d933ca731a9403fbc631772dc939fb1": {
+   "mediaKind": "photo",
+   "description": "一位大人用手机对着镜子自拍，胸前的背带里坐着一个戴浅蓝色针织帽、穿灰色背带裤的宝宝。背景是客厅，可见米色皮沙发、楼梯扶手、壁挂电视、放着水瓶的茶几，以及窗外绿树。",
+   "bytesSha256": "847146d1c188a81a47e621eff9a5dbd26bd5efc42154e636b0714e51030cb412",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:3fd40cb88a9d9e8dbf4ebac605ba48be25054a8222bc5bbcc7187f5a3699bac6": {
+   "mediaKind": "photo",
+   "description": "一位女子用带有卡通图案手机壳的手机对着穿衣镜自拍，胸前用灰色婴儿背带抱着一个戴灰色熊耳朵针织帽的婴儿，婴儿的手扶在镜面边缘，画面下方可见婴儿的后脑勺和头顶的帽子。背景是铺木地板的客厅，有沙发、楼梯扶手、墙上挂着的电视、小木桌和带百叶帘的窗户。",
+   "bytesSha256": "0c53d772e61344458f4d16de30abdd5d14e26eb3d9a95e4c51ba56fdfddb6721",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:d10fb3e52cf2c5cd2f3714f613e54ee02f98e29728f75a00a1f56bb846d84a39": {
+   "mediaKind": "photo",
+   "description": "一个穿着带耳朵装饰的灰色连体衣的婴儿坐在床上，双手举在胸前，张着嘴，身后是米色床头板和一个蓝绿色的靠枕。",
+   "bytesSha256": "9f288e2f70c3dc6fcf0e3e8dabc37d671c340cb727abaa4709ea39392bb9a6ce",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-124aa8f05f34db8e65f05a27658cd78d7db5683767cb10319315072866d68203": {
+   "mediaKind": "photo",
+   "description": "一名穿浅蓝色针织连帽衫的婴儿坐在带白色餐板的橙色儿童餐椅上，双手放在餐板上，张着嘴；身后是一位穿浅杏色开衫的女士，同样张着嘴，背景是带碎纹图案的玻璃隔断。",
+   "bytesSha256": "a19ad2bdc85fb4b6ee421e03c7ce106eb385164ff03d53c381a39553e133f45e",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-71defc3c9b701f68cf5693b68352663d2c56fd94c4f126632ca651e41b57a77a": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅蓝色针织开衫的婴儿坐在橙蓝配色带白色托盘的儿童餐椅上，一只手搭在托盘边缘，旁边一位穿粉色上衣的成年人正伸手帮他整理领口，背景是带有镂空花纹图案的玻璃隔断。",
+   "bytesSha256": "4d55b9cda67752bf8f0bd62327b1af949ec7aec4bb078d3ab7df17635765c3bd",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:0317d83193308248f8b9a5f4c1ab5d681830ac404eabd15c4acccdd7b27b4285": {
+   "mediaKind": "photo",
+   "description": "一名穿着深灰色上衣的婴儿坐在带白色餐盘的婴儿座椅里，右手放在嘴边，左手握着一个蓝绿色玩具，餐盘上贴有卡通动物贴纸；背景可见木质楼梯、扶手、木门、木地板和左侧沙发一角。",
+   "bytesSha256": "46750802f1db709e1d09c5fb03f10c54ef6fc8981e8911f355dec09fdccb8e97",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:ee095d8495d12daa16e568fb27329a635ea53fcfa3de8667939e40079bfb0a06": {
+   "mediaKind": "photo",
+   "description": "一个戴着米色渔夫帽、穿着米白色连体衣和白色围兜的婴儿坐在室内的灰色婴儿推车里，系着黑色安全带，右手抬起，左手抓着身前的物品，推车配有棕色扶手。背景是木质地板、木质楼梯、柜子、镜子和房门。",
+   "bytesSha256": "a8cd12c5e2df0ef598c6f8b280165004881601b08d97109146b4db6f3f517997",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:8c77ed8b8f61b8e83d7eae7a81a24a69b6c9038f2c4fb10487eadd800be331f5": {
+   "mediaKind": "photo",
+   "description": "一名穿着印有恐龙图案浅色连体衣的婴儿坐在白色婴儿餐椅里，张着嘴露出笑容，一只手向左侧伸出并握着一个因晃动而模糊的红色物品，餐椅上可见安全带部件，背景是木地板和白色的椅子腿。",
+   "bytesSha256": "3f39362ee62b24b2cd4cf6c10edada28ec09ce0db91d295ad844788c07fab6be",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:b6c11baaa34cc512148154818e2e01c6c93aee3b1d7302386da9f98d324cb406": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅色小动物印花连体衣的婴儿坐在白色高脚餐椅里，张着嘴似乎在笑，左手放在身前；画面左边缘有一个红色物体，背景是浅色墙面和木质地板，墙上贴着一张纸。",
+   "bytesSha256": "063178ea7ce33643c06b5daa14484b5747b3641f157ee698c1663bad0ebd2ac5",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:4e2aab34a2c61020336e39329eb9a32693d8dff6c7961e5ad3672397b1c5118f": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅蓝色针织衣、戴着印有大象图案的白色花瓣边围嘴的婴儿侧对镜头，身旁有成年人的手托扶着婴儿。背景是铺有花纹地砖的广场，对面有黄色和红色招牌的店铺，门前停放着几辆电动车。",
+   "bytesSha256": "2533a1285b89f829038507cbfbd49addb8ea0ac5b6e330618fa66868824bb846",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:7b8601f5021cb9225fca14df05454eefacaabd26fc54f86080673a90ffbd0aee": {
+   "mediaKind": "photo",
+   "description": "一名穿浅蓝色针织衫的婴儿被大人抱在怀里，婴儿戴着印有小图案和圆点的白色花瓣形围兜，脖子上系着红绳；抱着婴儿的人穿白色上衣，一只手在画面下方托着婴儿，背景可见木门、白墙和部分白色家具。",
+   "bytesSha256": "f9111277b428dbd80f73c3db197ee0e95abd12c804328a3886f107d97055b1a0",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-a6ef3caba12cc373c8b16670c68b60a953ee3466302bfa035b2d65084ffc751d": {
+   "mediaKind": "photo",
+   "description": "一个婴儿穿着灰色针织毛衣、带图案的白色围兜和浅色针织裤，躺在黑色网面婴儿摇椅（BabyBjörn）里，一只手放在嘴边，另一只手搭在身侧。背景是大幅窗户，窗外可见高楼和绿树，窗边有黑色线缆，旁边是木质墙面和地板。",
+   "bytesSha256": "bff7f1e4581221622e62f7f8017a02e00402a5d77b6b322bc316cfb50256211a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-35551a64ad375de2b5349b103844fa2b42870c33940526126f48859c882a94c3": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅蓝色针织毛衣、戴着白色花瓣形围嘴的婴儿坐在黑色网面婴儿摇椅（BABYBJÖRN品牌）中，一只手放在嘴边，另一只手搭在椅身上；背景是窗外的绿树和远处的高楼，旁边有木饰墙面和木地板，窗前可见一根黑色线缆。",
+   "bytesSha256": "f58e7cf46a247b504a1cd6122ba1e1f63a2b4657dfefe92d2e71f1d627ff1155",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-f28393f57fdd2c0fd50400419cf88decd7d8c3a8a148688aa8c62c1180edc389": {
+   "mediaKind": "photo",
+   "description": "一名闭着眼睛熟睡的婴儿侧着脸靠在大人的手臂上，身穿浅蓝色针织开衫（可见木纽扣）和粉色针织围领，背景是深色的汽车座椅。",
+   "bytesSha256": "d08d5efb8cc9e1956bc8a3a5c90ca491fd978fb5b6b83f1418c005899d78bcc4",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:24922e1e5c4efc5831f79dda01a57a21034829ac8e58a0e858b270c95c848c93": {
+   "mediaKind": "photo",
+   "description": "一名穿着浅蓝色针织衣裤和白色袜子的婴儿坐在灰色婴儿车里，视线朝向镜头，身前是棕色的扶手栏杆和垂下的深蓝色带子。背景是带有茅草和金属棚顶的乡村风格房屋、绿植以及晾挂的布料。",
+   "bytesSha256": "b34c562bbbb108afc4d21054a617aa3e7e8d1dbd671cbf87891e542104029a33",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:b7321f10c7bf07d90cb5e8ab6e28ce906d66a8c4a5cef7240c1188d3adb6daec": {
+   "mediaKind": "photo",
+   "description": "一个婴儿坐在带灰色遮阳篷的婴儿车里，面带笑容，穿着浅粉色外衣和灰色针织裤，身前是棕色皮质扶手，扶手上挂着深蓝色带子。背景是虚化的户外场景，可见绿植和建筑物。",
+   "bytesSha256": "e4f6fd8cc02173fe5400093fe07363bd8571b8d6436407ca6ed8d814b5e41895",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-15ebf66259fa70440267445572c2e03e1ee965ff4dc30396f0b4eb46283417a3": {
+   "mediaKind": "photo",
+   "description": "一名戴细框金属眼镜、穿米色连帽衫的男子坐在汽车内，低头看向怀中闭眼熟睡的婴儿；婴儿穿浅蓝色针织衣服，戴着黑白条纹围嘴，靠在男子胸前，车窗外可见树木。",
+   "bytesSha256": "8bd99f3ffc00d7a9d5d5d94ea51f520b57494cc4d630fbd81f22d539187649fd",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-26b3ad2eaa079dc9c2187f6a6e43d738a9220e95a9082693367c0a6a08678347": {
+   "mediaKind": "photo",
+   "description": "车内，一名身穿米色连帽衫的成人怀中依偎着一个闭眼入睡的婴儿，婴儿穿着浅蓝色针织上衣、围着黑白条纹围兜，一只小手放在胸前；画面上方露出成人的下巴，背景可见黑色车门内饰与窗外的树木。",
+   "bytesSha256": "429b2527cbe3b42374cd60fa19a5545dc2a4c783bd284ce5623e0352aecbd04b",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-b6ed31a2c33f33333240e984abc44548aa0a8a12bc73c34e0b36c5a411f1627d": {
+   "mediaKind": "photo",
+   "description": "车内，一名穿米色连帽衫的成年人怀抱着一个穿浅蓝色针织连体衣、脖子处垫着黑白条纹布的婴儿，婴儿闭着眼睛靠在成人胸前，似乎在睡觉；背景可见车门内侧和车窗外模糊的树木。",
+   "bytesSha256": "5342914d837efa3e74051681ecce110b25f3c5d85eab7f1d03d7b0c41330bd9a",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:022fa6d2038361876a80d2e9cbe50f797f8d1020c6f43b0923f6794029bc195e": {
+   "mediaKind": "photo",
+   "description": "一名幼儿坐在汽车后排的黑色真皮座椅上，身穿灰棕与米白拼色的连帽上衣、深灰色裤子和白色袜子，脖子挂着一根红绳，双腿分开而坐，一只手撑在座椅上。座椅两侧可见ISOFIX接口标识，整体光线较暗。",
+   "bytesSha256": "670c3a26a2bdc040b23ff019a3a4ebb1ffada12af21c322d3645a60fde0de6ca",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:8ddfe03842feff5a0c6ca1fda57322729b69a477d0ba9b2eabdb2f41141e93de": {
+   "mediaKind": "photo",
+   "description": "一名婴儿坐在灰色婴儿车里，双手扶在身前棕色皮质扶手上，身穿米白色上衣、深灰色裤子和白色长袜，胸前系着黑色安全带扣；婴儿车撑着深色遮阳篷，背景是虚化的户外绿植和街景。",
+   "bytesSha256": "901cfb5048ded2c6a3d286758d2d8dfeca24447eb796707118547da590cde472",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:cd754e14a93881dac82c3bf8f1c152291fcebd68a76c7d16ff0cb50f4704187f": {
+   "mediaKind": "photo",
+   "description": "一名穿着米白色上衣、灰色裤子和白色袜子的婴儿坐在灰色婴儿车里，双手扶住棕色皮质扶手，张着嘴巴。背景是玻璃橱窗，窗外可见树木和一辆蓝色汽车，婴儿车右侧有木质台面，前方有一个黑色弧形物件。",
+   "bytesSha256": "e259189d73b4fc6e6d56a91ceee30b50c243437c312510a6ac9fb3e3895b67be",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:a68eecbdf7b079bd1477135943f0d46cb778a3651d2c600d60218a03b36967d0": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿蓝色上衣和牛仔裤的男子站在瀑布前，胸前用蓝色婴儿背带抱着一个穿深色衣裤和白袜子的婴儿，男子一只手竖起大拇指并张着嘴，两人面向镜头。背景是从岩石上流下的瀑布、茂密的绿植，以及左上方的木质栏杆和小桥。",
+   "bytesSha256": "153c30125cb97864ada31c8f8c72d5f90fbc1f185fb94394f2345b2ba0054691",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:ecffe09364c89db080d55b84dbc9e0fa4c6ca73d8c91f19c747a50883d4f0137": {
+   "mediaKind": "photo",
+   "description": "一名戴眼镜、穿蓝色上衣和牛仔裤的男子用灰色婴儿背带把一名婴儿抱在胸前，站在竹制交叉栅栏前；身后有一块刻着红色文字的大石头，远处山坡上是层层排列的茶园和树木，天空呈灰白色。",
+   "bytesSha256": "9ef7cef41aec6f5b996d76151daf882d5848e17543d55c57e1c41991c7cc29f2",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:2186b751e0b892b6ea0593144bf77e3f301c0e72819de3ee58cdd4aeb3909a7d": {
+   "mediaKind": "photo",
+   "description": "一位戴黑框眼镜、穿姜黄色开衫和深色阔腿裤的女士站在公园石阶上，胸前用蓝灰色婴儿背带抱着一个戴熊猫帽子、穿白袜的婴儿，婴儿闭眼似在睡觉。背景是树木绿植、石阶小路和一根带黑色牌子的路灯，台阶远处还有行人走动。",
+   "bytesSha256": "e7fbee69c97211e518983176b2ba0efb43342da8cee70a6b208104149d770ba2",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:348fc1fb89112c8987bab1d57e5c75a8d4406a9ff1f3c5104a3c2db2404b7ae5": {
+   "mediaKind": "photo",
+   "description": "一名穿着深色上衣、围着米色围兜的婴儿坐在白色餐盘带有小鸡等卡通贴纸的餐椅上，双手捧着一个印有条形码的小纸盒，咧嘴笑着。背景是摆放着棕色圆靠枕和衣物的沙发。",
+   "bytesSha256": "0ddc90e33cc7238d41ee2982643ddb220c271d9aca919224ecc2bc48d80d9dbf",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-b0343e043f4331f080050aca824bf14fdca7adee64f50da6c04ccabc63fd8fb7": {
+   "mediaKind": "photo",
+   "description": "一个婴儿坐在婴儿车里，头戴带两个棕色小耳朵的米白色绒帽，身穿灰色背心和深色长袖上衣，一只手搭在身前的棕色皮质扶手横杆上。背景是黑色的婴儿车遮阳篷，上方隐约可见一块带文字的告示牌，场景为室内。",
+   "bytesSha256": "26e885b3e67a8645b68dd42233e4ea2e4ceb1f591b71ac8d1a1081b46ab4bd19",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:d642d43c47c5fcecfd2220cc48f1b7f17853d0094499a39428aba0053166d994": {
+   "mediaKind": "photo",
+   "description": "一个戴着白色熊耳朵绒帽的婴儿坐在灰色婴儿车里，头转向左侧，身穿米色背心和深色裤子，脚穿白色袜子，身前有一根棕色扶手横杆。婴儿车停在画有白色斑马线的沥青路面上。",
+   "bytesSha256": "dae81adde47035457b05bcb3d52cd2de17c60e111d0f51d5bf26359cb1107d84",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "media-quark-sha-6c29edd932c0ab637a6e7b4bee00609d7196b7e743e0eff21ee842375669b426": {
+   "mediaKind": "photo",
+   "description": "一个戴着白色绒毛小熊耳朵帽子的宝宝坐在婴儿车里，身穿米色马甲、棕色长袖上衣和深蓝色长裤，脚穿白色袜子，一条腿翘起搭在身前，手放在棕色皮质扶手附近。婴儿车为深灰色带遮阳篷，背景是铺有地砖和盲道的人行道。",
+   "bytesSha256": "347137e16efc7881577ad7fb140bc3b5ea999849e9c8f44316d4191e18696668",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:c08e1a4bfe1f9826c40963895c116cde98385d97edd3127dd5e3284a96ea24c4": {
+   "mediaKind": "photo",
+   "description": "一个戴着米色毛绒小熊帽、围着灰色围兜的幼儿坐在橙灰相间的儿童餐椅上，一只手扶着白色餐盘，餐盘上放着一个装有彩色物品的袋子。背景是铺着木地板的室内，有搭着米色外套的办公椅、木桌上的台式电脑、彩色的绕珠玩具，右侧可见沙发一角，窗外是夜景。",
+   "bytesSha256": "63afd7964a6de3bb6e66898377129eba4cddf207f68195c3b172718a3e4e0768",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:9c8c17d5207e7ad1e69326a3a6a8523ed34efb56d889868ece4bb1c8de3385a7": {
+   "mediaKind": "photo",
+   "description": "一名婴儿坐在深灰色婴儿车里，身穿浅灰色衣服、佩戴条纹围兜，侧头看向一旁，婴儿车把手上挂着彩色袋子；背景是铺浅色瓷砖的商场通道，远处有行人走过，两侧有商铺和红色气球拱门，画面上方可见停车场指示牌。",
+   "bytesSha256": "42234c96b282220fb8b1f7c49580adb73cf6c104644366934b2b800e3946b941",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
+  },
+  "wechat-media:11470a8601912188d55f34a9ddccfc9f089bfa6278c02559eadc74d189e30cb6": {
+   "mediaKind": "photo",
+   "description": "一个穿着浅色衣服的婴儿坐在带深色遮阳篷的婴儿车里，一只手举着条状零食放在嘴边，另一只手抬起张开，背景隐约可见红色招牌，似乎在商场或店铺内。",
+   "bytesSha256": "4e2197c693a3c249cee8844dc4a1833938f2634e10e375d58802a7f58e08e42f",
+   "model": "glm-5.3-flash",
+   "promptVersion": "photo-describe-v1",
+   "analysedAt": "2026-09-27T02:05:28.915Z"
   }
  }
 }
