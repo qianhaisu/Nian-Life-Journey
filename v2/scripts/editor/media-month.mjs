@@ -332,13 +332,14 @@ async function main() {
     curation.scenesChecked = multiGroups.length;
     const decisions = new Map();
     // 场景精选的模型判断同样存库复用：同一组成员（按 id 排序）只问一次。
-    // 提示词 v2 才懂「人像与生活场景各留一张」：组里有家庭生活照的，旧版判断不复用；纯人像组沿用旧判断。
+    // 场景精选规则 v3 把每个主体的上限收紧到一张。旧版判断即使是纯人像，
+    // 也可能保留三张，因此一律不能复用。
     store.scenes ??= {};
     const sceneStoreKey = (group) => createHash("sha256").update(group.map((m) => m.id).sort().join("|")).digest("hex").slice(0, 24);
     let scenesReused = 0;
     for (const { group } of multiGroups) {
       const held = store.scenes[sceneStoreKey(group)];
-      if (held && (held.promptVersion === CURATE_PROMPT_VERSION || !group.some((m) => m.family))) { decisions.set(sceneKeyOf(group), { sameScene: held.sameScene, keep: held.keep, why: held.why }); scenesReused += 1; }
+      if (held?.promptVersion === CURATE_PROMPT_VERSION) { decisions.set(sceneKeyOf(group), { sameScene: held.sameScene, keep: held.keep, why: held.why }); scenesReused += 1; }
     }
     if (multiGroups.length) {
       let cursor = 0;
