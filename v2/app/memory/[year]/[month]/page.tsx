@@ -84,30 +84,17 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
 
   // An edited month is ONE timeline of days (lib/month-timeline.ts): month title → summary → days.
   // Stories the content file did not already write are folded into their day there, so there is no
-  // second list — no 「这个月的故事」, no 「这个月的日子」 heading. Only the first week is rendered here;
-  // components/month-timeline.tsx loads the rest a week at a time. Months without edited content fall
-  // through to the original layout below, unchanged.
+  // second list — no 「这个月的故事」, no 「这个月的日子」, no 「这个月的照片」 heading. A month-end photo
+  // dump was tried (Teddy 2026-09-26/27) and reverted the next day (2026-09-27): it re-listed the
+  // month's dates a second time directly under the real timeline (same DayHead component, same date
+  // strings) — a family reader scrolling past the last real day meets what reads as a second, wordless
+  // copy of the month. All photos belong inside their own day's info or nowhere on this page; the
+  // fix for a day with unwritten photos is to write it in, not to give the leftovers their own list.
+  // Months without edited content fall through to the original layout below, unchanged.
   if (content) {
     const timeline = await buildMonthTimeline(archive, year, monthSegment);
     const first = timeline?.weeks[0];
     const initial = timeline && first ? weekEntries(timeline, first.id) ?? [] : [];
-
-    // dayPhotoGroups is merged back because this layout never renders it; only subject-checked
-    // (latest verdict approved) photos qualify, so store_only documents/screenshots and unjudged
-    // photos never reach this page.
-    const storyMediaIds = new Set(content.days.flatMap((d) => d.expandedMediaIds ?? []));
-    const albumByDay = new Map<string, (typeof composition.archiveDays)[number]>();
-    for (const day of [...composition.dayPhotoGroups, ...composition.archiveDays]) {
-      const held = albumByDay.get(day.day);
-      albumByDay.set(day.day, held ? { ...held, photos: [...held.photos, ...day.photos] } : day);
-    }
-    const unstoriedArchiveDays = [...albumByDay.values()]
-      .sort((a, b) => a.day.localeCompare(b.day))
-      .map((day) => ({ ...day, photos: day.photos.filter((p) => privilege.checked?.has(p.id) === true && !storyMediaIds.has(p.id)) }))
-      .filter((day) => day.photos.length > 0);
-    const unstoriedPhotoCount = unstoriedArchiveDays.reduce((sum, d) => sum + d.photos.length, 0);
-    const unstoriedHasVideo = unstoriedArchiveDays.some((d) => d.photos.some((p) => p.type === "video"));
-    const unstoriedLabel = unstoriedHasVideo ? "这个月的照片与视频" : "这个月的照片";
 
     return <div className="month-page reading-wrap">
       <header className="chapter-masthead">
@@ -124,17 +111,6 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         weeks={timeline.weeks}
         initial={initial}
       /> : null}
-
-      {unstoriedPhotoCount > 0 ? <details className="month-archive" id="month-photos">
-        <summary><span className="serif">{unstoriedLabel} · {unstoriedPhotoCount} 张</span></summary>
-        <ArchiveExpander
-          year={year}
-          month={monthSegment}
-          foldedDayCount={0}
-          visibleDays={unstoriedArchiveDays}
-          monthAgeLabel={chapter.ageLabel}
-        />
-      </details> : null}
 
       {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}
       {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`} prefetch={false}>{item.shortLabel}</Link>)}</p></footer> : null}
