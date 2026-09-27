@@ -59,7 +59,8 @@ const scp = (dest) => spawnSync("scp", ["-q", "-o", "BatchMode=yes", "-i", ECS.k
 // 出生日（上海日期）：之前的天走孕期分类器，当天起走「照片里是不是张年」。
 const BIRTH_DAY = "2025-01-03";
 const isPreBirth = (day) => day < BIRTH_DAY;
-const VERDICT_STORE = path.join(REPO_V2, "data/media-subject-verdicts.json");
+// Batch callers may isolate per-month caches, then merge them after their writers finish.
+const VERDICT_STORE = arg("verdict-store") ? path.resolve(arg("verdict-store")) : path.join(REPO_V2, "data/media-subject-verdicts.json");
 const SCENE_TAGS = path.join(REPO_V2, "data/photo-scene-tags.json");
 const SCENERY = path.join(REPO_V2, "data/photo-scenery.json");
 const readJson = (f, fallback) => (fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : fallback);
