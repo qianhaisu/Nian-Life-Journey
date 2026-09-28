@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { claimChunkReload, isChunkLoadError } from "../lib/chunk-recovery.ts";
+import { claimChunkReload, claimReload, isChunkLoadError } from "../lib/chunk-recovery.ts";
 
 const chunk = { name: "ChunkLoadError", message: "Loading chunk 997 failed." };
 const storage = () => {
@@ -26,6 +26,14 @@ test("blocked or corrupt session storage fails closed", () => {
   assert.equal(claimChunkReload(chunk, { getItem: () => { throw Error("blocked"); }, setItem() {} }, "/"), false);
   assert.equal(claimChunkReload(chunk, { getItem: () => "broken", setItem() {} }, "/"), false);
   assert.equal(claimChunkReload(chunk, { getItem: () => null, setItem: () => { throw Error("quota"); } }, "/"), false);
+});
+
+test("global recovery reloads any escaped error once per URL per minute", () => {
+  const state = storage();
+  assert.equal(claimReload(state, "/memory/2026/09", 1000), true);
+  assert.equal(claimReload(state, "/memory/2026/09", 30000), false);
+  assert.equal(claimReload(state, "/memory/2026/08", 30000), true);
+  assert.equal(claimReload({ getItem: () => { throw Error("blocked"); }, setItem() {} }, "/", 0), false);
 });
 
 test("CSS and native module load failures are recognized, generic fetch failures are not", () => {

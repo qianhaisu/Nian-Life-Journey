@@ -15,6 +15,17 @@ export function claimChunkReload(
   now = Date.now(),
 ): boolean {
   if (!isChunkLoadError(error)) return false;
+  return claimReload(storage, url, now);
+}
+
+// For app/global-error.tsx: anything that escapes every route boundary on a page that loaded fine
+// is, in practice, a tab kept open across a release (old router state meeting the new build), and a
+// fresh document load is the cure. Same throttle, so a genuinely broken page cannot loop.
+export function claimReload(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  url: string,
+  now = Date.now(),
+): boolean {
   try {
     const previous = JSON.parse(storage.getItem(KEY) ?? "null") as { url?: string; at?: number } | null;
     if (previous?.url === url && typeof previous.at === "number" && now - previous.at < RETRY_WINDOW_MS) return false;
