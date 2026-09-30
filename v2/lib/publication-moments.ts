@@ -26,6 +26,7 @@ import type { EditorialMemory, MediaRef, MonthChapter, PhotoDay } from "@/lib/me
 import { isArchiveCountNote, isGarbageLifeEvent, memoryTitle } from "@/lib/memory-chapters";
 import { containsTechnicalPlaceholder } from "@/lib/organizer/quality-review";
 import { heroSized, thumbnailSized } from "@/lib/media/hero";
+import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 import { photographsFirst } from "@/lib/media/presentation";
 import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { formatDay, timeSignatureFor } from "@/lib/time-signature";
@@ -489,8 +490,9 @@ export function buildMonthComposition(chapter: MonthChapter, privilege: MediaPri
   const excluded = privilege.excluded;
   const photoDaysAsc = [...chapter.photoDays]
     .flatMap((day) => {
-      if (!excluded || excluded.size === 0) return [day];
-      const photos = day.photos.filter((item) => !excluded.has(item.id));
+      const allowed = day.photos.filter((item) => !excluded?.has(item.id));
+      const rank = (item: MediaRef) => Number(isSubjectChecked(item, privilege)) * 2 + Number(isPrivileged(item, privilege));
+      const photos = uniqueDisplayMedia(allowed, (next, previous) => rank(next) > rank(previous));
       if (photos.length === day.photos.length) return [day];
       return photos.length > 0 ? [{ ...day, photos }] : [];
     })

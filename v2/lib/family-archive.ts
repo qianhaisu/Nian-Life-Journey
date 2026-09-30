@@ -5,6 +5,7 @@ import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { scopeStoreToProfile } from "@/lib/db/profile-scope";
 import { getFamilyArchiveInput, type Store } from "@/lib/db/repository";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
+import { identifyDisplayMedia } from "@/lib/media/display-identity";
 import { buildChapters, type YearChapter } from "@/lib/memory-chapters";
 import { calendarMonthOf } from "@/lib/timeline-dates";
 import { birthDayOf } from "@/lib/time-signature";
@@ -119,7 +120,7 @@ export function composeFamilyArchive(
   // and decides which months exist; the deliverable subset is publication eligibility and decides
   // what is shown and counted. A month whose photos are all waiting on derivatives keeps its
   // chapter — withheld is not missing.
-  const familyMedia = store.media.filter((item) => item.visibility !== "private");
+  const familyMedia = identifyDisplayMedia(store.media.filter((item) => item.visibility !== "private"), store.mediaAssets);
   const deliverable = deliverableMediaIds(store);
   const media = familyMedia.filter((item) => deliverable.has(item.id));
   // Basis C (lib/media/story-binding.ts): the ledger rows saying somebody looked at a picture and

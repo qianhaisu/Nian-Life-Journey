@@ -54,7 +54,7 @@ export type Store = {
  *
  * Three quarters of those bytes are columns nobody on the path reads: `media_locations` is consulted
  * ONLY through `selectLocation()` (provider/variant/status, keyed by asset), `media_assets` ONLY for
- * `mediaType`/`mimeType`, and `raw_sources` ONLY for `mediaPrivilegeOf()` — which looks at sources
+ * `mediaType`/`mimeType` and `checksum` (exact display identity), and `raw_sources` ONLY for `mediaPrivilegeOf()` — which looks at sources
  * that back a media row — plus one `max(capturedAt)` for the activity clock. The same three tables
  * were also being read twice over (`life_events` three times, `content_quality_reviews` twice).
  *

@@ -61,6 +61,7 @@ import { heroSized } from "@/lib/media/hero";
 import { ageAtMonth, formatMonth } from "@/lib/time-signature";
 import { moodFor, type MemoryMood } from "@/lib/home-memory-mood";
 import { NO_TOPICS, carouselQualified, carouselValue, type CarouselTheme, type PhotoTopicLookup } from "@/lib/home-memory-topics";
+import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 
 export const MEMORY_MIN_SLIDES = 8;
 /**
@@ -223,7 +224,7 @@ function sceneRepresentatives(reps: readonly MediaRef[], topics: PhotoTopicLooku
     const old = distinct.get(key);
     if (!old || better(photo, old) < 0) distinct.set(key, photo);
   }
-  return [...distinct.values()].sort(byTime);
+  return uniqueDisplayMedia([...distinct.values()].sort(better)).sort(byTime);
 }
 
 /** 沿序列均匀取 max 个，保住开头、中段与结尾。**没有价值分时的退路。** */
@@ -693,13 +694,20 @@ export function selectHomeMemories(
   const globalScenes = sceneGroups([...allPhotos].sort(byTime));
   const scenesById = new Map(globalScenes.flatMap(group => group.map(photo => [photo.id, group] as const)));
   const visualScenes = new Map<string, MediaRef[]>();
+  const fileAliases = new Map<string, MediaRef[]>();
   for (const photo of allPhotos) {
+    if (photo.displayKey) {
+      const aliases = fileAliases.get(photo.displayKey);
+      if (aliases) aliases.push(photo);
+      else fileAliases.set(photo.displayKey, [photo]);
+    }
     const scene = topics(photo.id)?.carousel?.sceneKey;
     if (scene) visualScenes.set(scene, [...(visualScenes.get(scene) ?? []), photo]);
   }
   const keep = (memory: HomeMemory | undefined): memory is HomeMemory => {
     if (!memory || !spansMultipleDays(memory)) return false;
     for (const slide of memory.slides) {
+      if (slide.media.displayKey) for (const alias of fileAliases.get(slide.media.displayKey) ?? []) usedIds.add(alias.id);
       for (const photo of scenesById.get(slide.media.id) ?? [slide.media]) usedIds.add(photo.id);
       const scene = topics(slide.media.id)?.carousel?.sceneKey;
       if (scene) for (const photo of visualScenes.get(scene) ?? []) usedIds.add(photo.id);

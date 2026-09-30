@@ -13,6 +13,7 @@ import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { toMediaRef, type MediaRef } from "@/lib/memory-chapters";
 import { loadMonthContent, dayForDate, resolveMonthContentMedia, type MonthContent, listEditedMonthContents } from "@/lib/month-content";
 import { buildMonthTimeline } from "@/lib/month-timeline";
+import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 import { ageOn } from "@/lib/time-signature";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
 import { coverScore, daysOf, type CoverScore, type Trip } from "./model";
@@ -155,7 +156,7 @@ export async function readTrip(id: string): Promise<{ trip: Trip; ageLabel?: str
     days.push({
       day, href: publishedDay.href, dateLabel: dateLabelOf(day), ageLabel: ageOn(archive.birthDay, day) ?? publishedDay.ageLabel,
       title, lead: publishedDay.paragraphs[0], // 有精选的旅程：精选里已经包括风景候选并按场景去过重，不再叠加风景名单（否则同一片牧场会出现四次）
-      photos: curated ? curatedOf(curated.byDay[day] ?? [], title) : interleave(entry ? photosOf(entry.firstScreenMediaIds, title) : publishedDay.photos.slice(0, 6), sceneryOf(archive, day)),
+      photos: uniqueDisplayMedia(curated ? curatedOf(curated.byDay[day] ?? [], title) : interleave(entry ? photosOf(entry.firstScreenMediaIds, title) : publishedDay.photos.slice(0, 6), sceneryOf(archive, day))),
     });
   }
   const cover = pickCover(trip, months, photosOf, scores);

@@ -6,6 +6,7 @@ import { pickLeadDays, pickLeadPhoto } from "@/lib/month-day-weight";
 import { loadMonthContent, resolveMonthContentMedia } from "@/lib/month-content";
 import { buildMonthComposition } from "@/lib/publication-moments";
 import { contentOnlyChapter } from "./edited-chapters";
+import { uniqueDisplayMedia } from "./media/display-identity";
 
 // An edited month as ONE timeline of days (2026-09-23, Teddy: 「故事和日子只能存在一个」).
 //
@@ -165,6 +166,7 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
 
   const order: "desc" | "asc" = month === latestChapterMonth(archive) ? "desc" : "asc";
   for (const entry of days.values()) {
+    entry.photos = uniqueDisplayMedia(entry.photos);
     entry.milestone = detectMilestone(entry.day, [entry.title, ...entry.paragraphs, ...entry.stories.flatMap((s) => [s.title, ...s.paragraphs])], archive.birthDay ?? undefined);
   }
   const leadDays = pickLeadDays([...days.values()].map((entry) => ({

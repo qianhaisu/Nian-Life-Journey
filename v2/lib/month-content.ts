@@ -1,5 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 
 // An edited month — the words a family actually reads — loaded from outside the repository.
 //
@@ -235,7 +236,7 @@ export function resolveMonthContentMedia<T extends { id: string }>(
     const media = available.get(id);
     if (media) out.push(media);
   }
-  return out;
+  return uniqueDisplayMedia(out);
 }
 
 /**

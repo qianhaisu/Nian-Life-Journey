@@ -10,6 +10,7 @@ import { calendarDayOf, calendarMonthOf } from "@/lib/timeline-dates";
 import { NO_HERO_MEDIA_ID, heroCandidates, heroSized, isHeroEligible, isThumbnailEligible } from "@/lib/media/hero";
 import { ledgerOnlyStoryPhotoIds, storyDisplayMedia, type StoryPhotoConfirmations } from "@/lib/media/story-binding";
 import { presentableAlt } from "@/lib/media/presentation";
+import { uniqueDisplayMedia, type DisplayMedia } from "@/lib/media/display-identity";
 import { ageAtMonth, ageSpan, formatDay, formatMonth, timeSignatureFor, type TimeSignature } from "@/lib/time-signature";
 
 // WeChat placeholder patterns that the rule organizer wrote verbatim into story/title fields.
@@ -26,7 +27,7 @@ export function isGarbageLifeEvent(event: Pick<LifeEvent, "title" | "story">): b
   return false;
 }
 
-export type MediaRef = Pick<Media, "id" | "src" | "thumbnailSrc" | "width" | "height" | "type" | "posterSrc" | "takenAt" | "durationSeconds"> & { alt: string };
+export type MediaRef = Pick<Media, "id" | "src" | "thumbnailSrc" | "width" | "height" | "type" | "posterSrc" | "takenAt" | "durationSeconds"> & { alt: string; displayKey?: string };
 
 export type EditorialMemory = {
   id: string;
@@ -102,8 +103,8 @@ export const STORY_PHOTOS_MAX = 4;
 // takes a photograph's place and a story never becomes a wall of players.
 export const STORY_VIDEOS_MAX = 2;
 
-export function toMediaRef(media: Media, context?: string): MediaRef {
-  return { id: media.id, src: media.src, thumbnailSrc: media.thumbnailSrc, width: media.width, height: media.height, type: media.type, posterSrc: media.posterSrc, takenAt: media.takenAt, durationSeconds: media.durationSeconds, alt: presentableAlt(media, context) };
+export function toMediaRef(media: DisplayMedia, context?: string): MediaRef {
+  return { id: media.id, src: media.src, thumbnailSrc: media.thumbnailSrc, width: media.width, height: media.height, type: media.type, posterSrc: media.posterSrc, takenAt: media.takenAt, durationSeconds: media.durationSeconds, alt: presentableAlt(media, context), ...(media.displayKey ? { displayKey: media.displayKey } : {}) };
 }
 
 // First paragraph of the story, trimmed to a reading length. Titles are not repeated into it.
@@ -156,7 +157,7 @@ export function editorialMemory(event: LifeEvent, mediaById: Map<string, Media>,
   const associated = storyDisplayMedia(event, media, confirmations);
   // The same ordered, size-checked list the lead has always been the head of. NO_HERO_MEDIA_ID
   // empties it, so a story reviewed as text-only draws nothing here either.
-  const approved = heroCandidates(event.heroMediaId, associated).slice(0, STORY_PHOTOS_MAX);
+  const approved = uniqueDisplayMedia(heroCandidates(event.heroMediaId, associated)).slice(0, STORY_PHOTOS_MAX);
   const lead = approved[0];
   // Approved videos: same reviewed-binding gate, same deliverable set (mediaById), drawable size, and
   // NO_HERO_MEDIA_ID (text-only by review) draws none. heroCandidates above never admits a video.

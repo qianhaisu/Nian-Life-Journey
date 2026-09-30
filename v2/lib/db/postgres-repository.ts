@@ -691,7 +691,8 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
    *     `selectLocation()`, which reads `provider`, `variant` and `status`. Nothing else ever looks
    *     at a location on this path. Rows are NOT filtered: scopeStoreToProfile still drops the ones
    *     whose asset belongs to another profile, exactly as before.
-   *   media_assets → 4 columns. Only `mediaType` (isDeliverable) and `mimeType` (derivativePlan /
+   *   media_assets → 5 columns. `checksum` provides exact photo identity without another query.
+   *     `mediaType` (isDeliverable) and `mimeType` (derivativePlan /
    *     preferredVariant) are read; `profileId` stays for the scoping, `id` for the index.
    *   raw_sources → the rows that back a media row, 5 columns. `mediaPrivilegeOf()` intersects
    *     trusted sources with `media.rawSourceId`, so a source no media row points at cannot change
@@ -711,7 +712,7 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
       db.select().from(t.profiles).where(eq(t.profiles.id, CANONICAL_PROFILE_ID)).limit(1),
       db.select().from(t.contributors),
       db.select().from(t.media).where(eq(t.media.profileId, CANONICAL_PROFILE_ID)),
-      db.select({ id: t.mediaAssets.id, profileId: t.mediaAssets.profileId, mediaType: t.mediaAssets.mediaType, mimeType: t.mediaAssets.mimeType }).from(t.mediaAssets),
+      db.select({ id: t.mediaAssets.id, profileId: t.mediaAssets.profileId, mediaType: t.mediaAssets.mediaType, mimeType: t.mediaAssets.mimeType, checksum: t.mediaAssets.checksum }).from(t.mediaAssets),
       db.select({ mediaAssetId: t.mediaLocations.mediaAssetId, provider: t.mediaLocations.provider, variant: t.mediaLocations.variant, status: t.mediaLocations.status }).from(t.mediaLocations),
       db.select({ id: t.rawSources.id, profileId: t.rawSources.profileId, sourceType: t.rawSources.sourceType, sourceLabel: t.rawSources.sourceLabel, deletedAt: t.rawSources.deletedAt })
         .from(t.rawSources)
