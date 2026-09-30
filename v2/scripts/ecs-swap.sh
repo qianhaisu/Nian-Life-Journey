@@ -13,13 +13,16 @@
 #   九月的编辑稿要从仓库外的私有目录读，容器需要看得到它；除此之外没有别的用途。
 #   不传就完全是原来的行为。
 #
-# 公开 Web 容器固定关闭试读与旧补录入口；保留私有入口能力。
-# env 文件仍然必须与源逐字节相同：要改运行时变量，就换一个新的源文件，而不是就地改目标。
+# Public web containers must close preview and capture while retaining the private source env.
+# The per-release target is derived atomically from the source; it is not the source of truth.
 set -euo pipefail
 SRC="$1"; TARGET="$2"; SHORT="$3"; ROLLBACK_NAME="$4"; POLL_N="${5:-48}"; POLL_S="${6:-5}"; MOUNT_SPEC="${7:-}"; HEALTH_MOUNTS="${8:-}"
 HEALTH_MOUNTS="${HEALTH_MOUNTS//,/ }"   # ssh 会把带空格的参数拆开，所以传进来时用逗号分隔
-if [ -e "$TARGET" ]; then cmp -s "$SRC" "$TARGET" || { echo "STOP: $TARGET differs from $SRC"; exit 3; }; else cp -n -p "$SRC" "$TARGET"; fi
-cmp -s "$SRC" "$TARGET" || { echo "STOP: copied env does not match source"; exit 3; }
+if [ -e "$TARGET" ]; then
+  grep -qx 'PREVIEW_READING_ENABLED=0' "$TARGET" && grep -qx 'CAPTURE_ENABLED=0' "$TARGET" || { echo "STOP: $TARGET is not a public env"; exit 3; }
+else
+  { grep -v -E '^(PREVIEW_READING_ENABLED|CAPTURE_ENABLED)=' "$SRC"; printf '%s\n' 'PREVIEW_READING_ENABLED=0' 'CAPTURE_ENABLED=0'; } > "$TARGET"
+fi
 rollback() {
   set +e
   echo "=== ROLLBACK === restoring $ROLLBACK_NAME as nianlife-diag-web"
@@ -65,7 +68,7 @@ if [ -n "$HEALTH_MOUNTS" ]; then
   other=$(writers || true)
   if [ -n "$other" ]; then echo "STOP: another running container already holds the writable health record: $other"; docker start "$ROLLBACK_NAME" || true; exit 8; fi
 fi
-if ! docker run -d --name nianlife-diag-web --restart unless-stopped -p 127.0.0.1:3000:3000 --env-file "$TARGET" -e PREVIEW_READING_ENABLED=0 -e CAPTURE_ENABLED=0 "${mount_args[@]}" "nianlife-web:$SHORT"; then
+if ! docker run -d --name nianlife-diag-web --restart unless-stopped -p 127.0.0.1:3000:3000 --env-file "$TARGET" "${mount_args[@]}" "nianlife-web:$SHORT"; then
   echo "STOP: docker run failed"
   if rollback; then exit 5; else exit 7; fi
 fi
