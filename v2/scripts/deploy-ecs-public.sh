@@ -10,6 +10,7 @@
 #   precheck                 只读：磁盘、当前容器、80/443 占用、两个域名的解析
 #   upload <sha>             git archive v2 → ~/v2-deploy-<short>（不构建）
 #   build <sha>              磁盘余量 ≥ MIN_FREE_MB 才构建 nianlife-web:<short>
+#   carousel-install <缓存>   安装离线回忆缓存，不重新构建应用
 #   content-install <月> <文件>  装一个月的编辑稿：版本化文件 + 同文件系统内原子替换
 #   content-rollback <月> <版本文件名>|--withdraw
 #                            撤回一个月的编辑稿：指回 versions/ 里的某个旧版本，或整月撤下（软链改名保留，
@@ -180,15 +181,55 @@ if [ "$free" -lt "$min_after" ]; then echo "WARN: free ${free}MB < ${min_after}M
 EOF
     ;;
 
+  carousel-install)
+    # Only the offline cache; immutable versions, atomic symlink and remote hash verification.
+    src="${1:?usage: carousel-install <local photo-topics.json>}"
+    [ -f "$src" ] || { echo "STOP: cache missing"; exit 2; }
+    stamp="$(date +%Y%m%d-%H%M%S)-$$"
+    scp -o BatchMode=yes -i "$ECS_KEY" "$src" "$ECS_SSH:/tmp/photo-topics.$stamp.json.tmp"
+    remote "$stamp" "$CONTENT_HOST_DIR" <<'EOF'
+set -euo pipefail
+stamp="$1"; dir="$2"; tmp="/tmp/photo-topics.$stamp.json.tmp"
+python3 - "$tmp" <<'PYEOF'
+import json, sys
+cache = json.load(open(sys.argv[1], encoding="utf-8"))
+assert isinstance(cache, dict) and isinstance(cache.get("topics"), dict) and cache["topics"]
+assert isinstance(cache.get("model"), str) and cache["model"]
+assert isinstance(cache.get("promptVersion"), str) and cache["promptVersion"]
+assert all(isinstance(value, dict) for value in cache["topics"].values())
+print("VALID carousel entries=%d" % len(cache["topics"]))
+PYEOF
+sudo mkdir -p "$dir/versions"
+ver="$dir/versions/photo-topics.$stamp.json"
+sudo cp "$tmp" "$ver"
+[ "$(sha256sum "$tmp" | cut -d' ' -f1)" = "$(sha256sum "$ver" | cut -d' ' -f1)" ]
+sudo chmod 0644 "$ver"
+sudo ln -sfn "$ver" "$dir/.photo-topics.json.new"
+sudo mv -T "$dir/.photo-topics.json.new" "$dir/photo-topics.json"
+sha256sum "$dir/photo-topics.json"
+rm -f "$tmp"
+echo "CAROUSEL_VERSION=photo-topics.$stamp.json"
+EOF
+    ;;
+
   content-install)
     # 一个月的编辑稿。版本化保存，校验通过后在同一文件系统内原子替换 current 软链。
-    month="${1:?usage: content-install <YYYY-MM> <local file>}"; src="${2:?usage: content-install <YYYY-MM> <local file>}"
+    month="${1:?usage: content-install <YYYY-MM> <local file> [expected hash]}"; src="${2:?usage: content-install <YYYY-MM> <local file> [expected hash]}"
+    expected="${3:-}"
     [ -f "$src" ] || { echo "STOP: $src not found"; exit 2; }
-    stamp="$(date +%Y%m%d-%H%M%S)"
+    stamp="$(date +%Y%m%d-%H%M%S)-$$"
     scp -o BatchMode=yes -i "$ECS_KEY" "$src" "$ECS_SSH:/tmp/$month.$stamp.json.tmp"
-    remote "$month" "$stamp" "$CONTENT_HOST_DIR" <<'EOF'
+    remote "$month" "$stamp" "$CONTENT_HOST_DIR" "$expected" <<'EOF'
 set -euo pipefail
-month="$1"; stamp="$2"; dir="$3"
+month="$1"; stamp="$2"; dir="$3"; expected="${4:-}"
+exec 8>/home/ecs-user/.nianlife-content.lock
+flock -n 8 || { echo "STOP: another content publication is active"; exit 9; }
+if [ -n "$expected" ]; then
+  current="absent"
+  if [ -f "$dir/$month.json" ]; then current="$(sha256sum "$dir/$month.json" | cut -d' ' -f1)";
+  elif [ -e "$dir/$month.json" ] || [ -L "$dir/$month.json" ]; then echo "STOP: invalid current content"; exit 10; fi
+  [ "$current" = "$expected" ] || { echo "STOP: content changed since reading; retry from a fresh copy"; exit 10; }
+fi
 sudo mkdir -p "$dir/versions"
 tmp="/tmp/$month.$stamp.json.tmp"
 # 按加载器实际要求校验：schema、month、days 为非空数组，且每天都有必需字段。
@@ -340,7 +381,7 @@ EOF
   health-data-install)
     src="${1:?usage: health-data-install <local dir with ledger/ pagedata/ analyses/ evidence/ material-root/ originals/>}"
     [ -d "$src/ledger" ] && [ -d "$src/analyses" ] && [ -d "$src/evidence" ] || { echo "STOP: $src is not a health data package"; exit 2; }
-    stamp="$(date +%Y%m%d-%H%M%S)"; tar_local="$(mktemp -d)/health-data-$stamp.tar"
+    stamp="$(date +%Y%m%d-%H%M%S)-$$"; tar_local="$(mktemp -d)/health-data-$stamp.tar"
     tar -C "$src" -cf "$tar_local" --exclude=record .
     scp -o BatchMode=yes -i "$ECS_KEY" "$tar_local" "$ECS_SSH:/home/ecs-user/health-data-$stamp.tar"
     remote "$stamp" "$HEALTH_HOST_DIR" <<'EOF'

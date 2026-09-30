@@ -14,6 +14,6 @@ export function dayLabel(dateLabel: string, year: string): string {
 // statement; a day only prints its own age when it actually differs (the days that cross a
 // "岁/个月" boundary within the month).
 export function DayHead({ day, dateLabel, ageLabel, monthAgeLabel, year }: { day: string; dateLabel: string; ageLabel?: string; monthAgeLabel?: string; year: string }) {
-  const showAge = ageLabel && ageLabel !== monthAgeLabel;
+  const showAge = ageLabel && ageLabel.replace(/\s+/g, "") !== monthAgeLabel?.replace(/\s+/g, "");
   return <p className="month-day-date"><time dateTime={day}>{dayLabel(dateLabel, year)}</time>{showAge ? <span>{ageLabel}</span> : null}</p>;
 }

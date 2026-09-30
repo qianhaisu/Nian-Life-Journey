@@ -15,11 +15,12 @@ import type { TimelineDay, TimelineWeek } from "@/lib/month-timeline";
 // Why a GET route and not a server action: nianlife.cn forwards only GET/HEAD (Caddyfile.ecs), so a
 // server action's POST is refused before it reaches the app — the album expander hit exactly this
 // (lib/month-album-request.ts).
-export function MonthTimeline({ year, month, monthAgeLabel, weeks, initial }: {
+export function MonthTimeline({ year, month, monthAgeLabel, weeks, initial, highlights = [] }: {
   year: string;
   month: string;
   monthAgeLabel?: string;
   weeks: TimelineWeek[];
+  highlights?: { day: string; title: string }[];
   /** The first week's days, rendered on the server. */
   initial: TimelineDay[];
 }) {
@@ -35,17 +36,17 @@ export function MonthTimeline({ year, month, monthAgeLabel, weeks, initial }: {
     inFlight.current = true;
     setBusy(true);
     setFailed(false);
+    const got: TimelineDay[][] = [];
     try {
-      const got: TimelineDay[][] = [];
       for (let index = loaded.length; index <= targetIndex && index < weeks.length; index += 1) {
         const response = await fetch(`/api/memory/${year}/${month}/timeline?week=${encodeURIComponent(weeks[index].id)}`, { headers: { Accept: "application/json" } });
         if (!response.ok) throw new Error(`timeline read failed: ${response.status}`);
         got.push(((await response.json()) as { entries: TimelineDay[] }).entries ?? []);
       }
-      if (got.length) setLoaded((current) => [...current, ...got]);
     } catch {
       setFailed(true);
     } finally {
+      if (got.length) setLoaded((current) => [...current, ...got]);
       inFlight.current = false;
       setBusy(false);
     }
@@ -55,7 +56,7 @@ export function MonthTimeline({ year, month, monthAgeLabel, weeks, initial }: {
   // across three freshly loaded weeks takes long enough to be interrupted by the reader's next touch.
   useEffect(() => {
     if (!scrollTo) return;
-    const index = weeks.findIndex((week) => week.id === scrollTo);
+    const index = weeks.findIndex((week) => week.id === scrollTo || week.days.some((day) => `day-${day}` === scrollTo));
     if (index < loaded.length) {
       document.getElementById(scrollTo)?.scrollIntoView({ block: "start" });
       setScrollTo(null);
@@ -65,8 +66,8 @@ export function MonthTimeline({ year, month, monthAgeLabel, weeks, initial }: {
   // Arriving with #week-3 in the address works the same as tapping its tab.
   useEffect(() => {
     const id = window.location.hash.slice(1);
-    const index = weeks.findIndex((week) => week.id === id);
-    if (index > 0) { setScrollTo(id); void loadThrough(index); }
+    const index = weeks.findIndex((week) => week.id === id || week.days.some((day) => `day-${day}` === id));
+    if (index >= 0) { setScrollTo(id); void loadThrough(index); }
     // Only on first mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -74,6 +75,17 @@ export function MonthTimeline({ year, month, monthAgeLabel, weeks, initial }: {
   const next = weeks[loaded.length];
 
   return <>
+    {highlights.length > 0 ? <nav className="month-highlights" aria-label="这个月值得再读的日子">
+      <p className="section-mark">值得再读</p>
+      {highlights.map((item) => <a key={item.day} href={`#day-${item.day}`} onClick={(event) => {
+        event.preventDefault();
+        const id = `day-${item.day}`;
+        history.replaceState(null, "", `#${id}`);
+        setScrollTo(id);
+        const index = weeks.findIndex((week) => week.days.includes(item.day));
+        if (index >= loaded.length) void loadThrough(index);
+      }}>{Number(item.day.slice(8))} 日 · {item.title}</a>)}
+    </nav> : null}
     {/* Only when the month really is more than one week: no control for a month of a few days. */}
     {weeks.length > 1 ? <nav className="month-jump" aria-label="跳到这个月的某一周">
       {weeks.map((week, index) => <a

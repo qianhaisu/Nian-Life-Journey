@@ -1,3 +1,4 @@
+import { productionRevision, rememberProductionRevision, readProductionContent } from "./read-production-content.mjs";
 // 照片的夜间自动化：找出新进库、还没核验的照片 → DeepSeek 看图 → 保守规则判定 → 写主体核验 → 并进当天的照片区。
 //
 // 2026-09-20 Teddy 明确决定：照片审批链要全自动——「通过 = 自动上页面，班级合影放行」。
@@ -40,18 +41,16 @@ fs.mkdirSync(TMP, { recursive: true });
 
 function fetchContent(month) {
   const tmp = path.join(PH, `_current-${month}.json`);
-  const r = spawnSync("scp", ["-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-i", ECS.key, `${ECS.ssh}:/srv/nianlife-content/${month}.json`, tmp], { encoding: "utf8" });
-  if (r.status !== 0) return null;
-  return JSON.parse(fs.readFileSync(tmp, "utf8"));
+  return readProductionContent(month, tmp, ECS);
 }
 
 function installToProduction(month, file) {
   const bash = process.env.NIANLIFE_BASH ?? "C:/Program Files/Git/bin/bash.exe";
-  const r = spawnSync(bash, [path.join(REPO_V2, "scripts/deploy-ecs-public.sh"), "content-install", month, file], {
+  const r = spawnSync(bash, [path.join(REPO_V2, "scripts/deploy-ecs-public.sh"), "content-install", month, file, productionRevision(month)], {
     encoding: "utf8", env: { ...process.env, ECS_SSH: ECS.ssh, ECS_KEY: ECS.key, ECS_PUBLIC_IP: "47.99.243.155" },
   });
   const m = (r.stdout ?? "").match(/CONTENT_VERSION=(\S+)/);
-  if (r.status === 0 && m) return { ok: true, version: m[1] };
+  if (r.status === 0 && m) { rememberProductionRevision(month, file); return { ok: true, version: m[1] }; }
   return { ok: false, error: (r.stderr || r.stdout || "").slice(-300) };
 }
 
@@ -207,13 +206,13 @@ async function main() {
       fs.writeFileSync(out, JSON.stringify({ ...cur, generatedAt: new Date().toISOString() }, null, 1), "utf8");
       if (!WRITE) { digest.added.push(...added.map((a) => ({ ...a, published: false }))); say(`dry-run：${month} 将并入 ${added.map((a) => `${a.day}+${a.n}`).join(" ")}`); continue; }
       const r = installToProduction(month, out);
-      if (!r.ok) { digest.notes.push(`${month} 装入失败：${r.error}`); ledger({ event: "install-failed", month, error: r.error }); continue; }
+      if (!r.ok) { digest.notes.push(`${month} 装入失败：${r.error}`); ledger({ event: "install-failed", month, error: r.error }); digest.errors += 1; continue; }
       digest.added.push(...added.map((a) => ({ ...a, published: true, version: r.version })));
       ledger({ event: "published", month, added, version: r.version });
       say(`已装入 ${month}（${r.version}）：${added.map((a) => `${a.day}+${a.n}`).join(" ")}`);
     }
     if (WRITE) fs.writeFileSync(stateFile, JSON.stringify(state, null, 1), "utf8");
-    return 0;
+    return digest.errors ? 1 : 0;
   } finally {
     try { await rds?.close(); } catch {}
     try { fs.rmSync(lock); } catch {}

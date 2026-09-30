@@ -28,7 +28,7 @@ export function MonthDayEntry({ entry, year, monthAgeLabel }: {
   monthAgeLabel?: string;
 }) {
   return (
-    <article className={entry.lead ? "month-moment moment-day-entry moment-day-lead" : "month-moment moment-day-entry"}>
+    <article id={`day-${entry.day}`} className={entry.lead ? "month-moment moment-day-entry moment-day-lead" : "month-moment moment-day-entry"}>
       <DayHead day={entry.day} dateLabel={entry.dateLabel} ageLabel={entry.ageLabel} monthAgeLabel={monthAgeLabel} year={year} />
       <div className="moment-body">
         {entry.title ? <h3 className="serif day-entry-title">{entry.title}</h3> : null}

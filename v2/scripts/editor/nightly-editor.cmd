@@ -17,23 +17,29 @@ rem Publishing turned ON 2026-09-20 at Teddy's explicit instruction (before any 
 rem To turn it off again, change the next line to: set NIANLIFE_EDITOR_PUBLISH=0
 set NIANLIFE_EDITOR_PUBLISH=1
 "C:\Program Files\nodejs\node.exe" --import tsx scripts\editor\nightly-editor.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\editor-%STAMP%.log 2>&1
-echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\editor-%STAMP%.log
 set EDITOR_EXIT=%ERRORLEVEL%
+echo exit=%EDITOR_EXIT% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\editor-%STAMP%.log
 rem Event backfill (added 2026-09-23, round 3): approved life_events that are on no month page yet go into
 rem the month content files, through the same validator as the editor. See scripts\editor\backfill-events.mjs.
 set NIANLIFE_BACKFILL_PUBLISH=1
 "C:\Program Files\nodejs\node.exe" --import tsx scripts\editor\backfill-events.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\backfill-%STAMP%.log 2>&1
-echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\backfill-%STAMP%.log
+set BACKFILL_EXIT=%ERRORLEVEL%
+echo exit=%BACKFILL_EXIT% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\backfill-%STAMP%.log
 rem Weekly reminders (added 2026-09-20): extract new todos with DeepSeek, then auto-approve them (Teddy chose
 rem full automation). Independent of the month editor above: either can fail without stopping the other.
 rem Needs the DB tunnel + env, so it goes through t20-run-env.mjs like the WeChat sync does.
 "C:\Program Files\nodejs\node.exe" --env-file=.env.local .data\t20-run-env.mjs -- scripts\editor\nightly-reminders.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\reminders-%STAMP%.log 2>&1
-echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\reminders-%STAMP%.log
 set REMINDERS_EXIT=%ERRORLEVEL%
+echo exit=%REMINDERS_EXIT% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\reminders-%STAMP%.log
+set NIANLIFE_CAROUSEL_PUBLISH=1
 rem Refresh offline carousel scores after the nightly inputs; never call the model from a page.
 "C:\Program Files\nodejs\node.exe" --import tsx scripts\editor\nightly-home-carousel.mjs >> C:\Users\teddy\NianlifeOps\ops-daily\logs\carousel-%STAMP%.log 2>&1
-echo exit=%ERRORLEVEL% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\carousel-%STAMP%.log
 set CAROUSEL_EXIT=%ERRORLEVEL%
+echo exit=%CAROUSEL_EXIT% >> C:\Users\teddy\NianlifeOps\ops-daily\logs\carousel-%STAMP%.log
+"C:\Program Files\nodejs\node.exe" scripts\editor\record-nightly-run.mjs --stamp %STAMP% --editor %EDITOR_EXIT% --backfill %BACKFILL_EXIT% --reminders %REMINDERS_EXIT% --carousel %CAROUSEL_EXIT%
+set RECEIPT_EXIT=%ERRORLEVEL%
 if not "%EDITOR_EXIT%"=="0" exit /b %EDITOR_EXIT%
+if not "%BACKFILL_EXIT%"=="0" exit /b %BACKFILL_EXIT%
 if not "%CAROUSEL_EXIT%"=="0" exit /b %CAROUSEL_EXIT%
-exit /b %REMINDERS_EXIT%
+if not "%REMINDERS_EXIT%"=="0" exit /b %REMINDERS_EXIT%
+exit /b %RECEIPT_EXIT%

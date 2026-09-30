@@ -1,0 +1,53 @@
+请接手 Nianlife 这轮改进的 ECS 发布和生产闭环核验。Teddy 已授权直接发布，不需重复审批；不是 Vercel。妈妈月报由苏静独立维护，不在本轮范围。
+
+仓库：https://github.com/qianhaisu/Nian-Life-Journey ，仅 main。
+本轮目标提交由 Teddy 的复制提示词提供，保存为 TARGET_IMPROVEMENT_SHA。云端本地提交已完成，但命令行和 GitHub 应用写入均返回 403，尚未推到远端 main。先导入 Teddy 下载的 nianlife-improvements.bundle，再推送 main，最后发布。
+导入步骤：核对干净程度和其他 session 占用；git bundle verify <交接包路径>；git fetch <交接包路径> main；核对 FETCH_HEAD 精确等于 TARGET_IMPROVEMENT_SHA。本地 main 干净且没有分叉时 fast-forward；若 origin/main 已有新提交，先保留并同步这些改动，再把本轮提交正常合并进 main，解决冲突后重跑相关检查。不强推、不丢弃他人修改、不新开分支。使用本地有权限的 GitHub 凭据推送；不能把云端已经提交当成 GitHub 已收到。随后部署最新 origin/main，必须包含 TARGET_IMPROVEMENT_SHA。
+本地目录预计 C:\Users\teddy\Documents\Nianlife；核对实际目录、AGENTS.md、CLAUDE.md 和最新交接。保护 .env.local、.data、别人未提交的改动及现有运行任务；不新开分支，不重启历史 A/B/C 调度，不 reset/clean/stash 或强推。
+
+本轮已实现：
+1. 年/月/日使用同一日子投影；旧事件地址读合并后的日子，网页标题与正文一致，保留来源。
+2. 旅行复用日子内容；已发布标题中明确的出发/到达可形成出行记录，计划与他人行程不计足迹；不猜返程，温州既有居住日期进入索引。
+3. 同事项同日期提醒去重、合并来源并保留全部原 ID；勾选/取消批量同步全部 ID；确定事项与待确认分区。
+4. 播放器每个画面显示日期、年龄和真实日页入口；没有日页则返回真实月份。
+5. 夜间任务保存真实退出码、生成执行回执；读取线上月稿失败不当作空月；安装增加锁与预期哈希，防止覆盖别人更新。
+6. 夜间回忆缓存通过 carousel-install 版本化、原子安装到既有内容挂载，不再仅更新本地文件。
+7. 月页精选跳转、分周深链接、日页前后阅读及返回原日期；统一年龄算法；手动健康列表改名爸妈补录。
+8. 公网容器固定关闭 preview/capture，保留私有入口能力；本次发布一并收尾 main 与线上旧 SHA 的差异。
+
+云端验证：类型检查、Lint、生产构建、全量测试及部署脚本语法检查通过；全量 1,741 项（1,729 通过、12 跳过、0 失败），新增 10 项回归；另有 3 项 ECS 保留策略测试通过。390/1440px 合成组件与实际 Next 页面验证；这不是生产数据验证。没有连接生产 RDS、没有执行付费模型任务、没有发布 ECS，也没有验证 Windows 计划任务真的运行。
+
+发布执行（Git Bash，在仓库根目录）：
+export ECS_SSH='ecs-user@47.99.243.155'
+export ECS_KEY='C:/Users/teddy/Downloads/nianlife-prod-ecs.pem'
+export ECS_PUBLIC_IP='47.99.243.155'
+export ENV_SOURCE='/home/ecs-user/.env.runtime.zhipu'
+git fetch origin main
+RELEASE_SHA=$(git rev-parse origin/main)
+git merge-base --is-ancestor "${TARGET_IMPROVEMENT_SHA:?请使用 Teddy 提供的本轮提交 SHA}" "$RELEASE_SHA" || exit 1
+bash v2/scripts/deploy-ecs-public.sh precheck
+bash v2/scripts/deploy-ecs-public.sh upload "$RELEASE_SHA"
+bash v2/scripts/deploy-ecs-public.sh build "$RELEASE_SHA"
+bash v2/scripts/deploy-ecs-public.sh swap "$RELEASE_SHA"
+每一步成功后才进行下一步。只走上述正式入口，保留祖先闸、冒烟闸、健康数据挂载及失败回滚。先核对 ENV_SOURCE 当前有效，不打印密钥或整份环境文件。
+
+上线核验：
+- /api/health 的 build.sha 精确等于 RELEASE_SHA，数据库与媒体交付健康；不能只确认容器启动。
+- 390/1440px 检查首页、年度、当前与历史月份、合并日页及对应旧事件地址：正文、网页标题、年龄一致，来源仍可展开；年页有当前编辑后的标题。
+- 月页初始仍一周；点击精选和 #day-YYYY-MM-DD 自动加载目标周；日页前后阅读、跨月边界及回月定位正常。
+- 首页两条同日期托班请假只显示一次，来源保留；已确定与待确认分开。在自有设备对这条真实事项有意勾选/取消并刷新，核对全部 alias ID 一致，不修改事项的微信证据状态；将手动勾选恢复到核验前状态。
+- 播放跨日主题，逐幕检查每张画面的日期、年龄、可点击日页入口和退出返回；核对日页确实存在，返回后没有残留 inert/滚动锁。
+- /travel 与旅程采用同一索引；若 9/24 已发布日子的标题明确写出出发回温州，应可看到该出行记录并打开对应真实日页；计划不点亮足迹，未记载返程不能显示假返程日期。
+- 公网 /preview、/preview/2026、/capture 为 404；现有健康、媒体、旧链接及妈妈月报正常，妈妈月报内容不变。
+
+自动化闭环（接通现有任务，不新建重复调度）：
+1. 核对 Windows 现有 23:30 微信同步、00:15 夜间编辑以及照片核验任务的实际 Action 路径、最近/下次运行时间、LastTaskResult、是否被休眠或代理中断。不要输出任务中携带的凭据。
+2. 正式任务通常运行 v2/.data/nightly-editor.cmd。先备份实际 wrapper，比较差异，将本提交 scripts/editor/nightly-editor.cmd 的退出码、backfill、回忆缓存发布和回执逻辑合入实际 wrapper；保留有效的本地路径、环境与代理设置。模板改了不代表任务已更新。
+3. 核对实际开关为 EDITOR_PUBLISH=1、BACKFILL_PUBLISH=1、PHOTOS_WRITE=1，以及新增 NIANLIFE_CAROUSEL_PUBLISH=1（实际变量名前缀照脚本）；照片任务沿用现有独立入口，不额外重复跑。别因旧 README 默认 dry-run 就宣布生产关闭。
+4. 检查公网容器 MONTH_CONTENT_DIR 指向 /srv/nianlife-content，内容目录只读挂载存在；若已有 HOME_PHOTO_TOPICS_PATH，确认它没有让页面继续读旧缓存。用正式 carousel-install 安装已验证的现有离线缓存，无需重复付费识图；核对本地、ECS 文件与容器读取的 SHA256 相同，并等待 ISR 后验证首页。
+5. 在 v2 运行：node scripts/check-automation.mjs --ops-dir 'C:/Users/teddy/NianlifeOps/ops-daily'。缺新回执只能报 unknown，不能当作完成。核对 ledger、增量游标、模型来源及 holds/failures，再选择最小必要增量完成一次真实运行，不全量重跑、不覆盖人工编辑、不扩大模型预算。
+6. 追踪至少一条已有新消息/新照片：导入去重 → 审核/编辑 → 版本化内容安装 → 线上日页可读、图片可打开、来源可追溯；回忆缓存增量与生产读取一致。没有新材料时分别报告任务成功和无新内容，不编造闭环样例。若任务正在运行则等待真实结果，不抢写或删除它的锁。
+
+失败与收尾：
+页面冒烟失败沿用脚本自动回滚；必要时使用正式 rollback-app <本次记录的旧容器名>，不删除数据。仅成功发布后执行现有 retention，保留当前 + 最近两版回滚；按切换时间排序，不删卷。
+最终简短汇报：部署 SHA、线上验证、两个保留回滚版本、清理结果、磁盘总量/已用/可用空间、自动化各阶段的真实证据和仍未验证项。代码发布成功与自动化生产闭环成功分开写；不是检查过脚本就算闭环完成。

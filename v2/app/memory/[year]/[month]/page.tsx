@@ -108,6 +108,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         year={year}
         month={monthSegment}
         monthAgeLabel={chapter.ageLabel}
+        highlights={[...timeline.byDay.values()].filter((day) => day.milestone || day.emphasis === "lead").slice(0, 3).map((day) => ({ day: day.day, title: day.title ?? day.dateLabel }))}
         weeks={timeline.weeks}
         initial={initial}
       /> : null}

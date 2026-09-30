@@ -44,7 +44,12 @@ const getCachedEventDetail = cache(async (id: string) => {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const detail = await getCachedEventDetail(id);
-  return { title: detail ? memoryTitle(detail.event) : "这一页不在档案里" };
+  if (!detail || detail.event.profileId !== CANONICAL_PROFILE_ID) return { title: "这一页不在档案里" };
+  const day = shanghaiDay(detail.event.occurredAt);
+  const content = day ? await loadMonthContent(day.slice(0, 7)) : null;
+  const edited = content ? dayForEventId(content, id) : null;
+  const reading = content && day ? await readDay(edited?.day ?? day) : null;
+  return { title: reading?.title ?? memoryTitle(detail.event) };
 }
 
 const GROWTH_LABEL: Record<string, string> = { language: "那时会说", motor: "那时会做", social: "那时的样子", interest: "那时喜欢", sleep: "那时的睡眠", food: "那时的吃饭", personality: "那时的性格", height: "身高", weight: "体重" };
@@ -76,10 +81,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const occurredDay = shanghaiDay(event.occurredAt);
   const editedContent = occurredDay ? await loadMonthContent(occurredDay.slice(0, 7)) : null;
   const editedDay = editedContent ? dayForEventId(editedContent, event.id) : null;
-  if (editedDay) {
-    const reading = await readDay(editedDay.day);
+  if (editedContent && occurredDay) {
+    const reading = await readDay(editedDay?.day ?? occurredDay);
     if (reading) {
-      const merged = (editedDay.eventIds ?? []).length;
+      const merged = (reading.day.eventIds ?? []).length;
       return <DayDetail
         day={reading.day}
         dateLabel={reading.dateLabel}
@@ -93,6 +98,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         deliverableIds={reading.sourceDeliverable}
         monthHref={reading.monthHref}
         monthLabel={reading.monthLabel}
+        stories={reading.stories} previous={reading.previous} next={reading.next}
         mergedNote={merged > 1 ? "这一天原本分成几段记录，现在合成了一篇。" : undefined}
       />;
     }

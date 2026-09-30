@@ -1,3 +1,4 @@
+import { attachMemoryReading } from "@/lib/home-memory-reading";
 import Link from "next/link";
 import Image from "next/image";
 import { HomeMemory } from "@/components/home-memory";
@@ -9,6 +10,7 @@ import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { selectHomeMemories } from "@/lib/home-memory";
 import { topicLookupFrom } from "@/lib/home-memory-topics";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
+import { groupReminders } from "@/lib/reminder-groups";
 import { HOME_QUIET_STATES } from "@/lib/home-reminder-display";
 import { windowStart, windowEnd } from "@/lib/home-reminder-window";
 import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
@@ -41,7 +43,9 @@ export default async function HomePage() {
   // 渲染路径一次新增读取都没有（CLAUDE.md 那条 $87 出站流量的规矩）。缓存读不到时
   // 主题与季节回忆都不展示，见 lib/home-memory-topics.ts。
   const topics = topicLookupFrom(await loadTopicCache());
-  const { memories, absence } = selectHomeMemories(archive, topics);
+  const selected = selectHomeMemories(archive, topics);
+  const memories = await attachMemoryReading(selected.memories, archive);
+  const absence = selected.absence;
 
   return <div className="home-v2">
     <div className="home-sheet">
@@ -145,8 +149,7 @@ function Reminders({ feed }: { feed: HomeFeed }) {
   // 内部真正拿来判定的那个函数，不是重新推一遍规则；这样页脚写的日期和实际筛选逻辑不会走两套账。
   const rangeStart = windowStart(feed.clock.today);
   return <HomeReminders
-    reminders={shown.map(toReminderView)}
-    more={more.map(toReminderView)}
+    reminders={groupReminders([...shown, ...more].map(toReminderView))}
     habitIds={reminders.status === "ready" ? reminders.habitShownIds : []}
     storageScope={CANONICAL_PROFILE_ID}
     rangeStart={rangeStart}
@@ -158,6 +161,8 @@ function toReminderView(reminder: HomeReminder): HomeReminderView {
   const when = reminder.item.when;
   return {
     id: reminder.id,
+    whenKey: JSON.stringify(when.kind === "unconfirmed" ? { ...when, raisedDay: reminder.item.evidence?.day ?? reminder.id } : when),
+    pendingConfirmation: reminder.state === "tentative" || reminder.state === "needs_confirmation" || when.kind === "unconfirmed",
     title: reminder.title,
     whenText: reminder.deadlineLabel,
     whenDay: when.kind === "day" ? when.day : undefined,

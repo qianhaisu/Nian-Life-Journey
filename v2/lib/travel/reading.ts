@@ -11,10 +11,12 @@
 // 这个例外只在旅行页；记忆页、首页不读这份名单。
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { toMediaRef, type MediaRef } from "@/lib/memory-chapters";
-import { loadMonthContent, dayForDate, resolveMonthContentMedia, type MonthContent } from "@/lib/month-content";
+import { loadMonthContent, dayForDate, resolveMonthContentMedia, type MonthContent, listEditedMonthContents } from "@/lib/month-content";
+import { buildMonthTimeline } from "@/lib/month-timeline";
 import { ageOn } from "@/lib/time-signature";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
-import { coverScore, daysOf, TRIPS, tripById, type CoverScore, type Trip } from "./model";
+import { coverScore, daysOf, type CoverScore, type Trip } from "./model";
+import { syncTrips } from "./sync";
 import sceneryFile from "./scenery.json";
 import curationFile from "./curation.json";
 
@@ -36,7 +38,6 @@ export type TripDay = {
 export type TripCard = { trip: Trip; cover?: MediaRef; scenery?: MediaRef; ageLabel?: string };
 
 const dateLabelOf = (day: string) => `${Number(day.slice(5, 7))} 月 ${Number(day.slice(8, 10))} 日`;
-const hrefOf = (day: string) => `/memory/${day.slice(0, 4)}/${day.slice(5, 7)}/${day.slice(8, 10)}`;
 
 async function monthsFor(days: string[]): Promise<Map<string, MonthContent | null>> {
   const months = [...new Set(days.map((d) => d.slice(0, 7)))];
@@ -108,29 +109,31 @@ function pickCover(trip: Trip, months: Map<string, MonthContent | null>, photosO
 }
 
 /** 总览页：每条旅程一张卡。 */
-export async function readTravelIndex(): Promise<{ cards: TripCard[]; birthDay?: string }> {
+export async function readTravelIndex(): Promise<{ cards: TripCard[]; trips: Trip[]; birthDay?: string }> {
   const [archive, scores] = await Promise.all([loadFamilyArchiveOnDemand(), coverScores()]);
+  const trips = syncTrips(await listEditedMonthContents());
   const photosOf = gate(archive);
-  const months = await monthsFor(TRIPS.flatMap((t) => daysOf(t)));
-  const cards = TRIPS.map((trip) => {
+  const months = await monthsFor(trips.flatMap((t) => daysOf(t)));
+  const cards = trips.map((trip) => {
     // 明信片角上叠一张这次旅行最好看的风景
     const scenery = daysOf(trip).flatMap((d) => (SCENERY_BY_DAY[d] ?? []).map((s) => ({ ...s, day: d })))
       .sort((a, b) => b.scenic - a.scenic).map((s) => sceneryOf(archive, s.day).find((m) => m.id === s.id)).find(Boolean);
     return { trip, cover: pickCover(trip, months, photosOf, scores), scenery, ageLabel: ageOn(archive.birthDay, trip.from) };
   });
-  return { cards, birthDay: archive.birthDay };
+  return { cards, trips, birthDay: archive.birthDay };
 }
 
 /**
  * 一条旅程：逐日的标题、首段、首屏照片。没有日页的日子不出现——旅程只是索引，不替日页编内容。
  */
 export async function readTrip(id: string): Promise<{ trip: Trip; ageLabel?: string; cover?: MediaRef; days: TripDay[] } | null> {
-  const trip = tripById(id);
+  const trip = syncTrips(await listEditedMonthContents()).find((item) => item.id === id);
   if (!trip) return null;
   const [archive, scores] = await Promise.all([loadFamilyArchiveOnDemand(), coverScores()]);
   const photosOf = gate(archive);
   const range = daysOf(trip);
   const months = await monthsFor(range);
+  const timelines = new Map(await Promise.all([...months.keys()].map(async (month) => [month, await buildMonthTimeline(archive, month.slice(0, 4), month.slice(5, 7))] as const)));
   const days: TripDay[] = [];
   const curated = CURATION[trip.id];
   const available = new Map(archive.media.map((item) => [item.id, item]));
@@ -141,17 +144,18 @@ export async function readTrip(id: string): Promise<{ trip: Trip; ageLabel?: str
   });
   for (const day of range) {
     const entry = dayForDate(months.get(day.slice(0, 7)) ?? null, day);
-    if (!entry) {
+    const publishedDay = timelines.get(day.slice(0, 7))?.byDay.get(day);
+    if (!publishedDay) {
       // 没有日页的日子：有沿途风景就单独占一格，只放日期和风景，不链接（没有可读的日页）
       const scenery = sceneryOf(archive, day);
       if (scenery.length) days.push({ day, dateLabel: dateLabelOf(day), ageLabel: ageOn(archive.birthDay, day), photos: scenery });
       continue;
     }
-    const title = entry.title ?? dateLabelOf(day);
+    const title = publishedDay.title ?? dateLabelOf(day);
     days.push({
-      day, href: hrefOf(day), dateLabel: dateLabelOf(day), ageLabel: ageOn(archive.birthDay, day) ?? entry.ageLabel,
-      title, lead: entry.paragraphs[0], // 有精选的旅程：精选里已经包括风景候选并按场景去过重，不再叠加风景名单（否则同一片牧场会出现四次）
-      photos: curated ? curatedOf(curated.byDay[day] ?? [], title) : interleave(photosOf(entry.firstScreenMediaIds, title), sceneryOf(archive, day)),
+      day, href: publishedDay.href, dateLabel: dateLabelOf(day), ageLabel: ageOn(archive.birthDay, day) ?? publishedDay.ageLabel,
+      title, lead: publishedDay.paragraphs[0], // 有精选的旅程：精选里已经包括风景候选并按场景去过重，不再叠加风景名单（否则同一片牧场会出现四次）
+      photos: curated ? curatedOf(curated.byDay[day] ?? [], title) : interleave(entry ? photosOf(entry.firstScreenMediaIds, title) : publishedDay.photos.slice(0, 6), sceneryOf(archive, day)),
     });
   }
   const cover = pickCover(trip, months, photosOf, scores);

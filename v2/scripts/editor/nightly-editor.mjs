@@ -1,3 +1,4 @@
+import { productionRevision, rememberProductionRevision, readProductionContent } from "./read-production-content.mjs";
 // 夜间编辑：把「已经搬进库」的微信消息，按天整理成月页上的一天。
 //
 // 每晚 23:30 的同步只做「搬进库」。「从消息里读出东西」（故事、月页内容）从来没有自动化过
@@ -56,9 +57,7 @@ function preflight() {
 // ── 现有内容：从 ECS 取（生产上实际在用的那一份），不信本地副本 ──────────────────────
 function fetchContent(month) {
   const tmp = path.join(ED, `_current-${month}.json`);
-  const r = spawnSync("scp", ["-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-i", ECS.key, `${ECS.ssh}:/srv/nianlife-content/${month}.json`, tmp], { encoding: "utf8" });
-  if (r.status !== 0) return null; // 这个月还没有内容文件（新月份）：从空白开始
-  return JSON.parse(fs.readFileSync(tmp, "utf8"));
+  return readProductionContent(month, tmp, ECS);
 }
 
 // ── 材料 ────────────────────────────────────────────────────────────────────────
@@ -136,8 +135,8 @@ async function main() {
   fs.mkdirSync(path.join(ED, "held"), { recursive: true });
   fs.mkdirSync(path.join(ED, "digests"), { recursive: true });
   const lock = path.join(ED, ".lock");
-  if (fs.existsSync(lock) && Date.now() - fs.statSync(lock).mtimeMs < 3 * 3600e3) { say("上一次运行还没结束（.lock 不足 3 小时），本次退出"); return 0; }
-  fs.writeFileSync(lock, String(process.pid));
+  try { fs.writeFileSync(lock, String(process.pid), { flag: "wx" }); }
+  catch { say("上次运行的锁仍存在，本次未运行；需核对原进程后处理，不能记为成功"); return 2; }
   const digest = { today: TODAY, publish: PUBLISH, wrote: [], held: [], skipped: [], failed: [], costUsd: 0 };
   try {
     const problems = preflight();
@@ -246,9 +245,9 @@ async function main() {
         digest.wrote.push({ day, title: decision.title, published: true, version: r.version });
         ledger({ event: "published", day, title: decision.title, version: r.version });
       }
-    } finally { rds.close?.(); }
+    } finally { await rds.close?.(); }
     fs.writeFileSync(stateFile, JSON.stringify(state, null, 1), "utf8");
-    return digest.failed.length && !digest.wrote.length ? 1 : 0;
+    return digest.failed.length ? 1 : 0;
   } finally {
     writeDigest(digest);
     try { fs.rmSync(lock); } catch {}
@@ -259,11 +258,11 @@ const READY_MONTH_LOOKBACK = 3; // 月初三天内也看上个月：上个月最
 
 function installToProduction(month, file) {
   const bash = process.env.NIANLIFE_BASH ?? "C:/Program Files/Git/bin/bash.exe";
-  const r = spawnSync(bash, [path.join(REPO_V2, "scripts/deploy-ecs-public.sh"), "content-install", month, file], {
+  const r = spawnSync(bash, [path.join(REPO_V2, "scripts/deploy-ecs-public.sh"), "content-install", month, file, productionRevision(month)], {
     encoding: "utf8", env: { ...process.env, ECS_SSH: ECS.ssh, ECS_KEY: ECS.key, ECS_PUBLIC_IP: "47.99.243.155" },
   });
   const m = (r.stdout ?? "").match(/CONTENT_VERSION=(\S+)/);
-  if (r.status === 0 && m) return { ok: true, version: m[1] };
+  if (r.status === 0 && m) { rememberProductionRevision(month, file); return { ok: true, version: m[1] }; }
   return { ok: false, error: `${(r.stderr || r.stdout || "").slice(-300)}` };
 }
 

@@ -18,6 +18,7 @@ export type Place = {
 export type TripKind = "birthplace" | "hometown" | "travel" | "daytrip";
 export type Trip = {
   id: string; title: string; kind: TripKind; from: string; to: string;
+  recordOnly?: boolean;
   placeIds: string[]; coverDay?: string; coverMediaId?: string; summary: string; evidence: string[];
 };
 
@@ -218,4 +219,9 @@ export function leadLine(trips: readonly Trip[], birthDay: string | undefined, t
   const [y, m] = ymd(latest.from);
   const [ty] = ymd(today);
   return `${head}最近一次是 ${y === ty ? "" : `${y} 年 `}${m} 月的${latest.title}。`;
+}
+
+/** A dated travel record does not claim that the family returned that day. */
+export function tripRange(trip: Trip): string {
+  return `${formatRange(trip.from, trip.to)}${trip.recordOnly ? " · 出行记录" : ""}`;
 }

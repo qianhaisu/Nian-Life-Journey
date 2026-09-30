@@ -687,3 +687,10 @@
 .weekly-kind .kind-cross { width: 13px; height: 13px; fill: none; stroke: #E5484D; stroke-width: 5.4; stroke-linecap: round; }
 .weekly-health-login { margin: 8px 0 0; font-size: 14px; color: var(--home-ink, var(--color-text)); }
 .weekly-health-login a { color: var(--home-accent); }
+
+.memory-scene-reading { position: absolute; bottom: .8rem; inset-inline: .8rem; z-index: 3; margin: 0; padding: .6rem .8rem; background: rgb(0 0 0 / .65); color: white; font-size: .8rem; border-radius: .3rem; }
+.memory-scene-reading a { display: block; color: white; text-underline-offset: .2em; padding-top: .3rem; }
+.weekly-unconfirmed { margin-block: 1.5rem; }
+
+.memory-player-slot:last-child .memory-scene-reading { bottom: calc(112px + env(safe-area-inset-bottom)); }
+.memory-scene-title { display: block; margin-bottom: .3rem; font-size: .95rem; }

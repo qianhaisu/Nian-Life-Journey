@@ -396,11 +396,17 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
                   priority={i === 0}
                   unoptimized
                 /> : null}
+                {i === index && entry.day ? <p className="memory-scene-reading">
+                  {entry.caption ? <span className="memory-scene-title">{entry.caption}</span> : null}
+                  <time dateTime={entry.day}>{entry.dateLabel}</time>
+                  {entry.ageLabel ? <span> · {entry.ageLabel}</span> : null}
+                  {entry.href ? <a href={entry.href}>{entry.linkLabel} ↗</a> : null}
+                </p> : null}
               </div>
             ))}
           </div>
         ))}
-        {caption ? <p className="memory-player-caption">{caption}</p> : null}
+        {caption && !scene?.items.some((item) => item.day) ? <p className="memory-player-caption">{caption}</p> : null}
       </div>
       {/* 底部进度条已去掉（Teddy 2026-09-17 第 3 条：「播放时底部也不要显示进度条」，
           参照的是 iPhone 相册回忆——那里播放时也没有这一排。换到第几张仍然读屏可读，

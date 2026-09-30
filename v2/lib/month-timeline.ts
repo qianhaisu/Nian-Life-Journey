@@ -1,3 +1,4 @@
+import { ageOn } from "./time-signature";
 import { detectMilestone, emphasisWithMilestone, type Milestone } from "./milestones";
 import type { FamilyArchive } from "@/lib/family-archive";
 import { findMonth, toMediaRef, type MediaRef } from "@/lib/memory-chapters";
@@ -33,9 +34,11 @@ export type TimelineDay = {
   paragraphs: string[];
   /** Published memories folded into this day that the content file had not already written. */
   stories: TimelineStory[];
+  eventIds?: string[];
   photos: MediaRef[];
   href: string;
   lead: boolean;
+  emphasis?: "lead" | "quiet";
   /** 文字里写明了的里程碑（lib/milestones.ts）：月页上抬成领头日并加一个小标记。 */
   milestone: Milestone | null;
 };
@@ -96,10 +99,10 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
   const chapter = findMonth(archive.chapters, month) ?? (content?.days.length ? contentOnlyChapter(month, archive.birthDay) : null);
   if (!chapter || !content) return null;
 
-  const { media, eventIdentities, privilege, traceEvents, birthDay } = archive;
+  const { media, privilege, traceEvents, birthDay } = archive;
   const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay);
   const available = new Map(media.map((item) => [item.id, item]));
-  const eventIds = new Set(eventIdentities.map((item) => item.id));
+
 
   const days = new Map<string, TimelineDay>();
   for (const entry of content.days) {
@@ -107,18 +110,18 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
     const photos = resolveMonthContentMedia(entry.expandedMediaIds, available, privilege.excluded)
       .map((item) => toMediaRef(item, entry.title ?? undefined));
     if (!entry.title && entry.paragraphs.length === 0 && photos.length === 0) continue;
-    const eventId = entry.eventId ?? null;
     days.set(entry.day, {
       day: entry.day,
       dateLabel: dateLabelOf(entry.day),
-      ageLabel: entry.ageLabel,
+      ageLabel: ageOn(birthDay, entry.day) ?? entry.ageLabel,
       title: entry.title,
       paragraphs: entry.paragraphs,
       stories: [],
+      eventIds: [...new Set([...(entry.eventIds ?? []), ...(entry.eventId ? [entry.eventId] : [])])],
       photos,
-      // A day that kept one original event keeps that URL; every other day has its own page.
-      href: eventId && eventIds.has(eventId) ? `/events/${eventId}` : `/memory/${year}/${monthSegment}/${entry.day.slice(8, 10)}`,
-      lead: false, milestone: null,
+      // All entrances share the day address; old event URLs continue to resolve to this day.
+      href: `/memory/${year}/${monthSegment}/${entry.day.slice(8, 10)}`,
+      lead: false, emphasis: entry.emphasis, milestone: null,
     });
   }
   const contentDays = days.size;
@@ -137,7 +140,7 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
       target = {
         day: moment.day, dateLabel: dateLabelOf(moment.day), ageLabel: moment.ageLabel,
         title: memory.title, paragraphs: memory.excerpt ? [memory.excerpt] : [], stories: [], photos: [],
-        href: `/events/${memory.id}`, lead: false, milestone: null,
+        href: `/memory/${year}/${monthSegment}/${moment.day.slice(8, 10)}`, eventIds: [], lead: false, milestone: null,
       };
       days.set(moment.day, target);
       daysFromStoriesOnly += 1;
@@ -148,6 +151,7 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
       const paragraphs = memory.excerpt && !said.includes(norm(memory.excerpt)) ? [memory.excerpt] : [];
       if (title || paragraphs.length) target.stories.push({ id: memory.id, title, paragraphs, href: `/events/${memory.id}` });
     }
+    target.eventIds = [...new Set([...(target.eventIds ?? []), memory.id])];
     const have = new Set(target.photos.map((item) => item.id));
     for (const item of storyMedia) if (!have.has(item.id)) { target.photos.push(item); have.add(item.id); }
     merged.push(memory.id);

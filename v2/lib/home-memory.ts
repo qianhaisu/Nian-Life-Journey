@@ -107,6 +107,11 @@ export type HomeMemorySlide = {
   media: MediaRef;
   /** 只可能是已发布记忆的标题原文，且只有 day 主题有——跨天主题没有逐张可依据的文字，就不写。 */
   caption?: string;
+  day?: string;
+  dateLabel?: string;
+  ageLabel?: string;
+  href?: string;
+  linkLabel?: string;
 };
 
 export type HomeMemory = {

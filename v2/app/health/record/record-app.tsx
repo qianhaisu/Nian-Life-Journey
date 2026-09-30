@@ -1,5 +1,5 @@
 "use client";
-// 爸妈手记 / 就医 / 已记录（HEALTH-03 r2）。所有数据来自 /api/health-record。没有健康登录：“妈妈 / 爸爸”只是录入人选择（随写入请求带上），不是经过验证的账号。
+// 爸妈手记 / 就医 / 爸妈补录（HEALTH-03 r2）。所有数据来自 /api/health-record。没有健康登录：“妈妈 / 爸爸”只是录入人选择（随写入请求带上），不是经过验证的账号。
 // 未提交的草稿只留在内存；保存只有在服务端持久提交成功后才提示“已保存”，失败保留全部输入。
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryEntry, RecordView, Symptoms } from "@/lib/health/record/service";
@@ -126,7 +126,7 @@ function Workspace({ label, onLost: lost, onLogout }: { label: string; onLost: (
         <div hidden={tab !== "visit"}><VisitForm onLost={lost} say={say} onSaved={() => setListVersion((v) => v + 1)} onOpen={(id) => { setTab("hist"); setOpenId(id); }} /></div>
         <div hidden={tab !== "hist"}><History version={listVersion} openId={openId} setOpenId={setOpenId} onLost={lost} say={say} onChanged={() => setListVersion((v) => v + 1)} /></div>
       </main>
-      <nav className="tabs" aria-label="主要功能"><div>{([["note", "✏️", "爸妈手记"], ["visit", "🏥", "就医"], ["hist", "🗂️", "已记录"]] as const).map(([k, ic, l]) => (
+      <nav className="tabs" aria-label="主要功能"><div>{([["note", "✏️", "爸妈手记"], ["visit", "🏥", "就医"], ["hist", "🗂️", "爸妈补录"]] as const).map(([k, ic, l]) => (
         <button key={k} data-tab={k} aria-current={tab === k ? "page" : undefined} onClick={() => { setTab(k); setToast(""); }}><span className="ic" aria-hidden="true">{ic}</span>{l}</button>))}</div></nav>
     </div>
   );
@@ -324,7 +324,7 @@ function VisitForm({ onLost, say, onSaved, onOpen }: Props) {
   );
 }
 
-/* ---------------- 已记录 ---------------- */
+/* ---------------- 爸妈补录 ---------------- */
 function History({ version, openId, setOpenId, onLost, say, onChanged }: { version: number; openId: string | null; setOpenId: (id: string | null) => void; onLost: () => void; say: (m: string) => void; onChanged: () => void }) {
   const [items, setItems] = useState<RecordView[]>([]); const [cursor, setCursor] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
@@ -337,7 +337,7 @@ function History({ version, openId, setOpenId, onLost, say, onChanged }: { versi
   useEffect(() => { setState("loading"); load(null); }, [version, load]);
   return (
     <>
-      <h2>已记录</h2><p className="hint">按记录时间排列。点开可以看历史，也可以更正；旧版本录入的记录完整保留，只能查看。</p>
+      <h2>爸妈补录</h2><p className="hint">这里显示爸妈在此补录的手记和就医记录，按记录时间排列。点开可以看历史，也可以更正；旧版本录入的记录完整保留，只能查看。</p>
       {state === "error" ? <div className="err" role="alert">没能读取记录，请稍后重试。 <button className="btn ghost" onClick={() => load(null)}>重试</button></div> : null}
       {state === "loading" ? <p className="hint">读取中…</p> : null}
       {state === "ok" && !items.length ? <div className="empty"><div className="big">🗂️</div><p>还没有记录。</p></div> : null}

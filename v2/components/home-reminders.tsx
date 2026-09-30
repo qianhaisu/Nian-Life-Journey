@@ -49,6 +49,9 @@ export type HomeReminderSource = {
 
 export type HomeReminder = {
   id: string;
+  aliasIds?: string[];
+  whenKey?: string;
+  pendingConfirmation?: boolean;
   title: string;
   whenText: string;
   whenDay?: string;
@@ -112,7 +115,7 @@ function DetailDisclosure({ reminder }: { reminder: HomeReminder }) {
     <div>
       {reminder.note ? <p className="weekly-note">{reminder.note}</p> : null}
       {reminder.sources.length > 0 ? <ul className="weekly-sources">
-        {reminder.sources.map((source) => <SourceRow key={`${reminder.id}-${source.kindLabel}-${source.recordedOn}`} source={source} />)}
+        {reminder.sources.map((source, index) => <SourceRow key={`${reminder.id}-${index}`} source={source} />)}
       </ul> : null}
     </div>
   </details>;
@@ -248,16 +251,19 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
   function toggle(id: string) {
     setChecked((was) => {
       const next = new Set(was);
-      const nowChecked = !next.has(id);
-      if (nowChecked) next.add(id); else next.delete(id);
-      myToggles.current.set(id, nowChecked);
+      const ids = [...reminders, ...more].find((item) => item.id === id)?.aliasIds ?? [id];
+      const nowChecked = !ids.some((alias) => next.has(alias));
+      for (const alias of ids) {
+        if (nowChecked) next.add(alias); else next.delete(alias);
+        myToggles.current.set(alias, nowChecked);
+      }
       writeChecked(storageScope, next);
       // 先画后传：勾的反馈必须是即时的，网络慢不该让复选框卡住。传失败也不回滚——本机这份还在，
       // 下次打开会作为待合并的勾再交一次。
       void fetch("/api/upcoming/checks", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, checked: nowChecked, title: titleOf(id) }),
+        body: JSON.stringify({ ids, checked: nowChecked, title: titleOf(id) }),
         keepalive: true,
       }).catch(() => {});
       return next;
@@ -271,20 +277,24 @@ export function HomeReminders({ reminders, more = [], habitIds = [], storageScop
 
   // Open tasks stay visible; completed tasks keep their original feed order below them.
   const all = [...reminders, ...more];
-  const pending = all.filter((item) => item.actionable && !checked.has(item.id));
-  const completed = all.filter((item) => !item.actionable || checked.has(item.id));
+  const isChecked = (item: HomeReminder) => (item.aliasIds ?? [item.id]).some((id) => checked.has(id));
+  const unfinished = all.filter((item) => item.actionable && !isChecked(item));
+  const pending = unfinished.filter((item) => !item.pendingConfirmation);
+  const tentative = unfinished.filter((item) => item.pendingConfirmation);
+  const completed = all.filter((item) => !item.actionable || isChecked(item));
   const habits = new Set(habitIds);
-  const reportable = [...pending, ...(completedOpen ? completed : [])]
+  const reportable = [...pending, ...tentative, ...(completedOpen ? completed : [])]
     .map((item) => item.id).filter((id) => habits.has(id));
   const rows = (items: HomeReminder[]) => <ul className="weekly-list">
     {items.map((reminder) => <Row key={reminder.id} reminder={reminder}
-      checked={checked.has(reminder.id)} onToggle={toggle}
+      checked={isChecked(reminder)} onToggle={toggle}
       habitId={habits.has(reminder.id) ? reminder.id : undefined} />)}
   </ul>;
 
   return <section className="weekly" aria-labelledby="weekly-heading">
     <h2 className="weekly-heading" id="weekly-heading">每周提醒</h2>
     {pending.length > 0 ? rows(pending) : null}
+    {tentative.length > 0 ? <div className="weekly-unconfirmed"><h3 className="section-mark">待确认</h3>{rows(tentative)}</div> : null}
     {completed.length > 0 ? <details className="weekly-more weekly-completed"
       open={completedOpen} onToggle={(event) => setCompletedOpen(event.currentTarget.open)}>
       <summary>已完成</summary>

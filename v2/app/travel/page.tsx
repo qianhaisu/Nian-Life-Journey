@@ -5,7 +5,7 @@ import { renderOnDemand } from "@/lib/render-on-demand";
 import { ageOn, formatMonth } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
 import chinaGeo from "@/lib/travel/geo/china.json";
-import { KIND_LABEL, PLACES, TRIPS, formatRange, leadLine, stampKeyOf, unitOf, whenAge, type Unit } from "@/lib/travel/model";
+import { KIND_LABEL, PLACES, tripRange, leadLine, stampKeyOf, unitOf, whenAge, type Unit } from "@/lib/travel/model";
 import { readTravelIndex } from "@/lib/travel/reading";
 import "./travel.css";
 
@@ -17,15 +17,15 @@ export const metadata: Metadata = { title: "旅行" };
 export default async function TravelPage() {
   // 与 /memory 同理：不在构建时用 mock 数据预渲染（lib/render-on-demand.ts）。
   await renderOnDemand();
-  const { cards, birthDay } = await readTravelIndex();
+  const { cards, birthDay, trips: publishedTrips } = await readTravelIndex();
   const today = productToday();
 
   // 地图上的格子：中国按地级市、美国按城市。颜色按第一次去的先后轮换；家那一格用固定的绿。
   // 家那一格（杭州市域）也放进来：千岛湖、桐庐的旅程要能在地图上点到，只是它不算进「去过几个城市」。
-  const firstTrip = new Map<string, (typeof TRIPS)[number]>();
+  const firstTrip = new Map<string, (typeof publishedTrips)[number]>();
   const visits = new Map<string, number>();
   const unitMeta = new Map<string, Unit>();
-  for (const trip of [...TRIPS].sort((a, b) => a.from.localeCompare(b.from))) {
+  for (const trip of [...publishedTrips].sort((a, b) => a.from.localeCompare(b.from))) {
     const keys = new Set<string>();
     for (const id of trip.placeIds) { const u = unitOf(id); if (u) { keys.add(u.key); unitMeta.set(u.key, u); } }
     for (const key of keys) { if (!firstTrip.has(key)) firstTrip.set(key, trip); visits.set(key, (visits.get(key) ?? 0) + 1); }
@@ -48,7 +48,7 @@ export default async function TravelPage() {
   for (const u of units) { const k = stampKeyOf(u.key); stampUnits.set(k, [...(stampUnits.get(k) ?? []), u.key]); }
   const stamps: (AtlasStamp & { firstDay: string })[] = [...stampUnits.entries()].map(([key, keys]) => {
     const head = unitByKey.get(key) ?? unitByKey.get(keys[0])!;
-    const visited = TRIPS.filter((t) => t.placeIds.some((id) => keys.includes(unitOf(id)?.key ?? "")));
+    const visited = publishedTrips.filter((t) => t.placeIds.some((id) => keys.includes(unitOf(id)?.key ?? "")));
     const first = [...visited].sort((x, y) => x.from.localeCompare(y.from))[0];
     const age = first ? ageOn(birthDay, first.from) : undefined;
     return {
@@ -73,12 +73,12 @@ export default async function TravelPage() {
   const places: AtlasPlace[] = PLACES.filter((p) => p.level === "city" || p.level === "spot")
     .map((p) => ({ id: p.id, name: p.name, unitKey: unitOf(p.id)?.key, home: p.home }));
   const cardById = new Map(cards.map((c) => [c.trip.id, c]));
-  const trips: AtlasTrip[] = TRIPS.map((t) => {
+  const trips: AtlasTrip[] = publishedTrips.map((t) => {
     const card = cardById.get(t.id);
     const tripUnits = t.placeIds.map(unitOf).filter((u): u is Unit => !!u);
     return {
       id: t.id, title: t.title, kind: t.kind, tag: KIND_LABEL[t.kind], from: t.from,
-      rangeLabel: formatRange(t.from, t.to), ageText: whenAge(card?.ageLabel), cover: card?.cover, scenery: card?.scenery,
+      rangeLabel: tripRange(t), ageText: whenAge(card?.ageLabel), cover: card?.cover, scenery: card?.scenery,
       unitKeys: [...new Set(tripUnits.map((u) => u.key))],
       provinces: [...new Set(tripUnits.map((u) => u.province).filter((x): x is string => !!x))],
     };
@@ -88,7 +88,7 @@ export default async function TravelPage() {
     <div className="travel-page">
       <header className="reading-wrap travel-head">
         <h1 className="serif">旅行</h1>
-        <p className="travel-lead">{leadLine(TRIPS, birthDay, today)}</p>
+        <p className="travel-lead">{leadLine(publishedTrips, birthDay, today)}</p>
       </header>
       <div className="reading-wrap">
         <TravelAtlas trips={trips} units={units} stamps={stamps} places={places} provinceColors={provinceColors} provinceNames={provinceNames} homeUnitKey={homeUnit?.key} />

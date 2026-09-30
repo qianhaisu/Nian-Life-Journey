@@ -83,7 +83,7 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
   const panel = useMemo(() => {
     const oldest = (list: AtlasTrip[]) => [...list].sort((x, y) => x.from.localeCompare(y.from));
     const newest = (list: AtlasTrip[]) => [...list].sort((x, y) => y.from.localeCompare(x.from));
-    const firstLine = (x: { firstMonth: string; firstAge?: string }) => "第一次来：" + x.firstMonth + (x.firstAge ? " · " + x.firstAge : "");
+    const firstLine = (x: { firstMonth: string; firstAge?: string }) => "最早收录：" + x.firstMonth + (x.firstAge ? " · " + x.firstAge : "");
     if (sel.kind === "unit") {
       const unit = unitByKey.get(sel.key);
       return { title: unit?.name ?? "", sub: unit ? firstLine(unit) : "", trips: oldest(trips.filter((t) => t.unitKeys.includes(sel.key))) };

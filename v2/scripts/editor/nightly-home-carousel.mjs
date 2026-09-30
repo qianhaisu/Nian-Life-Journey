@@ -39,4 +39,14 @@ fs.copyFileSync(cacheFile,backup);
 const candidate=path.join(workDir,'cache-next.json');
 console.log(writeCarouselCache({workDir,previousFile:backup,outFile:candidate,overrideFile:path.join(workDir,'overrides.json')}));
 fs.renameSync(candidate,cacheFile);
-console.log('Updated offline release cache; production changes only after the normal gated release.');
+if (process.env.NIANLIFE_CAROUSEL_PUBLISH === '1') {
+ const bash=process.env.NIANLIFE_BASH??"C:/Program Files/Git/bin/bash.exe";
+ const deployed=spawnSync(bash,['scripts/deploy-ecs-public.sh','carousel-install',cacheFile],{
+  encoding:'utf8',env:{...process.env,ECS_SSH:process.env.ECS_SSH??'ecs-user@47.99.243.155',ECS_KEY:process.env.ECS_KEY??'C:/Users/teddy/Downloads/nianlife-prod-ecs.pem',ECS_PUBLIC_IP:'47.99.243.155'}
+ });
+ if(deployed.status!==0 || !/CAROUSEL_VERSION=photo-topics\.\S+/.test(deployed.stdout??'')){
+  console.error('Carousel publication failed; offline cache retained for retry.');process.exit(deployed.status||1);
+ }
+ console.log(deployed.stdout);
+ console.log('Carousel cache installed; pages pick it up on the next ISR render.');
+}else console.log('Updated offline cache only (NIANLIFE_CAROUSEL_PUBLISH is not 1).');

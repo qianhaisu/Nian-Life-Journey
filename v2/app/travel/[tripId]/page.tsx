@@ -4,13 +4,13 @@ import { notFound } from "next/navigation";
 import { DayPhotos } from "@/components/day-photos";
 import { Photo } from "@/components/photo";
 import { renderOnDemand } from "@/lib/render-on-demand";
-import { KIND_LABEL, whenAge, formatRange, placeNames, tripById } from "@/lib/travel/model";
+import { KIND_LABEL, whenAge, tripRange, placeNames } from "@/lib/travel/model";
 import { readTrip } from "@/lib/travel/reading";
 import "../travel.css";
 
 export async function generateMetadata({ params }: { params: Promise<{ tripId: string }> }): Promise<Metadata> {
   const { tripId } = await params;
-  const trip = tripById(tripId);
+  const trip = (await readTrip(tripId))?.trip;
   return { title: trip ? `${trip.title} · 旅行` : "旅行" };
 }
 
@@ -31,7 +31,7 @@ export default async function TripPage({ params }: { params: Promise<{ tripId: s
         <Link className="back-link" href="/travel">← 旅行</Link>
         <p className="travel-when">
           {tag ? <span className="travel-tag">{tag}</span> : null}
-          <time dateTime={trip.from}>{formatRange(trip.from, trip.to)}</time>
+          <time dateTime={trip.from}>{tripRange(trip)}</time>
           <span className="travel-age">{whenAge(ageLabel)}</span>
         </p>
         <h1 className="serif">{trip.title}</h1>

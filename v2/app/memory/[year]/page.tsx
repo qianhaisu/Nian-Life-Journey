@@ -9,7 +9,8 @@ import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
 import { buildMemoryIndex, buildYearView } from "@/lib/memory-index";
 import { loadMonthContent } from "@/lib/month-content";
-import { monthAgeQualifier } from "@/lib/time-signature";
+import { buildMonthTimeline } from "@/lib/month-timeline";
+import { monthAgeLine } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
 
 export const revalidate = 300;
@@ -38,7 +39,8 @@ export async function generateMetadata({ params }: { params: Promise<{ year: str
 export default async function YearPage({ params }: { params: Promise<{ year: string }> }) {
   const { year } = await params;
   if (!/^\d{4}$/.test(year)) notFound();
-  const { chapters, privilege, birthDay } = await loadFamilyArchiveForIsr();
+  const archive = await loadFamilyArchiveForIsr();
+  const { chapters, privilege, birthDay } = archive;
   const chapter = chapters.find((item) => item.year === year);
   if (!chapter) notFound();
 
@@ -53,6 +55,8 @@ export default async function YearPage({ params }: { params: Promise<{ year: str
   const view = buildYearView(chapter, undefined, privilege, pinnedCovers, birthDay);
   const { nav } = buildMemoryIndex(chapters);
   const today = productToday();
+  const timelines = new Map(await Promise.all(chapter.months.map(async (month) =>
+    [month.month, await buildMonthTimeline(archive, year, month.month.slice(5, 7))] as const)));
 
   return <div className="year-page reading-wrap">
     <header className="chapter-masthead">
@@ -66,12 +70,14 @@ export default async function YearPage({ params }: { params: Promise<{ year: str
       <header className="month-anchor">
         <h2 id={`month-${month.chapter.month}`} className="serif"><Link href={month.href} prefetch={false}>{month.chapter.shortLabel}</Link></h2>
         {/* B1：当前月读「现在」，历史月份读「当时」。 */}
-        {month.chapter.ageLabel ? <p>{monthAgeQualifier(month.chapter.month, today)} {month.chapter.ageLabel}</p> : null}
+        {month.chapter.ageLabel ? <p>{monthAgeLine(month.chapter.month, today, month.chapter.ageLabel)}</p> : null}
       </header>
       {month.preview.length > 0 ? <PhotoStrip photos={month.preview} /> : null}
-      {month.titles.length > 0 ? <ul className="memory-lines">{month.titles.map((memory) => <EditorialMemory memory={memory} size="line" key={memory.id} />)}</ul> : null}
+      {timelines.get(month.chapter.month) ? <ul className="memory-lines">{[...timelines.get(month.chapter.month)!.byDay.values()]
+        .sort((a, b) => Number(Boolean(b.milestone) || b.emphasis === "lead") - Number(Boolean(a.milestone) || a.emphasis === "lead") || Number(b.lead) - Number(a.lead) || a.day.localeCompare(b.day))
+        .slice(0, 3).map((day) => <li className={`memory-line memory-weight-${day.milestone || day.emphasis === "lead" ? "highlight" : "memory"}`} key={day.day}><Link href={day.href} prefetch={false}><time dateTime={day.day}>{day.dateLabel}</time><span className="serif">{day.title ?? "这一天"}</span></Link></li>)}</ul> : month.titles.length > 0 ? <ul className="memory-lines">{month.titles.map((memory) => <EditorialMemory memory={memory} size="line" key={memory.id} />)}</ul> : null}
       {/* One way into the month, worded without the archive's counts (原则三, 2026-09-13). */}
-      <p className="chapter-meta"><Link className="text-link" href={month.href} prefetch={false}>{month.hiddenMemoryCount > 0 ? "翻看整个月的其他记忆" : "翻看整个月"}</Link></p>
+      <p className="chapter-meta"><Link className="text-link" href={month.href} prefetch={false}>翻看整个月</Link></p>
     </section>)}
     <ArchiveNav nav={nav} current={year} />
   </div>;

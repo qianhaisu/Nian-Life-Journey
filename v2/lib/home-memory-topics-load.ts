@@ -30,6 +30,13 @@ export async function loadTopicCache(
       const { readFile } = await import("node:fs/promises");
       return sane(JSON.parse(await readFile(file, "utf8")));
     }
+    // Versioned nightly cache shares the existing read-only content mount. A missing file
+    // keeps the initial release usable; a corrupt installed file fails closed.
+    if (env.MONTH_CONTENT_DIR) {
+      const { readFile } = await import("node:fs/promises");
+      try { return sane(JSON.parse(await readFile(`${env.MONTH_CONTENT_DIR}/photo-topics.json`, "utf8"))); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined; }
+    }
     // 没设路径就读随仓库发布的那一份：走打包器解析，生产上不依赖任何外部路径或环境变量。
     const mod = await import("@/data/photo-topics.json");
     return sane((mod as { default?: unknown }).default ?? mod);

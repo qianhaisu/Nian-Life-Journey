@@ -1,4 +1,4 @@
-import { mergeUpcomingChecks, readUpcomingChecks, setUpcomingCheck } from "@/lib/db/upcoming-checks-store";
+import { mergeUpcomingChecks, readUpcomingChecks, setUpcomingChecks, setUpcomingCheck } from "@/lib/db/upcoming-checks-store";
 
 // 首页「每周提醒」的勾选。
 //
@@ -24,7 +24,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as
-    | { id?: unknown; checked?: unknown; title?: unknown; merge?: unknown }
+    | { ids?: unknown; id?: unknown; checked?: unknown; title?: unknown; merge?: unknown }
     | null;
   if (!body) return Response.json({ error: "请求体不是 JSON" }, { status: 400 });
 
@@ -33,6 +33,12 @@ export async function POST(request: Request) {
       const result = await mergeUpcomingChecks(body.merge.filter((id): id is string => typeof id === "string"));
       const ids = await readUpcomingChecks();
       return Response.json({ ids: [...ids], added: result.added }, { headers: { "cache-control": "no-store" } });
+    }
+    if (Array.isArray(body.ids)) {
+      if (!body.ids.length || body.ids.length > 200 || body.ids.some((id) => typeof id !== "string" || !id.trim()) || typeof body.checked !== "boolean")
+        return Response.json({ error: "invalid check group" }, { status: 400 });
+      await setUpcomingChecks(body.ids as string[], body.checked, { title: typeof body.title === "string" ? body.title.slice(0, 200) : undefined });
+      return Response.json({ ids: body.ids, checked: body.checked }, { headers: { "cache-control": "no-store" } });
     }
     if (typeof body.id !== "string" || !body.id.trim() || typeof body.checked !== "boolean") {
       return Response.json({ error: "需要 { id: string, checked: boolean }" }, { status: 400 });

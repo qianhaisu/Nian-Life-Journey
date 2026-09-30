@@ -41,6 +41,7 @@ export default async function DayPage({ params }: { params: Promise<{ year: stri
       deliverableIds={reading.sourceDeliverable}
       monthHref={reading.monthHref}
       monthLabel={reading.monthLabel}
+        stories={reading.stories} previous={reading.previous} next={reading.next}
     />
   );
 }

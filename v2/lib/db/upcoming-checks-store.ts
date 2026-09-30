@@ -77,3 +77,18 @@ export async function mergeUpcomingChecks(
   }
   return { added };
 }
+
+/** Apply a deduplicated reminder's original ids in one database statement. */
+export async function setUpcomingChecks(itemIds: readonly string[], checked: boolean,
+  options: UpcomingCheckOptions & { title?: string } = {}): Promise<void> {
+  const ids = [...new Set(itemIds.filter((id) => id.trim()))];
+  if (!ids.length || ids.length > 200) throw new Error("invalid check group");
+  const db = options.db ?? getDb();
+  const profileId = options.profileId ?? CANONICAL_PROFILE_ID;
+  if (checked) {
+    await db.insert(t.upcomingChecks).values(ids.map((itemId) => ({ profileId, itemId, titleAtCheck: options.title ?? null })))
+      .onConflictDoNothing({ target: [t.upcomingChecks.profileId, t.upcomingChecks.itemId] });
+  } else {
+    await db.delete(t.upcomingChecks).where(and(eq(t.upcomingChecks.profileId, profileId), inArray(t.upcomingChecks.itemId, ids)));
+  }
+}

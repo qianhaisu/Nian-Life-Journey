@@ -3,7 +3,7 @@ import { loadHealthRecordConfig } from "@/lib/health/record/config";
 import { RecordApp } from "./record-app";
 import "./record.css";
 
-// HEALTH-03 家长健康记录：爸妈手记 / 就医 / 已记录。没有健康登录；“妈妈 / 爸爸”只是录入人选择。不读取任何全站存储。
+// HEALTH-03 家长健康记录：爸妈手记 / 就医 / 爸妈补录。没有健康登录；“妈妈 / 爸爸”只是录入人选择。不读取任何全站存储。
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "健康记录", robots: { index: false, follow: false } };
 
