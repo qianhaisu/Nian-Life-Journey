@@ -66,6 +66,33 @@ test("a midnight UTC slide opens its Shanghai day; unedited photos fall back to 
     assert.equal(enriched.slides[1].href, undefined);
   });
 });
+test("a stale visual description cannot restore withdrawn pictures or their derived text", async () => {
+  const archive = { chapters: [], media: [], events: [], eventIdentities: [], traceEvents: [], birthDay: "2025-01-03",
+    privilege: { confirmed: new Set(), trusted: new Set(), excluded: new Set(["withdrawn-skin"]) } };
+  await withContent(content([
+    day("2026-09-01", "Description of the withdrawn image", { kind: "visual-description", expandedMediaIds: ["withdrawn-skin"], firstScreenMediaIds: ["withdrawn-skin"] }),
+    day("2026-09-02", "Independent story remains", { expandedMediaIds: ["withdrawn-skin"], firstScreenMediaIds: ["withdrawn-skin"] }),
+    day("2026-09-03", "Temporarily unavailable derivative", { kind: "visual-description", expandedMediaIds: ["not-ready"], firstScreenMediaIds: ["not-ready"] }),
+  ]), async () => {
+    const timeline = await buildMonthTimeline(archive, "2026", "09");
+    assert.ok(!timeline.byDay.has("2026-09-01"));
+    assert.ok(timeline.byDay.has("2026-09-02"));
+    assert.ok(timeline.byDay.has("2026-09-03"));
+    assert.deepEqual(timeline.byDay.get("2026-09-02").photos, []);
+  });
+});
+test("merging an old approved story binding cannot override a later subject withdrawal", async () => {
+  const photo = { id: "withdrawn-skin", profileId: "p", visibility: "family", type: "photo", takenAt: "2026-09-02", src: "/api/media/withdrawn-skin", width: 1200, height: 1200, sourceIds: ["source"] };
+  const event = { id: "old-story", profileId: "p", title: "Independent story", story: "Original text stays.", occurredAt: "2026-09-02", people: [], tags: [], contentTypes: ["family"], mediaIds: [photo.id], sourceIds: ["source"], growthRecordIds: [], careRecordIds: [], eventType: "moment", memoryWeight: "memory", scopes: ["family"], visibility: "family", keptInYearbook: false };
+  const archive = { chapters: buildChapters({ events: [event], traces: [], media: [photo], birthDay: "2025-01-03", photoConfirmations: new Set([`${event.id}|${photo.id}`]) }), media: [photo], events: [event], eventIdentities: [event], traceEvents: [], birthDay: "2025-01-03", privilege: { confirmed: new Set(), trusted: new Set([photo.id]), excluded: new Set([photo.id]) } };
+  assert.deepEqual(archive.chapters[0].months[0].memories[0].storyPhotos.map((item) => item.id), [photo.id]);
+  await withContent(content([day("2026-09-03", "Another day")]), async () => {
+    const timeline = await buildMonthTimeline(archive, "2026", "09");
+    assert.ok(timeline.byDay.has("2026-09-02"));
+    assert.deepEqual(timeline.byDay.get("2026-09-02").photos, []);
+    assert.equal(timeline.byDay.get("2026-09-02").title, event.title);
+  });
+});
 test("mounted nightly cache overrides initial release; corrupt publication fails closed", async () => {
   await withContent(content([day("2026-09-02", "日子")]), async (dir) => {
     const cache = { model: "reviewed-model", promptVersion: "v4", topics: { a: { topic: "其他" } } };
