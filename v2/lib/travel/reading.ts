@@ -3,7 +3,7 @@
 // 读两样东西，都是页面已经在用、有缓存的读取：
 //   - loadFamilyArchiveOnDemand()：和 /memory、/mom-reports 共用同一份 300 s 记忆，不另起一次整库读取
 //     （它的使用边界见 lib/family-archive.ts；getStore()/getOrganizerStore() 这里一个都不碰）；
-//   - loadMonthContent(month)：月内容文件，300 s 缓存，一条旅程最多跨两个月。
+//   - loadMonthContent(month)：月内容文件，300 s 缓存，只取这段旅程涉及的月份。
 // 照片过的门和日页一样：resolveMonthContentMedia 用可发布的媒体 + 最新的 store_only 排除。
 // 唯一的例外是风景照（Teddy 2026-09-25：「可以放部分风景照，不用全部都是张年的照片」）：lib/travel/scenery.json
 // 里 GLM 判为好看风景、没有陌生人大脸、没有截图单据和隐私的照片，在旅行页上不需要「是张年」这道门——
@@ -20,6 +20,9 @@ import { coverScore, daysOf, type CoverScore, type Trip } from "./model";
 import { syncTrips } from "./sync";
 import sceneryFile from "./scenery.json";
 import curationFile from "./curation.json";
+import { buildTripMemory } from "./memory";
+import { tripEssay, type TripEssay } from "./essay";
+import type { HomeMemory } from "@/lib/home-memory";
 
 // 旅程照片精选（scripts/editor/travel-curate.mjs）：有精选的旅程，每天的照片按它来，不再用日页首屏那一组。
 // 目前只有「从美国回家」有（Teddy 2026-09-25：「洛杉矶的照片不行，重复场景去掉一些，多放一些其他的」）。
@@ -125,9 +128,11 @@ export async function readTravelIndex(): Promise<{ cards: TripCard[]; trips: Tri
 }
 
 /**
- * 一条旅程：逐日的标题、首段、首屏照片。没有日页的日子不出现——旅程只是索引，不替日页编内容。
+ * 一条旅程：既有审核池组成精选回忆，已确认行程对应独立散文。日子保留作来源链接，不再逐日铺开。
  */
-export async function readTrip(id: string): Promise<{ trip: Trip; ageLabel?: string; cover?: MediaRef; days: TripDay[] } | null> {
+export type TripReadingData = { trip: Trip; ageLabel?: string; memory?: HomeMemory; essay: TripEssay; days: TripDay[] };
+
+export async function readTrip(id: string): Promise<TripReadingData | null> {
   const trip = syncTrips(await listEditedMonthContents()).find((item) => item.id === id);
   if (!trip) return null;
   const [archive, scores] = await Promise.all([loadFamilyArchiveOnDemand(), coverScores()]);
@@ -160,5 +165,5 @@ export async function readTrip(id: string): Promise<{ trip: Trip; ageLabel?: str
     });
   }
   const cover = pickCover(trip, months, photosOf, scores);
-  return { trip, ageLabel: ageOn(archive.birthDay, trip.from), cover, days };
+  return { trip, ageLabel: ageOn(archive.birthDay, trip.from), memory: buildTripMemory(trip, days, scores, cover), essay: tripEssay(trip), days };
 }

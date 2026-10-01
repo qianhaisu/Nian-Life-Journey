@@ -1,5 +1,5 @@
 {
-  "_comment": "张年的旅程（docs/travel-module-plan.md §2）。每条都经 Teddy 2026-09-25 确认。一条旅程只是索引：它的每一天都指回已发布的日页（/memory/YYYY/MM/DD），正文与来源由日页承担，这里只多一段综述和证据摘要。kind：birthplace 出生地 / hometown 回老家 / travel 出去玩（过夜）/ daytrip 一日短途。evidence 写给核对的人看，页面不显示。coverDay 是封面取哪一天的首屏照片。",
+  "_comment": "张年的旅程（docs/travel-module-plan.md §2）。每条都经 Teddy 2026-09-25 确认。每条旅程以日期、地点、已确认综述与证据为事实底稿；独立散文在 essays.json，精选照片由旅行读取层组装，来源日页收进详情页折叠区。kind：birthplace 出生地 / hometown 回老家 / travel 出去玩（过夜）/ daytrip 一日短途。evidence 写给核对的人看，页面不显示。coverDay 是封面取哪一天的首屏照片。",
   "schema": "nianlife.travel-trips/1",
   "trips": [
     {

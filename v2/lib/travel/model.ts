@@ -25,7 +25,7 @@ export type Trip = {
 /** 封面候选需要的那部分视觉评分（来自 data/photo-topics.json 的 carousel 字段，夜间模型写、这里只读）。 */
 export type CoverScore = {
   qualified?: boolean; childMain?: boolean; faceClear?: boolean; faceUnblocked?: boolean; motionBlur?: boolean; sensitive?: boolean; sleeping?: boolean;
-  clarity?: number; expression?: number; matches?: { outdoor?: number };
+  clarity?: number; expression?: number; matches?: { outdoor?: number }; sceneKey?: string;
 };
 
 /**
