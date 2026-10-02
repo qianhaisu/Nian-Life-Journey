@@ -1,84 +1,29 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArchiveNav } from "@/components/archive-nav";
-import { EditorialMemory } from "@/components/editorial-memory";
-import { PhotoStrip } from "@/components/media-sequence";
+import { YearBookReading } from "@/components/year-book";
 import { loadFamilyArchiveForIsr } from "@/lib/family-archive";
 import { listArchiveMonths } from "@/lib/db/repository";
 import { buildTimeArchiveEnumerationAllowed } from "@/lib/db/config";
-import { buildMemoryIndex, buildYearView } from "@/lib/memory-index";
-import { loadMonthContent } from "@/lib/month-content";
-import { buildMonthTimeline } from "@/lib/month-timeline";
-import { monthAgeLine } from "@/lib/time-signature";
-import { productToday } from "@/lib/time-truth";
+import { buildMemoryIndex } from "@/lib/memory-index";
+import { readYearBook } from "@/lib/life-reading-load";
+import "../reading.css";
 
 export const revalidate = 300;
-
-// Without this, the [year] segment has no params known at build time and Next renders it fully
-// dynamic on every request (no CDN cache) regardless of `revalidate` above. A year absent from
-// this list still works — Next falls back to generating it on first request and caching that.
-// buildTimeArchiveEnumerationAllowed() guards against enumerating the local JSON fallback store's
-// mock years into the production build when no real database is configured at build time (see its
-// doc comment in lib/db/config.ts) — an empty list here just means every year renders on demand.
 export async function generateStaticParams() {
   if (!buildTimeArchiveEnumerationAllowed()) return [];
   const months = await listArchiveMonths();
-  const years = new Set(months.map((month) => month.slice(0, 4)));
-  return [...years].map((year) => ({ year }));
+  return [...new Set(months.map(month => month.slice(0, 4)))].map(year => ({ year }));
 }
-
 export async function generateMetadata({ params }: { params: Promise<{ year: string }> }): Promise<Metadata> {
-  const { year } = await params;
-  return { title: `${year} 年` };
+  return { title: `${(await params).year} 年 · 年度人生书` };
 }
-
-// The annual chapter: the age the year covered, then every month with its photos and a few of its
-// memory titles (lib/memory-ia-policy.ts). The month chapter is where a month is read whole. The
-// counts line (N 段记忆 · N 张照片 · N 天) was removed 2026-09-13 under 原则三.
 export default async function YearPage({ params }: { params: Promise<{ year: string }> }) {
   const { year } = await params;
   if (!/^\d{4}$/.test(year)) notFound();
   const archive = await loadFamilyArchiveForIsr();
-  const { chapters, privilege, birthDay } = archive;
-  const chapter = chapters.find((item) => item.year === year);
-  if (!chapter) notFound();
-
-  // Each edited month's chosen face, read from the same content files /memory reads (cached 300s,
-  // no database read): the strip opens with the pinned cover, gated exactly as on /memory
-  // (subject-checked, not excluded, taken in that month — lib/publication-moments.ts pinnedCoverAllowed).
-  const pinnedCovers = new Map<string, string>();
-  for (const month of chapter.months) {
-    const content = await loadMonthContent(month.month);
-    if (content?.coverMediaId) pinnedCovers.set(month.month, content.coverMediaId);
-  }
-  const view = buildYearView(chapter, undefined, privilege, pinnedCovers, birthDay);
-  const { nav } = buildMemoryIndex(chapters);
-  const today = productToday();
-  const timelines = new Map(await Promise.all(chapter.months.map(async (month) =>
-    [month.month, await buildMonthTimeline(archive, year, month.month.slice(5, 7))] as const)));
-
-  return <div className="year-page reading-wrap">
-    <header className="chapter-masthead">
-      <Link className="back-link" href="/memory">← 回到记忆</Link>
-      {/* 「年度篇章」是这套系统对自己结构的称呼，不是家人会说的话（原则三）；
-          它上面就是「← 回到记忆」，下面就是大字年份，去掉不丢信息。 */}
-      <h1 className="serif">{year}</h1>
-      {chapter.ageSpan ? <p className="chapter-age">这一年，张年 {chapter.ageSpan}。</p> : null}
-    </header>
-    {view.months.map((month) => <section className="year-month" key={month.chapter.month} aria-labelledby={`month-${month.chapter.month}`}>
-      <header className="month-anchor">
-        <h2 id={`month-${month.chapter.month}`} className="serif"><Link href={month.href} prefetch={false}>{month.chapter.shortLabel}</Link></h2>
-        {/* B1：当前月读「现在」，历史月份读「当时」。 */}
-        {month.chapter.ageLabel ? <p>{monthAgeLine(month.chapter.month, today, month.chapter.ageLabel)}</p> : null}
-      </header>
-      {month.preview.length > 0 ? <PhotoStrip photos={month.preview} /> : null}
-      {timelines.get(month.chapter.month) ? <ul className="memory-lines">{[...timelines.get(month.chapter.month)!.byDay.values()]
-        .sort((a, b) => Number(Boolean(b.milestone) || b.emphasis === "lead") - Number(Boolean(a.milestone) || a.emphasis === "lead") || Number(b.lead) - Number(a.lead) || a.day.localeCompare(b.day))
-        .slice(0, 3).map((day) => <li className={`memory-line memory-weight-${day.milestone || day.emphasis === "lead" ? "highlight" : "memory"}`} key={day.day}><Link href={day.href} prefetch={false}><time dateTime={day.day}>{day.dateLabel}</time><span className="serif">{day.title ?? "这一天"}</span></Link></li>)}</ul> : month.titles.length > 0 ? <ul className="memory-lines">{month.titles.map((memory) => <EditorialMemory memory={memory} size="line" key={memory.id} />)}</ul> : null}
-      {/* One way into the month, worded without the archive's counts (原则三, 2026-09-13). */}
-      <p className="chapter-meta"><Link className="text-link" href={month.href} prefetch={false}>翻看整个月</Link></p>
-    </section>)}
-    <ArchiveNav nav={nav} current={year} />
-  </div>;
+  if (!archive.chapters.some(chapter => chapter.year === year)) notFound();
+  const book = await readYearBook(archive, year);
+  const { nav } = buildMemoryIndex(archive.chapters);
+  return <><YearBookReading book={book} /><div className="reading-wrap"><ArchiveNav nav={nav} current={year} /></div></>;
 }

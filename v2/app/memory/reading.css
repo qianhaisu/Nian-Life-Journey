@@ -1,0 +1,85 @@
+.life-reading { padding-bottom: 64px; }
+.life-reading h1, .life-reading h2, .life-reading h3 { color: var(--color-primary); font-weight: 600; line-height: 1.4; }
+.life-masthead { padding: clamp(30px, 5vw, 64px) 0 26px; }
+.life-masthead h1 { margin: 20px 0 12px; font-size: clamp(28px, 6vw, 44px); }
+.life-masthead > p { color: var(--color-secondary); margin: 0; }
+.life-heading { display: flex; gap: 14px; justify-content: space-between; align-items: center; }
+.life-heading h1 { flex: 1; }
+.reading-mode { position: relative; flex: 0 0 auto; font-size: 14px; color: var(--color-secondary); }
+.reading-mode summary { cursor: pointer; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 10px; list-style: none; border-bottom: 1px solid var(--sage); }
+.reading-mode summary::-webkit-details-marker { display: none; }
+.reading-mode nav { position: absolute; z-index: 30; right: 0; min-width: 148px; padding: 8px; background: var(--color-bg); border: 1px solid var(--color-border); box-shadow: 0 6px 18px rgb(67 62 56 / .1); }
+.reading-mode nav a { display: flex; justify-content: space-between; padding: 10px 12px; min-height: 44px; }
+.reading-mode a[aria-current] { color: var(--color-accent); }
+.memory-page .memory-mode-row { display: flex; justify-content: flex-end; margin-top: -22px; margin-bottom: 20px; }
+.memory-year-book-link { margin: -4px 0 22px; text-align: center; font-size: 14px; color: var(--color-secondary); }
+.memory-year-book-link a { display: inline-flex; min-height: 44px; align-items: center; }
+.life-tabs { display: flex; flex-wrap: wrap; gap: 6px 22px; border-bottom: 1px solid var(--color-border); padding-bottom: 8px; }
+.life-tabs a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; color: var(--color-secondary); }
+.life-tabs a[aria-current] { color: var(--color-accent); border-bottom: 2px solid var(--sage); }
+.life-note { margin: 20px 0 34px; color: var(--color-secondary); font-size: 14px; line-height: 1.8; }
+.growth-thread { margin: 42px 0 64px; }
+.growth-thread > h2 { font-size: clamp(24px, 4.4vw, 32px); margin: 0 0 30px; }
+.growth-line { padding-left: 22px; border-left: 1px solid var(--sage); }
+.life-passage { position: relative; padding: 0 0 32px; }
+.life-passage + .life-passage { padding-top: 30px; border-top: 1px solid var(--color-border); }
+.growth-line .life-passage::before { content: ""; position: absolute; left: -27px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--sage); }
+.growth-line .life-passage + .life-passage::before { top: 36px; }
+.life-node-label { margin: 0 0 10px; color: var(--color-accent); font-size: 14px; }
+.life-date { color: var(--color-secondary); font-size: 13px; line-height: 1.7; margin: 0 0 8px; }
+.life-passage h3 { margin: 10px 0; font-size: 22px; }
+.life-excerpt, .person-opening > p:not(.life-date), .search-result > p { font-size: 18px; line-height: 1.95; margin: 12px 0 16px; overflow-wrap: anywhere; }
+.life-day-picture { margin: 22px 0 12px; max-width: 480px; }
+.life-day-picture figcaption { font-size: 13px; color: var(--color-secondary); margin-top: 8px; }
+.life-more, .book-contents, .book-changes { margin: 22px 0; border-block: 1px solid var(--color-border); }
+.life-more > summary, .book-contents > summary, .book-changes > summary { cursor: pointer; min-height: 48px; padding: 12px 0; color: var(--color-secondary); }
+.life-more[open] > summary { margin-bottom: 22px; }
+.people-directory { margin-top: 18px; }
+.person-opening { border-top: 1px solid var(--color-border); padding: 28px 0; }
+.person-opening h2 { margin: 0 0 16px; font-size: 28px; }
+.person-opening h2 span { color: var(--sage); font-size: 18px; }
+.person-days { margin: 36px 0; }
+.life-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; margin-top: 26px; }
+.life-pagination a { display: flex; min-height: 44px; align-items: center; border-bottom: 1px solid var(--sage); }
+.life-empty { margin: 36px 0; line-height: 1.9; color: var(--color-secondary); }
+.life-empty a { display: block; padding: 12px 0; color: var(--color-accent); }
+.archive-search label { display: block; font-size: 16px; margin-bottom: 12px; }
+.archive-search > div { display: flex; gap: 8px; }
+.archive-search input { width: 100%; min-width: 0; min-height: 48px; padding: 10px 12px; border: 1px solid var(--color-border); background: transparent; border-radius: 4px; font: inherit; }
+.archive-search button { flex-shrink: 0; border: 1px solid var(--sage); padding: 10px 16px; background: transparent; font: inherit; cursor: pointer; }
+.search-suggestions { margin-top: 36px; color: var(--color-secondary); }
+.search-suggestions a { display: block; padding: 12px 0; color: var(--color-accent); }
+.search-result { border-top: 1px solid var(--color-border); padding: 28px 0; }
+.search-result h2 { font-size: 24px; margin: 12px 0; }
+.search-result blockquote { margin: 16px 0; color: var(--color-accent); padding-left: 18px; border-left: 1px solid var(--sage); }
+.search-result blockquote p { margin: 8px 0; }
+.book-opening { padding: 40px 0 30px; }
+.book-kind { margin: 30px 0 16px; font-size: 13px; color: var(--color-secondary); letter-spacing: .06em; }
+.book-opening h1 { margin: 0; font-size: clamp(56px, 14vw, 104px); font-weight: 400; line-height: 1.2; }
+.book-opening h1 span { display: block; font-size: clamp(26px, 6vw, 40px); margin-top: 18px; }
+.book-age { margin: 16px 0; color: var(--color-secondary); }
+.book-intro, .book-chapter-intro > p { font-size: 20px; line-height: 1.95; white-space: pre-line; }
+.book-contents nav { padding: 0 0 20px; }
+.book-contents nav a { display: flex; gap: 18px; padding: 10px 0; color: var(--color-secondary); font-size: 14px; }
+.book-contents strong { display: block; color: var(--color-primary); font-weight: 500; font-size: 17px; margin-top: 4px; }
+.book-changes section { padding: 12px 0 30px; }
+.book-changes section > div { padding: 12px 0 22px; }
+.book-changes section > div > p:not(.life-date):not(.life-node-label) { font-size: 17px; line-height: 1.9; }
+.book-chapter { padding: clamp(44px, 7vw, 80px) 0; border-bottom: 1px solid var(--color-border); scroll-margin-top: 20px; }
+.book-chapter-mark { color: var(--color-accent); font-size: 14px; margin: 0 0 14px; }
+.book-chapter h2 { margin: 0 0 24px; font-size: clamp(28px, 6vw, 38px); }
+.book-chapter-intro { margin: 0 0 36px; }
+.book-chapter-intro a, .book-quote a { color: var(--color-secondary); font-size: 13px; display: inline-flex; align-items: center; min-height: 44px; }
+.book-passage { margin: 32px 0; }
+.book-prose .book-passage > p { font-size: 18px; line-height: 2; margin: 0 0 16px; }
+.book-citation { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 13px; color: var(--color-secondary); min-height: 44px; }
+.book-citation .life-date { margin: 0; }
+.book-photographs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; margin: 32px 0; }
+.book-photographs figure { margin: 0; }
+.book-photographs figcaption { margin-top: 10px; }
+.book-quote { padding: 16px 0 16px 24px; margin: 36px 0; border-left: 2px solid var(--sage); }
+.book-quote blockquote { font-size: 26px; line-height: 1.6; color: var(--color-accent); margin: 0; }
+.book-chapter footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; margin-top: 28px; }
+.book-last-line { margin: 48px 0 18px; color: var(--color-secondary); }
+@media (max-width: 480px) { .book-photographs { grid-template-columns: 1fr; gap: 28px; } .life-heading { gap: 8px; } .reading-mode summary { padding-inline: 6px; } }
+@media (prefers-reduced-motion: reduce) { .life-reading *, .reading-mode * { scroll-behavior: auto; } }

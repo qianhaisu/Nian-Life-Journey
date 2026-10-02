@@ -27,6 +27,9 @@ export function SiteHeader() {
       <div className="header-inner">
         <Link className="brand" href="/" aria-label="Life is about a dream，张年的人生档案首页"><span className="brand-mark">年</span><span className="brand-copy"><strong>Life is about a dream</strong><small>张年的人生档案</small></span></Link>
         <nav className="desktop-nav" aria-label="主导航"><NavLinks pathname={pathname} /></nav>
+        <Link className="header-search" href="/memory/search" aria-label="找一段往事" prefetch={false}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 5 5" /></svg>
+        </Link>
       </div>
     </header>
     <nav className="bottom-nav" aria-label="移动端主导航"><NavLinks pathname={pathname} /></nav>

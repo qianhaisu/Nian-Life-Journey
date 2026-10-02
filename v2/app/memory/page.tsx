@@ -6,6 +6,8 @@ import { renderOnDemand } from "@/lib/render-on-demand";
 import { loadMonthContent } from "@/lib/month-content";
 import { pinnedCoverAllowed } from "@/lib/publication-moments";
 import { YearNavHighlight } from "@/components/year-nav-highlight";
+import { MemoryReadingMode } from "@/components/memory-reading-mode";
+import "./reading.css";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
 // (lib/render-on-demand.ts), so there is no Next route cache for a revalidate window to
@@ -78,6 +80,7 @@ export default async function MemoryPage() {
         <h1 className="serif">往回翻翻，<br /><em>张年。</em></h1>
         <p>那些已经过去、但还想再看一次的日子。</p>
       </header>
+      <div className="memory-mode-row reading-wrap"><MemoryReadingMode /></div>
 
       {index.years.length === 0 ? (
         <section className="reading-wrap archive-empty">
@@ -145,6 +148,7 @@ export default async function MemoryPage() {
               <h2 className="section-mark memory-year-heading" id={`year-heading-${year.year}`}>
                 {year.year} 年
               </h2>
+              <p className="memory-year-book-link"><a href={`/memory/${year.year}`}>读 {year.year} 年度人生书 →</a></p>
               <div className="memory-month-grid reading-wrap">
                 {year.months.map((month) => (
                   <MonthCard

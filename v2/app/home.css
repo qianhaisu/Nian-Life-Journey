@@ -694,3 +694,15 @@
 
 .memory-player-slot:last-child .memory-scene-reading { bottom: calc(112px + env(safe-area-inset-bottom)); }
 .memory-scene-title { display: block; margin-bottom: .3rem; font-size: .95rem; }
+
+/* One quiet bookmark, requested 2026-10-02. It never replaces the recent-life opening. */
+.home-v2 .home-year-book { grid-column: 1 / -1; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 22px; align-items: start; margin: 32px 0 0; padding: 26px 0 8px; border-top: 1px solid var(--home-line); }
+.home-book-spine { display: flex; flex-direction: column; align-items: center; padding: 14px 8px; gap: 8px; background: #e8eadd; color: #515847; border-inline-start: 3px solid #abb39c; min-height: 132px; font-family: var(--home-serif); }
+.home-book-spine strong { font-size: 24px; font-weight: 400; }
+.home-book-spine span, .home-book-spine small { font-size: 12px; }
+.home-book-kicker, .home-book-age { margin: 0 0 6px; font-size: 13px; color: var(--home-muted); }
+.home-year-book h2 { margin: 2px 0 8px; font-size: 24px; font-family: var(--home-serif); font-weight: 400; }
+.home-book-intro { margin: 8px 0; font-size: 15px; line-height: 1.8; color: var(--home-muted); }
+.home-book-read { display: inline-flex; min-height: 44px; align-items: center; color: var(--home-accent); font-size: 14px; }
+@media (min-width: 900px) { .home-v2 .home-year-book { max-width: 740px; margin-top: 48px; } .home-year-book + .weekly { margin-top: 36px; } }
+.home-book-intro { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }

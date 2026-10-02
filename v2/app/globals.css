@@ -1228,3 +1228,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .month-highlights { margin-block: 2rem; }
 .month-highlights a { display: block; padding-block: .5rem; text-underline-offset: .25em; }
 [id^="day-"] { scroll-margin-top: 2rem; }
+
+/* Archive search is a small global entrance, separate from the five destinations. */
+.header-inner { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.header-search { display: inline-flex; justify-content: center; align-items: center; width: 44px; height: 44px; color: var(--color-secondary); }
+@media (max-width: 480px) { .brand-copy { flex-direction: column; align-items: flex-start; gap: 4px; white-space: normal; } }
+@media (min-width: 700px) { .header-inner { grid-template-columns: minmax(0, 1fr) auto auto; } }
