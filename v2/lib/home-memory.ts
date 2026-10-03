@@ -740,7 +740,7 @@ export function selectHomeMemories(
       key: `season:${key}`,
       title: `${bucket.year} 年的${bucket.label}`,
       subtitle: seasonSubtitle(bucket.label, bucket.year, birthDay),
-      href: `/memory/${bucket.year}`,
+      href: `/memory#year-${bucket.year}`,
       linkLabel: `翻到 ${bucket.year} 年`,
       photos: bucket.photos,
       privilege,

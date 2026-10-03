@@ -148,7 +148,6 @@ export default async function MemoryPage() {
               <h2 className="section-mark memory-year-heading" id={`year-heading-${year.year}`}>
                 {year.year} 年
               </h2>
-              <p className="memory-year-book-link"><a href={`/memory/${year.year}`}>读 {year.year} 年度人生书 →</a></p>
               <div className="memory-month-grid reading-wrap">
                 {year.months.map((month) => (
                   <MonthCard
