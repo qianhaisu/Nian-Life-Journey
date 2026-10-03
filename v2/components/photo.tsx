@@ -28,7 +28,7 @@ import { mediaDeliveryUrl } from "@/lib/media/paths";
 // portrait WeChat photo stands tall, nothing is cropped. "crop" is for a caller-owned fixed-height
 // slot (a month card cover, a home cluster tile): no aspect-ratio is written, the image fills the
 // slot's own height via CSS `object-fit: cover`.
-export function Photo({ media, sizes, priority = false, variant = "web", fit = "natural", className = "" }: { media: MediaRef; sizes: string; priority?: boolean; variant?: "web" | "thumbnail"; fit?: "natural" | "crop"; className?: string }) {
+export function Photo({ media, sizes, priority = false, loading, variant = "web", fit = "natural", className = "" }: { media: MediaRef; sizes: string; priority?: boolean; loading?: "eager" | "lazy"; variant?: "web" | "thumbnail"; fit?: "natural" | "crop"; className?: string }) {
   const [failed, setFailed] = useState(false);
   const [fullSize, setFullSize] = useState(false);
   const [actual, setActual] = useState<{ width: number; height: number } | null>(null);
@@ -53,7 +53,7 @@ export function Photo({ media, sizes, priority = false, variant = "web", fit = "
         the browser fetch /api/media/... directly. */}
     <Image
       key={src}
-      src={src} alt={media.alt} width={width} height={height} sizes={sizes} priority={priority}
+      src={src} alt={media.alt} width={width} height={height} sizes={sizes} priority={priority} loading={loading}
       unoptimized
       onError={() => (wantsThumbnail ? setFullSize(true) : setFailed(true))}
       onLoad={(event) => {

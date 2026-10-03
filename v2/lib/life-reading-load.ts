@@ -2,7 +2,7 @@ import { cache } from "react";
 import { loadFamilyArchiveOnDemand, type FamilyArchive } from "./family-archive";
 import { buildMonthTimeline } from "./month-timeline";
 import { loadMonthContent } from "./month-content";
-import { buildYearBook, readingSentences, readingAge, type ReadingDay, type YearBook } from "./life-reading";
+import { buildYearBook, readingAge, type ReadingDay, type YearBook } from "./life-reading";
 import { loadTopicCache } from "./home-memory-topics-load";
 import { topicLookupFrom, type PhotoTopicLookup } from "./home-memory-topics";
 import { buildYearView } from "./memory-index";
@@ -64,24 +64,4 @@ export async function readYearBook(archive: FamilyArchive, year: string): Promis
     sceneKey: media => topics(media.id)?.carousel?.sceneKey,
     value: media => { const score = topics(media.id)?.carousel; return score ? score.clarity + score.expression : 0; },
   });
-}
-
-/** Homepage bookmark: only local text reads, never builds all day timelines on the homepage. */
-export async function readBookTeaser(archive: FamilyArchive) {
-  const years = [...archive.chapters].sort((a, b) => b.year.localeCompare(a.year));
-  const ordered = [...years.filter(year => year.year < archive.time.today.slice(0, 4)), ...years.filter(year => year.year >= archive.time.today.slice(0, 4))];
-  for (const year of ordered) {
-    const contents = await Promise.all([...year.months].sort((a, b) => a.month.localeCompare(b.month)).map(month => loadMonthContent(month.month)));
-    const opening = contents.find(content => !!content?.intro?.trim() || !!content?.cardLine?.trim());
-    const snapshot = archive.snapshots.find(snapshot => snapshot.month.startsWith(`${year.year}-`) && snapshot.summary?.trim());
-    const intro = opening?.intro?.trim() || opening?.cardLine?.trim() || snapshot?.summary?.trim();
-    if (!intro || !contents.some(content => content?.days.length)) continue;
-    const days = contents.flatMap(content => content?.days.map(day => day.day) ?? []).sort();
-    const firstAge = days[0] ? readingAge(archive.birthDay, days[0]) : undefined;
-    const lastAge = days.at(-1) ? readingAge(archive.birthDay, days.at(-1)!) : undefined;
-    const ageLabel = firstAge && lastAge ? firstAge === lastAge ? firstAge : `${firstAge} 到 ${lastAge}` : year.ageSpan;
-    return { year: year.year, ageLabel, intro: readingSentences(intro.replace(/^-\s*/, ""))[0],
-      ongoing: year.year === archive.time.today.slice(0, 4), href: `/memory/${year.year}` };
-  }
-  return undefined;
 }

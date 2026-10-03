@@ -18,27 +18,11 @@
 .life-tabs a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; color: var(--color-secondary); }
 .life-tabs a[aria-current] { color: var(--color-accent); border-bottom: 2px solid var(--sage); }
 .life-note { margin: 20px 0 34px; color: var(--color-secondary); font-size: 14px; line-height: 1.8; }
-.growth-thread { margin: 42px 0 64px; }
-.growth-thread > h2 { font-size: clamp(24px, 4.4vw, 32px); margin: 0 0 30px; }
-.growth-line { padding-left: 22px; border-left: 1px solid var(--sage); }
-.life-passage { position: relative; padding: 0 0 32px; }
-.life-passage + .life-passage { padding-top: 30px; border-top: 1px solid var(--color-border); }
-.growth-line .life-passage::before { content: ""; position: absolute; left: -27px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--sage); }
-.growth-line .life-passage + .life-passage::before { top: 36px; }
 .life-node-label { margin: 0 0 10px; color: var(--color-accent); font-size: 14px; }
 .life-date { color: var(--color-secondary); font-size: 13px; line-height: 1.7; margin: 0 0 8px; }
-.life-passage h3 { margin: 10px 0; font-size: 22px; }
-.life-excerpt, .person-opening > p:not(.life-date), .search-result > p { font-size: 18px; line-height: 1.95; margin: 12px 0 16px; overflow-wrap: anywhere; }
-.life-day-picture { margin: 22px 0 12px; max-width: 480px; }
-.life-day-picture figcaption { font-size: 13px; color: var(--color-secondary); margin-top: 8px; }
-.life-more, .book-contents, .book-changes { margin: 22px 0; border-block: 1px solid var(--color-border); }
-.life-more > summary, .book-contents > summary, .book-changes > summary { cursor: pointer; min-height: 48px; padding: 12px 0; color: var(--color-secondary); }
-.life-more[open] > summary { margin-bottom: 22px; }
-.people-directory { margin-top: 18px; }
-.person-opening { border-top: 1px solid var(--color-border); padding: 28px 0; }
-.person-opening h2 { margin: 0 0 16px; font-size: 28px; }
-.person-opening h2 span { color: var(--sage); font-size: 18px; }
-.person-days { margin: 36px 0; }
+.search-result > p { font-size: 18px; line-height: 1.95; margin: 12px 0 16px; overflow-wrap: anywhere; }
+.book-contents, .book-changes { margin: 22px 0; border-block: 1px solid var(--color-border); }
+.book-contents > summary, .book-changes > summary { cursor: pointer; min-height: 48px; padding: 12px 0; color: var(--color-secondary); }
 .life-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; margin-top: 26px; }
 .life-pagination a { display: flex; min-height: 44px; align-items: center; border-bottom: 1px solid var(--sage); }
 .life-empty { margin: 36px 0; line-height: 1.9; color: var(--color-secondary); }
@@ -83,3 +67,42 @@
 .book-last-line { margin: 48px 0 18px; color: var(--color-secondary); }
 @media (max-width: 480px) { .book-photographs { grid-template-columns: 1fr; gap: 28px; } .life-heading { gap: 8px; } .reading-mode summary { padding-inline: 6px; } }
 @media (prefers-reduced-motion: reduce) { .life-reading *, .reading-mode * { scroll-behavior: auto; } }
+
+/* The growth and people routes read as continuous essays. Dates sit beside the sentences they support. */
+.reading-index { display: flex; flex-wrap: wrap; gap: 2px 20px; padding: 18px 0 26px; border-block: 1px solid var(--color-border); }
+.reading-index a { display: inline-flex; align-items: center; min-height: 44px; color: var(--color-accent); border-bottom: 1px solid transparent; }
+.reading-index a:hover, .reading-index a:focus-visible { border-color: currentColor; }
+.growth-chapter, .person-story { scroll-margin-top: 30px; }
+.growth-chapter { padding: clamp(50px, 8vw, 88px) 0 28px; border-bottom: 1px solid var(--color-border); }
+.reading-chapter-kind { margin: 0 0 14px; color: var(--color-accent); font-size: 14px; letter-spacing: .12em; }
+.growth-chapter > header h2 { font-size: clamp(26px, 4.5vw, 38px); margin: 0 0 36px; font-weight: 500; }
+.growth-essay { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 280px); gap: clamp(24px, 5vw, 72px); align-items: start; margin: 0 0 clamp(50px, 7vw, 82px); }
+.growth-essay--text { display: block; max-width: 66ch; }
+.growth-essay:last-child { margin-bottom: 0; }
+.growth-essay-body { min-width: 0; }
+.growth-essay h3 { font-size: clamp(23px, 3vw, 30px); font-weight: 500; margin: 0 0 10px; }
+.reading-opening { margin: 0 0 24px; color: var(--color-secondary); font-size: 16px; line-height: 1.8; }
+.reading-essay > p { font-size: clamp(17px, 1.8vw, 19px); line-height: 2.05; margin: 0 0 28px; overflow-wrap: anywhere; }
+.reading-essay > p:last-child { margin-bottom: 0; }
+.reading-citations { display: flex; flex-wrap: wrap; gap: 0 18px; margin-top: 12px; font-size: 13px; line-height: 1.8; }
+.reading-citations a { display: inline-flex; align-items: center; min-height: 38px; border-bottom: 1px solid var(--sage); color: var(--color-secondary); white-space: nowrap; }
+.reading-citations a:hover, .reading-citations a:focus-visible { color: var(--color-accent); }
+.growth-essay-photo { margin: 14px 0 0; }
+.growth-essay-photo img { width: 100%; height: auto; }
+.growth-essay-photo > p { color: var(--color-secondary); font-size: 13px; margin-top: 10px; }
+.people-stories { padding-top: 4px; }
+.person-story { display: grid; grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr); gap: clamp(32px, 7vw, 110px); border-bottom: 1px solid var(--color-border); padding: clamp(58px, 9vw, 100px) 0; }
+.person-story header { min-width: 0; }
+.person-story h2 { font-size: clamp(38px, 6vw, 64px); font-weight: 400; margin: 0 0 6px; }
+.person-story-title { color: var(--color-accent); font-size: clamp(18px, 2.3vw, 24px); margin: 0 0 28px; line-height: 1.6; }
+.person-story-opening { color: var(--color-secondary); font-size: 16px; line-height: 1.9; margin: 0; max-width: 26ch; }
+.person-story .reading-essay { padding-top: 8px; }
+.person-story .reading-essay > p { font-size: clamp(18px, 1.8vw, 20px); line-height: 2.1; }
+@media (max-width: 700px) {
+  .reading-index { gap: 2px 14px; }
+  .growth-essay, .person-story { display: block; }
+  .growth-essay-photo { max-width: 320px; margin-top: 26px; }
+  .person-story-title { margin-bottom: 12px; }
+  .person-story-opening { max-width: none; margin-bottom: 26px; }
+  .person-story .reading-essay { padding-top: 0; }
+}

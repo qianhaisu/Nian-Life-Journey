@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {growthThreads,personMatches,READING_PEOPLE,searchArchive,searchTerms,quotesIn,buildYearBook,selectReadingPhotos} from '../lib/life-reading.ts';
+import {GROWTH_PROSE,PEOPLE_PROSE,resolveReadingProse} from '../lib/life-reading-narratives.ts';
 const day=(date,text,extra={})=>({day:date,title:'那一天',href:'/memory/'+date.replaceAll('-','/'),ageLabel:'1 岁',paragraphs:[text],photos:[],milestone:null,lead:false,...extra});
 const photo=(id,key)=>({id,type:'photo',src:'/api/media/'+id,alt:'已审核照片',displayKey:key});
 
@@ -94,4 +95,28 @@ test('同一句里的成人引语不串到孩子的说词检索结果',()=>{
 test('成长和人物页面的日子配图也跨段去重，不重复同文件或已知场景',()=>{
  const entries=[day('2026-01-01','他玩了。',{photos:[photo('a','same')]}),day('2026-01-02','后来。',{photos:[photo('alias','same'),photo('scene-alias','other'),photo('different','last')]}),day('2026-01-03','又一天。',{photos:[photo('again','same')]})];
  assert.deepEqual(selectReadingPhotos(entries,p=>['a','scene-alias'].includes(p.id)?'known-scene':undefined).map(p=>p?.id),['a','different',undefined]);assert.equal(entries[1].photos.length,3);
+});
+
+test('成长总结只展示有逐句出处的变化，撤下或改写依据后不残留旧断言',()=>{
+ const entries=[
+  day('2025-10-22','雪姨报来消息：「会喊妈妈了」。'),day('2025-10-23','爷爷说「小年年会叫爸爸了」。'),
+  day('2026-07-14','大兵老师说：「小年就说：泡泡」。'),day('2026-09-08','老师说他「自己说倒」。'),
+  day('2026-09-09','老师说：「宝贝刚刚说，打开…」，又补了一句「没很标准」。'),
+  day('2026-09-22','妈妈说「比如bing这类的」。')];
+ const matches=entries.map(entry=>({entry,excerpt:entry.paragraphs[0]}));
+ assert.equal(resolveReadingProse(GROWTH_PROSE.words,matches).paragraphs.length,3);
+ assert.equal(resolveReadingProse(GROWTH_PROSE.words,matches.filter(match=>match.entry.day!=='2026-09-09')).paragraphs.length,2);
+ const rewritten=matches.map(match=>match.entry.day==='2026-09-09'?{...match,entry:{...match.entry,paragraphs:['老师说他今天想说话。']}}:match);
+ assert.equal(resolveReadingProse(GROWTH_PROSE.words,rewritten).paragraphs.length,2);
+});
+
+test('人物叙述必须由该人物同一句话支撑，不借同日其他大人的话',()=>{
+ const rows=[day('2026-06-27','阳阳老师下来接。'),day('2026-07-02','阳阳老师说去看了宝贝，正在玩耍呢。'),
+  day('2026-07-31','大兵老师说「宝贝转个身情绪就好转了」。')];
+ const person=READING_PEOPLE.find(item=>item.id==='teacher-yangyang');
+ const matches=personMatches(rows,person);
+ assert.equal(resolveReadingProse(PEOPLE_PROSE[person.id],matches,person.aliases).paragraphs.length,0);
+ const published=[day('2026-06-27','阳阳老师下来接。'),day('2026-07-02','阳阳老师说「刚去看了一下宝贝，在玩耍呢」。'),
+  day('2026-07-31','阳阳老师说「宝贝转个身情绪就好转了」。')];
+ assert.equal(resolveReadingProse(PEOPLE_PROSE[person.id],personMatches(published,person),person.aliases).paragraphs.length,2);
 });

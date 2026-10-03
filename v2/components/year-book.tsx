@@ -20,7 +20,7 @@ export function YearBookReading({ book }: { book: YearBook }) {
     {book.changes.length > 0 && <details className="book-changes"><summary>这一年慢慢发生的变化</summary>
       {book.changes.slice(0, 4).map(thread => <section key={thread.id}><h2>{thread.title}</h2>
         {[thread.matches[0], thread.matches.at(-1)!].map((match, index) => <div key={match.entry.day}><p className="life-node-label">{index === 0 ? "年内较早的记录" : "年内后来的记录"}</p><ReadingDate entry={match.entry} /><p>{match.excerpt}</p><Link className="text-link" href={match.entry.href} prefetch={false}>读当时的日子 →</Link></div>)}
-        <Link className="text-link" href={`/memory/growth?kind=${thread.category}#${thread.id}`} prefetch={false}>接着看整条变化线 →</Link>
+        <Link className="text-link" href={`/memory/growth#${thread.id}`} prefetch={false}>接着看整条变化线 →</Link>
       </section>)}
     </details>}
     {book.chapters.map((chapter, index) => {

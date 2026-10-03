@@ -2,8 +2,6 @@ import { attachMemoryReading } from "@/lib/home-memory-reading";
 import Link from "next/link";
 import Image from "next/image";
 import { HomeMemory } from "@/components/home-memory";
-import { HomeYearBook } from "@/components/home-year-book";
-import { readBookTeaser } from "@/lib/life-reading-load";
 import { HomeHealthReminders } from "@/components/home-health-reminders";
 import { HomeReminders, type HomeReminder as HomeReminderView, type HomeReminderSource } from "@/components/home-reminders";
 import { MODALITY_LABEL, SOURCE_KIND_LABEL, roleText, type SourceKind } from "@/components/upcoming-tasks";
@@ -22,7 +20,7 @@ import { selectHomeAnswer } from "@/lib/home-answer";
 import type { FamilyArchive } from "@/lib/family-archive";
 import "./home.css";
 
-// 首页：近况与回忆、一个年度书书签、每周提醒。
+// 首页：近况与回忆、每周提醒。
 //
 //   一、最近怎么样，张年 —— 一段真实的回忆，静音预览，点开沉浸播放。
 //   二、每周提醒        —— 本周事项及仍需确认的未结束计划。
@@ -47,7 +45,6 @@ export default async function HomePage() {
   const topics = topicLookupFrom(await loadTopicCache());
   const selected = selectHomeMemories(archive, topics);
   const memories = await attachMemoryReading(selected.memories, archive);
-  const book = await readBookTeaser(archive);
   const absence = selected.absence;
 
   return <div className="home-v2">
@@ -63,7 +60,6 @@ export default async function HomePage() {
       {memories.length > 0
         ? <HomeMemory memories={memories} />
         : <MemoryFallback feed={feed} reason={absence?.reason} />}
-      {book && <HomeYearBook book={book} />}
       <Reminders feed={feed} />
     </div>
   </div>;
