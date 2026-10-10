@@ -49,6 +49,7 @@ const outFile = path.join(OUT_DIR, `nightly-${stamp}.json`); // 候选详情引�
 
 let batches = [];
 let extractedInfo = null;
+let partialExtraction = false;
 if (manualBatches.length) {
   say(`手动模式：只批准批次 ${manualBatches.join("、")}（不提取）`);
   batches = manualBatches;
@@ -57,6 +58,7 @@ if (manualBatches.length) {
   say("提取：upcoming-extract.mjs --incremental");
   const r = spawnSync(process.execPath, ["--import", "tsx", "scripts/upcoming-extract.mjs", "--incremental", `--out=${outFile}`], { encoding: "utf8", env: process.env, cwd: process.cwd() });
   const stdout = r.stdout ?? "";
+  partialExtraction = /(?:completed_with_failures|failed):/.test(stdout);
   process.stdout.write(stdout.split("\n").filter((l) => !/SECURITY WARNING|^In the next|^To prepare|^- If you|^See https|^\(Use/.test(l)).join("\n"));
   if (r.status !== 0) {
     say(`❌ 提取失败（退出码 ${r.status}）：${(r.stderr ?? "").slice(-300).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED]")}`);
@@ -65,7 +67,7 @@ if (manualBatches.length) {
     process.exit(1);
   }
   const batchId = (stdout.match(/batch (upcoming-\d+)/) ?? [])[1];
-  const created = Number((stdout.match(/completed: (\d+) created/) ?? [])[1] ?? 0);
+  const created = Number((stdout.match(/(?:completed|completed_with_failures): (\d+) created/) ?? [])[1] ?? 0);
   const updated = Number((stdout.match(/, (\d+) updated/) ?? [])[1] ?? 0);
   if (!batchId) { say("提取没有产生批次（可能今晚没有新消息），不批准任何东西"); ledger({ event: "no-batch" }); await closePool(); process.exit(0); }
   say(`本批 ${batchId}：新建 ${created}，更新 ${updated}`);
@@ -88,4 +90,5 @@ for (const batchId of batches) {
   say(`已批准 ${approved.updated} 条；留给人 ${plan.hold.length} 条${plan.hold.length ? "：" + plan.hold.map((h) => `${h.id.slice(-8)}(${h.reason})`).join("；") : ""}`);
 }
 await closePool();
-process.exit(0);
+if (partialExtraction) ledger({ event: "extract-partial", batches });
+process.exit(partialExtraction ? 1 : 0);

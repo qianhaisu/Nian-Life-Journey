@@ -29,6 +29,7 @@ import { getUpcomingCursor, mergeUpcomingCandidates, recordUpcomingRun } from ".
 import { FAMILY_REGISTRY } from "../lib/organizer/family-registry.ts";
 import { resolveSpeaker } from "../lib/organizer/identity.ts";
 import { UPCOMING_PROMPT_VERSION, buildUnitPrompt, extractFromUnit } from "../lib/upcoming-extractor.ts";
+import { reviewedReminderUnit } from "./lib/reviewed-reminder-unit.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -39,6 +40,9 @@ const incremental = has("incremental");
 const maxUnits = Number(flag("max-units") ?? 0) || Infinity;
 const outPath = flag("out");
 const profileId = flag("profile") ?? CANONICAL_PROFILE_ID;
+const reviewPath = path.join(process.env.NIANLIFE_OPS_DIR ?? "C:/Users/teddy/NianlifeOps/ops-daily", "upcoming", "codex-reviewed-units.json");
+let directReviews = {};
+try { directReviews = JSON.parse(fs.readFileSync(reviewPath, "utf8")); } catch { /* No direct reviews available. */ }
 
 if (outPath) {
   const resolved = path.resolve(outPath);
@@ -161,7 +165,8 @@ let consecutive = 0; let covered = 0;
 
 for (const unit of selected) {
   const carried = [...open.values()].filter((item) => item.status === "open" || item.status === "tentative");
-  let output = null; let lastError = null;
+  let output = reviewedReminderUnit(unit, directReviews); let lastError = null;
+  if (output) console.log(`source-reviewed ${unit.shortId} ${unit.day}: no new public reminder`);
   for (let attempt = 0; attempt < 2 && !output; attempt += 1) {
     try { output = await extractFromUnit(buildUnitPrompt(unit, carried)); }
     catch (error) { lastError = String(error?.message ?? error); }
