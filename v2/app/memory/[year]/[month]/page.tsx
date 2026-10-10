@@ -98,7 +98,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
 
     return <div className="month-page reading-wrap">
       <header className="chapter-masthead">
-        <Link className="back-link" href={`/memory/${year}`}>← {year} 年</Link>
+        <Link className="back-link" href={`/memory#year-${year}`}>← {year} 年</Link>
         <h1 className="serif">{chapter.label}</h1>
         {ageLine ? <p className="chapter-age">{ageLine}</p> : null}
         {content.intro ? <p className="chapter-summary serif">{content.intro}</p> : null}
@@ -119,7 +119,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
 
   return <div className="month-page reading-wrap">
     <header className="chapter-masthead">
-      <Link className="back-link" href={`/memory/${year}`}>← {year} 年</Link>
+      <Link className="back-link" href={`/memory#year-${year}`}>← {year} 年</Link>
       {/* 「月份章节」同上：结构名，不是家人的话，而且下一行就是「2026 年 9 月」。 */}
       <h1 className="serif">{chapter.label}</h1>
       {/* B1：当前月读「现在」，翻回去的历史月份读「当时」（monthAgeQualifier，lib/time-signature.ts）。 */}

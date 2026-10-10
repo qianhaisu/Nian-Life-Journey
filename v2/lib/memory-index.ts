@@ -121,7 +121,7 @@ export function buildMemoryIndex(chapters: YearChapter[], policy: MemoryIaPolicy
     return {
       year: year.year,
       ageSpan: year.ageSpan,
-      href: `/memory/${year.year}`,
+      href: `/memory#year-${year.year}`,
       months,
       memoryCount: months.reduce((sum, month) => sum + month.memoryCount, 0),
       traceDayCount: months.reduce((sum, month) => sum + month.traces.dayCount, 0),

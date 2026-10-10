@@ -15,7 +15,7 @@
 // The site's family pages all read one archive (lib/family-archive.ts), so a change to it can alter
 // any of them: a story's month, its year, the /memory index card, the neighbouring stories' 上一篇 /
 // 下一篇. Guessing the affected subset is the failure above in another form. `scope: "archive"`
-// refreshes all of them — three route patterns plus the on-demand pages' shared read — and costs
+// refreshes all of them — the ISR route patterns plus the on-demand pages' shared read — and costs
 // only a re-render on each page's next visit, never a database read now.
 import { ON_DEMAND_ARCHIVE_PATHS } from "@/lib/render-on-demand";
 
@@ -31,7 +31,9 @@ export type RefreshTarget = { path: string; type?: "page" };
 // up to five minutes — the failure this whole file exists to prevent, on the page a reader lands
 // on when they follow 「读这一天的原记录」. The guard's matcher now knows readDay reaches the
 // archive, so a future page that reads it through a helper cannot go missing the same way.
-export const ARCHIVE_ISR_ROUTES: readonly string[] = ["/memory/[year]", "/memory/[year]/[month]", "/memory/[year]/[month]/[day]", "/events/[id]"];
+// The year route now redirects on demand to the matching section of /memory while its book is
+// unpublished; it has no ISR page to invalidate.
+export const ARCHIVE_ISR_ROUTES: readonly string[] = ["/memory/[year]/[month]", "/memory/[year]/[month]/[day]", "/events/[id]"];
 
 // Pages rendered on demand that read the archive through the shared memo. /preview is the private
 // preview surface; it reads the same memo, so it is cleared by the same notice.
