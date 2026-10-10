@@ -20,7 +20,8 @@ export async function callTextModel(prompt, { env = editorModelEnv(), request = 
     const response = await request(`${base}/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json", Authorization: `Bearer ${env.ZHIPU_API_KEY}` },
-      body: JSON.stringify({ model, max_tokens: 8000, messages: [{ role: "user", content: prompt }] }),
+      // Reasoning and the final JSON share this allowance, as in the reminder extractor.
+      body: JSON.stringify({ model, max_tokens: 16000, messages: [{ role: "user", content: prompt }] }),
       signal: AbortSignal.timeout(180_000),
     });
     // Do not echo provider bodies: they may contain source text or credentials.

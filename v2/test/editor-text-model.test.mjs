@@ -9,6 +9,7 @@ test("editor uses a tool-free provider request and reports model provenance", as
     const body = JSON.parse(options.body);
     assert.equal(body.tools, undefined);
     assert.equal(body.model, "glm-5.3-flash");
+    assert.equal(body.max_tokens, 16000);
     return { ok: true, json: async () => ({ model: body.model, choices: [{ finish_reason: "stop", message: { content: '{"decision":"skip"}' } }] }) };
   } });
   assert.equal(result.ok, true);
