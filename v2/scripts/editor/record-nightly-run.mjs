@@ -7,6 +7,11 @@ const stages = Object.fromEntries(["editor", "backfill", "reminders", "carousel"
   if (!/^-?\d+$/.test(value ?? "")) throw new Error(`missing exit code: ${name}`);
   return [name, Number(value)];
 }));
+if (args.includes("--photos")) {
+  const value = arg("photos");
+  if (!/^-?\d+$/.test(value ?? "")) throw new Error("missing exit code: photos");
+  stages.photos = Number(value);
+}
 const dir = path.join(process.env.NIANLIFE_OPS_DIR ?? "C:/Users/teddy/NianlifeOps/ops-daily", "editor", "runs");
 fs.mkdirSync(dir, { recursive: true });
 const receipt = { at: new Date().toISOString(), stamp: arg("stamp"), stages, ok: Object.values(stages).every((code) => code === 0) };

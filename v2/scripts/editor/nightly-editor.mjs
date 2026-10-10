@@ -1,3 +1,4 @@
+import { callTextModel, editorModelEnv } from "./text-model.mjs";
 import { productionRevision, rememberProductionRevision, readProductionContent } from "./read-production-content.mjs";
 // 夜间编辑：把「已经搬进库」的微信消息，按天整理成月页上的一天。
 //
@@ -14,10 +15,9 @@ import { productionRevision, rememberProductionRevision, readProductionContent }
 //   - 命中确定性敏感词 = hold，不发布（plan.mjs sensitiveHits）。
 //   - 不碰照片：新照片没有 media_subject_check 审批本来就不会显示，审批链是另一条线。
 //   - 缺私有的真名清单 = 拒绝运行，而不是静默放行。
-//   - 必须走本机代理：清掉 HTTP_PROXY 会让 Claude 返回假的 403（见记忆 nianlife-feedback-keep-proxy-for-claude）。
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { pickDays, isReadable, sensitiveHits, extractJson, checkDecision, timeWordProblems, afterFailure, shanghaiToday, addDays } from "./plan.mjs";
 import { validateDayText } from "./validate-day.mjs";
@@ -29,7 +29,6 @@ const ED = path.join(OPS, "editor");
 const REPO_V2 = path.resolve(new URL("../..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
 const BIRTH_DAY = "2025-01-03";
 const PUBLISH = process.env.NIANLIFE_EDITOR_PUBLISH === "1";
-const MODEL = process.env.NIANLIFE_EDITOR_MODEL || ""; // 空 = CLI 默认
 const ECS = { ssh: process.env.ECS_SSH ?? "ecs-user@47.99.243.155", key: process.env.ECS_KEY ?? "C:/Users/teddy/Downloads/nianlife-prod-ecs.pem" };
 const NOW = new Date();
 const TODAY = process.env.NIANLIFE_EDITOR_TODAY || shanghaiToday(NOW);
@@ -50,7 +49,8 @@ function preflight() {
   if (!fs.existsSync(namesFile)) problems.push(`缺真名清单 ${namesFile}（缺清单时静默放行等于没校验）`);
   const brief = path.join(ED, "BRIEF.day.md");
   if (!fs.existsSync(brief)) problems.push(`缺提示词模板 ${brief}（node ${path.join(ED, "build-brief.mjs")} 生成）`);
-  if (!process.env.HTTP_PROXY && !process.env.HTTPS_PROXY) problems.push("没有 HTTP_PROXY/HTTPS_PROXY：本机在国内，直连 Anthropic 会返回假的 403；代理程序（127.0.0.1:7994）没开？");
+  const modelEnv = editorModelEnv();
+  if (modelEnv.AI_PROVIDER?.toLowerCase() !== "zhipu" || !modelEnv.ZHIPU_API_KEY) problems.push("缺 GLM 模型配置");
   return problems;
 }
 
@@ -82,45 +82,7 @@ async function loadDayPack(rds, day) {
   return { keys, text: lines.join("\n"), total: rows.length };
 }
 
-// ── 调 Claude（无头，保留代理，不给任何工具）──────────────────────────────────────
-//
-// 安全边界，每一条都核对过 `claude --help`：
-//   --tools ""                官方文档：「Use "" to disable all tools」。模型拿不到 Bash/Read/Write 任何东西，
-//                             所以就算简报里混进了恶意指令也做不了任何事，最坏只是写出一篇会被校验拦下的稿子。
-//                             （--allowedTools 只是「免审批」清单，不等于禁用，不能拿它当边界。）
-//   --no-session-persistence  不把私人消息存进会话记录。
-//   cwd = 空的临时目录        项目里的 CLAUDE.md 会按 cwd 自动发现；在空目录里跑，模型只看到简报和当天材料。
-//   不用 --bare              它让认证「只认 ANTHROPIC_API_KEY、不读 OAuth」，本机是订阅登录，加了就又是 403。
-//   保留 HTTP_PROXY           清掉它会从国内直连而得到假的 403（记忆 nianlife-feedback-keep-proxy-for-claude）。
-function callClaude(prompt) {
-  return new Promise((resolve) => {
-    const env = { ...process.env };
-    for (const k of Object.keys(env)) if (/^CLAUDE_CODE_|^CLAUDECODE$|^CLAUDE_PID$/.test(k)) delete env[k]; // 不带会话标记；代理变量保留
-    const sandbox = path.join(ED, "_sandbox");
-    fs.mkdirSync(sandbox, { recursive: true });
-    // 整条命令行用一个字符串交给 shell，才能保住 --tools "" 里的空字符串（数组形式在 Windows 上会把它吞掉）。
-    const cmdline = `claude -p --output-format json --max-turns 1 --tools "" --no-session-persistence${MODEL ? ` --model ${MODEL}` : ""}`;
-    const child = spawn(cmdline, { env, cwd: sandbox, shell: true, stdio: ["pipe", "pipe", "pipe"] });
-    let out = "", err = "";
-    child.stdout.on("data", (d) => (out += d));
-    child.stderr.on("data", (d) => (err += d));
-    const timer = setTimeout(() => { child.kill(); resolve({ ok: false, error: "调用超时（8 分钟）" }); }, 8 * 60 * 1000);
-    child.on("close", () => {
-      clearTimeout(timer);
-      try {
-        const j = JSON.parse(out);
-        if (j.is_error) {
-          const hint = j.api_error_status === 403 ? "（403：代理程序没开？本机在国内，直连 Anthropic 会被拒）" : "";
-          return resolve({ ok: false, error: `Claude 报错 ${j.api_error_status ?? ""}${hint}：${String(j.result).slice(0, 160)}` });
-        }
-        resolve({ ok: true, reply: j.result, costUsd: j.total_cost_usd });
-      } catch { resolve({ ok: false, error: `无法解析 Claude 输出：${(out || err).slice(0, 200)}` }); }
-    });
-    child.stdin.write(prompt);
-    child.stdin.end();
-  });
-}
-
+// ── 提示词 ────────────────────────────────────────────────────
 function buildPrompt({ brief, day, pack, samples, errors }) {
   const parts = [brief, `\n## 这一天：${day}\n\n下面是当天的消息（短键 时间 称呼: 正文）：\n\n${pack.text}\n`];
   if (samples.length) parts.push(`\n## 这个月已经写好的样稿（只用来对齐写法和长度，不要复述内容）\n\n${samples.map((s) => `【${s.day}】${s.title}\n${s.paragraphs.join("\n")}`).join("\n\n")}\n`);
@@ -172,7 +134,7 @@ async function main() {
 
         let decision = null, errors = null, lastReply = null;
         for (let attempt = 1; attempt <= 2; attempt += 1) {
-          const res = await callClaude(buildPrompt({ brief, day, pack, samples, errors }));
+          const res = await callTextModel(buildPrompt({ brief, day, pack, samples, errors }));
           if (!res.ok) { errors = [res.error]; say(`[${day}] 第 ${attempt} 次调用失败：${res.error}`); continue; }
           digest.costUsd += res.costUsd ?? 0;
           lastReply = res.reply;
@@ -274,7 +236,7 @@ function writeDigest(d) {
   sec("失败", d.failed, (f) => `- ${f.day}：${f.reason}${f.status ? `（${f.status}）` : ""}`);
   sec("跳过", d.skipped.slice(0, 20), (s) => `- ${s.day}：${s.reason}`);
   if (!d.wrote.length && !d.held.length && !d.failed.length && !d.skipped.length) L.push("今晚没有需要做的事：所有已就绪的日子都已有内容。", "");
-  L.push(`模型花费 ≈ $${d.costUsd.toFixed(3)}`);
+  L.push(`编辑模型：glm-5.3-flash；费用未从接口返回`);
   fs.writeFileSync(path.join(ED, "digests", `${d.today}.md`), L.join("\n") + "\n", "utf8");
   say(`摘要 → ${path.join(ED, "digests", `${d.today}.md`)}`);
 }

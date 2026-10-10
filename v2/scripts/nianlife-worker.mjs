@@ -34,6 +34,7 @@
 
 import { messagesFetch, modelKey } from "../lib/organizer/glm-messages.mjs";
 import path from "node:path";
+import { workerRunOutcome } from "./lib/worker-run-outcome.mjs";
 import {
   readFileSync,
   writeFileSync,
@@ -722,22 +723,22 @@ async function main() {
     log(`WARN: ${totals.failed} conversation(s) failed — will retry on next run`);
   }
 
-  // Advance lastRunAt so the next run starts from here. We still update even if some
-  // conversations failed — those will retry from this point, and messages already imported
-  // will come back as "reused" (idempotent).
+  const outcome = workerRunOutcome({ previous: workerState, startedAt: runStartedAt.toISOString(), runId: RUN_ID, conversations: conversationState, failed: totals.failed });
+  // Save successful per-conversation progress, but retain the global retry window on failure.
   if (CLI_NO_STATE_UPDATE) {
     log("[bounded test run] --no-state-update set — worker-state.json left untouched");
   } else {
-    writeWorkerState({ version: 2, lastRunAt: runStartedAt.toISOString(), lastRunId: RUN_ID, conversations: conversationState });
-    log(`${path.basename(WORKER_STATE_PATH)} → lastRunAt: ${runStartedAt.toISOString()}, ${Object.keys(conversationState).length} conversation cursor(s)`);
+    writeWorkerState(outcome.state);
+    log(`${path.basename(WORKER_STATE_PATH)} → lastRunAt: ${outcome.state.lastRunAt ?? "not advanced"}, ${Object.keys(conversationState).length} conversation cursor(s)`);
   }
   log(`log file: ${logPath}`);
   ledger({ phase: "run", event: "completed", durationSec, created: totals.created, mediaCreated: totals.mediaCreated,
     skipped: totals.skipped, failed: totals.failed, failureClasses: totals.failureClasses,
-    affectedMonths, stateAdvanced: !CLI_NO_STATE_UPDATE });
+    affectedMonths, stateAdvanced: !CLI_NO_STATE_UPDATE && outcome.advanced });
+  return outcome.exitCode;
 }
 
-main().catch((error) => {
+main().then((code) => { process.exitCode = code ?? 0; }).catch((error) => {
   const info = safeErrorInfo(error);
   const failure = classifyFailure({ error });
   try { ledger({ phase: "run", event: "fatal", failure, message: info.message.slice(0, 200) }); } catch {}

@@ -93,8 +93,8 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   // Months without edited content fall through to the original layout below, unchanged.
   if (content) {
     const timeline = await buildMonthTimeline(archive, year, monthSegment);
-    const first = timeline?.weeks[0];
-    const initial = timeline && first ? weekEntries(timeline, first.id) ?? [] : [];
+
+    const entries = timeline?.weeks.map((week) => weekEntries(timeline, week.id) ?? []) ?? [];
 
     return <div className="month-page reading-wrap">
       <header className="chapter-masthead">
@@ -104,13 +104,12 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         {content.intro ? <p className="chapter-summary serif">{content.intro}</p> : null}
       </header>
 
-      {timeline && first ? <MonthTimeline
+      {timeline?.weeks.length ? <MonthTimeline
         year={year}
-        month={monthSegment}
         monthAgeLabel={chapter.ageLabel}
         highlights={[...timeline.byDay.values()].filter((day) => day.milestone || day.emphasis === "lead").slice(0, 3).map((day) => ({ day: day.day, title: day.title ?? day.dateLabel }))}
         weeks={timeline.weeks}
-        initial={initial}
+        entries={entries}
       /> : null}
 
       {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}

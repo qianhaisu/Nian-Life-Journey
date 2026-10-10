@@ -1,8 +1,9 @@
-// 写（或重写）月页上的一天：组材料 → 无头 Claude 写稿 → 全部校验 → 不过就带着错误重写。
+import { callTextModel } from "./text-model.mjs";
+// 写（或重写）月页上的一天：组材料 → GLM 写稿 → 全部校验 → 不过就带着错误重写。
 // regen-month.mjs（按新规则重写机器写的天）和 backfill-events.mjs（把审核通过的新事件补进月页）共用这一段，
 // 所以两条路径过的是同一套校验，没有「补进来的内容走捷径」。
 //
-// 安全边界同 nightly-editor.mjs：模型不给任何工具（--tools ""），在空目录里跑，不存会话，保留本机代理。
+// 安全边界同 nightly-editor.mjs：通过无工具的模型请求写稿，不创建或唤醒任何 agent 会话。
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -28,30 +29,6 @@ export function loadVisionDescriptions(dir = HISTORY) {
 
 export function loadBrief() {
   return fs.readFileSync(new URL("./BRIEF.regen.md", import.meta.url), "utf8").replace("{{LABELS}}", registeredLabels().join("、"));
-}
-
-export function callClaude(prompt, sandbox) {
-  return new Promise((resolve) => {
-    const env = { ...process.env };
-    for (const k of Object.keys(env)) if (/^CLAUDE_CODE_|^CLAUDECODE$|^CLAUDE_PID$/.test(k)) delete env[k];
-    fs.mkdirSync(sandbox, { recursive: true });
-    const cmdline = `claude -p --output-format json --max-turns 1 --tools "" --no-session-persistence`;
-    const child = spawn(cmdline, { env, cwd: sandbox, shell: true, stdio: ["pipe", "pipe", "pipe"] });
-    let out = "", err = "";
-    child.stdout.on("data", (d) => (out += d));
-    child.stderr.on("data", (d) => (err += d));
-    const timer = setTimeout(() => { child.kill(); resolve({ ok: false, error: "调用超时（8 分钟）" }); }, 8 * 60 * 1000);
-    child.on("close", () => {
-      clearTimeout(timer);
-      try {
-        const j = JSON.parse(out);
-        if (j.is_error) return resolve({ ok: false, error: `Claude 报错 ${j.api_error_status ?? ""}：${String(j.result).slice(0, 160)}` });
-        resolve({ ok: true, reply: j.result, costUsd: j.total_cost_usd, model: Object.keys(j.modelUsage ?? {}).join(",") });
-      } catch { resolve({ ok: false, error: `无法解析 Claude 输出：${(out || err).slice(0, 200)}` }); }
-    });
-    child.stdin.write(prompt);
-    child.stdin.end();
-  });
 }
 
 /** 一稿的全部校验。返回 {problems, evidence}。纯函数。 */
@@ -80,7 +57,7 @@ export function checkDraft(decision, pack, realNames) {
  * @param {{rds:object, outDir:string, realNames:string[], vision?:Map<string,string>, brief?:string, call?:Function}} ctx
  * @returns {(target:{day:string, ageLabel?:string, eventIds:string[], expandedMediaIds:string[], firstScreenMediaIds:string[]}) => Promise<object>}
  */
-export function createDayWriter({ rds, outDir, realNames, vision = loadVisionDescriptions(), brief = loadBrief(), call = callClaude }) {
+export function createDayWriter({ rds, outDir, realNames, vision = loadVisionDescriptions(), brief = loadBrief(), call = callTextModel }) {
   if (!realNames?.length) throw new Error("真名清单为空：拒绝运行");
   const sandbox = path.join(outDir, "_sandbox");
   let cost = 0;
