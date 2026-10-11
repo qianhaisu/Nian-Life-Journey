@@ -80,3 +80,6 @@
 ## 部署闸（第 0 步）
 
 见 `.data/deploy-guard-test.md`：ce08236 重新部署时闸 a 放行、闸 b 通过；a3c4434 被闸 a 拦下（exit 11）。按 Teddy 的决定，preflight 改为 `git fetch` + SHA 必须等于 origin/main；共享工作区里别人未提交的改动只提示不拦，也不再在共享工作区里跑 `pull --rebase`。这些都写进了根目录 CLAUDE.md 的部署章节。
+线上多了什么：《隔着屏幕》118秒定稿成片、首页给雪姨入口和 /films/xueyi；生产SHA c93f6f0abec8c7095a5963a6c7a998aabe2d87c8，双宽度加载后播放/视觉验收通过。
+没做到什么：听感未验收、真实iPhone/Safari未验收；自动化初始等待及一次未复现月页告警如实保留，详见第三版/发布记录.md。
+下一件事：Teddy试听；ROLLBACK_CONTAINER=nianlife-diag-web-pre-c93f6f0-20261011-120702，保留第二回滚pre-1d6e7a9-20261010-192728，本次清理成功。
