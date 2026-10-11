@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 
 // 给雪姨的短片（2026-10）。只读 OSS 上两个固定对象；不查数据库、不进档案。size 是上传时记下的真实字节数。
 const FILMS: Record<string, { key: string; type: string; size: number }> = {
-  "xueyi-2026.mp4": { key: "media/films/xueyi-2026/xueyi-2026-v1.mp4", type: "video/mp4", size: 39148591 },
-  "xueyi-2026-poster.jpg": { key: "media/films/xueyi-2026/xueyi-2026-poster-v1.jpg", type: "image/jpeg", size: 190412 },
+  "xueyi-2026-v2.mp4": { key: "media/films/xueyi-2026/xueyi-2026-v2.mp4", type: "video/mp4", size: 67145909 },
+  "xueyi-2026-poster-v2.jpg": { key: "media/films/xueyi-2026/xueyi-2026-poster-v2.jpg", type: "image/jpeg", size: 202577 },
 };
 const NO_STORE = { "Cache-Control": "no-store" };
 
