@@ -1,0 +1,10 @@
+/* 观看页：只有标题和片子。站点页眉/页脚在 layout 里，这一页用 :has 把它们收起来。 */
+body:has(.film-page) .site-header, body:has(.film-page) .bottom-nav, body:has(.film-page) .site-footer { display: none; }
+body:has(.film-page) .site-shell { min-height: 100svh; padding-bottom: 0; }
+.film-page { min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(14px, 2.4vh, 22px); padding: clamp(20px, 4vh, 40px) 16px calc(20px + env(safe-area-inset-bottom)); background: var(--color-bg); }
+.film-title { margin: 0; font-family: var(--font-nunito, "Nunito"), "LXGW WenKai", "Songti SC", serif; font-weight: 400;
+  font-size: clamp(22px, 5.6vw, 30px); letter-spacing: .06em; color: var(--color-primary); animation: fadeInUp 1s var(--ease) both; }
+.film-video { display: block; width: min(100%, calc((100svh - 140px) * 9 / 16)); height: auto; aspect-ratio: 9 / 16;
+  border-radius: 20px; background: #000; box-shadow: var(--shadow); animation: rise 650ms var(--ease-out) 120ms both; }
+@media (prefers-reduced-motion: reduce) { .film-title, .film-video { animation: none; } }

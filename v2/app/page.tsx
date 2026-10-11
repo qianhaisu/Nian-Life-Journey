@@ -2,6 +2,7 @@ import { attachMemoryReading } from "@/lib/home-memory-reading";
 import Link from "next/link";
 import Image from "next/image";
 import { HomeMemory } from "@/components/home-memory";
+import { HomeFilmEntry } from "@/components/home-film-entry";
 import { HomeHealthReminders } from "@/components/home-health-reminders";
 import { HomeReminders, type HomeReminder as HomeReminderView, type HomeReminderSource } from "@/components/home-reminders";
 import { MODALITY_LABEL, SOURCE_KIND_LABEL, roleText, type SourceKind } from "@/components/upcoming-tasks";
@@ -60,6 +61,7 @@ export default async function HomePage() {
       {memories.length > 0
         ? <HomeMemory memories={memories} />
         : <MemoryFallback feed={feed} reason={absence?.reason} />}
+      <HomeFilmEntry />
       <Reminders feed={feed} />
     </div>
   </div>;
