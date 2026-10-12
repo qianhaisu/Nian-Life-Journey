@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 const FILMS: Record<string, { key: string; type: string; size: number }> = {
   "xueyi-2026-v5.mp4": { key: "media/films/xueyi-2026/xueyi-2026-v5.mp4", type: "video/mp4", size: 119799243 },
   "xueyi-2026-poster-v4.jpg": { key: "media/films/xueyi-2026/xueyi-2026-poster-v4.jpg", type: "image/jpeg", size: 386172 },
+  "xueyi-2026-poster-v6.jpg": { key: "media/films/xueyi-2026/xueyi-2026-poster-v6.jpg", type: "image/jpeg", size: 65029 },
 };
 const NO_STORE = { "Cache-Control": "no-store" };
 
