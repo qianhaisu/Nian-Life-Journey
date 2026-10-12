@@ -77,6 +77,7 @@ test("worker uploads one verified object set, persists family-visible evidence, 
     const storeAfterFirst = await repository.getStore();
     assert.equal(storeAfterFirst.rawSources.length, 1);
     assert.equal(storeAfterFirst.rawSources[0].visibility, "family");
+    assert.equal(storeAfterFirst.media[0].visibility, "private", "an imported attachment must await a separate public review");
     assert.equal(storeAfterFirst.mediaAssets.length, 1);
     assert.equal(storeAfterFirst.mediaLocations.length, 4);
     assert.equal(storeAfterFirst.mediaLocations.filter((location) => location.provider === "hot" && location.variant === "original")[0].status, "awaiting_archive");
