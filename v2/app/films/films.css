@@ -8,3 +8,12 @@ body:has(.film-page) .site-shell { min-height: 100svh; padding-bottom: 0; }
 .film-video { display: block; width: min(100%, calc((100svh - 140px) * 9 / 16)); height: auto; aspect-ratio: 9 / 16;
   border-radius: 20px; background: #000; box-shadow: var(--shadow); animation: rise 650ms var(--ease-out) 120ms both; }
 @media (prefers-reduced-motion: reduce) { .film-title, .film-video { animation: none; } }
+/* 回首页：左上角的"年"字标，样子同站点页眉的 .brand-mark（页眉在这一页收起来了）。 */
+.film-page { position: relative; }
+.film-home { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 16px; z-index: 2; display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; }
+.film-home-mark { display: grid; width: 44px; height: 44px; place-items: center; border: 2px solid var(--brand-accent); border-radius: 15px;
+  color: var(--brand-accent); font-size: 22px; font-weight: 800; transition: transform .3s var(--ease); }
+.film-home:hover .film-home-mark { transform: scale(1.05) rotate(-5deg); }
+.film-home:focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 3px; border-radius: 17px; }
+/* 给微信分享卡片抓取用的方形缩略图：在页面里，但看不见、不占位置。 */
+.film-share-image { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
