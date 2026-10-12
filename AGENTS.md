@@ -4,7 +4,7 @@
 
 Teddy 已取消 `nianlife-orchestrator` 协作技能及 Codex → Claude Code / Cowork 派单流程。Codex 收到命令后直接执行、检查并完成，不唤醒、派单或调用 Claude Code。旧协作文档仅保留为历史记录，不再作为当前执行要求；发布、隐私和数据保护原则继续有效。
 
-2026-10-12：Teddy 决定内容更新不再调用智谱或 DeepSeek，改由 Codex 定时直接读来源、写稿与审核。旧 Windows `Nianlife Nightly Editor` 已禁用，原始微信同步继续运行；每日流程见 `docs/codex-daily-editor.md`。不启动旧模型编辑、补录、照片识别、提醒提取或轮播评分入口。普通内容审核由 Codex 完成，应用代码生产发布仍遵守下方人工批准规则。
+2026-10-12：Teddy 决定内容更新不再调用智谱或 DeepSeek，改由模型会话定时直接读来源、写稿与审核（当前由 Claude Code 执行）。旧 Windows `Nianlife Nightly Editor` 已禁用，原始微信同步继续运行；每日流程见 `docs/daily-editor.md`。不启动旧模型编辑、补录、照片识别、提醒提取或轮播评分入口。普通内容审核由 Claude Code 完成，应用代码生产发布仍遵守下方人工批准规则。
 
 ## 项目定位
 

@@ -95,7 +95,7 @@ Cowork 只 grep 了文字就宣布「9 月验收通过」，Teddy 一打开就�
 
 Organizer V2 已在生产运行，不是「还没上线」。问题相反：**它已经在跑，却只放行了 3 段 Memory**（生产 content_quality_reviews：life_event approved 3 / store_only 15 / downgrade 10 / rejected 6）。精度机制把真实人生挡在外面了。
 
-已定方向：Judgment 改 **recall-first**，精度机制降级为「对每句话的约束」，不再作为「要不要出候选」的门；人工审阅台（`/inbox`）作为 Organizer 最后一级。每日编辑已改由 Codex 执行（`v2/scripts/editor/codex-editor.mjs`，见 `docs/codex-daily-editor.md`，2026-10-12），不再有本地 worker。
+已定方向：Judgment 改 **recall-first**，精度机制降级为「对每句话的约束」，不再作为「要不要出候选」的门；人工审阅台（`/inbox`）作为 Organizer 最后一级。每日编辑由 Claude Code 定时执行（工具 `v2/scripts/editor/codex-editor.mjs`，流程见 `docs/daily-editor.md`，2026-10-12），不再有本地 worker。
 
 Capture 链路的同步调用问题仍在（响应延迟不稳定）；不要靠调大 `AI_TIMEOUT_MS` 掩盖。
 
