@@ -125,7 +125,7 @@ const AUGUST_2026: MomReportContent = {
   month: "2026-08",
   title: "张小年",
   release: "2026.08 · V1.3",
-  heroBadge: "✨ 最近的张小年",
+  heroBadge: "✨ 这个月的张小年",
   heroImage: { src: `${IMG}/hero.jpg`, width: 958, height: 1704, alt: "张小年笑着向前走的近期照片" },
   heroStats: { heightLabel: "86 cm", weightLabel: "12.1 kg", ageLabel: "1 岁 7 个月" },
   summaryBody:
@@ -180,9 +180,9 @@ const AUGUST_2026: MomReportContent = {
         status: "观察中",
         statusTone: "watch",
         details: [
-          { label: "最近", text: "2026.08.19 起再次流鼻涕，后续出现较浓绿色鼻涕和咳嗽；暂无发热报告。周末晨起更明显、下午减轻，08/23–08/24 夜间睡眠受到影响。" },
+          { label: "这个月", text: "2026.08.19 起再次流鼻涕，后续出现较浓绿色鼻涕和咳嗽；暂无发热报告。周末晨起更明显、下午减轻，08/23–08/24 夜间睡眠受到影响。" },
           { label: "历史", text: "2026.07 一轮呼吸道感染，已恢复；2026.04–06 入托后感染次数增加；曾有鼻窦炎持续约一个月；1 岁以内曾有一次高热急诊史。" },
-          { label: "当前", text: "继续观察本轮症状是否逐步改善。本次只记录症状 episode，不作确定诊断。" },
+          { label: "当时", text: "继续观察本轮症状是否逐步改善。本次只记录症状 episode，不作确定诊断。" },
         ],
       },
       {
@@ -193,9 +193,9 @@ const AUGUST_2026: MomReportContent = {
         status: "长期观察",
         statusTone: "later",
         details: [
-          { label: "最近", text: "持续半年以上甚至更久；无明显疼痛，触碰不明显敏感，与鞋子挤压关系不明确，暂无明显急性感染表现。" },
+          { label: "这个月", text: "持续半年以上甚至更久；无明显疼痛，触碰不明显敏感，与鞋子挤压关系不明确，暂无明显急性感染表现。" },
           { label: "历史", text: "剪甲一直谨慎，没有刻意剪两侧角；穿凉拖期间仍然存在。" },
-          { label: "当前", text: "下次儿童保健时现场评估。" },
+          { label: "当时", text: "下次儿童保健时现场评估。" },
         ],
       },
       {
@@ -208,7 +208,7 @@ const AUGUST_2026: MomReportContent = {
         settled: true,
         details: [
           { label: "状态", text: "目前对刷牙配合度一般，有效清洁仍需巩固。" },
-          { label: "当前", text: "保持固定流程，先保证每天至少一次真正刷到牙面。" },
+          { label: "当时", text: "保持固定流程，先保证每天至少一次真正刷到牙面。" },
         ],
       },
       {
@@ -221,7 +221,7 @@ const AUGUST_2026: MomReportContent = {
         settled: true,
         details: [
           { label: "状态", text: "肋骨和膝盖处留有疤痕。" },
-          { label: "当前", text: "继续使用硅酮凝胶做日常护理。" },
+          { label: "当时", text: "继续使用硅酮凝胶做日常护理。" },
         ],
       },
       {
@@ -234,7 +234,7 @@ const AUGUST_2026: MomReportContent = {
         settled: true,
         details: [
           { label: "状态", text: "近期较喜欢电视和手机。" },
-          { label: "当前", text: "先记录频率与时长，再根据家庭节奏决定是否调整。" },
+          { label: "当时", text: "先记录频率与时长，再根据家庭节奏决定是否调整。" },
         ],
       },
       {
@@ -247,7 +247,7 @@ const AUGUST_2026: MomReportContent = {
         settled: true,
         details: [
           { label: "状态", text: "发量相对偏少，发际线略呈 M 形。" },
-          { label: "当前", text: "保留月度对比照片，计划两岁时复盘。" },
+          { label: "当时", text: "保留月度对比照片，计划两岁时复盘。" },
         ],
       },
       {
@@ -260,7 +260,7 @@ const AUGUST_2026: MomReportContent = {
         settled: true,
         details: [
           { label: "历史", text: "出生后出现，照蓝光 1 天，复查正常。" },
-          { label: "当前", text: "已稳定，仅作为历史记录保留。" },
+          { label: "当时", text: "已稳定，仅作为历史记录保留。" },
         ],
       },
     ],

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { previewReadingEnabled } from "@/lib/preview-access";
 import { listMemoryCandidates } from "@/lib/organizer/candidate-store";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +29,9 @@ function factsOf(candidate: Awaited<ReturnType<typeof listMemoryCandidates>>[num
 // 系统怎么运作，不是这一条候选本身是什么；换成候选来自哪里、还没定下来的意思是什么。
 // 内部读者仍然需要能对上原始字段名去查代码/数据库，所以下面保留了英文字段名本身
 // （proposedAction/finalAction/worthinessScore 等）——去掉的是包在它们外面的系统黑话，不是字段名。
+// 与 /preview 同一个服务端开关：生产默认关闭（404），只有私有容器显式打开。
 export default async function InboxPage() {
+  if (!previewReadingEnabled()) notFound();
   const candidates = await listMemoryCandidates();
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "32px 16px", fontFamily: "system-ui, sans-serif" }}>
@@ -36,7 +40,7 @@ export default async function InboxPage() {
         内部整理工作台，只读。这里是还没定下来的候选，不是家人看的时间线；候选要不要收进正式记录，不在这个页面上做。
       </p>
       {candidates.length === 0 ? (
-        <p style={{ color: "#999" }}>目前没有候选。</p>
+        <p style={{ color: "#666" }}>目前没有候选。</p>
       ) : (
         <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: 16 }}>
           {candidates.map((candidate) => (

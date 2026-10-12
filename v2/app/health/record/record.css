@@ -2,7 +2,7 @@
 
 
 .hr-root{
-  --paper:#F9F6F0; --card:#F3EEE6; --surface:#fff; --ink:#433E38; --muted:#716A60; --border:#E4DDD4;
+  --paper:#F9F6F0; --card:#F3EEE6; --surface:#fff; --ink:#433E38; --muted:#655E55; --border:#E4DDD4;
   --sage:#626F56; --sage-soft:#E8ECE3; --clay:#826544; --clay-soft:#F1E8DC; --accent:#A85D43; --accent-soft:#F6E6DF;
   --ok:#3E6B47; --warn:#8A5A12; --warn-soft:#FBF0D9; --danger:#A03A2C; --danger-soft:#F8E4E0;
   --r:18px; --r-sm:12px; --tap:48px;

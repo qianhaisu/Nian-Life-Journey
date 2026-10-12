@@ -405,7 +405,7 @@ function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: (
     <div className="sheet-wrap" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={edit ? "更正" : "记录详情"}>
         <div className="grab" />
-        {!rec ? <p className="hint">{msg || "读取中…"}</p> : edit ? (
+        {!rec ? <><p className="hint" role={msg ? "alert" : undefined}>{msg || "读取中…"}</p><div className="actions"><button className="btn sec" onClick={onClose}>关闭</button></div></> : edit ? (
           <>
             <h2>更正</h2><p className="hint">改的地方会写进历史，原来的内容不会丢。取消一个选项只表示“不记”，不会变成“没有”或“正常”。</p>
             {msg ? <div className="err" role="alert">{msg}{needsConfirm ? <div className="actions"><button className="btn" onClick={() => save(true)}>确认无误，保存</button></div> : null}{uncertain ? <div className="actions"><button className="btn sec" onClick={giveUp}>放弃这次操作</button></div> : null}</div> : null}

@@ -29,8 +29,8 @@
 
   /* V1.3's own five-tone system (index.html :root) — kept as the content's organising colours. */
   --mr-yellow: #f1b640; --mr-yellow-soft: #fff6dc; --mr-yellow-ink: #8a5a06;
-  --mr-green: #56b878; --mr-green-soft: #edf9f1; --mr-green-ink: #278d50;
-  --mr-blue: #4f97ee; --mr-blue-soft: #eaf4ff; --mr-blue-ink: #2f6cb8;
+  --mr-green: #56b878; --mr-green-soft: #edf9f1; --mr-green-ink: #1f6e3f;
+  --mr-blue: #4f97ee; --mr-blue-soft: #eaf4ff; --mr-blue-ink: #2a5fa5;
   --mr-coral: #ee897b; --mr-coral-soft: #fff0ed; --mr-coral-ink: #b25143;
   --mr-purple: #8b84e8; --mr-purple-soft: #f1efff; --mr-purple-ink: #5952b0;
 
@@ -121,15 +121,15 @@
 .mr-growth-card h2 { margin: 0 0 8px; font-size: 1.1rem; display: flex; align-items: center; gap: 6px; }
 .mr-chart-svg { width: 100%; height: auto; overflow: visible; }
 .mr-chart-grid line { stroke: #edf0f2; stroke-width: 1; }
-.mr-chart-months text { fill: #87939b; font-size: 9px; }
+.mr-chart-months text { fill: #5f6e78; font-size: 9px; }
 .mr-chart-height path { fill: none; stroke: var(--mr-blue); stroke-width: 5; stroke-linecap: round; }
 .mr-chart-height circle { fill: var(--mr-blue); }
-.mr-chart-height text { fill: #337fce; font-size: 11px; font-weight: 700; }
+.mr-chart-height text { fill: #2a68ad; font-size: 11px; font-weight: 700; }
 .mr-chart-weight path { fill: none; stroke: var(--mr-green); stroke-width: 5; stroke-linecap: round; }
 .mr-chart-weight circle { fill: var(--mr-green); }
-.mr-chart-weight text { fill: #348c55; font-size: 11px; font-weight: 700; }
+.mr-chart-weight text { fill: #2a7346; font-size: 11px; font-weight: 700; }
 .mr-chart-legend { display: flex; gap: 14px; margin-top: 8px; font-size: .74rem; }
-.mr-legend-height { color: #337fce; } .mr-legend-weight { color: #348c55; }
+.mr-legend-height { color: #2a68ad; } .mr-legend-weight { color: #2a7346; }
 .mr-chart-note { margin-top: 12px; padding: 12px 13px; border-radius: 16px; background: #f8fafb; border: 1px solid var(--mr-line); font-size: .8rem; color: #50606a; }
 
 .mr-measurement-detail { margin-top: 14px; border-top: 1px solid var(--mr-line); padding-top: 10px; }

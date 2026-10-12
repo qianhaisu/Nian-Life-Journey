@@ -162,3 +162,10 @@ button.hp-bp { cursor: pointer; }
 .hp-view-frame { width: 100%; height: 100%; border: 0; background: #fff; }
 .hp-view-foot { padding: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom)); text-align: center; background: #241F19; font-size: .84rem; }
 .hp-view-foot a { color: #CFC6B8; }
+
+/* 手机点按：画面比例不变，只把可点范围向外扩（竖向到约 44px，横向再留 4px），短区间和小圆点不再点不中 */
+.hp-bp::before, .hp-nd::before { content: ""; position: absolute; }
+.hp-bp::before { inset: -12px -4px; }
+.hp-bp.bridge { z-index: 1; }
+.hp-nd::before { inset: -8px; }
+.hp-sick-info { min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; }
