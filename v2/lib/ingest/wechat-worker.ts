@@ -50,6 +50,8 @@ export type WechatWorkerReport = {
   taskId?: string;
   status: ChatImportTask["status"] | "rejected" | "busy";
   safeErrorCode?: string;
+  /** Durable total across resumed attempts; per-call create/reuse counters remain deltas. */
+  processedMessages: number;
   createdMessages: number;
   reusedMessages: number;
   createdMediaAssets: number;
@@ -262,8 +264,9 @@ function hotLocation(assetId: string, object: StoredMediaObject, now: string, de
   return { id, mediaAssetId: assetId, provider, variant: object.variant, providerRef: object.key, status: object.variant === "original" ? "awaiting_archive" : "ready", mimeType: object.mimeType, fileSize: object.size, width: object.width, height: object.height, createdAt: now, updatedAt: now };
 }
 
-function reportFrom(task: ChatImportTask | null, values: Omit<WechatWorkerReport, "taskId" | "status" | "safeErrorCode" | "checkpoint"> & { safeErrorCode?: string }): WechatWorkerReport {
-  return { ...values, taskId: task?.id, status: task?.status ?? "rejected", safeErrorCode: values.safeErrorCode, checkpoint: task?.checkpoint };
+function reportFrom(task: ChatImportTask | null, values: Omit<WechatWorkerReport, "taskId" | "status" | "safeErrorCode" | "checkpoint" | "processedMessages"> & { safeErrorCode?: string }): WechatWorkerReport {
+  return { ...values, taskId: task?.id, status: task?.status ?? "rejected", safeErrorCode: values.safeErrorCode,
+    checkpoint: task?.checkpoint, processedMessages: task?.processedMessages ?? values.createdMessages + values.reusedMessages };
 }
 
 // --- Batch processing ---------------------------------------------------------------------

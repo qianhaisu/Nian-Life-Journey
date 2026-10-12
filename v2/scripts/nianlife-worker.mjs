@@ -543,8 +543,8 @@ async function main() {
       });
       // An allowlisted import that does not account for every selected message is a silent partial
       // import, the one outcome wechat-import-all.mjs also refuses to call success.
-      if (recordOrdinals && (report.status === "completed" || report.status === "completed_with_warnings") && report.createdMessages + report.reusedMessages !== recordOrdinals.size) {
-        report = { ...report, status: "failed", safeErrorCode: `CONTENT_BATCH_SHORTFALL_${report.createdMessages + report.reusedMessages}_OF_${recordOrdinals.size}` };
+      if (recordOrdinals && (report.status === "completed" || report.status === "completed_with_warnings") && report.processedMessages !== recordOrdinals.size) {
+        report = { ...report, status: "failed", safeErrorCode: `CONTENT_BATCH_SHORTFALL_${report.processedMessages}_OF_${recordOrdinals.size}` };
       }
     } catch (error) {
       // Nothing was written, so the reservation must go back: this message may still arrive through

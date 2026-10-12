@@ -407,6 +407,7 @@ test("worker resumes from the last saved checkpoint after an interruption, repla
     assert.equal(second.reusedMessages, 1);
     assert.equal(second.createdMediaAssets, 0);
     assert.equal(second.reusedMediaAssets, 1);
+    assert.equal(second.processedMessages, 21, "the report exposes the durable total across the resumed task, not only this retry's delta");
     assert.equal(second.uploadedObjects, 0, "the photo was already uploaded before the crash; replay must not re-upload it");
     assert.equal(storage.putCalls.length, 6, "3 objects for message 1's photo + 3 for message 21's photo, never re-uploaded on replay");
 
