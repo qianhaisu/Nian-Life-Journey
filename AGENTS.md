@@ -4,6 +4,8 @@
 
 Teddy 已取消 `nianlife-orchestrator` 协作技能及 Codex → Claude Code / Cowork 派单流程。Codex 收到命令后直接执行、检查并完成，不唤醒、派单或调用 Claude Code。旧协作文档仅保留为历史记录，不再作为当前执行要求；发布、隐私和数据保护原则继续有效。
 
+2026-10-12：Teddy 决定内容更新不再调用智谱或 DeepSeek，改由 Codex 定时直接读来源、写稿与审核。旧 Windows `Nianlife Nightly Editor` 已禁用，原始微信同步继续运行；每日流程见 `docs/codex-daily-editor.md`。不启动旧模型编辑、补录、照片识别、提醒提取或轮播评分入口。普通内容审核由 Codex 完成，应用代码生产发布仍遵守下方人工批准规则。
+
 ## 项目定位
 
 V1 是现有的静态单页产品参考和历史资料。V2 是全新、长期可维护的张年数字人生档案，不能把 V1 HTML 直接重构为 React，也不能以 V1 的 CSS/DOM 组件结构作为 V2 的实现基础。

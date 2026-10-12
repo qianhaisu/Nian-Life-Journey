@@ -1,4 +1,6 @@
 import type { MonthContent } from "@/lib/month-content";
+import { productToday } from "@/lib/time-truth";
+import { mergeReviewedTravelRecords } from "./reviewed-records";
 import { PLACES, TRIPS, type Trip } from "./model";
 
 /** Manual journeys win. A new published departure is a dated record, never a guessed stay. */
@@ -27,5 +29,5 @@ export function syncTrips(contents: readonly MonthContent[], curated: readonly T
         evidence: [`已发布日页：${day.day}`, ...(day.sourceIds ?? [])] });
     }
   }
-  return trips.sort((a, b) => b.from.localeCompare(a.from) || a.id.localeCompare(b.id));
+  return mergeReviewedTravelRecords(contents, trips, productToday());
 }
