@@ -95,9 +95,9 @@ Cowork 只 grep 了文字就宣布「9 月验收通过」，Teddy 一打开就�
 
 Organizer V2 已在生产运行，不是「还没上线」。问题相反：**它已经在跑，却只放行了 3 段 Memory**（生产 content_quality_reviews：life_event approved 3 / store_only 15 / downgrade 10 / rejected 6）。精度机制把真实人生挡在外面了。
 
-已定方向：Judgment 改 **recall-first**，精度机制降级为「对每句话的约束」，不再作为「要不要出候选」的门；人工审阅台（`/inbox`）作为 Organizer 最后一级。Organizer 搬到 Teddy 电脑上的本地 worker（见 `v2/scripts/editor/nightly-*.mjs`，00:15 定时任务）。
+已定方向：Judgment 改 **recall-first**，精度机制降级为「对每句话的约束」，不再作为「要不要出候选」的门；人工审阅台（`/inbox`）作为 Organizer 最后一级。每日编辑已改由 Codex 执行（`v2/scripts/editor/codex-editor.mjs`，见 `docs/codex-daily-editor.md`，2026-10-12），不再有本地 worker。
 
-Capture 链路的同步调用问题仍在（响应延迟不稳定），本地 worker 上线后自然解决；不要靠调大 `AI_TIMEOUT_MS` 掩盖。
+Capture 链路的同步调用问题仍在（响应延迟不稳定）；不要靠调大 `AI_TIMEOUT_MS` 掩盖。
 
 ## Teddy 的长期开发规则
 
@@ -120,7 +120,7 @@ Nianlife 当前按单用户个人项目开发，功能优先。
 
 0. **把硬盘上的东西全部导进来** ← 当前阶段。9 个微信会话（本地 5 万余条，已入库仅 16%）+ 夸克 2,279 个素材（已入库 0）。验收：raw_sources 覆盖 2025-01 → 2026-09 每月，任何一个月都能看到张年
 1. 审阅台 + recall-first，先做 2026-09 → 2026-06
-2. 本地 worker 上线；推进到 2026-01
+2. 推进到 2026-01
 3. 回到 2025 年逐月出版；2025 年度书 V1
 4. 核心功能完成后再考虑登录和安全
 
@@ -195,7 +195,7 @@ Teddy 的默认 Git 习惯：
 - 不删除现有路径、Schema、Policy 和幂等保护。
 - 修改后运行与改动范围匹配的 typecheck、test、lint、build 和 diff check（见「常用验证命令」），而不是每次都跑全套或完全不验证。
 
-## 完成的定义、停下清单与 Codex 边界（2026-09-04）
+## 完成的定义与停下清单（2026-09-04）
 
 ### 完成的定义
 
@@ -208,22 +208,9 @@ Teddy 的默认 Git 习惯：
 - 40 条测试残留不删除（读取层过滤）；Gemini / OpenAI provider 分支不删除也不维护
 - 商业化、登录、多用户（与上文「当前产品优先级」一致）
 
-### Codex 插件（`openai/codex-plugin-cc`）使用边界
+### 性能
 
-装它是为了两件具体的事，不是多一道审查。**用错地方它会变成第 32 份审计。**
-
-- ✅ `/codex:rescue`：Claude Code 额度用尽或卡住时甩给 Codex 接手。随时可用
-- ✅ `/codex:adversarial-review`：**只审两类代码**
-  1. **importer 与本地 worker** —— 幂等、断点续跑、并发、`--since` 边界，以及**吞吐**（批量写 vs 逐条 round-trip：5 万条消息 + 2,279 个素材，这一项决定导入跑 1 小时还是 3 天）
-  2. **R2 归档**（1,024 个 awaiting_archive）—— 文件搬运，错了就是照片没了
-- ❌ **不审 Organizer / judgment / worthiness / 展示层。** 那里的毛病是放行太少，不是漏洞太多。让一个专门挑刺的 AI 去审「要不要把这句话给苏静看」，只会让门更紧
-
-Codex 报告只在 importer / worker / R2 上有一票，别处一票都没有。它说「报告干净」不等于任务完成——完成的定义见上。
-
-### 性能的两个去处
-
-- **吞吐** → 归 Codex 审查（已并入上面第 1 类）。导入慢一个数量级，阶段 0 就从 2 天变成 2 周
-- **阅读体验** → 归验收，不归 Codex。指标只有一个：**苏静手机上打开一个月页，几秒内出现照片**，目标 ≤3 秒。已知最大嫌疑是 `getStore()` 每次拉 17 MB
+- **阅读体验** → 归验收。指标只有一个：**苏静手机上打开一个月页，几秒内出现照片**，目标 ≤3 秒。已知最大嫌疑是 `getStore()` 每次拉 17 MB
 - **不做**：并发压测、缓存架构、CDN 调优、bundle 分析。这个站 3 个读者
 
 ## 工程执行质量（精简版）
@@ -281,14 +268,12 @@ Codex 报告只在 importer / worker / R2 上有一票，别处一票都没有�
 
 同一时间只有 Teddy 指定的**一个** session 可以执行 upload / build / swap / rollback-app。其他 session 只往 main 推代码，**不部署**、不 SSH 改 ECS 上的容器。没被指定为部署 session，就不要跑这个脚本的写操作子命令，哪怕"只是重新部署一下"。
 
-### 两个 session 共用一个工作区（Teddy 2026-09-23）
+### 共用一个工作区
 
-不建 worktree。前端/部署 session 与数据 session 共用 `C:\Users\teddy\Documents\Nianlife`：
+不建 worktree，不再按前端/数据划分 session 和文件归属，任何 session 都可以改任何部分。但工作区可能同时有别人（其他 session 或 Codex）未提交的改动：
 
 - 提交只 `git add` 自己改过的具体文件，绝不暂存别人的改动；禁止 `git add -A`。
-- 共享工作区里禁止会动到别人文件的命令：`git stash`、`git checkout -- <file>`、`git restore`、`git reset --hard`、`git clean`、`git pull --rebase`。
-- 文件归属：前端 session 改 `v2/app/`、`v2/components/`、`v2/app/globals.css`、`v2/scripts/deploy-ecs-public.sh` 和本文件的部署章节；`lib/organizer/`、`lib/ingest/`、`scripts/` 里的数据脚本、`docs/STATUS.md` 归数据 session。`lib/publication-moments.ts` 只有在 `git status` 里是干净的时候才能改，改完尽快提交。
-- 前端进度写 `.data/frontend-round-summary.md`，不写 `docs/STATUS.md`。
+- 禁止会动到别人文件的命令：`git stash`、`git checkout -- <file>`、`git restore`、`git reset --hard`、`git clean`、`git pull --rebase`。
 
 ### 两道闸（脚本内置，没有旁路开关，不许绕过）
 
