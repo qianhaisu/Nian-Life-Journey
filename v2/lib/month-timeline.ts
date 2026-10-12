@@ -6,7 +6,6 @@ import { pickLeadDays, pickLeadPhoto } from "@/lib/month-day-weight";
 import { loadMonthContent, resolveMonthContentMedia } from "@/lib/month-content";
 import { buildMonthComposition } from "@/lib/publication-moments";
 import { contentOnlyChapter } from "./edited-chapters";
-import { uniqueDisplayMedia } from "./media/display-identity";
 
 // An edited month as ONE timeline of days (2026-09-23, Teddy: 「故事和日子只能存在一个」).
 //
@@ -110,10 +109,6 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
     // The curated order is a proposal; deliverability and the latest store_only decide.
     const photos = resolveMonthContentMedia(entry.expandedMediaIds, available, privilege.excluded)
       .map((item) => toMediaRef(item, entry.title ?? undefined));
-    // A visual description is derived from its pictures, not an independent story. If every
-    // picture was explicitly withdrawn, an older content file must not restore their description.
-    if (entry.kind === "visual-description" && entry.expandedMediaIds.length > 0
-      && entry.expandedMediaIds.every((id) => privilege.excluded?.has(id))) continue;
     if (!entry.title && entry.paragraphs.length === 0 && photos.length === 0) continue;
     days.set(entry.day, {
       day: entry.day,
@@ -138,9 +133,7 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
   let daysFromStoriesOnly = 0;
   for (const moment of remaining) {
     const memory = moment.memory!;
-    // A historical story binding does not override the latest subject withdrawal.
-    const storyMedia = [...(memory.storyPhotos ?? (memory.lead ? [memory.lead] : [])), ...(memory.storyVideos ?? [])]
-      .filter((item) => available.has(item.id) && !privilege.excluded?.has(item.id));
+    const storyMedia = [...(memory.storyPhotos ?? (memory.lead ? [memory.lead] : [])), ...(memory.storyVideos ?? [])];
     let target = days.get(moment.day);
     if (!target) {
       // A day the file never wrote: the memory becomes that day, under its own title.
@@ -166,7 +159,6 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
 
   const order: "desc" | "asc" = month === latestChapterMonth(archive) ? "desc" : "asc";
   for (const entry of days.values()) {
-    entry.photos = uniqueDisplayMedia(entry.photos);
     entry.milestone = detectMilestone(entry.day, [entry.title, ...entry.paragraphs, ...entry.stories.flatMap((s) => [s.title, ...s.paragraphs])], archive.birthDay ?? undefined);
   }
   const leadDays = pickLeadDays([...days.values()].map((entry) => ({

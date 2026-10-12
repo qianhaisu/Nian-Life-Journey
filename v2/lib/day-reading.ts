@@ -2,7 +2,6 @@ import { cache } from "react";
 import { loadFamilyArchiveForIsr } from "@/lib/family-archive";
 import { getSourcesByIds } from "@/lib/db/repository";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
-import { identifyDisplayMedia } from "@/lib/media/display-identity";
 import type { MediaRef } from "@/lib/memory-chapters";
 import { dayForDate, gateMaterialMedia, loadMonthContent, type MonthContent, type MonthContentDay } from "@/lib/month-content";
 import { formatMonth } from "@/lib/time-signature";
@@ -90,7 +89,7 @@ export const readDay = cache(async function readDay(dayKey: string): Promise<Day
     previous, next,
     sources,
     speakers: resolveDaySpeakers(sources, content.speakerBySourceId),
-    sourceMedia: identifyDisplayMedia(gateMaterialMedia(material.media.filter((item) => item.visibility !== "private"), privilege.excluded), material.mediaAssets),
+    sourceMedia: gateMaterialMedia(material.media.filter((item) => item.visibility !== "private"), privilege.excluded),
     sourceDeliverable,
     monthHref: `/memory/${month.slice(0, 4)}/${month.slice(5, 7)}#day-${dayKey}`,
     monthLabel: formatMonth(month),

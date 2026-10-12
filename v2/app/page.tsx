@@ -21,7 +21,7 @@ import { selectHomeAnswer } from "@/lib/home-answer";
 import type { FamilyArchive } from "@/lib/family-archive";
 import "./home.css";
 
-// 首页：近况与回忆、每周提醒。
+// 首页（2026-09-16 改版）。整页只有两件事：
 //
 //   一、最近怎么样，张年 —— 一段真实的回忆，静音预览，点开沉浸播放。
 //   二、每周提醒        —— 本周事项及仍需确认的未结束计划。
