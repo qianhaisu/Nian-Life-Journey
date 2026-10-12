@@ -16,6 +16,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { downloadPhoto } from "./download-photo.mjs";
 import { shanghaiToday, addDays } from "./plan.mjs";
 import { classifyPhotos, chooseLead } from "./photo-classify.mjs";
 import { decidePhoto, pickPhotos, batchLooksBroken, mergeDayMedia, applyLead, PROMPT_VERSION, POLICY_VERSION, LOOKBACK_DAYS } from "./photos-plan.mjs";
@@ -54,19 +55,22 @@ function installToProduction(month, file) {
   return { ok: false, error: (r.stderr || r.stdout || "").slice(-300) };
 }
 
-async function download(id, file) {
-  const res = await fetch(`${MEDIA_BASE}/api/media/${encodeURIComponent(id)}?variant=web`, { signal: AbortSignal.timeout(60_000) });
-  if (!res.ok) return false;
-  fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
-  return true;
-}
-
 async function main() {
   const refFiles = fs.existsSync(REFS) ? fs.readdirSync(REFS).filter((f) => /\.(webp|jpe?g|png)$/i.test(f)).map((f) => path.join(REFS, f)) : [];
   if (refFiles.length < 3) { say(`❌ 参考图不足（${REFS} 里 ${refFiles.length} 张，至少 3 张）`); ledger({ event: "preflight-failed", reason: "refs" }); return 2; }
   const lock = path.join(PH, "run.lock");
   try { fs.writeFileSync(lock, String(process.pid), { flag: "wx" }); } catch { say("❌ 上一次还在跑（run.lock 存在）"); return 2; }
-  const digest = { today: TODAY, write: WRITE, considered: 0, downloaded: 0, approved: 0, storeOnly: 0, held: 0, errors: 0, added: [], notes: [] };
+  const digest = { today: TODAY, write: WRITE, considered: 0, downloaded: 0, downloadFailures: 0, approved: 0, storeOnly: 0, held: 0, errors: 0, added: [], notes: [] };
+  const download = async (id, file, phase) => {
+    const result = await downloadPhoto(`${MEDIA_BASE}/api/media/${encodeURIComponent(id)}?variant=web`, file);
+    if (!result.ok) {
+      digest.downloadFailures += 1;
+      digest.errors += 1;
+      ledger({ event: "download-failed", mediaId: id, phase, status: result.status, reason: result.reason });
+      say(`照片下载失败：${phase} ${result.reason} HTTP=${result.status ?? "none"}`);
+    }
+    return result.ok;
+  };
   const state = readJson(stateFile, { seen: {}, tries: {} });
   state.tries ??= {};
   let rds;
@@ -93,11 +97,11 @@ async function main() {
       while (next < picked.length) {
         const p = picked[next++];
         const file = path.join(TMP, `${p.id}.webp`);
-        try { if (await download(p.id, file)) items.push({ id: p.id, file, takenDay: p.takenDay }); } catch {}
+        if (await download(p.id, file, "classify")) items.push({ id: p.id, file, takenDay: p.takenDay });
       }
     }));
     digest.downloaded = items.length;
-    say(`下载成功 ${items.length}/${picked.length}（下载不了的多半是没有可用的网页版，下次再试）`);
+    say(`下载成功 ${items.length}/${picked.length}；失败保留为未处理，下次重试，不计作成功`);
     let verdicts = {};
     if (items.length) {
       const r = await classifyPhotos(items, refFiles, { concurrency: 4 });
@@ -193,7 +197,7 @@ async function main() {
         const files = [];
         for (const id of pool) {
           const f = path.join(TMP, `lead-${id.slice(-16)}.webp`);
-          try { if (await download(id, f)) files.push({ id, file: f }); } catch {}
+          if (await download(id, f, "lead")) files.push({ id, file: f });
         }
         let picked = null;
         try { picked = await chooseLead(entry, files); } catch {}
@@ -222,7 +226,7 @@ async function main() {
 
 function writeDigest(d) {
   const L = [`# 夜间照片 ${d.today}${d.write ? "" : "（dry-run，未写库）"}`, "",
-    `处理 ${d.considered} 张，下载成功 ${d.downloaded}：放行 ${d.approved}，不上页面 ${d.storeOnly}，留给人 ${d.held}，识别出错 ${d.errors}`, ""];
+    `处理 ${d.considered} 张，下载成功 ${d.downloaded}，下载失败 ${d.downloadFailures}：放行 ${d.approved}，不上页面 ${d.storeOnly}，留给人 ${d.held}，总错误 ${d.errors}`, ""];
   if (d.added.length) L.push("## 并入照片区", ...d.added.map((a) => `- ${a.day} +${a.n}${a.lead ? `，配图已换（${a.lead}）` : ""}${a.published ? ` 已发布 ${a.version}` : "（未发布）"}`), "");
   if (d.notes.length) L.push("## 备注", ...d.notes.map((n) => `- ${n}`), "");
   if (d.model) L.push(`模型 ${d.model}，tokens in ${d.inputTokens} out ${d.outputTokens}`);

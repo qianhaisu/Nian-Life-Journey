@@ -10,6 +10,7 @@ import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { getEventDetail } from "@/lib/db/repository";
 import { memoryTitle, toMediaRef } from "@/lib/memory-chapters";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
+import { identifyDisplayMedia } from "@/lib/media/display-identity";
 import { storyLayout } from "@/lib/media/presentation";
 import { storyDisplayMedia } from "@/lib/media/story-binding";
 import type { NeighbourCandidate } from "@/lib/story-neighbours";
@@ -63,7 +64,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const detail = await getCachedEventDetail(id);
   // An event that is not 张年's (a fixture profile's row reached by URL) is not a page in this book.
   if (!detail || detail.event.profileId !== CANONICAL_PROFILE_ID) notFound();
-  const { event, media: eventMedia, sources: eventSources, contributors, growth, care, links: eventLinks, mediaAssets, mediaLocations, birthDay, neighbours } = detail;
+  const { event, media: storedEventMedia, sources: eventSources, contributors, growth, care, links: eventLinks, mediaAssets, mediaLocations, birthDay, neighbours } = detail;
+  const eventMedia = identifyDisplayMedia(storedEventMedia, mediaAssets);
   const sourceRoles: ReadonlyMap<string, "primary" | "supporting" | "context"> = new Map(
     eventLinks.map((link) => [link.rawSourceId, link.role as "primary" | "supporting" | "context"])
   );

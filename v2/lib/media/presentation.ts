@@ -1,4 +1,5 @@
 import type { Media } from "@/lib/types";
+import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 import { NO_HERO_MEDIA_ID, isHeroEligible, isThumbnailEligible } from "@/lib/media/hero";
 
 // Display-only decisions about photos. Nothing here touches Media identity, storage or the import
@@ -90,7 +91,7 @@ export function storyLayout(candidates: Media[], preferredId?: string): StoryMed
   // Reviewed, no photo: unlike an unset heroMediaId, this does not fall back to the event's other
   // attached media (see lib/media/hero.ts's NO_HERO_MEDIA_ID) — the story is text-only, full stop.
   if (preferredId === NO_HERO_MEDIA_ID) return { hero: undefined, supporting: [], remaining: 0 };
-  const drawable = candidates.filter(isThumbnailEligible);
+  const drawable = uniqueDisplayMedia(candidates.filter(isThumbnailEligible), (next, previous) => next.id === preferredId || (isHeroEligible(next) && !isHeroEligible(previous)));
   const preferred = preferredId ? drawable.find((item) => item.id === preferredId) : undefined;
   const hero = preferred && isHeroEligible(preferred) ? preferred : drawable.find(isHeroEligible);
   const supporting = drawable.filter((item) => item.id !== hero?.id).slice(0, STORY_SUPPORTING_MAX);

@@ -34,14 +34,14 @@ import { Button } from "@/components/ui/button";
 // 配乐：Teddy 2026-09-16 深夜给了两首真实音轨，放在 public/audio/。点一次播放**随机挑一首**
 // （pickTrack()，抽签发生在浏览器里，见 MemoryPlayer）。一首都没有时这个组件仍然
 // **不挂 <audio>、不画静音键**——不是指向一个 404 让它静静失败，也不是留一个点了没反应的按钮。
-export function HomeMemory({ memories }: { memories: HomeMemoryData[] }) {
+export function HomeMemory({ memories, ariaLabel = "最近的一段回忆", closeLabel = "关闭，回到首页" }: { memories: HomeMemoryData[]; ariaLabel?: string; closeLabel?: string }) {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const playButton = useRef<HTMLButtonElement>(null);
   const memory = memories[Math.min(index, memories.length - 1)];
   if (!memory) return null;
 
-  return <section className="home-memory" aria-label="最近的一段回忆">
+  return <section className="home-memory" aria-label={ariaLabel}>
     <MemoryPreview
       memory={memory}
       total={memories.length}
@@ -50,7 +50,7 @@ export function HomeMemory({ memories }: { memories: HomeMemoryData[] }) {
       playRef={playButton}
     />
     {playing
-      ? <MemoryPlayer memory={memory} onClose={() => setPlaying(false)} returnFocusTo={playButton} />
+      ? <MemoryPlayer memory={memory} onClose={() => setPlaying(false)} returnFocusTo={playButton} closeLabel={closeLabel} />
       : null}
   </section>;
 }
@@ -241,10 +241,11 @@ function pairSomePortraits(scenes: MemoryScene[]): MemoryScene[] {
   return out;
 }
 
-function MemoryPlayer({ memory, onClose, returnFocusTo }: {
+function MemoryPlayer({ memory, onClose, returnFocusTo, closeLabel }: {
   memory: HomeMemoryData;
   onClose: () => void;
   returnFocusTo: React.RefObject<HTMLButtonElement | null>;
+  closeLabel: string;
 }) {
   const reduced = usePrefersReducedMotion();
   const [index, setIndex] = useState(0);
@@ -347,7 +348,7 @@ function MemoryPlayer({ memory, onClose, returnFocusTo }: {
       {track ? <audio ref={audio} src={track} loop muted={muted} preload="auto" /> : null}
 
       <header className="memory-player-head">
-        <button type="button" className="memory-player-close" onClick={closeViaUI} aria-label="关闭，回到首页">✕</button>
+        <button type="button" className="memory-player-close" onClick={closeViaUI} aria-label={closeLabel}>✕</button>
         <div className="memory-player-heading">
           <h2 id={titleId}>{memory.title}</h2>
           <p>{memory.dateTime ? <time dateTime={memory.dateTime}>{memory.subtitle}</time> : memory.subtitle}</p>

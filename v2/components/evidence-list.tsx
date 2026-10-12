@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 import type { Contributor, Media, RawSource, SourceType } from "@/lib/types";
 import { presentableEvidenceText, presentableSourceLabel } from "@/lib/organizer/evidence-text";
 import { isThumbnailEligible } from "@/lib/media/hero";
@@ -49,7 +50,7 @@ function EvidenceItem({ source, mediaById, contributorById, deliverableIds }: {
   deliverableIds?: ReadonlySet<string>;
 }) {
   const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
-  const withImages = sourceMedia.filter((item) => isThumbnailEligible(item) && (!deliverableIds || deliverableIds.has(item.id)));
+  const withImages = uniqueDisplayMedia(sourceMedia.filter((item) => isThumbnailEligible(item) && (!deliverableIds || deliverableIds.has(item.id))));
   const withoutImages = sourceMedia.filter((item) => deliverableIds && !deliverableIds.has(item.id));
   const text = presentableEvidenceText(source.text);
   const label = presentableSourceLabel(source.sourceLabel);

@@ -26,7 +26,7 @@ export async function renderOnDemand(): Promise<void> {
   await connection();
 }
 
-// The routes that call renderOnDemand() and read through loadFamilyArchiveOnDemand(). Named here
-// so app/api/internal/revalidate knows which incoming paths mean "the archive changed under the
-// on-demand pages" without either file guessing about the other.
-export const ON_DEMAND_ARCHIVE_PATHS: readonly string[] = ["/", "/memory", "/mom-reports"];
+// Static paths that call renderOnDemand() and read through loadFamilyArchiveOnDemand(). Dynamic
+// year/person routes share the same memo, cleared by any archive refresh, but have no route cache
+// to revalidate as a page pattern.
+export const ON_DEMAND_ARCHIVE_PATHS: readonly string[] = ["/", "/memory", "/memory/growth", "/memory/people", "/memory/search", "/mom-reports"];

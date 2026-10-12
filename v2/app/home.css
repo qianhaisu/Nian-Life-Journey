@@ -621,7 +621,7 @@
     width: 1px;
     background: var(--home-line);
   }
-  .home-memory { grid-column: 2; margin: 0; }
+  .home-v2 .home-memory { grid-column: 2; margin: 0; }
   .weekly { grid-column: 1 / -1; margin-top: clamp(48px, 8vh, 96px); }
 
   /* 字号：taito 标题 60px、说明 20px（3:1）。汉字圆体视觉更重，标题取 clamp(46, 4.3vw, 64)；
@@ -655,7 +655,7 @@
      竖照在这种格子里会被裁穿人脸。收到和预览同一个宽度，版式才和手机上一致。 */
   .memory-player-stage { width: min(620px, 100%); margin-inline: auto; }
   /* 照片：填满照片列、高度取 --home-photo-h（不再是 4:5 的竖长条）。 */
-  .memory-frames {
+  .home-v2 .memory-frames {
     aspect-ratio: auto;
     width: 100%;
     height: var(--home-photo-h);

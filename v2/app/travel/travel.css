@@ -96,13 +96,17 @@
 
 .travel-trip .detail-head { padding-bottom: clamp(16px, 3vw, 24px); }
 .travel-trip .detail-head h1 { max-width: none; }
-.travel-trip-cover .photo { margin: 0; overflow: hidden; border-radius: var(--r-card); }
-.travel-trip .story-layer { margin-top: clamp(20px, 4vw, 32px); }
-
-.travel-days { display: grid; gap: clamp(32px, 6vw, 48px); margin-top: clamp(28px, 5vw, 44px); padding: 0; list-style: none; }
-.travel-day { display: grid; gap: 10px; padding-top: clamp(20px, 4vw, 28px); border-top: 1px solid var(--color-border); }
-.travel-day-title { margin: 0; font-size: 1.25rem; font-weight: 800; line-height: 1.35; }
-.travel-day-title a { color: var(--color-text); }
-.travel-day-lead { margin: 0; color: var(--color-text); line-height: 1.8; }
-.travel-day-more { justify-self: start; color: var(--sage-ink); font-size: .9rem; font-weight: 700; }
-.travel-day-more::after { content: " →"; }
+.travel-reel { --home-serif: var(--font-heading); }
+.travel-reel .home-memory { margin-bottom: 0; }
+.travel-reel .memory-actions { display: none; }
+.travel-reel .memory-caption-line { bottom: 60px; line-height: 1.5; }
+.travel-essay { margin-top: clamp(32px, 6vw, 56px); }
+.travel-essay h2 { margin: 0 0 22px; font-size: clamp(1.35rem, 4.6vw, 1.8rem); line-height: 1.5; }
+.travel-essay-body { max-width: 36em; font-size: clamp(1.05rem, 2.6vw, 1.18rem); line-height: 1.95; }
+.travel-essay-body p { margin: 0 0 1.2em; }
+.travel-sources { margin-top: 32px; padding-top: 18px; border-top: 1px solid var(--color-border); color: var(--sage-ink); font-size: .9rem; }
+.travel-sources summary { width: fit-content; padding-block: 8px; cursor: pointer; }
+.travel-sources ul { display: grid; gap: 12px; padding: 16px 0 0; margin: 0; list-style: none; }
+.travel-sources a { display: flex; align-items: baseline; gap: 8px 16px; color: var(--color-text); line-height: 1.6; }
+.travel-sources time { flex: none; color: var(--muted); }
+@media (max-width: 480px) { .travel-sources a { flex-direction: column; gap: 2px; } }
