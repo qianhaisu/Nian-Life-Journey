@@ -28,3 +28,14 @@ test("auxiliary markdown is excluded and unsafe references reject validation", (
   assert.equal(auxiliary.messages.length, 0);
   assert.throws(() => validateChatImportBundle({ schemaVersion: "chat-import-bundle/v1", parserVersion: "test", sourceProvider: "wechat-official-markdown", sourceTimezone: "Asia/Shanghai", exportSnapshot: { rootFingerprint: "x", capturedAt: "x", fileCount: 1 }, conversations: [], participants: [], messages: [{ messageId: "x", conversationId: "c", senderId: "s", direction: "unknown", sentAt: "2026-01-01T00:00:00+08:00", messageType: "text", text: "", mediaRefs: [{ id: "m", relativePath: "../escape.jpg", availability: "missing" }], sourceLocator: { document: "d", recordOrdinal: 1 } }], mediaRefs: [], warnings: [] }));
 });
+
+test("the 2026-10 WeFlow bold header format parses to the same messages as the older ## format", () => {
+  const head = "# 家庭群\n\n- 会话ID: `12345@chatroom`\n- 会话类型: 群聊\n---\n";
+  const oldText = `${head}## 2026\-10\-08 08:37:31 阿静\n\n\n哈哈\n\n## 2026\-10\-08 08:37:42 大兵\n\n\n累并快乐着\n`;
+  const newText = `${head}**2026\-10\-08 08:37:31 阿静**\n\n\n哈哈\n\n**2026\-10\-08 08:37:42 大兵**\n\n\n累并快乐着\n`;
+  const a = parseWechatMarkdown({ root: "C:/export", document: "c.md", media: new Map(), text: oldText });
+  const b = parseWechatMarkdown({ root: "C:/export", document: "c.md", media: new Map(), text: newText });
+  assert.equal(b.messages.length, 2);
+  assert.equal(b.messages[1].sender ?? b.messages[1].senderName, "大兵");
+  assert.deepEqual(b.messages.map((m) => m.messageId), a.messages.map((m) => m.messageId));
+});

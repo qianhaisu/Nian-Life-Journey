@@ -6,7 +6,10 @@ import { canonicalMessageId, type ChatMessage, type ChatMessageType, type MediaA
 // NOT the document-derived conversationId. One chat exported twice has two conversationIds and one
 // sessionKey, which is the only handle that can say "these two documents are the same chat".
 export interface ParsedMarkdown { document: string; conversationId: string; conversationName: string; sessionKey: string; messages: ChatMessage[]; warnings: string[]; }
-const header = /^## (\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) (.+)$/;
+// WeFlow's older exports write each message header as `## <time> <sender>`; the version released in
+// October 2026 writes `**<time> <sender>**` instead (2026-10-26: every export since the update parsed
+// to zero messages and the daily sync silently imported nothing). Both shapes are accepted.
+const header = /^(?:## (\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) (.+)|\*\*(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) (.+?)\*\*)$/;
 export function id(value: string) { return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 24); }
 export function safeTarget(root: string, document: string, target: string) {
   if (!target || /^(?:[A-Za-z]:[\\/]|\\\\|[a-z][a-z0-9+.-]*:)/i.test(target)) return undefined;
@@ -37,7 +40,7 @@ export function parseWechatMarkdown(input: { root: string; document: string; tex
   const conversationId = `conversation:${id(sessionId ? `markdown\n${sessionId}\n${title}\n${sessionType}` : title + "\n" + headerLines.join("\n"))}`; const messages: ChatMessage[] = [];
   let current: { sentAt: string; sender: string; body: string[]; ordinal: number } | undefined; let ordinal = 0;
   const flush = () => { if (!current) return; const body = current.body.join("\n"); const refs = [...body.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((m, i) => { const rawTarget = m[1].trim(); const path = safeTarget(input.root, input.document, rawTarget); const relativePath = path ?? `unresolved-${id(rawTarget)}`; const meta = path ? input.media.get(path) : undefined; return { id: `media-ref:${id(relativePath)}:${i}`, relativePath, checksum: meta?.checksum, availability: meta?.availability ?? (path ? "missing" : "invalid" as const), mimeType: meta?.mimeType, fileSize: meta?.fileSize, width: meta?.width, height: meta?.height }; }); const type: ChatMessageType = refs.length ? (body.replace(/!\[[^\]]*\]\(([^)]+)\)/g, "").trim() ? "mixed" : "image") : "text"; const base = { conversationId, senderId: `sender:${id(current.sender)}`, direction: "unknown" as const, sentAt: current.sentAt, messageType: type, text: body, mediaRefs: refs, sourceLocator: { document: input.document, recordOrdinal: current.ordinal } }; messages.push({ ...base, senderName: current.sender, messageId: canonicalMessageId(base, 0) }); };
-  for (const line of lines.slice(boundary + 1)) { const match = line.replaceAll("\\-", "-").match(header); if (match) { flush(); ordinal += 1; current = { sentAt: `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}+08:00`, sender: match[7], body: [], ordinal }; } else if (current) current.body.push(line); }
+  for (const line of lines.slice(boundary + 1)) { const match = line.replaceAll("\\-", "-").match(header); if (match) { flush(); ordinal += 1; const g = match[1] ? match.slice(1, 8) : match.slice(8, 15); current = { sentAt: `${g[0]}-${g[1]}-${g[2]}T${g[3]}:${g[4]}:${g[5]}+08:00`, sender: g[6], body: [], ordinal }; } else if (current) current.body.push(line); }
   flush(); const counts = new Map<string, number>(); for (const message of messages) { const n = counts.get(message.messageId) ?? 0; counts.set(message.messageId, n + 1); if (n) message.messageId = canonicalMessageId(message, n); message.occurrenceRank = n; }
   return { document: input.document, conversationId, conversationName: "conversation_1", sessionKey: sessionId ? `wechat-session:${sessionId}` : "", messages, warnings: [] };
 }
