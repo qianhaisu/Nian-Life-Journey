@@ -520,7 +520,11 @@ async function main() {
       }
       recordOrdinals = selection.ordinals;
       reservation = selection.reservation;
-      batchKey = `content:${[...selection.ordinals].sort((a, b) => a - b).join(",")}`;
+      // import_batch_id is a unique-indexed text column and embeds this key; a few hundred ordinals
+      // blow past Postgres' index row limit (2026-10-26: a 644-message batch failed the task insert).
+      // Short lists keep the historical readable form so earlier batch ids stay valid.
+      const ordinalList = [...selection.ordinals].sort((a, b) => a - b).join(",");
+      batchKey = ordinalList.length <= 200 ? `content:${ordinalList}` : `content-sha256:${selection.ordinals.size}:${createHash("sha256").update(ordinalList, "utf8").digest("hex")}`;
       log(`conversation ${index}: content dedupe selected ${selection.ordinals.size} of ${full.bundle.messages.length} (${selection.alreadyArchived} already archived, ${selection.ambiguous.length} undecided)`);
       ledger({ phase: "import", event: "content_selected", conversationIndex: index, digest, sessionKeyDigest: digestOf(sessionKey), selected: selection.ordinals.size, alreadyArchived: selection.alreadyArchived, ambiguous: selection.ambiguous.length });
     }
