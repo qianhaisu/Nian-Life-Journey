@@ -18,6 +18,7 @@ import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { formatDay, formatMonth } from "@/lib/time-signature";
 import { selectHomeAnswer } from "@/lib/home-answer";
+import { loadMonthContent } from "@/lib/month-content";
 import type { FamilyArchive } from "@/lib/family-archive";
 import "./home.css";
 
@@ -48,6 +49,10 @@ export default async function HomePage() {
   const memories = await attachMemoryReading(selected.memories, archive);
   const absence = selected.absence;
 
+  // 当月与上月编辑过的月稿给的一句话（读的是月稿文件，不是数据库）。
+  const editedLines = (await Promise.all([feed.clock.today.slice(0, 7), prevMonth(feed.clock.today.slice(0, 7))]
+    .map(async (month) => ({ month, line: (await loadMonthContent(month))?.cardLine ?? "" })))).filter((item) => item.line);
+
   return <div className="home-v2">
     <div className="home-sheet">
       {/* 这一页的 h1 是这句问候，不是照片上的题签：页面回答的问题是「最近怎么样」，
@@ -56,7 +61,7 @@ export default async function HomePage() {
           手机上它就是照片上方的两个块，和之前一样）。 */}
       <div className="home-lede">
         <h1 className="home-greeting"><span className="greeting-ask">最近怎么样，</span><span className="keep-whole">张年</span></h1>
-        <RecentAnswer archive={archive} today={feed.clock.today} />
+        <RecentAnswer archive={archive} today={feed.clock.today} editedLines={editedLines} />
       </div>
       {memories.length > 0
         ? <HomeMemory memories={memories} />
@@ -75,8 +80,13 @@ export default async function HomePage() {
  * （lib/family-archive.ts:177），这里只是消费已经读到内存的东西。CLAUDE.md 渲染路径那条
  * $87 出站流量的规矩不允许在这里多加一次读，这一段也确实没有加。
  */
-function RecentAnswer({ archive, today }: { archive: FamilyArchive; today: string }) {
-  const answer = selectHomeAnswer(archive.snapshots, today, archive.birthDay);
+function prevMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+
+function RecentAnswer({ archive, today, editedLines }: { archive: FamilyArchive; today: string; editedLines: { month: string; line: string }[] }) {
+  const answer = selectHomeAnswer(archive.snapshots, today, archive.birthDay, editedLines);
   if (!answer) return null;
   return <p className="home-answer">
     {answer.parts.map((part, i) => part.core

@@ -51,7 +51,7 @@ const NO_CURATE = process.argv.includes("--no-curate"); // 同场景精选（Ted
 const FILES_FROM = (arg("files-from") ?? "").split(",").map((s) => s.trim()).filter(Boolean).map((s) => path.resolve(s)); // 复用之前批次下载过的缩略图
 const OPS = "C:/Users/teddy/NianlifeOps";
 const REFS = `${OPS}/ops-daily/photos/refs`;
-const ECS = { ssh: "ecs-user@47.99.243.155", key: "C:/Users/teddy/Downloads/nianlife-prod-ecs.pem" };
+const ECS = { ssh: "ecs-user@47.99.243.155", key: process.env.ECS_KEY ?? "C:/Users/teddy/.ssh/nianlife-prod-ecs.pem" };
 const REPO_V2 = path.resolve(new URL("../..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
 const say = (m) => console.log(`[media ${MONTH}] ${m}`);
 const scp = (dest) => spawnSync("scp", ["-q", "-o", "BatchMode=yes", "-i", ECS.key, `${ECS.ssh}:/srv/nianlife-content/${MONTH}.json`, dest], { encoding: "utf8" }).status === 0;

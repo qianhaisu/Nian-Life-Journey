@@ -9,7 +9,7 @@ import {CAROUSEL_PROMPT_VERSION} from './home-carousel-score.mjs';
 
 const workDir=path.resolve(process.env.NIANLIFE_CAROUSEL_WORK_DIR??`.data/home-carousel-nightly/${CAROUSEL_PROMPT_VERSION}`);
 fs.mkdirSync(path.join(workDir,'scores'),{recursive:true});
-const cacheFile=path.resolve('data/photo-topics.json');
+const cacheFile=path.resolve(process.env.NIANLIFE_CAROUSEL_PREVIOUS??'data/photo-topics.json');
 const previous=JSON.parse(fs.readFileSync(cacheFile,'utf8'));
 // Preserve the reviewed initial release and explicit per-theme vetoes.
 const overrides={};
@@ -23,16 +23,16 @@ const {openRds}=await import('../../.data/night-rds.mjs');
 const rds=await openRds({readOnly:true});let rows;
 try{
  rows=(await rds.client.query(`select m.id,to_char(m.taken_at,'YYYY-MM-DD HH24:MI:SS') as "takenAt",m.width,m.height,'photo' as type
- from media m where m.type='photo' and m.visibility<>'private' and m.taken_at::date<=current_date
+ from media m where m.type='photo' and m.visibility<>'private' and m.taken_at::date<=current_date and m.taken_at>='${process.env.NIANLIFE_CAROUSEL_SINCE??'1970-01-01'}'::date
  and least(m.width,m.height)>=480 and greatest(m.width,m.height)>=720
  and (select q.decision from content_quality_reviews q where q.target_kind='media_subject_check' and q.target_id=m.id order by q.reviewed_at desc limit 1)='approved'
- and exists(select 1 from media_locations ml where ml.media_asset_id=m.media_asset_id and ml.provider='hot' and ml.variant='web' and ml.status='ready')
+ and exists(select 1 from media_locations ml where ml.media_asset_id=m.media_asset_id and ml.provider in ('hot','oss') and ml.variant='web' and ml.status='ready')
  order by m.taken_at,m.id`)).rows;
 }finally{await rds.close();}
 for(const p of rows)if(previous.topics[p.id]?.carousel?.takenAt!==p.takenAt)delete overrides[p.id];
 const manifest=path.join(workDir,'candidates.json');fs.writeFileSync(manifest,JSON.stringify(rows));
 fs.writeFileSync(path.join(workDir,'overrides.json'),JSON.stringify(overrides));
-const scored=spawnSync(process.execPath,['scripts/editor/home-carousel-rescore.mjs','--manifest',manifest,'--work-dir',workDir,'--concurrency','4','--batch-size','3'],{stdio:'inherit'});
+const scored=spawnSync(process.execPath,[process.env.NIANLIFE_CAROUSEL_SCORER??'scripts/editor/home-carousel-rescore.mjs','--manifest',manifest,'--work-dir',workDir,'--concurrency','4','--batch-size','3'],{stdio:'inherit'});
 if(scored.status!==0)process.exit(scored.status??1);
 const stamp=new Date().toISOString().replace(/[:.]/g,'-');const backup=path.join(workDir,`cache-before-${stamp}.json`);
 fs.copyFileSync(cacheFile,backup);

@@ -60,8 +60,16 @@ export function selectHomeAnswer(
   snapshots: readonly { month: string; summary?: string | null }[],
   today: string,
   birthDay?: string,
+  // 编辑过的月稿自带的一句月卡文字（month content 的 cardLine）。同一个月它压过 Organizer 快照：
+  // 快照是模型当月写的、Organizer 停了以后不再更新，而月稿是每日编辑核过来源的。
+  // 2026-10-26：十月没有快照，首页一直在答九月。
+  editedLines: readonly { month: string; line: string }[] = [],
 ): HomeAnswer | undefined {
-  const withSummary = snapshots
+  const edited = new Map(editedLines.filter((item) => item.line.trim()).map((item) => [item.month, item.line]));
+  const withSummary = [
+    ...editedLines.filter((item) => item.line.trim()).map((item) => ({ month: item.month, summary: item.line })),
+    ...snapshots.filter((snapshot) => !edited.has(snapshot.month)),
+  ]
     .filter((snapshot) => snapshot.summary?.trim())
     .sort((a, b) => b.month.localeCompare(a.month));
   // 当前日历月优先；没有就退到有 summary 的最新一个月。不猜、不合成。

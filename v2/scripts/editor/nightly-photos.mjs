@@ -62,6 +62,13 @@ async function main() {
   try { fs.writeFileSync(lock, String(process.pid), { flag: "wx" }); } catch { say("❌ 上一次还在跑（run.lock 存在）"); return 2; }
   const digest = { today: TODAY, write: WRITE, considered: 0, downloaded: 0, downloadFailures: 0, approved: 0, storeOnly: 0, held: 0, errors: 0, added: [], notes: [] };
   const download = async (id, file, phase) => {
+    // 导入的微信照片默认 private，站点接口不给 private 的图（by design）。NIANLIFE_MEDIA_CACHE 指向一个目录时，
+    // 先从那里取（由 .data/oct-fetch.mjs 从对象存储拉到本地的网页版派生图），取不到再走站点接口。
+    const cacheDir = process.env.NIANLIFE_MEDIA_CACHE;
+    if (cacheDir) {
+      const cached = path.join(cacheDir, `${id.replace(/[^A-Za-z0-9._-]/g, "_")}.webp`);
+      if (fs.existsSync(cached)) { fs.copyFileSync(cached, file); return true; }
+    }
     const result = await downloadPhoto(`${MEDIA_BASE}/api/media/${encodeURIComponent(id)}?variant=web`, file);
     if (!result.ok) {
       digest.downloadFailures += 1;

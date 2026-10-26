@@ -78,3 +78,15 @@ test("selectHomeAnswer 带出 parts，且与 line 一致", () => {
   assert.equal(answer.parts.map((part) => part.text).join(""), answer.line);
   assert.equal(answer.parts.filter((part) => part.core).length, 5);
 });
+
+test("an edited month card line beats the organizer snapshot and a newer month wins over an older one", () => {
+  const snapshots = [{ month: "2026-09", summary: "- 九月的快照第一行" }];
+  const answer = selectHomeAnswer(snapshots, "2026-10-27", "2025-01-03", [{ month: "2026-10", line: "十月的编辑月稿一句话" }]);
+  assert.equal(answer?.month, "2026-10");
+  assert.equal(answer?.line, "十月的编辑月稿一句话");
+  // Same month: the edited line replaces the snapshot instead of sitting next to it.
+  const same = selectHomeAnswer([{ month: "2026-10", summary: "- 快照" }], "2026-10-27", "2025-01-03", [{ month: "2026-10", line: "月稿" }]);
+  assert.equal(same?.line, "月稿");
+  // No edited lines → behaviour unchanged.
+  assert.equal(selectHomeAnswer(snapshots, "2026-10-27", "2025-01-03")?.month, "2026-09");
+});

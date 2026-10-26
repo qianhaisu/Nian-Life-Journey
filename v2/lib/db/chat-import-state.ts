@@ -12,7 +12,9 @@ import type { ChatImportCheckpoint, ChatImportStage, ChatImportTask, ChatImportT
 import { newId } from "./repository-interface";
 
 export const DEFAULT_CHAT_IMPORT_STAGE: ChatImportStage = "snapshot_validation";
-export const DEFAULT_CHAT_IMPORT_LEASE_MS = 5 * 60 * 1000;
+// CHAT_IMPORT_LEASE_MS lets a one-off backfill with 100 MB videos hold the lease across a slow upload
+// (2026-10-26: the 5-minute default expired mid-batch). The daily run keeps the default.
+export const DEFAULT_CHAT_IMPORT_LEASE_MS = Number(process.env.CHAT_IMPORT_LEASE_MS) || 5 * 60 * 1000;
 export const DEFAULT_CHAT_IMPORT_MAX_ATTEMPTS = 3;
 
 const stageOrder: ChatImportStage[] = ["snapshot_validation", "bundle_parse", "raw_source_persist", "media_validate", "media_upload", "media_link", "finalize"];

@@ -12,7 +12,7 @@ export function restoreCarouselScores(candidates,workDir,historyRoot=HISTORY_ROO
  const byId=new Map(candidates.map(p=>[p.id,p]));let reused=0;
  const records=fs.readFileSync(file,'utf8').split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line)).sort((a,b)=>b.assessedAt.localeCompare(a.assessedAt));
  for(const row of records){
-  const p=byId.get(row.mediaId);if(!p||row.model!=='glm-5.3-flash'||row.promptVersion!==CAROUSEL_PROMPT_VERSION||row.promptHash!==digest(CAROUSEL_PROMPT)
+  const p=byId.get(row.mediaId);if(!p||!['glm-5.3-flash','deepseek-flash'].includes(row.model)||row.promptVersion!==CAROUSEL_PROMPT_VERSION||row.promptHash!==digest(CAROUSEL_PROMPT)
     ||row.takenAt!==p.takenAt||row.source.width!==p.width||row.source.height!==p.height)continue;
   const out=path.join(workDir,'scores',digest(p.id)+'.json');if(fs.existsSync(out))continue;
   const localImage=path.join(workDir,'images',digest(p.id)+'.webp');
