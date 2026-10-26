@@ -1234,3 +1234,40 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .header-search { display: inline-flex; justify-content: center; align-items: center; width: 44px; height: 44px; color: var(--color-secondary); }
 @media (max-width: 480px) { .brand-copy { flex-direction: column; align-items: flex-start; gap: 4px; white-space: normal; } }
 @media (min-width: 700px) { .header-inner { grid-template-columns: minmax(0, 1fr) auto auto; } }
+
+/* ── 精致层（2026-10-26 Teddy：「ui 还是不够精致 科技」）──────────────────────────────
+   方向：保留暖纸底（原则一，给家人读），把精致感放在细节上——发丝线、分层阴影、
+   等宽数字与标签、更小更利的圆角、半透明页眉、极淡点阵代替噪点。全部用 token 叠加在
+   上面的规则之后，不改任何结构；要回退，删掉这一整段即可。 */
+:root {
+  --font-display: var(--font-poppins, 'Poppins'), 'Yozai', var(--font-nunito, 'Nunito'), 'NianRound', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-serif: var(--font-lora, 'Lora'), 'LXGW WenKai', 'Songti SC', serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --hairline: rgb(67 62 56 / .10);
+  --hairline-strong: rgb(67 62 56 / .18);
+  --r-card: 20px;
+  --r-badge: 12px;
+  --shadow: 0 0 0 1px var(--hairline), 0 1px 2px rgb(67 62 56 / .05), 0 18px 36px -18px rgb(67 62 56 / .18);
+  --shadow-hover: 0 0 0 1px var(--hairline-strong), 0 2px 4px rgb(67 62 56 / .06), 0 28px 48px -20px rgb(67 62 56 / .26);
+  --shadow-badge: 0 0 0 1px var(--hairline);
+  --color-border: #E6E0D6;
+}
+body::before {
+  background-image: radial-gradient(rgb(67 62 56 / .09) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+  opacity: .55;
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 70%);
+  mask-image: linear-gradient(to bottom, #000, transparent 70%);
+}
+.site-header { position: sticky; top: 0; border-bottom: 1px solid var(--hairline); background: rgb(249 246 240 / .72); -webkit-backdrop-filter: saturate(1.4) blur(16px); backdrop-filter: saturate(1.4) blur(16px); }
+.section-mark, .eyebrow, .layer-label { font-family: var(--font-display); font-size: .78rem; font-weight: 500; font-style: normal; letter-spacing: .1em; }
+time, .evidence-time, .monthly-focus-meta, .monthly-focus-origin { font-family: var(--font-display); font-variant-numeric: lining-nums tabular-nums; letter-spacing: .01em; }
+h1, h2, h3, .serif, .home-title-line, .section-heading h2 { font-family: var(--font-display); font-weight: 500; }
+.home-masthead h1, .page-masthead h1, .about-masthead h1 { font-weight: 400; }
+.home-masthead h1, .page-masthead h1, .about-masthead h1 { letter-spacing: -.02em; }
+.primary-button { border-radius: 10px !important; box-shadow: inset 0 1px 0 rgb(255 255 255 / .14), 0 1px 2px rgb(67 62 56 / .2); }
+.text-link, .back-link { border-bottom: 1px solid var(--hairline-strong); }
+.text-link:hover, .back-link:hover { border-bottom-color: var(--color-accent); }
+.capture-form input, .capture-form select, .capture-form textarea { border-radius: 8px; border-color: var(--hairline-strong); }
+:focus-visible { outline-offset: 3px; border-radius: 4px; }
+@media (prefers-reduced-motion: no-preference) { img { transition: opacity .4s var(--ease-out); } }

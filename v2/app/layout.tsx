@@ -7,6 +7,8 @@ import "./fonts.css";
 // 霞鹜文楷：只声明 @font-face，不给任何元素指定字体；真正用到它的只有 app/home.css 里
 // .home-v2 作用域内的规则，所以其他页面的字体一个像素都不变（见 fonts-wenkai.css 顶部）。
 import "./fonts-wenkai.css";
+// 悠哉字体（OFL）：标题用的中文手写体，只声明 @font-face，见 fonts-yozai.css 顶部。
+import "./fonts-yozai.css";
 import "./globals.css";
 import "./shadcn.css";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -29,6 +31,26 @@ const nunito = localFont({
   variable: "--font-nunito",
 });
 
+// Poppins (headings, numerals) and Lora (serif accents) — both SIL OFL 1.1, licences beside the files.
+// Latin subsets only; CJK glyphs fall through to the stacks in globals.css.
+const poppins = localFont({
+  src: [
+    { path: "./fonts/poppins/poppins-latin-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/poppins/poppins-latin-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/poppins/poppins-latin-600.woff2", weight: "600", style: "normal" },
+  ],
+  display: "swap",
+  variable: "--font-poppins",
+});
+const lora = localFont({
+  src: [
+    { path: "./fonts/lora/lora-latin.woff2", weight: "400 700", style: "normal" },
+    { path: "./fonts/lora/lora-latin-italic.woff2", weight: "400 700", style: "italic" },
+  ],
+  display: "swap",
+  variable: "--font-lora",
+});
+
 // A private family archive: readable by whoever has the link, but never something search engines
 // should index (see app/robots.ts). Pages set their own `title`; the template keeps the site name.
 export const metadata: Metadata = {
@@ -41,5 +63,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f5efe4" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="zh-CN" data-scroll-behavior="smooth" className={nunito.variable}><body><a className="skip-link" href="#main-content">跳到主要内容</a><SiteHeader /><main id="main-content" className="site-shell">{children}</main><SiteFooter /><ScrollReveal /></body></html>;
+  return <html lang="zh-CN" data-scroll-behavior="smooth" className={`${nunito.variable} ${poppins.variable} ${lora.variable}`}><body><a className="skip-link" href="#main-content">跳到主要内容</a><SiteHeader /><main id="main-content" className="site-shell">{children}</main><SiteFooter /><ScrollReveal /></body></html>;
 }

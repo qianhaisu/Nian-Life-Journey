@@ -1,0 +1,3 @@
+Yozai (悠哉字体) — Copyright (C) 2020 LXGW. Original Font Data Copyright (C) Y.OzVox.
+Licensed under the SIL Open Font License, Version 1.1 (http://scripts.sil.org/OFL; text also embedded in each font file's name table).
+Self-hosted unmodified from @chinese-fonts/yozai@3.0.0 (cn-font-split slices of the Regular weight).

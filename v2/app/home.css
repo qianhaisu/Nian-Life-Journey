@@ -694,3 +694,18 @@
 
 .memory-player-slot:last-child .memory-scene-reading { bottom: calc(112px + env(safe-area-inset-bottom)); }
 .memory-scene-title { display: block; margin-bottom: .3rem; font-size: .95rem; }
+
+/* ── 精致层（2026-10-26）：照片是主角，所以给它发丝描边 + 分层投影，像一块被精确裁切的玻璃；
+   控件改成半透明描边，元信息改等宽。回退：删掉这一段。 */
+.memory-frames { border-radius: 14px; box-shadow: 0 0 0 1px rgb(40 38 33 / .08), 0 1px 2px rgb(40 38 33 / .06), 0 28px 56px -24px rgb(40 38 33 / .34); }
+.memory-frames::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .12); pointer-events: none; }
+.home-memory--single .memory-single-photo { border-radius: 14px; box-shadow: 0 0 0 1px rgb(40 38 33 / .08), 0 24px 48px -24px rgb(40 38 33 / .3); }
+.home-v2 { --home-serif: var(--font-poppins, "Poppins"), "Yozai", "LXGW WenKai", "Songti SC", "Noto Serif SC", serif; }
+.home-greeting { font-weight: 500; }
+.memory-caption-line { font-family: var(--font-display); font-size: 12.5px; letter-spacing: .03em; font-variant-numeric: lining-nums; }
+.memory-title { letter-spacing: .01em; }
+.home-answer-source { font-family: var(--font-display); font-size: 13px; letter-spacing: .02em; }
+.memory-switch { border-color: var(--hairline-strong); border-radius: 10px; background: rgb(255 255 255 / .5); letter-spacing: .04em; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.memory-read { letter-spacing: .02em; }
+.weekly { border-top-color: var(--hairline); }
+.weekly-heading { font-family: var(--font-display); font-size: 13px; letter-spacing: .12em; }

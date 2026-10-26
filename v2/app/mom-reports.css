@@ -234,3 +234,9 @@
 @media (prefers-reduced-motion: reduce) {
   .mr-page * { transition: none !important; animation: none !important; }
 }
+
+/* 2026-10-26 Teddy：妈妈月报不跟全站的新字体方案（Poppins + 悠哉）走，保持原来的标题与日期字体。
+   全站规则在 globals.css 末尾的「精致层」；这里用 :where() 把优先级压到最低，只退回字体和字重，
+   页面自己写在 .mr-* 选择器里的任何设置都不受影响。 */
+.mr-page :where(h1, h2, h3, .serif, time) { font-family: var(--font-heading); font-weight: revert; font-variant-numeric: normal; letter-spacing: normal; }
+.mr-page :where(h1, .serif) { font-weight: 600; }
