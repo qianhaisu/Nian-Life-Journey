@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import type { ChatImportBundle, ChatMediaRef } from "./chat-import-bundle";
 import { chatImportBatchId } from "./chat-import-bundle";
@@ -7,7 +6,7 @@ import { buildWechatMessageItem } from "./wechat-import";
 import { assertWechatSnapshot, hashWechatFile, loadWechatBundle, type WechatBundleOptions, type WechatSnapshotEntry } from "./wechat-snapshot";
 import { normalizeSha256 } from "@/lib/db/chat-import-persistence";
 import { createDerivatives, sourceImageMetadata } from "@/lib/media/processing";
-import { activeMediaProvider, getStorageForProvider, hotStorage, type HotStorage } from "@/lib/storage/hot-storage";
+import { getStorageForProvider, type HotStorage } from "@/lib/storage/hot-storage";
 import type { ChatImportTask, MediaAsset, MediaLocation, MediaProvider } from "@/lib/types";
 import type { Repository, UploadPersistInput } from "@/lib/db/repository-interface";
 import * as defaultRepository from "@/lib/db/repository";
@@ -27,9 +26,8 @@ export type WechatWorkerOptions = WechatBundleOptions & {
   // Phase 3B2: kept for backward compatibility with existing callers/tests that inject ONE
   // storage double for every upload (e.g. test/wechat-worker.test.mjs's CountingStorage) — when
   // given, it is used for BOTH the original and every derivative, exactly as before. New code
-  // should use originalStorage/derivativeStorage instead, which default independently: original
-  // always through the legacy "hot" backend (hotStorage), derivative through
-  // getStorageForProvider(activeMediaProvider()) — see the module doc comment near uploadVerified.
+  // should use originalStorage/derivativeStorage for storage test doubles. Production writes
+  // originals and derivatives to OSS, with the same provider recorded for every copy.
   storage?: HotStorage;
   originalStorage?: HotStorage;
   derivativeStorage?: HotStorage;
@@ -153,19 +151,16 @@ function bytesChecksum(bytes: Uint8Array) {
 
 type StoredMediaObject = { key: string; variant: "original" | "thumbnail" | "web"; mimeType: string; size: number; width?: number; height?: number; uploaded: boolean };
 
-// Phase 3B2: the original is unconditionally the "hot" R2/local staging tier — it feeds the
-// awaiting_archive → Quark pipeline (lib/archive/quark-archive.ts), unaffected by this round, so
-// it is written through `originalStorage` regardless of MEDIA_STORAGE_PROVIDER. Only the
-// derivative (thumbnail/web) copies follow activeMediaProvider(), written through
-// `derivativeStorage`. The two are no longer forced through the same client instance — a
-// deployment that has flipped MEDIA_STORAGE_PROVIDER=oss for new derivatives still needs
-// `derivativeStorage` distinct from `originalStorage` so the original keeps landing on R2/local.
+// Every new media copy, including the original, is stored in OSS. Upload fixed bytes:
+// OSS does not support the SDK streaming checksum trailer encoding.
 async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, originalStorage: HotStorage, derivativeStorage: HotStorage) {
   const sourceHash = await hashWechatFile(entry);
   if (sourceHash.checksum !== checksum || sourceHash.size !== entry.size) throw new Error("WECHAT_MEDIA_HASH_CHANGED");
   // The format mediaStatus sniffed from the bytes (image/jpeg or image/png since 2026-09-16), not an
   // assumption: it decides the object key's extension, what the object is stored as, and what the
   // asset row claims to be.
+  const bytes = new Uint8Array(await readFile(entry.absolutePath));
+  if (bytes.byteLength !== entry.size || bytesChecksum(bytes) !== checksum) throw new Error("WECHAT_MEDIA_HASH_CHANGED");
   const sourceMimeType = entry.imageMimeType ?? "image/jpeg";
   const key = objectKey(checksum, sourceMimeType);
   const existing = await originalStorage.verify(key, checksum);
@@ -176,37 +171,11 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, orig
   }
   if (!existing.exists || !existing.checksumVerified) {
     await withRetry(2, async () => {
-      let actualChecksum = "";
-      let actualSize = 0;
-      const body = (async function* () {
-        const stream = createReadStream(entry.absolutePath);
-        const hash = createHash("sha256");
-        for await (const chunk of stream) {
-          hash.update(chunk);
-          actualSize += chunk.byteLength;
-          yield chunk;
-        }
-        actualChecksum = `sha256:${hash.digest("hex")}`;
-      })();
-      try {
-        await originalStorage.put({ key, body, mimeType: sourceMimeType, checksum, fileSize: entry.size });
-      } catch (error) {
-        await originalStorage.delete(key).catch(() => undefined);
-        throw error;
-      }
-      if (actualChecksum !== checksum || actualSize !== entry.size) {
-        await originalStorage.delete(key).catch(() => undefined);
-        throw new Error("WECHAT_MEDIA_HASH_CHANGED");
-      }
+      await originalStorage.put({ key, body: bytes, mimeType: sourceMimeType, checksum, fileSize: entry.size });
     });
     originalUploaded = true;
   }
 
-  const bytes = new Uint8Array(await readFile(entry.absolutePath));
-  if (bytes.byteLength !== entry.size || bytesChecksum(bytes) !== checksum) {
-    await originalStorage.delete(key).catch(() => undefined);
-    throw new Error("WECHAT_MEDIA_HASH_CHANGED");
-  }
   const dimensions = await sourceImageMetadata(bytes);
   const derivativeObjects: StoredMediaObject[] = [];
   const asset = { id: `media-asset:${checksum.slice("sha256:".length)}`, profileId: "", mediaType: "photo" as const, mimeType: sourceMimeType, checksum, createdAt: "" };
@@ -237,12 +206,9 @@ async function uploadVerified(entry: WechatSnapshotEntry, checksum: string, orig
   return { objects: [{ key, variant: "original" as const, mimeType: sourceMimeType, size: verification.fileSize ?? sourceHash.size, width: dimensions.width, height: dimensions.height, uploaded: originalUploaded }, ...derivativeObjects] };
 }
 
-// The original is always tagged "hot" (see uploadVerified's doc comment above); a derivative is
-// tagged with whichever provider derivativeStorage actually is — `derivativeProvider` is computed
-// once per worker run by the SAME activeMediaProvider() call that chose derivativeStorage itself
-// (see runWechatImportWorker below), so the tag and the physical backend can never disagree.
+// Persist the actual destination for every variant; OSS originals are ready immediately.
 function hotLocation(assetId: string, object: StoredMediaObject, now: string, derivativeProvider: MediaProvider): MediaLocation {
-  const provider = object.variant === "original" ? "hot" : derivativeProvider;
+  const provider = derivativeProvider;
   // The id has to carry the provider, because the table's two unique keys disagree without it.
   //
   // media_locations has a PRIMARY KEY on id AND a unique index on (provider, provider_ref). This
@@ -261,7 +227,7 @@ function hotLocation(assetId: string, object: StoredMediaObject, now: string, de
   // Re-importing something that already has a row of the SAME provider is unaffected: the
   // (provider, provider_ref) arbiter still matches and the insert still does nothing.
   const id = `hot-location:${digest(`${provider} ${object.variant} ${object.key}`)}`;
-  return { id, mediaAssetId: assetId, provider, variant: object.variant, providerRef: object.key, status: object.variant === "original" ? "awaiting_archive" : "ready", mimeType: object.mimeType, fileSize: object.size, width: object.width, height: object.height, createdAt: now, updatedAt: now };
+  return { id, mediaAssetId: assetId, provider, variant: object.variant, providerRef: object.key, status: object.variant === "original" && provider === "hot" ? "awaiting_archive" : "ready", mimeType: object.mimeType, fileSize: object.size, width: object.width, height: object.height, createdAt: now, updatedAt: now };
 }
 
 function reportFrom(task: ChatImportTask | null, values: Omit<WechatWorkerReport, "taskId" | "status" | "safeErrorCode" | "checkpoint" | "processedMessages"> & { safeErrorCode?: string }): WechatWorkerReport {
@@ -343,20 +309,11 @@ function buildBatchItems(
 
 export async function runWechatImportWorker(options: WechatWorkerOptions): Promise<WechatWorkerReport> {
   const repository: WechatWorkerRepository = options.repository ?? defaultRepository;
-  // Phase 3B2: original always through the legacy "hot" backend; derivative follows
-  // activeMediaProvider() — computed once here so the storage client and the provider tag
-  // (buildBatchItems → hotLocation) are guaranteed to agree for this entire run, the same
-  // decoupling Phase 3B1-fix already applies at the routing-function level.
-  //
-  // `options.storage`, when given, is a FULL legacy override: both original and derivative go
-  // through that one client AND both are tagged "hot" — never "oss" — regardless of
-  // MEDIA_STORAGE_PROVIDER. Tagging a row "oss" while its bytes actually landed in whatever
-  // `options.storage` is would be exactly the tag/backend mismatch Phase 3B1-fix exists to
-  // prevent, so a single-storage caller (existing tests, or any future one) gets the pre-3B2
-  // behavior in full, not just the storage-selection half of it.
-  const derivativeProvider: MediaProvider = options.storage ? "hot" : activeMediaProvider();
-  const originalStorage = options.storage ?? options.originalStorage ?? hotStorage;
-  const derivativeStorage = options.storage ?? options.derivativeStorage ?? getStorageForProvider(derivativeProvider);
+  // Production import never uses R2, including when an old environment still selects it.
+  // The explicit single-storage override is retained for isolated storage doubles.
+  const derivativeProvider: MediaProvider = options.storage ? "hot" : "oss";
+  const originalStorage = options.storage ?? options.originalStorage ?? getStorageForProvider("oss");
+  const derivativeStorage = options.storage ?? options.derivativeStorage ?? getStorageForProvider("oss");
   const leaseOwner = options.leaseOwner ?? `wechat-worker:${randomUUID()}`;
   const messageBatchSize = clamp(options.messageBatchSize, 50, 20, 100);
   const mediaConcurrency = clamp(options.mediaConcurrency, 4, 2, 24);

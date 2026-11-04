@@ -102,19 +102,17 @@ test("worker uploads one verified object set, persists family-visible evidence, 
   }
 });
 
-// Phase 3B2: the original and its derivatives no longer have to share one storage client. With
-// MEDIA_STORAGE_PROVIDER=oss really set on process.env, the original must still land on the
-// legacy "hot" client (it feeds the awaiting_archive → Quark pipeline, untouched by this round)
-// while the derivatives land on a DIFFERENT client and are tagged "oss" — proving the split by
-// checking which fake client actually received which put() calls, not just the location rows.
-test("with MEDIA_STORAGE_PROVIDER=oss, the original still uploads through originalStorage tagged \"hot\" while derivatives upload through derivativeStorage tagged \"oss\"", async () => {
+// Originals and derivatives must use OSS even with a stale R2 environment.
+test("all new variants use OSS even when an old environment selects R2", async () => {
   const root = await createFixture();
   const previousEnv = process.env.MEDIA_STORAGE_PROVIDER;
-  process.env.MEDIA_STORAGE_PROVIDER = "oss";
+  process.env.MEDIA_STORAGE_PROVIDER = "r2";
   try {
     const repository = createInMemoryRepository();
     const originalStorage = new CountingStorage();
     const derivativeStorage = new CountingStorage();
+    const originalPut = originalStorage.put.bind(originalStorage);
+    originalStorage.put = async (input) => { assert.ok(input.body instanceof Uint8Array, "OSS receives replayable bytes without streaming trailers"); return originalPut(input); };
     const options = { sourceRoot: root, profileId: "profile-wechat-oss-split-test", contributorId: "contributor-system", repository, originalStorage, derivativeStorage, leaseOwner: "synthetic-oss-split-worker", maxMessages: 100, maxMedia: 20, now: new Date().toISOString() };
     const report = await runWechatImportWorker(options);
     assert.equal(report.status, "completed_with_warnings");
@@ -127,10 +125,10 @@ test("with MEDIA_STORAGE_PROVIDER=oss, the original still uploads through origin
     const store = await repository.getStore();
     // A "wechat"-provider location (the raw chat-attachment reference, from buildWechatMessageItem
     // in lib/ingest/wechat-import.ts) also has variant "original" — filter to the hot-staging one.
-    const original = store.mediaLocations.find((location) => location.variant === "original" && location.provider === "hot");
+    const original = store.mediaLocations.find((location) => location.variant === "original" && location.provider !== "wechat");
     const derivatives = store.mediaLocations.filter((location) => location.variant !== "original");
-    assert.equal(original?.provider, "hot", "the original is unaffected by MEDIA_STORAGE_PROVIDER");
-    assert.equal(original?.status, "awaiting_archive");
+    assert.equal(original?.provider, "oss");
+    assert.equal(original?.status, "ready");
     assert.equal(derivatives.length, 2);
     assert.ok(derivatives.every((location) => location.provider === "oss"), "every derivative must be tagged \"oss\" once MEDIA_STORAGE_PROVIDER=oss");
     assert.ok(derivatives.every((location) => location.status === "ready"));
