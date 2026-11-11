@@ -7,6 +7,7 @@
 // evidence: the photo or video itself is already displayed by the media grid next to the text.
 const MEDIA_MARKDOWN = /!?\[[^\]]*\]\(\s*media\/[^)]*\)/g;
 const PLACEHOLDER_TOKEN = /\[(media|图片|视频|视频文件|表情包|动画表情|语音|文件|位置|链接|链接分享|名片|转账|红包)\]/g;
+const WECHAT_EMOTICON = /\[(微笑|撇嘴|色|发呆|得意|流泪|害羞|闭嘴|睡|大哭|尴尬|发怒|调皮|呲牙|惊讶|难过|囧|抓狂|吐|偷笑|愉快|白眼|傲慢|困|惊恐|憨笑|悠闲|咒骂|疑问|嘘|晕|衰|骷髅|敲打|再见|擦汗|抠鼻|鼓掌|坏笑|右哼哼|左哼哼|哈欠|鄙视|委屈|快哭了|阴险|亲亲|飞吻|可怜|笑脸|生病|脸红|破涕为笑|喜极而泣|恐惧|失望|无语|嘿哈|捂脸|奸笑|机智|皱眉|耶|吃瓜|加油|加油加油|汗|天啊|Emm|社会社会|旺柴|好的|打脸|哇|翻白眼|666|让我看看|叹气|苦涩|裂开|嘴唇|爱心|比心|心碎|拥抱|强|点赞|弱|握手|胜利|抱拳|勾引|拳头|OK|合十|啤酒|咖啡|蛋糕|玫瑰|送花|凋谢|菜刀|炸弹|便便|月亮|太阳|庆祝|礼物|红包|發|福|烟花|爆竹|猪头|跳跳|发抖|转圈)\]/g;
 const EXPORTER_TOKEN = /\$(names|username|revoke|emoji)\$/g;
 const WECHAT_ESCAPE = /\\([[\]().*_~`>#+\-!\\])/g;
 const RECALL_NOTICE = /撤回了一条消息|你邀请.*加入了群聊|邀请你和.*加入了群聊|^\s*\d+\s*条聊天记录\s*$/;
@@ -30,6 +31,11 @@ function stripQuotedReply(text: string): string {
 }
 
 const SERVICE_MESSAGE = /满意度调查|问卷|退订|回复\s*TD|验证码|【[^】]{2,12}】.{0,40}(?:您|尊敬的)/;
+
+export function stripWechatEmoticons(text: string | undefined | null): string {
+  if (!text) return "";
+  return text.replace(WECHAT_EMOTICON, "").replace(/[ \t]+/g, " ").trim();
+}
 
 // Returns the text as it should be displayed, or an empty string when nothing readable is left.
 // An empty result means "render the media, not a caption" — never "hide the evidence item".

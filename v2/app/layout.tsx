@@ -4,11 +4,8 @@ import localFont from "next/font/local";
 // 分片与许可见 app/fonts.css 顶部注释与 public/fonts/nian-round/LICENSE.txt。
 // 写在 globals 之前，@font-face 先于用到它的规则声明。
 import "./fonts.css";
-// 霞鹜文楷：只声明 @font-face，不给任何元素指定字体；真正用到它的只有 app/home.css 里
-// .home-v2 作用域内的规则，所以其他页面的字体一个像素都不变（见 fonts-wenkai.css 顶部）。
+// 霞鹜文楷：自托管 @font-face 分片（见 app/fonts-wenkai.css），全站文学标题与章节题签统一与 Lora 搭配。
 import "./fonts-wenkai.css";
-// 悠哉字体（OFL）：标题用的中文手写体，只声明 @font-face，见 fonts-yozai.css 顶部。
-import "./fonts-yozai.css";
 import "./globals.css";
 import "./shadcn.css";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -60,7 +57,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
   alternates: { canonical: "./" },
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f5efe4" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#F8F4EC" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="zh-CN" data-scroll-behavior="smooth" className={`${nunito.variable} ${poppins.variable} ${lora.variable}`}><body><a className="skip-link" href="#main-content">跳到主要内容</a><SiteHeader /><main id="main-content" className="site-shell">{children}</main><SiteFooter /><ScrollReveal /></body></html>;

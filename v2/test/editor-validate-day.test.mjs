@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateDayText, quotesOf, normalizeForQuote, UNCONFIRMED_NAMES, VAGUE_PERSON, personMentions, attributedLabel } from "../scripts/editor/validate-day.mjs";
+import { validateDayText, validateLiteraryStyle, quotesOf, normalizeForQuote, UNCONFIRMED_NAMES, VAGUE_PERSON, personMentions, attributedLabel } from "../scripts/editor/validate-day.mjs";
 import { unconfirmedNames, registeredLabels, labelForSender, KINSHIP_TERMS } from "../scripts/editor/identity-rules.mjs";
 import { FAMILY_REGISTRY } from "../lib/organizer/family-registry.ts";
 import { senderDigestForDisplayName } from "../lib/organizer/identity.ts";
@@ -182,7 +182,24 @@ test("一天既没标题也没正文是错的", () => {
   assert.match(validateDayText({ day: "2026-09-18", title: null, paragraphs: [] }, SRC).errors.join(), /既没有标题也没有正文/);
 });
 
-test("quotesOf：嵌套只取最外层", () => {
+test("quotesOf：嵌套只取最外层，且弯引号“”与直角引号「」同样受逐字来源与说话人核验约束", () => {
   assert.deepEqual(quotesOf("他说「你说『好』」然后走了"), ["你说『好』"]);
   assert.deepEqual(quotesOf("他说「你说「好」吧」"), ["你说「好」吧"]);
+  assert.deepEqual(quotesOf("老师说：“今天他自己爬上了小滑梯”"), ["今天他自己爬上了小滑梯"]);
+  assert.deepEqual(validateDayText(day(["老师说：“今天他自己爬上了小滑梯”。"]), SRC).errors, []);
+  assert.match(validateDayText(day(["老师说：“今天他自己爬上了大滑梯”。"]), SRC).errors.join(), /引语找不到来源/, "弯引号绝不能绕过逐字核验");
+  assert.match(validateDayText(day(["妈妈说：“今天他自己爬上了小滑梯”。"]), SRC).errors.join(), /引语归属不对/, "弯引号绝不能绕过说话人归属核验");
+});
+
+test("validateLiteraryStyle：拦截空泛套话、聊天室转播腔与机械四段式排班表，但不误伤原话引语", () => {
+  assert.ok(validateLiteraryStyle(day(["这一天留下了满满的幸福。"])).length > 0);
+  assert.ok(validateLiteraryStyle(day(["老师发来几张照片，记录成长的足迹。"])).length > 0);
+  assert.ok(validateLiteraryStyle(day([
+    "早上，他喝了奶。上午，他去公园。中午，他吃了面。下午，他睡了一觉。晚上，他看绘本。",
+  ])).some((e) => e.includes("按时间段机械罗列")));
+  assert.deepEqual(
+    validateLiteraryStyle(day(["奶奶说「满满的幸福」。"])),
+    [],
+    "家人原话里的词在引号内不误伤",
+  );
 });

@@ -51,7 +51,7 @@ export function DayDetail({
         <section className="story-layer reading-wrap">
           <div className="story-column">
             {paragraphs.map((text, index) => (
-              <p key={index} className={index === 0 ? "story-lead" : undefined}>{text}</p>
+              <p key={index}>{text}</p>
             ))}
           </div>
         </section>
@@ -80,8 +80,18 @@ export function DayDetail({
       {mergedNote ? <p className="reading-wrap chapter-meta day-detail-merged">{mergedNote}</p> : null}
 
       <nav className="reading-wrap day-neighbors" aria-label="继续读日子">
-        {previous ? <Link href={previous.href} prefetch={false}>← {previous.title}</Link> : <span />}
-        {next ? <Link href={next.href} prefetch={false}>{next.title} →</Link> : null}
+        {previous ? (
+          <Link className="day-neighbor day-neighbor-prev" href={previous.href} prefetch={false}>
+            <span className="section-mark">← 上一日</span>
+            <span className="serif day-neighbor-title">{previous.title}</span>
+          </Link>
+        ) : <span />}
+        {next ? (
+          <Link className="day-neighbor day-neighbor-next" href={next.href} prefetch={false}>
+            <span className="section-mark">下一日 →</span>
+            <span className="serif day-neighbor-title">{next.title}</span>
+          </Link>
+        ) : null}
       </nav>
       <footer className="detail-footer reading-wrap">
         <Link className="text-link" href={monthHref}>回到 {monthLabel}</Link>

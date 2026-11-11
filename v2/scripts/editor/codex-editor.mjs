@@ -73,20 +73,40 @@ function assertSourcesUnchanged(sources, currentSources) {
 }
 
 /**
- * Pure candidate builder. Every existing day is immutable, regardless of its editor/source.
+ * Pure candidate builder. Every existing day is immutable by default, regardless of its editor/source.
+ * Explicit rewrites are allowed ONLY for days listed in allowRewriteDays (never _source="human"),
+ * archiving the prior published day entry + SHA-256 into _revisions so zero history is ever lost.
  * currentSources must come from a fresh read-only database query, not the prepared file.
  */
-export function buildCandidate({ month, original = null, decisions, sources, currentSources, realNames = [], now }) {
+export function buildCandidate({
+  month,
+  original = null,
+  decisions,
+  sources,
+  currentSources,
+  realNames = [],
+  now,
+  allowRewriteDays = [],
+  literary = false,
+  monthMeta = null,
+}) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) refuse("INVALID_MONTH", "Invalid month.");
   if (!nonempty(now) || Number.isNaN(Date.parse(now))) refuse("INVALID_TIME", "A valid review timestamp is required.");
   if (original !== null && !validateMonthContent(original, month)) refuse("INVALID_PRODUCTION", "Production snapshot failed month-content validation.");
   if (!Array.isArray(decisions)) refuse("INVALID_DECISIONS", "Decisions must be an array.");
   assertSourcesUnchanged(sources, currentSources);
+  const rewriteAllowSet = new Set(allowRewriteDays);
   const lookup = new Map(sources.map((source) => [source.id, source]));
-  const protectedDays = new Map((original?.days ?? []).map((day) => [day.day, JSON.stringify(day)]));
+  const priorByDay = new Map((original?.days ?? []).map((day) => [day.day, structuredClone(day)]));
+  const protectedDays = new Map(
+    (original?.days ?? [])
+      .filter((day) => !rewriteAllowSet.has(day.day))
+      .map((day) => [day.day, JSON.stringify(day)]),
+  );
   let content = original === null ? { schema: MONTH_SCHEMA, month, speakerBySourceId: {}, days: [] } : structuredClone(original);
   const seen = new Set();
   const wrote = [];
+  const rewritten = [];
   const skipped = [];
 
   for (const decision of decisions) {
@@ -94,9 +114,16 @@ export function buildCandidate({ month, original = null, decisions, sources, cur
       refuse("INVALID_DECISIONS", "Invalid, duplicate, or wrong-month decision date.");
     }
     seen.add(decision.day);
-    if (protectedDays.has(decision.day)) refuse("EXISTING_DAY", "An already published day cannot be changed.", { day: decision.day });
+    const prior = priorByDay.get(decision.day) ?? null;
+    if (prior && !rewriteAllowSet.has(decision.day)) {
+      refuse("EXISTING_DAY", "An already published day cannot be changed.", { day: decision.day });
+    }
+    if (prior && prior._source === "human") {
+      refuse("HUMAN_DAY_PROTECTED", "A human-authored day cannot be rewritten.", { day: decision.day });
+    }
     if (!sources.some((source) => source.day === decision.day)) refuse("UNPREPARED_DAY", "Decision date has no prepared source evidence.", { day: decision.day });
     if (decision.decision === "skip") {
+      if (prior) refuse("INVALID_DECISIONS", "An explicit rewrite day cannot use decision=skip.", { day: decision.day });
       if (!nonempty(decision.reason)) refuse("INVALID_DECISIONS", "A skipped day requires a reason.", { day: decision.day });
       skipped.push({ day: decision.day, reason: decision.reason });
       continue;
@@ -110,7 +137,12 @@ export function buildCandidate({ month, original = null, decisions, sources, cur
         refuse("UNKNOWN_SOURCE", "Each paragraph must cite prepared sources from its own day.", { day: decision.day });
       }
     }
-    const shape = checkDecision({ ...decision, kind: decision.kind ?? "story", paragraphs: paragraphs.map((paragraph) => ({ text: paragraph.text, sources: paragraph.sourceIds })) }, new Set(lookup.keys()));
+    const allowedKinds = prior ? ["story", "visual-description", "text-only"] : ["story", "text-only"];
+    const shape = checkDecision(
+      { ...decision, kind: decision.kind ?? prior?.kind ?? "story", paragraphs: paragraphs.map((paragraph) => ({ text: paragraph.text, sources: paragraph.sourceIds })) },
+      new Set(lookup.keys()),
+      { kinds: allowedKinds },
+    );
     if (!shape.ok) refuse("INVALID_DECISIONS", "Decision shape failed validation.", { day: decision.day, error: shape.error });
 
     const evidence = { quotes: [], persons: [], paragraphSources: [] };
@@ -128,25 +160,105 @@ export function buildCandidate({ month, original = null, decisions, sources, cur
     const cited = ids.map((id) => lookup.get(id));
     const titleCheck = validateDayText({ day: decision.day, title: decision.title, paragraphs: [] }, cited, { realNames });
     errors.push(...titleCheck.errors);
+    if (literary) {
+      const fullLiteraryCheck = validateDayText({ day: decision.day, title: decision.title, paragraphs: paragraphs.map((p) => p.text) }, cited, { realNames, literary: true });
+      for (const e of fullLiteraryCheck.errors) if (e.includes("非虚构禁用") || e.includes("按时间段机械罗列")) errors.push(e);
+    }
     const badTitleTimes = timeWordProblems(decision.title, cited.map((source) => Number(source.time.slice(0, 2))));
     if (badTitleTimes.length) errors.push(`标题时间不符：${badTitleTimes.join("、")}`);
     const hits = sensitiveHits({ title: decision.title, paragraphs: paragraphs.map((paragraph) => paragraph.text) });
     if (hits.length) errors.push(...hits.map((hit) => `敏感兜底：${hit.category}`));
-    if (errors.length) refuse("TEXT_VALIDATION_FAILED", "Draft failed attribution, privacy, quote, or time checks.", { day: decision.day, errors });
+    if (errors.length) refuse("TEXT_VALIDATION_FAILED", "Draft failed attribution, privacy, quote, literary, or time checks.", { day: decision.day, errors });
 
-    content = appendDay(content, { day: decision.day, kind: decision.kind ?? "story", title: decision.title, paragraphs: paragraphs.map((paragraph) => paragraph.text), sourceIds: ids, evidence }, {
-      birthDay: "2025-01-03", now, dataCutoff: decision.day,
+    if (prior) {
+      const existingIdx = content.days.findIndex((d) => d.day === decision.day);
+      if (existingIdx >= 0) content.days[existingIdx]._source = "machine";
+    }
+
+    const firstScreenMediaIds = decision.firstScreenMediaIds ?? prior?.firstScreenMediaIds ?? [];
+    const expandedMediaIds = decision.expandedMediaIds ?? prior?.expandedMediaIds ?? [];
+    const storyBoundMediaIds = decision.storyBoundMediaIds ?? prior?.storyBoundMediaIds ?? [];
+    const eventIds = decision.eventIds ?? prior?.eventIds ?? (prior?.eventId ? [prior.eventId] : []);
+
+    content = appendDay(content, {
+      day: decision.day,
+      kind: decision.kind ?? prior?.kind ?? "story",
+      title: decision.title,
+      paragraphs: paragraphs.map((paragraph) => paragraph.text),
+      sourceIds: ids,
+      firstScreenMediaIds,
+      expandedMediaIds,
+      storyBoundMediaIds,
+      eventIds,
+      evidence,
+    }, {
+      birthDay: "2025-01-03",
+      now,
+      dataCutoff: decision.day,
       speakerBySourceId: Object.fromEntries(cited.map((source) => [source.id, source.speaker ?? "未登记的人"])),
     }).content;
-    content.days.find((day) => day.day === decision.day)._source = "codex";
-    wrote.push({ day: decision.day, sourceIds: ids });
+
+    const targetDay = content.days.find((day) => day.day === decision.day);
+    targetDay._source = "codex";
+    const emphasis = decision.emphasis ?? prior?.emphasis;
+    if (emphasis === "lead" || emphasis === "quiet") targetDay.emphasis = emphasis;
+    if (prior) {
+      const { _revisions: priorRevs = [], ...priorSnapshot } = prior;
+      targetDay._revisions = [
+        ...priorRevs,
+        {
+          archivedAt: now,
+          sha256: sha256(JSON.stringify(priorSnapshot)),
+          title: priorSnapshot.title ?? null,
+          kind: priorSnapshot.kind,
+          paragraphs: priorSnapshot.paragraphs,
+          sourceIds: priorSnapshot.sourceIds ?? [],
+          _source: priorSnapshot._source ?? null,
+        },
+      ];
+      rewritten.push({ day: decision.day, priorSha256: sha256(JSON.stringify(priorSnapshot)), sourceIds: ids });
+    }
+    wrote.push({ day: decision.day, sourceIds: ids, rewritten: Boolean(prior) });
+  }
+
+  let metaChanged = false;
+  if (monthMeta && typeof monthMeta === "object") {
+    const prevMeta = {
+      cardLine: content.cardLine,
+      intro: content.intro,
+      coverMediaId: content.coverMediaId,
+      coverFocal: content.coverFocal,
+      coverFrame: content.coverFrame,
+    };
+    for (const key of ["cardLine", "intro", "coverMediaId", "coverFocal", "coverFrame"]) {
+      if (monthMeta[key] !== undefined && JSON.stringify(monthMeta[key]) !== JSON.stringify(content[key])) {
+        content[key] = monthMeta[key];
+        metaChanged = true;
+      }
+    }
+    if (metaChanged) {
+      content._metaRevisions = [...(content._metaRevisions ?? []), { archivedAt: now, ...prevMeta }];
+      content.generatedAt = now;
+    }
   }
 
   for (const [day, serialized] of protectedDays) {
     if (JSON.stringify(content.days.find((entry) => entry.day === day)) !== serialized) refuse("EXISTING_DAY_CHANGED", "An existing day changed while building the candidate.", { day });
   }
-  if (wrote.length && !validateMonthContent(content, month)) refuse("INVALID_CANDIDATE", "Candidate failed month-content validation.");
-  return { content: wrote.length ? content : original, review: { month, wrote, skipped, protectedDays: [...protectedDays].map(([day, serialized]) => ({ day, sha256: sha256(serialized) })), published: false } };
+  const hasChanges = wrote.length > 0 || metaChanged;
+  if (hasChanges && !validateMonthContent(content, month)) refuse("INVALID_CANDIDATE", "Candidate failed month-content validation.");
+  return {
+    content: hasChanges ? content : original,
+    review: {
+      month,
+      wrote,
+      rewritten,
+      skipped,
+      metaChanged,
+      protectedDays: [...protectedDays].map(([day, serialized]) => ({ day, sha256: sha256(serialized) })),
+      published: false,
+    },
+  };
 }
 
 /** A transfer/probe failure is never evidence that a production month is missing. */
@@ -222,15 +334,24 @@ function realNames() {
   return value.names;
 }
 
-export async function prepare(out, { today = shanghaiToday() } = {}) {
+export async function prepare(out, { today = shanghaiToday(), lookbackDays = 14, rewriteDays = [] } = {}) {
   if (!validDay(today)) refuse("INVALID_TIME", "Invalid Shanghai date.");
+  const span = Math.max(1, Math.min(366, Number(lookbackDays) || 14));
+  for (const rd of rewriteDays) {
+    if (!validDay(rd) || rd >= today) refuse("INVALID_REWRITE_DAY", "Rewrite days must be valid past YYYY-MM-DD dates.", { day: rd });
+  }
   const directory = privateDirectory(out);
   if (fs.existsSync(path.join(directory, "source-pack.json"))) refuse("OUTPUT_EXISTS", "Source pack already exists; use a fresh private directory.");
   realNames();
   const ecs = resolveEcsConnection();
-  const from = addDays(today, -14);
+  const windowFrom = addDays(today, -span);
+  const earliestRewrite = [...rewriteDays].sort()[0] ?? windowFrom;
+  const from = earliestRewrite < windowFrom ? earliestRewrite : windowFrom;
   const readyThrough = addDays(today, -1);
-  const allDays = Array.from({ length: 14 }, (_, index) => addDays(from, index));
+  const allDays = [];
+  for (let d = windowFrom; d <= readyThrough; d = addDays(d, 1)) allDays.push(d);
+  for (const rd of rewriteDays) if (!allDays.includes(rd)) allDays.push(rd);
+  allDays.sort();
   const months = [...new Set(allDays.map((day) => day.slice(0, 7)))];
   const production = path.join(directory, "production");
   fs.mkdirSync(production, { recursive: true, mode: 0o700 });
@@ -243,16 +364,32 @@ export async function prepare(out, { today = shanghaiToday() } = {}) {
   let allSources;
   try { allSources = await loadSources(rds.client, from, today); } finally { await rds.close(); }
   const covered = new Set(snapshots.flatMap((snapshot) => snapshot.content?.days.map((day) => day.day) ?? []));
-  const days = allDays.filter((day) => !covered.has(day) && allSources.some((source) => source.day === day && isReadable(source.text)));
+  const rewriteSet = new Set(rewriteDays);
+  for (const rd of rewriteSet) {
+    if (!covered.has(rd)) refuse("INVALID_REWRITE_DAY", "Cannot rewrite a day that is not currently published.", { day: rd });
+  }
+  const days = allDays.filter((day) => (rewriteSet.has(day) || !covered.has(day)) && allSources.some((source) => source.day === day && isReadable(source.text)));
   const sources = allSources.filter((source) => days.includes(source.day));
-  const pack = { schema: PACK_SCHEMA, generatedAt: new Date().toISOString(), today, from, readyThrough, days, sources, sourceFingerprint: sha256(JSON.stringify(sources)),
+  const pack = {
+    schema: PACK_SCHEMA,
+    generatedAt: new Date().toISOString(),
+    today,
+    from,
+    lookbackDays: span,
+    rewriteDays: [...rewriteSet].sort(),
+    readyThrough,
+    days,
+    sources,
+    sourceFingerprint: sha256(JSON.stringify(sources)),
     months: snapshots.map(({ month, revision, snapshotFile }) => ({ month, revision, snapshotFile })),
-    coveredDays: [...covered].sort(), noReadableSourceDays: allDays.filter((day) => !covered.has(day) && !days.includes(day)) };
+    coveredDays: [...covered].sort(),
+    noReadableSourceDays: allDays.filter((day) => !covered.has(day) && !days.includes(day)),
+  };
   writePrivateJson(path.join(directory, "source-pack.json"), pack);
-  return { days: days.length, sources: sources.length, sourcePack: path.join(directory, "source-pack.json") };
+  return { days: days.length, rewriteDays: rewriteSet.size, sources: sources.length, sourcePack: path.join(directory, "source-pack.json") };
 }
 
-export async function apply(out, decisionsFile) {
+export async function apply(out, decisionsFile, { literary = false, monthMetaFile = null } = {}) {
   const directory = privateDirectory(out);
   if (!nonempty(decisionsFile)) refuse("DECISIONS_REQUIRED", "Specify the private decisions JSON with --decisions.");
   assertOutsideRepository(path.resolve(decisionsFile), REPO);
@@ -261,11 +398,14 @@ export async function apply(out, decisionsFile) {
   const pack = JSON.parse(packBytes.toString("utf8"));
   const decisionBytes = fs.readFileSync(decisionsFile);
   const decisions = JSON.parse(decisionBytes.toString("utf8"));
+  const monthMetaByMonth = monthMetaFile ? JSON.parse(fs.readFileSync(path.resolve(monthMetaFile), "utf8")) : {};
+  if (monthMetaFile) assertOutsideRepository(path.resolve(monthMetaFile), REPO);
   if (pack.schema !== PACK_SCHEMA || !Array.isArray(pack.days) || !Array.isArray(pack.months)
-    || !validDay(pack.today) || pack.from !== addDays(pack.today, -14) || pack.readyThrough !== addDays(pack.today, -1)
+    || !validDay(pack.today) || !validDay(pack.from) || pack.readyThrough !== addDays(pack.today, -1)
     || sha256(JSON.stringify(pack.sources)) !== pack.sourceFingerprint) refuse("INVALID_SOURCE_PACK", "Prepared source pack failed integrity checks.");
   checkedSources(pack.sources);
-  if (!Array.isArray(decisions) || decisions.some((decision) => !decision || !pack.days.includes(decision.day))) refuse("UNPREPARED_DAY", "Decisions may only address prepared uncovered days.");
+  if (!Array.isArray(decisions) || decisions.some((decision) => !decision || !pack.days.includes(decision.day))) refuse("UNPREPARED_DAY", "Decisions may only address prepared days.");
+  const allowRewriteDays = Array.isArray(pack.rewriteDays) ? pack.rewriteDays : [];
   const names = realNames();
   const ecs = resolveEcsConnection();
   const rds = await connectReadOnly();
@@ -278,8 +418,12 @@ export async function apply(out, decisionsFile) {
   if (fs.existsSync(path.join(directory, "review-receipt.json"))) refuse("OUTPUT_EXISTS", "Reviewed candidates already exist; prepare a fresh source pack.");
   fs.mkdirSync(candidateDir, { recursive: true, mode: 0o700 });
   fs.mkdirSync(checkDir, { recursive: true, mode: 0o700 });
+  const targetMonths = [...new Set([
+    ...decisions.map((decision) => decision.day.slice(0, 7)),
+    ...Object.keys(monthMetaByMonth),
+  ])];
   const results = [];
-  for (const month of [...new Set(decisions.map((decision) => decision.day.slice(0, 7)))]) {
+  for (const month of targetMonths) {
     const prepared = pack.months.find((snapshot) => snapshot.month === month);
     if (!prepared || !(prepared.revision === "absent" || /^[a-f0-9]{64}$/.test(prepared.revision))) refuse("INVALID_SOURCE_PACK", "Missing production revision evidence.");
     let original = null;
@@ -291,15 +435,25 @@ export async function apply(out, decisionsFile) {
     }
     const fresh = readProductionSnapshot(month, path.join(checkDir, `${month}.json`), ecs);
     if (fresh.revision !== prepared.revision) refuse("PRODUCTION_CHANGED", "Production changed after preparation; prepare a fresh source pack.");
-    const built = buildCandidate({ month, original, decisions: decisions.filter((decision) => decision.day.startsWith(`${month}-`)),
-      sources: pack.sources.filter((source) => source.day.startsWith(`${month}-`)), currentSources: currentSources.filter((source) => source.day.startsWith(`${month}-`)), realNames: names, now: new Date().toISOString() });
+    const built = buildCandidate({
+      month,
+      original,
+      decisions: decisions.filter((decision) => decision.day.startsWith(`${month}-`)),
+      sources: pack.sources.filter((source) => source.day.startsWith(`${month}-`)),
+      currentSources: currentSources.filter((source) => source.day.startsWith(`${month}-`)),
+      realNames: names,
+      now: new Date().toISOString(),
+      allowRewriteDays: allowRewriteDays.filter((d) => d.startsWith(`${month}-`)),
+      literary,
+      monthMeta: monthMetaByMonth[month] ?? null,
+    });
     results.push({ ...built, expectedRevision: prepared.revision });
   }
 
   const reviews = [];
   for (const result of results) {
     const review = { ...result.review, expectedRevision: result.expectedRevision, candidateFile: null, candidateSha256: null };
-    if (result.review.wrote.length) {
+    if (result.review.wrote.length || result.review.metaChanged) {
       review.candidateFile = `candidates/${result.review.month}.json`;
       const destination = path.join(directory, review.candidateFile);
       writePrivateJson(destination, result.content);
@@ -308,19 +462,26 @@ export async function apply(out, decisionsFile) {
     reviews.push(review);
   }
   const receipt = { schema: RECEIPT_SCHEMA, reviewedAt: new Date().toISOString(), sourcePackSha256: sha256(packBytes), decisionsSha256: sha256(decisionBytes),
-    editor: "codex", modelCalls: 0, databaseWrites: 0, published: false, months: reviews };
+    editor: "antigravity", modelCalls: 0, databaseWrites: 0, published: false, months: reviews };
   writePrivateJson(path.join(directory, "review-receipt.json"), receipt);
-  return { candidates: reviews.filter((review) => review.candidateFile).length, wroteDays: reviews.reduce((count, review) => count + review.wrote.length, 0), published: false, receipt: path.join(directory, "review-receipt.json") };
+  return { candidates: reviews.filter((review) => review.candidateFile).length, wroteDays: reviews.reduce((count, review) => count + review.wrote.length, 0), rewrittenDays: reviews.reduce((count, review) => count + (review.rewritten?.length ?? 0), 0), published: false, receipt: path.join(directory, "review-receipt.json") };
 }
 
 async function main() {
   const args = process.argv.slice(2);
   const option = (name) => { const at = args.indexOf(`--${name}`); return at >= 0 ? args[at + 1] : undefined; };
+  const flag = (name) => args.includes(`--${name}`);
   const out = option("out");
   try {
-    if (args[0] === "prepare") console.log(JSON.stringify(await prepare(out)));
-    else if (args[0] === "apply") console.log(JSON.stringify(await apply(out, option("decisions"))));
-    else refuse("INVALID_COMMAND", "Use prepare --out <private-directory> or apply --out <private-directory> --decisions <private-json>.");
+    if (args[0] === "prepare") {
+      const lookbackDays = option("lookback-days") ? Number(option("lookback-days")) : 21;
+      const rewriteDays = option("rewrite-days") ? option("rewrite-days").split(",").map((s) => s.trim()).filter(Boolean) : [];
+      console.log(JSON.stringify(await prepare(out, { today: option("today") ?? shanghaiToday(), lookbackDays, rewriteDays })));
+    } else if (args[0] === "apply") {
+      console.log(JSON.stringify(await apply(out, option("decisions"), { literary: flag("literary"), monthMetaFile: option("month-meta") ?? null })));
+    } else {
+      refuse("INVALID_COMMAND", "Use prepare --out <private-directory> [--lookback-days N] [--rewrite-days d1,d2] or apply --out <same-directory> --decisions <private-json> [--literary] [--month-meta <json>].");
+    }
   } catch (error) {
     // Detailed validation findings may contain private quotations. Save privately, never log them.
     try {

@@ -107,30 +107,30 @@ function MemoryPreview({ memory, total, onOpen, onSwitch, playRef }: {
           aria-hidden={i !== index}
         /> : null
       ))}
-      <div className="memory-scrim" aria-hidden="true" />
       <button ref={playRef} type="button" className="memory-play" onClick={onOpen} aria-label="播放回忆">
         <PlayGlyph />
       </button>
-      <p className="memory-caption-line">
-        {memory.dateTime
-          ? <time dateTime={memory.dateTime}>{memory.subtitle}</time>
-          : <span>{memory.subtitle}</span>}
-      </p>
-      <h2 className="memory-title">{memory.title}</h2>
     </div>
 
-    <div className="memory-actions">
-      {/* 标签跟着去处走：一天是「读读这一天」，一季是「翻到 2025 年」；
-          主题横跨很多个月，没有对得上的单一去处，就什么都不画。 */}
-      {memory.href && memory.linkLabel
-        ? <Link className="memory-read" href={memory.href}>{memory.linkLabel} <span aria-hidden="true">↗</span></Link>
-        : <span />}
-      {/* 只有真的不止一段时才出现——一段时它点了也没有别的可换。 */}
-      {total > 1
-        ? <Button type="button" variant="outline" className="memory-switch" onClick={onSwitch} aria-label="换一段回忆">
-          换一段 <SwitchGlyph />
-        </Button>
-        : null}
+    <div className="memory-colophon">
+      <div className="memory-colophon-copy">
+        <p className="memory-caption-line">
+          {memory.dateTime
+            ? <time dateTime={memory.dateTime}>{memory.subtitle}</time>
+            : <span>{memory.subtitle}</span>}
+        </p>
+        <h2 className="memory-title">{memory.title}</h2>
+      </div>
+      <div className="memory-actions">
+        {memory.href && memory.linkLabel
+          ? <Link className="memory-read" href={memory.href}>{memory.linkLabel} <span aria-hidden="true">↗</span></Link>
+          : <span />}
+        {total > 1
+          ? <Button type="button" variant="outline" className="memory-switch" onClick={onSwitch} aria-label="换一段回忆">
+            换一段 <SwitchGlyph />
+          </Button>
+          : null}
+      </div>
     </div>
 
     {/* 读屏：换段之后播报换到了哪一段。 */}

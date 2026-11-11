@@ -145,6 +145,50 @@ test("a production change during transfer is refused", (t) => {
   }), { code: "PRODUCTION_CHANGED" });
 });
 
+test("explicit allowRewriteDays archives prior version in _revisions, preserves media, and protects human days", () => {
+  const src9 = source({ id: "source-9", day: "2026-10-09", text: "小年把积木一块一块摆齐了。", speaker: "爸爸" });
+  const rebuilt = buildCandidate({
+    month: "2026-10",
+    original: original(),
+    decisions: [{
+      day: "2026-10-09",
+      decision: "write",
+      title: "把积木摆齐",
+      paragraphs: [{ text: "爸爸说「小年把积木一块一块摆齐了」。", sourceIds: ["source-9"] }],
+    }],
+    sources: [src9],
+    currentSources: [src9],
+    realNames: [],
+    now,
+    allowRewriteDays: ["2026-10-09"],
+    literary: true,
+  });
+  const day9 = rebuilt.content.days.find((d) => d.day === "2026-10-09");
+  assert.equal(day9.title, "把积木摆齐");
+  assert.deepEqual(day9.firstScreenMediaIds, ["photo-9"], "curated media preserved across text rewrite");
+  assert.equal(day9._revisions.length, 1, "prior published version archived in _revisions");
+  assert.equal(day9._revisions[0].title, "原有记录");
+  assert.deepEqual(day9._revisions[0].paragraphs, ["留着原来的每一句话。"]);
+
+  const humanDoc = original();
+  humanDoc.days[0]._source = "human";
+  assert.throws(() => buildCandidate({
+    month: "2026-10",
+    original: humanDoc,
+    decisions: [{
+      day: "2026-10-09",
+      decision: "write",
+      title: "把积木摆齐",
+      paragraphs: [{ text: "爸爸说「小年把积木一块一块摆齐了」。", sourceIds: ["source-9"] }],
+    }],
+    sources: [src9],
+    currentSources: [src9],
+    realNames: [],
+    now,
+    allowRewriteDays: ["2026-10-09"],
+  }), { code: "HUMAN_DAY_PROTECTED" });
+});
+
 test("the CLI writes refusal details outside the repository while logging only a safe code", (t) => {
   const fixture = snapshotFixture(t);
   const directory = path.dirname(fixture.file);

@@ -19,6 +19,7 @@ import { renderOnDemand } from "@/lib/render-on-demand";
 import { formatDay, formatMonth } from "@/lib/time-signature";
 import { selectHomeAnswer } from "@/lib/home-answer";
 import { loadMonthContent } from "@/lib/month-content";
+import { stripWechatEmoticons } from "@/lib/organizer/evidence-text";
 import type { FamilyArchive } from "@/lib/family-archive";
 import "./home.css";
 
@@ -175,7 +176,7 @@ function toReminderView(reminder: HomeReminder): HomeReminderView {
     id: reminder.id,
     whenKey: JSON.stringify(when.kind === "unconfirmed" ? { ...when, raisedDay: reminder.item.evidence?.day ?? reminder.id } : when),
     pendingConfirmation: reminder.state === "tentative" || reminder.state === "needs_confirmation" || when.kind === "unconfirmed",
-    title: reminder.title,
+    title: stripWechatEmoticons(reminder.title) || reminder.title,
     whenText: reminder.deadlineLabel,
     whenDay: when.kind === "day" ? when.day : undefined,
     // 已完成的关键事项（Teddy 2026-09-17 第 5 条）是一句事实，不是一件要办的事——
@@ -183,7 +184,7 @@ function toReminderView(reminder: HomeReminder): HomeReminderView {
     // 微信记录证实过，两者不该混在一起（任务书原话：手动勾选和微信推导出的 done 从不互相写入）。
     actionable: reminder.state !== "done",
     statusLabel: HOME_QUIET_STATES.has(reminder.state) ? undefined : HOME_REMINDER_LABEL[reminder.state],
-    note: reminder.detail,
+    note: reminder.detail ? (stripWechatEmoticons(reminder.detail) || undefined) : undefined,
     sources: provenanceRows(reminder),
   };
 }
@@ -208,7 +209,7 @@ function provenanceRows(reminder: HomeReminder): HomeReminderSource[] {
     toneLabel: MODALITY_LABEL[note.modality],
     recordedOn: note.onDay,
     recordedOnLabel: formatDay(note.onDay),
-    summary: note.summary,
+    summary: stripWechatEmoticons(note.summary) || note.summary,
     link,
   }] : []);
 }

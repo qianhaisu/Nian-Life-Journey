@@ -80,11 +80,11 @@ export default async function MemoryPage() {
         <h1 className="serif">往回翻翻，<br /><em>张年。</em></h1>
         <p>那些已经过去、但还想再看一次的日子。</p>
       </header>
-      <div className="memory-mode-row reading-wrap"><MemoryReadingMode /></div>
 
       {index.years.length === 0 ? (
         <section className="reading-wrap archive-empty">
           <p className="serif">档案还是空的。等时间再走一会儿。</p>
+          <div className="memory-mode-row"><MemoryReadingMode /></div>
         </section>
       ) : (
         <>
@@ -117,6 +117,7 @@ export default async function MemoryPage() {
                 </div>
               </div>
             ))}
+            <div className="memory-year-nav-mode"><MemoryReadingMode /></div>
           </nav>
           <YearNavHighlight />
 
@@ -126,7 +127,6 @@ export default async function MemoryPage() {
             <section key={year.year} id={`year-${year.year}`} className={`memory-year-section${isPrebirth ? " memory-year-section--prebirth" : ""}`} aria-labelledby={`year-heading-${year.year}`}>
               {year.year === firstPostbirthYear && (
                 <header className="memory-life-chapter reading-wrap">
-                  <p className="memory-life-label">出生后</p>
                   <p className="serif memory-life-title">一起长大的日子</p>
                 </header>
               )}

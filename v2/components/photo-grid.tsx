@@ -6,27 +6,22 @@ import { ViewerModal, videoFrameStyle, type GalleryPhoto } from "@/components/ph
 import { VideoPlayer } from "@/components/video-player";
 import { mediaDeliveryUrl } from "@/lib/media/paths";
 
-// Smart grid layout for any number of photos.
-//
-// Layout rules:
-//   1 photo  — centred, max-height 400px
-//   2 photos — side by side, equal cropped height
-//   3 photos — 1 large left (2/3) + 2 small right (1/3, stacked)
-//   4 photos — 2 × 2
-//   5+       — 3-column rows of squares
+// Editorial grid layout for any number of photos:
+//   1 photo  — single plate, natural aspect capped at 460px
+//   2 photos — 2 equal plates side by side
+//   3 photos — 1 large plate left (2fr) + 2 stacked right (1fr)
+//   4 photos — 2 × 2 square plates
+//   6 or 9   — 3-column hero-plate L-grid: photo 0 spans 2×2, remaining 5 or 8 wrap flush around it (zero empty slots)
+//   other 5+ — 6-column flush mosaic: leading 2 (when n % 3 === 2) or 4 (when n % 3 === 1) span 3 cols, remaining span 2 cols (zero orphan slots)
 //
 // `limit` (the month page uses 6): with more photos than that, only `limit` cells are drawn and the
-// last one carries a light veil and 「展开」 — never a count (原则三); tapping it calls `onExpand`, which
-// shows them all.
-// Without `limit` every photo is drawn (the day's own page, and a day the reader already opened).
-//
-// object-fit: cover throughout, 4px gap. Clicking any still opens the shared ViewerModal, whose reel
-// is always every still of the day — including the ones a limited grid has not drawn yet.
+// last one carries a light veil and 「展开」 — never a count (原则三).
 
-// Grid cell: click → viewer (stills only), play in place (video)
 function Cell({
   photo,
   onClick,
+  ariaLabel,
+  className = "",
   sizes,
   priority = false,
   onMore,
@@ -35,37 +30,31 @@ function Cell({
 }: {
   alone?: boolean;
   large?: boolean;
+  className?: string;
+  ariaLabel?: string;
   photo: GalleryPhoto;
   onClick?: () => void;
   sizes: string;
   priority?: boolean;
-  /** This cell is the last one drawn: a light veil with a real 「展开」 button that opens the rest. */
   onMore?: () => void;
 }) {
   const isVideo = photo.type === "video";
-  // A grid cell is at most a third or a half of the reading column, and the grid is what every day
-  // shows by default — so a small cell asks for the ~480px thumbnail, derived from the id the way
-  // components/photo.tsx does (`thumbnailSrc` is null on every WeChat row). A missing thumbnail
-  // derivative falls back to the full file rather than leaving a hole. A picture standing alone, or
-  // the large cell of three, gets the full file from the start.
   const [full, setFull] = useState(large);
   const src = isVideo ? (photo.posterSrc ?? mediaDeliveryUrl(photo.id, "poster")) : full ? photo.src : (photo.thumbnailSrc ?? mediaDeliveryUrl(photo.id, "thumbnail"));
-  // A video under 「展开」 is drawn by its poster like a still: the cell's job there is to open the rest.
+  const cls = ["pg-cell", className].filter(Boolean).join(" ");
   if (isVideo && !onMore) {
     return (
-      // Only a video standing alone keeps its own frame; inside a grid it takes the cell's shape like
-      // every other picture, or its row runs taller than its neighbours.
-      <figure className="pg-cell pg-cell-video" style={alone ? videoFrameStyle(photo) : undefined}>
+      <figure className={`${cls} pg-cell-video`} style={alone ? videoFrameStyle(photo) : undefined}>
         <VideoPlayer mediaId={photo.id} alt={photo.alt} durationSeconds={photo.durationSeconds} />
       </figure>
     );
   }
   return (
     <figure
-      className="pg-cell"
+      className={cls}
       role={onClick && !onMore ? "button" : undefined}
       tabIndex={onClick && !onMore ? 0 : undefined}
-      aria-label={onClick && !onMore ? "打开照片" : undefined}
+      aria-label={onClick && !onMore ? (ariaLabel ?? "打开照片") : undefined}
       onClick={onMore ? undefined : onClick}
       onKeyDown={onClick && !onMore ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
     >
@@ -80,7 +69,6 @@ function Cell({
         style={{ objectFit: "cover" }}
         onError={() => { if (!full) setFull(true); }}
       />
-      {/* 原则三：展开控件只说它做什么，不报还剩几张。 */}
       {onMore ? <button type="button" className="pg-more" onClick={onMore} aria-label="展开这一天的其他照片">展开</button> : null}
     </figure>
   );
@@ -98,9 +86,7 @@ export function PhotoGrid({
   dateLabel: string;
   ageLabel?: string;
   priority?: boolean;
-  /** Draw at most this many cells; the last one becomes 「展开」. Only honoured for 5 or more cells. */
   limit?: number;
-  /** Called when 「展开」 is tapped. */
   onExpand?: () => void;
 }) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -109,12 +95,15 @@ export function PhotoGrid({
 
   if (photos.length === 0) return null;
 
-  // Stills-only reel for the viewer (videos play in place)
   const stillPhotos = photos.filter((p) => p.type !== "video");
 
   function viewerIdxFor(originalIdx: number): number {
     const still = photos[originalIdx];
     return Math.max(0, stillPhotos.indexOf(still));
+  }
+
+  function labelFor(originalIdx: number): string {
+    return `打开第 ${viewerIdxFor(originalIdx) + 1} 张照片`;
   }
 
   function openStill(idx: number) {
@@ -125,47 +114,42 @@ export function PhotoGrid({
 
   const limited = limit !== undefined && photos.length > limit;
   const displayed = limited ? photos.slice(0, limit) : photos;
-
   const n = displayed.length;
 
-  // Sizes hint — rough: most cells are 1/2 or 1/3 of the reading column (max ~760px)
   const halfSizes = "(max-width: 700px) 50vw, 380px";
   const thirdSizes = "(max-width: 700px) 33vw, 250px";
   const twoThirdSizes = "(max-width: 700px) 66vw, 506px";
 
-  // ── 1 photo ──────────────────────────────────────────────────────────────
   if (n === 1) {
     return (
       <>
         <div className="pg pg-1">
-          <Cell photo={displayed[0]} onClick={() => openStill(0)} sizes="(max-width: 700px) 100vw, 760px" priority={priority} alone />
+          <Cell photo={displayed[0]} onClick={() => openStill(0)} ariaLabel={labelFor(0)} sizes="(max-width: 700px) 100vw, 760px" priority={priority} alone />
         </div>
         {viewerIndex !== null ? <ViewerModal photos={stillPhotos} startIndex={viewerIndex} dateLabel={dateLabel} ageLabel={ageLabel} onClose={closeViewer} /> : null}
       </>
     );
   }
 
-  // ── 2 photos ──────────────────────────────────────────────────────────────
   if (n === 2) {
     return (
       <>
         <div className="pg pg-2">
-          {displayed.map((p, i) => <Cell key={p.id} photo={p} onClick={() => openStill(i)} sizes={halfSizes} priority={priority && i === 0} />)}
+          {displayed.map((p, i) => <Cell key={p.id} photo={p} onClick={() => openStill(i)} ariaLabel={labelFor(i)} sizes={halfSizes} priority={priority && i === 0} />)}
         </div>
         {viewerIndex !== null ? <ViewerModal photos={stillPhotos} startIndex={viewerIndex} dateLabel={dateLabel} ageLabel={ageLabel} onClose={closeViewer} /> : null}
       </>
     );
   }
 
-  // ── 3 photos: left large (2/3) + right column with 2 stacked ─────────────
   if (n === 3) {
     return (
       <>
         <div className="pg pg-3">
-          <Cell key={displayed[0].id} photo={displayed[0]} onClick={() => openStill(0)} sizes={twoThirdSizes} priority={priority} large />
+          <Cell key={displayed[0].id} photo={displayed[0]} onClick={() => openStill(0)} ariaLabel={labelFor(0)} sizes={twoThirdSizes} priority={priority} large />
           <div className="pg-col">
-            <Cell key={displayed[1].id} photo={displayed[1]} onClick={() => openStill(1)} sizes={thirdSizes} />
-            <Cell key={displayed[2].id} photo={displayed[2]} onClick={() => openStill(2)} sizes={thirdSizes} />
+            <Cell key={displayed[1].id} photo={displayed[1]} onClick={() => openStill(1)} ariaLabel={labelFor(1)} sizes={thirdSizes} />
+            <Cell key={displayed[2].id} photo={displayed[2]} onClick={() => openStill(2)} ariaLabel={labelFor(2)} sizes={thirdSizes} />
           </div>
         </div>
         {viewerIndex !== null ? <ViewerModal photos={stillPhotos} startIndex={viewerIndex} dateLabel={dateLabel} ageLabel={ageLabel} onClose={closeViewer} /> : null}
@@ -173,31 +157,61 @@ export function PhotoGrid({
     );
   }
 
-  // ── 4 photos: 2 × 2 ──────────────────────────────────────────────────────
   if (n === 4) {
     return (
       <>
         <div className="pg pg-4">
-          {displayed.map((p, i) => <Cell key={p.id} photo={p} onClick={() => openStill(i)} sizes={halfSizes} priority={priority && i === 0} />)}
+          {displayed.map((p, i) => <Cell key={p.id} photo={p} onClick={() => openStill(i)} ariaLabel={labelFor(i)} sizes={halfSizes} priority={priority && i === 0} />)}
         </div>
         {viewerIndex !== null ? <ViewerModal photos={stillPhotos} startIndex={viewerIndex} dateLabel={dateLabel} ageLabel={ageLabel} onClose={closeViewer} /> : null}
       </>
     );
   }
 
-  // ── 5+ photos: 3-column rows, the last drawn cell carrying 「展开」 when limited ──
+  // 6 or 9 photos fill a 3-column grid seamlessly when photo 0 spans 2×2 (4 + 5 = 9 slots; 4 + 8 = 12 slots)
+  if (n === 6 || n === 9) {
+    return (
+      <>
+        <div className="pg pg-3-row pg-hero-grid">
+          {displayed.map((p, i) => {
+            const isMore = limited && i === n - 1;
+            const isHero = i === 0;
+            return <Cell
+              key={p.id}
+              className={isHero ? "pg-cell-hero" : ""}
+              photo={p}
+              onClick={() => openStill(i)}
+              ariaLabel={labelFor(i)}
+              onMore={isMore ? onExpand : undefined}
+              sizes={isHero ? twoThirdSizes : thirdSizes}
+              priority={priority && isHero}
+              large={isHero}
+            />;
+          })}
+        </div>
+        {viewerIndex !== null ? <ViewerModal photos={stillPhotos} startIndex={viewerIndex} dateLabel={dateLabel} ageLabel={ageLabel} onClose={closeViewer} /> : null}
+      </>
+    );
+  }
+
+  // 5, 7, 8, 10+ photos: 6-column flush mosaic without orphan cells
+  const wideLeadCount = n % 3 === 2 ? 2 : n % 3 === 1 ? 4 : 0;
   return (
     <>
-      <div className="pg pg-3-row">
+      <div className="pg pg-mosaic">
         {displayed.map((p, i) => {
           const isMore = limited && i === n - 1;
+          const isWide = i < wideLeadCount;
           return <Cell
             key={p.id}
+            className={isWide ? "pg-span-3" : "pg-span-2"}
             photo={p}
             onClick={() => openStill(i)}
+            ariaLabel={labelFor(i)}
             onMore={isMore ? onExpand : undefined}
-            sizes={thirdSizes}
+            sizes={isWide ? halfSizes : thirdSizes}
             priority={priority && i === 0}
+            large={i === 0 && isWide}
           />;
         })}
       </div>

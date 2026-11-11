@@ -29,21 +29,28 @@ export const normalizeForQuote = (t) =>
     .replace(/[？?]/g, "？")
     .replace(/[：:]/g, "：");
 
-/** 取出最外层「」里的引语；引号不配对时返回里面含一个 null。 */
+/** 取出最外层「」或“”里的引语；引号不配对时返回里面含一个 null。 */
 export function quotesOf(text) {
   return quoteSpans(text).map((q) => q.text);
 }
 
-/** 同 quotesOf，但带位置：{text, start, end}（start 是「的下标）。不配对时末尾加 {text:null}。 */
+/** 同 quotesOf，但带位置：{text, start, end}（start 是左引号下标）。支持「」与“”，不配对时末尾加 {text:null}。 */
 function quoteSpans(text) {
   const out = [];
   const stack = [];
   const s = String(text);
   for (let i = 0; i < s.length; i += 1) {
-    if (s[i] === "「") stack.push(i);
-    else if (s[i] === "」" && stack.length) {
-      const start = stack.pop();
-      if (!stack.length) out.push({ text: s.slice(start + 1, i), start, end: i });
+    const ch = s[i];
+    if (ch === "「" || ch === "“") {
+      const close = ch === "「" ? "」" : "”";
+      if (!stack.length || stack.at(-1).open === ch) stack.push({ idx: i, open: ch, close });
+    } else if (ch === "」" || ch === "”") {
+      if (stack.length && stack.at(-1).close === ch) {
+        const top = stack.pop();
+        if (!stack.length) out.push({ text: s.slice(top.idx + 1, i), start: top.idx, end: i });
+      } else if (!stack.length) {
+        out.push({ text: null, start: -1, end: -1 });
+      }
     }
   }
   if (stack.length) out.push({ text: null, start: -1, end: -1 });
@@ -51,7 +58,31 @@ function quoteSpans(text) {
 }
 
 /** 把引号里的字换成同样长度的占位，保留下标：之后在「引号外」找词，位置还能对回原文。 */
-const blankQuotes = (text) => String(text).replace(/「[^「」]*」/g, (m) => "　".repeat(m.length));
+const blankQuotes = (text) => {
+  const s = String(text);
+  const spans = quoteSpans(s).filter((q) => q.text !== null && q.start >= 0);
+  if (!spans.length) return s;
+  let res = "";
+  let cursor = 0;
+  for (const q of spans) {
+    res += s.slice(cursor, q.start) + "　".repeat(q.end - q.start + 1);
+    cursor = q.end + 1;
+  }
+  return res + s.slice(cursor);
+};
+
+const stripQuotes = (text) => {
+  const s = String(text);
+  const spans = quoteSpans(s).filter((q) => q.text !== null && q.start >= 0);
+  if (!spans.length) return s;
+  let res = "";
+  let cursor = 0;
+  for (const q of spans) {
+    res += s.slice(cursor, q.start);
+    cursor = q.end + 1;
+  }
+  return res + s.slice(cursor);
+};
 
 const TECHNICAL = /\[(media|图片|视频|表情包|语音|文件|动画表情)\]|\]\(media\/|https?:\/\/|undefined|Quark|微信|群聊|会话|导入|数据库|网站/i;
 
@@ -117,7 +148,7 @@ export function personMentions(text, labels = registeredLabels()) {
   for (const m of s.matchAll(re)) {
     const after = s.slice(m.index + m[0].length, m.index + m[0].length + 14);
     // 称谓与动词之间允许几个字的状语（「妈妈在群里说」「雪姨下午问」），但不能跨标点或引号。
-    const head = after.split(/[，。；！？、　「」]/)[0];
+    const head = after.split(/[，。；！？、　「」“”]/)[0];
     const before = s.slice(Math.max(0, m.index - 3), m.index);
     let role = "presence";
     if (new RegExp(`^[^，。；！？]{0,8}?(${SPEECH_VERB})`).test(head)) role = "speech";
@@ -145,11 +176,48 @@ export function attributedLabel(text, quoteStart, labels = registeredLabels()) {
 }
 
 function quoteHits(quote, sources) {
-  const nq = normalizeForQuote(quote.replace(/「|」/g, ""));
+  const nq = normalizeForQuote(quote.replace(/[「」“”]/g, ""));
   if (!nq) return null; // 空引语不核对
   const parts = nq.split(/……|\.\.\./).filter(Boolean);
   // 省略号表示节选：每一段都要在同一条来源里找到。
   return sources.filter((src) => { const ns = normalizeForQuote(src.text); return parts.every((part) => ns.includes(part)); });
+}
+
+export const LITERARY_CLICHE = [
+  [/满满的/, "通用套话「满满的…」"],
+  [/成长的足迹|成长的印记|成长的每一步/, "通用套话「成长的足迹/印记」"],
+  [/美好的一天|充实的一天|快乐的一天|平凡而温暖/, "通用套话「美好/充实的一天」"],
+  [/每天都进步的宝贝|未来可期|岁月静好|治愈了/, "空泛抒情套话"],
+  [/传来(好)?消息|发来(了)?[^，。；！？]{0,12}?(照片|视频|消息)|分享了一段视频|在(家人)?群里(说|聊起|问|发)|有一条留言写道|通话时长/, "聊天室转播腔（「发来照片/在群里说/通话时长」）"],
+  [/(?:^|[，。；！？、\s]|老师说|妈妈说|爸爸说|外婆说|外公说|奶奶说)[^，。；！？]{0,4}?(你自己|给你|你已经|你喜欢|你新学会|你会|你把|你跟|我们家|我们宝贝)/, "叙述人称越界（须统一第三人称「小年/他」，禁用「你/我们」）"],
+];
+
+function stripBookTitles(text) {
+  return String(text ?? "").replace(/《[^》]*》/g, "《》");
+}
+
+/**
+ * 家庭非虚构文风检查（引号与书名号外）：拒绝套话、聊天室转播腔、人称分裂与「上午…中午…下午…傍晚…」机械排班表。
+ */
+export function validateLiteraryStyle(entry) {
+  const errors = [];
+  const chunks = [["标题", entry.title ?? ""], ...(entry.paragraphs ?? []).map((p, i) => [`第 ${i + 1} 段`, p])];
+  let periodLeadCount = 0;
+  for (const [where, text] of chunks) {
+    if (!text) continue;
+    const outside = stripBookTitles(stripQuotes(text));
+    for (const [re, label] of LITERARY_CLICHE) {
+      if (re.test(outside)) errors.push(`${where}: 含非虚构禁用套话或转播腔（${label}）`);
+    }
+    if (where !== "标题") {
+      const leads = [...outside.matchAll(/(?:^|[。！？\n])\s*(凌晨|早上|上午|中午|下午|傍晚|晚上|夜里)[，、]/g)];
+      periodLeadCount += leads.length;
+    }
+  }
+  if (periodLeadCount >= 4) {
+    errors.push(`整体: 按时间段机械罗列（出现 ${periodLeadCount} 处「上午/中午/下午/晚上，」句首报账），请按场面与细节重新组织`);
+  }
+  return errors;
 }
 
 /**
@@ -178,7 +246,7 @@ export function validateDayText(entry, sources, opts = {}) {
     const spans = quoteSpans(text);
     if (spans.some((q) => q.text === null)) err(where, "引号不配对");
 
-    const outside = String(text).replace(/「[^「」]*」/g, "");
+    const outside = stripQuotes(text);
     for (const name of UNCONFIRMED_NAMES) if (outside.includes(name)) err(where, `引号外出现注册表里没有的称谓「${name}」`);
     for (const [re, label] of VAGUE_PERSON) if (re.test(outside)) err(where, `含糊的指人写法「${label}」：能解析发送人的写称谓，解析不出的不写`);
     for (const [label, re] of SENSITIVE_TEXT) { const m = String(text).match(re); if (m) err(where, `敏感信息（${label}）「${m[0]}」：不写进故事`); }
@@ -233,6 +301,7 @@ export function validateDayText(entry, sources, opts = {}) {
     }
     if (BAD_AGE.test(outside)) err(where, "出现与出生日期不符的岁数");
   }
+  if (opts.literary) errors.push(...validateLiteraryStyle(entry));
   if (entry.paragraphs.length === 0 && !entry.title) err("整体", "一天既没有标题也没有正文");
   return { errors, evidence };
 }

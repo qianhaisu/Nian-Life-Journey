@@ -113,11 +113,20 @@ export function ViewerModal({
     <dialog ref={dialogRef} className="photo-viewer" aria-modal="true" aria-label="照片查看器"
       onCancel={(event) => { event.preventDefault(); closeViaUI(); }}>
       <header className="viewer-header">
-        <button className="viewer-close" onClick={closeViaUI} aria-label="关闭" autoFocus>✕</button>
+        <button type="button" className="viewer-close" onClick={closeViaUI} aria-label="关闭" autoFocus>✕</button>
         <p className="viewer-caption">
           <time>{dateLabel}</time>
           {ageLabel ? <span>{ageLabel}</span> : null}
         </p>
+        <button
+          type="button"
+          className="viewer-zoom"
+          onClick={() => setZoomed((z) => !z)}
+          aria-pressed={zoomed}
+          aria-label={zoomed ? "还原照片比例" : "放大照片细节"}
+        >
+          {zoomed ? "还原" : "放大"}
+        </button>
       </header>
       <div className="viewer-reel" ref={reelRef} onScroll={handleScroll}>
         {photos.map((photo, index) => (

@@ -2,21 +2,21 @@
    只在 .travel-page 作用域里生效，不改任何别的页面。 */
 .travel-page { padding-bottom: clamp(48px, 8vw, 96px); }
 
-.travel-head { display: grid; gap: 12px; padding: clamp(28px, 5vw, 56px) 0 clamp(8px, 2vw, 16px); }
-.travel-head h1 { margin: 0; font-size: clamp(2.2rem, 7vw, 3.6rem); font-weight: 800; line-height: 1.08; }
-.travel-lead { margin: 0; max-width: 32em; color: var(--color-text); font-size: clamp(1.05rem, 2.6vw, 1.25rem); line-height: 1.7; }
+.travel-head { display: grid; gap: 10px; padding: clamp(28px, 4.5vw, 52px) 0 clamp(8px, 2vw, 16px); }
+.travel-head h1 { margin: 0; font-family: var(--font-serif); font-size: clamp(2.2rem, 5.6vw, 3.3rem); font-weight: 400; line-height: 1.16; letter-spacing: 0; }
+.travel-lead { margin: 0; max-width: 34em; color: var(--color-text); font-size: clamp(1.02rem, 2.2vw, 1.16rem); line-height: 1.82; }
 
 .travel-when { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; color: var(--clay-ink); font-size: .85rem; font-weight: 600; }
 .travel-tag { display: inline-flex; padding: 2px 10px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--sage) 22%, #fff); color: var(--sage-ink); font-size: .75rem; font-weight: 700; letter-spacing: .04em; }
 .travel-age { white-space: nowrap; }
 .travel-places { margin: 0; color: var(--muted); font-size: .9rem; }
 
-/* ── 迷雾地图（2026-09-25 重做：地方为主，可爱的手绘风） ───────────────────── */
+/* ── 迷雾地图（2026-09-25 重做；2026-11-11 R2 年鉴地图页气质统一） ───────────────── */
 .travel-atlas { display: grid; gap: clamp(18px, 4vw, 28px); margin-top: clamp(12px, 3vw, 20px); }
-.travel-map-tabs { display: inline-flex; justify-self: start; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card-soft); }
-.travel-map-tabs button { min-height: 36px; padding: 0 18px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: .9rem; font-weight: 700; cursor: pointer; }
-.travel-map-tabs button.is-on { background: #fff; color: var(--color-text); box-shadow: 0 2px 0 rgba(156,132,104,.18); }
-.travel-map { position: relative; overflow: hidden; padding: clamp(10px, 2.5vw, 18px); border: 6px solid #FFFDF8; border-radius: 30px; background-color: #E3EEEA; background-image: radial-gradient(120% 80% at 30% 10%, rgba(255,255,255,.55), transparent 60%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='40'%3E%3Cpath d='M6 12 q5 -5 10 0 t10 0' fill='none' stroke='%23CFE0DB' stroke-width='1.6' stroke-linecap='round'/%3E%3Cpath d='M38 30 q5 -5 10 0 t10 0' fill='none' stroke='%23CFE0DB' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); box-shadow: 0 3px 0 rgba(156,132,104,.18), 0 14px 30px rgba(138,121,102,.12); scroll-margin-top: 80px; }
+.travel-map-tabs { display: inline-flex; justify-self: start; gap: 4px; padding: 4px; border: 1px solid var(--hairline-strong); border-radius: 10px; background: var(--card-soft); }
+.travel-map-tabs button { min-height: 44px; padding: 0 18px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: .88rem; font-weight: 600; letter-spacing: .03em; cursor: pointer; transition: background-color .18s var(--ease-out), color .18s var(--ease-out); }
+.travel-map-tabs button.is-on { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 3px rgb(44 40 35 / .10); }
+.travel-map { position: relative; overflow: hidden; padding: clamp(10px, 2.5vw, 18px); border: 4px solid var(--color-surface); border-radius: 22px; background-color: #E3EEEA; background-image: radial-gradient(120% 80% at 30% 10%, rgba(255,255,255,.55), transparent 60%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='40'%3E%3Cpath d='M6 12 q5 -5 10 0 t10 0' fill='none' stroke='%23CFE0DB' stroke-width='1.6' stroke-linecap='round'/%3E%3Cpath d='M38 30 q5 -5 10 0 t10 0' fill='none' stroke='%23CFE0DB' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); box-shadow: var(--shadow); scroll-margin-top: 80px; }
 /* 三层叠放：底图 / 动效 / 标签图钉。只有底图和顶层上带 data-hit 的东西接收点击 */
 .travel-stage { position: relative; width: 100%; font-family: var(--font-body); }
 .travel-layer { position: absolute; inset: 0; display: block; width: 100%; height: 100%; overflow: visible; }
@@ -27,7 +27,7 @@
 .travel-layer [role="button"]:focus { outline: none; }
 .travel-layer [role="button"]:focus-visible { stroke: var(--brand-accent); }
 .travel-lit { transition: stroke-width .25s var(--ease-out); }
-.travel-map-back { position: absolute; top: 14px; left: 14px; z-index: 2; min-height: 36px; padding: 0 14px; border: 2px solid #EFE6D8; border-radius: 999px; background: #fff; color: var(--color-text); font: inherit; font-size: .85rem; font-weight: 700; box-shadow: 0 2px 0 rgba(156,132,104,.18); cursor: pointer; }
+.travel-map-back { position: absolute; top: 14px; left: 14px; z-index: 2; min-height: 44px; padding: 0 16px; border: 1px solid var(--hairline-strong); border-radius: 10px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: .85rem; font-weight: 600; box-shadow: var(--shadow); cursor: pointer; }
 .travel-map-loading { aspect-ratio: 1; }
 
 /* 动效：雾带匀速流过；云来回漂、轻轻上下；航线虚线往前走；选中的图钉弹一下 */
@@ -54,17 +54,15 @@
 @keyframes travel-breathe { from { opacity: .5; } to { opacity: 1; } }
 
 .travel-panel { display: grid; gap: 12px; }
-.travel-panel-head h2 { margin: 0; font-size: 1.3rem; font-weight: 800; color: var(--color-text); }
-.travel-panel-head p { margin: 4px 0 0; color: var(--clay-ink); font-size: .85rem; font-weight: 600; }
-.travel-postcards { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 62%); gap: 14px; margin: 0 -16px; padding: 6px 16px 14px; overflow-x: auto; scroll-snap-type: x mandatory; list-style: none; scrollbar-width: none; }
+.travel-panel-head h2 { margin: 0; font-family: var(--font-serif); font-size: 1.4rem; font-weight: 400; color: var(--color-text); }
+.travel-panel-head p { margin: 4px 0 0; font-family: var(--font-display); color: var(--clay-ink); font-size: .82rem; font-weight: 600; }
+.travel-postcards { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(208px, 64%); gap: 14px; margin: 0 -16px; padding: 6px 16px 14px; overflow-x: auto; scroll-snap-type: x mandatory; list-style: none; scrollbar-width: none; }
 .travel-postcards::-webkit-scrollbar { display: none; }
-@media (min-width: 720px) { .travel-postcards { grid-auto-columns: minmax(200px, 30%); } }
+@media (min-width: 720px) { .travel-postcards { grid-auto-columns: minmax(210px, 31%); } }
 .travel-postcards li { scroll-snap-align: start; }
-.travel-postcards li:nth-child(odd) .travel-postcard { rotate: -1.2deg; }
-.travel-postcards li:nth-child(even) .travel-postcard { rotate: 1deg; }
-.travel-postcard { display: grid; gap: 10px; height: 100%; padding: 8px 8px 14px; border-radius: 16px; background: #fff; box-shadow: 0 3px 0 rgba(156,132,104,.16), 0 10px 22px rgba(138,121,102,.1); transition: rotate .3s var(--ease-hover), translate .3s var(--ease-hover); }
-.travel-postcard:active { translate: 0 2px; }
-@media (hover: hover) { .travel-postcard:hover { rotate: 0deg; translate: 0 -3px; } }
+.travel-postcard { display: grid; gap: 10px; height: 100%; padding: 10px 10px 14px; border: 1px solid var(--hairline); border-radius: 14px; background: var(--color-surface); box-shadow: var(--shadow); transition: translate .26s var(--ease-hover), box-shadow .26s var(--ease-hover); }
+.travel-postcard:active { translate: 0 1px; }
+@media (hover: hover) { .travel-postcard:hover { translate: 0 -3px; box-shadow: var(--shadow-hover); } }
 .travel-postcard-photo { position: relative; display: block; aspect-ratio: 1; overflow: hidden; border-radius: 10px; background: var(--card-soft); }
 .travel-postcard-photo .photo-crop { position: absolute; inset: 0; margin: 0; }
 .travel-postcard-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
@@ -78,20 +76,20 @@
 /* 没有已授权封面的旅程：不留空照片框，文字本身当明信片（不生成虚构照片） */
 .travel-postcard--text { align-content: start; padding: 18px 12px 16px; border-top: 4px solid #f1e8dc; }
 .travel-postcard-body .travel-tag { justify-self: start; }
-.travel-postcard-body strong { color: var(--color-text); font-size: 1.05rem; font-weight: 800; }
-.travel-postcard-when { color: var(--clay-ink); font-size: .78rem; font-weight: 600; line-height: 1.5; }
-.travel-postcard-age { color: var(--muted); font-size: .76rem; font-weight: 600; }
+.travel-postcard-body strong { font-family: var(--font-serif); color: var(--color-text); font-size: 1.12rem; font-weight: 400; line-height: 1.32; }
+.travel-postcard-when { font-family: var(--font-display); color: var(--clay-ink); font-size: .76rem; font-weight: 600; line-height: 1.5; }
+.travel-postcard-age { color: var(--muted); font-size: .76rem; font-weight: 500; }
 
-.travel-section-title { margin: 0 0 12px; font-size: 1.1rem; font-weight: 800; color: var(--color-text); }
+.travel-section-title { margin: 0 0 14px; font-family: var(--font-serif); font-size: 1.32rem; font-weight: 400; color: var(--color-text); }
 .travel-stamps { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 14px 10px; margin: 0; padding: 0; list-style: none; }
-.travel-stamp { --stamp: #F2C4A4; display: grid; place-items: center; align-content: center; gap: 3px; width: 100%; aspect-ratio: 1; padding: 10px; border: 2px dashed color-mix(in srgb, var(--stamp) 70%, #8a7560); border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--stamp) 55%, #fff) 0 62%, #fff 63%); color: var(--color-text); font: inherit; text-align: center; cursor: pointer; transition: rotate .3s var(--ease-hover), scale .3s var(--ease-hover); }
-.travel-stamps li:nth-child(3n+1) .travel-stamp { rotate: -4deg; }
-.travel-stamps li:nth-child(3n+2) .travel-stamp { rotate: 3deg; }
-.travel-stamp.is-on { scale: 1.06; border-style: solid; }
+.travel-stamp { --stamp: #F2C4A4; display: grid; place-items: center; align-content: center; gap: 3px; width: 100%; aspect-ratio: 1; padding: 10px; border: 1.5px dashed color-mix(in srgb, var(--stamp) 65%, #8a7560); border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--stamp) 48%, #FCF9F4) 0 62%, #FCF9F4 63%); color: var(--color-text); font: inherit; text-align: center; cursor: pointer; transition: rotate .3s var(--ease-hover), scale .3s var(--ease-hover); }
+.travel-stamps li:nth-child(3n+1) .travel-stamp { rotate: -3deg; }
+.travel-stamps li:nth-child(3n+2) .travel-stamp { rotate: 2.5deg; }
+.travel-stamp.is-on { scale: 1.05; border-style: solid; }
 @media (hover: hover) { .travel-stamp:hover { rotate: 0deg; } }
-.travel-stamp-name { font-size: 1rem; font-weight: 800; line-height: 1.2; }
-.travel-stamp-first { color: var(--clay-ink); font-size: .68rem; font-weight: 700; line-height: 1.3; white-space: nowrap; }
-.travel-stamp-age { color: var(--muted); font-size: .66rem; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.travel-stamp-name { font-family: var(--font-serif); font-size: 1.04rem; font-weight: 400; line-height: 1.2; }
+.travel-stamp-first { font-family: var(--font-display); color: var(--clay-ink); font-size: .66rem; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.travel-stamp-age { color: var(--muted); font-size: .66rem; font-weight: 500; line-height: 1.3; white-space: nowrap; }
 .travel-stamp-dots { display: flex; gap: 3px; min-height: 5px; }
 .travel-stamp-dots i { width: 5px; height: 5px; border-radius: 50%; background: color-mix(in srgb, var(--stamp) 60%, #6b5a48); }
 

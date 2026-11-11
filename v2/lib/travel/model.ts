@@ -218,7 +218,11 @@ export function leadLine(trips: readonly Trip[], birthDay: string | undefined, t
   if (!latest) return head;
   const [y, m] = ymd(latest.from);
   const [ty] = ymd(today);
-  return `${head}最近一次是 ${y === ty ? "" : `${y} 年 `}${m} 月的${latest.title}。`;
+  const monthText = `${y === ty ? "" : `${y} 年 `}${m} 月`;
+  if (/[去回在到住带坐看玩逛过]/.test(latest.title)) {
+    return `${head}最近一次在 ${monthText}，${latest.title}。`;
+  }
+  return `${head}最近一次是 ${monthText}的${latest.title}。`;
 }
 
 /** A dated travel record does not claim that the family returned that day. */

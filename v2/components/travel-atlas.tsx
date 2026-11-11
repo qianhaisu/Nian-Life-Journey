@@ -165,8 +165,8 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
             <li key={t.id}>
               <Link href={`/travel/${t.id}`} className={t.cover || t.scenery ? "travel-postcard" : "travel-postcard travel-postcard--text"}>
                 {t.cover || t.scenery ? <span className="travel-postcard-photo">
-                  {t.cover ? <Photo media={t.cover} variant="thumbnail" fit="crop" sizes="220px" /> : null}
-                  {t.scenery ? <span className="travel-postcard-scenery"><Photo media={t.scenery} variant="thumbnail" fit="crop" sizes="96px" /></span> : null}
+                  <Photo media={(t.cover ?? t.scenery)!} variant="thumbnail" fit="crop" sizes="220px" />
+                  {t.cover && t.scenery ? <span className="travel-postcard-scenery"><Photo media={t.scenery} variant="thumbnail" fit="crop" sizes="96px" /></span> : null}
                 </span> : null}
                 <span className="travel-postcard-body">
                   {t.tag ? <span className="travel-tag">{t.tag}</span> : null}

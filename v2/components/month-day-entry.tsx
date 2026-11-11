@@ -33,11 +33,11 @@ export function MonthDayEntry({ entry, year, monthAgeLabel }: {
       <div className="moment-body">
         {entry.title ? <h3 className="serif day-entry-title">{entry.title}</h3> : null}
         {/* Paragraphs are paragraphs: the browser wraps, at 390px and at 1280px alike. */}
-        {entry.paragraphs.map((text, index) => <p className="serif day-entry-text" key={index}>{text}</p>)}
+        {entry.paragraphs.map((text, index) => <p className="day-entry-text" key={index}>{text}</p>)}
         {entry.stories.map((story) => (
           <div className="day-entry-story" key={story.id}>
             {story.title ? <h4 className="serif day-entry-story-title"><Link href={story.href} prefetch={false}>{story.title}</Link></h4> : null}
-            {story.paragraphs.map((text, index) => <p className="serif day-entry-text" key={index}>{text}</p>)}
+            {story.paragraphs.map((text, index) => <p className="day-entry-text" key={index}>{text}</p>)}
           </div>
         ))}
         {entry.photos.length > 0 ? <DayPhotos photos={entry.photos} dateLabel={entry.dateLabel} ageLabel={entry.ageLabel} quietLabel /> : null}

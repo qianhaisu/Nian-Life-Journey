@@ -695,17 +695,192 @@
 .memory-player-slot:last-child .memory-scene-reading { bottom: calc(112px + env(safe-area-inset-bottom)); }
 .memory-scene-title { display: block; margin-bottom: .3rem; font-size: .95rem; }
 
-/* ── 精致层（2026-10-26）：照片是主角，所以给它发丝描边 + 分层投影，像一块被精确裁切的玻璃；
-   控件改成半透明描边，元信息改等宽。回退：删掉这一段。 */
-.memory-frames { border-radius: 14px; box-shadow: 0 0 0 1px rgb(40 38 33 / .08), 0 1px 2px rgb(40 38 33 / .06), 0 28px 56px -24px rgb(40 38 33 / .34); }
-.memory-frames::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .12); pointer-events: none; }
-.home-memory--single .memory-single-photo { border-radius: 14px; box-shadow: 0 0 0 1px rgb(40 38 33 / .08), 0 24px 48px -24px rgb(40 38 33 / .3); }
-.home-v2 { --home-serif: var(--font-poppins, "Poppins"), "Yozai", "LXGW WenKai", "Songti SC", "Noto Serif SC", serif; }
-.home-greeting { font-weight: 500; }
-.memory-caption-line { font-family: var(--font-display); font-size: 12.5px; letter-spacing: .03em; font-variant-numeric: lining-nums; }
-.memory-title { letter-spacing: .01em; }
-.home-answer-source { font-family: var(--font-display); font-size: 13px; letter-spacing: .02em; }
-.memory-switch { border-color: var(--hairline-strong); border-radius: 10px; background: rgb(255 255 255 / .5); letter-spacing: .04em; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-.memory-read { letter-spacing: .02em; }
-.weekly { border-top-color: var(--hairline); }
-.weekly-heading { font-family: var(--font-display); font-size: 13px; letter-spacing: .12em; }
+/* ── 私家摄影散文画册首页层（2026-11-11 R2）────────────────────────────────────
+   1. 冲印相纸衬卡（Mounted Darkroom Print）：退掉静止预览里的模糊虚化侧翼（竖照深色衣袖糊开后会在两侧形成冷灰脏边），
+      改用温润棉浆画心衬纸（#F2ECE1）+ 细微暗房内压线与相纸微阴影，竖照与横照都像夹在私家画册里的原片；
+      题签与日期安静排在画框下方印记栏（.memory-colophon），零遮挡人像；
+   2. 手机 390×844 首屏完整度：收紧刊头与画幅高度上限，确保首屏完整露出相片、题签、「读读这一天 →」与「换一段」，
+      不被底部固定导航栏截断，且所有交互热区 ≥ 44px；
+   3. 桌面下半屏把「给雪姨」短片入口与「每周提醒」编排为顶线对齐的书页附录。 */
+.home-v2 {
+  --home-serif: var(--font-lora, "Lora"), "LXGW WenKai", "Songti SC", "Noto Serif SC", serif;
+  --home-ink: #2C2823;
+  --home-muted: #696258;
+  --home-line: #E4DDD1;
+}
+.home-greeting {
+  font-family: var(--home-serif);
+  font-weight: 400;
+  letter-spacing: .01em;
+}
+.home-greeting .keep-whole { color: var(--brand-accent); }
+.home-answer {
+  color: var(--home-ink);
+  line-height: 1.78;
+}
+.home-answer-source {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  letter-spacing: .03em;
+  color: var(--clay-ink);
+}
+
+.memory-stage {
+  background: var(--color-surface, #FCF9F4);
+  border: 1px solid var(--hairline-strong, rgb(44 40 35 / .15));
+  border-radius: 14px;
+  padding: 10px 10px 12px;
+  box-shadow: 0 2px 6px rgb(44 40 35 / .04), 0 20px 42px -24px rgb(44 40 35 / .18);
+}
+.memory-frames {
+  border-radius: 8px;
+  background: radial-gradient(120% 100% at 50% 0%, #F6F1E7 0%, #EDE6D9 100%);
+  box-shadow: inset 0 0 0 1px rgb(44 40 35 / .07);
+}
+.memory-frames::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .42), inset 0 0 28px rgb(44 40 35 / .03);
+  pointer-events: none;
+}
+/* 静止画册预览彻底关闭模糊虚化底（避免深色竖照两侧晕出灰黑竖条）；全屏剧院播放器保持不变 */
+.memory-frames img.memory-backdrop,
+.memory-frames img.memory-backdrop.is-current {
+  display: none;
+  opacity: 0;
+}
+.memory-frames img.memory-frame {
+  filter: drop-shadow(0 1px 4px rgb(44 40 35 / .09));
+}
+
+.memory-play {
+  right: 14px;
+  bottom: 14px;
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgb(255 255 255 / .56);
+  background: rgb(32 29 25 / .46);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+  box-shadow: 0 4px 14px rgb(20 18 16 / .22);
+}
+
+.memory-colophon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px 18px;
+  padding: 12px 6px 2px;
+}
+.memory-colophon-copy { min-width: 0; flex: 1 1 200px; }
+.memory-colophon .memory-caption-line {
+  position: static;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  letter-spacing: .04em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--clay-ink);
+}
+.memory-colophon .memory-title {
+  position: static;
+  margin: 3px 0 0;
+  color: var(--home-ink);
+  font-family: var(--home-serif);
+  font-size: clamp(19px, 4.4vw, 25px);
+  font-weight: 400;
+  line-height: 1.34;
+  letter-spacing: .01em;
+  text-shadow: none;
+}
+.memory-colophon .memory-actions {
+  margin: 0;
+  gap: 8px 12px;
+  flex-shrink: 0;
+}
+.memory-read {
+  min-height: 44px;
+  font-size: 14.5px;
+  font-weight: 500;
+  letter-spacing: .02em;
+}
+.memory-switch {
+  min-height: 44px;
+  padding: 6px 15px;
+  border-color: var(--hairline-strong);
+  border-radius: 8px;
+  background: var(--color-bg, #F8F4EC);
+  font-size: 13.5px;
+  letter-spacing: .03em;
+}
+
+.home-memory--single .memory-single-photo {
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 899px) {
+  .home-sheet {
+    padding-top: 12px;
+  }
+  .home-greeting {
+    margin-bottom: 10px;
+    font-size: clamp(32px, 8.8vw, 40px);
+    line-height: 1.18;
+  }
+  .home-answer {
+    margin: 0 0 14px;
+    font-size: 16.5px;
+    line-height: 1.66;
+  }
+  .home-answer-source {
+    margin-top: 4px;
+    font-size: 13px;
+  }
+  .home-memory {
+    margin-bottom: 32px;
+  }
+  .memory-frames {
+    aspect-ratio: auto;
+    height: min(42svh, 356px);
+    max-height: none;
+  }
+  .memory-colophon {
+    padding: 10px 4px 0;
+    gap: 6px 12px;
+  }
+}
+
+@media (min-width: 900px) {
+  .home-sheet {
+    --home-photo-h: min(calc(100svh - 248px), 660px);
+  }
+  .memory-stage { padding: 14px 14px 16px; border-radius: 16px; }
+  .home-v2 .home-film {
+    grid-column: 1;
+    align-self: start;
+    width: 100%;
+    margin: clamp(48px, 6.5vh, 76px) 0 0;
+  }
+  .home-v2 .weekly {
+    grid-column: 2;
+    align-self: start;
+    margin-top: clamp(48px, 6.5vh, 76px);
+    padding-top: 22px;
+  }
+  .home-sheet:not(:has(.home-film)) .weekly {
+    grid-column: 1 / -1;
+  }
+}
+
+.weekly { border-top-color: var(--hairline-strong); }
+.weekly-heading {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  color: var(--clay-ink);
+}

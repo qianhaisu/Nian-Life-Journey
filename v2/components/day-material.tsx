@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 import type { Media, RawSource, SourceType } from "@/lib/types";
-import { presentableEvidenceText, presentableSourceLabel } from "@/lib/organizer/evidence-text";
+import { presentableEvidenceText, presentableSourceLabel, stripWechatEmoticons } from "@/lib/organizer/evidence-text";
 import { isThumbnailEligible } from "@/lib/media/hero";
 import { presentableAlt } from "@/lib/media/presentation";
 import { shanghaiClock } from "@/lib/shanghai-time";
@@ -56,7 +56,7 @@ export function DayMaterial({ sources, media, speakerBySourceId, deliverableIds 
           const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
           const withImages = uniqueDisplayMedia(sourceMedia.filter((item) => isThumbnailEligible(item) && (!deliverableIds || deliverableIds.has(item.id))));
           const withoutImages = sourceMedia.filter((item) => deliverableIds && !deliverableIds.has(item.id));
-          const text = presentableEvidenceText(source.text);
+          const text = stripWechatEmoticons(presentableEvidenceText(source.text));
           const label = presentableSourceLabel(source.sourceLabel);
           const speaker = speakerBySourceId?.[source.id];
           // capturedAt is a real instant (timestamptz). It is formatted in Asia/Shanghai, never by
@@ -70,7 +70,7 @@ export function DayMaterial({ sources, media, speakerBySourceId, deliverableIds 
               </div>
               <div className="evidence-content">
                 <div className="evidence-source"><span>{sourceTypeLabel(source.sourceType)}</span>{label ? <span>{label}</span> : null}</div>
-                {text ? <p className={source.sourceType === "wechat" ? "evidence-quote" : "evidence-note"}>{source.sourceType === "wechat" ? `"${text}"` : text}</p> : null}
+                {text ? <p className={source.sourceType === "wechat" ? "evidence-quote" : "evidence-note"}>{source.sourceType === "wechat" ? `「${text}」` : text}</p> : null}
                 {withImages.length > 0 ? (
                   <div className="evidence-media">
                     {withImages.map((item) => (

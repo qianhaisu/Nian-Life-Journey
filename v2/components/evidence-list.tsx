@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 import type { Contributor, Media, RawSource, SourceType } from "@/lib/types";
-import { presentableEvidenceText, presentableSourceLabel } from "@/lib/organizer/evidence-text";
+import { presentableEvidenceText, presentableSourceLabel, stripWechatEmoticons } from "@/lib/organizer/evidence-text";
 import { isThumbnailEligible } from "@/lib/media/hero";
 import { presentableAlt } from "@/lib/media/presentation";
 import { shanghaiClock } from "@/lib/shanghai-time";
@@ -32,13 +32,13 @@ function EvidenceText({ text, sourceType }: { text: string; sourceType: SourceTy
   const isLong = chars.length > TEXT_PREVIEW_LIMIT;
   const className = sourceType === "wechat" ? "evidence-quote" : "evidence-note";
   if (!isLong) {
-    return <p className={className}>{sourceType === "wechat" ? `"${text}"` : text}</p>;
+    return <p className={className}>{sourceType === "wechat" ? `「${text}」` : text}</p>;
   }
   const preview = chars.slice(0, TEXT_PREVIEW_LIMIT).join("") + "…";
   return (
     <details className="evidence-text-long">
-      <summary className={className}>{sourceType === "wechat" ? `"${preview}"` : preview}</summary>
-      <p className={className}>{sourceType === "wechat" ? `"${text}"` : text}</p>
+      <summary className={className}>{sourceType === "wechat" ? `「${preview}」` : preview}</summary>
+      <p className={className}>{sourceType === "wechat" ? `「${text}」` : text}</p>
     </details>
   );
 }
@@ -52,7 +52,7 @@ function EvidenceItem({ source, mediaById, contributorById, deliverableIds }: {
   const sourceMedia = source.mediaIds.map((id) => mediaById.get(id)).filter((item): item is Media => Boolean(item));
   const withImages = uniqueDisplayMedia(sourceMedia.filter((item) => isThumbnailEligible(item) && (!deliverableIds || deliverableIds.has(item.id))));
   const withoutImages = sourceMedia.filter((item) => deliverableIds && !deliverableIds.has(item.id));
-  const text = presentableEvidenceText(source.text);
+  const text = stripWechatEmoticons(presentableEvidenceText(source.text));
   const label = presentableSourceLabel(source.sourceLabel);
   return (
     <article className="evidence-item" key={source.id}>
