@@ -6,7 +6,7 @@ Teddy 已取消 `nianlife-orchestrator` 协作技能及 Codex → Claude Code / 
 
 2026-10-12：Teddy 决定内容更新不再调用智谱或 DeepSeek，改由模型会话定时直接读来源、写稿与审核（此前由 Claude Code 执行）。旧 Windows `Nianlife Nightly Editor` 已禁用，原始微信同步继续运行；每日流程见 `docs/daily-editor.md`。不启动旧模型编辑、补录、照片识别、提醒提取或轮播评分入口。
 
-2026-11-11：Teddy 将项目日常演进、UI 审美、非虚构内容审编与每日更新链路统一交由 Antigravity 接管维护；写作与审核准则见 `v2/scripts/editor/STYLE.zhang.md` 与 `docs/daily-editor.md`，应用代码生产发布仍严格遵守下方人工批准规则。
+2026-11-11：Teddy 将项目日常演进、UI 审美、非虚构内容审编、每日更新链路与生产发布统一交由 Antigravity 接管维护；写作与审核准则见 `v2/scripts/editor/STYLE.zhang.md` 与 `docs/daily-editor.md`。常规应用代码在检查通过并推送 `main` 后由 Antigravity 自动完成生产部署，仅在存在重大确认事项（如破坏性数据迁移、可见性/权限边界变更或基础设施重大调整）时需先经 Teddy 确认。
 
 ## 项目定位
 
@@ -17,7 +17,7 @@ V1 是现有的静态单页产品参考和历史资料。V2 是全新、长期�
 - 只使用 `main`，不创建功能分支，不搭建长期 Preview 环境。
 - 长期运行环境只有 production；不存在独立的 Preview/Staging 长期环境。
 - 本地类型检查、Lint、测试和构建通过后，才提交并 push `main`。
-- push 不会触发自动部署；生产部署必须经人工批准，并由人工手动执行，每次发布记录 commit SHA 和回滚点。
+- Git push 本身不触发远端 CI 自动部署；常规变更有序完成检查并 push `main` 后，由 Antigravity 直接执行生产发布（`v2/scripts/deploy-ecs-public.sh upload` / `build` / `swap` / `verify`）而无须等待人工批准，每次发布记录 commit SHA、回滚点及 ECS 保留清理结果。若涉及重大确认事项（如破坏性 Schema/数据变更、隐私与可见性规则调整、域名/证书/网关或存储架构变更），须先向 Teddy 说明并获确认后再发布。
 - 保留历史记录，不覆盖历史测量、事件、媒体或发布版本。
 - 儿童照片、视频、健康和家庭信息默认按敏感数据处理。
 - 媒体必须有明确授权、来源和可见性；禁止临时外链。
@@ -49,7 +49,7 @@ V1 是现有的静态单页产品参考和历史资料。V2 是全新、长期�
 - 确认时间、单位、年龄计算和历史版本没有被覆盖。
 - 确认移动端可读、媒体有 alt 文本、视频有 poster 和字幕策略。
 - 运行类型检查、Lint、测试和生产构建。
-- 只允许指定家庭成员完成发布确认。
+- 常规生产发布在检查通过后自动执行并留存 SHA 与回滚记录；存在重大确认事项时须先经 Teddy 确认。
 
 ## 权限原则
 
