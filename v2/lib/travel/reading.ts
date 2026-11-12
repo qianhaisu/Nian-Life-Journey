@@ -13,7 +13,7 @@ import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { toMediaRef, type MediaRef } from "@/lib/memory-chapters";
 import { loadMonthContent, dayForDate, resolveMonthContentMedia, type MonthContent, listEditedMonthContents } from "@/lib/month-content";
 import { buildMonthTimeline } from "@/lib/month-timeline";
-import { uniqueDisplayMedia } from "@/lib/media/display-identity";
+import { displayIdentity, uniqueDisplayMedia } from "@/lib/media/display-identity";
 import { isSubjectChecked } from "@/lib/publication-moments";
 import { calendarDayOf } from "@/lib/timeline-dates";
 import { ageOn } from "@/lib/time-signature";
@@ -148,15 +148,24 @@ export type TripDayCoverPool = {
  * 旅程手工指定的 coverMediaId → 全程候选池评分最高的一张 → coverDay（缺省第一天）首屏第一张 → 候选池首张。
  * 当月稿暂未填入媒体 ID 时，候选池已自动包含关联日的已审核照片与沿途风景，避免空封面卡。
  */
-export function pickTripCover(trip: Trip, dayPools: readonly TripDayCoverPool[], scores: Scores): MediaRef | undefined {
-  const pool = dayPools.flatMap(({ day, photos }) =>
+export function pickTripCover(
+  trip: Trip,
+  dayPools: readonly TripDayCoverPool[],
+  scores: Scores,
+  excludeIds?: ReadonlySet<string>,
+): MediaRef | undefined {
+  const rawPool = dayPools.flatMap(({ day, photos }) =>
     photos.filter((m) => m.type !== "video").map((m) => ({ m, day })),
   );
-  if (pool.length === 0) return undefined;
+  if (rawPool.length === 0) return undefined;
   if (trip.coverMediaId) {
-    const chosen = pool.find((p) => p.m.id === trip.coverMediaId);
+    const chosen = rawPool.find((p) => p.m.id === trip.coverMediaId);
     if (chosen) return chosen.m;
   }
+  const isExcluded = (m: MediaRef) =>
+    Boolean(excludeIds && (excludeIds.has(m.id) || excludeIds.has(displayIdentity(m))));
+  const nonExcluded = excludeIds && excludeIds.size > 0 ? rawPool.filter((p) => !isExcluded(p.m)) : rawPool;
+  const pool = nonExcluded.length > 0 ? nonExcluded : rawPool;
   let best: { m: MediaRef; score: number } | undefined;
   for (const { m, day } of pool) {
     const score = coverScore(scores.get(m.id), day === trip.coverDay);
@@ -245,16 +254,35 @@ export async function readTravelIndex(): Promise<{ cards: TripCard[]; trips: Tri
   const photosOf = gate(archive);
   const approvedOfDay = approvedPhotosByDay(archive);
   const months = await monthsFor(trips.flatMap((t) => daysOf(t)));
-  const cards = trips.map((trip) => {
+  const usedCoverIds = new Set<string>();
+  const recordCover = (cover?: MediaRef) => {
+    if (!cover) return;
+    usedCoverIds.add(cover.id);
+    usedCoverIds.add(displayIdentity(cover));
+  };
+  const drafts = trips.map((trip) => {
     // 明信片角上叠一张这次旅行最好看的风景
     const scenery = daysOf(trip).flatMap((d) => (SCENERY_BY_DAY[d] ?? []).map((s) => ({ ...s, day: d })))
       .sort((a, b) => b.scenic - a.scenic).map((s) => sceneryOf(archive, s.day).find((m) => m.id === s.id)).find(Boolean);
     const ownPools = buildTripDayPoolsForDays(daysOf(trip), trip, months, photosOf, approvedOfDay, archive);
     const hasOwnPhotos = ownPools.some((p) => p.photos.some((m) => m.type !== "video"));
-    const effectivePools = hasOwnPhotos
-      ? ownPools
-      : buildTripDayPoolsForDays(connectedTripFallbackDays(trip, trips), trip, months, photosOf, approvedOfDay, archive);
-    return { trip, cover: pickTripCover(trip, effectivePools, scores), scenery, ageLabel: ageOn(archive.birthDay, trip.from) };
+    const ownCover = hasOwnPhotos ? pickTripCover(trip, ownPools, scores) : undefined;
+    recordCover(ownCover);
+    return { trip, scenery, hasOwnPhotos, ownCover, ageLabel: ageOn(archive.birthDay, trip.from) };
+  });
+  const cards = drafts.map(({ trip, scenery, hasOwnPhotos, ownCover, ageLabel }) => {
+    if (hasOwnPhotos) return { trip, cover: ownCover, scenery, ageLabel };
+    const fallbackPools = buildTripDayPoolsForDays(
+      connectedTripFallbackDays(trip, trips),
+      trip,
+      months,
+      photosOf,
+      approvedOfDay,
+      archive,
+    );
+    const cover = pickTripCover(trip, fallbackPools, scores, usedCoverIds);
+    recordCover(cover);
+    return { trip, cover, scenery, ageLabel };
   });
   return { cards, trips, birthDay: archive.birthDay };
 }
@@ -324,10 +352,24 @@ export async function readTrip(id: string): Promise<TripReadingData | null> {
     ? []
     : fallbackRange.map((d) => buildDayRecord(d, false)).filter((d): d is TripDay => d !== null && d.photos.length > 0);
   const ownPools = buildTripDayPoolsForDays(range, trip, months, photosOf, approvedOfDay, archive, publishedByDay);
-  const effectivePools = ownPools.some((p) => p.photos.some((m) => m.type !== "video"))
+  const hasOwnPoolPhotos = ownPools.some((p) => p.photos.some((m) => m.type !== "video"));
+  const effectivePools = hasOwnPoolPhotos
     ? ownPools
     : buildTripDayPoolsForDays(fallbackRange, trip, months, photosOf, approvedOfDay, archive, publishedByDay);
-  const cover = pickTripCover(trip, effectivePools, scores);
+  const siblingUsedCoverIds = new Set<string>();
+  if (!hasOwnPoolPhotos) {
+    for (const other of allTrips) {
+      if (other.id === trip.id || other.from > trip.to || trip.from > other.to) continue;
+      const otherPools = buildTripDayPoolsForDays(daysOf(other), other, months, photosOf, approvedOfDay, archive, publishedByDay);
+      if (!otherPools.some((p) => p.photos.some((m) => m.type !== "video"))) continue;
+      const otherCover = pickTripCover(other, otherPools, scores);
+      if (otherCover) {
+        siblingUsedCoverIds.add(otherCover.id);
+        siblingUsedCoverIds.add(displayIdentity(otherCover));
+      }
+    }
+  }
+  const cover = pickTripCover(trip, effectivePools, scores, siblingUsedCoverIds);
   const memoryDays = hasOwnPhotos ? days : [...days, ...fallbackTripDays];
   return { trip, ageLabel: ageOn(archive.birthDay, trip.from), memory: buildTripMemory(trip, memoryDays, scores, cover), essay: tripEssay(trip), days };
 }

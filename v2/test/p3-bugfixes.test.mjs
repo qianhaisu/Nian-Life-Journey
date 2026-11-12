@@ -261,6 +261,59 @@ test("3.2 旅行回退：当行程日为 text-only（firstScreen/expanded 均空
   assert.equal(connectedMemory?.slides[0].href, "/memory/2026/10/03");
 });
 
+test("3.2 相连行程封面避撞：回退行程传入 excludeIds 时优先选用未被相邻行程占用的合格照片，相册首帧同步避撞", () => {
+  const wenzhouTrip = {
+    id: "codex-2026-10-wenzhou",
+    title: "飞回温州",
+    kind: "hometown",
+    from: "2026-10-03",
+    to: "2026-10-04",
+    placeIds: ["cn-zj-wenzhou"],
+  };
+  const yiwuTrip = {
+    id: "codex-2026-10-yiwu",
+    title: "回杭州路上在义乌住一晚",
+    kind: "outing",
+    from: "2026-10-04",
+    to: "2026-10-05",
+    placeIds: ["cn-zj-jinhua-yiwu"],
+  };
+  const oct3Photos = [
+    mkPhoto("wechat-media:ecd9f6c94f6ab59583a63d96e88664616ddb4449baf0029779bb83bf4367d5fc", "2026-10-03 10:45:21"),
+    mkPhoto("wechat-media:bb7e31063fedc192812782d28cd26dba810946106875c18d76a7e8ceee633752", "2026-10-03 18:12:00"),
+  ];
+  const scores = new Map([
+    [oct3Photos[0].id, { qualified: true, childMain: true, faceClear: true, clarity: 92, expression: 88 }],
+    [oct3Photos[1].id, { qualified: true, childMain: true, faceClear: true, clarity: 85, expression: 82 }],
+  ]);
+  const sharedPool = [{ day: "2026-10-03", photos: oct3Photos }];
+
+  const wenzhouCover = pickTripCover(wenzhouTrip, sharedPool, scores);
+  assert.equal(wenzhouCover?.id, oct3Photos[0].id);
+
+  const usedCoverIds = new Set([wenzhouCover.id]);
+  const yiwuCover = pickTripCover(yiwuTrip, sharedPool, scores, usedCoverIds);
+  assert.equal(yiwuCover?.id, oct3Photos[1].id, "义乌回退卡片应避开已被温州卡片选中的首张图，选用池中第 2 张合格图");
+  assert.notEqual(yiwuCover?.id, wenzhouCover?.id);
+
+  const yiwuMemory = buildTripMemory(
+    yiwuTrip,
+    [
+      { day: "2026-10-04", href: "/memory/2026/10/04", dateLabel: "10 月 4 日", photos: [] },
+      { day: "2026-10-05", href: "/memory/2026/10/05", dateLabel: "10 月 5 日", photos: [] },
+      { day: "2026-10-03", href: "/memory/2026/10/03", dateLabel: "10 月 3 日", photos: oct3Photos },
+    ],
+    scores,
+    yiwuCover,
+  );
+  assert.ok(yiwuMemory);
+  assert.equal(yiwuMemory.slides[yiwuMemory.coverIndex]?.media.id, oct3Photos[1].id, "详情页相册首帧 coverIndex 与避撞封面保持一致");
+
+  // 极端边界：若回退池总共只有 1 张照片且已被占用，仍须兜底返回该图而不出现空封面
+  const singlePool = [{ day: "2026-10-03", photos: [oct3Photos[0]] }];
+  assert.equal(pickTripCover(yiwuTrip, singlePool, scores, usedCoverIds)?.id, oct3Photos[0].id);
+});
+
 // ── 3.3 首页大图卡与放映器字幕逻辑 + 主题选片相关性优化测试 ──────────────────────────────────
 
 test("3.3 MonthContent 校验兼容可选 photoCaptions 字段", () => {

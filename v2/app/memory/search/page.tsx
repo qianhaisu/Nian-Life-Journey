@@ -56,7 +56,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           : "按留下的文字寻找（含每月综述与每日记录）。最早匹配的记录不一定是人生第一次；当时的原话和资料可在日页继续核对。"}
       </p>
       {results.length === 0 && <div className="life-empty"><p>还没找到与“{query}”相合的文字。试试一句短一点的原话，或输入年份（如 2024）、年月（如 2025年3月）。</p>{SECTIONS.growth ? <Link href="/memory/growth">看看成长里的变化 →</Link> : <Link href="/memory">翻翻按月整理的记忆 →</Link>}</div>}
-      <div className="search-results">{results.slice((page - 1) * 15, page * 15).map((item) => {
+      <div className="search-results">{results.slice((page - 1) * 15, page * 15).map((item, index) => {
+        const thumbLoading = index < 4 ? "eager" : "lazy";
         if (item.kind === "month") {
           const { month, excerpt, quotes } = item;
           const cover = month.cover;
@@ -88,7 +89,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               </div>
               {cover ? (
                 <Link className="search-result-thumb" href={month.href} prefetch={false} aria-label={`查看 ${month.label}`}>
-                  <Photo media={cover} variant="thumbnail" fit="crop" loading="lazy" sizes="(max-width: 640px) 96px, 136px" />
+                  <Photo media={cover} variant="thumbnail" fit="crop" loading={thumbLoading} sizes="(max-width: 640px) 96px, 136px" />
                 </Link>
               ) : null}
             </article>
@@ -117,7 +118,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             </div>
             {thumb ? (
               <Link className="search-result-thumb" href={entry.href} prefetch={false} aria-label={`查看 ${entry.day} 的照片`}>
-                <Photo media={thumb} variant="thumbnail" fit="crop" loading="lazy" sizes="(max-width: 640px) 96px, 136px" />
+                <Photo media={thumb} variant="thumbnail" fit="crop" loading={thumbLoading} sizes="(max-width: 640px) 96px, 136px" />
               </Link>
             ) : null}
           </article>
