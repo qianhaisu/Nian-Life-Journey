@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { SECTIONS } from "@/lib/features";
 import { readLifeArchive } from "@/lib/life-reading-load";
 import { READING_PEOPLE, personMatches } from "@/lib/life-reading";
 import { PEOPLE_PROSE, resolveReadingProse } from "@/lib/life-reading-narratives";
@@ -8,9 +10,13 @@ import { MemoryReadingMode } from "@/components/memory-reading-mode";
 import "../reading.css";
 import "../memory-modern.css";
 
-export const metadata: Metadata = { title: "一起长大的人" };
+export const metadata: Metadata = {
+  title: "一起长大的人",
+  ...(SECTIONS.people ? {} : { robots: { index: false, follow: false } }),
+};
 
 export default async function PeoplePage() {
+  if (!SECTIONS.people) redirect("/memory");
   await renderOnDemand();
   const { entries } = await readLifeArchive();
   const people = READING_PEOPLE.flatMap(person => {

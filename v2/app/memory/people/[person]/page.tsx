@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { SECTIONS } from "@/lib/features";
 import { READING_PEOPLE, personMatches } from "@/lib/life-reading";
 import { readLifeArchive } from "@/lib/life-reading-load";
 import { PEOPLE_PROSE, resolveReadingProse } from "@/lib/life-reading-narratives";
@@ -11,6 +12,7 @@ import "../../reading.css";
 import "../../memory-modern.css";
 
 export async function generateMetadata({ params }: { params: Promise<{ person: string }> }): Promise<Metadata> {
+  if (!SECTIONS.people) return { title: "人物", robots: { index: false, follow: false } };
   const { person: id } = await params;
   const person = READING_PEOPLE.find(item => item.id === id);
   return { title: person ? `${person.label} · 一起长大的人` : "人物" };
@@ -18,6 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ person: s
 
 /** A complete portrait at its own stable address; nothing to expand or paginate. */
 export default async function PersonPage({ params }: { params: Promise<{ person: string }> }) {
+  if (!SECTIONS.people) redirect("/memory");
   const { person: id } = await params;
   const person = READING_PEOPLE.find(item => item.id === id);
   if (!person) notFound();

@@ -160,6 +160,11 @@
   margin-bottom: 12px;
 }
 
+.memory-page .memory-mode-row:empty,
+.memory-page .memory-year-nav-mode:empty {
+  display: none;
+}
+
 /* ── Shared Tabs, Notes, Dates & Empty States ────────────────────────────────────────────── */
 
 .life-tabs {

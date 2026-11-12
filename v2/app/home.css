@@ -1940,6 +1940,17 @@ a.weekly-title {
   .bottom-widgets:not(:has(.weekly)) {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .bottom-widgets:not(:has(.weekly)) .footprint-panel:has(.footprint-latest):has(.footprint-cities) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    gap: 18px 24px;
+    align-items: center;
+  }
+
+  .bottom-widgets:not(:has(.weekly)) .footprint-panel:has(.footprint-latest):has(.footprint-cities) > .widget-head {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (min-width: 1080px) {

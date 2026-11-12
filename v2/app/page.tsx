@@ -12,24 +12,15 @@ import {
   TimeCapsuleSection,
   TravelFootprintCard,
 } from "@/components/home-bento-sections";
-import { HomeHealthReminders } from "@/components/home-health-reminders";
-import { HomeReminders, type HomeReminder as HomeReminderView, type HomeReminderSource } from "@/components/home-reminders";
-import { MODALITY_LABEL, SOURCE_KIND_LABEL, roleText, type SourceKind } from "@/components/upcoming-tasks";
-import { readHomeFeed, HOME_REMINDER_LABEL, type HomeFeed, type HomeReminder, type HomeReminderState } from "@/lib/home-feed";
+import { readHomeFeed, type HomeFeed } from "@/lib/home-feed";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildHomeBentoModel } from "@/lib/home-bento";
 import { selectHomeMemories } from "@/lib/home-memory";
 import { topicLookupFrom } from "@/lib/home-memory-topics";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
-import { groupReminders } from "@/lib/reminder-groups";
-import { HOME_QUIET_STATES } from "@/lib/home-reminder-display";
-import { windowStart, windowEnd } from "@/lib/home-reminder-window";
-import { CANONICAL_PROFILE_ID } from "@/lib/db/config";
 import { renderOnDemand } from "@/lib/render-on-demand";
-import { formatDay, formatMonth } from "@/lib/time-signature";
 import { selectHomeAnswer, type HomeAnswer } from "@/lib/home-answer";
 import { listEditedMonthContents, loadMonthContent } from "@/lib/month-content";
-import { stripWechatEmoticons } from "@/lib/organizer/evidence-text";
 import "./home.css";
 
 // 首页（Modular Canvas · 模块化生活画布）：
@@ -38,7 +29,7 @@ import "./home.css";
 //   2. 12 列 Bento 首屏马赛克（回忆主卡 + 最新日切片 + 近月成长 + 家人的话 + 家庭短片）
 //   3. 近期日常 · 按天阅读（3 列结构化日卡）
 //   4. 过去的张年 · 时间胶囊（4 列竖版胶卷回看，原则六）
-//   5. 底部家庭实用双栏（每周提醒 + 旅行足迹）
+//   5. 底部旅行足迹面板
 //
 // **零新增数据库查询**（CLAUDE.md 渲染路径规矩）：
 // 全部数据均来自既有的 loadFamilyArchiveOnDemand()、readHomeFeed({ archive })、
@@ -101,6 +92,7 @@ export default async function HomePage() {
   const hasGrowth = bento.growth !== null;
   const hasTopRight = hasLatestDay || hasGrowth;
   const hasVoices = bento.voices.length > 0;
+  const hasTravel = bento.travel.cityCount > 0 || Boolean(bento.travel.latestTrip);
 
   const bentoClasses = [
     "bento-hero",
@@ -149,10 +141,11 @@ export default async function HomePage() {
 
         <TimeCapsuleSection capsules={bento.capsules} />
 
-        <div className="bottom-widgets">
-          <Reminders feed={feed} />
-          <TravelFootprintCard footprint={bento.travel} />
-        </div>
+        {hasTravel ? (
+          <div className="bottom-widgets">
+            <TravelFootprintCard footprint={bento.travel} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -285,90 +278,4 @@ function MemoryFallback({ feed, reason }: { feed: HomeFeed; reason?: string }) {
       </div>
     </section>
   );
-}
-
-const LIVE_REMINDER_STATES = new Set<HomeReminderState>(["active", "needs_confirmation", "tentative", "done"]);
-
-function Reminders({ feed }: { feed: HomeFeed }) {
-  const { reminders } = feed;
-  if (reminders.status === "unavailable") return <HomeHealthReminders standalone />;
-  const shown = reminders.status === "ready" ? reminders.shown : [];
-  const more =
-    reminders.status === "ready"
-      ? reminders.more.filter((reminder) => LIVE_REMINDER_STATES.has(reminder.state))
-      : [];
-  const rangeStart = windowStart(feed.clock.today);
-  return (
-    <HomeReminders
-      reminders={groupReminders([...shown, ...more].map(toReminderView))}
-      habitIds={reminders.status === "ready" ? reminders.habitShownIds : []}
-      storageScope={CANONICAL_PROFILE_ID}
-      rangeStart={rangeStart}
-      rangeEnd={windowEnd(feed.clock.today)}
-    />
-  );
-}
-
-function toReminderView(reminder: HomeReminder): HomeReminderView {
-  const when = reminder.item.when;
-  return {
-    id: reminder.id,
-    whenKey: JSON.stringify(
-      when.kind === "unconfirmed"
-        ? { ...when, raisedDay: reminder.item.evidence?.day ?? reminder.id }
-        : when,
-    ),
-    pendingConfirmation:
-      reminder.state === "tentative" ||
-      reminder.state === "needs_confirmation" ||
-      when.kind === "unconfirmed",
-    title: stripWechatEmoticons(reminder.title) || reminder.title,
-    whenText: reminder.deadlineLabel,
-    whenDay: when.kind === "day" ? when.day : undefined,
-    actionable: reminder.state !== "done",
-    statusLabel: HOME_QUIET_STATES.has(reminder.state) ? undefined : HOME_REMINDER_LABEL[reminder.state],
-    note: reminder.detail ? stripWechatEmoticons(reminder.detail) || undefined : undefined,
-    sources: provenanceRows(reminder),
-  };
-}
-
-function provenanceRows(reminder: HomeReminder): HomeReminderSource[] {
-  const provenance = reminder.provenance;
-  if (provenance?.reviewState !== "approved") return [];
-  const notes: { kind: SourceKind; note: NonNullable<typeof provenance.raised> | undefined }[] = [
-    { kind: "raised", note: provenance.raised },
-    { kind: "completed", note: provenance.completed },
-    { kind: "rescheduled", note: provenance.rescheduled },
-    { kind: "cancelled", note: provenance.cancelled },
-  ];
-  const link = evidenceLink(reminder);
-  return notes.flatMap(({ kind, note }) =>
-    note
-      ? [
-          {
-            kindLabel: SOURCE_KIND_LABEL[kind],
-            roleText: roleText(note.role),
-            roleUnconfirmed: note.role.kind === "unconfirmed",
-            toneLabel: MODALITY_LABEL[note.modality],
-            recordedOn: note.onDay,
-            recordedOnLabel: formatDay(note.onDay),
-            summary: stripWechatEmoticons(note.summary) || note.summary,
-            link,
-          },
-        ]
-      : [],
-  );
-}
-
-function evidenceLink(reminder: HomeReminder): { href: string; label: string } | undefined {
-  if (!reminder.evidenceHref) return undefined;
-  if (reminder.evidenceKind === "event") return { href: reminder.evidenceHref, label: "看那一天" };
-  if (reminder.evidenceKind === "month") {
-    const [, , year, month] = reminder.evidenceHref.split("/");
-    return {
-      href: reminder.evidenceHref,
-      label: year && month ? `翻到 ${formatMonth(`${year}-${month}`)}` : "翻到那个月",
-    };
-  }
-  return undefined;
 }

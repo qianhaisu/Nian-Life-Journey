@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { SECTIONS } from "./features";
 
 // Why a page that reads the archive must NOT be prerendered at build time.
 //
@@ -28,5 +29,12 @@ export async function renderOnDemand(): Promise<void> {
 
 // Static paths that call renderOnDemand() and read through loadFamilyArchiveOnDemand(). Dynamic
 // year/person routes share the same memo, cleared by any archive refresh, but have no route cache
-// to revalidate as a page pattern.
-export const ON_DEMAND_ARCHIVE_PATHS: readonly string[] = ["/", "/memory", "/memory/growth", "/memory/people", "/memory/search", "/mom-reports"];
+// to revalidate as a page pattern. Hidden sections (lib/features.ts) are excluded while offline.
+export const ON_DEMAND_ARCHIVE_PATHS: readonly string[] = [
+  "/",
+  "/memory",
+  ...(SECTIONS.growth ? ["/memory/growth"] : []),
+  ...(SECTIONS.people ? ["/memory/people"] : []),
+  "/memory/search",
+  "/mom-reports",
+];

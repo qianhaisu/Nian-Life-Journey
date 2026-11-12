@@ -7,6 +7,7 @@ import { loadMonthContent } from "@/lib/month-content";
 import { pinnedCoverAllowed } from "@/lib/publication-moments";
 import { YearNavHighlight } from "@/components/year-nav-highlight";
 import { MemoryReadingMode } from "@/components/memory-reading-mode";
+import { hasMemoryReadingModeSwitch } from "@/lib/features";
 import "./reading.css";
 import "./memory-modern.css";
 
@@ -85,7 +86,7 @@ export default async function MemoryPage() {
       {index.years.length === 0 ? (
         <section className="reading-wrap archive-empty">
           <p className="serif">档案还是空的。等时间再走一会儿。</p>
-          <div className="memory-mode-row"><MemoryReadingMode /></div>
+          {hasMemoryReadingModeSwitch ? <div className="memory-mode-row"><MemoryReadingMode /></div> : null}
         </section>
       ) : (
         <>
@@ -118,7 +119,7 @@ export default async function MemoryPage() {
                 </div>
               </div>
             ))}
-            <div className="memory-year-nav-mode"><MemoryReadingMode /></div>
+            {hasMemoryReadingModeSwitch ? <div className="memory-year-nav-mode"><MemoryReadingMode /></div> : null}
           </nav>
           <YearNavHighlight />
 

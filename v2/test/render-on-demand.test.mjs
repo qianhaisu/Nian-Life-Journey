@@ -11,6 +11,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ISR_ARCHIVE_TTL_MS, ON_DEMAND_ARCHIVE_TTL_MS, __resetOnDemandArchiveForTests, invalidateOnDemandArchive, loadFamilyArchiveForIsr, loadFamilyArchiveOnDemand } from "../lib/family-archive.ts";
+import { SECTIONS } from "../lib/features.ts";
 import { ON_DEMAND_ARCHIVE_PATHS } from "../lib/render-on-demand.ts";
 
 const appDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "app");
@@ -114,9 +115,15 @@ test("a revalidate notification drops the memo, so the next read sees the new ar
   // always contains "/" and "/memory" — the whole point being that new content does not wait out a
   // cache window. Those routes have no Next route cache any more, and revalidatePath() cannot see
   // this memo at all, so before this the push reported success and changed nothing for 300s.
-  for (const path of ["/", "/memory", "/memory/growth", "/memory/people", "/memory/search", "/mom-reports"]) {
-    assert.ok(ON_DEMAND_ARCHIVE_PATHS.includes(path), `${path} must share the refreshed archive`);
-  }
+  const expectedPaths = [
+    "/",
+    "/memory",
+    ...(SECTIONS.growth ? ["/memory/growth"] : []),
+    ...(SECTIONS.people ? ["/memory/people"] : []),
+    "/memory/search",
+    "/mom-reports",
+  ];
+  assert.deepEqual([...ON_DEMAND_ARCHIVE_PATHS], expectedPaths, "only active on-demand archive pages belong in the refresh list");
 });
 
 test("cache: filled, then notified, then the next read is fresh — and reuse still works in between", async () => {

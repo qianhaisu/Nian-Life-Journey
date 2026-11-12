@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { SECTIONS } from "@/lib/features";
 import { healthPageRuntime } from "@/lib/health/page/runtime";
 import { HealthView } from "./health-view";
 import "./health.css";
@@ -10,6 +12,7 @@ export const revalidate = 0;
 export const metadata: Metadata = { title: "健康", robots: { index: false, follow: false } };
 
 export default async function HealthPage() {
+  if (!SECTIONS.health) redirect("/");
   const rt = healthPageRuntime();
   if (!rt.ok) return <div className="hp"><h1 className="hp-h1">健康</h1><p className="hp-muted">健康页还没有启用。</p></div>;
   const page = await rt.page.page();

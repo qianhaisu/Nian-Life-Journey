@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SECTIONS } from "@/lib/features";
 
-// Five places, equal weight, on every screen (HEALTH-04: 首页 / 记忆 / 健康 / 妈妈月报; 旅行 added
-// 2026-09-25 between 健康 and 妈妈月报, Teddy's order). Capture keeps its route but is not a
-// destination the family navigates to — the archive grows on its own.
+// Primary places, equal weight, on every screen (HEALTH-04: 首页 / 记忆 / 健康 / 妈妈月报; 旅行 added
+// 2026-09-25 between 健康 and 妈妈月报, Teddy's order). When SECTIONS.health is false, 「健康」 is
+// hidden from both nav bars while keeping the remaining four places in order. Capture keeps its
+// route but is not a destination the family navigates to — the archive grows on its own.
 const primary = [
   { href: "/", label: "首页", match: (path: string) => path === "/" },
   { href: "/memory", label: "记忆", match: (path: string) => path.startsWith("/memory") || path.startsWith("/events") },
-  { href: "/health", label: "健康", match: (path: string) => path.startsWith("/health") },
+  ...(SECTIONS.health ? [{ href: "/health", label: "健康", match: (path: string) => path.startsWith("/health") }] : []),
   { href: "/travel", label: "旅行", match: (path: string) => path.startsWith("/travel") },
   { href: "/mom-reports", label: "妈妈月报", match: (path: string) => path.startsWith("/mom-reports") },
 ];

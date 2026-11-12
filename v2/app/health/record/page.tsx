@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { SECTIONS } from "@/lib/features";
 import { loadHealthRecordConfig } from "@/lib/health/record/config";
 import { RecordApp } from "./record-app";
 import "./record.css";
@@ -8,6 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "健康记录", robots: { index: false, follow: false } };
 
 export default function HealthRecordPage() {
+  if (!SECTIONS.health) redirect("/");
   const conf = loadHealthRecordConfig();
   if (!conf.ok) {
     return <div className="hr-root"><div className="hr-app"><h1 style={{ marginTop: 40 }}>健康记录</h1><p>这个功能还没有启用。</p></div></div>;

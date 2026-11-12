@@ -292,6 +292,9 @@
     padding-top: 8px;
     margin-top: 2px;
   }
+  .memory-page .memory-year-nav-mode:empty {
+    display: none;
+  }
 }
 
 .memory-page .memory-year-section {

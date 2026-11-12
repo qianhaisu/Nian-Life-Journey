@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { SECTIONS } from "@/lib/features";
 import { readLifeArchive } from "@/lib/life-reading-load";
 import { GROWTH_CATEGORIES, growthThreads, selectReadingPhotos, type GrowthCategory } from "@/lib/life-reading";
 import { GROWTH_PROSE, resolveReadingProse } from "@/lib/life-reading-narratives";
@@ -11,7 +12,10 @@ import { Photo } from "@/components/photo";
 import "../reading.css";
 import "../memory-modern.css";
 
-export const metadata: Metadata = { title: "怎样慢慢长大" };
+export const metadata: Metadata = {
+  title: "怎样慢慢长大",
+  ...(SECTIONS.growth ? {} : { robots: { index: false, follow: false } }),
+};
 const chapterTitles: Record<GrowthCategory, string> = {
   language: "那些慢慢说出来的话", action: "他怎样开始自己做", sleep: "睡着和醒来的日子", interest: "喜欢的东西，逐渐有了形状",
 };
@@ -30,6 +34,7 @@ const illustratedDays: Record<string, string> = {
 };
 
 export default async function GrowthPage({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
+  if (!SECTIONS.growth) redirect("/memory");
   const { kind } = await searchParams;
   const category = GROWTH_CATEGORIES.find(item => item.id === kind);
   if (kind && !category) notFound();

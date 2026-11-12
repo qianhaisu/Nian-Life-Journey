@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import { SECTIONS } from "@/lib/features";
 
 // HEALTH-04：首页「每周提醒」里的健康提醒。首页本身继续走 ISR 缓存，HTML 里不含任何健康内容；
 // 这里在浏览器端向受保护的接口要提醒（只含明确的预约），同源 Cookie 自动带上：
@@ -18,6 +19,7 @@ export function HealthCross() {
 export function HomeHealthReminders({ standalone = false }: { standalone?: boolean }) {
   const [state, setState] = useState<State>({ kind: "none" });
   useEffect(() => {
+    if (!SECTIONS.health) return;
     let alive = true;
     fetch("/api/health-record/reminders", { cache: "no-store", credentials: "same-origin" })
       .then(async (r) => {
@@ -27,6 +29,7 @@ export function HomeHealthReminders({ standalone = false }: { standalone?: boole
       .catch(() => {});
     return () => { alive = false; };
   }, []);
+  if (!SECTIONS.health) return null;
   if (state.kind === "none") return null;
   const wrap = (node: ReactNode) => (standalone ? <section className="weekly weekly--health-only" aria-label="健康提醒">{node}</section> : node);
   if (!state.items.length) return null;
@@ -34,7 +37,7 @@ export function HomeHealthReminders({ standalone = false }: { standalone?: boole
     {state.items.map((it) => <li className="weekly-item weekly-item--fact" key={it.id}>
       <div className="weekly-line"><p className="weekly-label">
         <span className="weekly-kind weekly-kind--health"><HealthCross />健康</span>
-        <Link className="weekly-title" href="/health">{it.title}</Link>
+        {SECTIONS.health ? <Link className="weekly-title" href="/health">{it.title}</Link> : <span className="weekly-title">{it.title}</span>}
         <span className="weekly-when">{" · "}<time dateTime={it.date}>{Number(it.date.slice(5, 7))}月{Number(it.date.slice(8, 10))}日</time>{it.place ? ` · ${it.place}` : ""}</span>
       </p></div>
     </li>)}

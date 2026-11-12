@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SECTIONS } from "@/lib/features";
 import { readLifeArchive } from "@/lib/life-reading-load";
 import { searchArchive } from "@/lib/life-reading";
 import { renderOnDemand } from "@/lib/render-on-demand";
@@ -27,7 +28,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     </form>
     {!query ? <div className="search-suggestions"><p>也可以从这些往事找起</p>{suggestions.map(text => <Link href={`/memory/search?${new URLSearchParams({ q: text })}`} prefetch={false} key={text}>{text} →</Link>)}</div> : <>
       <p className="life-note">按留下的文字寻找。最早匹配的记录不一定是人生第一次；当时的原话和资料可在日页继续核对。</p>
-      {results.length === 0 && <div className="life-empty"><p>还没找到与“{query}”相合的文字。试试一句短一点的原话，或一个人物、地点。</p><Link href="/memory/growth">看看成长里的变化 →</Link></div>}
+      {results.length === 0 && <div className="life-empty"><p>还没找到与“{query}”相合的文字。试试一句短一点的原话，或一个人物、地点。</p>{SECTIONS.growth ? <Link href="/memory/growth">看看成长里的变化 →</Link> : <Link href="/memory">翻翻按月整理的记忆 →</Link>}</div>}
       <div className="search-results">{results.slice((page - 1) * 15, page * 15).map(({ entry, excerpt, quotes }) => <article className="search-result" key={entry.day}>
         <ReadingDate entry={entry} /><h2><Link href={entry.href} prefetch={false}>{entry.title || "这一天"}</Link></h2>
         <p>{excerpt}</p>{quotes.length > 0 && <blockquote>{quotes.slice(0, 2).map(quote => <p key={quote}>「{quote}」</p>)}</blockquote>}

@@ -85,20 +85,25 @@ guard_ancestor() {
   echo "GATE_A_OK live ${live:0:7} is an ancestor of ${want:0:7}"
 }
 
-# 闸 b（切换后真实页面冒烟）：每页 HTTP 200 且含关键内容；/health 的「年度累计生病」只在有真实病程数据
-# （累计天数 > 0）时才渲染，缺挂载/空状态时不会出现。每页最多试 3 次（冷启动 ISR 首次渲染可能慢）。
+# 闸 b（切换后真实页面冒烟）：每页 HTTP 200 且含关键内容；若 SECTIONS.health 开启则校验 /health 200 与关键内容，
+# 若 SECTIONS.health 关闭则改为校验 /health 307 临时重定向。每页最多试 3 次（冷启动 ISR 首次渲染可能慢）。
 SMOKE_PAGES=(
   "/|最近怎么样"
-  "/health|年度累计生病|资料截至"
+  "/travel|旅行"
   "/memory/2025/12|2025 年 12 月"
   "/memory/2025/12/01|12 月 1 日"
 )
 smoke() {
   local want="$1" ok=1 entry path code body live parts needles n
+  local pages=("${SMOKE_PAGES[@]}") health_enabled=0
+  if grep -qE 'health:[[:space:]]*true' "$REPO_ROOT/v2/lib/features.ts" 2>/dev/null; then
+    health_enabled=1
+    pages+=("/health|年度累计生病|资料截至")
+  fi
   live="$(live_sha || true)"
   if [ "$live" = "$want" ]; then echo "smoke /api/health build.sha=${live:0:7} OK"; else echo "smoke FAIL /api/health build.sha=${live:-none} want ${want:0:7}"; ok=0; fi
   body="$(mktemp)"
-  for entry in "${SMOKE_PAGES[@]}"; do
+  for entry in "${pages[@]}"; do
     IFS='|' read -r -a parts <<<"$entry"; path="${parts[0]}"; needles=("${parts[@]:1}")
     local pass=0 try missing
     for try in 1 2 3; do
@@ -110,6 +115,15 @@ smoke() {
     done
     if [ "$pass" = 1 ]; then echo "smoke $path 200 OK"; else echo "smoke FAIL $path http=$code missing=${missing:-none}"; ok=0; fi
   done
+  if [ "$health_enabled" = 0 ]; then
+    local hpass=0 try
+    for try in 1 2 3; do
+      code=$(curl --noproxy '*' -s -m 20 -o /dev/null -w '%{http_code}' "$SITE/health" || echo 000)
+      if [ "$code" = 307 ]; then hpass=1; break; fi
+      sleep 5
+    done
+    if [ "$hpass" = 1 ]; then echo "smoke /health 307 OK"; else echo "smoke FAIL /health http=$code want 307"; ok=0; fi
+  fi
   rm -f "$body"
   [ "$ok" = 1 ]
 }
