@@ -438,11 +438,16 @@
   transition: transform 0.32s var(--mem-spring), box-shadow 0.32s var(--mem-spring), border-color 0.2s ease;
 }
 
+.memory-page .month-card:not(.month-card--compact) {
+  align-self: stretch;
+}
+
 .memory-page .month-card:has(.month-card-photo) {
   padding: 10px;
 }
 
 .memory-page .month-card--compact {
+  align-self: start;
   border-top: 1px solid var(--mem-border);
   background: var(--mem-surface);
 }
@@ -459,40 +464,51 @@
   transform: scale(0.985);
 }
 
-.memory-page .month-card-photo {
+.memory-page .month-card-photo,
+.memory-page .month-card-photo--square,
+.memory-page .month-card-photo--full {
   position: relative;
-  height: clamp(190px, 34vw, 224px);
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  flex-shrink: 0;
   border-radius: var(--mem-r-media);
   overflow: hidden;
   background: var(--mem-muted-bg);
 }
 
-.memory-page .month-card-photo--square {
-  height: auto;
-  aspect-ratio: 1 / 1;
-}
-
-.memory-page .month-card-photo--full {
-  height: auto;
+.memory-page .month-card-photo .photo,
+.memory-page .month-card-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .memory-page .month-card-body {
   padding: 14px 8px 8px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .memory-page .month-card--compact .month-card-body {
   padding: 20px 22px;
+  flex: 0 0 auto;
 }
 
 .memory-page .month-card-top {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
 .memory-page .month-card-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--font-heading);
   font-size: 1.22rem;
   font-weight: 700;
@@ -502,6 +518,8 @@
 }
 
 .memory-page .month-card-age {
+  flex-shrink: 0;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   margin-top: 0;
@@ -535,6 +553,10 @@
   font-size: 0.9rem;
   line-height: 1.62;
   color: var(--mem-ink-muted);
+}
+
+.memory-page .month-card:not(.month-card--compact) .month-card-blurb {
+  min-height: calc(2 * 1.62em);
 }
 
 /* ── 2. /memory/[year]/[month] — Apple-Journal Hero + Elevated Day Cards ─────────────────── */
@@ -1025,7 +1047,7 @@
 
 .month-page .pg-cell,
 .detail-page .pg-cell {
-  background: var(--mem-muted-bg);
+  background: linear-gradient(135deg, #EAEFF6 0%, #F1F5F9 52%, #E4EAF3 100%);
   border-radius: 6px;
 }
 

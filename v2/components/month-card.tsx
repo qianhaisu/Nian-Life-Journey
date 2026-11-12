@@ -57,7 +57,7 @@ export function MonthCard({ entry, blurb, cover, coverFocal, coverFrame }: {
           <Photo
             media={coverPhoto}
             variant={cover && coverFrame ? "web" : "thumbnail"}
-            fit={cover && coverFrame === "full" ? "natural" : "crop"}
+            fit="crop"
             sizes="(max-width: 720px) calc(100vw - 32px), 340px"
           />
         </div>

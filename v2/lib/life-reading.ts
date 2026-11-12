@@ -140,6 +140,119 @@ export function personMatches(entries: readonly ReadingDay[], person: ReadingPer
 }
 
 type SearchTerm = { alternatives: string[] };
+
+export type DateQuery =
+  | { kind: "year"; year: string }
+  | { kind: "month"; year: string; month: string; ym: string };
+
+/**
+ * 解析年份（如 2024、2025、2026、2024年）与年月（如 2025年3月、2025-03、2025.3、2025/03）。
+ */
+export function parseDateQuery(query: string): DateQuery | null {
+  const normalized = query.normalize("NFKC").trim();
+  const yearMatch = normalized.match(/^(202\d)\s*年?$/);
+  if (yearMatch) return { kind: "year", year: yearMatch[1] };
+  const ymChinese = normalized.match(/^(202\d)\s*年\s*(1[0-2]|0?[1-9])\s*月?$/);
+  if (ymChinese) {
+    const year = ymChinese[1];
+    const month = ymChinese[2].padStart(2, "0");
+    return { kind: "month", year, month, ym: `${year}-${month}` };
+  }
+  const ymSep = normalized.match(/^(202\d)\s*[-\/.]\s*(1[0-2]|0?[1-9])$/);
+  if (ymSep) {
+    const year = ymSep[1];
+    const month = ymSep[2].padStart(2, "0");
+    return { kind: "month", year, month, ym: `${year}-${month}` };
+  }
+  return null;
+}
+
+const ZH_WORD_SEGMENTER = typeof Intl !== "undefined" && "Segmenter" in Intl
+  ? new Intl.Segmenter("zh-CN", { granularity: "word" })
+  : null;
+
+const SINGLE_CHAR_FALSE_COMPOUNDS: Readonly<Record<string, readonly string[]>> = {
+  海: [
+    "海鲜", "上海", "刘海", "海绵", "海报", "脑海", "海量", "海淀", "海关",
+    "海苔", "海带", "海参", "海蛰", "海洋球", "海洋馆", "前海", "后海", "青海",
+    "北海道", "地中海",
+  ],
+  水: ["水果", "水平", "口水", "汗水", "薪水", "水准", "胶水", "墨水", "香水"],
+  花: ["花生", "花钱", "花费", "天花板", "眼花", "棉花", "火花"],
+  车: ["车间", "风车", "车厘子"],
+  雪: ["雪姨", "雪梨", "雪糕", "雪碧"],
+  风: ["风景", "风格", "风险", "麦克风", "跟风"],
+  鱼: ["木鱼", "摸鱼", "鱿鱼", "章鱼", "鳄鱼"],
+  山: ["山东", "山西", "佛山", "唐山", "昆山", "萧山"],
+  马: ["马上", "立马", "马桶", "马路", "斑马", "河马", "木马", "罗马", "马来西亚"],
+};
+
+function isSingleHanChar(word: string): boolean {
+  return /^\p{Script=Han}$/u.test(word);
+}
+
+function maskSingleCharFalseCompounds(text: string, char: string): string {
+  const list = SINGLE_CHAR_FALSE_COMPOUNDS[char];
+  if (!list || list.length === 0) return text;
+  let out = text;
+  for (const compound of list) {
+    if (out.includes(compound)) {
+      out = out.split(compound).join("□".repeat(compound.length));
+    }
+  }
+  return out;
+}
+
+/**
+ * 返回词匹配等级（0 = 不匹配，1 = 一般复合词，2 = 动宾/方位透明短语或常规多字词，3 = 单字独立成词）。
+ * 单字查询时：剔除常见无关复合词（如搜「海」剔除「海鲜」「上海」「刘海」「海洋球」），且独立成词排在最前。
+ */
+export function wordMatchTier(text: string, rawWord: string): number {
+  const word = compact(rawWord);
+  if (!word) return 0;
+  const normalizedText = compact(text);
+  if (!normalizedText.includes(word)) return 0;
+  if (!isSingleHanChar(word)) {
+    return 2;
+  }
+  const masked = maskSingleCharFalseCompounds(normalizedText, word);
+  if (!masked.includes(word)) return 0;
+  if (!ZH_WORD_SEGMENTER) return 2;
+  const directPhrase = new RegExp(`^(?:看|听|见|到|在|去|下|出|临|靠|望|傍|大|小)${word}$|^${word}(?:里|边|上|中|面|岸|水|浪|滩|风|边上)$`);
+  let best = 0;
+  for (const seg of ZH_WORD_SEGMENTER.segment(masked)) {
+    if (!seg.isWordLike) continue;
+    const token = seg.segment;
+    if (!token.includes(word)) continue;
+    if (token === word) return 3;
+    if (directPhrase.test(token)) best = Math.max(best, 2);
+    else best = Math.max(best, 1);
+  }
+  return best;
+}
+
+function termTierInText(text: string, term: SearchTerm): number {
+  let best = 0;
+  for (const alt of term.alternatives) {
+    const tier = wordMatchTier(text, alt);
+    if (tier > best) best = tier;
+  }
+  return best;
+}
+
+function matchAllTermsTier(text: string, terms: readonly SearchTerm[]): number {
+  if (terms.length === 0) return 0;
+  let minTier = Infinity;
+  let totalTier = 0;
+  for (const term of terms) {
+    const tier = termTierInText(text, term);
+    if (tier === 0) return 0;
+    minTier = Math.min(minTier, tier);
+    totalTier += tier;
+  }
+  return minTier * 10 + totalTier;
+}
+
 export function searchTerms(query: string): SearchTerm[] {
   let text = compact(query).slice(0, 100);
   const terms: SearchTerm[] = [];
@@ -159,8 +272,99 @@ export function searchTerms(query: string): SearchTerm[] {
   for (const part of text.split(/\s+/).filter(Boolean)) terms.push({ alternatives: [part] });
   return terms;
 }
-export type SearchResult = ReadingMatch & { quotes: string[] };
+
+export type SearchMonthEntry = {
+  month: string;
+  href: string;
+  label: string;
+  ageLabel?: string;
+  preBirth?: boolean;
+  cardLine?: string;
+  intro?: string;
+  summary?: string;
+  cover?: MediaRef;
+};
+
+export type SearchResult = ReadingMatch & {
+  quotes: string[];
+  leadPhoto?: MediaRef;
+  tierScore?: number;
+};
+
+export type SearchArchiveHit =
+  | ({ kind: "month"; month: SearchMonthEntry; excerpt: string; quotes: string[]; tierScore: number })
+  | ({ kind: "day" } & SearchResult & { tierScore: number });
+
+export type HighlightSegment = { text: string; hit: boolean };
+
+/**
+ * 将文本按命中关键词切分为高亮片段；单字查询自动跳过常见误匹配复合词（如搜「海」不高亮「海鲜」里的海）。
+ */
+export function highlightSegments(text: string, highlightTerms: readonly string[]): HighlightSegment[] {
+  if (!text || highlightTerms.length === 0) return [{ text, hit: false }];
+  const cleaned = [...new Set(highlightTerms.map((t) => t.trim()).filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  if (cleaned.length === 0) return [{ text, hit: false }];
+
+  const hitMask = new Uint8Array(text.length);
+  const lowerText = text.toLowerCase();
+
+  for (const term of cleaned) {
+    const needle = term.toLowerCase();
+    if (!needle) continue;
+    if (isSingleHanChar(needle)) {
+      const masked = maskSingleCharFalseCompounds(lowerText, needle);
+      for (let i = 0; i < masked.length; i += 1) {
+        if (masked[i] === needle) hitMask[i] = 1;
+      }
+    } else {
+      let from = 0;
+      while (from <= lowerText.length - needle.length) {
+        const idx = lowerText.indexOf(needle, from);
+        if (idx === -1) break;
+        for (let k = idx; k < idx + needle.length; k += 1) hitMask[k] = 1;
+        from = idx + needle.length;
+      }
+    }
+  }
+
+  const out: HighlightSegment[] = [];
+  let start = 0;
+  let currentHit = Boolean(hitMask[0]);
+  for (let i = 1; i < text.length; i += 1) {
+    const h = Boolean(hitMask[i]);
+    if (h !== currentHit) {
+      out.push({ text: text.slice(start, i), hit: currentHit });
+      start = i;
+      currentHit = h;
+    }
+  }
+  out.push({ text: text.slice(start), hit: currentHit });
+  return out;
+}
+
+export function highlightTermsForQuery(query: string): string[] {
+  const dateQ = parseDateQuery(query);
+  if (dateQ) {
+    return dateQ.kind === "year"
+      ? [dateQ.year]
+      : [dateQ.ym, `${dateQ.year} 年 ${Number(dateQ.month)} 月`, `${Number(dateQ.month)} 月`];
+  }
+  return [...new Set(searchTerms(query).flatMap((t) => t.alternatives))];
+}
+
 export function searchArchive(entries: readonly ReadingDay[], query: string): SearchResult[] {
+  const dateQ = parseDateQuery(query);
+  if (dateQ) {
+    const prefix = dateQ.kind === "year" ? `${dateQ.year}-` : `${dateQ.ym}-`;
+    return [...entries]
+      .filter((entry) => entry.day.startsWith(prefix))
+      .sort((a, b) => a.day.localeCompare(b.day))
+      .map((entry) => {
+        const excerpt = entry.paragraphs[0] ?? entry.title ?? "";
+        return { entry, excerpt, quotes: quotesIn(excerpt), leadPhoto: entry.photos[0], tierScore: 20 };
+      });
+  }
   const terms = searchTerms(query);
   if (!terms.length) return [];
   const oldestFirst = /第一次|最早|什么时候|开始/.test(query);
@@ -170,19 +374,111 @@ export function searchArchive(entries: readonly ReadingDay[], query: string): Se
   return entries.flatMap(entry => {
     const texts = entry.paragraphs.flatMap(readingSentences);
     if (entry.title) texts.push(entry.title);
-    const excerpt = texts.find(text => {
-      if (!terms.every(term => term.alternatives.some(word => compact(text).includes(compact(word))))) return false;
+    let bestExcerpt: string | undefined;
+    let bestScore = 0;
+    for (const text of texts) {
+      const score = matchAllTermsTier(text, terms);
+      if (score === 0) continue;
       if (speechIntent && (!childSpeechRecord(text) || /(?:还|并|尚|没|不)(?:有|能|会)?(?:说|喊|叫)/.test(text)
-        || !childSpeechSegments(text).some(segment => terms.every(term => term.alternatives.some(word => compact(segment).includes(compact(word))))))) return false;
-      if (travelTogether && person) return person.aliases.some(alias => {
-        const match = text.match(new RegExp(`(?:和|跟|与).{0,8}${alias}.{0,12}(?:去|到|逛|游|散步)|${alias}.{0,8}(?:带|陪|抱|和|跟).{0,12}(?:去|到|逛|游|散步)`));
-        return !!match && !/说|问|建议|打算|希望|可以/.test(match[0]) && !PLANNING_ONLY.test(text);
+        || !childSpeechSegments(text).some(segment => matchAllTermsTier(segment, terms) > 0))) continue;
+      if (travelTogether && person) {
+        const ok = person.aliases.some(alias => {
+          const match = text.match(new RegExp(`(?:和|跟|与).{0,8}${alias}.{0,12}(?:去|到|逛|游|散步)|${alias}.{0,8}(?:带|陪|抱|和|跟).{0,12}(?:去|到|逛|游|散步)`));
+          return !!match && !/说|问|建议|打算|希望|可以/.test(match[0]) && !PLANNING_ONLY.test(text);
+        });
+        if (!ok) continue;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestExcerpt = text;
+      }
+    }
+    if (!bestExcerpt) return [];
+    return [{ entry, excerpt: bestExcerpt, quotes: quotesIn(bestExcerpt), leadPhoto: entry.photos[0], tierScore: bestScore }];
+  }).sort((a, b) => {
+    if (!oldestFirst && (b.tierScore ?? 0) !== (a.tierScore ?? 0)) {
+      return (b.tierScore ?? 0) - (a.tierScore ?? 0);
+    }
+    return oldestFirst ? a.entry.day.localeCompare(b.entry.day) : b.entry.day.localeCompare(a.entry.day);
+  });
+}
+
+/**
+ * 综合检索（用于 /memory/search）：同时覆盖月度综述（cardLine / intro / summary）、年份/年月查询（含 2024 出生前月份段落）与日页记录。
+ */
+export function searchArchiveAll(input: {
+  entries: readonly ReadingDay[];
+  months?: readonly SearchMonthEntry[];
+  query: string;
+}): { items: SearchArchiveHit[]; highlightTerms: string[]; dateQuery: DateQuery | null } {
+  const { entries, months = [], query } = input;
+  const dateQ = parseDateQuery(query);
+  const highlights = highlightTermsForQuery(query);
+
+  if (dateQ) {
+    const monthPrefix = dateQ.kind === "year" ? `${dateQ.year}-` : dateQ.ym;
+    const matchedMonths: SearchArchiveHit[] = [...months]
+      .filter((m) => (dateQ.kind === "year" ? m.month.startsWith(monthPrefix) : m.month === monthPrefix))
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map((m) => {
+        const excerpt = m.intro?.trim() || m.cardLine?.trim() || m.summary?.trim() || `${m.label}的月份记录`;
+        return { kind: "month" as const, month: m, excerpt, quotes: quotesIn(excerpt), tierScore: 30 };
       });
-      return true;
-    });
-    if (!excerpt) return [];
-    return [{ entry, excerpt, quotes: quotesIn(excerpt) }];
-  }).sort((a, b) => oldestFirst ? a.entry.day.localeCompare(b.entry.day) : b.entry.day.localeCompare(a.entry.day));
+    const matchedDays: SearchArchiveHit[] = searchArchive(entries, query).map((hit) => ({
+      kind: "day" as const,
+      ...hit,
+      tierScore: hit.tierScore ?? 20,
+    }));
+    return { items: [...matchedMonths, ...matchedDays], highlightTerms: highlights, dateQuery: dateQ };
+  }
+
+  const terms = searchTerms(query);
+  if (!terms.length) return { items: [], highlightTerms: [], dateQuery: null };
+  const speechIntent = /(?:说|喊|叫).+/.test(query);
+  const travelTogether = /(?:和|跟|与).*(?:去过|去|到|哪里)/.test(query);
+
+  const monthHits: SearchArchiveHit[] = speechIntent || travelTogether
+    ? []
+    : [...months]
+        .sort((a, b) => b.month.localeCompare(a.month))
+        .flatMap((m) => {
+          const candidates = [
+            ...(m.intro ? readingSentences(m.intro) : []),
+            ...(m.cardLine ? [m.cardLine] : []),
+            ...(m.summary ? readingSentences(m.summary) : []),
+            m.label,
+          ].filter(Boolean);
+          let bestExcerpt: string | undefined;
+          let bestScore = 0;
+          for (const text of candidates) {
+            const score = matchAllTermsTier(text, terms);
+            if (score > bestScore) {
+              bestScore = score;
+              bestExcerpt = text;
+            }
+          }
+          if (!bestExcerpt) return [];
+          return [{ kind: "month" as const, month: m, excerpt: bestExcerpt, quotes: quotesIn(bestExcerpt), tierScore: bestScore }];
+        });
+
+  const dayHits: SearchArchiveHit[] = searchArchive(entries, query).map((hit) => ({
+    kind: "day" as const,
+    ...hit,
+    tierScore: hit.tierScore ?? 20,
+  }));
+
+  const oldestFirst = /第一次|最早|什么时候|开始/.test(query);
+  if (oldestFirst) {
+    return { items: [...dayHits, ...monthHits], highlightTerms: highlights, dateQuery: null };
+  }
+  // Keep highest-tier hits first (so standalone single-char hits stay above compound hits across both months and days).
+  const combined = [...monthHits, ...dayHits].sort((a, b) => {
+    if (b.tierScore !== a.tierScore) return b.tierScore - a.tierScore;
+    const keyA = a.kind === "month" ? `${a.month.month}-99` : a.entry.day;
+    const keyB = b.kind === "month" ? `${b.month.month}-99` : b.entry.day;
+    return keyB.localeCompare(keyA);
+  });
+  return { items: combined, highlightTerms: highlights, dateQuery: null };
 }
 
 export type BookMonthInput = { month: string; intro?: string; title?: string; pinnedPhotoId?: string; entries: ReadingDay[] };

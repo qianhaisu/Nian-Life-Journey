@@ -13,11 +13,37 @@ export const metadata: Metadata = {
 };
 
 export default function XueyiFilmPage() {
-  return <div className="film-page">
-    <span className="film-share-image" aria-hidden="true"><Image src={SHARE_IMAGE} alt="" width={600} height={600} unoptimized priority /></span>
-    <Link className="film-home" href="/" aria-label="回到张年的人生档案首页"><span className="film-home-mark">年</span></Link>
-    <h1 className="film-title">给雪姨</h1>
-    <video className="film-video" src="/api/films/xueyi-2026-v5.mp4" poster="/api/films/xueyi-2026-poster-v6.jpg"
-      controls playsInline preload="metadata" width={1080} height={1920} />
-  </div>;
+  return (
+    <div className="film-page">
+      <span className="film-share-image" aria-hidden="true">
+        <Image src={SHARE_IMAGE} alt="" width={600} height={600} unoptimized priority />
+      </span>
+      <Link className="film-home" href="/" aria-label="回到张年的人生档案首页">
+        <span className="film-home-mark" aria-hidden="true">年</span>
+        <span className="film-home-label">← 首页</span>
+      </Link>
+      <header className="film-head">
+        <h1 className="film-title">给雪姨</h1>
+        <p className="film-meta">
+          <span>《还认识我吗》</span>
+          <span aria-hidden="true">·</span>
+          <time dateTime="2026-10">2026 年 10 月</time>
+          <span aria-hidden="true">·</span>
+          <span>当时 1 岁 9 个月</span>
+          <span aria-hidden="true">·</span>
+          <span>6:12</span>
+        </p>
+      </header>
+      <video
+        className="film-video"
+        src="/api/films/xueyi-2026-v5.mp4"
+        poster="/api/films/xueyi-2026-poster-v6.jpg"
+        controls
+        playsInline
+        preload="metadata"
+        width={1080}
+        height={1920}
+      />
+    </div>
+  );
 }
