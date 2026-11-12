@@ -15,6 +15,8 @@ export type GalleryPhoto = {
   alt: string;
   width: number;
   height: number;
+  /** Optional scene caption displayed inline and at the bottom of the lightbox viewer. */
+  caption?: string;
   // "video" gets a player instead of a picture. Optional so every existing caller that hands over a
   // list of photographs keeps working untouched.
   type?: string;
@@ -46,12 +48,14 @@ export function ViewerModal({
   startIndex,
   dateLabel,
   ageLabel,
+  captions,
   onClose,
 }: {
   photos: GalleryPhoto[];
   startIndex: number;
   dateLabel: string;
   ageLabel?: string;
+  captions?: Readonly<Record<string, string>>;
   onClose: () => void;
 }) {
   const reelRef = useRef<HTMLDivElement>(null);
@@ -109,9 +113,19 @@ export function ViewerModal({
 
   // Escape animated/transformed ancestors. The native modal also makes the page underneath inert.
   if (typeof document === "undefined") return null;
+  const activePhoto = photos[currentIndex];
+  const rawCaption = activePhoto?.caption ?? (activePhoto ? captions?.[activePhoto.id] : undefined);
+  const activeCaption = typeof rawCaption === "string" && rawCaption.trim().length > 0 ? rawCaption.trim() : undefined;
+
   return createPortal(
-    <dialog ref={dialogRef} className="photo-viewer" aria-modal="true" aria-label="照片查看器"
-      onCancel={(event) => { event.preventDefault(); closeViaUI(); }}>
+    <dialog
+      ref={dialogRef}
+      className="photo-viewer"
+      aria-modal="true"
+      aria-label="照片查看器"
+      onClick={(event) => { if (event.target === dialogRef.current) closeViaUI(); }}
+      onCancel={(event) => { event.preventDefault(); closeViaUI(); }}
+    >
       <header className="viewer-header">
         <button type="button" className="viewer-close" onClick={closeViaUI} aria-label="关闭" autoFocus>✕</button>
         <p className="viewer-caption">
@@ -142,6 +156,9 @@ export function ViewerModal({
           </div>
         ))}
       </div>
+      {activeCaption ? (
+        <p className="viewer-photo-caption" aria-live="polite">{activeCaption}</p>
+      ) : null}
       <footer className="viewer-nav">
         <button type="button" disabled={currentIndex === 0} aria-label="上一张"
           onClick={() => reelRef.current?.scrollTo({ left: (currentIndex - 1) * reelRef.current.offsetWidth, behavior: "smooth" })}>‹</button>

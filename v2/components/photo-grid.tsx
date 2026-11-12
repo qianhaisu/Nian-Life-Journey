@@ -40,11 +40,15 @@ function Cell({
 }) {
   const isVideo = photo.type === "video";
   const [full, setFull] = useState(large);
-  const src = isVideo ? (photo.posterSrc ?? mediaDeliveryUrl(photo.id, "poster")) : full ? photo.src : (photo.thumbnailSrc ?? mediaDeliveryUrl(photo.id, "thumbnail"));
+  const thumbCandidate = photo.thumbnailSrc
+    ?? (photo.src.startsWith("/api/media/") ? mediaDeliveryUrl(photo.id, "thumbnail") : photo.src);
+  const videoPoster = photo.posterSrc
+    ?? (photo.src.startsWith("/api/media/") ? mediaDeliveryUrl(photo.id, "poster") : photo.src);
+  const src = isVideo ? videoPoster : full ? photo.src : thumbCandidate;
   const cls = ["pg-cell", className].filter(Boolean).join(" ");
   if (isVideo && !onMore) {
     return (
-      <figure className={`${cls} pg-cell-video`} style={alone ? videoFrameStyle(photo) : undefined}>
+      <figure className={`${cls} pg-cell-video`} data-media-id={photo.id} style={alone ? videoFrameStyle(photo) : undefined}>
         <VideoPlayer mediaId={photo.id} alt={photo.alt} durationSeconds={photo.durationSeconds} />
       </figure>
     );
@@ -52,6 +56,7 @@ function Cell({
   return (
     <figure
       className={cls}
+      data-media-id={photo.id}
       role={onClick && !onMore ? "button" : undefined}
       tabIndex={onClick && !onMore ? 0 : undefined}
       aria-label={onClick && !onMore ? (ariaLabel ?? "打开照片") : undefined}
@@ -81,6 +86,8 @@ export function PhotoGrid({
   priority = false,
   limit,
   onExpand,
+  onSelectPhoto,
+  photoNumberFor,
 }: {
   photos: GalleryPhoto[];
   dateLabel: string;
@@ -88,6 +95,8 @@ export function PhotoGrid({
   priority?: boolean;
   limit?: number;
   onExpand?: () => void;
+  onSelectPhoto?: (photo: GalleryPhoto) => void;
+  photoNumberFor?: (photo: GalleryPhoto) => number;
 }) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const openViewer = useCallback((idx: number) => setViewerIndex(idx), []);
@@ -103,12 +112,18 @@ export function PhotoGrid({
   }
 
   function labelFor(originalIdx: number): string {
-    return `打开第 ${viewerIdxFor(originalIdx) + 1} 张照片`;
+    const photo = photos[originalIdx];
+    const num = photoNumberFor ? photoNumberFor(photo) : viewerIdxFor(originalIdx) + 1;
+    return photo.caption ? `打开第 ${num} 张照片：${photo.caption}` : `打开第 ${num} 张照片`;
   }
 
   function openStill(idx: number) {
     const photo = photos[idx];
     if (photo.type === "video") return;
+    if (onSelectPhoto) {
+      onSelectPhoto(photo);
+      return;
+    }
     openViewer(viewerIdxFor(idx));
   }
 

@@ -9,6 +9,7 @@ import { SnapshotSummary } from "@/components/snapshot-summary";
 import { MonthMoment } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { MonthTimeline } from "@/components/month-timeline";
+import { resolveCardThumbnail } from "@/lib/day-photo-layout";
 import { groupIntoWeeks } from "@/lib/month-day-weight";
 import { loadMonthContent } from "@/lib/month-content";
 import { buildMonthTimeline, weekEntries } from "@/lib/month-timeline";
@@ -113,7 +114,14 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         year={year}
         month={monthSegment}
         monthAgeLabel={chapter.ageLabel}
-        highlights={[...timeline.byDay.values()].filter((day) => day.milestone || day.emphasis === "lead").slice(0, 3).map((day) => ({ day: day.day, title: day.title ?? day.dateLabel }))}
+        highlights={[...timeline.byDay.values()]
+          .filter((day) => day.milestone || day.emphasis === "lead")
+          .slice(0, 3)
+          .map((day) => ({
+            day: day.day,
+            title: day.title ?? day.dateLabel,
+            thumbnail: resolveCardThumbnail(day.photos, day.firstScreenMediaIds),
+          }))}
         weeks={timeline.weeks}
         entries={entries}
       /> : null}
