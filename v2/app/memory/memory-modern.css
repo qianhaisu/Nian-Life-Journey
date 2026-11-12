@@ -1,0 +1,1658 @@
+/* ── Nianlife V2 · Memory & Event Modular Canvas System (Concept 02: Amie / Apple Journal) ──
+   Imported by /memory/* and /events/[id] routes so all reading surfaces share crisp modern
+   Chinese sans-serif typography, concentric radii (24px outer / 16px media / 999px pill),
+   daylight #F3F5F9 canvas + elevated #FFFFFF cards, micro-pastel accents, and >=44px targets,
+   without colliding with globals.css owned by shell-tokens. */
+
+.memory-page,
+.month-page,
+.detail-page,
+.life-reading {
+  --mem-canvas: var(--color-bg, #F3F5F9);
+  --mem-surface: var(--color-surface, #FFFFFF);
+  --mem-soft: var(--card-soft, #EEF2F8);
+  --mem-muted-bg: var(--paper-dark, #EAEFF6);
+  --mem-ink: var(--color-primary, #0F172A);
+  --mem-ink-sec: var(--color-secondary, #334155);
+  --mem-ink-muted: var(--color-muted, #526075);
+  --mem-blue: var(--accent-blue, #2563EB);
+  --mem-blue-ink: #1D4ED8;
+  --mem-blue-tint: var(--tint-blue, #EDF4FF);
+  --mem-peach: var(--accent-peach, #C2410C);
+  --mem-peach-tint: var(--tint-peach, #FFF4EE);
+  --mem-lavender: var(--accent-lavender, #6D28D9);
+  --mem-lavender-tint: var(--tint-lavender, #F4F0FF);
+  --mem-mint: var(--accent-mint, #047857);
+  --mem-mint-tint: var(--tint-mint, #ECFDF5);
+  --mem-border: var(--hairline, rgba(15, 23, 42, 0.06));
+  --mem-border-strong: var(--hairline-strong, rgba(15, 23, 42, 0.12));
+  --mem-r-card: var(--r-card, 24px);
+  --mem-r-media: var(--r-media, 16px);
+  --mem-r-pill: var(--r-badge, 999px);
+  --mem-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px -4px rgba(15, 23, 42, 0.05));
+  --mem-shadow-hover: var(--shadow-hover, 0 2px 6px rgba(15, 23, 42, 0.05), 0 16px 36px -6px rgba(15, 23, 42, 0.09));
+  --mem-shadow-pill: var(--shadow-badge, 0 1px 3px rgba(15, 23, 42, 0.04));
+  --mem-spring: var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1));
+  font-family: var(--font-body);
+  color: var(--mem-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Eliminate all classical serif / thin-400 remnants across memory & event surfaces */
+.memory-page h1,
+.memory-page h2,
+.memory-page h3,
+.memory-page .serif,
+.month-page h1,
+.month-page h2,
+.month-page h3,
+.month-page h4,
+.month-page .serif,
+.detail-page h1,
+.detail-page h2,
+.detail-page h3,
+.detail-page .serif,
+.life-reading h1,
+.life-reading h2,
+.life-reading h3,
+.life-reading .serif {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+/* Shared crisp pill links (back links & action links, >=44px touch target) */
+.month-page .back-link,
+.detail-page .back-link,
+.life-reading .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border-strong);
+  box-shadow: var(--mem-shadow-pill);
+  color: var(--mem-ink-sec);
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-decoration: none;
+  transition: transform 0.22s var(--mem-spring), background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.month-page .back-link:hover,
+.detail-page .back-link:hover,
+.life-reading .back-link:hover {
+  background: var(--mem-blue-tint);
+  border-color: rgba(37, 99, 235, 0.24);
+  color: var(--mem-blue-ink);
+  transform: translateX(-2px);
+}
+
+.memory-page .section-mark,
+.month-page .section-mark,
+.detail-page .section-mark,
+.life-reading .section-mark {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--mem-blue-ink);
+}
+
+/* ── 1. /memory Directory & Year Sections ─────────────────────────────────────────────────── */
+
+.memory-page {
+  padding-bottom: 56px;
+}
+
+.memory-page .reading-wrap {
+  width: min(1040px, calc(100% - 32px));
+}
+
+@media (min-width: 700px) {
+  .memory-page .reading-wrap {
+    width: min(1040px, calc(100% - 64px));
+  }
+}
+
+.memory-page .page-masthead {
+  padding: clamp(24px, 4vw, 44px) 0 clamp(16px, 2.5vw, 24px);
+  text-align: left;
+}
+
+.memory-masthead-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-blue-tint);
+  color: var(--mem-blue-ink);
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 12px;
+}
+
+.memory-page .page-masthead h1 {
+  max-width: none;
+  margin: 0 0 10px;
+  font-size: clamp(2rem, 4.6vw, 2.95rem);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+  color: var(--mem-ink);
+}
+
+.memory-page .page-masthead h1 br {
+  display: none;
+}
+
+.memory-page .page-masthead h1 em {
+  color: var(--mem-blue);
+  font-style: normal;
+}
+
+.memory-page .page-masthead > p {
+  margin: 0;
+  max-width: 48ch;
+  font-size: 0.98rem;
+  line-height: 1.65;
+  color: var(--mem-ink-muted);
+}
+
+/* Frosted elevated year + reading-mode dock */
+.memory-page .memory-year-nav {
+  position: sticky;
+  top: 76px;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-block: 8px 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid var(--mem-border-strong);
+  border-radius: 20px;
+  box-shadow: var(--mem-shadow);
+}
+
+.memory-page .memory-year-nav-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+}
+
+.memory-page .memory-year-nav-group + .memory-year-nav-group {
+  margin-left: 4px;
+  padding-left: 14px;
+  border-left: 1px solid var(--mem-border-strong);
+}
+
+.memory-page .memory-year-nav-label {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--mem-ink-muted);
+}
+
+.memory-page .memory-year-nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.memory-page .memory-year-nav-mode {
+  margin-left: auto;
+}
+
+.memory-page .year-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 62px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-soft);
+  box-shadow: none;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--mem-ink-sec);
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.2s var(--mem-spring), background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.memory-page .year-pill:hover {
+  transform: translateY(-1px);
+  background: #E2E8F0;
+  color: var(--mem-ink);
+  border-color: transparent;
+}
+
+.memory-page .year-pill--active,
+.memory-page .year-pill--active:hover {
+  background: var(--mem-ink);
+  color: #FFFFFF;
+  border-color: var(--mem-ink);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+}
+
+/* Pre-birth (2024 pregnancy chapter): warm peach micro-pastel instead of sepia/ochre */
+.memory-page .year-pill--prebirth {
+  background: var(--mem-peach-tint);
+  color: var(--mem-peach);
+  border: 1px solid rgba(194, 65, 12, 0.16);
+}
+
+.memory-page .year-pill--prebirth:hover {
+  background: #FFE8D9;
+  color: #9A3412;
+  border-color: rgba(194, 65, 12, 0.28);
+}
+
+.memory-page .year-pill--prebirth.year-pill--active,
+.memory-page .year-pill--prebirth.year-pill--active:hover {
+  background: var(--mem-peach);
+  color: #FFFFFF;
+  border-color: var(--mem-peach);
+  box-shadow: 0 4px 12px rgba(194, 65, 12, 0.22);
+}
+
+@media (max-width: 560px) {
+  .memory-page .memory-year-nav {
+    position: static;
+    padding: 10px 12px;
+    gap: 8px 10px;
+  }
+  .memory-page .memory-year-nav-group + .memory-year-nav-group {
+    margin-left: 0;
+    padding-left: 10px;
+    border-left: 1px solid var(--mem-border-strong);
+  }
+  .memory-page .memory-year-nav-mode {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid var(--mem-border);
+    padding-top: 8px;
+    margin-top: 2px;
+  }
+}
+
+.memory-page .memory-year-section {
+  padding: clamp(20px, 3vw, 32px) 0 clamp(16px, 2.5vw, 24px);
+  scroll-margin-top: 140px;
+}
+
+.memory-page .memory-life-chapter {
+  margin-bottom: 14px;
+}
+
+.memory-page .memory-life-title {
+  margin: 0;
+  font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+  font-weight: 700;
+  color: var(--mem-ink);
+  letter-spacing: -0.015em;
+}
+
+.memory-page .memory-year-heading {
+  width: min(1040px, calc(100% - 32px));
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--mem-ink);
+}
+
+@media (min-width: 700px) {
+  .memory-page .memory-year-heading {
+    width: min(1040px, calc(100% - 64px));
+  }
+}
+
+.memory-page .memory-year-heading::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--mem-border-strong);
+}
+
+/* Joyful warm peach pre-birth milestone & chapter card */
+.memory-page .memory-birth-boundary {
+  margin-top: 12px;
+  margin-bottom: 22px;
+  padding: clamp(20px, 3.5vw, 28px);
+  border: 1px solid rgba(194, 65, 12, 0.14);
+  border-radius: var(--mem-r-card);
+  background: var(--mem-peach-tint);
+  box-shadow: var(--mem-shadow);
+}
+
+.memory-page .memory-birth-milestone {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 14px;
+  border-radius: var(--mem-r-pill);
+  background: #FFFFFF;
+  color: var(--mem-peach);
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.5;
+  box-shadow: var(--mem-shadow-pill);
+}
+
+.memory-page .memory-birth-note {
+  margin: 10px 0 0;
+  color: var(--mem-ink-sec);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.memory-page .memory-prenatal-chapter {
+  margin-top: 16px;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid rgba(194, 65, 12, 0.14);
+  background: transparent;
+  color: var(--mem-ink);
+}
+
+.memory-page .memory-prenatal-chapter .memory-life-label {
+  display: inline-block;
+  margin: 0 0 6px;
+  font-family: var(--font-heading);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--mem-peach);
+}
+
+.memory-page .memory-prenatal-chapter .memory-life-title {
+  color: var(--mem-ink);
+}
+
+.memory-page .memory-year-section--prebirth .memory-year-heading {
+  color: var(--mem-peach);
+}
+
+.memory-page .memory-year-section--prebirth .memory-year-heading::after {
+  background: rgba(194, 65, 12, 0.18);
+}
+
+/* Month cards grid: 1 col mobile, 2 cols tablet, 3 cols desktop */
+.memory-page .memory-month-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 18px;
+}
+
+@media (min-width: 640px) {
+  .memory-page .memory-month-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 980px) {
+  .memory-page .memory-month-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Concentric MonthCard: 24px outer radius + 10px padding + 16px inner photo radius */
+.memory-page .month-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-card);
+  box-shadow: var(--mem-shadow);
+  overflow: hidden;
+  transition: transform 0.32s var(--mem-spring), box-shadow 0.32s var(--mem-spring), border-color 0.2s ease;
+}
+
+.memory-page .month-card:has(.month-card-photo) {
+  padding: 10px;
+}
+
+.memory-page .month-card--compact {
+  border-top: 1px solid var(--mem-border);
+  background: var(--mem-surface);
+}
+
+@media (hover: hover) {
+  .memory-page .month-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--mem-shadow-hover);
+    border-color: var(--mem-border-strong);
+  }
+}
+
+.memory-page .month-card:active {
+  transform: scale(0.985);
+}
+
+.memory-page .month-card-photo {
+  position: relative;
+  height: clamp(190px, 34vw, 224px);
+  border-radius: var(--mem-r-media);
+  overflow: hidden;
+  background: var(--mem-muted-bg);
+}
+
+.memory-page .month-card-photo--square {
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+
+.memory-page .month-card-photo--full {
+  height: auto;
+}
+
+.memory-page .month-card-body {
+  padding: 14px 8px 8px;
+}
+
+.memory-page .month-card--compact .month-card-body {
+  padding: 20px 22px;
+}
+
+.memory-page .month-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.memory-page .month-card-label {
+  font-family: var(--font-heading);
+  font-size: 1.22rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--mem-ink);
+}
+
+.memory-page .month-card-age {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0;
+  padding: 3px 10px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-blue-tint);
+  color: var(--mem-blue-ink);
+  font-family: var(--font-heading);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memory-page .memory-year-section--prebirth .month-card {
+  border-color: rgba(194, 65, 12, 0.12);
+}
+
+.memory-page .memory-year-section--prebirth .month-card-age {
+  background: var(--mem-peach-tint);
+  color: var(--mem-peach);
+}
+
+.memory-page .month-card-blurb {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin: 10px 0 0;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  line-height: 1.62;
+  color: var(--mem-ink-muted);
+}
+
+/* ── 2. /memory/[year]/[month] — Apple-Journal Hero + Elevated Day Cards ─────────────────── */
+
+.month-page {
+  padding-top: clamp(16px, 2.5vw, 28px);
+  padding-bottom: 64px;
+}
+
+.month-page.reading-wrap {
+  width: min(820px, calc(100% - 32px));
+}
+
+@media (min-width: 700px) {
+  .month-page.reading-wrap {
+    width: min(820px, calc(100% - 64px));
+  }
+}
+
+/* Modern Apple-Journal Hero Card */
+.month-page .chapter-masthead {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: clamp(22px, 4vw, 34px);
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-card);
+  box-shadow: var(--mem-shadow);
+  margin-bottom: 18px;
+}
+
+.month-page .chapter-masthead .back-link {
+  margin-bottom: 2px;
+}
+
+.month-masthead-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  width: 100%;
+}
+
+.month-page .chapter-masthead h1 {
+  margin: 0;
+  font-size: clamp(1.95rem, 4.8vw, 2.65rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+  color: var(--mem-ink);
+}
+
+.month-page .chapter-age {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 5px 14px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-blue-tint);
+  color: var(--mem-blue-ink);
+  font-family: var(--font-heading);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.month-page .chapter-age--prebirth {
+  background: var(--mem-peach-tint);
+  color: var(--mem-peach);
+}
+
+.month-page .chapter-summary,
+.month-page .chapter-narration {
+  max-width: none;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 16px 18px;
+  border-radius: var(--mem-r-media);
+  background: var(--mem-canvas);
+  border: 1px solid var(--mem-border);
+  font-family: var(--font-body);
+  font-size: clamp(0.96rem, 2vw, 1.04rem);
+  font-weight: 400;
+  line-height: 1.82;
+  color: var(--mem-ink-sec);
+}
+
+.month-page .chapter-summary li + li {
+  margin-top: 8px;
+}
+
+.month-page .chapter-meta {
+  margin: 2px 0 0;
+}
+
+.month-page .chapter-meta .text-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--mem-r-pill);
+  border: 1px solid var(--mem-border-strong);
+  background: var(--mem-soft);
+  color: var(--mem-ink-sec);
+  font-family: var(--font-heading);
+  font-size: 0.84rem;
+  font-weight: 600;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.2s var(--mem-spring);
+}
+
+.month-page .chapter-meta .text-link:hover {
+  background: var(--mem-blue-tint);
+  border-color: rgba(37, 99, 235, 0.24);
+  color: var(--mem-blue-ink);
+  transform: translateY(-1px);
+}
+
+/* Curated highlight chips (值得再读) */
+.month-page .month-highlights {
+  margin: 0 0 16px;
+  padding: 16px 20px;
+  background: var(--mem-lavender-tint);
+  border: 1px solid rgba(109, 40, 217, 0.12);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.month-page .month-highlights .section-mark {
+  margin: 0;
+  color: var(--mem-lavender);
+  font-size: 0.78rem;
+}
+
+.month-highlights-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.month-page .month-highlights a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 15px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-surface);
+  border: 1px solid rgba(109, 40, 217, 0.14);
+  box-shadow: var(--mem-shadow-pill);
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--mem-ink);
+  text-decoration: none;
+  transition: transform 0.2s var(--mem-spring), box-shadow 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.month-page .month-highlights a::after {
+  content: "↓";
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--mem-lavender);
+  opacity: 0.9;
+}
+
+.month-page .month-highlights a:hover {
+  transform: translateY(-1px);
+  border-color: rgba(109, 40, 217, 0.32);
+  color: var(--mem-lavender);
+  box-shadow: var(--mem-shadow);
+}
+
+/* Sleek Amie Segmented Week Switcher (>=44px touch targets) */
+.month-page .month-jump {
+  position: sticky;
+  top: 76px;
+  z-index: 14;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 22px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid var(--mem-border-strong);
+  border-radius: 20px;
+  box-shadow: var(--mem-shadow);
+}
+
+@media (max-width: 560px) {
+  .month-page .month-jump {
+    position: static;
+  }
+}
+
+.month-page .month-jump a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  border-radius: var(--mem-r-pill);
+  background: transparent;
+  font-family: var(--font-heading);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--mem-ink-sec);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.month-page .month-jump a:hover {
+  background: var(--mem-soft);
+  color: var(--mem-ink);
+  border-color: transparent;
+}
+
+.month-page .month-jump a.is-active,
+.month-page .month-jump a[aria-current="location"] {
+  background: var(--mem-ink);
+  color: #FFFFFF;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.16);
+}
+
+/* Week section headers */
+.month-page .month-days {
+  margin-top: 8px;
+}
+
+.month-page .month-week {
+  scroll-margin-top: 144px;
+}
+
+.month-page .month-week + .month-week {
+  margin-top: 28px;
+}
+
+.month-page .week-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px 4px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-muted-bg);
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--mem-ink-sec);
+  font-variant-numeric: tabular-nums;
+}
+
+.month-page .month-week:first-of-type .week-mark {
+  margin-top: 0;
+}
+
+.month-page .month-days--edited ol {
+  display: grid;
+  gap: 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.month-page .month-days--edited .month-day {
+  padding: 0;
+}
+
+/* Elevated #FFFFFF 24px Journal Card per Day */
+.month-page .moment-day-entry,
+.month-page .month-days .moment-day-entry {
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-card);
+  box-shadow: var(--mem-shadow);
+  padding: clamp(20px, 3.5vw, 28px);
+  scroll-margin-top: 144px;
+  transition: box-shadow 0.28s var(--mem-spring), border-color 0.22s ease;
+}
+
+.month-page .month-days .month-day:last-child > .moment-day-entry {
+  border-bottom: 1px solid var(--mem-border);
+}
+
+@media (hover: hover) {
+  .month-page .moment-day-entry:hover {
+    box-shadow: var(--mem-shadow-hover);
+    border-color: var(--mem-border-strong);
+  }
+}
+
+/* Principle 5: Lead / milestone days carry unmistakable visual weight */
+.month-page .moment-day-lead,
+.month-page .month-days .moment-day-lead {
+  padding: clamp(22px, 4vw, 32px);
+  border-color: rgba(37, 99, 235, 0.18);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.04), 0 12px 32px -6px rgba(15, 23, 42, 0.07);
+}
+
+.day-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Dual-clock pill badge (日期 · 当时年龄) */
+.month-page .moment-day-entry .month-day-date {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-blue-tint);
+  color: var(--mem-blue-ink);
+  font-family: var(--font-heading);
+  font-size: 0.79rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.month-page .moment-day-entry .month-day-date time {
+  color: inherit;
+  font-weight: 700;
+}
+
+.month-page .moment-day-entry .month-day-date span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mem-ink-sec);
+  font-weight: 600;
+}
+
+.month-page .moment-day-entry .month-day-date span::before {
+  content: "·";
+  color: rgba(37, 99, 235, 0.45);
+}
+
+.month-page .moment-day-entry .month-day-date--prebirth {
+  background: var(--mem-peach-tint);
+  color: var(--mem-peach);
+}
+
+.month-page .moment-day-entry .month-day-date--prebirth span::before {
+  color: rgba(194, 65, 12, 0.4);
+}
+
+.month-timeline-sentinel {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0 8px;
+}
+
+.month-timeline-more-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: var(--mem-r-pill);
+  border: 1px solid var(--mem-border-strong);
+  background: var(--mem-surface);
+  box-shadow: var(--mem-shadow-pill);
+  color: var(--mem-ink);
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.2s var(--mem-spring);
+}
+
+.month-timeline-more-btn:hover:not(:disabled) {
+  background: var(--mem-blue-tint);
+  border-color: rgba(37, 99, 235, 0.24);
+  color: var(--mem-blue-ink);
+  transform: translateY(-1px);
+}
+
+.month-timeline-more-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.day-milestone-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 11px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-peach-tint);
+  border: 1px solid rgba(194, 65, 12, 0.15);
+  color: var(--mem-peach);
+  font-family: var(--font-heading);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.day-milestone-badge::before {
+  content: "✦";
+  font-size: 0.7rem;
+}
+
+.month-page .day-entry-title {
+  margin: 0 0 12px;
+  font-family: var(--font-heading);
+  font-size: clamp(1.2rem, 2.6vw, 1.42rem);
+  font-weight: 700;
+  line-height: 1.38;
+  letter-spacing: -0.015em;
+  color: var(--mem-ink);
+}
+
+.month-page .moment-day-lead .day-entry-title {
+  margin-bottom: 14px;
+  font-size: clamp(1.38rem, 3.3vw, 1.72rem);
+  line-height: 1.32;
+}
+
+.month-page .day-entry-text {
+  max-width: 42em;
+  margin: 0 0 0.85em;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.82;
+  color: var(--mem-ink-sec);
+}
+
+.month-page .day-entry-text:last-of-type {
+  margin-bottom: 0;
+}
+
+/* Folded secondary story inside a day card: tactile micro-pastel callout */
+.month-page .day-entry-story {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: var(--mem-r-media);
+  background: var(--mem-peach-tint);
+  border: 1px solid rgba(194, 65, 12, 0.1);
+}
+
+.month-page .day-entry-story-title {
+  margin: 0 0 6px;
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--mem-ink);
+}
+
+.month-page .day-entry-story-title a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+}
+
+.month-page .day-entry-story-title a:hover {
+  color: var(--mem-peach);
+}
+
+/* Concentric 16px PhotoGrid framing inside day cards & detail pages */
+.month-page .pg,
+.detail-page .pg {
+  gap: 6px;
+  border-radius: var(--mem-r-media);
+  overflow: hidden;
+}
+
+.month-page .pg-cell,
+.detail-page .pg-cell {
+  background: var(--mem-muted-bg);
+  border-radius: 6px;
+}
+
+.month-page .pg-1,
+.month-page .pg-1 .pg-cell,
+.detail-page .pg-1,
+.detail-page .pg-1 .pg-cell {
+  border-radius: var(--mem-r-media);
+}
+
+.month-page .pg-more,
+.detail-page .pg-more {
+  background: rgba(15, 23, 42, 0.52);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: none;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #FFFFFF;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.month-page .pg-more:hover,
+.detail-page .pg-more:hover {
+  background: rgba(37, 99, 235, 0.72);
+  color: #FFFFFF;
+}
+
+/* Day entry footer pill (读这一天的原记录 →) */
+.month-page .day-entry-more {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--mem-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.month-page .day-entry-more .text-link {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--mem-r-pill);
+  border: 1px solid var(--mem-border);
+  background: var(--mem-soft);
+  color: var(--mem-ink-sec);
+  font-family: var(--font-heading);
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.month-page .day-entry-more .text-link:hover {
+  background: var(--mem-blue-tint);
+  border-color: rgba(37, 99, 235, 0.24);
+  color: var(--mem-blue-ink);
+}
+
+/* Unedited fallback month layout (.month-reading) — also elevated onto crisp cards */
+.month-page .month-reading {
+  margin-top: 18px;
+}
+
+.month-page .month-reading .month-moment {
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-card);
+  box-shadow: var(--mem-shadow);
+  padding: clamp(20px, 3.5vw, 28px);
+  margin-bottom: 16px;
+}
+
+.month-page .month-reading .moment-continued {
+  margin-top: -8px;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+@media (min-width: 760px) {
+  .month-page .month-reading .month-moment {
+    display: block;
+  }
+  .month-page .month-reading .month-day-date {
+    display: inline-flex;
+    text-align: left;
+    margin: 0 0 12px;
+  }
+  .month-page .month-reading .month-day-date span {
+    display: inline;
+    margin-top: 0;
+  }
+  .month-page .month-reading .day-photos,
+  .month-page .month-reading .day-album-entry {
+    margin-left: 0;
+  }
+}
+
+.month-page .month-reading .month-day-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-blue-tint);
+  color: var(--mem-blue-ink);
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.month-page .month-reading .month-day-date time {
+  color: inherit;
+}
+
+.month-page .month-reading .moment-text {
+  max-width: 42em;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.82;
+  color: var(--mem-ink-sec);
+}
+
+.month-page .month-reading .moment-text p {
+  text-indent: 0;
+  margin: 0 0 0.75em;
+}
+
+.month-page .month-reading .moment-text p:last-child {
+  margin-bottom: 0;
+}
+
+.month-page .memory-copy h3 a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.month-page .month-archive {
+  margin: 24px 0;
+  padding: 0 22px;
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-card);
+  box-shadow: var(--mem-shadow);
+}
+
+.month-page .month-archive > summary {
+  min-height: 60px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+.month-page .month-archive > summary span {
+  font-family: var(--font-heading);
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.month-page .day-album-open--quiet,
+.month-page .archive-expand .text-link,
+.month-page .day-photos-expand .text-link {
+  min-height: 44px;
+}
+
+.month-page .month-more .text-link {
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border-strong);
+  box-shadow: var(--mem-shadow);
+  color: var(--mem-ink);
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+/* Sibling months card at foot of month page */
+.month-page .other-years {
+  margin-top: 32px;
+  padding: 22px 24px;
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-card);
+  box-shadow: var(--mem-shadow);
+}
+
+.month-page .other-years p {
+  margin: 12px 0 0;
+  font-family: var(--font-heading);
+  font-size: 0.92rem;
+  font-weight: 600;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.month-page .other-years a {
+  min-width: 56px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-soft);
+  color: var(--mem-ink-sec);
+  font-variant-numeric: tabular-nums;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.2s var(--mem-spring);
+}
+
+.month-page .other-years a:hover {
+  background: var(--mem-blue-tint);
+  color: var(--mem-blue-ink);
+  transform: translateY(-1px);
+}
+
+/* ── 3. /memory/[year]/[month]/[day] & /events/[id] — Carded Article Layout ───────────────── */
+
+.detail-page {
+  padding-top: clamp(16px, 2.5vw, 28px);
+  padding-bottom: 64px;
+}
+
+.detail-page .reading-wrap {
+  width: min(820px, calc(100% - 32px));
+}
+
+@media (min-width: 700px) {
+  .detail-page .reading-wrap {
+    width: min(820px, calc(100% - 64px));
+  }
+}
+
+.detail-topbar {
+  margin-bottom: 16px;
+}
+
+.detail-card {
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-card);
+  box-shadow: var(--mem-shadow);
+  padding: clamp(22px, 4.2vw, 38px);
+}
+
+.detail-card .detail-head {
+  padding: 0 0 clamp(18px, 3vw, 24px);
+  border-bottom: 1px solid var(--mem-border);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.detail-card .detail-head .back-link {
+  margin-bottom: 2px;
+}
+
+/* Crisp cobalt dual-clock pill */
+.day-detail .day-detail-when,
+.detail-page .detail-head .time-signature {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-blue-tint);
+  color: var(--mem-blue-ink);
+  box-shadow: none;
+  font-family: var(--font-heading);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-detail .day-detail-when time,
+.detail-page .detail-head .time-signature time {
+  color: var(--mem-blue-ink);
+  font-weight: 700;
+}
+
+.day-detail .day-detail-when span,
+.detail-page .detail-head .time-signature span {
+  color: var(--mem-ink-sec);
+  font-weight: 600;
+}
+
+.day-detail .day-detail-when span::before,
+.detail-page .detail-head .time-signature span::before {
+  content: "· ";
+  color: rgba(37, 99, 235, 0.45);
+}
+
+.day-detail .day-detail-title,
+.detail-page .detail-head h1 {
+  max-width: 24em;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 4vw, 2.15rem);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: var(--mem-ink);
+}
+
+.detail-page .detail-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-peach-tint);
+  color: var(--mem-peach);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.detail-card .story-layer {
+  padding: clamp(20px, 3.2vw, 28px) 0 0;
+}
+
+.detail-card .story-layer + .story-layer {
+  margin-top: 20px;
+  border-top: 1px solid var(--mem-border);
+}
+
+.detail-card .story-column {
+  max-width: 42em;
+}
+
+.detail-card .story-column h2 {
+  margin: 0 0 12px;
+  font-size: 1.24rem;
+  font-weight: 700;
+  color: var(--mem-ink);
+}
+
+.detail-card .story-column > p,
+.detail-card .story-column .story-lead {
+  margin: 0 0 1.15em;
+  font-family: var(--font-body);
+  font-size: clamp(1.02rem, 2vw, 1.08rem);
+  line-height: 1.88;
+  color: var(--mem-ink-sec);
+}
+
+.detail-card .story-column > p:last-child {
+  margin-bottom: 0;
+}
+
+.detail-card .story-aside {
+  gap: 12px;
+}
+
+.detail-card .story-note {
+  padding: 14px 16px;
+  border: 1px solid rgba(109, 40, 217, 0.12);
+  border-radius: var(--mem-r-media);
+  background: var(--mem-lavender-tint);
+}
+
+.detail-card .story-note .section-mark {
+  color: var(--mem-lavender);
+}
+
+.detail-card .story-note p {
+  margin: 6px 0 0;
+  color: var(--mem-ink-sec);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* Concentric 20px hero photo/video framing */
+.detail-card .detail-supporting {
+  margin-top: clamp(20px, 3vw, 28px);
+  padding-bottom: 0;
+}
+
+.detail-page .detail-hero {
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--mem-shadow);
+}
+
+.detail-page .detail-supporting .photo-strip {
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.detail-page .detail-supporting .photo-strip .photo {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.detail-page .detail-supporting .photo-strip .photo-video {
+  border-radius: 18px;
+}
+
+.detail-page .day-detail-merged {
+  margin-top: 16px;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: var(--mem-soft);
+  color: var(--mem-ink-muted);
+  font-size: 0.86rem;
+}
+
+/* Clean Evidence Disclosure Card (当时留下的资料) */
+.detail-page .evidence-disclosure {
+  margin-top: 18px;
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-card);
+  box-shadow: var(--mem-shadow);
+  padding: 0 clamp(20px, 3.8vw, 30px);
+}
+
+.detail-page .evidence-disclosure > summary {
+  min-height: 62px;
+  padding: 16px 0;
+  align-items: center;
+}
+
+.detail-page .evidence-disclosure > summary span {
+  font-family: var(--font-heading);
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--mem-ink);
+}
+
+.detail-page .evidence-disclosure > summary::after {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-soft);
+  color: var(--mem-ink-sec);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.detail-page .evidence-list {
+  gap: 12px;
+  padding-bottom: 24px;
+}
+
+.detail-page .evidence-item {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-media);
+  background: var(--mem-canvas);
+}
+
+@media (min-width: 600px) {
+  .detail-page .evidence-item {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+.detail-page .evidence-time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: start;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.detail-page .evidence-time time {
+  color: var(--mem-ink-muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tactile micro-pastel speaker attribution chip */
+.detail-page .evidence-time span {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-peach-tint);
+  color: var(--mem-peach);
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.detail-page .evidence-source {
+  gap: 8px;
+  align-items: center;
+}
+
+.detail-page .evidence-source span:first-child {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-blue-tint);
+  color: var(--mem-blue-ink);
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.detail-page .evidence-quote,
+.detail-page .evidence-text-long > summary.evidence-quote {
+  max-width: 44ch;
+  margin: 8px 0 0;
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  font-weight: 500;
+  line-height: 1.72;
+  color: var(--mem-ink);
+}
+
+.detail-page .evidence-note {
+  margin: 8px 0 0;
+  font-size: 0.94rem;
+  line-height: 1.68;
+  color: var(--mem-ink-sec);
+}
+
+.detail-page .evidence-media {
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.detail-page .evidence-media-item {
+  border-radius: 12px;
+}
+
+.detail-page .evidence-media-label {
+  border-radius: var(--mem-r-pill);
+  padding: 3px 9px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #FFFFFF;
+  font-family: var(--font-heading);
+  font-weight: 600;
+}
+
+.detail-page .evidence-secondary-label {
+  min-height: 48px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+}
+
+/* Elevated 接着读 / 继续读日子 Cards */
+.detail-page .day-neighbors,
+.detail-page .story-steps {
+  margin-block: 22px 0;
+  padding-top: 0;
+  gap: 14px;
+}
+
+.detail-page .day-neighbors a.day-neighbor,
+.detail-page .story-steps .story-step {
+  min-height: 88px;
+  padding: 18px 22px;
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border);
+  border-radius: var(--mem-r-card);
+  box-shadow: var(--mem-shadow);
+  gap: 6px;
+  transition: transform 0.26s var(--mem-spring), box-shadow 0.26s var(--mem-spring), border-color 0.2s ease;
+}
+
+@media (hover: hover) {
+  .detail-page .day-neighbors a.day-neighbor:hover,
+  .detail-page .story-steps .story-step:hover {
+    transform: translateY(-3px);
+    border-color: rgba(37, 99, 235, 0.24);
+    box-shadow: var(--mem-shadow-hover);
+  }
+}
+
+.detail-page .day-neighbor-title,
+.detail-page .story-step-title {
+  font-family: var(--font-heading);
+  font-size: 1.06rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--mem-ink);
+}
+
+.detail-page .story-step-when {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  color: var(--mem-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-page .detail-footer {
+  padding: 24px 0 36px;
+  display: flex;
+  justify-content: center;
+}
+
+.detail-page .detail-footer .text-link {
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: var(--mem-r-pill);
+  background: var(--mem-surface);
+  border: 1px solid var(--mem-border-strong);
+  box-shadow: var(--mem-shadow-pill);
+  color: var(--mem-ink-sec);
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.detail-page .detail-footer .text-link:hover {
+  background: var(--mem-blue-tint);
+  border-color: rgba(37, 99, 235, 0.24);
+  color: var(--mem-blue-ink);
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-page *,
+  .month-page *,
+  .detail-page *,
+  .life-reading * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

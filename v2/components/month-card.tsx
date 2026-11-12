@@ -63,9 +63,11 @@ export function MonthCard({ entry, blurb, cover, coverFocal, coverFrame }: {
         </div>
       ) : null}
       <div className="month-card-body">
-        <span className="serif month-card-label">{chapter.shortLabel}</span>
-        {/* B1：当前月读「现在」，历史月份读「当时」。 */}
-        {chapter.ageLabel ? <span className="month-card-age">{monthAgeQualifier(chapter.month, productToday())} {chapter.ageLabel}</span> : null}
+        <div className="month-card-top">
+          <span className="serif month-card-label">{chapter.shortLabel}</span>
+          {/* B1：当前月读「现在」，历史月份读「当时」。 */}
+          {chapter.ageLabel ? <span className="month-card-age">{monthAgeQualifier(chapter.month, productToday())} {chapter.ageLabel}</span> : null}
+        </div>
         {cardBlurb ? <p className="month-card-blurb">{cardBlurb}</p> : null}
       </div>
     </Link>

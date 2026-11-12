@@ -5,6 +5,7 @@ import { searchArchive } from "@/lib/life-reading";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { ReadingDate } from "@/components/life-reading";
 import "../reading.css";
+import "../memory-modern.css";
 
 export const metadata: Metadata = { title: "找一段往事" };
 const suggestions = ["什么时候开始自己吃饭", "第一次说打开", "和外公去过哪里"];

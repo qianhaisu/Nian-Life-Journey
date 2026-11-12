@@ -50,7 +50,7 @@ test("shadcn styles, portals and keyboard behaviour coexist with legacy pages", 
       page.on("pageerror", e => errors.push(e.message));
       await page.setContent(`<!doctype html><html lang="zh-CN"><body><div class="mr-page"><div class="mr-card"><div class="mr-aspect"><h3>月报样例</h3><p class="mr-aspect-detail">说明文字</p></div><ul class="mr-sleep-labels"><li>标签</li></ul><button>原有按钮</button></div></div><div id="root"></div></body></html>`);
       await page.addStyleTag({ content: legacy });
-      await page.waitForFunction(() => getComputedStyle(document.querySelector(".mr-page")).backgroundColor === "rgb(245, 243, 236)");
+      await page.waitForFunction(() => getComputedStyle(document.querySelector(".mr-page")).backgroundColor === "rgb(243, 245, 249)");
       const legacySignature = () => page.locator(".mr-page, .mr-page *").evaluateAll(elements => elements.map(e => {
         const s = getComputedStyle(e), r = e.getBoundingClientRect();
         return [r.x,r.y,r.width,r.height,s.color,s.backgroundColor,s.fontFamily,s.fontSize,s.fontWeight,s.border,s.borderRadius,s.padding,s.margin];
@@ -65,7 +65,7 @@ test("shadcn styles, portals and keyboard behaviour coexist with legacy pages", 
       const appearance = await primary.evaluate(e => {
         const s = getComputedStyle(e); return { bg:s.backgroundColor,color:s.color,height:e.getBoundingClientRect().height,radius:s.borderRadius };
       });
-      assert.equal(appearance.bg, "rgb(168, 93, 67)");
+      assert.equal(appearance.bg, "rgb(37, 99, 235)");
       assert.equal(appearance.color, "rgb(255, 255, 255)");
       assert.equal(appearance.radius, "12px");
       assert.ok(appearance.height >= 44);
@@ -83,14 +83,16 @@ test("shadcn styles, portals and keyboard behaviour coexist with legacy pages", 
       await dialog.waitFor();
       const bounds = await dialog.boundingBox();
       assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width, "portal fits viewport");
-      assert.equal(await dialog.evaluate(e => getComputedStyle(e).backgroundColor), "rgb(249, 246, 240)");
+      assert.equal(await dialog.evaluate(e => getComputedStyle(e).backgroundColor), "rgb(243, 245, 249)");
       for (let i = 0; i < 8; i++) {
         await page.keyboard.press("Tab");
         assert.equal(await dialog.evaluate(e => e.contains(document.activeElement)), true, "focus stays in dialog");
       }
       await page.keyboard.press("Escape");
       await dialog.waitFor({ state: "detached" });
-      assert.equal(await page.getByRole("button", { name: "打开对话框" }).evaluate(e => e === document.activeElement), true);
+      const trigger = page.getByRole("button", { name: "打开对话框" });
+      await page.waitForFunction(el => el === document.activeElement, await trigger.elementHandle());
+      assert.equal(await trigger.evaluate(e => e === document.activeElement), true);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       assert.deepEqual(errors, []);
       await page.close();

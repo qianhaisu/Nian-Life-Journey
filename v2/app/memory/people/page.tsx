@@ -6,6 +6,7 @@ import { PEOPLE_PROSE, resolveReadingProse } from "@/lib/life-reading-narratives
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { MemoryReadingMode } from "@/components/memory-reading-mode";
 import "../reading.css";
+import "../memory-modern.css";
 
 export const metadata: Metadata = { title: "一起长大的人" };
 

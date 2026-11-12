@@ -7,6 +7,7 @@
 @source ".";
 
 @theme inline {
+  --font-sans: var(--font-sans);
   --color-background: var(--color-bg);
   --color-foreground: var(--color-text);
   --color-card: var(--color-surface);
@@ -19,8 +20,8 @@
   --color-secondary-foreground: var(--color-text);
   --color-muted: var(--paper-dark);
   --color-muted-foreground: var(--color-muted);
-  --color-accent: var(--paper-dark);
-  --color-accent-foreground: var(--color-text);
+  --color-accent: var(--tint-blue);
+  --color-accent-foreground: var(--color-primary);
   --color-destructive: var(--danger);
   --color-border: var(--color-border);
   --color-input: var(--color-border);
@@ -29,7 +30,7 @@
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
+  --radius-xl: 1.5rem;
 }
 
 /* Minimal reset only for owned elements; it also works inside Radix portals.

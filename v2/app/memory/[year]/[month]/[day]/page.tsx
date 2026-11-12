@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DayDetail } from "@/components/day-detail";
 import { readDay } from "@/lib/day-reading";
+import "../../../memory-modern.css";
 
 // A day's own page.
 //
@@ -41,7 +42,9 @@ export default async function DayPage({ params }: { params: Promise<{ year: stri
       deliverableIds={reading.sourceDeliverable}
       monthHref={reading.monthHref}
       monthLabel={reading.monthLabel}
-        stories={reading.stories} previous={reading.previous} next={reading.next}
+      stories={reading.stories}
+      previous={reading.previous}
+      next={reading.next}
     />
   );
 }

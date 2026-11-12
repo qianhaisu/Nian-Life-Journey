@@ -1,69 +1,70 @@
 /* 妈妈月报 — styles scoped entirely under .mr-page, loaded only by app/mom-reports/page.tsx.
 
-   2026-09-17, second pass: 苏静's first read of this page said the screenshots "还不够保真" (not
-   faithful enough). The first pass got the CONTENT structure right but flattened V1.3's actual
-   visual language — floating white cards with soft shadows, a single narrow (860px) column at every
-   width, a hero photo with a badge overlaid and an info panel floating on top of it, a softly
-   glowing paper background — into plain bordered sections on a wide 1120px desktop layout. This
-   version is a much closer line-by-line port of V1.3's own CSS (docs/mom-reports-implementation
-   -handoff.md §12 has the full diff): same radii, same shadow, same card nesting, same 2-column
-   grids at every width, same hero composition. Only the base palette (paper/ink/line/shadow tint)
-   and the heading font are swapped for the site's own tokens — V1.3's own five-tone system
-   (yellow/green/blue/coral/purple) is kept exactly, because that IS the content's organisation,
-   not a decoration. */
+   2026-09-17: Full V1.3 layout fidelity requested by 苏静 — 860px single-column structure, floating
+   white cards, hero photo with floating badge + overlapping info panel, 2-column grids, and V1.3's
+   five-tone content organising system (yellow/green/blue/coral/purple).
+   2026-11-12: Base canvas, ink, shadow, and typography tokens harmonized with Nianlife V2's modern
+   daylight system (--mr-paper #F3F5F9, crisp sans-serif --font-heading, tabular numerals, cool sky
+   & lavender corner glows) while keeping 100% of V1.3's layout geometry and five-tone system intact. */
 
 .mr-page {
-  --mr-paper: #F5F3EC;
-  --mr-card: #ffffff;
-  --mr-ink: #282621;
-  --mr-clay: #984D34;
-  --mr-clay-ink: #7A3D2A;
-  --mr-muted: #6B6459;
-  --mr-line: #e7e0d1;
-  --mr-shadow: 0 14px 38px rgba(90,70,50,.13);
-  --mr-shadow-soft: 0 10px 26px rgba(90,70,50,.09);
+  --mr-paper: #F3F5F9;
+  --mr-card: #FFFFFF;
+  --mr-ink: #0F172A;
+  --mr-clay: #2563EB;
+  --mr-clay-ink: #1D4ED8;
+  --mr-muted: #526075;
+  --mr-line: rgba(15, 23, 42, 0.07);
+  --mr-shadow: 0 2px 6px rgba(15, 23, 42, 0.04), 0 14px 34px -6px rgba(15, 23, 42, 0.07);
+  --mr-shadow-soft: 0 1px 3px rgba(15, 23, 42, 0.03), 0 8px 22px -4px rgba(15, 23, 42, 0.05);
   --mr-radius: 24px;
   --mr-max: 860px;
-  --mr-display: 'LXGW WenKai', 'Songti SC', serif;
-  --mr-body: 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  --mr-display: var(--font-heading);
+  --mr-body: var(--font-body, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif);
 
-  /* V1.3's own five-tone system (index.html :root) — kept as the content's organising colours. */
+  /* V1.3's own five-tone system — kept as the content's organising colours (AA contrast verified). */
   --mr-yellow: #f1b640; --mr-yellow-soft: #fff6dc; --mr-yellow-ink: #8a5a06;
   --mr-green: #56b878; --mr-green-soft: #edf9f1; --mr-green-ink: #1f6e3f;
   --mr-blue: #4f97ee; --mr-blue-soft: #eaf4ff; --mr-blue-ink: #2a5fa5;
-  --mr-coral: #ee897b; --mr-coral-soft: #fff0ed; --mr-coral-ink: #b25143;
+  --mr-coral: #ee897b; --mr-coral-soft: #fff0ed; --mr-coral-ink: #9f3a2d;
   --mr-purple: #8b84e8; --mr-purple-soft: #f1efff; --mr-purple-ink: #5952b0;
 
   color: var(--mr-ink);
   font-family: var(--mr-body);
   font-size: 1rem;
-  line-height: 1.6;
-  /* V1.3's own soft corner glows (index.html body), recoloured to the warm palette instead of its
-     yellow/blue — this is the one purely decorative rule kept, because a flat page directly beside
-     the rest of the site's plainer background is exactly the kind of thing that reads as "not the
-     same page" at a glance. */
-  background: radial-gradient(circle at 7% 1%, rgba(152,77,52,.08), transparent 24%), radial-gradient(circle at 94% 6%, rgba(86,184,120,.08), transparent 22%), var(--mr-paper);
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+  background:
+    radial-gradient(circle at 7% 1%, rgba(37, 99, 235, 0.06), transparent 26%),
+    radial-gradient(circle at 94% 6%, rgba(109, 40, 217, 0.05), transparent 24%),
+    var(--mr-paper);
   padding-bottom: clamp(48px, 8vw, 96px);
 }
 
 .mr-page * { box-sizing: border-box; }
 .mr-page img { display: block; max-width: 100%; height: auto; }
-.mr-page a { color: inherit; }
-.mr-page ::selection { background: #dab29e; color: var(--mr-ink); }
+.mr-page a:not(.skip-link) { color: inherit; }
+.mr-page ::selection { background: rgba(37, 99, 235, 0.18); color: var(--mr-ink); }
 
-.mr-serif { font-family: var(--mr-display); font-weight: 400; }
+.mr-serif { font-family: var(--mr-display); font-weight: 700; letter-spacing: -0.02em; }
 .mr-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .mr-app { width: min(100%, var(--mr-max)); margin-inline: auto; padding: 18px 15px 0; }
 
 .mr-section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin: 0 3px 10px; }
-.mr-section-heading h2 { margin: 0; font-size: 1.4rem; letter-spacing: -.02em; }
-.mr-section-heading > span, .mr-eyebrow { font-size: .76rem; color: var(--mr-muted); }
-.mr-section-note { margin: -4px 3px 14px; font-size: .95rem; line-height: 1.7; color: #5f6e78; }
+.mr-section-heading h2 { margin: 0; font-family: var(--mr-display); font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
+.mr-section-heading > span, .mr-eyebrow { font-size: .76rem; font-weight: 600; color: var(--mr-muted); }
+.mr-section-note { margin: -4px 3px 14px; font-size: .95rem; line-height: 1.7; color: #475569; }
 .mr-source-note { margin-top: 12px; font-size: .78rem; line-height: 1.75; color: var(--mr-muted); }
 
-/* A floating white/gradient panel — V1.3's `.card`, the page's single most repeated visual unit. */
-.mr-card { background: rgba(255,255,255,.94); border: 1px solid #fff; border-radius: var(--mr-radius); box-shadow: var(--mr-shadow); padding: 18px; }
+/* Floating white card — V1.3's `.card` unit */
+.mr-card {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--mr-line);
+  border-radius: var(--mr-radius);
+  box-shadow: var(--mr-shadow);
+  padding: 18px;
+}
 
 /* Five reusable tone variants — shared by aspect icons, tags, health icons, moment tags. */
 .mr-tone-yellow { --tone: var(--mr-yellow); --tone-soft: var(--mr-yellow-soft); --tone-ink: var(--mr-yellow-ink); }
@@ -72,148 +73,182 @@
 .mr-tone-coral { --tone: var(--mr-coral); --tone-soft: var(--mr-coral-soft); --tone-ink: var(--mr-coral-ink); }
 .mr-tone-purple { --tone: var(--mr-purple); --tone-soft: var(--mr-purple-soft); --tone-ink: var(--mr-purple-ink); }
 
-/* ---------- Top bar (release marker, no second site logo — see handoff doc §12.4) ---------- */
+/* ---------- Top bar ---------- */
 .mr-topbar { display: flex; justify-content: flex-end; margin: 0 3px 12px; }
-.mr-release { font-size: .72rem; font-weight: 800; color: var(--mr-clay-ink); background: #fff; padding: 6px 10px; border-radius: 99px; box-shadow: var(--mr-shadow-soft); }
+.mr-release { font-size: .72rem; font-weight: 700; color: var(--mr-clay-ink); background: #FFFFFF; border: 1px solid var(--mr-line); padding: 6px 12px; border-radius: 999px; box-shadow: var(--mr-shadow-soft); }
 
-/* ---------- Hero: photo with a floating badge, an info panel overlapping its bottom edge ---------- */
+/* ---------- Hero: photo with floating badge + overlapping info panel ---------- */
 .mr-hero-wrap { position: relative; }
-.mr-hero-photo { position: relative; height: 390px; overflow: hidden; border-radius: 32px; box-shadow: var(--mr-shadow); background: var(--mr-blue-soft); margin: 0; }
+.mr-hero-photo { position: relative; height: 390px; overflow: hidden; border-radius: 28px; box-shadow: var(--mr-shadow); background: var(--mr-blue-soft); margin: 0; border: 4px solid #FFFFFF; }
 .mr-hero-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 42%; }
-.mr-hero-badge { position: absolute; left: 18px; top: 18px; z-index: 2; display: inline-flex; padding: 7px 12px; border-radius: 99px; background: #ffffffd6; font-weight: 750; font-size: .82rem; color: var(--mr-clay-ink); backdrop-filter: blur(10px); }
-.mr-hero-panel { position: relative; z-index: 3; margin: -28px 14px 0; padding: 18px; background: rgba(255,255,255,.96); border-radius: 24px; box-shadow: var(--mr-shadow); }
-.mr-hero-title { margin: 0 0 8px; font-size: 2rem; line-height: 1; }
-.mr-hero-subtitle { margin: 0; color: #5f6e78; font-size: .95rem; }
+.mr-hero-badge {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  z-index: 2;
+  display: inline-flex;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  font-weight: 700;
+  font-size: .82rem;
+  color: var(--mr-clay-ink);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.mr-hero-panel {
+  position: relative;
+  z-index: 3;
+  margin: -28px 14px 0;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--mr-line);
+  border-radius: 24px;
+  box-shadow: var(--mr-shadow);
+}
+.mr-hero-title { margin: 0 0 8px; font-size: 2rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.08; }
+.mr-hero-subtitle { margin: 0; color: #475569; font-size: .95rem; font-weight: 500; }
 .mr-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
-.mr-hero-stats div { text-align: center; padding: 11px 3px; border-radius: 16px; background: #f7fafc; border: 1px solid var(--mr-line); min-width: 0; }
-.mr-hero-stats strong { display: block; font-size: 1.05rem; white-space: nowrap; }
-.mr-hero-stats small { display: block; margin-top: 2px; font-size: .64rem; color: var(--mr-muted); white-space: nowrap; }
+.mr-hero-stats div { text-align: center; padding: 11px 4px; border-radius: 16px; background: #F8FAFC; border: 1px solid var(--mr-line); min-width: 0; }
+.mr-hero-stats strong { display: block; font-family: var(--mr-display); font-size: 1.05rem; font-weight: 700; white-space: nowrap; }
+.mr-hero-stats small { display: block; margin-top: 2px; font-size: .68rem; color: var(--mr-muted); white-space: nowrap; }
 
 .mr-month-picker { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
-.mr-month-picker label { font-size: .76rem; color: var(--mr-muted); }
-.mr-month-picker select { min-height: 44px; padding: 6px 24px 6px 4px; border: 0; border-bottom: 1px solid var(--mr-clay); background: transparent; font: inherit; font-size: .95rem; color: var(--mr-ink); border-radius: 0; }
-.mr-month-picker > span { font-size: .72rem; color: var(--mr-muted); }
+.mr-month-picker label { font-size: .78rem; font-weight: 600; color: var(--mr-muted); }
+.mr-month-picker select {
+  min-height: 44px;
+  padding: 6px 28px 6px 12px;
+  border: 1px solid var(--mr-line);
+  border-radius: 999px;
+  background-color: #F8FAFC;
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--mr-ink);
+  cursor: pointer;
+}
+.mr-month-picker > span { font-size: .74rem; color: var(--mr-muted); }
 
 /* ---------- Sections ---------- */
 .mr-section { margin-top: 20px; scroll-margin-top: 88px; }
 
-/* 本月情况总结 — a gradient card, V1.3's own .summary-card. */
-.mr-summary { background: linear-gradient(135deg, var(--mr-blue-soft), #fff); }
+/* 本月情况总结 */
+.mr-summary { background: linear-gradient(135deg, var(--mr-blue-soft), #FFFFFF); }
+.mr-summary h2 { margin: 0 0 8px; font-size: 1.25rem; }
 .mr-summary-layout { display: block; }
-.mr-summary-lead { margin: 0 0 7px; font-family: var(--mr-display); font-size: 1.25rem; line-height: 1.55; }
+.mr-summary-lead { margin: 0 0 7px; font-family: var(--mr-display); font-size: 1.22rem; font-weight: 700; line-height: 1.55; }
 .mr-summary-lead em { font-style: normal; color: var(--mr-clay-ink); }
-.mr-summary-copy { margin: 0; font-size: .96rem; line-height: 1.75; }
-.mr-tags { display: flex; flex-wrap: wrap; gap: 7px; margin: 11px 0 0; padding: 0; list-style: none; }
-.mr-tags li { padding: 6px 9px; border-radius: 999px; font-size: .76rem; font-weight: 800; background: var(--tone-soft); color: var(--tone-ink); }
+.mr-summary-copy { margin: 0; font-size: .96rem; line-height: 1.78; color: #334155; }
+.mr-tags { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 0; padding: 0; list-style: none; }
+.mr-tags li { padding: 6px 11px; border-radius: 999px; font-size: .76rem; font-weight: 700; background: var(--tone-soft); color: var(--tone-ink); }
 
-/* 基本概况 — one shared card holding a 2-column grid, matching V1.3's .mini-grid exactly. */
+/* 基本概况 — 2-column grid inside one card */
 .mr-aspects-card { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); }
-.mr-aspect { padding: 14px; border: 1px solid var(--mr-line); border-radius: 18px; background: #fff; min-width: 0; }
+.mr-aspect { padding: 14px; border: 1px solid var(--mr-line); border-radius: 18px; background: #FFFFFF; min-width: 0; }
 .mr-aspect-top { display: flex; align-items: center; gap: 10px; }
 .mr-aspect-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 13px; background: var(--tone-soft); font-size: 1.1rem; flex-shrink: 0; }
-.mr-aspect h3 { margin: 0; font-size: .95rem; }
-/* V1.3's own .metric p is 13px for both the lead and the detail line (`.fact-lead` only adds
-   font-weight, it inherits the same 13px) — matched exactly here for a flatter, denser card. */
-.mr-aspect-lead { margin: 6px 0 0; font-size: .8125rem; font-weight: 750; color: #4f5d66; line-height: 1.4; }
-.mr-aspect-detail { margin: 2px 0 0; font-size: .8125rem; color: var(--mr-muted); line-height: 1.4; }
+.mr-aspect h3 { margin: 0; font-family: var(--mr-display); font-size: .95rem; font-weight: 700; }
+.mr-aspect-lead { margin: 6px 0 0; font-size: .8125rem; font-weight: 700; color: #334155; line-height: 1.45; }
+.mr-aspect-detail { margin: 2px 0 0; font-size: .8125rem; color: var(--mr-muted); line-height: 1.45; }
 
 /* 生长发育曲线 */
-.mr-growth-card h2 { margin: 0 0 8px; font-size: 1.1rem; display: flex; align-items: center; gap: 6px; }
+.mr-growth-card h2 { margin: 0 0 8px; font-family: var(--mr-display); font-size: 1.12rem; font-weight: 700; display: flex; align-items: center; gap: 6px; }
 .mr-chart-svg { width: 100%; height: auto; overflow: visible; }
-.mr-chart-grid line { stroke: #edf0f2; stroke-width: 1; }
-.mr-chart-months text { fill: #5f6e78; font-size: 9px; }
+.mr-chart-grid line { stroke: #E2E8F0; stroke-width: 1; }
+.mr-chart-months text { fill: #526075; font-size: 9px; }
 .mr-chart-height path { fill: none; stroke: var(--mr-blue); stroke-width: 5; stroke-linecap: round; }
 .mr-chart-height circle { fill: var(--mr-blue); }
-.mr-chart-height text { fill: #2a68ad; font-size: 11px; font-weight: 700; }
+.mr-chart-height text { fill: #1D4ED8; font-size: 11px; font-weight: 700; }
 .mr-chart-weight path { fill: none; stroke: var(--mr-green); stroke-width: 5; stroke-linecap: round; }
 .mr-chart-weight circle { fill: var(--mr-green); }
-.mr-chart-weight text { fill: #2a7346; font-size: 11px; font-weight: 700; }
-.mr-chart-legend { display: flex; gap: 14px; margin-top: 8px; font-size: .74rem; }
-.mr-legend-height { color: #2a68ad; } .mr-legend-weight { color: #2a7346; }
-.mr-chart-note { margin-top: 12px; padding: 12px 13px; border-radius: 16px; background: #f8fafb; border: 1px solid var(--mr-line); font-size: .8rem; color: #50606a; }
+.mr-chart-weight text { fill: #1f6e3f; font-size: 11px; font-weight: 700; }
+.mr-chart-legend { display: flex; gap: 14px; margin-top: 8px; font-size: .76rem; font-weight: 600; }
+.mr-legend-height { color: #1D4ED8; }
+.mr-legend-weight { color: #1f6e3f; }
+.mr-chart-note { margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: #F8FAFC; border: 1px solid var(--mr-line); font-size: .82rem; color: #475569; }
 
 .mr-measurement-detail { margin-top: 14px; border-top: 1px solid var(--mr-line); padding-top: 10px; }
-.mr-measurement-detail summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; min-height: 44px; font-size: .82rem; }
+.mr-measurement-detail summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; min-height: 44px; font-size: .84rem; font-weight: 600; color: #334155; }
 .mr-measurement-detail summary::-webkit-details-marker { display: none; }
-.mr-measurement-detail summary span { font-weight: 400; font-size: 1.1rem; transition: transform .16s ease-out; }
+.mr-measurement-detail summary span { font-weight: 500; font-size: 1.1rem; transition: transform .16s ease-out; }
 .mr-measurement-detail[open] summary span { transform: rotate(45deg); }
 .mr-table-scroll { overflow-x: auto; }
-.mr-table-scroll table { width: 100%; margin-top: 6px; font-size: .8rem; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mr-table-scroll table { width: 100%; margin-top: 6px; font-size: .82rem; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .mr-table-scroll th, .mr-table-scroll td { text-align: left; padding: 8px; border-bottom: 1px solid var(--mr-line); }
-.mr-table-scroll th { font-weight: 600; }
+.mr-table-scroll th { font-weight: 700; color: var(--mr-ink); }
 
 /* Outside Food Guide 入口 teaser 卡 */
-.mr-food-entry { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 13px; background: linear-gradient(135deg, var(--mr-green-soft), #fff); min-height: 44px; }
-.mr-food-entry-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 17px; background: #fff; font-size: 1.3rem; }
+.mr-food-entry { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 13px; background: linear-gradient(135deg, var(--mr-green-soft), #FFFFFF); min-height: 64px; text-decoration: none; }
+.mr-food-entry-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: #FFFFFF; border: 1px solid var(--mr-line); font-size: 1.3rem; }
 .mr-food-entry-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.mr-food-entry-copy strong { font-size: .95rem; }
+.mr-food-entry-copy strong { font-family: var(--mr-display); font-size: .95rem; font-weight: 700; }
 .mr-food-entry-copy span { font-size: .78rem; color: var(--mr-muted); }
-.mr-food-entry-link { padding: 8px 12px; border-radius: 99px; background: #fff; border: 1px solid var(--mr-line); font-size: .74rem; font-weight: 800; color: var(--mr-green-ink); white-space: nowrap; }
+.mr-food-entry-link { padding: 8px 13px; border-radius: 999px; background: #FFFFFF; border: 1px solid var(--mr-line); font-size: .76rem; font-weight: 700; color: var(--mr-green-ink); white-space: nowrap; }
 
-/* 健康与关注 — flat grid of cards, each a 42px|1fr|auto row exactly like V1.3's .health-item. */
+/* 健康与关注 */
 .mr-care-list { display: grid; gap: 10px; }
-.mr-care-item { display: grid; grid-template-columns: 42px 1fr auto; gap: 10px; align-items: start; padding: 15px; border: 1px solid var(--mr-line); border-radius: 18px; background: #fff; }
-.mr-care-item.is-settled { opacity: .82; box-shadow: none; background: #fbfcfc; }
+.mr-care-item { display: grid; grid-template-columns: 42px 1fr auto; gap: 10px; align-items: start; padding: 15px; border: 1px solid var(--mr-line); border-radius: 18px; background: #FFFFFF; }
+.mr-care-item.is-settled { opacity: .86; box-shadow: none; background: #F8FAFC; }
 .mr-care-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--tone-soft); font-size: 1.05rem; }
-.mr-care-title { margin: 0; font-size: .95rem; grid-column: 2; }
-.mr-pill { grid-column: 3; font-style: normal; font-size: .72rem; font-weight: 800; padding: 5px 8px; border-radius: 999px; white-space: nowrap; }
+.mr-care-title { margin: 0; font-family: var(--mr-display); font-size: .95rem; font-weight: 700; grid-column: 2; }
+.mr-pill { grid-column: 3; font-style: normal; font-size: .72rem; font-weight: 700; padding: 5px 9px; border-radius: 999px; white-space: nowrap; }
 .mr-pill-watch { background: var(--mr-yellow-soft); color: var(--mr-yellow-ink); }
 .mr-pill-later { background: var(--mr-blue-soft); color: var(--mr-blue-ink); }
 .mr-pill-good { background: var(--mr-green-soft); color: var(--mr-green-ink); }
 .mr-care-detail { grid-column: 2 / -1; display: grid; gap: 7px; margin-top: 9px; }
-.mr-care-detail > div { display: grid; grid-template-columns: 48px 1fr; gap: 7px; padding-top: 7px; border-top: 1px solid #f0f2f3; }
-.mr-care-detail dt { margin: 0; font-size: .72rem; color: #50606a; font-weight: 600; }
-.mr-care-detail dd { margin: 0; font-size: .8rem; color: var(--mr-muted); line-height: 1.6; }
+.mr-care-detail > div { display: grid; grid-template-columns: 48px 1fr; gap: 7px; padding-top: 7px; border-top: 1px solid var(--mr-line); }
+.mr-care-detail dt { margin: 0; font-size: .74rem; color: #334155; font-weight: 700; }
+.mr-care-detail dd { margin: 0; font-size: .82rem; color: var(--mr-muted); line-height: 1.62; }
 
-/* 睡眠旅程 — one gradient card, matching V1.3's .sleep-trend-card. */
-.mr-sleep-card { background: linear-gradient(135deg, var(--mr-blue-soft), #fff); overflow: hidden; }
-.mr-sleep-card h2 { margin: 0; font-size: 1.15rem; }
+/* 睡眠旅程 */
+.mr-sleep-card { background: linear-gradient(135deg, var(--mr-blue-soft), #FFFFFF); overflow: hidden; }
+.mr-sleep-card h2 { margin: 2px 0 0; font-size: 1.18rem; }
 .mr-sleep-key { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin: 13px 0; }
-.mr-sleep-key div { padding: 12px 13px; border-radius: 16px; background: #fff; border: 1px solid var(--mr-line); }
-.mr-sleep-key small { display: block; color: var(--mr-muted); font-size: .68rem; }
-.mr-sleep-key strong { font-size: 1rem; }
+.mr-sleep-key div { padding: 12px 14px; border-radius: 16px; background: #FFFFFF; border: 1px solid var(--mr-line); }
+.mr-sleep-key small { display: block; color: var(--mr-muted); font-size: .7rem; font-weight: 500; }
+.mr-sleep-key strong { font-family: var(--mr-display); font-size: 1rem; font-weight: 700; }
 .mr-sleep-svg { width: 100%; height: auto; }
-.mr-sleep-baseline { stroke: #dfe9ef; stroke-width: 2; stroke-dasharray: 4 6; }
+.mr-sleep-baseline { stroke: #CBD5E1; stroke-width: 2; stroke-dasharray: 4 6; }
 .mr-sleep-curve { fill: none; stroke: var(--mr-blue); stroke-width: 6; stroke-linecap: round; }
-.mr-sleep-svg circle { fill: #fff; stroke: var(--mr-blue); stroke-width: 4; }
+.mr-sleep-svg circle { fill: #FFFFFF; stroke: var(--mr-blue); stroke-width: 4; }
 .mr-sleep-svg circle.is-current { fill: var(--mr-blue); }
-.mr-sleep-labels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 2px 0 0; padding: 0; list-style: none; color: var(--mr-muted); font-size: .68rem; text-align: center; }
+.mr-sleep-labels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; color: var(--mr-muted); font-size: .7rem; text-align: center; }
 .mr-sleep-labels li.is-current { color: var(--mr-blue-ink); font-weight: 700; }
-.mr-sleep-caption { margin: 11px 0 0; font-size: .88rem; line-height: 1.7; color: #50606a; }
+.mr-sleep-caption { margin: 11px 0 0; font-size: .88rem; line-height: 1.72; color: #334155; }
 
-/* 闪光时刻 — V1.3's own fixed warm/cool gradient behind every illustration or photo, regardless of
-   that moment's own tag colour: the tag colour marks the MOMENT, not the picture frame. */
-.mr-moments-list { display: grid; gap: 10px; }
-.mr-moment { overflow: hidden; border-radius: 23px; background: #fff; border: 1px solid var(--mr-line); box-shadow: var(--mr-shadow-soft); }
-.mr-moment-media { display: flex; align-items: center; justify-content: center; height: 300px; padding: 10px; background: linear-gradient(135deg, #fff6dd, #eef7ff); }
-.mr-moment-media img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
-.mr-moment-copy { padding: 15px; }
-.mr-moment-copy h3 { margin: 0 0 4px; font-size: 1.05rem; }
-.mr-moment-copy p { margin: 0; font-size: .88rem; line-height: 1.65; color: var(--mr-muted); }
+/* 闪光时刻 */
+.mr-moments-list { display: grid; gap: 12px; }
+.mr-moment { overflow: hidden; border-radius: 24px; background: #FFFFFF; border: 1px solid var(--mr-line); box-shadow: var(--mr-shadow-soft); }
+.mr-moment-media { display: flex; align-items: center; justify-content: center; height: 300px; padding: 12px; background: linear-gradient(135deg, #EEF4FF, #F4F0FF); }
+.mr-moment-media img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: 12px; }
+.mr-moment-copy { padding: 16px; }
+.mr-moment-copy h3 { margin: 0 0 5px; font-size: 1.06rem; }
+.mr-moment-copy p { margin: 0; font-size: .88rem; line-height: 1.68; color: var(--mr-muted); }
 .mr-moment-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
-.mr-moment-tag { padding: 5px 9px; border-radius: 999px; font-size: .72rem; font-weight: 800; background: var(--tone-soft); color: var(--tone-ink); }
-.mr-moment-credit { padding: 5px 9px; border-radius: 999px; font-size: .72rem; color: var(--mr-muted); background: var(--mr-paper); }
+.mr-moment-tag { padding: 5px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; background: var(--tone-soft); color: var(--tone-ink); }
+.mr-moment-credit { padding: 5px 10px; border-radius: 999px; font-size: .72rem; font-weight: 600; color: var(--mr-muted); background: var(--mr-paper); }
 
 /* Outside Food Guide 完整指南 */
-.mr-food-guide-card { background: linear-gradient(135deg, #fffdf7, #fff); }
-.mr-food-guide-card h2 { margin: 0; font-size: 1.15rem; }
-.mr-food-principle { margin: 5px 0 0; font-size: 1.1rem; font-weight: 850; letter-spacing: -.02em; }
+.mr-food-guide-card { background: linear-gradient(135deg, #F8FAFC, #FFFFFF); }
+.mr-food-guide-card h2 { margin: 2px 0 0; font-size: 1.16rem; }
+.mr-food-principle { margin: 6px 0 0; font-family: var(--mr-display); font-size: 1.08rem; font-weight: 700; letter-spacing: -0.02em; }
 .mr-food-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 14px; }
-.mr-food-scene { display: grid; grid-template-columns: 38% 1fr; min-height: 130px; border: 1px solid var(--mr-line); border-radius: 20px; background: #fff; overflow: hidden; }
-.mr-food-photo { position: relative; padding: 8px; background: linear-gradient(145deg,#f8f1e4,#eef5f1); }
+.mr-food-scene { display: grid; grid-template-columns: 38% 1fr; min-height: 130px; border: 1px solid var(--mr-line); border-radius: 20px; background: #FFFFFF; overflow: hidden; }
+.mr-food-photo { position: relative; padding: 8px; background: linear-gradient(145deg, #EEF2F8, #ECFDF5); }
 .mr-food-photo img { width: 100%; height: 100%; object-fit: contain; }
 .mr-food-copy { display: flex; flex-direction: column; justify-content: center; padding: 12px; min-width: 0; }
-.mr-food-copy h3 { margin: 0; font-size: .92rem; }
-.mr-food-items { margin: 4px 0 0; font-size: .76rem; color: #596770; line-height: 1.4; }
-.mr-food-tip { align-self: flex-start; margin-top: 8px; padding: 4px 8px; border-radius: 999px; background: var(--mr-yellow-soft); color: var(--mr-yellow-ink); font-size: .68rem; font-weight: 800; }
-.mr-food-fallback { margin-top: 12px; padding: 15px; border-radius: 18px; background: var(--mr-blue-soft); text-align: center; color: #376a9f; font-size: .95rem; font-weight: 750; }
-.mr-food-fallback strong { color: #285e92; }
+.mr-food-copy h3 { margin: 0; font-family: var(--mr-display); font-size: .92rem; font-weight: 700; }
+.mr-food-items { margin: 4px 0 0; font-size: .78rem; color: #475569; line-height: 1.45; }
+.mr-food-tip { align-self: flex-start; margin-top: 8px; padding: 4px 9px; border-radius: 999px; background: var(--mr-yellow-soft); color: var(--mr-yellow-ink); font-size: .68rem; font-weight: 700; }
+.mr-food-fallback { margin-top: 12px; padding: 15px; border-radius: 18px; background: var(--mr-blue-soft); text-align: center; color: #1E40AF; font-size: .95rem; font-weight: 700; }
+.mr-food-fallback strong { color: #1D4ED8; }
 
 /* 下月重点关注 */
 .mr-next-notes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.mr-next-notes article { padding: 14px 15px; border-radius: 18px; border: 1px solid var(--mr-line); background: #fff; }
-.mr-next-notes h3 { margin: 0 0 3px; font-size: .9rem; font-family: var(--mr-display); font-weight: 400; }
-.mr-next-notes p { margin: 0; font-size: .8rem; color: var(--mr-muted); line-height: 1.6; }
+.mr-next-notes article { padding: 15px 16px; border-radius: 18px; border: 1px solid var(--mr-line); background: #FFFFFF; box-shadow: var(--mr-shadow-soft); }
+.mr-next-notes h3 { margin: 0 0 4px; font-size: .92rem; font-family: var(--mr-display); font-weight: 700; }
+.mr-next-notes p { margin: 0; font-size: .82rem; color: var(--mr-muted); line-height: 1.65; }
 
 /* 来源与署名 */
 .mr-footer { text-align: center; margin-top: 36px; }
@@ -227,7 +262,7 @@
   .mr-hero-panel { margin: -24px 10px 0; padding: 16px; }
   .mr-hero-title { font-size: 1.7rem; }
   .mr-sleep-key { grid-template-columns: 1fr; }
-  .mr-sleep-labels { font-size: .6rem; }
+  .mr-sleep-labels { font-size: .62rem; }
   .mr-care-detail > div { grid-template-columns: 44px 1fr; }
 }
 
@@ -235,8 +270,5 @@
   .mr-page * { transition: none !important; animation: none !important; }
 }
 
-/* 2026-10-26 Teddy：妈妈月报不跟全站的新字体方案（Poppins + 悠哉）走，保持原来的标题与日期字体。
-   全站规则在 globals.css 末尾的「精致层」；这里用 :where() 把优先级压到最低，只退回字体和字重，
-   页面自己写在 .mr-* 选择器里的任何设置都不受影响。 */
-.mr-page :where(h1, h2, h3, .serif, time) { font-family: var(--font-heading); font-weight: revert; font-variant-numeric: normal; letter-spacing: normal; }
-.mr-page :where(h1, .serif) { font-weight: 600; }
+.mr-page :where(h1, h2, h3, .serif) { font-family: var(--mr-display); font-weight: 700; letter-spacing: -0.02em; }
+.mr-page :where(time) { font-variant-numeric: tabular-nums; }

@@ -8,6 +8,7 @@ import { pinnedCoverAllowed } from "@/lib/publication-moments";
 import { YearNavHighlight } from "@/components/year-nav-highlight";
 import { MemoryReadingMode } from "@/components/memory-reading-mode";
 import "./reading.css";
+import "./memory-modern.css";
 
 // No `export const revalidate` here on purpose: this page is rendered on demand
 // (lib/render-on-demand.ts), so there is no Next route cache for a revalidate window to

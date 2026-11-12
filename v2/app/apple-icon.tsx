@@ -9,15 +9,15 @@ export default function AppleIcon() {
       style={{
         width: 180,
         height: 180,
-        background: "#C2A88A",
-        borderRadius: 38,
+        background: "linear-gradient(135deg, #2563EB 0%, #3B82F6 54%, #60A5FA 100%)",
+        borderRadius: 42,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "#F9F6F0",
-        fontSize: 110,
-        fontWeight: 500,
-        fontFamily: "serif",
+        color: "#FFFFFF",
+        fontSize: 106,
+        fontWeight: 700,
+        fontFamily: "sans-serif",
       }}
     >
       年

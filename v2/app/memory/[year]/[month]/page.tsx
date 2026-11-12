@@ -6,7 +6,7 @@ import { ArchiveExpander } from "@/components/archive-expander";
 import { DayAlbumLink } from "@/components/day-album";
 import { DayPhotos } from "@/components/day-photos";
 import { SnapshotSummary } from "@/components/snapshot-summary";
-import { DayHead, MonthMoment } from "@/components/month-moment";
+import { MonthMoment } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { MonthTimeline } from "@/components/month-timeline";
 import { groupIntoWeeks } from "@/lib/month-day-weight";
@@ -21,6 +21,7 @@ import { focusGoalsForSnapshot } from "@/lib/monthly-focus";
 import { formatMonth, monthAgeLine } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
 import { contentOnlyChapter } from "@/lib/edited-chapters";
+import "../../memory-modern.css";
 
 export const revalidate = 300;
 
@@ -64,6 +65,8 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const chapter = findMonth(chapters, month) ?? (content && content.days.length > 0 ? contentOnlyChapter(month, birthDay) : null);
   if (!chapter) notFound();
 
+  const birthYear = birthDay ? Number(birthDay.slice(0, 4)) : 2025;
+  const isPrebirth = Number(year) < birthYear;
   const ageLine = monthAgeLine(month, productToday(), chapter.ageLabel);
   const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay, content?.coverMediaId);
   const summary = snapshots.find((item) => item.month === month);
@@ -99,13 +102,16 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
     return <div className="month-page reading-wrap">
       <header className="chapter-masthead">
         <Link className="back-link" href={`/memory#year-${year}`}>← {year} 年</Link>
-        <h1 className="serif">{chapter.label}</h1>
-        {ageLine ? <p className="chapter-age">{ageLine}</p> : null}
+        <div className="month-masthead-top">
+          <h1 className="serif">{chapter.label}</h1>
+          {ageLine ? <p className={isPrebirth ? "chapter-age chapter-age--prebirth" : "chapter-age"}>{ageLine}</p> : null}
+        </div>
         {content.intro ? <p className="chapter-summary serif">{content.intro}</p> : null}
       </header>
 
       {timeline?.weeks.length ? <MonthTimeline
         year={year}
+        month={monthSegment}
         monthAgeLabel={chapter.ageLabel}
         highlights={[...timeline.byDay.values()].filter((day) => day.milestone || day.emphasis === "lead").slice(0, 3).map((day) => ({ day: day.day, title: day.title ?? day.dateLabel }))}
         weeks={timeline.weeks}
@@ -120,10 +126,12 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   return <div className="month-page reading-wrap">
     <header className="chapter-masthead">
       <Link className="back-link" href={`/memory#year-${year}`}>← {year} 年</Link>
-      {/* 「月份章节」同上：结构名，不是家人的话，而且下一行就是「2026 年 9 月」。 */}
-      <h1 className="serif">{chapter.label}</h1>
-      {/* B1：当前月读「现在」，翻回去的历史月份读「当时」（monthAgeQualifier，lib/time-signature.ts）。 */}
-      {ageLine ? <p className="chapter-age">{ageLine}</p> : null}
+      <div className="month-masthead-top">
+        {/* 「月份章节」同上：结构名，不是家人的话，而且下一行就是「2026 年 9 月」。 */}
+        <h1 className="serif">{chapter.label}</h1>
+        {/* B1：当前月读「现在」，翻回去的历史月份读「当时」（monthAgeQualifier，lib/time-signature.ts）。 */}
+        {ageLine ? <p className={isPrebirth ? "chapter-age chapter-age--prebirth" : "chapter-age"}>{ageLine}</p> : null}
+      </div>
       {summary?.summary ? <SnapshotSummary text={summary.summary} className="chapter-summary serif" /> : null}
       {!summary && composition.narration ? <p className="chapter-narration serif">{composition.narration}</p> : null}
       {/* No standfirst any more: 「这个月记下 N 天。」 was a count standing in for the month (原则三,
@@ -154,7 +162,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         {/* Week jump nav — only when the month has more than one week of content */}
         {weekCount > 1 ? <nav className="month-jump" aria-label="跳到这个月的某一段">
           {weeks.map((wk, wi) => {
-            const [yr, mo] = timelineMoments[0].day.split("-");
+            const [, mo] = timelineMoments[0].day.split("-");
             const [from, to] = wk.label.split(" – ").map((s) => s.replace(" 日", ""));
             const label = `第 ${wi + 1} 周 · ${Number(mo)} 月 ${from}-${to} 日`;
             return <a key={wk.id} href={`#${wk.id}`}>{label}</a>;
@@ -165,11 +173,11 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
           <h2 id="timeline-title" className="section-mark">这个月</h2>
           {weeks.map((wk, wi) => <div className="month-week" id={wk.id} key={wk.id}>
             {weekCount > 1 ? <p className="week-mark">{(() => {
-              const [yr, mo] = timelineMoments[0].day.split("-");
+              const [, mo] = timelineMoments[0].day.split("-");
               const [from, to] = wk.label.split(" – ").map((s) => s.replace(" 日", ""));
               return `第 ${wi + 1} 周 · ${Number(mo)} 月 ${from}-${to} 日`;
             })()}</p> : null}
-            {wk.entries.map((moment, localIndex) => {
+            {wk.entries.map((moment) => {
               // Find the global index for priority (first of entire timeline = priority)
               const globalIndex = timelineMoments.indexOf(moment);
               const prevMoment = timelineMoments[globalIndex - 1];

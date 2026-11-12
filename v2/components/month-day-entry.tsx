@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DayHead } from "@/components/day-head";
+import { dayLabel } from "@/components/day-head";
 import { DayPhotos } from "@/components/day-photos";
 import type { TimelineDay } from "@/lib/month-timeline";
 
@@ -22,14 +22,25 @@ import type { TimelineDay } from "@/lib/month-timeline";
 //
 // No "use client": this renders on the server for the first week, and inside MonthTimeline (a client
 // component) for every week loaded after it.
-export function MonthDayEntry({ entry, year, monthAgeLabel }: {
+export function MonthDayEntry({ entry, year, monthAgeLabel: _monthAgeLabel }: {
   entry: TimelineDay;
   year: string;
   monthAgeLabel?: string;
 }) {
+  const isPrebirth = Boolean(entry.ageLabel?.startsWith("出生前"));
+  const ageText = entry.ageLabel
+    ? (/^(当时|出生)/.test(entry.ageLabel) ? entry.ageLabel : `当时 ${entry.ageLabel}`)
+    : undefined;
+
   return (
     <article id={`day-${entry.day}`} className={entry.lead ? "month-moment moment-day-entry moment-day-lead" : "month-moment moment-day-entry"}>
-      <DayHead day={entry.day} dateLabel={entry.dateLabel} ageLabel={entry.ageLabel} monthAgeLabel={monthAgeLabel} year={year} />
+      <div className="day-entry-head">
+        <p className={isPrebirth ? "month-day-date month-day-date--prebirth" : "month-day-date"}>
+          <time dateTime={entry.day}>{dayLabel(entry.dateLabel, year)}</time>
+          {ageText ? <span>{ageText}</span> : null}
+        </p>
+        {entry.milestone ? <span className="day-milestone-badge">{entry.milestone.badge}</span> : null}
+      </div>
       <div className="moment-body">
         {entry.title ? <h3 className="serif day-entry-title">{entry.title}</h3> : null}
         {/* Paragraphs are paragraphs: the browser wraps, at 390px and at 1280px alike. */}

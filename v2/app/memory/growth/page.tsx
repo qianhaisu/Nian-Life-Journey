@@ -9,6 +9,7 @@ import { MemoryReadingMode } from "@/components/memory-reading-mode";
 import { ReadingEssay } from "@/components/reading-essays";
 import { Photo } from "@/components/photo";
 import "../reading.css";
+import "../memory-modern.css";
 
 export const metadata: Metadata = { title: "怎样慢慢长大" };
 const chapterTitles: Record<GrowthCategory, string> = {

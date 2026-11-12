@@ -1,886 +1,1940 @@
-/* 首页（2026-09-16 改版）。整页只有两块：一段回忆，和每周提醒。
-
-   作用域：除了播放器和 .visually-hidden，所有规则都收在 .home-v2 里，其他页面的版式与字体
-   一个像素都不变。播放器（.memory-player）由 createPortal 挂到 <body> 上，**不在 .home-v2 里面**，
-   所以它的规则必须写在顶层——这不是疏忽，是 portal 的必然结果。
-
-   字体（用户 2026-09-16 第 3 条）：
-   - 中文标题与短叙事配文 —— 霞鹜文楷常规字重（自托管，见 app/fonts-wenkai.css）。
-     只用 400：中文楷体的层级来自字号、颜色和留白，不来自合成粗体。
-   - 提醒、控件、导航 —— 系统黑体（苹方 / 思源黑体 / 雅黑）。它们是"要读清楚的功能文字"，
-     楷体在小字号上辨识度不如黑体，这一条在手机上尤其明显。
-   - 不动品牌标题：.site-header 在 .home-v2 之外，「年 + Life is about a dream」原样保留。 */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Nianlife V2 — 首页样式（Modular Canvas · 模块化生活画布）
+   设计语言：Amie.so / Apple Journal / Retro.app 日光画布与同心圆角 Bento 系统
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .home-v2 {
-  /* 拉丁与数字先被 Nunito 接住（它带 unicode-range），汉字落到文楷上。
-     这个顺序 2026-09-16 用真浏览器验过，别凭直觉改：页面加载时实际请求了
-     lxgwwenkai-regular-subset-117 / 118（正好是题签「他说了打开」那几个字所在的分片），
-     document.fonts 里 6 个文楷 face 状态是 loaded——**汉字确实走到了文楷这一层**。
-     中途我一度以为 next/font 生成的 `Nunito Fallback`（local("Arial")、不带 unicode-range）
-     会把汉字截住，于是把文楷提到最前面；那个判断是错的，已经改回来——提到最前面会顺带把
-     拉丁字母也从 Nunito 抢过去，而这里并不需要。
-     顺带记一条教训：**用字宽做字体探针对中文无效**，任何中文字体都是一字一 em，
-     量出来永远一样宽；要证明字体有没有生效，看 woff2 请求和 document.fonts，不看宽度。 */
-  --home-serif: var(--font-nunito, "Nunito"), "LXGW WenKai", "Songti SC", "Noto Serif SC", serif;
-  --home-sans: var(--font-nunito, "Nunito"), -apple-system, "PingFang SC", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-  /* 实测对比度（对纸底 #F9F6F0）：ink 13.6:1，muted 5.4:1，accent 4.9:1，三项都过 AA 正文。 */
-  --home-ink: #282621;
-  --home-muted: #6B6860;
-  /* 2026-09-17：这个值现在也是顶部「年」logo 的填充色（app/globals.css 的 --brand-accent，
-     唯一定义处），两边引用同一个变量，不在这里重复写字面值——Teddy 要求两处「换成完全同一种」。 */
-  --home-accent: var(--brand-accent, #A85D43);
-  --home-line: #E4DDD4;
-  color: var(--home-ink);
-  font-family: var(--home-sans);
-  font-size: 16px;
-  line-height: 1.75;
+  --canvas-bg: var(--color-bg, #F3F5F9);
+  --card-bg: var(--color-surface, #FFFFFF);
+  --ink-strong: var(--color-primary, #0F172A);
+  --ink-body: var(--color-text, #334155);
+  --ink-soft: var(--color-muted, #64748B);
+  --cobalt: var(--brand-accent, #2563EB);
+  --cobalt-ink: #1D4ED8;
+  --cobalt-tint: var(--tint-blue, #EDF4FF);
+  --lavender-tint: var(--tint-lavender, #F4F0FF);
+  --lavender-ink: #5B21B6;
+  --peach-tint: var(--tint-peach, #FFF4EE);
+  --peach-ink: #9A3412;
+  --mint-tint: var(--tint-mint, #ECFDF5);
+  --mint-ink: var(--accent-mint, #047857);
+  --card-border: var(--hairline, rgba(15, 23, 42, 0.06));
+  --card-border-hover: rgba(37, 99, 235, 0.22);
+  --card-radius: var(--r-card, 26px);
+  --inner-radius: var(--r-media, 16px);
+  --card-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.03),
+    0 10px 28px -6px rgba(15, 23, 42, 0.05);
+  --card-shadow-hover:
+    0 4px 12px rgba(15, 23, 42, 0.05),
+    0 20px 38px -10px rgba(15, 23, 42, 0.10);
+  --spring: var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1));
+
+  min-height: 100%;
+  background: var(--canvas-bg);
+  color: var(--ink-strong);
+  font-family: var(--font-body);
 }
 
-.home-sheet {
-  width: min(880px, calc(100% - 32px));
+.home-canvas {
+  width: min(1340px, 100%);
   margin-inline: auto;
-  padding: clamp(20px, 4vw, 36px) 0 clamp(48px, 8vw, 72px);
+  padding: 20px 16px 64px;
 }
 
-/* 这一页的问候，也是唯一的 h1。手机 28px 起，不做概念图里那种压满屏的巨号字。 */
+/* ── 1. 顶部双时钟问候与近况回答 ────────────────────────────────────────── */
+
+.canvas-greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.greeting-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--cobalt-tint);
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  color: var(--cobalt-ink);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.greeting-kicker-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cobalt);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
 .home-greeting {
-  margin: 0 0 clamp(18px, 3vw, 26px);
-  font-family: var(--home-serif);
-  /* 2026-09-20 Teddy：「最近怎么样，」换行「张年」，这句话字体再大一些。手机原来是 28–38px 一行，
-     现在拆成两行、放到 36–46px：「最近怎么样，」6 个字在 390 宽的版心（358px）里 46px 也只占 276px。 */
-  font-size: clamp(36px, 10.4vw, 46px);
-  font-weight: 400;
-  line-height: 1.22;
-  letter-spacing: 0;
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: var(--font-heading);
+  font-size: clamp(28px, 6.2vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
 }
-.home-greeting .greeting-ask { display: block; }
-/* 「张年」的颜色和记忆页「往回翻翻，张年。」里的「张年」用同一个变量（--color-accent，
-   globals.css :root 定义，两页共享）——Teddy 2026-09-17 要求两处一致。
-   选择器只落在 .home-greeting 内部的 .keep-whole，不动全局 .keep-whole（globals.css 里
-   那个只管不断行，home-lead.tsx 另一处也在用，改了那个会连带影响不相关的地方）。 */
-.home-greeting .keep-whole { color: var(--color-accent); }
 
-/* 标题下面那句答案（原则一）。比标题小、比正文沉，是"被回答了"的语气，不是又一个标题。
-   月份链接另起一行、降一号字、去掉下划线——它是出处，不是号召点击的按钮，
-   不能把首屏第一个视觉重音从那句话本身抢走。 */
+.greeting-ask {
+  color: var(--ink-strong);
+}
+
 .home-answer {
-  margin: calc(-1 * clamp(8px, 1.4vw, 12px)) 0 clamp(20px, 3.4vw, 30px);
-  /* 用页面上已有的黑体（提醒、控件本来就用它；中文走系统字体，不下载任何字体文件）。
-     原来用文楷：新增这一句多出几十个不同的汉字，散落进更多文楷分片，首页字体 404KB→649KB（+61%），
-     Teddy 2026-09-20 裁定「答案句改用页面已有的字体」。标题仍是文楷。 */
-  font-family: var(--home-sans);
-  font-size: clamp(17px, 4.1vw, 20px);
-  line-height: 1.7;
-  color: var(--home-ink);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  max-width: 760px;
+  margin: 2px 0 0;
+  color: var(--ink-body);
+  font-size: clamp(15px, 3.8vw, 16.5px);
+  line-height: 1.65;
 }
+
+.home-answer-core {
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
 .home-answer-source {
-  display: block;
-  margin-top: 6px;
-  font-size: clamp(13px, 3.1vw, 14px);
-  line-height: 1.5;
-  color: var(--home-muted);
-  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  color: var(--cobalt-ink);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    transform 240ms var(--spring);
 }
-.home-answer-source:hover { color: var(--home-accent); }
 
-/* 核心词：句子里被「」框起来的词和外语词（判定规则见 lib/home-answer.ts splitAnswerParts）。
-   只上颜色（陶土色），不加底色、不加下划线、不加粗：Teddy 2026-09-19 明确不要下划线效果；
-   NianRound 也只有 Regular 一个字重，合成粗体会把圆头笔画糊在一起（app/fonts.css 顶部记录）。 */
-/* nowrap：核心词整体不断行。收窄的文字栏里「「粥粥，粥粥」」曾被劈成「「粥粥，粥 / 粥」」
-   （2026-09-19 私有站看到）。核心词都很短（引号里的一个词、一个外语词），不会撑出栏。 */
-.home-answer-core { color: var(--home-accent); white-space: nowrap; }
+@media (hover: hover) {
+  .home-answer-source:hover {
+    background: var(--cobalt-tint);
+    border-color: var(--card-border-hover);
+    transform: translateY(-1px);
+  }
+}
 
-/* ── 一、一段回忆 ───────────────────────────────────────────────────────────── */
+/* ── 2. 12 列 Bento 首屏马赛克 ───────────────────────────────────────────── */
 
-.home-memory { margin: 0 0 clamp(44px, 7vw, 64px); }
+.bento-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
 
-.memory-stage { position: relative; }
+.bento-tile {
+  position: relative;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  transition:
+    transform 320ms var(--spring),
+    box-shadow 320ms var(--spring),
+    border-color 240ms ease;
+}
 
-/* 照片舞台。竖照占绝大多数（生产实测约 85%），所以按 4:5 立起来，并且给一个视口高度的上限，
-   保证题签和日期在手机第一屏里还读得到——2026-09-16 那次「题签被顶到底栏下面」就是这条没做。 */
+.bento-tile.tile-film {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: linear-gradient(165deg, #0F172A 0%, #162036 100%);
+  color: #FFFFFF;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18), 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+@media (hover: hover) {
+  a.bento-tile:hover {
+    transform: translateY(-3px);
+    border-color: var(--card-border-hover);
+    box-shadow: var(--card-shadow-hover);
+  }
+  a.bento-tile.tile-film:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 20px 42px rgba(15, 23, 42, 0.24), 0 4px 12px rgba(15, 23, 42, 0.14);
+  }
+}
+
+a.bento-tile:active {
+  transform: scale(0.992);
+}
+
+.tile-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+}
+
+.tile-label--lavender {
+  color: var(--lavender-ink);
+}
+
+.tile-label--peach {
+  color: var(--peach-ink);
+}
+
+/* ── Tile 1：交互回忆主视觉卡（HomeMemory） ──────────────────────────────── */
+
+.home-memory {
+  position: relative;
+  border-radius: var(--card-radius);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #0F172A;
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.04),
+    0 16px 36px -8px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.memory-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* 注意：保留 aspect-ratio: 4 / 5 与 max-height: min(72svh, 620px)，守住手机首屏同时看见照片与题签的底线 */
 .memory-frames {
   position: relative;
+  width: 100%;
   aspect-ratio: 4 / 5;
   max-height: min(72svh, 620px);
   overflow: hidden;
-  border-radius: 20px;
-  background: var(--paper-dark);
+  border-radius: inherit;
+  background: #0F172A;
+  cursor: pointer;
 }
-.memory-frames img {
+
+.memory-backdrop {
+  position: absolute;
+  inset: -8%;
+  width: 116%;
+  height: 116%;
+  object-fit: cover;
+  filter: blur(28px) saturate(118%) brightness(0.68);
+  opacity: 0;
+  transition: opacity 900ms ease;
+  pointer-events: none;
+}
+
+.memory-backdrop.is-current {
+  opacity: 0.72;
+}
+
+.memory-frame {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  /* 完整展示已复核的照片，不裁脸（90230d6）。照片没盖到的地方由下面的虚化底垫满，
-     所以运镜只往上推（scale ≥ 1），不再缩小——缩到 .92 会在四周露出一圈底色，看起来像边框
-     （Teddy 2026-09-25：「不是填充的，有边框不好看」）。 */
-  object-fit: contain;
-  object-position: 50% 50%;
-  opacity: 0;
-  transition: opacity 800ms ease-in-out;
-  transform: scale(1);
-}
-/* 虚化底：同一张照片铺满、放大、糊开，只负责把画框填满。它不动，只跟着换片淡入淡出。 */
-.memory-frames img.memory-backdrop {
   object-fit: cover;
-  object-position: 50% 40%;
-  transform: scale(1.18);
-  filter: blur(22px) saturate(1.15) brightness(.96);
-  animation: none;
+  object-position: 50% 30%;
+  opacity: 0;
+  transition: opacity 900ms ease;
+  will-change: transform, opacity;
 }
-.memory-frames img.memory-backdrop.is-current { opacity: 1; }
-/* Ken Burns（Teddy 2026-09-16 裁定：做到明显，8%）。
-   Apple 的回忆把静态照片做成"动起来"靠的就是这个——缓慢推拉 + 交叉淡化，
-   而我第一版是纯淡入淡出，一点运镜都没有，这是"质感差太远"里最直接的一条。
-   只动 transform（合成层，不触发重排），和站点既有动效规范一致。
-   方向按序号交替：偶数张推近、奇数张拉远，连着看不会一直往一个方向漂。 */
-.memory-frame.is-current,
-.memory-player-frame.is-current {
+
+.memory-frame.is-current {
   opacity: 1;
-  animation: memoryKenBurnsIn calc(var(--memory-slide-ms, 5000ms) + 900ms) linear both;
 }
 
-/* 四种运镜轮着来（Teddy 2026-09-17 第 6 条：「切换图片时多点效果变化」）。
-   之前只有推近/拉远两种交替，连看十二张仍然像同一个动作在重复。
-
-   **按 data-fx 选，不按 nth-child 选。** 一开始写的是 nth-child(4n+2) 那一套，
-   它依赖「<img> 正好是舞台的第 n 个子元素」——播放器改成多图版式（一屏放 2–3 张）之后，
-   照片被包进了 .memory-player-scene，nth-child 立刻错位。运镜是第几张的属性，
-   不是 DOM 位置的属性，所以让组件把序号直接写在 data-fx 上。 */
-.memory-frame.is-current[data-fx="1"],
-.memory-player-frame.is-current[data-fx="1"] { animation-name: memoryPanRight; }
-.memory-frame.is-current[data-fx="2"],
-.memory-player-frame.is-current[data-fx="2"] { animation-name: memoryKenBurnsOut; }
-.memory-frame.is-current[data-fx="3"],
-.memory-player-frame.is-current[data-fx="3"] { animation-name: memoryRiseUp; }
-
-/* 交叉淡化的时长也错开一点：全部 800ms 会让每一次切换像节拍器。 */
-.memory-frames img[data-fx="1"] { transition-duration: 1150ms; }
-.memory-frames img[data-fx="3"] { transition-duration: 650ms; }
-
-/* 推拉幅度仍是 Teddy 2026-09-16 定的约 8%，只是从 1 往上推，不再从 .88 起步。 */
-@keyframes memoryKenBurnsIn {
+@keyframes memory-ken-0 {
   from { transform: scale(1) translate3d(0, 0, 0); }
-  to   { transform: scale(1.08) translate3d(-1.2%, -1.4%, 0); }
+  to { transform: scale(1.065) translate3d(-1.2%, -1%, 0); }
 }
-@keyframes memoryKenBurnsOut {
-  from { transform: scale(1.08) translate3d(1.2%, 1%, 0); }
-  to   { transform: scale(1) translate3d(0, 0, 0); }
+@keyframes memory-ken-1 {
+  from { transform: scale(1.06) translate3d(1.2%, 0, 0); }
+  to { transform: scale(1) translate3d(-0.6%, 0.8%, 0); }
 }
-/* 横移：尺度不变，只平移——和推拉是两种明显不同的感觉。 */
-@keyframes memoryPanRight {
-  from { transform: scale(1.06) translate3d(-2%, 0, 0); }
-  to   { transform: scale(1.06) translate3d(2%, -0.5%, 0); }
+@keyframes memory-ken-2 {
+  from { transform: scale(1) translate3d(0, 1%, 0); }
+  to { transform: scale(1.065) translate3d(1%, -1%, 0); }
 }
-/* 上升：画面缓缓抬起来一点，同时轻微推近。 */
-@keyframes memoryRiseUp {
-  from { transform: scale(1.01) translate3d(0, 2%, 0); }
-  to   { transform: scale(1.08) translate3d(0, -1.2%, 0); }
+@keyframes memory-ken-3 {
+  from { transform: scale(1.055) translate3d(-1%, -0.8%, 0); }
+  to { transform: scale(1) translate3d(0.8%, 0.6%, 0); }
 }
 
-/* 只有压字的那一条给局部遮罩，照片本身不加任何全局滤镜（任务书三：照片保持原色）。 */
+.memory-frame.is-current[data-fx="0"],
+.memory-player-frame.is-current[data-fx="0"] {
+  animation: memory-ken-0 calc(var(--memory-slide-ms, 5000ms) + 900ms) linear forwards;
+}
+.memory-frame.is-current[data-fx="1"],
+.memory-player-frame.is-current[data-fx="1"] {
+  animation: memory-ken-1 calc(var(--memory-slide-ms, 5000ms) + 900ms) linear forwards;
+}
+.memory-frame.is-current[data-fx="2"],
+.memory-player-frame.is-current[data-fx="2"] {
+  animation: memory-ken-2 calc(var(--memory-slide-ms, 5000ms) + 900ms) linear forwards;
+}
+.memory-frame.is-current[data-fx="3"],
+.memory-player-frame.is-current[data-fx="3"] {
+  animation: memory-ken-3 calc(var(--memory-slide-ms, 5000ms) + 900ms) linear forwards;
+}
+
+.memory-single-photo {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.memory-single-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 30%;
+}
+
 .memory-scrim {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 46%;
-  background: linear-gradient(to top, rgb(20 18 16 / .62), rgb(20 18 16 / .28) 46%, transparent);
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(9, 13, 22, 0.38) 0%, rgba(9, 13, 22, 0) 26%),
+    linear-gradient(0deg, rgba(9, 13, 22, 0.82) 0%, rgba(9, 13, 22, 0.36) 34%, rgba(9, 13, 22, 0) 62%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.memory-top-bar {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
   pointer-events: none;
 }
 
-/* 播放入口：只有图标，没有「配乐播放」四个字（用户 2026-09-16 第 2 条）。
-   56px 的圆，远超 44px 的触达下限；焦点环走站点全局那一支。 */
-/* 播放键放**右下角**（Teddy 2026-09-17 第 1 条：「播放按钮放右下角 不够精致」）。
-   先说不能放哪：**不能放正中**——2026-09-16 真机截图（390×844）实测，居中时这个圆正好压在
-   张年的嘴和下巴上；完整展示时人脸的位置随照片变化。所以正中和上半部都是不该放东西的地方，右下角是这类竖构图里最安全的一块。
-
-   「精致」落到三处具体改动，不是换个说法：
-   1. 实心白圆 -> 毛玻璃。白饼盖在照片上像个贴纸；半透明 + backdrop-filter 让它浮在画面上，
-      照片的颜色透上来，这是 iOS 控件的做法。
-   2. 56px -> 52px，阴影从 20px/.28 收到 14px/.20——它是次要控件，不该比题签还抢眼。
-   3. 加一圈 1px 的高光描边，在浅色照片上才不会糊成一团。
-   题签与日期因此右移让位（见 .memory-title / .memory-caption-line 的 right 值）。 */
-.memory-play {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  display: grid;
-  width: 52px;
-  height: 52px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid rgb(255 255 255 / .38);
-  border-radius: 50%;
-  background: rgb(255 255 255 / .18);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  color: #fff;
-  box-shadow: 0 4px 14px rgb(20 18 16 / .20);
-  transition: transform 200ms var(--ease-out), background-color 200ms var(--ease-out);
-}
-.memory-play svg { width: 24px; height: 24px; margin-left: 3px; /* 三角形视觉居中 */ }
-@media (hover: hover) { .memory-play:hover { transform: scale(1.06); background: rgb(255 255 255 / .3); } }
-.memory-play:active { transform: scale(.96); }
-
-/* right 给播放键让位：播放键占右下角 14px + 52px，再留 12px 呼吸，所以文字在 78px 处收住。
-   不让位的话题签会从播放键底下穿过去。 */
 .memory-caption-line {
-  position: absolute;
-  right: 78px;
-  bottom: 52px;
-  left: 20px;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
   margin: 0;
-  color: rgb(255 255 255 / .86);
-  font-size: 13px;
-  letter-spacing: .02em;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  box-shadow: 0 4px 14px rgba(9, 13, 22, 0.18);
 }
-.memory-caption-line time { color: inherit; font-weight: 400; }
+
+.memory-switch {
+  pointer-events: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 15px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  color: #FFFFFF;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(9, 13, 22, 0.18);
+  transition: background-color 200ms ease, transform 220ms var(--spring);
+}
+
+@media (hover: hover) {
+  .memory-switch:hover {
+    background: rgba(15, 23, 42, 0.72);
+    transform: translateY(-1px);
+  }
+}
+
+.memory-colophon {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  pointer-events: none;
+}
+
+.memory-colophon-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
 
 .memory-title {
-  position: absolute;
-  right: 78px; /* 同上：给右下角的播放键让位 */
-  bottom: 18px;
-  left: 20px;
   margin: 0;
-  color: #fff;
-  font-family: var(--home-serif);
-  font-size: clamp(20px, 5.2vw, 26px);
-  font-weight: 400;
-  line-height: 1.4;
-  text-shadow: 0 1px 12px rgb(20 18 16 / .34);
+  color: #FFFFFF;
+  font-family: var(--font-heading);
+  font-size: clamp(21px, 5vw, 25px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.28;
+  text-shadow: 0 2px 12px rgba(9, 13, 22, 0.36);
 }
 
-/* 照片下面原本有一排细横线当进度点，2026-09-17 按 Teddy 第 5 条去掉了
-   （「去掉图片轮播时最下方的横线间隔」）。它本来是想说明"这一段有几个瞬间"，
-   但照片本身在动，那排线只是多一道横向切分，把照片和下面的操作行隔开了。
-   去掉之后照片直接接到「读读这一天 / 换一段」那一行，整块更连贯。 */
+.memory-slide-note {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
-/* 照片下面那一行：左边「读读这一天」，右边「换一段」。
-   「换一段」只在真的不止一段时才渲染（components/home-memory.tsx），所以这一行有时只有左边一项。 */
 .memory-actions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  margin: 12px 0 0;
+  gap: 10px;
+  margin-top: 2px;
+  pointer-events: auto;
 }
+
 .memory-read {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   min-height: 44px;
-  color: var(--home-accent);
-  font-size: 15px;
+  padding: 0 15px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background-color 200ms ease, transform 220ms var(--spring);
 }
-@media (hover: hover) { .memory-read:hover { color: var(--home-ink); } }
-/* 「换一段」：一枚安静的描边胶囊。它是这一页上除播放键之外唯一的控件——
-   做成实心会和播放键抢主角，做成纯文字又不像能按；描边是这两者之间那一档。 */
-.memory-switch {
+
+@media (hover: hover) {
+  .memory-read:hover {
+    background: rgba(255, 255, 255, 0.28);
+    transform: translateY(-1px);
+  }
+}
+
+.memory-play {
+  pointer-events: auto;
+  flex-shrink: 0;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  color: #FFFFFF;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(9, 13, 22, 0.32);
+  transition: transform 240ms var(--spring), background-color 200ms ease;
+}
+
+.memory-play svg {
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+}
+
+@media (hover: hover) {
+  .memory-play:hover {
+    background: rgba(255, 255, 255, 0.36);
+    transform: scale(1.06);
+  }
+}
+
+.memory-play:active {
+  transform: scale(0.95);
+}
+
+/* 无图降级或空档案状态 */
+.home-memory--text-only {
+  background: var(--card-bg);
+  border-color: var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+.memory-fallback-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  height: 100%;
+  min-height: 260px;
+  padding: 28px;
+}
+
+.memory-caption-line--ink {
+  align-self: flex-start;
+  background: var(--cobalt-tint);
+  border-color: rgba(37, 99, 235, 0.12);
+  color: var(--cobalt-ink);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.memory-title--ink {
+  color: var(--ink-strong);
+  text-shadow: none;
+}
+
+.memory-read--ink {
+  background: var(--cobalt-tint);
+  border-color: rgba(37, 99, 235, 0.16);
+  color: var(--cobalt-ink);
+  backdrop-filter: none;
+}
+
+.tile-lead-empty {
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+  padding: 32px;
+}
+
+.home-nothing {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* ── Tile 2：最新日切片卡（LatestDayTile） ───────────────────────────────── */
+
+.tile-latest-day {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding: 20px;
+  background: var(--card-bg);
+}
+
+.tile-latest-day--with-photo {
+  grid-template-columns: 118px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.day-slice-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 148px;
+  border-radius: var(--inner-radius);
+  overflow: hidden;
+  background: #E2E8F0;
+}
+
+.day-slice-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 25%;
+  transition: transform 480ms var(--spring);
+}
+
+@media (hover: hover) {
+  .tile-latest-day:hover .day-slice-thumb img {
+    transform: scale(1.04);
+  }
+}
+
+.day-slice-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.day-slice-badge {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-height: 44px;
-  padding: 8px 16px;
-  border: 1px solid var(--home-line);
+  flex-wrap: wrap;
+  padding: 4px 11px;
   border-radius: 999px;
-  background: none;
-  color: var(--home-muted);
-  font: inherit;
+  background: var(--cobalt-tint);
+  color: var(--cobalt-ink);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.day-slice-title {
+  color: var(--ink-strong);
+  font-family: var(--font-heading);
+  font-size: 18.5px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.32;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.day-slice-excerpt {
+  color: var(--ink-body);
   font-size: 14px;
-  transition: border-color 180ms var(--ease-out), color 180ms var(--ease-out);
-}
-@media (hover: hover) { .memory-switch:hover { border-color: var(--home-accent); color: var(--home-ink); } }
-.memory-switch:active { transform: scale(.98); }
-/* 没有音轨时占住静音键的位置，标题才不会从居中偏出去。 */
-.memory-player-spacer { display: block; width: 44px; height: 44px; flex: none; }
-
-/* 降级：没有合格回忆时用已有的真实封面与真实文字，不画空框、不写「暂无」。 */
-.home-memory--single .memory-single-photo { display: block; border-radius: 20px; overflow: hidden; background: var(--paper-dark); }
-.home-memory--single .memory-single-photo img { display: block; width: 100%; height: auto; }
-.home-memory--single .memory-caption-line { position: static; margin: 12px 0 0; color: var(--home-muted); }
-.home-memory--single .memory-title { position: static; margin: 6px 0 0; color: var(--home-ink); text-shadow: none; }
-.home-nothing { max-width: 34em; margin: 24px 0 0; color: var(--home-muted); font-size: 16px; line-height: 1.95; }
-
-/* ── 二、每周提醒 ───────────────────────────────────────────────────────────── */
-
-/* 2026-09-19 全站验收，原则四 + peak-end：功能一个字没动（Teddy 2026-09-16 明确要的），
-   但它是首页最后一块地方——苏静是来看儿子的，页面不该以一份行政清单收尾、还跟那段回忆
-   平起平坐。所以这里只改分量：跟上面拉开更大的距离，标题从正文级的衬线标题降成一行安静的
-   小字，读起来是「附带一提」，不是第二章。触达区（.weekly-label 的 44px）一格没动。 */
-.weekly { margin: 0; padding-top: clamp(40px, 6.5vw, 56px); border-top: 1px solid var(--home-line); }
-
-.weekly-heading {
-  margin: 0 0 12px;
-  font-family: var(--home-sans);
-  font-size: clamp(13px, 3.1vw, 14px);
-  font-weight: 400;
-  line-height: 1.5;
-  letter-spacing: 0.08em;
-  color: var(--home-muted);
-}
-
-.weekly-list { margin: 0; padding: 0; list-style: none; }
-.weekly-item + .weekly-item { margin-top: 2px; }
-
-/* 一行 = 复选框 + 标签。两者是一个整体的点击区；「查看来源」是它下面另一个独立控件。 */
-.weekly-line { display: flex; align-items: flex-start; gap: 12px; }
-
-/* 原生 checkbox，只放大并换成陶土色，不自绘——自绘控件在读屏和移动端辅助功能上从来不划算。
-   44px 的触达由 .weekly-label 的 min-height 一起撑起来（勾选框本身是 22px 的视觉尺寸）。 */
-.weekly-check {
-  width: 22px;
-  height: 22px;
-  flex: none;
-  margin: 11px 0 0;
-  accent-color: var(--home-accent);
-}
-
-.weekly-label {
-  min-height: 44px;
-  padding: 10px 0;
-  color: var(--home-ink);
-  font-size: 16px;
   line-height: 1.6;
-  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.weekly-title { font-size: 16px; }
-.weekly-when { color: var(--home-muted); font-size: 14px; }
-.weekly-when time { color: inherit; font-weight: 400; }
-.weekly-status { color: var(--home-accent); font-size: 14px; }
 
-/* 勾上：加删除线、把颜色压淡一档，但**仍然读得清**，而且**留在原位**——
-   立刻隐藏或跳走就没法取消勾选了（用户 2026-09-16 第 5 条）。 */
-.weekly-item.is-checked .weekly-title {
-  color: var(--home-muted);
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-  text-decoration-color: var(--home-muted);
-}
-.weekly-item.is-checked .weekly-when,
-.weekly-item.is-checked .weekly-status { color: #8a857c; }
-
-/* 已完成的关键事项（2026-09-17 第 5 条）：一句事实，不是复选框——用一个静态的勾号，
-   尺寸和位置比着 .weekly-check 来，行高对得上，但不接受点击、不接受键盘焦点。 */
-.weekly-item--fact .weekly-label { cursor: default; }
-.weekly-fact-mark {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  flex: none;
-  margin: 11px 0 0;
-  place-items: center;
-  color: var(--home-accent);
-  font-size: 14px;
+.day-slice-cta {
+  margin-top: auto;
+  padding-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--cobalt-ink);
+  font-size: 13px;
   font-weight: 700;
 }
 
-/* 查看来源：独立的折叠层，和勾选互不触发。 */
-.weekly-detail { margin: 0 0 4px 34px; }
-.weekly-detail > summary {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--home-muted);
-  font-size: 13px;
-  cursor: pointer;
-  list-style: none;
+/* ── Tile 3：近月成长亮点卡（Soft Lavender） ─────────────────────────────── */
+
+.tile-growth {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px;
+  background: linear-gradient(160deg, var(--lavender-tint) 0%, #FAF8FF 100%);
+  border-color: rgba(109, 40, 217, 0.10);
 }
-.weekly-detail > summary::-webkit-details-marker { display: none; }
-.weekly-detail > summary::after { margin-left: 6px; content: "＋"; font-size: 11px; }
-.weekly-detail[open] > summary::after { content: "－"; }
-.weekly-note { margin: 0 0 8px; color: var(--home-muted); font-size: 14px; line-height: 1.8; }
-.weekly-sources { margin: 0; padding: 0; list-style: none; }
-.weekly-source { padding-left: 10px; border-left: 2px solid var(--home-line); }
-.weekly-source + .weekly-source { margin-top: 10px; }
-.weekly-source-head {
+
+@media (hover: hover) {
+  a.tile-growth:hover {
+    border-color: rgba(109, 40, 217, 0.26);
+  }
+}
+
+.tile-growth-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tile-growth-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tile-growth-clock {
+  color: var(--lavender-ink);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.growth-headline {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.growth-tags {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 7px;
+  gap: 7px;
   margin: 0;
-  color: var(--home-muted);
-  font-size: 12.5px;
+  padding: 0;
+  list-style: none;
 }
-.weekly-source-head > * + *::before { margin-right: 7px; color: var(--home-line); content: "·"; }
-.weekly-source-kind, .weekly-source-role { color: var(--home-accent); }
-.weekly-source-role--unconfirmed { color: var(--home-muted); font-style: italic; }
-.weekly-source-summary { margin: 3px 0 0; color: var(--home-ink); font-size: 14px; line-height: 1.7; }
-.weekly-source-link { margin: 2px 0 0; }
-.weekly-source-link a { display: inline-flex; align-items: center; min-height: 44px; color: var(--home-accent); font-size: 13px; }
 
-.weekly-more { margin-top: 8px; }
+.growth-tag {
+  padding: 5px 11px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(109, 40, 217, 0.12);
+  color: var(--lavender-ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  box-shadow: 0 1px 2px rgba(109, 40, 217, 0.04);
+}
+
+.tile-growth-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--lavender-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── Tile 4：家人的话（Warm Peach） ──────────────────────────────────────── */
+
+.tile-voices {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 20px 22px;
+  background: linear-gradient(160deg, var(--peach-tint) 0%, #FFF9F5 100%);
+  border-color: rgba(194, 65, 12, 0.10);
+}
+
+.tile-voices-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-bubbles {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-height: 48px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(194, 65, 12, 0.10);
+  box-shadow: 0 2px 8px rgba(194, 65, 12, 0.04);
+  transition:
+    transform 220ms var(--spring),
+    border-color 200ms ease,
+    background-color 200ms ease;
+}
+
+@media (hover: hover) {
+  .chat-msg:hover {
+    background: #FFFFFF;
+    border-color: rgba(194, 65, 12, 0.24);
+    transform: translateY(-1px);
+  }
+}
+
+.chat-avatar {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--font-heading);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.chat-avatar--mom {
+  background: #FFEDD5;
+  color: #C2410C;
+}
+.chat-avatar--dad {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+.chat-avatar--teacher {
+  background: #E0E7FF;
+  color: #4338CA;
+}
+.chat-avatar--elder {
+  background: #FEF3C7;
+  color: #B45309;
+}
+.chat-avatar--care {
+  background: #DCFCE7;
+  color: #047857;
+}
+
+.chat-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.chat-text {
+  color: var(--ink-strong);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.chat-meta {
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-meta strong {
+  color: var(--peach-ink);
+  font-weight: 700;
+}
+
+/* ── 3. 通用模块标题行与近期日常（3 列结构化日卡） ──────────────────────── */
+
+.mod-section {
+  margin-top: 44px;
+}
+
+.mod-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.mod-sec-title {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: var(--font-heading);
+  font-size: clamp(20px, 4.6vw, 23px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.mod-sec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  color: var(--cobalt-ink);
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    transform 240ms var(--spring);
+}
+
+@media (hover: hover) {
+  .mod-sec-pill:hover {
+    background: var(--cobalt-tint);
+    border-color: var(--card-border-hover);
+    transform: translateY(-1px);
+  }
+}
+
+.journal-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.j-card {
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  border-radius: 24px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  transition:
+    transform 320ms var(--spring),
+    box-shadow 320ms var(--spring),
+    border-color 240ms ease;
+}
+
+@media (hover: hover) {
+  .j-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--card-border-hover);
+    box-shadow: var(--card-shadow-hover);
+  }
+  .j-card:hover .j-card-photo img {
+    transform: scale(1.035);
+  }
+}
+
+.j-card-photo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3.2;
+  margin-bottom: 15px;
+  border-radius: var(--inner-radius);
+  overflow: hidden;
+  background: #E2E8F0;
+}
+
+.j-card-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 28%;
+  transition: transform 480ms var(--spring);
+}
+
+.j-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.j-card-date {
+  color: var(--ink-strong);
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.j-card-age {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #F1F5F9;
+  color: var(--ink-body);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.j-card-title {
+  margin: 0 0 8px;
+  color: var(--ink-strong);
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+}
+
+.j-card-excerpt {
+  margin: 0;
+  color: var(--ink-body);
+  font-size: 14.5px;
+  line-height: 1.65;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.j-card--text-only {
+  justify-content: flex-start;
+}
+
+.j-card--text-only .j-card-excerpt {
+  flex: 1 1 auto;
+  margin: 4px 0 16px;
+  padding: 18px 20px;
+  border-radius: var(--inner-radius);
+  background: linear-gradient(155deg, #F8FAFC 0%, var(--cobalt-tint) 100%);
+  border: 1px solid rgba(37, 99, 235, 0.10);
+  color: var(--ink-strong);
+  font-size: 14.5px;
+  line-height: 1.75;
+  -webkit-line-clamp: 7;
+}
+
+.j-card-foot {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--cobalt-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.j-card-excerpt + .j-card-foot,
+.j-card-title + .j-card-foot {
+  margin-top: 16px;
+}
+
+/* ── 4. 时间胶囊 · 过去的张年（4 列竖版胶卷回看） ───────────────────────── */
+
+.capsule-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.capsule-card {
+  position: relative;
+  display: block;
+  aspect-ratio: 3 / 3.9;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #0F172A;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: var(--card-shadow);
+  transition:
+    transform 340ms var(--spring),
+    box-shadow 340ms var(--spring);
+}
+
+.capsule-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 25%;
+  transition: transform 520ms var(--spring);
+}
+
+@media (hover: hover) {
+  .capsule-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--card-shadow-hover);
+  }
+  .capsule-card:hover img {
+    transform: scale(1.045);
+  }
+}
+
+.capsule-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(9, 13, 22, 0.18) 0%, rgba(9, 13, 22, 0) 30%),
+    linear-gradient(0deg, rgba(9, 13, 22, 0.84) 0%, rgba(9, 13, 22, 0.28) 42%, rgba(9, 13, 22, 0) 68%);
+  pointer-events: none;
+}
+
+.capsule-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #0F172A;
+  font-size: 11.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  box-shadow: 0 2px 8px rgba(9, 13, 22, 0.16);
+}
+
+.capsule-info {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: #FFFFFF;
+}
+
+.capsule-date {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.capsule-title {
+  color: #FFFFFF;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.32;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 1px 8px rgba(9, 13, 22, 0.35);
+}
+
+/* ── 5. 底部实用双栏（每周提醒 + 旅行足迹） ─────────────────────────────── */
+
+.bottom-widgets {
+  margin-top: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.widget-panel,
+.weekly {
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  padding: 24px;
+}
+
+.widget-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.widget-title-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.widget-title,
+.weekly-heading {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.weekly-heading {
+  margin-bottom: 14px;
+}
+
+.widget-badge {
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.widget-badge--mint {
+  background: var(--mint-tint);
+  color: var(--mint-ink);
+}
+
+.widget-head-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #F8FAFC;
+  border: 1px solid var(--card-border);
+  color: var(--cobalt-ink);
+  font-size: 13px;
+  font-weight: 700;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+@media (hover: hover) {
+  .widget-head-link:hover {
+    background: var(--cobalt-tint);
+    border-color: var(--card-border-hover);
+  }
+}
+
+/* 每周提醒（HomeReminders & HomeHealthReminders） */
+.weekly-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weekly-list + .weekly-list--health,
+.weekly-unconfirmed,
+.weekly-more {
+  margin-top: 14px;
+}
+
+.weekly-unconfirmed > .section-mark {
+  margin: 0 0 8px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.weekly-item {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #F8FAFC;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.weekly-item.is-checked {
+  background: #F8FAFC;
+  opacity: 0.72;
+}
+
+.weekly-item.is-checked .weekly-title {
+  text-decoration: line-through;
+  color: var(--ink-soft);
+}
+
+.weekly-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.weekly-check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin: 11px 0 0;
+  accent-color: var(--cobalt);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.weekly-fact-mark {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-top: 11px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--mint-tint);
+  color: var(--mint-ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.weekly-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  color: var(--ink-strong);
+  font-size: 14.5px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.weekly-item--fact .weekly-label {
+  cursor: default;
+}
+
+.weekly-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.weekly-kind--life {
+  background: var(--cobalt-tint);
+  color: var(--cobalt-ink);
+}
+
+.weekly-kind--health {
+  background: #FEF2F2;
+  color: #B91C1C;
+}
+
+.kind-cross {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.weekly-title {
+  font-weight: 700;
+  color: var(--ink-strong);
+}
+
+a.weekly-title {
+  text-decoration: underline;
+  text-decoration-color: rgba(185, 28, 28, 0.3);
+  text-underline-offset: 3px;
+}
+
+.weekly-when,
+.weekly-status {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekly-detail {
+  margin-top: 4px;
+  padding-left: 34px;
+}
+
+.weekly-detail > summary,
 .weekly-more > summary {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: var(--home-accent);
-  font-size: 14px;
+  padding: 0 10px;
+  margin-left: -10px;
+  border-radius: 10px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 700;
   cursor: pointer;
+  user-select: none;
+}
+
+@media (hover: hover) {
+  .weekly-detail > summary:hover,
+  .weekly-more > summary:hover {
+    color: var(--cobalt-ink);
+    background: rgba(37, 99, 235, 0.06);
+  }
+}
+
+.weekly-note {
+  margin: 6px 0 8px;
+  color: var(--ink-body);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.weekly-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0 4px;
+  padding: 0;
   list-style: none;
 }
-.weekly-more > summary::-webkit-details-marker { display: none; }
-.weekly-more > summary::after { margin-left: 7px; content: "＋"; }
-.weekly-more[open] > summary::after { content: "－"; }
 
-/* 每周提醒最下方的日期范围（2026-09-17 第 5 条：「小字斜体写上开始结束日期」）。
-   这是给自己核对「看的是哪一段时间」的一句轻量注脚，不是内容，所以比正文小、比正文淡。 */
-.weekly-range { margin: 14px 0 0; color: var(--home-muted); font-size: 12px; font-style: italic; }
-.weekly-range time { color: inherit; font-style: inherit; }
+.weekly-source {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #FFFFFF;
+  border: 1px solid var(--card-border);
+}
 
-/* ── 沉浸播放器（portal 到 <body>，所以不在 .home-v2 作用域里）───────────────── */
+.weekly-source-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0 0 4px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
 
-/* 2026-09-17：Teddy 发了张真的 iPhone 相册回忆播放截图——照片边到边铺满整个屏幕，
-   标题和控件是**浮在照片上面的半透明层**，不是把屏幕切成"标题条 / 照片 / 控件条"三段。
-   我之前只当成一个尺寸 bug 来修（Next.js <Image> 的 fill 模式），但即使 fill 修好了，
-   .memory-player-head/.memory-player-controls 仍然是 flex 布局里占位的实体色块，
-   会把 .memory-player-stage 挤成一个变矮的方框——从 Teddy 手机上看仍然是"上下有黑边"，
-   只是黑边变窄了，不是消失了。
+.weekly-source-kind {
+  color: var(--cobalt-ink);
+  font-weight: 800;
+}
 
-   真正要改的是版式：不再用 flex-column 切三段，改成 stage **铺满整个屏幕**（position:absolute;
-   inset:0），head 和 controls 各自绝对定位悬浮在最上面和最下面，背景从实色改成往透明淡出的
-   渐变（scrim）——这样字和按钮下面能透出照片的颜色，和参考截图里的效果一致。 */
+.weekly-source-role {
+  color: var(--ink-strong);
+  font-weight: 700;
+}
+
+.weekly-source-role--unconfirmed {
+  color: var(--ink-soft);
+}
+
+.weekly-source-summary {
+  margin: 0;
+  color: var(--ink-body);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.weekly-source-link {
+  margin: 4px 0 0;
+}
+
+.weekly-source-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  color: var(--cobalt-ink);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.weekly-range {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-style: italic;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 旅行足迹面板（TravelFootprintCard） */
+.footprint-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.footprint-panel .widget-head {
+  margin-bottom: 0;
+}
+
+.footprint-latest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 64px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: linear-gradient(155deg, #F8FAFC 0%, var(--cobalt-tint) 100%);
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  transition:
+    transform 240ms var(--spring),
+    border-color 200ms ease,
+    box-shadow 240ms var(--spring);
+}
+
+@media (hover: hover) {
+  .footprint-latest:hover {
+    transform: translateY(-2px);
+    border-color: rgba(37, 99, 235, 0.28);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+  }
+}
+
+.footprint-latest-kicker {
+  color: var(--cobalt-ink);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.footprint-latest-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink-strong);
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.footprint-latest-arrow {
+  color: var(--cobalt-ink);
+  font-size: 15px;
+}
+
+.footprint-latest-summary {
+  color: var(--ink-body);
+  font-size: 13.5px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.footprint-cities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.footprint-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 15px;
+  border-radius: 999px;
+  background: #F8FAFC;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  color: var(--ink-body);
+  font-size: 13.5px;
+  font-weight: 700;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 220ms var(--spring);
+}
+
+.footprint-pill.is-latest {
+  background: var(--cobalt-tint);
+  border-color: rgba(37, 99, 235, 0.22);
+  color: var(--cobalt-ink);
+}
+
+@media (hover: hover) {
+  .footprint-pill:hover {
+    background: var(--cobalt-tint);
+    border-color: rgba(37, 99, 235, 0.28);
+    color: var(--cobalt-ink);
+    transform: translateY(-1px);
+  }
+}
+
+/* ── 全屏沉浸回忆剧场（MemoryPlayer Portal） ─────────────────────────────── */
+
 .memory-player {
   position: fixed;
   inset: 0;
-  z-index: 300;
-  background: #14120f;
-  color: #fff;
-  font-family: var(--font-nunito, "Nunito"), -apple-system, "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  z-index: 1200;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #090D16;
+  color: #F8FAFC;
+  font-family: var(--font-body);
   outline: none;
 }
 
 .memory-player-head {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 2;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: max(14px, env(safe-area-inset-top)) 16px 40px;
-  /* 往下淡出的黑色渐变——不是一整条实色，photo 要能从底下透出来。 */
-  background: linear-gradient(to bottom, rgb(0 0 0 / .55), rgb(0 0 0 / .22) 65%, transparent);
-}
-.memory-player-heading { flex: 1; min-width: 0; text-align: center; }
-.memory-player-heading h2 {
-  margin: 0;
-  font-family: var(--font-nunito, "Nunito"), "LXGW WenKai", "Songti SC", serif;
-  font-size: 17px;
-  font-weight: 400;
-  line-height: 1.4;
-}
-.memory-player-heading p { margin: 2px 0 0; color: rgb(255 255 255 / .62); font-size: 13px; }
-.memory-player-heading time { color: inherit; font-weight: 400; }
-
-.memory-player-close, .memory-player-mute {
   display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 12px;
+  padding: max(14px, env(safe-area-inset-top)) 18px 12px;
+  z-index: 2;
+}
+
+.memory-player-close,
+.memory-player-mute {
   width: 44px;
   height: 44px;
-  flex: none;
+  display: grid;
   place-items: center;
-  padding: 0;
-  border: 0;
   border-radius: 50%;
-  background: rgb(255 255 255 / .12);
-  color: #fff;
-  font-size: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 180ms ease;
 }
-.memory-player-close svg, .memory-player-mute svg { width: 22px; height: 22px; }
 
-/* 画面：cover，铺满，允许裁。
-   2026-09-16 的第一版用的是 contain（一寸不裁），代价是竖照上下两条黑边，
-   看起来像个播放器控件而不是一段回忆。Teddy 看过线上截图后裁定：裁。
-   所以这里和首页预览统一成 cover——播放器本来就该是沉浸的那一个。
-   播放器同样完整展示照片，
-   横构图在这个竖长的舞台里会被上下裁，居中裁就容易把脸切掉。 */
-/* 铺满整个屏幕——不再是 head/controls 之间"剩下的那一块"。见上面 .memory-player 的注释。 */
-.memory-player-stage { position: absolute; inset: 0; z-index: 1; }
+.memory-player-close:hover,
+.memory-player-mute:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
 
-/* 一「幕」= 一屏。多数时候一幕就是一张竖照铺满；横照则 2–3 张上下叠起来一起占满一屏
-   （Teddy 2026-09-17 第 7 条：「iPhone 相册有的时候会有三张图片从上到下布满一屏，
-   有的是一张，反正就是多加点变化，结合图片比例」）。
+.memory-player-mute svg {
+  width: 20px;
+  height: 20px;
+}
 
-   为什么按比例分组而不是随机分：把一张竖照压成三分之一屏，人就被切成一条；
-   而一张横照独占竖屏，左右必然裁掉一大半。**横照叠起来、竖照独占，是这两种裁切里
-   各自最少的那一种**——所以这是画幅决定的，不是花样。分组逻辑见 components/home-memory.tsx 的 buildScenes。 */
+.memory-player-spacer {
+  width: 44px;
+  height: 44px;
+}
+
+.memory-player-heading {
+  text-align: center;
+  min-width: 0;
+}
+
+.memory-player-heading h2 {
+  margin: 0;
+  color: #FFFFFF;
+  font-family: var(--font-heading);
+  font-size: clamp(16px, 3.8vw, 19px);
+  font-weight: 800;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.memory-player-heading p {
+  margin: 2px 0 0;
+  color: #94A3B8;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.memory-player-stage {
+  position: relative;
+  width: min(1080px, 100%);
+  height: 100%;
+  margin-inline: auto;
+  overflow: hidden;
+}
+
 .memory-player-scene {
   position: absolute;
   inset: 0;
+  padding: 8px 16px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 10px;
   opacity: 0;
-  transition: opacity 800ms ease-in-out;
   pointer-events: none;
+  transition: opacity 720ms ease;
 }
-.memory-player-scene.is-current { opacity: 1; pointer-events: auto; }
 
-/* 一幕里每张照片各占等分的一条；单张的那一幕自然就是整屏。 */
-.memory-player-scene > * { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.memory-player-scene.is-current {
+  opacity: 1;
+  pointer-events: auto;
+}
 
-.memory-player-stage img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+.memory-player-slot {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #0F172A;
+}
+
+.memory-player-frame {
   object-fit: contain;
-  object-position: 50% 50%;
+  will-change: transform;
 }
-/* 播放器里也要有运镜（Teddy 2026-09-17 第 3 条：「点击播放按钮后没有运镜了，只有没点的时候有」）。
-   这一条之前**确实漏了**：Ken Burns 只挂在 .memory-frame（首页预览）上，
-   播放器这一行原本只有 `opacity: 1`，所以点开之后反而变成了纯淡入淡出的幻灯片——
-   沉浸的那个反而比预览还静。时长同样跟着 --memory-slide-ms 走（由组件传下来）。 */
-/* 具体的运镜规则和首页预览合并在一起写（见上面 .memory-frame.is-current 那一段），
-   免得两处各写一份、改了一处忘了另一处——播放器漏运镜就是这么漏的。 */
+
+.memory-scene-reading {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: rgba(9, 13, 22, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  color: rgba(248, 250, 252, 0.9);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.memory-scene-title {
+  color: #FFFFFF;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.memory-scene-reading a {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 10px;
+  color: #93C5FD;
+  font-weight: 700;
+}
 
 .memory-player-caption {
   position: absolute;
-  right: 24px;
-  /* 悬浮的底部控件条现在盖在照片上而不是把照片往上挤，配文要往上让一段距离，
-     不然会被控件条的渐变压住——留出的量比控件条本身高一些，读起来才松快。 */
-  bottom: calc(112px + env(safe-area-inset-bottom));
-  left: 24px;
-  z-index: 1;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  max-width: min(640px, calc(100% - 32px));
   margin: 0;
-  font-family: var(--font-nunito, "Nunito"), "LXGW WenKai", "Songti SC", serif;
-  font-size: clamp(18px, 4.6vw, 22px);
-  line-height: 1.5;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(9, 13, 22, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 600;
   text-align: center;
-  text-shadow: 0 2px 16px rgb(0 0 0 / .62);
 }
 
 .memory-player-controls {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 28px;
-  padding: 24px 16px max(20px, env(safe-area-inset-bottom));
-  /* 往上淡出的黑色渐变，和顶部 head 是同一个做法，方向相反。 */
-  background: linear-gradient(to top, rgb(0 0 0 / .55), rgb(0 0 0 / .22) 65%, transparent);
+  gap: 18px;
+  padding: 12px 18px max(20px, env(safe-area-inset-bottom));
 }
+
 .memory-player-controls button {
+  width: 48px;
+  height: 48px;
   display: grid;
-  width: 48px;
-  height: 48px;
   place-items: center;
-  padding: 0;
-  border: 0;
   border-radius: 50%;
-  background: none;
-  color: #fff;
-}
-.memory-player-controls button svg { width: 24px; height: 24px; }
-.memory-player-controls button:disabled { opacity: .3; }
-.memory-player-toggle { background: rgb(255 255 255 / .14) !important; width: 60px !important; height: 60px !important; }
-.memory-player-toggle svg { width: 28px; height: 28px; }
-
-/* ── 只给读屏的文字：.visually-hidden 已提到 app/globals.css（月页也要用），这里不再重复定义。 ── */
-
-/* ── 桌面 ──────────────────────────────────────────────────────────────────── */
-@media (min-width: 900px) {
-  /* 桌面端首屏（2026-09-19 Teddy 桌面验收两轮：文字放到图的左边；图文比例照 taito.ai 首页）。
-
-     第一版我只抄了「左文右图」这个骨架，比例是错的：照片做成 568×710 的竖长条、只占宽 39%。
-     taito 实测（1440×900）：右图约 777×721——**占宽 54%、占高 80%、近方形（约 1.08:1）**，
-     左栏约占宽 38%，两者之间一条细竖线；标题与说明字号约 3:1。照片是这一屏的主角，不是配图。
-
-     照片使用 contain 完整展示，并为运镜预留边缘；不以人脸通常在上半部来猜裁切位置。
-     另外给了一个上限：照片列宽 = min(60%, 照片高 × 1.12)。矮屏（720 高）上照片高只有 530，
-     再按 60% 去撑会变成 1.3:1 的扁条、竖照被裁得太狠，所以宽度跟着高度收，多出来的宽度还给文字栏。 */
-  .home-sheet {
-    --home-photo-h: min(calc(100svh - 190px), 860px);
-    --home-gap: clamp(40px, 4vw, 64px);
-    /* 版心宽度**必须和页眉一致**（.header-inner 在 globals.css：min(1400px, calc(100% - 64px))）。
-       Teddy 2026-09-19：「我只是让你调整比例，没让你总宽度加宽」——我上一版擅自放宽到 1680，
-       结果内容左缘在 x≈101、页眉 logo 在 x≈247，右边同理，两边对不齐。改回同一个宽度之后，
-       左栏的左缘就是 logo 的左缘、照片的右缘就是导航的右缘，不用任何额外对齐代码。
-       要改这个宽度，先改页眉，别只改这里。 */
-    width: min(1400px, calc(100% - 64px));
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) min(60%, calc(var(--home-photo-h) * 1.12));
-    column-gap: var(--home-gap);
-    align-items: center;
-    padding-top: clamp(28px, 4vh, 48px);
-  }
-  /* 左栏：垂直居中；右边缘一条细竖线（taito 的分隔），线画在两栏间隙的正中。 */
-  .home-lede { grid-column: 1; position: relative; }
-  .home-lede::after {
-    content: "";
-    position: absolute;
-    top: -8vh;
-    bottom: -8vh;
-    right: calc(var(--home-gap) / -2);
-    width: 1px;
-    background: var(--home-line);
-  }
-  .home-v2 .home-memory { grid-column: 2; margin: 0; }
-  .weekly { grid-column: 1 / -1; margin-top: clamp(48px, 8vh, 96px); }
-
-  /* 字号：taito 标题 60px、说明 20px（3:1）。汉字圆体视觉更重，标题取 clamp(46, 4.3vw, 64)；
-     说明比手机大一档但不再压过标题——上一版 30px 的答案句在变窄的左栏里会折成四行。 */
-  /* 字号：taito 标题 60px。版心收回到和页眉同宽（1400）之后，文字栏在 1920 宽屏上只有约 496px，
-     66px 的「最近怎么样，」装不下、被劈成「最近怎么 / 样，张年」。所以上限收到 60px、用 4.1vw 跟着
-     栏宽走（1024 宽时文字栏只有约 343px，需要能小到 38px）。word-break: keep-all 让 CJK 不在字中间断，
-     只在标点后面断——万一还是装不下，也是「最近怎么样，/ 张年」这种读得通的断法。 */
-  .home-greeting {
-    margin: 0 0 clamp(22px, 3.4vh, 36px);
-    /* 2026-09-20：两行版（「最近怎么样，」/「张年」），字号可以比一行版大得多——只需要装下 6 个字而不是 8 个。
-       文字栏宽度 ≈ 版心 − 照片列 − 间距：1024→343、1280→571、1440→519、1920→496px，
-       所以上限 80px（480 宽）在最窄的 1920 也装得下，1024 用 5.3vw≈54px（326）。 */
-    font-size: clamp(40px, 5.3vw, 80px);
-    line-height: 1.16;
-    word-break: keep-all;
-  }
-  .home-answer {
-    margin: 0;
-    font-size: clamp(22px, 1.85vw, 27px);
-    line-height: 1.7;
-  }
-  .home-answer-source {
-    margin-top: clamp(18px, 2.6vh, 28px);
-    font-size: 15px;
-    letter-spacing: 0.02em;
-  }
-
-  /* 播放器在宽屏上也要收窄，理由和预览一样，但后果更严重：
-     一幕叠两张时，1440px 的屏会把每张压成 1440×450 的长条，
-     竖照在这种格子里会被裁穿人脸。收到和预览同一个宽度，版式才和手机上一致。 */
-  .memory-player-stage { width: min(620px, 100%); margin-inline: auto; }
-  /* 照片：填满照片列、高度取 --home-photo-h（不再是 4:5 的竖长条）。 */
-  .home-v2 .memory-frames {
-    aspect-ratio: auto;
-    width: 100%;
-    height: var(--home-photo-h);
-    max-width: none;
-    max-height: none;
-    margin-inline: 0;
-  }
-  .memory-actions { max-width: none; margin-inline: 0; }
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: background-color 180ms ease, transform 180ms ease;
 }
 
-/* ── 减少动态 ──────────────────────────────────────────────────────────────── */
-/* 全局那条 prefers-reduced-motion 已经把 transition 压到 0.01ms；这里额外把预览的自动轮播
-   交给 JS 停掉（components/home-memory.tsx 的 usePrefersReducedMotion），CSS 只负责去掉淡入淡出。 */
-@media (prefers-reduced-motion: reduce) {
-  .memory-frames img, .memory-player-stage img { transition: none; }
-  .memory-play { transition: none; }
-  /* Ken Burns 是 animation，不是 transition——全局那条 reduce 规则把时长压到 0.01ms 就够了，
-     但这里写死 none 更清楚：要求减少动态的人不该看到任何推拉，静止在原始取景上。 */
-  .memory-frame.is-current,
-  .memory-player-frame.is-current,
-  .memory-frame.is-current[data-fx],
-  .memory-player-frame.is-current[data-fx] { animation: none; transform: scale(1); }
+.memory-player-controls button.memory-player-toggle {
+  width: 56px;
+  height: 56px;
+  background: #FFFFFF;
+  border-color: #FFFFFF;
+  color: #090D16;
 }
 
-/* HEALTH-04：提醒区的「生活 / 健康」标记。健康用圆润红十字；颜色沿用站点 sage-ink 与既有红色。 */
-.weekly-kind { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.7; vertical-align: 1px; white-space: nowrap; }
-.weekly-kind--life { background: #EEF1EA; color: var(--sage-ink); }
-.weekly-kind--health { background: #FDE7E7; color: #B3282D; }
-.weekly-kind .kind-cross { width: 13px; height: 13px; fill: none; stroke: #E5484D; stroke-width: 5.4; stroke-linecap: round; }
-.weekly-health-login { margin: 8px 0 0; font-size: 14px; color: var(--home-ink, var(--color-text)); }
-.weekly-health-login a { color: var(--home-accent); }
-
-.memory-scene-reading { position: absolute; bottom: .8rem; inset-inline: .8rem; z-index: 3; margin: 0; padding: .6rem .8rem; background: rgb(0 0 0 / .65); color: white; font-size: .8rem; border-radius: .3rem; }
-.memory-scene-reading a { display: block; color: white; text-underline-offset: .2em; padding-top: .3rem; }
-.weekly-unconfirmed { margin-block: 1.5rem; }
-
-.memory-player-slot:last-child .memory-scene-reading { bottom: calc(112px + env(safe-area-inset-bottom)); }
-.memory-scene-title { display: block; margin-bottom: .3rem; font-size: .95rem; }
-
-/* ── 私家摄影散文画册首页层（2026-11-11 R2）────────────────────────────────────
-   1. 冲印相纸衬卡（Mounted Darkroom Print）：退掉静止预览里的模糊虚化侧翼（竖照深色衣袖糊开后会在两侧形成冷灰脏边），
-      改用温润棉浆画心衬纸（#F2ECE1）+ 细微暗房内压线与相纸微阴影，竖照与横照都像夹在私家画册里的原片；
-      题签与日期安静排在画框下方印记栏（.memory-colophon），零遮挡人像；
-   2. 手机 390×844 首屏完整度：收紧刊头与画幅高度上限，确保首屏完整露出相片、题签、「读读这一天 →」与「换一段」，
-      不被底部固定导航栏截断，且所有交互热区 ≥ 44px；
-   3. 桌面下半屏把「给雪姨」短片入口与「每周提醒」编排为顶线对齐的书页附录。 */
-.home-v2 {
-  --home-serif: var(--font-lora, "Lora"), "LXGW WenKai", "Songti SC", "Noto Serif SC", serif;
-  --home-ink: #2C2823;
-  --home-muted: #696258;
-  --home-line: #E4DDD1;
-}
-.home-greeting {
-  font-family: var(--home-serif);
-  font-weight: 400;
-  letter-spacing: .01em;
-}
-.home-greeting .keep-whole { color: var(--brand-accent); }
-.home-answer {
-  color: var(--home-ink);
-  line-height: 1.78;
-}
-.home-answer-source {
-  font-family: var(--font-display);
-  font-size: 13.5px;
-  letter-spacing: .03em;
-  color: var(--clay-ink);
+.memory-player-controls button svg {
+  width: 22px;
+  height: 22px;
 }
 
-.memory-stage {
-  background: var(--color-surface, #FCF9F4);
-  border: 1px solid var(--hairline-strong, rgb(44 40 35 / .15));
-  border-radius: 14px;
-  padding: 10px 10px 12px;
-  box-shadow: 0 2px 6px rgb(44 40 35 / .04), 0 20px 42px -24px rgb(44 40 35 / .18);
-}
-.memory-frames {
-  border-radius: 8px;
-  background: radial-gradient(120% 100% at 50% 0%, #F6F1E7 0%, #EDE6D9 100%);
-  box-shadow: inset 0 0 0 1px rgb(44 40 35 / .07);
-}
-.memory-frames::after {
-  content: "";
+/* 读屏辅助隐藏文本 */
+.visually-hidden {
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / .42), inset 0 0 28px rgb(44 40 35 / .03);
-  pointer-events: none;
-}
-/* 静止画册预览彻底关闭模糊虚化底（避免深色竖照两侧晕出灰黑竖条）；全屏剧院播放器保持不变 */
-.memory-frames img.memory-backdrop,
-.memory-frames img.memory-backdrop.is-current {
-  display: none;
-  opacity: 0;
-}
-.memory-frames img.memory-frame {
-  filter: drop-shadow(0 1px 4px rgb(44 40 35 / .09));
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.memory-play {
-  right: 14px;
-  bottom: 14px;
-  width: 48px;
-  height: 48px;
-  border: 1px solid rgb(255 255 255 / .56);
-  background: rgb(32 29 25 / .46);
-  backdrop-filter: blur(12px) saturate(130%);
-  -webkit-backdrop-filter: blur(12px) saturate(130%);
-  box-shadow: 0 4px 14px rgb(20 18 16 / .22);
-}
+/* ── 平板端自适应（680px+） ──────────────────────────────────────────────── */
 
-.memory-colophon {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 8px 18px;
-  padding: 12px 6px 2px;
-}
-.memory-colophon-copy { min-width: 0; flex: 1 1 200px; }
-.memory-colophon .memory-caption-line {
-  position: static;
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 12.5px;
-  letter-spacing: .04em;
-  font-variant-numeric: lining-nums tabular-nums;
-  color: var(--clay-ink);
-}
-.memory-colophon .memory-title {
-  position: static;
-  margin: 3px 0 0;
-  color: var(--home-ink);
-  font-family: var(--home-serif);
-  font-size: clamp(19px, 4.4vw, 25px);
-  font-weight: 400;
-  line-height: 1.34;
-  letter-spacing: .01em;
-  text-shadow: none;
-}
-.memory-colophon .memory-actions {
-  margin: 0;
-  gap: 8px 12px;
-  flex-shrink: 0;
-}
-.memory-read {
-  min-height: 44px;
-  font-size: 14.5px;
-  font-weight: 500;
-  letter-spacing: .02em;
-}
-.memory-switch {
-  min-height: 44px;
-  padding: 6px 15px;
-  border-color: var(--hairline-strong);
-  border-radius: 8px;
-  background: var(--color-bg, #F8F4EC);
-  font-size: 13.5px;
-  letter-spacing: .03em;
-}
+@media (min-width: 680px) {
+  .home-canvas {
+    padding: 28px 24px 76px;
+  }
 
-.home-memory--single .memory-single-photo {
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-}
+  .bento-hero {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
 
-@media (max-width: 899px) {
-  .home-sheet {
-    padding-top: 12px;
-  }
-  .home-greeting {
-    margin-bottom: 10px;
-    font-size: clamp(32px, 8.8vw, 40px);
-    line-height: 1.18;
-  }
-  .home-answer {
-    margin: 0 0 14px;
-    font-size: 16.5px;
-    line-height: 1.66;
-  }
-  .home-answer-source {
-    margin-top: 4px;
-    font-size: 13px;
-  }
-  .home-memory {
-    margin-bottom: 32px;
-  }
-  .memory-frames {
-    aspect-ratio: auto;
-    height: min(42svh, 356px);
-    max-height: none;
-  }
-  .memory-colophon {
-    padding: 10px 4px 0;
-    gap: 6px 12px;
-  }
-}
-
-@media (min-width: 900px) {
-  .home-sheet {
-    --home-photo-h: min(calc(100svh - 248px), 660px);
-  }
-  .memory-stage { padding: 14px 14px 16px; border-radius: 16px; }
-  .home-v2 .home-film {
-    grid-column: 1;
-    align-self: start;
-    width: 100%;
-    margin: clamp(48px, 6.5vh, 76px) 0 0;
-  }
-  .home-v2 .weekly {
-    grid-column: 2;
-    align-self: start;
-    margin-top: clamp(48px, 6.5vh, 76px);
-    padding-top: 22px;
-  }
-  .home-sheet:not(:has(.home-film)) .weekly {
+  .tile-lead-photo {
     grid-column: 1 / -1;
   }
+
+  .tile-latest-day--with-photo {
+    grid-template-columns: 148px minmax(0, 1fr);
+  }
+
+  .journal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
 }
 
-.weekly { border-top-color: var(--hairline-strong); }
-.weekly-heading {
-  font-family: var(--font-display);
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: .12em;
-  color: var(--clay-ink);
+/* ── 桌面端 12 列 Bento 马赛克（900px+） ─────────────────────────────────── */
+
+@media (min-width: 900px) {
+  .home-canvas {
+    --home-photo-h: min(calc(100svh - 220px), 540px);
+    padding: 34px 28px 88px;
+  }
+
+  /* 兼容双栏照片列宽上限契约 */
+  .home-sheet--split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) min(58%, calc(var(--home-photo-h) * 1.12));
+    gap: 24px;
+  }
+
+  .memory-frames {
+    height: var(--home-photo-h);
+    max-height: none;
+    aspect-ratio: auto;
+  }
+
+  .bento-hero {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: minmax(244px, auto);
+    gap: 18px;
+  }
+
+  .bento-hero .tile-lead-photo {
+    grid-column: 1 / 6;
+    grid-row: 1 / 3;
+  }
+
+  .bento-hero .tile-lead-photo .memory-frames {
+    height: 100%;
+    min-height: var(--home-photo-h);
+    max-height: 620px;
+  }
+
+  .bento-hero .tile-latest-day {
+    grid-column: 6 / 10;
+    grid-row: 1 / 2;
+  }
+
+  .bento-hero .tile-latest-day--wide {
+    grid-column: 6 / 13;
+  }
+
+  .bento-hero .tile-growth {
+    grid-column: 10 / 13;
+    grid-row: 1 / 2;
+  }
+
+  .bento-hero--no-latest .tile-growth {
+    grid-column: 6 / 13;
+  }
+
+  .bento-hero .tile-voices {
+    grid-column: 6 / 10;
+    grid-row: 2 / 3;
+  }
+
+  .bento-hero .tile-film {
+    grid-column: 10 / 13;
+    grid-row: 2 / 3;
+    margin: 0;
+    width: 100%;
+  }
+
+  .bento-hero .tile-film--wide,
+  .bento-hero--no-voices .tile-film {
+    grid-column: 6 / 13;
+  }
+
+  .bento-hero--single-right-row .tile-lead-photo {
+    grid-row: 1 / 2;
+  }
+
+  .bento-hero--single-right-row .tile-voices,
+  .bento-hero--single-right-row .tile-film {
+    grid-row: 1 / 2;
+  }
+
+  .capsule-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .bottom-widgets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .bottom-widgets:not(:has(.weekly)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1080px) {
+  .journal-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .tile-latest-day--with-photo {
+    grid-template-columns: 162px minmax(0, 1fr);
+  }
+}
+
+/* ── 减少动态效果偏好 ────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .bento-tile,
+  .j-card,
+  .capsule-card,
+  .capsule-card img,
+  .j-card-photo img,
+  .day-slice-thumb img,
+  .memory-backdrop,
+  .memory-frame,
+  .memory-player-scene,
+  .memory-play,
+  .memory-switch,
+  .memory-read,
+  .mod-sec-pill,
+  .home-answer-source,
+  .footprint-latest,
+  .footprint-pill {
+    transition: none !important;
+    animation: none !important;
+  }
 }

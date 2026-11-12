@@ -8,6 +8,7 @@ import { renderOnDemand } from "@/lib/render-on-demand";
 import { MemoryReadingMode } from "@/components/memory-reading-mode";
 import { ReadingEssay } from "@/components/reading-essays";
 import "../../reading.css";
+import "../../memory-modern.css";
 
 export async function generateMetadata({ params }: { params: Promise<{ person: string }> }): Promise<Metadata> {
   const { person: id } = await params;

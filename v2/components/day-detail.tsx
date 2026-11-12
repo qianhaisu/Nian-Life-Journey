@@ -36,39 +36,45 @@ export function DayDetail({
   previous?: { href: string; title: string };
   next?: { href: string; title: string };
 }) {
+  const ageText = ageLabel
+    ? (/^(当时|出生)/.test(ageLabel) ? ageLabel : `当时 ${ageLabel}`)
+    : undefined;
+
   return (
     <article className="detail-page day-detail">
-      <header className="reading-wrap detail-head">
-        <Link className="back-link" href={monthHref}>← 回到 {monthLabel}</Link>
-        <p className="detail-signature day-detail-when">
-          <time dateTime={day.day}>{dateLabel}</time>
-          {ageLabel ? <span>当时 {ageLabel}</span> : null}
-        </p>
-        <h1 className="serif day-detail-title">{title}</h1>
-      </header>
+      <div className="detail-card reading-wrap">
+        <header className="detail-head">
+          <Link className="back-link" href={monthHref}>← 回到 {monthLabel}</Link>
+          <p className="detail-signature day-detail-when">
+            <time dateTime={day.day}>{dateLabel}</time>
+            {ageText ? <span>{ageText}</span> : null}
+          </p>
+          <h1 className="serif day-detail-title">{title}</h1>
+        </header>
 
-      {paragraphs.length > 0 ? (
-        <section className="story-layer reading-wrap">
-          <div className="story-column">
-            {paragraphs.map((text, index) => (
-              <p key={index}>{text}</p>
-            ))}
+        {paragraphs.length > 0 ? (
+          <section className="story-layer">
+            <div className="story-column">
+              {paragraphs.map((text, index) => (
+                <p key={index}>{text}</p>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {stories.length > 0 ? <section className="story-layer">{stories.map((story) => <div className="story-column" key={story.id}>
+          {story.title ? <h2 className="serif">{story.title}</h2> : null}
+          {story.paragraphs.map((text, index) => <p key={index}>{text}</p>)}
+        </div>)}</section> : null}
+
+        {/* The month page's grid (components/photo-grid.tsx), every photograph drawn: somebody came to
+            this page to look at one day, so nothing is folded behind a 「+N」 here. Tapping opens the viewer. */}
+        {photos.length > 0 ? (
+          <div className="detail-supporting day-detail-photos">
+            <PhotoGrid photos={photos} dateLabel={dateLabel} ageLabel={ageLabel} priority />
           </div>
-        </section>
-      ) : null}
-
-      {stories.length > 0 ? <section className="reading-wrap story-layer">{stories.map((story) => <div className="story-column" key={story.id}>
-        {story.title ? <h2 className="serif">{story.title}</h2> : null}
-        {story.paragraphs.map((text, index) => <p key={index}>{text}</p>)}
-      </div>)}</section> : null}
-
-      {/* The month page's grid (components/photo-grid.tsx), every photograph drawn: somebody came to
-          this page to look at one day, so nothing is folded behind a 「+N」 here. Tapping opens the viewer. */}
-      {photos.length > 0 ? (
-        <div className="reading-wrap detail-supporting day-detail-photos">
-          <PhotoGrid photos={photos} dateLabel={dateLabel} ageLabel={ageLabel} priority />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       <DayMaterial
         sources={sources}

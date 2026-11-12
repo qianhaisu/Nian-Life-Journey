@@ -1,395 +1,948 @@
-/* B-9 Earth Tones — Nian Life (Teddy 2026-09-05 定稿) */
+/* Modular Daylight Canvas — Nianlife V2 Global Design System (Amie / Apple Journal / Retro inspired) */
 :root {
-  /* New earth-tone primitives.
-     --sage / --clay 是**面和线**用的浅色（品牌块底、药丸底、图表线、色块），不是字色。
-     2026-09-16 视觉验收实测：#9EAB92 当字色时对纸底只有 2.24:1、#C2A88A 只有 2.10:1，
-     WCAG AA 正文要求 4.5:1——站里约六十处功能文字（日期、当时几岁、章节名、相册入口、
-     身高体重数值）都踩在这两个值上，在手机上是「看得见但读不动」。
-     解决办法不是换色相（B-9 定稿不动），是给同色相补一档**字色**：
-     --sage-ink / --clay-ink，用 HSL 只降明度算到刚过 4.6:1，面和线继续用原来的浅色。 */
-  --sage: #9EAB92;
-  --clay: #C2A88A;
-  --sage-ink: #626F56;  /* 对 #F9F6F0 纸底 4.96 · 白 5.35 · #F3EEE6 卡底 4.63 */
-  --clay-ink: #826544;  /* 对 #F9F6F0 纸底 5.00 · 白 5.39 · #F3EEE6 卡底 4.67 */
-  /* 2026-09-17 Teddy：「首页最上方年logo填充色和"读读这一天"button的颜色换成完全同一种」。
-     两处原本各自独立：顶部品牌标「年」用 --clay（#C2A88A，一个面色），首页「读读这一天」
-     用 app/home.css 的 --home-accent（#A85D43，一个字色）。**不能反过来**让「读读这一天」
-     改用 --clay——上面那段注释写得很清楚，#C2A88A 当字色对纸底只有 2.10:1，连 WCAG AA 正文
-     4.5:1 的门槛都过不了。所以统一到 --home-accent 这个已经验过对比度的值，此处只定义一次，
-     顶部品牌标和 home.css 都引用它，不在两处各写一份字面值。 */
-  --brand-accent: #A85D43;
-  --shadow: 0 16px 40px rgba(138,121,102,.08);
-  --shadow-hover: 0 24px 48px rgba(138,121,102,.15);
-  --shadow-badge: 0 4px 12px rgba(138,121,102,.05);
-  --r-card: 32px;
-  --r-badge: 20px;
-  /* Canonical aliases — all existing CSS continues using these names */
-  --color-primary: #433E38;
-  /* --color-secondary / --color-accent 站里几乎只当字色用（grep：约 60 处 color:，非字色只有
-     焦点框、两条图表线、三条 1px 分隔线和一个 9% 色块底），所以它们指向 --sage-ink；
-     真正需要浅色面的地方直接写 var(--sage) / var(--clay)。 */
-  --color-secondary: var(--sage-ink);
-  --color-accent: var(--sage-ink);
-  --color-bg: #F9F6F0;
+  /* Canvas & Surfaces */
+  --color-bg: #F3F5F9;
   --color-surface: #FFFFFF;
-  --color-text: #433E38;
-  --color-muted: #716A60;  /* 原 #7A7267 = 4.39:1，差 0.11 就过 AA；同色相压深一档到 4.95 */
-  --color-border: #E4DDD4;
-  /* 中文是 NianRound（自托管圆体，app/fonts.css），英文和数字仍然是 Nunito——Nunito 排在前面，
-     拉丁字符先被它接住，汉字才落到圆体上。PingFang / 雅黑只是最后的系统兜底，正常情况下
-     看不到它们；这一条 2026-09-13 起才成立，之前中文一直是系统字体。 */
-  --font-heading: var(--font-nunito, 'Nunito'), 'NianRound', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-body: var(--font-nunito, 'Nunito'), 'NianRound', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --radius-sm: 2px; --radius-md: 6px; --radius-lg: 10px; --radius-xl: 16px;
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px;
-  --shadow-style: 0 8px 18px rgba(67,62,56,.08);
+  --paper-dark: #EAEFF6;
+  --card-soft: #EEF2F8;
+
+  /* Ink (WCAG AA >= 4.5:1 verified on #F3F5F9, #FFFFFF, #EAEFF6, and #EEF2F8) */
+  --color-primary: #0F172A;
+  --color-text: #0F172A;
+  --color-muted: #526075;
+  --muted: #526075;
+  --color-secondary: #334155;
+
+  /* Accents & Amie Micro-Pastels */
+  --brand-accent: #2563EB;
+  --color-accent: #2563EB;
+  --sage: #94A3B8;
+  --sage-ink: #047857;
+  --clay: #CBD5E1;
+  --clay-ink: #1D4ED8;
+  --tint-blue: #EDF4FF;
+  --accent-blue: #2563EB;
+  --tint-peach: #FFF4EE;
+  --accent-peach: #C2410C;
+  --tint-lavender: #F4F0FF;
+  --accent-lavender: #6D28D9;
+  --tint-mint: #ECFDF5;
+  --accent-mint: #047857;
+
+  /* Semantic & Legacy Aliases */
+  --warm-gold: #CBD5E1;
+  --success: #047857;
+  --danger: #DC2626;
+
+  /* Borders, Concentric Radii & Multi-layer Ambient Shadows */
+  --color-border: rgba(15, 23, 42, 0.08);
+  --hairline: rgba(15, 23, 42, 0.06);
+  --hairline-strong: rgba(15, 23, 42, 0.12);
+  --r-card: 24px;
+  --r-media: 16px;
+  --r-badge: 999px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px -4px rgba(15, 23, 42, 0.05);
+  --shadow-hover: 0 2px 6px rgba(15, 23, 42, 0.05), 0 16px 36px -6px rgba(15, 23, 42, 0.09);
+  --shadow-badge: 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-style: var(--shadow);
   --density: spacious;
-  --paper-dark: #F3EEE6;
-  --warm-gold: #C2A88A;
-  --success: oklch(43% 0.09 145);
-  --danger: oklch(46% 0.14 28);
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --ease-hover: cubic-bezier(0.25, 1, 0.5, 1);
-  --ease-out: cubic-bezier(.25, 1, .5, 1);
-  --muted: #716A60;
-  --card-soft: #F3EEE6;
+
+  /* Spring & Smooth Motion Curves */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-hover: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* Typography — Self-hosted Poppins + Nunito + CJK Modern System Sans */
+  --font-sans: var(--font-poppins, 'Poppins'), -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Noto Sans CJK SC', sans-serif;
+  --font-heading: var(--font-sans);
+  --font-body: var(--font-nunito, 'Nunito'), -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei UI', 'Noto Sans CJK SC', sans-serif;
+  --font-display: var(--font-poppins, 'Poppins'), -apple-system, 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
+  --font-serif: var(--font-heading);
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { min-height: 100dvh; margin: 0; overflow-x: clip; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); font-size: 1rem; line-height: 1.7; font-kerning: normal; -webkit-tap-highlight-color: oklch(49% .13 38 / .16); }
-body::before { position: fixed; inset: 0; z-index: -1; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E"); opacity: .16; content: ""; pointer-events: none; }
+body {
+  min-height: 100dvh;
+  margin: 0;
+  overflow-x: clip;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.72;
+  letter-spacing: 0.008em;
+  font-kerning: normal;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: rgba(37, 99, 235, 0.12);
+}
 a { color: inherit; text-decoration: none; }
-button { color: inherit; font: inherit; touch-action: manipulation; border-radius: 8px; }
+button { color: inherit; font: inherit; touch-action: manipulation; border-radius: 10px; }
 img { display: block; }
-h1, h2, h3 { scroll-margin-top: 88px; text-wrap: balance; }
-/* 不该被断开的一小段文字（现在只有张年的名字，见 components/home-lead.tsx）。 */
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--color-primary);
+  scroll-margin-top: 88px;
+  text-wrap: balance;
+}
 .keep-whole { white-space: nowrap; }
 p { text-wrap: pretty; }
-time, .portrait-facts strong { font-variant-numeric: tabular-nums; }
-.serif { font-family: var(--font-heading); font-weight: 600; }
-.skip-link { position: fixed; top: 8px; left: 8px; z-index: 1000; padding: 10px 14px; background: var(--color-primary); color: var(--color-bg); border-radius: 8px; transform: translateY(-160%); }
+time,
+.portrait-facts strong,
+.evidence-time,
+.monthly-focus-meta,
+.monthly-focus-origin {
+  font-family: var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: 0.01em;
+}
+.serif {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  z-index: 1000;
+  padding: 10px 16px;
+  background: var(--color-primary);
+  color: #FFFFFF;
+  border-radius: var(--r-badge);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-180%);
+  transition: transform 200ms var(--ease-spring);
+}
 .skip-link:focus { transform: translateY(0); }
-:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
 
-/* 2026-09-16 视觉验收：页眉条比正文纸色偏粉，全站每一页都带着。实测计算值是
-   `oklch(0.973792 0.00859903 none / 0.94)`——色相被插成了 none。`transparent` 在 oklch 里是
-   `oklch(0 0 0 / 0)`，和暖纸色混合时纸色那点色度留下了、色相丢了，于是渲染成偏红。
-   这不是审美选择，是一个 bug。直接写死同一支纸色带透明度，不再做色彩空间插值。 */
-.site-header { position: relative; z-index: 20; border-bottom: 1px solid var(--color-border); background: rgb(249 246 240 / .94); animation: fadeInUp 1s var(--ease) both; }
-.header-inner { display: grid; grid-template-columns: auto 1fr; align-items: center; width: min(1400px, calc(100% - 32px)); min-height: 72px; margin-inline: auto; }
-.brand { display: inline-flex; min-width: 0; align-items: center; gap: 12px; min-height: 44px; }
-/* 2026-09-17 Teddy 第 1 条：「年 logo 改为无填充仅有现有颜色的边框」——去掉实心底色，
-   改成边框 + 同色文字。边框宽度算进 48×48 的盒子里（box-sizing 全站默认 border-box，
-   见下面通用规则），尺寸不用跟着改。字色和边框同一个 --brand-accent，对纸底 4.9:1，
-   早就核对过对比度（app/home.css 那条注释）。 */
-.brand-mark { display: grid; width: 48px; height: 48px; flex-shrink: 0; place-items: center; background: transparent; border: 2px solid var(--brand-accent); color: var(--brand-accent); border-radius: 16px; font-size: 24px; font-weight: 800; transition: transform .3s var(--ease); }
-.brand-mark:hover { transform: scale(1.05) rotate(-5deg); }
-.brand-copy { display: flex; min-width: 0; align-items: baseline; gap: 10px; line-height: 1.15; white-space: nowrap; }
-.brand-copy strong { overflow: hidden; color: var(--color-primary); font-size: clamp(.95rem, 2.4vw, 1.2rem); font-weight: 600; letter-spacing: .015em; text-overflow: ellipsis; }
-.brand-copy small { flex: 0 0 auto; color: var(--color-muted); font-size: clamp(.64rem, 1.5vw, .76rem); letter-spacing: .08em; }
+/* ── Amie Floating Segmented Header & Mobile Dock ──────────────────────────── */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(243, 245, 249, 0.84);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  border-bottom: 1px solid var(--hairline);
+}
+.header-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: min(1360px, calc(100% - 32px));
+  min-height: 62px;
+  margin-inline: auto;
+}
+.brand {
+  justify-self: start;
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  min-height: 44px;
+  padding: 4px 6px 4px 0;
+  border-radius: 14px;
+}
+.brand-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #2563EB 0%, #3B82F6 54%, #60A5FA 100%);
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow:
+    0 6px 16px -2px rgba(37, 99, 235, 0.28),
+    0 1px 2px rgba(37, 99, 235, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  transition: transform 280ms var(--ease-spring), box-shadow 280ms var(--ease-spring);
+}
+@media (hover: hover) {
+  .brand:hover .brand-mark {
+    transform: translateY(-1px) scale(1.04);
+    box-shadow:
+      0 8px 20px -2px rgba(37, 99, 235, 0.36),
+      0 2px 4px rgba(37, 99, 235, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  }
+}
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+  line-height: 1.2;
+}
+.brand-copy strong {
+  overflow: hidden;
+  color: var(--color-primary);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.brand-copy small {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .desktop-nav { display: none; }
-/* 章节小标题。0.72rem = 11.52px 对着「量过的身高体重」「这个月记下来的」这种真的在分区的
-   标题来说太小了（2026-09-16 实测），提到 0.8rem = 12.8px；颜色跟着 --color-accent 一起从
-   2.24:1 升到 4.96:1。 */
-.section-mark, .eyebrow, .layer-label { display: block; color: var(--color-accent); font-size: .8rem; font-weight: 700; letter-spacing: .08em; }
-.text-link, .back-link { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 2px solid var(--sage); font-size: .82rem; font-weight: 700; transition: color 180ms var(--ease-out), transform 180ms var(--ease-out); }
-.text-link:hover, .back-link:hover { color: var(--color-accent); transform: translateX(4px); }
-.primary-button { border: 1px solid var(--color-primary) !important; background: var(--color-primary) !important; color: var(--color-bg) !important; border-radius: 12px !important; }
-.primary-button:hover { border-color: var(--color-accent) !important; background: var(--color-accent) !important; transform: translateY(-2px); box-shadow: 0 8px 16px oklch(49% .13 38 / .16); }
-button:disabled { cursor: not-allowed; opacity: .45; }
-.home-masthead { padding: clamp(56px, 9vw, 128px) 0 clamp(40px, 6vw, 80px); }
-.home-masthead h1 { max-width: none; margin: 18px 0 0; font-size: clamp(2.4rem, 7vw, 6rem); font-weight: 800; letter-spacing: -.04em; line-height: 1.05; animation: fadeInUp 1.2s var(--ease) .2s both; }
+.header-search {
+  justify-self: end;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-badge);
+  background: rgba(255, 255, 255, 0.84);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-badge), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  color: var(--color-secondary);
+  transition:
+    transform 240ms var(--ease-spring),
+    box-shadow 240ms var(--ease-spring),
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
+}
+@media (hover: hover) {
+  .header-search:hover {
+    background: #FFFFFF;
+    color: var(--brand-accent);
+    border-color: var(--hairline-strong);
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+  }
+}
+.header-search:active { transform: scale(0.96); }
+.header-search.is-active {
+  background: var(--color-primary);
+  color: #FFFFFF;
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+}
+
+/* Mobile floating frosted-glass Amie/iOS dock */
+.bottom-nav {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  max-width: 440px;
+  margin-inline: auto;
+  z-index: 100;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border-radius: var(--r-badge);
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow:
+    0 4px 16px rgba(15, 23, 42, 0.07),
+    0 16px 36px -6px rgba(15, 23, 42, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+.bottom-nav > a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 4px;
+  border-radius: var(--r-badge);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: var(--color-secondary);
+  transition:
+    background-color 220ms var(--ease-spring),
+    color 220ms var(--ease-spring),
+    transform 180ms var(--ease-spring),
+    box-shadow 220ms var(--ease-spring);
+}
+.bottom-nav > a:active { transform: scale(0.95); }
+.bottom-nav > a.is-active {
+  background: var(--color-primary);
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+}
+
+/* Desktop Floating Segmented Dock */
+@media (min-width: 768px) {
+  .site-header {
+    background: rgba(243, 245, 249, 0.8);
+  }
+  .header-inner {
+    width: min(1360px, calc(100% - 64px));
+    min-height: 72px;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+  }
+  .desktop-nav {
+    justify-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    border-radius: var(--r-badge);
+    background: rgba(255, 255, 255, 0.82);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid var(--hairline);
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.03),
+      0 8px 22px -6px rgba(15, 23, 42, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  }
+  .desktop-nav a {
+    position: relative;
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 18px;
+    border-radius: var(--r-badge);
+    font-family: var(--font-sans);
+    font-size: 0.86rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--color-secondary);
+    white-space: nowrap;
+    transition:
+      background-color 220ms var(--ease-spring),
+      color 220ms var(--ease-spring),
+      transform 180ms var(--ease-spring),
+      box-shadow 220ms var(--ease-spring);
+  }
+  @media (hover: hover) {
+    .desktop-nav a:hover:not(.is-active) {
+      background: rgba(15, 23, 42, 0.05);
+      color: var(--color-primary);
+    }
+  }
+  .desktop-nav a:active { transform: scale(0.97); }
+  .desktop-nav a.is-active {
+    background: var(--color-primary);
+    color: #FFFFFF;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+  }
+  .bottom-nav { display: none; }
+}
+@media (min-width: 920px) {
+  .header-inner {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+}
+
+/* ── Shared Typography, Links & Buttons ────────────────────────────────────── */
+.section-mark, .eyebrow, .layer-label {
+  display: block;
+  font-family: var(--font-display);
+  color: var(--accent-blue);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.08em;
+}
+.text-link, .back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  gap: 6px;
+  border-bottom: 1.5px solid var(--hairline-strong);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+  transition: color 200ms var(--ease-spring), border-color 200ms var(--ease-spring), transform 200ms var(--ease-spring);
+}
+@media (hover: hover) {
+  .text-link:hover, .back-link:hover {
+    color: var(--brand-accent);
+    border-bottom-color: var(--brand-accent);
+    transform: translateX(2px);
+  }
+}
+.primary-button {
+  border: 1px solid var(--color-primary) !important;
+  background: var(--color-primary) !important;
+  color: #FFFFFF !important;
+  border-radius: 14px !important;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.14);
+  transition:
+    transform 220ms var(--ease-spring),
+    background-color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 220ms var(--ease-spring);
+}
+@media (hover: hover) {
+  .primary-button:hover {
+    border-color: var(--brand-accent) !important;
+    background: var(--brand-accent) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px -4px rgba(37, 99, 235, 0.32);
+  }
+}
+button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+/* ── Mastheads & Capture / Review Surfaces ─────────────────────────────────── */
+.home-masthead { padding: clamp(32px, 5vw, 56px) 0 clamp(24px, 4vw, 36px); }
+.home-masthead h1 {
+  max-width: none;
+  margin: 14px 0 0;
+  font-size: clamp(2.1rem, 5.5vw, 3.4rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.16;
+}
 .home-masthead.reveal { animation: none; }
-.home-masthead .section-mark { animation: fadeInUp 1.2s var(--ease) .4s both; }
 .home-title-line { display: block; white-space: nowrap; }
-/* 问候之后的当前年龄 — the only date on this page that is not in the past. */
-.home-age { margin: 16px 0 0; color: var(--color-secondary); font-size: 1.05rem; font-weight: 600; letter-spacing: .01em; }
-.home-masthead em, .page-masthead em { color: var(--color-accent); font-style: normal; }
-.section-heading { display: grid; gap: 12px; }
-.section-heading h2 { max-width: 18ch; margin: 0; font-size: clamp(2.1rem, 5vw, 4.2rem); line-height: 1.08; }
-.section-heading > p { max-width: 46ch; margin: 0; color: var(--color-muted); }
-.monthly-focus { padding: 8px 0 clamp(88px, 12vw, 144px); }
-.monthly-focus-heading { display: grid; gap: 18px; padding-top: 28px; border-top: 1px solid var(--color-primary); }
-.monthly-focus-heading h2 { max-width: 12ch; margin: 10px 0 0; font-size: clamp(2.35rem, 7vw, 4.4rem); line-height: 1.08; }
-.monthly-focus-heading > p { max-width: 31ch; margin: 0; color: var(--color-muted); }
-.monthly-focus-list { display: grid; gap: 0; margin: 44px 0 0; padding: 0; border-top: 1px solid var(--color-border); list-style: none; }
-.monthly-focus-item { min-width: 0; padding: 24px 0 26px; border-bottom: 1px solid var(--color-border); }
-.monthly-focus-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--color-accent); font-size: .72rem; font-weight: 700; letter-spacing: .06em; }
-.monthly-focus-meta small { flex: 0 0 auto; color: var(--color-secondary); font-size: .68rem; font-weight: 700; letter-spacing: .02em; }
-.monthly-focus-item h3 { margin: 14px 0 8px; font-size: clamp(1.55rem, 5vw, 2.15rem); line-height: 1.22; }
-.monthly-focus-item p { max-width: 31ch; margin: 0; color: var(--color-muted); }
-.monthly-focus-origin { margin: 22px 0 0; color: var(--color-muted); font-size: .76rem; }
-.monthly-focus--review { padding: 84px 0 16px; }
+.home-age { margin: 14px 0 0; color: var(--color-secondary); font-size: 1.02rem; font-weight: 600; letter-spacing: 0.01em; }
+.home-masthead em, .page-masthead em { color: var(--brand-accent); font-style: normal; }
+.section-heading { display: grid; gap: 10px; }
+.section-heading h2 { max-width: 20ch; margin: 0; font-size: clamp(1.75rem, 4vw, 2.6rem); line-height: 1.18; }
+.section-heading > p { max-width: 48ch; margin: 0; color: var(--color-muted); }
+
+.monthly-focus { padding: 8px 0 clamp(72px, 10vw, 120px); }
+.monthly-focus-heading { display: grid; gap: 16px; padding-top: 28px; border-top: 1px solid var(--hairline-strong); }
+.monthly-focus-heading h2 { max-width: 14ch; margin: 8px 0 0; font-size: clamp(2rem, 5.5vw, 3.2rem); line-height: 1.16; }
+.monthly-focus-heading > p { max-width: 34ch; margin: 0; color: var(--color-muted); }
+.monthly-focus-list { display: grid; gap: 16px; margin: 36px 0 0; padding: 0; list-style: none; }
+.monthly-focus-item {
+  min-width: 0;
+  padding: 22px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.monthly-focus-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--accent-blue); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; }
+.monthly-focus-meta small { flex: 0 0 auto; color: var(--color-secondary); font-size: 0.72rem; font-weight: 600; }
+.monthly-focus-item h3 { margin: 12px 0 8px; font-size: clamp(1.3rem, 3.5vw, 1.65rem); line-height: 1.3; }
+.monthly-focus-item p { max-width: 36ch; margin: 0; color: var(--color-muted); }
+.monthly-focus-origin { margin: 18px 0 0; color: var(--color-muted); font-size: 0.76rem; }
+.monthly-focus--review { padding: 64px 0 16px; }
 .monthly-focus--review .monthly-focus-heading { padding-top: 24px; }
-.page-masthead, .about-masthead { padding: clamp(64px, 10vw, 120px) 0 clamp(48px, 8vw, 88px); }
-/* 2026-09-16 视觉验收：`-.055em` 字距和 `.98` 行高是拉丁展示字的手法，加在汉字上必然撞笔画、
-   撞句号——「往回翻翻，张年。」排到 120px 时尤其明显。汉字方块本身就是等宽的，不需要负字距。
-   同时字号从 7.5rem 收到 5.5rem：原来 /memory 的第一屏整屏只有一句标语，一张照片都没有。 */
-.page-masthead h1, .about-masthead h1 { max-width: 12ch; margin: 18px 0 24px; font-size: clamp(3rem, 8vw, 5.5rem); letter-spacing: -.01em; line-height: 1.12; }
-.page-masthead > p, .about-masthead > p { max-width: 48ch; margin: 0; color: var(--color-muted); font-size: 1.05rem; }
-.capture-form { display: grid; gap: 18px; margin-top: 32px; padding: 28px 0; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
-.capture-form label { display: grid; gap: 8px; color: var(--color-muted); font-size: .78rem; }
-.capture-form input, .capture-form select, .capture-form textarea { width: 100%; padding: 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text); }
+
+.page-masthead, .about-masthead { padding: clamp(32px, 6vw, 64px) 0 clamp(24px, 4vw, 44px); }
+.page-masthead h1, .about-masthead h1 {
+  max-width: 16ch;
+  margin: 12px 0 16px;
+  font-size: clamp(2.1rem, 5.4vw, 3.4rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+}
+.page-masthead > p, .about-masthead > p { max-width: 50ch; margin: 0; color: var(--color-muted); font-size: 1.02rem; }
+
+.capture-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 28px;
+  padding: 28px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.capture-form label { display: grid; gap: 8px; color: var(--color-secondary); font-size: 0.82rem; font-weight: 600; }
+.capture-form input, .capture-form select, .capture-form textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 12px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+.capture-form input:focus, .capture-form select:focus, .capture-form textarea:focus {
+  background: var(--color-surface);
+  border-color: var(--brand-accent);
+}
 .capture-form-grid { display: grid; gap: 16px; }
-.capture-form button, .capture-done a { justify-self: start; min-height: 46px; padding: 0 18px; border: 1px solid var(--color-primary); background: transparent; }
-.form-error { margin: 0; color: var(--color-accent); }
-.capture-done { display: grid; gap: 16px; padding: 48px 0; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
-.capture-done h2 { max-width: 14ch; margin: 0; font-size: clamp(2.5rem, 7vw, 5rem); line-height: 1; }
+.capture-form button, .capture-done a {
+  justify-self: start;
+  min-height: 46px;
+  padding: 0 20px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 12px;
+  background: var(--color-surface);
+  font-weight: 600;
+}
+.form-error { margin: 0; color: var(--danger); font-weight: 600; }
+.capture-done {
+  display: grid;
+  gap: 16px;
+  padding: 36px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.capture-done h2 { max-width: 16ch; margin: 0; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.15; }
 .capture-done > p { margin: 0; color: var(--color-muted); }
-.done-summary { display: grid; gap: 6px; padding: 18px 0; border-top: 1px solid var(--color-accent); border-bottom: 1px solid var(--color-border); }
-.done-summary span, .capture-privacy { color: var(--color-muted); font-size: .8rem; }
+.done-summary { display: grid; gap: 6px; padding: 18px 0; border-top: 1px solid var(--hairline-strong); border-bottom: 1px solid var(--hairline); }
+.done-summary span, .capture-privacy { color: var(--color-muted); font-size: 0.82rem; }
 .capture-privacy { margin: 20px 0 0; }
 @media (min-width: 700px) { .capture-form-grid { grid-template-columns: 1fr 1fr; } }
-.capture-masthead { padding-bottom: 56px; }
-.flow-steps { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0 0 64px; padding: 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); list-style: none; }
-.flow-steps li { padding: 14px 8px; color: var(--color-muted); font-size: .7rem; text-align: center; }
-.flow-steps li + li { border-left: 1px solid var(--color-border); }
-.flow-steps li.is-active { color: var(--color-accent); font-weight: 700; }
-.flow-steps li.is-done { color: var(--color-secondary); }
-.capture-question { padding-bottom: 120px; }
-.capture-question > div:first-child h2 { margin: 14px 0; font-size: clamp(2.8rem, 7vw, 5rem); line-height: 1; }
+.capture-masthead { padding-bottom: 40px; }
+.flow-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0 0 48px;
+  padding: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-badge);
+  box-shadow: var(--shadow-badge);
+  list-style: none;
+}
+.flow-steps li { padding: 10px 8px; border-radius: var(--r-badge); color: var(--color-muted); font-size: 0.76rem; font-weight: 600; text-align: center; }
+.flow-steps li.is-active { background: var(--tint-blue); color: var(--accent-blue); font-weight: 700; }
+.flow-steps li.is-done { color: var(--accent-mint); }
+.capture-question { padding-bottom: 100px; }
+.capture-question > div:first-child h2 { margin: 14px 0; font-size: clamp(2.1rem, 5.5vw, 3.4rem); line-height: 1.15; }
 .capture-question > div:first-child p { color: var(--color-muted); }
-.capture-kinds { display: grid; margin-top: 48px; border-top: 1px solid var(--color-primary); }
-.capture-kinds button { display: grid; grid-template-columns: 44px 1fr; min-height: 64px; align-items: center; border: 0; border-bottom: 1px solid var(--color-border); background: transparent; text-align: left; transition: color 180ms var(--ease-out), padding 180ms var(--ease-out), background-color 180ms var(--ease-out); }
-.capture-kinds button span { color: var(--color-accent); font-size: 1.2rem; }
-.capture-kinds button.is-selected { padding-left: 8px; background: var(--paper-dark); color: var(--color-accent); font-weight: 700; }
-.capture-batch { display: grid; gap: 14px; margin-top: 56px; padding: 28px 0; border-top: 1px solid var(--color-accent); }
-.capture-batch > span { color: var(--color-muted); font-size: .72rem; }
-.capture-batch strong { max-width: 28ch; font-family: var(--font-heading); font-size: 1.7rem; }
-.capture-batch button { justify-self: start; min-height: 48px; padding: 0 18px; transition: transform 180ms var(--ease-out), background-color 180ms var(--ease-out), border-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out); }
+.capture-kinds {
+  display: grid;
+  margin-top: 36px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.capture-kinds button {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  min-height: 64px;
+  align-items: center;
+  padding: 0 20px;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  transition: color 180ms ease, background-color 180ms ease;
+}
+.capture-kinds button:last-child { border-bottom: 0; }
+.capture-kinds button span { color: var(--brand-accent); font-size: 1.2rem; }
+.capture-kinds button.is-selected { background: var(--tint-blue); color: var(--accent-blue); font-weight: 700; }
+.capture-batch { display: grid; gap: 14px; margin-top: 44px; padding: 28px 0; border-top: 1px solid var(--hairline-strong); }
+.capture-batch > span { color: var(--color-muted); font-size: 0.76rem; }
+.capture-batch strong { max-width: 28ch; font-family: var(--font-heading); font-size: 1.5rem; }
+.capture-batch button { justify-self: start; min-height: 48px; padding: 0 20px; }
 .candidate-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.candidate-actions button { min-height: 44px; padding: 8px 14px; border: 1px solid var(--color-border); background: transparent; font-size: .76rem; font-weight: 700; transition: color 180ms var(--ease-out), transform 180ms var(--ease-out), background-color 180ms var(--ease-out), border-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out); }
-.candidate-actions button:hover { border-color: var(--color-primary); transform: translateY(-2px); }
-.action-result { color: var(--success); font-size: .78rem; }
-.evidence-item { display: grid; grid-template-columns: 64px 1fr; gap: 18px; padding: 26px 0; border-bottom: 1px solid var(--color-border); }
-.evidence-time { display: grid; align-content: start; color: var(--color-muted); font-size: .68rem; }
-.evidence-time time { color: var(--color-accent); font-weight: 700; }
-/* Evidence text is imported verbatim, so it can contain a long unbroken token. Wrap anywhere
-   rather than letting one string widen the page — a mobile event page was scrolling sideways. */
-.evidence-source { display: flex; flex-wrap: wrap; gap: 12px; color: var(--color-secondary); font-size: .7rem; overflow-wrap: anywhere; }
-.evidence-quote { max-width: 38ch; overflow-wrap: anywhere; margin: 10px 0 0; font-family: var(--font-heading); font-size: clamp(1.3rem, 4vw, 2rem); line-height: 1.4; }
+.candidate-actions button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-badge);
+  background: var(--color-surface);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: color 180ms ease, transform 200ms var(--ease-spring), border-color 180ms ease, box-shadow 200ms var(--ease-spring);
+}
+@media (hover: hover) {
+  .candidate-actions button:hover { border-color: var(--brand-accent); color: var(--brand-accent); transform: translateY(-1px); box-shadow: var(--shadow-badge); }
+}
+.action-result { color: var(--success); font-size: 0.8rem; font-weight: 600; }
+
+/* ── Evidence & Provenance Items ───────────────────────────────────────────── */
+.evidence-item {
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.evidence-item:last-child { border-bottom: 0; }
+.evidence-time { display: grid; align-content: start; color: var(--color-muted); font-size: 0.72rem; }
+.evidence-time time { color: var(--accent-blue); font-weight: 700; }
+.evidence-source { display: flex; flex-wrap: wrap; gap: 10px; color: var(--color-secondary); font-size: 0.74rem; font-weight: 600; overflow-wrap: anywhere; }
+.evidence-quote {
+  max-width: 42ch;
+  overflow-wrap: anywhere;
+  margin: 8px 0 0;
+  font-family: var(--font-body);
+  font-size: clamp(1rem, 2.2vw, 1.1rem);
+  line-height: 1.76;
+  color: var(--color-text);
+}
 .evidence-note { color: var(--color-muted); overflow-wrap: anywhere; }
-.evidence-media { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 16px; }
-.evidence-media-item { position: relative; aspect-ratio: 4 / 3; overflow: hidden; }
+.evidence-media { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 14px; }
+.evidence-media-item { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; background: var(--paper-dark); }
 .evidence-media-item img { object-fit: cover; }
-/* A picture the day left behind whose derivative is not ready yet: named, never drawn broken. */
 .evidence-media-pending { margin-top: 10px; font-size: 0.8rem; color: var(--color-muted); }
-.evidence-media-label, .media-chip { position: absolute; right: 8px; bottom: 8px; padding: 3px 7px; background: var(--color-primary); color: var(--color-bg); font-size: .62rem; }
+.evidence-media-label, .media-chip {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 9px;
+  border-radius: var(--r-badge);
+  background: rgba(15, 23, 42, 0.78);
+  color: #FFFFFF;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
 @media (hover: hover) {
   button:not(:disabled) { cursor: pointer; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
-@keyframes canvasReveal { from { opacity: .35; transform: scale(1.025); } to { opacity: 1; transform: scale(1); } }
-@keyframes textMemoryReveal { from { opacity: 0; transform: translateY(14px) rotate(-.7deg); } to { opacity: 1; transform: translateY(0) rotate(-.7deg); } }
-@keyframes rise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
-.reveal { animation: rise 650ms var(--ease-out) both; }
+@keyframes canvasReveal { from { opacity: 0.35; transform: scale(1.02); } to { opacity: 1; transform: scale(1); } }
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+.reveal { animation: rise 520ms var(--ease-spring) both; }
 
-/* ---------- Layout scale ----------
-   Story column ~760px, photo column ~1200px, canvas ~1400px. Mobile keeps 16px gutters and
-   reserves the bottom navigation plus the device safe-area. */
-.site-shell { min-height: calc(100dvh - 72px); padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
-.wide-wrap { width: min(1400px, calc(100% - 32px)); margin-inline: auto; }
-.reading-wrap { width: min(760px, calc(100% - 32px)); margin-inline: auto; }
+/* ── Layout Scale & Site Footer ────────────────────────────────────────────── */
+.site-shell {
+  min-height: calc(100dvh - 72px);
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+.wide-wrap { width: min(1360px, calc(100% - 32px)); margin-inline: auto; }
+.reading-wrap { width: min(780px, calc(100% - 32px)); margin-inline: auto; }
 .photo-wrap { width: min(1200px, calc(100% - 32px)); margin-inline: auto; }
-.bottom-nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 100; display: grid; grid-template-columns: repeat(5, 1fr); min-height: 60px; padding: 4px 8px max(6px, env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); background: var(--color-surface); }
-.bottom-nav > a { display: grid; min-width: 0; min-height: 48px; place-items: center; color: var(--color-muted); font-size: .8rem; letter-spacing: .04em; }
-.bottom-nav > a.is-active { color: var(--color-primary); font-weight: 700; }
-/* 备案号页脚。手机上底部导航是 fixed，页脚落在 site-shell 的底部留白之后，自己再留出导航的高度，
-   不被导航盖住；桌面没有底部导航，只留常规边距。 */
-.site-footer { padding: 0 16px calc(72px + env(safe-area-inset-bottom)); text-align: center; font-size: .75rem; letter-spacing: .02em; }
-/* 2026-09-16 视觉验收：备案号原本只有 143×16，够不到 44px 触达高度。 */
-.site-footer a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 8px; color: var(--color-muted); }
-.site-footer a:hover { color: var(--color-primary); }
 
-/* ---------- Editorial layer ---------- */
-.time-signature { display: flex; flex-wrap: wrap; gap: 0 14px; margin: 0; color: var(--color-muted); font-size: .8rem; letter-spacing: .04em; }
-.time-signature time { color: var(--color-accent); font-weight: 700; }
-.chapter-meta, .month-index-count, .month-index-age { color: var(--color-muted); font-size: .8rem; }
-.archive-empty { margin: 48px 0 96px; font-size: 1.6rem; color: var(--color-muted); }
+.site-footer {
+  padding: 16px 16px calc(88px + env(safe-area-inset-bottom));
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+.site-footer-inner {
+  width: min(1360px, calc(100% - 32px));
+  margin-inline: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  text-align: center;
+}
+.site-footer-brand {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+.site-footer a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-badge);
+  font-family: var(--font-display);
+  color: var(--color-muted);
+  transition: color 180ms ease, background-color 180ms ease;
+}
+@media (hover: hover) {
+  .site-footer a:hover {
+    color: var(--color-primary);
+    background: rgba(15, 23, 42, 0.04);
+  }
+}
 
-/* Home */
-.home-masthead { padding-bottom: clamp(24px, 4vw, 40px); }
-.home-lead { padding: 0 0 clamp(56px, 8vw, 96px); }
-.home-lead > .section-mark { display: block; margin-bottom: 20px; }
-.home-alternates { margin-top: 28px; }
-/* The cover as recent photographed days: each day one quiet block — date, age, a short row of
-   pictures. Same strip primitives as everywhere else; nothing on the cover counts or explains. */
+/* ── Shared Archive Signatures & Editorial Primitives ──────────────────────── */
+.time-signature {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+  margin: 0;
+  color: var(--color-muted);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.time-signature time { color: var(--accent-blue); font-weight: 700; }
+.chapter-meta, .month-index-count, .month-index-age { color: var(--color-muted); font-size: 0.8rem; }
+.archive-empty { margin: 48px 0 96px; font-size: 1.4rem; color: var(--color-muted); }
+
+/* Legacy Home & Upcoming Primitives */
+.home-lead { padding: 0 0 clamp(40px, 6vw, 72px); }
+.home-lead > .section-mark { display: block; margin-bottom: 16px; }
+.home-alternates { margin-top: 24px; }
 .home-days { margin: 0; padding: 0; list-style: none; }
 .home-day { padding: 18px 0 6px; }
-.home-day + .home-day { border-top: 1px solid var(--color-border); }
-.home-day-date { display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px; font-size: .8rem; color: var(--color-muted); }
+.home-day + .home-day { border-top: 1px solid var(--hairline); }
+.home-day-date { display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px; font-size: 0.8rem; color: var(--color-muted); }
 .home-day-date time { color: var(--color-secondary); font-weight: 700; }
-/* The cover as ONE recent moment: its date, its words at cover size, one hero, a few small frames. */
 .home-moment .home-day-date { margin: 0 0 16px; }
-.home-moment .moment-text { max-width: 30ch; }
-.home-moment .moment-text p { font-size: clamp(1.5rem, 4vw, 2.2rem); line-height: 1.4; }
+.home-moment .moment-text { max-width: 32ch; }
+.home-moment .moment-text p { font-size: clamp(1.35rem, 3.6vw, 1.9rem); line-height: 1.45; }
 .home-moment .moment-hero { margin-top: 0; }
 .home-moment .moment-text + .moment-hero { margin-top: 20px; }
 .home-moment .photo-strip { margin-top: 8px; }
 .home-moment .chapter-meta { margin-top: 20px; }
 
-/* B-9a: date badge + moment left-right layout */
-.date-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay-ink); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 20px; white-space: nowrap; }
-.moment-layout { padding-bottom: clamp(56px, 8vw, 96px); }
+.date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--tint-blue);
+  padding: 6px 14px;
+  border-radius: var(--r-badge);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  color: var(--accent-blue);
+  font-weight: 700;
+  width: fit-content;
+  margin-bottom: 16px;
+  white-space: nowrap;
+}
+.moment-layout { padding-bottom: clamp(44px, 6vw, 76px); }
 .moment-photo-col { min-width: 0; }
 .moment-text-col { min-width: 0; }
-.moment-photo-col .moment-hero { border-radius: var(--r-card); box-shadow: var(--shadow); transition: transform .5s var(--ease-hover), box-shadow .5s var(--ease-hover); }
-@media (hover: hover) {
-  .moment-photo-col .moment-hero:hover { transform: translateY(-8px) scale(1.02); box-shadow: var(--shadow-hover); }
+.moment-photo-col .moment-hero {
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  transition: transform 380ms var(--ease-spring), box-shadow 380ms var(--ease-spring);
 }
-.moment-photo-col .moment-hero:active { transform: scale(.98); }
+@media (hover: hover) {
+  .moment-photo-col .moment-hero:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+}
+.moment-photo-col .moment-hero:active { transform: scale(0.985); }
 @media (min-width: 720px) {
-  .moment-layout { display: flex; flex-direction: row; align-items: center; gap: 60px; }
+  .moment-layout { display: flex; flex-direction: row; align-items: center; gap: 48px; }
   .moment-photo-col { flex: 1.2; }
   .moment-text-col { flex: 0.8; }
 }
-/* B-9a-fix: memory/dated cover uses EditorialMemory size="lead" — same visual shell as moment */
-.home-lead .memory-lead .memory-photo .photo { border-radius: var(--r-card); box-shadow: var(--shadow); overflow: hidden; transition: transform .5s var(--ease-hover), box-shadow .5s var(--ease-hover); }
+.home-lead .memory-lead .memory-photo .photo {
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: transform 380ms var(--ease-spring), box-shadow 380ms var(--ease-spring);
+}
 @media (hover: hover) {
-  .home-lead .memory-lead .memory-photo:hover .photo { transform: translateY(-8px) scale(1.02); box-shadow: var(--shadow-hover); }
+  .home-lead .memory-lead .memory-photo:hover .photo { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
 }
-.home-lead .memory-lead .memory-photo:active .photo { transform: scale(.98); }
-.home-lead .memory-lead .time-signature { display: inline-flex; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay-ink); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; margin-bottom: 12px; white-space: nowrap; }
-.home-lead .memory-lead .time-signature time, .home-lead .memory-lead .time-signature span { color: inherit; font-size: inherit; font-weight: inherit; }
+.home-lead .memory-lead .time-signature {
+  display: inline-flex;
+  gap: 6px;
+  background: var(--tint-blue);
+  padding: 5px 13px;
+  border-radius: var(--r-badge);
+  font-size: 0.82rem;
+  color: var(--accent-blue);
+  font-weight: 700;
+  box-shadow: none;
+  width: fit-content;
+  margin-bottom: 12px;
+  white-space: nowrap;
+}
+.home-lead .memory-lead .time-signature time,
+.home-lead .memory-lead .time-signature span { color: inherit; font-size: inherit; font-weight: inherit; }
 @media (min-width: 900px) {
-  .home-lead .memory-lead { display: flex; flex-direction: row; align-items: flex-start; gap: 60px; }
+  .home-lead .memory-lead { display: flex; flex-direction: row; align-items: flex-start; gap: 48px; }
   .home-lead .memory-lead .memory-photo { flex: 1.2; min-width: 0; }
-  .home-lead .memory-lead .memory-copy { flex: 0.8; min-width: 0; padding-top: 20px; }
+  .home-lead .memory-lead .memory-copy { flex: 0.8; min-width: 0; padding-top: 12px; }
 }
-/* B-9d's 1000px rule widened the lead block alone to 1100px. The rail layout below neutralises that
-   from 1200px up, which left 1000–1199 as the one band where the lead still started 170px to the
-   left of every other block on the page. Removed, so the front page is one 760px measure at every
-   width. The cover's 1.2:0.8 photo:text split does not depend on it — that is the flex rule above,
-   on whatever width the column has. */
-.home-past { padding: clamp(64px, 8vw, 96px) 0 clamp(40px, 6vw, 64px); }
+
+.home-past { padding: clamp(48px, 6vw, 76px) 0 clamp(32px, 5vw, 52px); }
 .home-past .memory { margin-top: 20px; }
-/* 近况概览 (2026-09-12). The block that answers 「他最近怎么样」 reads second, directly under the
-   greeting, in the page's one column — on a desktop screen it used to be moved into a 320px rail
-   and set at .8rem, which made the most important text on the page the smallest (that grid is
-   deleted below). Its own lines are set above the prior month's review so that 一眼 tells 近况 from
-   回顾 (原则五). */
-.home-overview { padding: clamp(28px, 4vw, 44px) 0 clamp(20px, 3vw, 32px); }
-/* The period the lines actually cover, always printed, both clocks (原则二). */
-.home-overview-span { margin: 8px 0 18px; color: var(--color-muted); font-size: .82rem; letter-spacing: .02em; }
-.home-change-note { margin: 18px 0 14px; list-style: none; padding: 0; }
-.home-change-note li { font-size: 1rem; font-weight: 500; color: var(--muted); line-height: 1.7; margin-top: 10px; }
-.home-overview .home-change-note li { font-size: 1.08rem; color: var(--color-primary); }
-.home-change-meta { display: flex; gap: 14px; margin: 0; color: var(--color-muted); font-size: .8rem; }
+.home-overview { padding: clamp(20px, 3vw, 32px) 0 clamp(16px, 2.5vw, 26px); }
+.home-overview-span { margin: 8px 0 16px; color: var(--color-muted); font-size: 0.82rem; }
+.home-change-note { margin: 16px 0 12px; list-style: none; padding: 0; }
+.home-change-note li { font-size: 1rem; font-weight: 500; color: var(--muted); line-height: 1.72; margin-top: 10px; }
+.home-overview .home-change-note li { font-size: 1.06rem; color: var(--color-primary); }
+.home-change-meta { display: flex; gap: 14px; margin: 0; color: var(--color-muted); font-size: 0.8rem; }
 .home-change-meta span { color: var(--color-secondary); font-weight: 700; }
-/* A month with no snapshot of its own: its published days as dated lines. Each line is one tap
-   target to that day, 52px tall, and carries no age — the span line above read both clocks once. */
-.home-facts { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
-.home-fact a { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; min-height: 52px; padding: 11px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
-.home-fact a:hover { color: var(--color-accent); }
-.home-fact time { color: var(--color-secondary); font-size: .78rem; font-weight: 700; white-space: nowrap; }
-.home-fact-title { font-size: 1.12rem; line-height: 1.5; }
+.home-facts { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--hairline-strong); }
+.home-fact a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  min-height: 52px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--hairline);
+  transition: color 180ms ease;
+}
+.home-fact a:hover { color: var(--brand-accent); }
+.home-fact time { color: var(--color-secondary); font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+.home-fact-title { font-size: 1.08rem; line-height: 1.5; }
 @media (min-width: 700px) {
   .home-fact a { grid-template-columns: 9.5em minmax(0, 1fr); align-items: baseline; gap: 4px 18px; }
 }
-/* 近期待办 (2026-09-12). Sits between 近况 and the day's story, and is deliberately set as a list
-   of actions rather than as another piece of reading: a tighter line, the date first, the status as
-   a small badge. It must be findable at a glance on a phone and never push 近况 off the screen, so
-   only four items show and the rest sit behind 展开全部 — nothing is dropped to fit.
-   The line through a finished item is `<del>`, used for 完成 only; 取消 keeps its text (a trip
-   nobody took is not a thing that got done) and 改期 carries where it moved to. */
+
 .home-upcoming { padding: clamp(8px, 1.5vw, 16px) 0 clamp(24px, 3.5vw, 40px); }
-/* 分组：组名是小字，规矩和页面其他 section-mark 一样；组与组之间靠间距分开，不再加线，
-   因为每条事项本来就带下划线，再加一条会读成表格。 */
 .upcoming-group + .upcoming-group { margin-top: 18px; }
-.upcoming-group-title { margin: 0; color: var(--color-secondary); font-size: .75rem; font-weight: 700; letter-spacing: .06em; }
-.upcoming-group--overdue .upcoming-group-title, .upcoming-group--done .upcoming-group-title, .upcoming-group--cancelled .upcoming-group-title { color: var(--color-muted); }
-.upcoming-list { margin: 10px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--color-primary); }
-.upcoming-item { padding: 14px 0 12px; border-bottom: 1px solid var(--color-border); }
-.upcoming-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; color: var(--color-muted); font-size: .78rem; letter-spacing: .03em; }
+.upcoming-group-title { margin: 0; color: var(--color-secondary); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; }
+.upcoming-group--overdue .upcoming-group-title,
+.upcoming-group--done .upcoming-group-title,
+.upcoming-group--cancelled .upcoming-group-title { color: var(--color-muted); }
+.upcoming-list { margin: 10px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--hairline-strong); }
+.upcoming-item { padding: 14px 0 12px; border-bottom: 1px solid var(--hairline); }
+.upcoming-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; color: var(--color-muted); font-size: 0.78rem; }
 .upcoming-when time { color: var(--color-secondary); font-weight: 700; }
-.upcoming-near { color: var(--color-accent); font-size: .82rem; font-weight: 700; }
+.upcoming-near { color: var(--accent-blue); font-size: 0.82rem; font-weight: 700; }
 .upcoming-when--unset { color: var(--color-muted); font-style: normal; }
 .upcoming-age { color: var(--color-muted); }
-.upcoming-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 10px; margin: 6px 0 0; font-size: 1.12rem; line-height: 1.5; }
+.upcoming-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 10px; margin: 6px 0 0; font-size: 1.08rem; line-height: 1.5; }
 .upcoming-when + .upcoming-title { margin-top: 6px; }
 .upcoming-item > .upcoming-title:first-child { margin-top: 0; }
 .upcoming-item--done .upcoming-title, .upcoming-item--cancelled .upcoming-title { color: var(--color-muted); }
 .upcoming-title del { text-decoration-thickness: 1px; text-decoration-color: var(--color-muted); }
-.upcoming-badge { padding: 2px 8px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--clay) 12%, transparent); color: var(--clay-ink); font-size: .72rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
-.upcoming-badge--tentative { background: color-mix(in srgb, var(--sage) 16%, transparent); color: color-mix(in srgb, var(--sage) 70%, #000); }
+.upcoming-badge {
+  padding: 2px 9px;
+  border-radius: var(--r-badge);
+  background: var(--tint-blue);
+  color: var(--accent-blue);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.upcoming-badge--tentative { background: var(--tint-mint); color: var(--accent-mint); }
 .upcoming-badge--done { background: transparent; border: 1px solid var(--color-border); color: var(--color-muted); }
-.upcoming-note { margin: 4px 0 0; color: var(--color-muted); font-size: .9rem; line-height: 1.6; }
-.upcoming-status-note { margin: 4px 0 0; color: var(--color-secondary); font-size: .85rem; }
-/* 依据行：先是「来源 · 8 月 4 日」这句可读的字，再是一个名字与去处一致的链接。
-   链接在 2026-09-13 验收时实测 38×40，拇指够不着，现在按 44×44 的下限撑开：高度用 min-height，
-   宽度用 min-width 加左右内边距（「翻到 2026 年 8 月」本来就宽，短标签才需要这条）。 */
+.upcoming-note { margin: 4px 0 0; color: var(--color-muted); font-size: 0.9rem; line-height: 1.6; }
+.upcoming-status-note { margin: 4px 0 0; color: var(--color-secondary); font-size: 0.85rem; }
 .upcoming-meta { display: flex; flex-wrap: wrap; gap: 2px 18px; margin: 4px 0 0; }
 .upcoming-evidence { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 10px; }
-.upcoming-basis { color: var(--color-muted); font-size: .78rem; }
+.upcoming-basis { color: var(--color-muted); font-size: 0.78rem; }
 .upcoming-basis time { color: var(--color-secondary); font-weight: 700; }
-.upcoming-meta .upcoming-source, .upcoming-source-check .upcoming-source { display: inline-flex; min-height: 44px; min-width: 44px; align-items: center; justify-content: center; padding: 0 6px; font-size: .8rem; }
-/* 来源摘要 (2026-09-13). 每一条依据是一行：谁提的、什么语气、哪天记下的，然后是那句经审核的话。
-   语气词和角色是并排的两个小字，中间的「·」由 CSS 生成，所以标记里不会留下重复的分隔符；
-   「提出／完成／改期／取消」做成一个小标签，四种依据在视觉上一眼分得开，不会读成同一件事。 */
+.upcoming-meta .upcoming-source,
+.upcoming-source-check .upcoming-source {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  font-size: 0.8rem;
+}
 .upcoming-sources { margin: 8px 0 0; padding: 0; list-style: none; }
-.upcoming-source-row { padding-left: 10px; border-left: 2px solid var(--color-border); }
+.upcoming-source-row { padding-left: 10px; border-left: 2px solid var(--hairline-strong); }
 .upcoming-source-row + .upcoming-source-row { margin-top: 10px; }
-.upcoming-source-row--completed { border-left-color: color-mix(in srgb, var(--sage) 55%, transparent); }
-.upcoming-source-row--cancelled, .upcoming-source-row--rescheduled { border-left-color: color-mix(in srgb, var(--clay) 40%, transparent); }
-.upcoming-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; margin: 0; color: var(--color-muted); font-size: .76rem; letter-spacing: .02em; }
-.upcoming-source-head > * + *::before { margin-right: 8px; color: var(--color-border); content: "·"; }
-.upcoming-source-kind { padding: 1px 7px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--color-secondary) 9%, transparent); color: var(--color-secondary); font-weight: 700; }
+.upcoming-source-row--completed { border-left-color: var(--accent-mint); }
+.upcoming-source-row--cancelled, .upcoming-source-row--rescheduled { border-left-color: var(--accent-peach); }
+.upcoming-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; margin: 0; color: var(--color-muted); font-size: 0.76rem; }
+.upcoming-source-head > * + *::before { margin-right: 8px; color: var(--hairline-strong); content: "·"; }
+.upcoming-source-kind { padding: 1px 8px; border-radius: var(--r-badge); background: var(--card-soft); color: var(--color-secondary); font-weight: 700; }
 .upcoming-source-role { color: var(--color-secondary); font-weight: 700; }
-/* 未确认的来源人物照实写出来，并且不做成人名的样子——它不是一个名字。 */
 .upcoming-source-role--unconfirmed { color: var(--color-muted); font-weight: 400; font-style: italic; }
 .upcoming-source-day time, .upcoming-source-happened time { color: var(--color-secondary); }
-.upcoming-source-summary { margin: 3px 0 0; color: var(--color-primary); font-size: .92rem; line-height: 1.65; }
+.upcoming-source-summary { margin: 3px 0 0; color: var(--color-primary); font-size: 0.92rem; line-height: 1.65; }
 .upcoming-source-check { margin: 0; }
-.upcoming-source-pending { margin: 8px 0 0; color: var(--color-muted); font-size: .8rem; }
-/* 读取失败自己说自己，不借用「待审核」，也不借用「没有来源」。 */
-.upcoming-sources-unreadable { margin: 10px 0 0; color: var(--color-muted); font-size: .82rem; line-height: 1.6; }
-.upcoming-more { margin-top: 4px; }
+.upcoming-source-pending { margin: 8px 0 0; color: var(--color-muted); font-size: 0.8rem; }
+.upcoming-sources-unreadable { margin: 10px 0 0; color: var(--color-muted); font-size: 0.82rem; line-height: 1.6; }
 .upcoming-more { margin-top: 14px; }
-.upcoming-more > summary { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; padding-right: 4px; color: var(--color-accent); cursor: pointer; font-size: .85rem; font-weight: 600; list-style: none; }
+.upcoming-more > summary {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  padding-right: 4px;
+  color: var(--brand-accent);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  list-style: none;
+}
 .upcoming-more > summary::-webkit-details-marker { display: none; }
 .upcoming-more > summary::after { margin-left: 8px; content: "＋"; }
 .upcoming-more[open] > summary::after { content: "－"; }
 .upcoming-more .upcoming-group:first-child .upcoming-list { border-top: none; }
 .upcoming-more .upcoming-group:first-child { margin-top: 0; }
-/* 完整覆盖、队列里也没有待审的一行。带上读到哪天，「没有待办」才是可核对的。 */
-.upcoming-clear { margin: 12px 0 0; color: var(--color-muted); font-size: .95rem; line-height: 1.7; }
+.upcoming-clear { margin: 12px 0 0; color: var(--color-muted); font-size: 0.95rem; line-height: 1.7; }
 
-/* 上一个月的回顾. Quieter than 近况 AND visibly a block of its own: with September holding three
-   days of material and August a five-line summary, the review is the bigger thing on the page by
-   area, and the two were reading as one list of 近况 under two labels. The soft card gives it a
-   boundary a reader sees before they read a word, which is 原则五's 「一眼」 rather than a caption
-   asking them to work it out. Type stays smaller and muted; nothing is truncated. */
 .home-prior-review { padding: clamp(8px, 1.5vw, 16px) 0 clamp(20px, 3vw, 32px); }
-.home-prior-review > div { padding: clamp(16px, 3vw, 22px) clamp(16px, 3vw, 24px) clamp(10px, 2vw, 16px); background: var(--card-soft); border-radius: 18px; }
-.home-prior-review .section-mark { display: block; margin-bottom: 2px; }
+.home-prior-review > div {
+  padding: clamp(18px, 3vw, 24px);
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.home-prior-review .section-mark { display: block; margin-bottom: 4px; }
 .home-prior-review .home-change-note { margin: 8px 0 0; }
-.home-prior-review .home-change-note li { font-size: .95rem; color: var(--color-muted); margin-top: 8px; }
-/* 忽然想起 (原则六): one relation, one story. Set quieter than 最近的一段生活 — it is something
-   the archive remembers, not the news. The relation line carries the weight; the story below it is
-   an ordinary chapter entry, so nothing new had to be designed for it. */
-.home-resurface { padding: clamp(48px, 7vw, 80px) 0 clamp(32px, 5vw, 56px); }
-.resurface-relation { margin: 10px 0 18px; font-size: clamp(1.4rem, 3.4vw, 1.9rem); color: var(--color-secondary); }
+.home-prior-review .home-change-note li { font-size: 0.95rem; color: var(--color-muted); margin-top: 8px; }
+.home-resurface { padding: clamp(40px, 6vw, 68px) 0 clamp(28px, 4vw, 48px); }
+.resurface-relation { margin: 10px 0 18px; font-size: clamp(1.3rem, 3vw, 1.75rem); font-weight: 700; color: var(--color-secondary); }
 .home-resurface .memory { margin-top: 0; }
-/* 44px 的点击高度。首页上低于 44 的可点元素只有故事标题这一种：忽然想起那段实测 272×37，
-   抽到单行标题时代表日记那段实测 334×42（两者都随抽签变化）。标题用的是 .memory 的通用样式，
-   所以只在首页这一层加内边距，月页的同一个结构不动。 */
 .home-page .memory-copy h3 a { display: inline-block; padding-block: 5px; }
-/* A group's stages: the change read in the order it happened. The date and the age sit together on
-   the left so the distance between two stages is legible at a glance, and each line is its own tap
-   target back to that story. */
-.echo-stages { margin: 0; padding: 0; list-style: none; counter-reset: none; }
-.echo-stages a { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px 14px; min-height: 48px; padding: 10px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
-.echo-stages a:hover { color: var(--color-accent); }
-.echo-stages time { color: var(--color-secondary); font-size: .78rem; font-weight: 700; white-space: nowrap; }
-.echo-age { color: var(--color-muted); font-size: .78rem; white-space: nowrap; }
-.echo-title { grid-column: 1 / -1; font-size: 1.15rem; }
+
+.echo-stages { margin: 0; padding: 0; list-style: none; }
+.echo-stages a {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 4px 14px;
+  min-height: 48px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+  transition: color 180ms ease;
+}
+.echo-stages a:hover { color: var(--brand-accent); }
+.echo-stages time { color: var(--color-secondary); font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+.echo-age { color: var(--color-muted); font-size: 0.78rem; white-space: nowrap; }
+.echo-title { grid-column: 1 / -1; font-size: 1.1rem; font-weight: 600; }
 @media (min-width: 700px) {
   .echo-stages a { grid-template-columns: 9em 7em 1fr; }
   .echo-title { grid-column: auto; }
@@ -397,753 +950,1162 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .home-same-day-mark { margin: 28px 0 4px; }
 .home-same-day .memory-line a { grid-template-columns: minmax(0, 1fr); }
 .home-lead .memory-lines { margin: 0 0 18px; }
-/* 月份与全部记忆的入口，集中收尾. The newest month keeps the card; the other months the page
-   mentioned, and 全部记忆, are plain links under it. */
-.home-entries { padding: clamp(36px, 5vw, 64px) 0 clamp(56px, 7vw, 96px); }
-.home-entry-links { display: flex; flex-wrap: wrap; gap: 0 26px; margin: 14px 0 0; padding: 0; list-style: none; }
-.home-entry-links a { display: inline-flex; min-height: 44px; align-items: center; font-size: .9rem; }
-/* B-9d: 本月入口 card — clickable card with badge + soft rounded shell */
-.home-month-card { display: block; padding: clamp(24px, 4vw, 40px); background: var(--card-soft); border-radius: var(--r-card); text-decoration: none; transition: transform .3s var(--ease-hover), box-shadow .3s var(--ease-hover); }
-@media (hover: hover) { .home-month-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); } }
-.home-month-card:active { transform: scale(.98); }
-.month-card-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay-ink); font-weight: 600; box-shadow: var(--shadow-badge); white-space: nowrap; }
-.month-card-cta { margin: 16px 0 0; color: var(--muted); font-size: .88rem; font-weight: 600; }
+.home-entries { padding: clamp(32px, 5vw, 56px) 0 clamp(48px, 6vw, 80px); }
+.home-entry-links { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 14px 0 0; padding: 0; list-style: none; }
+.home-entry-links a { display: inline-flex; min-height: 44px; align-items: center; font-size: 0.9rem; font-weight: 600; }
+.home-month-card {
+  display: block;
+  padding: clamp(22px, 3.5vw, 34px);
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  transition: transform 320ms var(--ease-spring), box-shadow 320ms var(--ease-spring);
+}
+@media (hover: hover) { .home-month-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); } }
+.home-month-card:active { transform: scale(0.985); }
+.month-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--tint-blue);
+  padding: 6px 14px;
+  border-radius: var(--r-badge);
+  font-size: 0.85rem;
+  color: var(--accent-blue);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.month-card-cta { margin: 14px 0 0; color: var(--muted); font-size: 0.88rem; font-weight: 600; }
 
-/* Year / month anchors */
-.year-chapter { padding-bottom: clamp(48px, 7vw, 88px); }
-.year-anchor { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; padding: 40px 0 12px; border-bottom: 1px solid var(--color-primary); }
-.year-anchor h2 { margin: 0; color: var(--color-accent); font-size: clamp(2.6rem, 7vw, 4rem); font-weight: 500; line-height: 1; letter-spacing: -.03em; }
-/* 年页上「9 月」这类月份链接在手机上只有 45×32，够不到 44px 触达高度。 */
+/* ── Year / Month Anchors & Chapter Surfaces ───────────────────────────────── */
+.year-chapter { padding-bottom: clamp(40px, 6vw, 76px); }
+.year-anchor { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; padding: 36px 0 12px; border-bottom: 1px solid var(--hairline-strong); }
+.year-anchor h2 { margin: 0; color: var(--brand-accent); font-size: clamp(2.1rem, 5.5vw, 3.2rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.025em; }
 .month-anchor h2 a, .year-anchor h2 a { display: inline-flex; align-items: center; min-height: 44px; }
-.year-anchor p { margin: 0; color: var(--color-muted); font-size: .85rem; }
-.month-anchor { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 28px 0 10px; border-bottom: 1px solid var(--color-border); }
-.month-anchor h2, .month-anchor h3 { margin: 0; font-size: clamp(1.5rem, 3.6vw, 2rem); font-weight: 600; line-height: 1.2; }
-.month-anchor p { margin: 0; color: var(--color-muted); font-size: .82rem; }
+.year-anchor p { margin: 0; color: var(--color-muted); font-size: 0.85rem; }
+.month-anchor { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 26px 0 10px; border-bottom: 1px solid var(--hairline); }
+.month-anchor h2, .month-anchor h3 { margin: 0; font-size: clamp(1.35rem, 3.2vw, 1.8rem); font-weight: 700; line-height: 1.25; }
+.month-anchor p { margin: 0; color: var(--color-muted); font-size: 0.82rem; }
 .month-chapter { padding-bottom: 12px; }
 .month-memories { display: grid; }
-.month-index { margin: 24px 0 0; padding: 0; list-style: none; }
-.month-index-row a { display: grid; grid-template-columns: 4.5rem 1fr auto; align-items: baseline; gap: 12px; min-height: 52px; padding: 8px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
-.month-index-row a:hover { color: var(--color-accent); }
-.month-index-label { font-size: 1.25rem; }
+.month-index { margin: 20px 0 0; padding: 0; list-style: none; }
+.month-index-row a {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hairline);
+  transition: color 180ms ease;
+}
+.month-index-row a:hover { color: var(--brand-accent); }
+.month-index-label { font-size: 1.15rem; font-weight: 600; }
 .year-month { padding-bottom: 20px; }
 .year-month .photo-strip { margin-top: 20px; }
 .year-month .memory-lines { margin-top: 12px; }
 .year-month .chapter-meta { margin: 8px 0 0; }
-.chapter-masthead { display: grid; gap: 8px; padding: clamp(32px, 6vw, 64px) 0 clamp(32px, 5vw, 56px); }
-.chapter-masthead .back-link { justify-self: start; margin-bottom: 24px; }
-.chapter-masthead h1 { margin: 6px 0 0; font-size: clamp(2.8rem, 9vw, 5.5rem); font-weight: 500; letter-spacing: -.04em; line-height: 1; }
-.chapter-age { margin: 4px 0 0; color: var(--color-muted); font-size: .95rem; }
+
+.chapter-masthead { display: grid; gap: 8px; padding: clamp(24px, 4.5vw, 48px) 0 clamp(20px, 3.5vw, 32px); }
+.chapter-masthead .back-link { justify-self: start; margin-bottom: 12px; }
+.chapter-masthead h1 { margin: 4px 0 0; font-size: clamp(2.1rem, 5.6vw, 3.2rem); font-weight: 700; letter-spacing: -0.025em; line-height: 1.16; }
+.chapter-age { margin: 4px 0 0; font-family: var(--font-display); color: var(--accent-blue); font-size: 0.88rem; font-weight: 600; }
 .chapter-masthead .chapter-meta { margin: 0; }
-.chapter-summary { max-width: 30ch; margin: 18px 0 0; list-style: none; padding: 0; font-size: clamp(1.35rem, 3.4vw, 1.9rem); font-weight: 500; line-height: 1.4; }
-.chapter-summary li { margin-top: .35em; }
-.chapter-narration { max-width: 30ch; margin: 18px 0 0; color: var(--color-muted); font-size: clamp(1.1rem, 2.8vw, 1.4rem); line-height: 1.5; }
-.chapter-standfirst { max-width: 30ch; margin: 18px 0 0; color: var(--color-muted); font-size: clamp(1.1rem, 2.8vw, 1.4rem); line-height: 1.5; }
-.month-page .photo-strip { margin-top: 28px; }
-/* The month's days: one bordered block per day, date and age as a quiet running head. */
-.month-days { margin-top: clamp(32px, 5vw, 56px); }
+.chapter-summary {
+  max-width: 36em;
+  margin: 14px 0 0;
+  list-style: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: clamp(1.06rem, 2.3vw, 1.24rem);
+  font-weight: 500;
+  line-height: 1.72;
+  color: var(--color-text);
+}
+.chapter-summary li { margin-top: 0.35em; }
+.chapter-narration, .chapter-standfirst { max-width: 34em; margin: 14px 0 0; color: var(--color-muted); font-size: clamp(1.02rem, 2.2vw, 1.2rem); line-height: 1.65; }
+.month-page .photo-strip { margin-top: 24px; }
+.month-days { margin-top: clamp(24px, 4vw, 40px); }
 .month-days > ol { margin: 0; padding: 0; list-style: none; }
-/* 试读 — the private reading surface (app/preview). Same paper, same type, no new visual language:
-   a year set as one column of months so it reads straight through. The only thing this adds is the
-   draft mark, and it is deliberately plain rather than alarming — it states what a paragraph is,
-   it is not a warning banner. */
+
+/* Preview Reading Surface (/preview) */
 .preview-years { margin: 24px 0 40px; padding: 0; list-style: none; }
-.preview-year-link { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; min-height: 56px; padding: 12px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
-.preview-year-link:hover { color: var(--color-accent); }
-.preview-year-link > .serif { font-size: 1.6rem; }
+.preview-year-link { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; min-height: 56px; padding: 12px 0; border-bottom: 1px solid var(--hairline); transition: color 180ms ease; }
+.preview-year-link:hover { color: var(--brand-accent); }
+.preview-year-link > .serif { font-size: 1.5rem; }
 .preview-month { padding: clamp(24px, 5vw, 48px) 0 0; }
-.preview-month-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0; padding-top: 16px; border-top: 1px solid var(--color-primary); font-size: clamp(1.6rem, 4.5vw, 2.4rem); font-weight: 500; }
-.preview-month.is-quiet .preview-month-head { border-top-color: var(--color-border); color: var(--color-muted); font-size: clamp(1.1rem, 3vw, 1.4rem); }
+.preview-month-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0; padding-top: 16px; border-top: 1px solid var(--hairline-strong); font-size: clamp(1.5rem, 4vw, 2.1rem); font-weight: 700; }
+.preview-month.is-quiet .preview-month-head { border-top-color: var(--hairline); color: var(--color-muted); font-size: clamp(1.1rem, 2.8vw, 1.35rem); }
 .preview-review { margin: 18px 0 8px; }
-.preview-review .chapter-summary { max-width: 34ch; font-size: clamp(1.2rem, 3vw, 1.5rem); }
-/* The review's own pictures, set as columns rather than as a row grid. A row grid has to give every
-   cell in a row the same height, so one tall portrait beside two landscapes tears holes in its own
-   row — measured on 2026-08's four pictures, which come out 443, 140, 333 and 187 tall at the same
-   width. Columns let each photograph keep its proportions and still leave no gaps. Two columns on a
-   phone, where three would be about 120px wide. */
-.preview-review .photo-strip { display: block; column-count: 2; column-gap: 6px; margin-top: 20px; }
-.preview-review .photo-strip > * { display: block; margin: 0 0 6px; break-inside: avoid; }
+.preview-review .chapter-summary { max-width: 36ch; font-size: clamp(1.1rem, 2.6vw, 1.35rem); }
+.preview-review .photo-strip { display: block; column-count: 2; column-gap: 8px; margin-top: 20px; }
+.preview-review .photo-strip > * { display: block; margin: 0 0 8px; break-inside: avoid; border-radius: var(--r-media); }
 @media (min-width: 700px) { .preview-review .photo-strip { column-count: 3; } }
 .preview-story .month-day-date { flex-wrap: wrap; }
-.preview-story h3 { margin: 0 0 10px; font-size: clamp(1.25rem, 3.2vw, 1.6rem); font-weight: 500; }
-/* Reading weight, not display weight — the same step .month-reading .moment-text takes so a
-   paragraph of prose does not come out heavier than the title above it. */
-.preview-paragraph { max-width: 34em; margin: 0 0 10px; font-weight: 400; font-size: clamp(1.05rem, 2.8vw, 1.15rem); line-height: 1.95; }
+.preview-story h3 { margin: 0 0 10px; font-size: clamp(1.2rem, 3vw, 1.5rem); font-weight: 700; }
+.preview-paragraph { max-width: 36em; margin: 0 0 10px; font-weight: 400; font-size: clamp(1.02rem, 2.4vw, 1.1rem); line-height: 1.85; }
 .preview-photo { margin: 12px 0 16px; max-height: 76vh; border-radius: var(--r-card); }
-.preview-draft-mark { color: var(--color-accent); font-weight: 700; }
-.preview-story.is-draft { border-left: 2px solid var(--color-border); padding-left: 14px; }
-.month-day { padding: 32px 0 10px; }
+.preview-draft-mark { color: var(--brand-accent); font-weight: 700; }
+.preview-story.is-draft { border-left: 2px solid var(--brand-accent); padding-left: 14px; }
+
+/* ── Month Timeline, Highlights, Day Entries & Day Details ─────────────────── */
+.month-day { padding: 28px 0 10px; }
 .month-day .photo-strip { margin-top: 0; }
-.month-day-date { display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px; font-size: .8rem; color: var(--color-muted); }
-.month-day-date time { color: var(--color-secondary); font-weight: 700; }
-.month-day-notes { margin: 12px 0 4px; padding-left: 1.2em; font-size: .9rem; color: var(--color-text); }
+.month-day-date {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+.month-day-date time { color: var(--accent-blue); font-weight: 700; }
+.month-day-notes { margin: 12px 0 4px; padding-left: 1.2em; font-size: 0.92rem; color: var(--color-text); }
 .month-day-notes li { margin: 4px 0; }
 
-/* ---------- Publication moments ---------- */
-/* CHAPTER — the month read as prose, not as an index of its own days.
-   A day is a passage: its date and age hang in the left margin as a running head, and the words
-   the archive kept for that day run on beneath one another at reading size. Each entry stays its
-   own paragraph — it is a separate record and the page never merges two of them into a sentence —
-   but they are set as consecutive indented paragraphs of a Chinese book, so a day reads through
-   in one go and a month reads as twelve passages rather than thirty-six headlines.
-   Reading size is the point: at title size these short, plain observations wrapped every ten
-   characters and every one of them shouted. Weight is reserved for what actually carries it — a
-   published memory keeps its title type, so it still stands above an ordinary day (原则五). */
-.month-moment { padding: clamp(24px, 4vw, 36px) 0 clamp(16px, 3vw, 24px); border-bottom: 1px solid var(--color-border); }
-/* ---- 一天的详情页 ---- */
-/* The title is the day's own sentence, so it is sized to be read rather than to be a masthead: a
-   28-character Chinese title at the old h1 size wrapped to four lines on a 390px phone and left a
-   band of empty space under it. */
-.day-detail-title { margin: 8px 0 0; max-width: 22ch; font-size: clamp(1.5rem, 5.2vw, 2.1rem); line-height: 1.3; font-weight: 600; }
-.day-detail-when { display: flex; align-items: baseline; gap: 10px; margin: 0; color: var(--color-muted); font-size: .85rem; }
-.day-detail-when time { color: var(--color-secondary); font-weight: 700; }
-/* Prose measure comes from the column, and words break at word boundaries — no hyphenation and no
-   hand-inserted line breaks, so the same paragraph wraps correctly at 390px and at 1280px. */
-.day-detail .story-column p { line-height: 1.8; overflow-wrap: break-word; word-break: normal; hyphens: none; }
-.day-detail .story-column { max-width: 34em; }
-.day-detail-photos { margin-top: clamp(18px, 3vw, 26px); }
-.day-detail-merged { margin-top: 14px; color: var(--color-muted); font-size: .85rem; }
-/* One disclosure, and the long quotes inside it wrap instead of being cut at 120 characters. */
+.month-moment { padding: clamp(22px, 3.6vw, 32px) 0 clamp(18px, 3vw, 26px); border-bottom: 1px solid var(--hairline); }
+
+.day-detail-title {
+  margin: 8px 0 0;
+  max-width: 22em;
+  font-family: var(--font-heading);
+  font-size: clamp(1.55rem, 4.4vw, 2.25rem);
+  line-height: 1.28;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  text-wrap: pretty;
+}
+.day-detail-when {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 5px 13px;
+  border-radius: var(--r-badge);
+  background: var(--tint-blue);
+  color: var(--accent-blue);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.day-detail-when time { color: var(--accent-blue); font-weight: 700; }
+.day-detail .story-column p { line-height: 1.84; overflow-wrap: break-word; word-break: normal; hyphens: none; }
+.day-detail .story-column { max-width: 36em; }
+.day-detail-photos { margin-top: clamp(18px, 3vw, 28px); padding-bottom: clamp(20px, 3.5vw, 32px); }
+.day-detail-merged { margin-top: 14px; color: var(--color-muted); font-size: 0.85rem; }
 .day-material .evidence-quote, .day-material .evidence-note { overflow-wrap: break-word; word-break: normal; white-space: pre-wrap; }
 .day-material .evidence-item { break-inside: avoid; }
-/* The refusal path: an explicit control, only after a fullscreen request was turned down. */
-.video-fullscreen { position: absolute; right: 8px; top: 8px; z-index: 2; padding: 4px 10px; border: 0; border-radius: 999px;
-  background: rgba(0,0,0,.55); color: #fff; font-size: .75rem; line-height: 1.6; cursor: pointer; }
-.video-fullscreen:hover { background: rgba(0,0,0,.72); }
-/* One edited day: a title, then prose, then that day's pictures. The list wrapper already spaces
-   the days apart, so the entry itself carries no extra rule of its own. */
+
+.video-fullscreen {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 2;
+  padding: 5px 11px;
+  border: 0;
+  border-radius: var(--r-badge);
+  background: rgba(15, 23, 42, 0.68);
+  backdrop-filter: blur(8px);
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.video-fullscreen:hover { background: rgba(15, 23, 42, 0.84); }
+
 .month-days--edited ol { list-style: none; margin: 0; padding: 0; }
 .month-days--edited .month-day { padding: 0; }
-.moment-day-entry { padding-top: clamp(20px, 3.5vw, 30px); }
-.day-entry-title { margin: 0 0 10px; font-size: clamp(1.15rem, 2.8vw, 1.45rem); font-weight: 600; line-height: 1.35; color: var(--color-text); }
-
-/* ── 一个月里的层级与分段（原则五 + 2026-09-19 全站验收）────────────────────────────
-   之前：出生那个月和平常的六月同一个模板、同一个字号，26 屏全是一样的块，读到一半不知道在哪。
-   现在：几天领头（lib/month-day-weight.ts，靠「写了多少、拍了多少」的代理信号，手写 emphasis 可覆盖），
-   领头的日子标题更大、上方留白更多、一张大图领着；其余的日子保持原样，只是照片挪到标题下面。
-   整个月再按 1–7 / 8–14 / 15–21 / 22–月底 分成四块，每块一个安静的标记，顶上一排可以跳。 */
-.moment-day-lead { padding-top: clamp(40px, 7vw, 68px); }
-.moment-day-lead .day-entry-title { margin-bottom: 14px; font-size: clamp(1.55rem, 4.6vw, 2.15rem); line-height: 1.28; }
+.moment-day-entry,
+.month-days .moment-day-entry {
+  padding: clamp(22px, 3.5vw, 30px) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.month-days .month-day:last-child > .moment-day-entry { border-bottom: 0; }
+.day-entry-title {
+  margin: 0 0 10px;
+  font-family: var(--font-heading);
+  font-size: clamp(1.22rem, 2.8vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  color: var(--color-primary);
+  text-wrap: pretty;
+}
+.moment-day-lead,
+.month-days .moment-day-lead {
+  position: relative;
+  padding-top: clamp(32px, 5vw, 48px);
+}
+.moment-day-lead .day-entry-title {
+  margin-bottom: 14px;
+  font-size: clamp(1.48rem, 3.8vw, 1.95rem);
+  line-height: 1.3;
+}
 .moment-day-lead .day-lead-photo { margin: 6px 0 18px; }
 .moment-day-lead .day-photos { margin-top: 20px; }
-/* 2026-09-23：每一天同一个顺序——日期 → 标题 → 正文 → 照片网格 → 原记录链接。照片永远在文字后面。 */
 .moment-day-entry .moment-body > .day-photos { margin: 16px 0 0; }
 .day-entry-story { margin-top: 1.1em; }
-.day-entry-story-title { margin: 0 0 .4em; font-size: 1.02rem; font-weight: 600; line-height: 1.4; }
+.day-entry-story-title { margin: 0 0 0.4em; font-size: 1.04rem; font-weight: 700; line-height: 1.4; }
 .day-entry-story-title a { color: inherit; text-decoration: none; }
-.day-entry-more { margin: 12px 0 0; }
+.day-entry-more { margin: 14px 0 0; }
+.day-entry-more .text-link {
+  min-height: 44px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
 .month-more { margin: clamp(28px, 5vw, 44px) 0 0; text-align: center; }
-.month-more .text-link { min-height: 44px; padding: 0 18px; border: 1px solid var(--color-border); border-radius: 999px; background: none; }
-.month-more .text-link[disabled] { opacity: .6; }
-.pg-cell:focus-visible { outline: 2px solid var(--color-secondary); outline-offset: 2px; }
+.month-more .text-link {
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-badge);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-badge);
+}
+.month-more .text-link[disabled] { opacity: 0.6; }
+.pg-cell:focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 2px; }
 
 .month-week { scroll-margin-top: 88px; }
-.month-week > ol { margin-top: 4px; }
-.week-mark { margin: clamp(36px, 6vw, 56px) 0 0; padding-top: 14px; border-top: 1px solid var(--color-border); font-size: .78rem; letter-spacing: .1em; color: var(--color-muted); }
-.month-week:first-of-type .week-mark { margin-top: 20px; }
+.month-week > ol { margin-top: 8px; }
+.week-mark {
+  margin: clamp(28px, 4.5vw, 42px) 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline-strong);
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent-blue);
+}
+.month-week:first-of-type .week-mark { margin-top: 12px; }
 
-.month-jump { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
-.month-jump a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 999px; font-size: .78rem; white-space: nowrap; color: var(--color-secondary); text-decoration: none; }
-.month-jump a:hover { border-color: var(--color-secondary); color: var(--color-text); }
-/* 月份大标题：验收时页面上最大的元素是一个日历数字（桌面约 88px）——最该被读的是张年的这个月，
-   不是「2026 年 9 月」这几个字。只压月页，年页、记忆页的同名类不动。 */
-.month-page .chapter-masthead h1 { font-size: clamp(2.3rem, 6.4vw, 3.6rem); }
-/* No max-width in ch here: the measure comes from the reading column, so the same paragraph wraps
-   on its own at 390px and at 1280px rather than being broken to fit a guess. */
-.day-entry-text { margin: 0 0 .7em; line-height: 1.75; color: var(--color-text); }
+.month-highlights {
+  margin-block: 20px 14px;
+  padding: 18px 22px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.month-highlights .section-mark { margin: 0 0 8px; }
+.month-highlights a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding-block: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.96rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline);
+  transition: color 180ms ease;
+}
+.month-highlights a::after {
+  content: "↓";
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  color: var(--brand-accent);
+  opacity: 0.75;
+}
+.month-highlights a:last-of-type { border-bottom: 0; padding-bottom: 2px; }
+.month-highlights a:hover { color: var(--brand-accent); }
+.month-highlights a:hover::after { opacity: 1; }
+
+.month-jump {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.month-jump a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-badge);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-badge);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--color-secondary);
+  text-decoration: none;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, transform 180ms var(--ease-spring);
+}
+@media (hover: hover) {
+  .month-jump a:hover {
+    border-color: var(--brand-accent);
+    color: var(--brand-accent);
+    transform: translateY(-1px);
+  }
+}
+
+.month-page .chapter-masthead h1 { font-size: clamp(2.1rem, 5.2vw, 3.1rem); }
+.day-entry-text {
+  max-width: 38em;
+  margin: 0 0 0.85em;
+  font-family: var(--font-body);
+  font-size: 1.02rem;
+  line-height: 1.82;
+  color: var(--color-text);
+}
 .day-entry-text:last-of-type { margin-bottom: 0; }
 .moment-day-entry .day-photos { margin-top: 16px; }
 .moment-body { min-width: 0; }
 .moment-text { max-width: 34ch; }
-.moment-text p { margin: 0 0 10px; font-size: clamp(1.25rem, 3.2vw, 1.7rem); line-height: 1.5; }
+.moment-text p { margin: 0 0 10px; font-size: clamp(1.2rem, 3vw, 1.6rem); line-height: 1.5; }
 .month-reading { margin-top: clamp(24px, 4vw, 40px); }
 .month-reading > .section-mark { display: block; margin-bottom: 8px; }
 .month-reading .month-moment { padding: clamp(24px, 3.6vw, 34px) 0 0; border-bottom: 0; }
-/* 2026-09-16 视觉验收：`.moment-memory_led` 的 margin-top(≤72) + padding-top(≤38) 是给**两段记忆
-   之间**的呼吸，但月页的第一段紧挨着「这个月记下来的」这行小标题，于是标题下面出现约 120px 空白，
-   标题被晾在那儿，手机上第一眼像是内容没加载出来。标题上方留白多、下方留白少才是对的。 */
 .month-reading > .section-mark + .month-moment,
 .month-reading > .section-mark + .month-moment.moment-memory_led { margin-top: 0; padding-top: clamp(12px, 2vw, 18px); }
 .month-reading .month-day-date { margin: 0 0 10px; }
-/* The same day continuing under a head already stated: closer, so it reads on. */
 .month-reading .moment-continued { padding-top: clamp(12px, 1.8vw, 16px); }
-.month-reading .moment-text { max-width: 34em; font-weight: 400; font-size: clamp(1.05rem, 2.8vw, 1.15rem); line-height: 1.95; }
+.month-reading .moment-text { max-width: 36em; font-weight: 400; font-size: clamp(1.02rem, 2.6vw, 1.12rem); line-height: 1.88; }
 .month-reading .moment-text p { margin: 0; font-size: inherit; line-height: inherit; text-indent: 2em; }
-/* 「这一天的照片」 — the day's own pictures, after the day's words. Set apart from the story above
-   it (its own air, a quiet heading) so it reads as the date's photographs, not as an illustration
-   the story is claiming. Grid and cap match 「这个月的照片」 so the two read as one archive. */
-.day-photos { margin: clamp(20px, 3vw, 28px) 0 clamp(28px, 4vw, 40px); }
+
+.day-photos { margin: clamp(20px, 3vw, 28px) 0 clamp(24px, 3.5vw, 36px); }
 .day-photos > .section-mark { display: block; margin: 0 0 10px; }
-.day-photos .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 0; }
-.day-photos .photo { max-height: 220px; }
+.day-photos .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 0; }
+.day-photos .photo { max-height: 220px; border-radius: 12px; }
 .day-photos .day-photos-expand { margin: 10px 0 0; }
 @media (min-width: 900px) {
-  /* Aligns with the story column above: the date gutter stays empty, pictures start where the
-     words start. */
   .month-reading .day-photos { margin-left: calc(6.5rem + 32px); }
 }
-/* A published memory is the month's heavier unit: a rule and extra air open it, its own date line
-   gives way to the running head above it, and its title keeps the size a story has earned. */
-.month-reading .moment-memory_led { margin-top: clamp(56px, 6vw, 72px); padding-top: clamp(26px, 4vw, 38px); }
+
+.month-reading .moment-memory_led { margin-top: clamp(48px, 5.5vw, 64px); padding-top: clamp(24px, 3.6vw, 34px); }
 .month-reading .moment-memory_led .memory { padding: 0; border-bottom: 0; }
 .month-reading .moment-memory_led .memory .time-signature { display: none; }
 .month-reading .moment-memory_led .memory-copy h3 { margin-top: 0; }
-.month-reading .moment-memory_led .memory-copy p { max-width: 34em; }
-/* 图文衔接 (2026-09-13): a story's approved photographs read after its words, sized by what each
-   picture is — not one cover slot stamped on every story. One landscape runs the text measure; one
-   portrait stands narrow (and beside the words on a wide screen); two or more sit as a pair. */
-.memory-story-photos { max-width: 34em; }
+.month-reading .moment-memory_led .memory-copy p { max-width: 36em; }
+
+.memory-story-photos { max-width: 36em; }
 .memory-story-photo { margin: 0; max-height: 76vh; border-radius: var(--r-card); cursor: zoom-in; }
 .memory-story-photo.photo-portrait { max-width: min(100%, 340px); }
 .memory-story-photo.photo-square { max-width: min(100%, 420px); }
-.memory-story-photos .photo-strip { margin-top: 0; gap: 6px; }
-.memory-story-photos .photo-strip .photo { max-height: 420px; border-radius: 10px; cursor: zoom-in; }
+.memory-story-photos .photo-strip { margin-top: 0; gap: 8px; }
+.memory-story-photos .photo-strip .photo { max-height: 420px; border-radius: var(--r-media); cursor: zoom-in; }
 @media (min-width: 900px) {
   .month-reading .memory-story.memory-photo-portrait { grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); column-gap: 36px; align-items: start; }
   .month-reading .memory-story.memory-photo-portrait .memory-story-photo.photo-portrait { max-width: 100%; }
 }
-/* 「翻开这一天的相册」 — once per day, after the day's last story (and its reviewed group, if any).
-   A quiet pill, not a heading: it is a way into the month's album at this date, not a section of
-   the story. */
-.day-album-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 18px 0 0; }
-.day-album-open { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-secondary); font: inherit; font-size: .92rem; cursor: pointer; transition: border-color 180ms var(--ease-out), color 180ms var(--ease-out); }
-.day-album-open::after { color: var(--color-accent); content: "→"; }
-.day-album-open:hover { border-color: var(--color-accent); color: var(--color-text); }
-/* 安静变体：月末相册里每一天都可能带这个入口，描边胶囊重复二十几次会变成页面上最响的元素。 */
-.day-album-open--quiet { padding: 8px 0; border: 0; border-radius: 0; background: none; font-size: .86rem; }
+
+.day-album-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 16px 0 0; }
+.day-album-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-badge);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-badge);
+  color: var(--color-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 180ms ease, color 180ms ease, transform 180ms var(--ease-spring);
+}
+.day-album-open::after { color: var(--brand-accent); content: "→"; }
+@media (hover: hover) {
+  .day-album-open:hover { border-color: var(--brand-accent); color: var(--brand-accent); transform: translateY(-1px); }
+}
+.day-album-open--quiet { padding: 8px 0; border: 0; border-radius: 0; background: none; box-shadow: none; font-size: 0.85rem; }
 .day-album-open--quiet::after { content: " →"; }
-.day-album-open--quiet:hover { color: var(--color-text); }
-.day-album-open[aria-busy="true"] { cursor: wait; opacity: .75; }
-.day-album-failed { color: var(--color-muted); font-size: .85rem; }
+.day-album-open[aria-busy="true"] { cursor: wait; opacity: 0.75; }
+.day-album-failed { color: var(--color-muted); font-size: 0.85rem; }
 @media (min-width: 760px) {
   .month-reading .day-album-entry { margin-left: calc(6.5rem + 32px); }
 }
+
 .day-album-sheet { position: fixed; inset: 0; z-index: 250; display: flex; flex-direction: column; background: var(--color-bg); outline: none; }
-.day-album-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: max(14px, env(safe-area-inset-top)) 20px 12px; border-bottom: 1px solid var(--color-border); }
+.day-album-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: max(14px, env(safe-area-inset-top)) 20px 12px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--hairline);
+}
 .day-album-head .section-mark { display: block; }
-.day-album-head h2 { margin: 4px 0 0; font-size: clamp(1.3rem, 4vw, 1.7rem); line-height: 1.25; }
-.day-album-head p { margin: 4px 0 0; color: var(--color-muted); font-size: .85rem; }
-.day-album-close { flex: none; width: 44px; height: 44px; border: 0; background: none; color: var(--color-text); font-size: 1.2rem; cursor: pointer; }
-.day-album-body { flex: 1; overflow-y: auto; padding: 12px 20px 24px; overscroll-behavior: contain; }
-.day-album-body .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 0; }
-.day-album-body .photo { max-height: 260px; cursor: zoom-in; }
-.day-album-foot { padding: 6px 20px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); }
-.day-album-back { min-height: 44px; padding: 8px 4px; border: 0; background: none; color: var(--color-accent); font: inherit; cursor: pointer; }
+.day-album-head h2 { margin: 4px 0 0; font-size: clamp(1.25rem, 3.6vw, 1.65rem); line-height: 1.25; }
+.day-album-head p { margin: 4px 0 0; color: var(--color-muted); font-size: 0.85rem; }
+.day-album-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-badge);
+  background: var(--card-soft);
+  color: var(--color-text);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.day-album-body { flex: 1; overflow-y: auto; padding: 14px 20px 24px; overscroll-behavior: contain; }
+.day-album-body .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 0; }
+.day-album-body .photo { max-height: 260px; border-radius: 12px; cursor: zoom-in; }
+.day-album-foot { padding: 8px 20px max(12px, env(safe-area-inset-bottom)); background: var(--color-surface); border-top: 1px solid var(--hairline); }
+.day-album-back { min-height: 44px; padding: 8px 12px; border: 0; background: none; color: var(--brand-accent); font-family: var(--font-sans); font-weight: 600; cursor: pointer; }
 @media (min-width: 900px) {
   .day-album-head, .day-album-body, .day-album-foot { padding-inline: max(24px, calc((100vw - 1040px) / 2)); }
-  .day-album-body .photo-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .day-album-body .photo-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 }
 @media (min-width: 760px) {
   .month-reading .month-moment { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0 32px; }
-  /* Column 2 is named, not inferred, so a continued day — whose head is deliberately absent —
-     keeps the same measure instead of sliding into the empty margin. */
   .month-reading .moment-body { grid-column: 2; }
-  .month-reading .month-day-date { display: block; margin: .9em 0 0; text-align: right; }
+  .month-reading .month-day-date { display: block; margin: 0.9em 0 0; text-align: right; }
   .month-reading .month-day-date span { display: block; margin-top: 2px; }
   .month-reading .moment-memory_led .month-day-date { margin-top: 1.4em; }
 }
-.moment-hero { margin-top: 18px; max-height: 76vh; }
+
+.moment-hero { margin-top: 18px; max-height: 76vh; border-radius: var(--r-card); }
 .moment-hero.photo-portrait { max-width: min(100%, 480px); }
 .month-moment .photo-strip { margin-top: 12px; }
 .month-moment .chapter-meta { margin: 12px 0 0; }
-/* CHRONICLE — photographed days as weighted moments, not equal blocks: a day with a hero breathes,
-   a day without one stays a compact strip. */
 .month-days .month-moment { padding: 0; border-bottom: 0; }
 .moment-photo_led .photo-strip { margin-top: 0; }
-/* TRACE — the lightest tier (原则五): a store_only day's own one-line description, no photo, no
-   headline size. It exists so a day the Organizer judged "not significant" still reads as a real
-   sentence instead of disappearing into the quiet-days count. */
-.moment-trace .month-day-date { margin-bottom: 4px; font-size: .75rem; }
-.moment-trace .moment-text { max-width: 46ch; }
-.moment-trace .moment-text p { margin: 0; font-size: .92rem; font-weight: 400; line-height: 1.55; color: var(--color-muted); }
+.moment-trace .month-day-date { margin-bottom: 4px; font-size: 0.75rem; }
+.moment-trace .moment-text { max-width: 48ch; }
+.moment-trace .moment-text p { margin: 0; font-size: 0.92rem; font-weight: 400; line-height: 1.6; color: var(--color-muted); }
 .month-days .month-day:has(> .moment-trace) { padding: 10px 0; }
 .month-days .day-album-entry { margin-top: 10px; }
-.month-quiet-days { margin: clamp(24px, 4vw, 36px) 0 0; max-width: 42ch; color: var(--color-muted); font-size: .95rem; line-height: 1.8; }
-/* ARCHIVE — the whole month, folded shut. Small frames on purpose: it is a record, not the read. */
-.month-archive { margin: clamp(32px, 5vw, 48px) 0 24px; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
-.month-archive > summary { display: flex; align-items: baseline; gap: 14px; min-height: 64px; padding: 12px 0; cursor: pointer; list-style: none; }
+.month-quiet-days { margin: clamp(24px, 4vw, 36px) 0 0; max-width: 44ch; color: var(--color-muted); font-size: 0.95rem; line-height: 1.8; }
+
+.month-archive {
+  margin: clamp(32px, 5vw, 48px) 0 24px;
+  padding: 0 22px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.month-archive > summary { display: flex; align-items: baseline; gap: 14px; min-height: 60px; padding: 12px 0; cursor: pointer; list-style: none; }
 .month-archive > summary::-webkit-details-marker { display: none; }
-.month-archive > summary span { font-size: 1.3rem; }
-.month-archive > summary small { color: var(--color-muted); font-size: .8rem; }
-.month-archive > summary::after { margin-left: auto; color: var(--color-accent); content: "＋"; }
+.month-archive > summary span { font-family: var(--font-heading); font-size: 1.15rem; font-weight: 700; }
+.month-archive > summary small { color: var(--color-muted); font-size: 0.8rem; }
+.month-archive > summary::after { margin-left: auto; color: var(--brand-accent); font-weight: 700; content: "＋"; }
 .month-archive[open] > summary::after { content: "－"; }
-.month-archive > ol { margin: 0; padding: 0 0 16px; list-style: none; }
-.month-archive .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-.month-archive .photo { max-height: 220px; }
+.month-archive > ol { margin: 0; padding: 0 0 18px; list-style: none; }
+.month-archive .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.month-archive .photo { max-height: 220px; border-radius: 10px; }
 .month-archive > .chapter-meta { padding-bottom: 16px; }
 .archive-expand { padding-bottom: 16px; }
-.archive-expand .text-link { background: none; border: none; padding: 0; font: inherit; color: var(--color-accent); cursor: pointer; text-decoration: underline; }
+.archive-expand .text-link { background: none; border: none; padding: 0; font: inherit; color: var(--brand-accent); cursor: pointer; text-decoration: underline; }
 .archive-expand .text-link:disabled { color: var(--color-muted); cursor: wait; text-decoration: none; }
 .archive-expanded { margin: 0; padding: 0; list-style: none; }
-.archive-expanded .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-.archive-expanded .photo { max-height: 220px; }
+.archive-expanded .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.archive-expanded .photo { max-height: 220px; border-radius: 10px; }
 .month-chapter .photo-strip { margin-top: 18px; }
 .month-page .month-memories { margin-top: 8px; }
 .month-page .trace-disclosure { margin-top: 8px; }
-.other-years { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--color-border); }
-/* The month links are the last way out of a month page, and as bare inline text each tap target was
-   the glyph box: 42.1 × 31.0, with 7.1px between wrapped rows. Every link now carries its own
-   44 × 44 box, and the row gap is what keeps two rows of targets apart. The gap is also the
-   separator — there is no 「·」 text between the links, so no wrapped row can begin with a stranded
-   one (see the month page's footer, the only place .other-years is used). Text links, no pill, no
-   horizontal scroll. */
-.other-years p { margin: 8px 0 0; font-size: 1.4rem; display: flex; flex-wrap: wrap; gap: 8px 18px; }
+
+.other-years { margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--hairline-strong); }
+.other-years p { margin: 10px 0 0; font-family: var(--font-sans); font-size: 1.05rem; font-weight: 600; display: flex; flex-wrap: wrap; gap: 8px 12px; }
 .other-years a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--r-badge);
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-badge);
+  font-size: 0.9rem;
+  color: var(--color-secondary);
+  transition: color 180ms ease, border-color 180ms ease, transform 180ms var(--ease-spring);
 }
-.other-years a:hover { color: var(--color-accent); }
+@media (hover: hover) {
+  .other-years a:hover { color: var(--brand-accent); border-color: var(--brand-accent); transform: translateY(-1px); }
+}
 
-/* Memories */
-.memory { display: grid; gap: 16px; padding: 28px 0; border-bottom: 1px solid var(--color-border); }
+/* ── Editorial Memories & Principle 5 Weight Hierarchy ─────────────────────── */
+.memory { display: grid; gap: 16px; padding: 28px 0; border-bottom: 1px solid var(--hairline); }
 .memory-photo { display: block; }
 .memory-photo .photo { max-width: 100%; }
 .memory-entry .photo-portrait { max-width: min(100%, 360px); }
 .memory-entry .photo-square { max-width: min(100%, 420px); }
-.memory-copy h3 { margin: 8px 0 8px; font-size: clamp(1.45rem, 3.8vw, 2rem); line-height: 1.25; }
-.memory-copy h3 a:hover { color: var(--color-accent); }
-.memory-copy p { max-width: 42ch; margin: 0; color: var(--color-muted); }
+.memory-copy h3 { margin: 8px 0; font-size: clamp(1.35rem, 3.4vw, 1.85rem); line-height: 1.28; }
+.memory-copy h3 a:hover { color: var(--brand-accent); }
+.memory-copy p { max-width: 44ch; margin: 0; color: var(--color-muted); }
 .memory-lead { padding: 0; border-bottom: 0; }
 .memory-lead .photo-portrait { max-width: min(100%, 520px); }
-.memory-lead .memory-copy h3 { margin-top: 10px; font-size: clamp(1.9rem, 5vw, 2.9rem); line-height: 1.15; }
-.memory-lead .memory-copy p { max-width: 38ch; font-size: 1.05rem; }
-.memory-weight-chapter .memory-copy h3, .memory-weight-highlight .memory-copy h3, .memory-weight-memory .memory-copy h3 { font-size: clamp(1.7rem, 4.5vw, 2.5rem); }
-/* T20-C: a "memory"-weight entry's portrait/square photo reads at the lead's own size, not the
-   smaller cap every ordinary entry gets — matches its "web" (not "thumbnail") image variant. */
-.memory-weight-memory.memory-entry .photo-portrait, .memory-weight-memory.memory-entry .photo-square { max-width: min(100%, 520px); }
+.memory-lead .memory-copy h3 { margin-top: 10px; font-size: clamp(1.75rem, 4.4vw, 2.5rem); line-height: 1.2; }
+.memory-lead .memory-copy p { max-width: 40ch; font-size: 1.02rem; }
+.memory-weight-chapter .memory-copy h3,
+.memory-weight-highlight .memory-copy h3,
+.memory-weight-memory .memory-copy h3 { font-size: clamp(1.55rem, 4vw, 2.2rem); }
+.memory-weight-memory.memory-entry .photo-portrait,
+.memory-weight-memory.memory-entry .photo-square { max-width: min(100%, 520px); }
 .memory-lines { margin: 0; padding: 0; list-style: none; }
-.memory-line a { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 14px; min-height: 48px; padding: 8px 0; border-bottom: 1px solid var(--color-border); transition: color 180ms var(--ease-out); }
-.memory-line a:hover { color: var(--color-accent); }
-.memory-line time { color: var(--color-muted); font-size: .78rem; white-space: nowrap; }
-.memory-line span { font-size: 1.1rem; }
-/* 原则五在年页上的落地（2026-09-16）：同一个月的几行不是等权的。
-   非 trace 的那几条是分档器判出来的「真正的变化或第一次」（一个月 1-4 条，见
-   scripts/t20c-grade-events.mjs 的 prompt），trace 是值得留着的普通一天。
-   分辨靠字号和墨色，不靠加边框、加色块、加图标——这一页仍然是一张纸上的目录。 */
+.memory-line a {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 14px;
+  min-height: 48px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hairline);
+  transition: color 180ms ease;
+}
+.memory-line a:hover { color: var(--brand-accent); }
+.memory-line time { color: var(--color-muted); font-size: 0.78rem; white-space: nowrap; }
+.memory-line span { font-size: 1.08rem; }
+/* Principle 5 weight contrast (tested in test/title-emphasis.test.mjs) */
 .memory-line.memory-weight-trace span { font-size: 1rem; color: var(--color-muted); }
 .memory-line.memory-weight-memory span,
 .memory-line.memory-weight-highlight span,
-.memory-line.memory-weight-chapter span { font-size: 1.32rem; font-weight: 500; line-height: 1.35; }
+.memory-line.memory-weight-chapter span { font-size: 1.32rem; font-weight: 600; line-height: 1.35; }
 .memory-line.memory-weight-trace a { min-height: 44px; padding: 6px 0; }
 
-/* Photos: each at its own proportions */
-.photo { position: relative; margin: 0; overflow: hidden; background: var(--paper-dark); }
+/* ── Photos, Video Frames & Strips ─────────────────────────────────────────── */
+.photo { position: relative; margin: 0; overflow: hidden; background: var(--paper-dark); border-radius: var(--r-media); }
 .photo img { width: 100%; height: 100%; object-fit: contain; }
-/* A clip lays out in the same box a photograph would, and keeps its whole frame: cropping a video
-   to fill a grid cell would cut the child out of half of them. Native controls stay on top. */
 .photo-video video { width: 100%; height: 100%; object-fit: contain; background: var(--paper-dark); display: block; }
 .photo-strip .photo-video video { object-fit: contain; }
-/* Our own play mark, because at a phone's grid width Chrome drops its play button and leaves a bare
-   scrubber (components/video-player.tsx says what that looked like).
-
-   Target and mark are sized separately. Before playback there is no native control bar, so the
-   single button sits at the centre of the entire poster, with a 44px minimum hit target. */
 .video-frame { position: relative; width: 100%; height: 100%; }
 .video-play-layer { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
-/* border-radius: 0 is load-bearing, not tidying. Chrome's own button styling rounds the corners by
-   8px, and a rounded corner clips hit testing as well as paint: a press 2px inside the top-right
-   corner fell through to the video underneath. The disc that is actually round is the span inside. */
-.video-play { pointer-events: auto; width: clamp(44px, 24%, 56px); aspect-ratio: 1; display: grid;
-  place-items: center; padding: 0; border: 0; border-radius: 0; background: none; cursor: pointer; }
-.video-play-mark { width: clamp(30px, 72%, 48px); aspect-ratio: 1; display: grid; place-items: center;
-  border-radius: 50%; background: rgb(0 0 0 / .48); color: #fff; transition: background 160ms var(--ease-out); }
-.video-play:hover .video-play-mark, .video-play:focus-visible .video-play-mark { background: rgb(0 0 0 / .68); }
-.video-play svg { width: 58%; height: 58%; fill: currentColor; }
-/* A band across the frame rather than a centred pill. Anchored at left:50% the line only had the
-   right half of a 117px tile to shrink-to-fit into, so 「这段视频暂时打不开」 came out as 三行 with
-   视频 split across two of them. Anchoring both edges gives it the tile's full width. */
-.video-unavailable { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); margin: 0;
-  padding: 6px 8px; background: rgb(0 0 0 / .62); color: #fff;
-  font-size: .72rem; line-height: 1.4; text-align: center; text-wrap: balance; }
-.photo-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; align-items: start; }
+/* border-radius: 0 on button keeps the full >=44px square hit area active; inner span draws the circle. */
+.video-play {
+  pointer-events: auto;
+  width: clamp(44px, 24%, 56px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  cursor: pointer;
+}
+.video-play-mark {
+  width: clamp(32px, 74%, 48px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(8px);
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+  transition: background-color 180ms ease, transform 200ms var(--ease-spring);
+}
+.video-play:hover .video-play-mark,
+.video-play:focus-visible .video-play-mark { background: var(--brand-accent); transform: scale(1.06); }
+.video-play svg { width: 56%; height: 56%; fill: currentColor; }
+.video-unavailable {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #FFFFFF;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  text-align: center;
+  text-wrap: balance;
+}
+.photo-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: start; }
 .photo-strip .photo { max-height: 60vh; }
 .photo-strip .photo img { object-fit: cover; object-position: 50% 40%; }
 .photo-strip .photo-portrait img { object-position: 50% 32%; }
 .photo-strip .photo-landscape img { object-position: 50% 42%; }
 .photo-strip-1 { grid-template-columns: minmax(0, 480px); }
 .photo-strip-1 .photo { max-height: none; }
-.sequence-more { margin: 10px 0 0; color: var(--color-muted); font-size: .8rem; }
+.sequence-more { margin: 10px 0 0; color: var(--color-muted); font-size: 0.8rem; }
 
 /* Traces, folded */
-.trace-disclosure { margin: 4px 0 0; border-bottom: 1px solid var(--color-border); }
-.trace-disclosure summary { display: flex; align-items: center; min-height: 52px; cursor: pointer; color: var(--color-muted); font-size: .85rem; list-style: none; }
+.trace-disclosure { margin: 4px 0 0; border-bottom: 1px solid var(--hairline); }
+.trace-disclosure summary { display: flex; align-items: center; min-height: 52px; cursor: pointer; color: var(--color-muted); font-size: 0.85rem; font-weight: 600; list-style: none; }
 .trace-disclosure summary::-webkit-details-marker { display: none; }
-.trace-disclosure summary::before { margin-right: 10px; color: var(--color-accent); content: "＋"; }
+.trace-disclosure summary::before { margin-right: 10px; color: var(--brand-accent); content: "＋"; }
 .trace-disclosure[open] summary::before { content: "－"; }
 .trace-disclosure > ol { display: grid; gap: 14px; margin: 0; padding: 8px 0 24px 22px; list-style: none; }
 .trace-disclosure > ol > li { display: grid; gap: 4px; }
-.trace-disclosure time { color: var(--color-accent); font-size: .76rem; font-weight: 700; }
-.trace-disclosure ul { margin: 0; padding: 0; list-style: none; color: var(--color-muted); font-size: .92rem; }
+.trace-disclosure time { color: var(--accent-blue); font-size: 0.76rem; font-weight: 700; }
+.trace-disclosure ul { margin: 0; padding: 0; list-style: none; color: var(--color-muted); font-size: 0.92rem; }
 .trace-disclosure ul li::before { margin-right: 8px; color: var(--color-secondary); content: "—"; }
-.trace-disclosure .trace-more { font-size: .8rem; }
+.trace-disclosure .trace-more { font-size: 0.8rem; }
 .trace-disclosure .trace-more::before { content: "…"; }
 .trace-disclosure .trace-more a { border-bottom: 1px solid currentColor; }
-.month-chapter .chapter-meta .text-link, .year-month .chapter-meta .text-link { min-height: 44px; font-weight: 600; }
+.month-chapter .chapter-meta .text-link,
+.year-month .chapter-meta .text-link { min-height: 44px; font-weight: 600; }
 
-/* Year / age navigation */
+/* Year / Age Navigation */
 .archive-nav { margin-top: 8px; }
-.archive-nav ol { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; padding: 0 0 12px; list-style: none; border-bottom: 1px solid var(--color-border); }
+.archive-nav ol { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 0 0 12px; list-style: none; border-bottom: 1px solid var(--hairline); }
 .archive-nav a { display: inline-flex; flex-direction: column; min-height: 44px; justify-content: center; line-height: 1.2; }
-.archive-nav a span { font-size: 1.15rem; font-weight: 600; }
-.archive-nav a small { color: var(--color-muted); font-size: .74rem; }
-.archive-nav li[aria-current] a span { color: var(--color-accent); }
-.archive-nav a:hover span { color: var(--color-accent); }
-.year-page .archive-nav { margin-top: 48px; padding: 0; }
+.archive-nav a span { font-size: 1.1rem; font-weight: 700; }
+.archive-nav a small { color: var(--color-muted); font-size: 0.74rem; }
+.archive-nav li[aria-current] a span,
+.archive-nav a:hover span { color: var(--brand-accent); }
+.year-page .archive-nav { margin-top: 40px; padding: 0; }
 
-/* Detail */
-.detail-head { display: grid; gap: 10px; padding: clamp(28px, 5vw, 56px) 0 clamp(24px, 4vw, 40px); }
-.detail-head .back-link { justify-self: start; margin-bottom: 20px; }
-.detail-head h1 { max-width: 16ch; margin: 4px 0 0; font-size: clamp(2.2rem, 7vw, 4.2rem); line-height: 1.08; }
-.detail-context { margin: 0; color: var(--color-muted); font-size: .9rem; }
-/* ONE hero between the title and the story; a small supporting strip after the story. */
-.detail-hero { max-height: 82vh; }
+/* ── Event & Day Detail Pages ──────────────────────────────────────────────── */
+.detail-head {
+  display: grid;
+  gap: 10px;
+  padding: clamp(22px, 4vw, 44px) 0 clamp(18px, 3vw, 26px);
+  border-bottom: 1px solid var(--hairline);
+}
+.detail-head .back-link { justify-self: start; margin-bottom: 10px; }
+.detail-head h1 {
+  max-width: 18em;
+  margin: 4px 0 0;
+  font-size: clamp(1.65rem, 4.6vw, 2.45rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.28;
+  text-wrap: pretty;
+}
+.detail-head .time-signature {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--tint-blue);
+  padding: 5px 13px;
+  border-radius: var(--r-badge);
+  font-size: 0.82rem;
+  color: var(--accent-blue);
+  font-weight: 600;
+  width: fit-content;
+  white-space: nowrap;
+}
+.detail-head .time-signature time,
+.detail-head .time-signature span { color: inherit; font-size: inherit; font-weight: inherit; letter-spacing: 0; }
+.detail-context { margin: 0; color: var(--color-muted); font-size: 0.9rem; }
+.detail-hero { max-height: 82vh; border-radius: var(--r-card); box-shadow: var(--shadow); }
 .detail-hero.photo-portrait { max-width: min(100%, 560px); }
-.detail-supporting { padding-bottom: clamp(24px, 4vw, 40px); }
-.detail-supporting .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.detail-supporting .photo { max-height: 300px; }
-/* A clip on its own story's page is the thing being read, not a thumbnail beside one: in the
-   three-up strip it came out 115×205 on a 390px phone. It takes the whole row at the text measure,
-   keeps its own proportions, and a tall one is narrowed until it fits 78% of the screen's height
-   (--media-ar is the clip's width / height, set beside aspect-ratio in components/photo-viewer.tsx).
-   `dense` lets the photographs close up behind a clip that moved to its own row. */
-.detail-supporting .photo-strip { grid-auto-flow: row dense; }
+.detail-supporting { margin-top: clamp(20px, 3.5vw, 30px); padding-bottom: clamp(24px, 4vw, 40px); }
+.detail-supporting .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-flow: row dense; }
+.detail-supporting .photo { max-height: 300px; border-radius: var(--r-media); }
 .detail-supporting .photo-strip .photo-video { grid-column: 1 / -1; justify-self: center; max-height: none;
-  width: min(100%, calc(78svh * var(--media-ar, 16 / 9))); border-radius: 10px; }
-.story-layer { display: grid; gap: 40px; padding: clamp(40px, 6vw, 72px) 0 clamp(40px, 6vw, 64px); }
-.story-column > p { margin: 0 0 22px; font-size: 1.05rem; line-height: 1.85; }
-.story-column .story-lead { font-family: var(--font-heading); font-size: clamp(1.4rem, 3.4vw, 1.9rem); line-height: 1.5; }
+  width: min(100%, calc(78svh * var(--media-ar, 16 / 9))); border-radius: var(--r-media); }
+
+.story-layer { display: grid; gap: 36px; padding: clamp(24px, 4vw, 40px) 0 clamp(16px, 2.5vw, 24px); }
+.story-column { max-width: 36em; }
+.story-column > p,
+.story-column .story-lead {
+  margin: 0 0 1.16em;
+  font-family: var(--font-body);
+  font-size: clamp(1.04rem, 2.1vw, 1.12rem);
+  line-height: 1.88;
+  color: var(--color-text);
+}
+.story-column > p:last-child { margin-bottom: 0; }
 .story-aside { display: grid; gap: 20px; align-content: start; }
-.story-note { padding-top: 12px; border-top: 1px solid var(--color-border); }
-.story-note p { margin: 6px 0 0; color: var(--color-muted); font-size: .9rem; }
-.evidence-disclosure { margin-top: 8px; border-top: 1px solid var(--color-primary); border-bottom: 1px solid var(--color-border); }
-.evidence-disclosure > summary { display: flex; align-items: baseline; gap: 14px; min-height: 64px; padding: 12px 0; cursor: pointer; list-style: none; }
+.story-note {
+  padding: 16px 18px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-media);
+  box-shadow: var(--shadow-badge);
+}
+.story-note p { margin: 6px 0 0; color: var(--color-muted); font-size: 0.9rem; }
+
+.evidence-disclosure {
+  margin-top: 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  padding: 0 22px;
+}
+.evidence-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 0;
+  cursor: pointer;
+  list-style: none;
+}
 .evidence-disclosure > summary::-webkit-details-marker { display: none; }
-.evidence-disclosure > summary span { font-size: 1.3rem; }
-.evidence-disclosure > summary small { color: var(--color-muted); font-size: .8rem; }
-.evidence-disclosure > summary::after { margin-left: auto; color: var(--color-accent); content: "＋"; }
+.evidence-disclosure > summary span {
+  font-family: var(--font-heading);
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+.evidence-disclosure > summary small { color: var(--color-muted); font-size: 0.8rem; }
+.evidence-disclosure > summary::after { margin-left: auto; color: var(--brand-accent); font-weight: 700; content: "＋"; }
 .evidence-disclosure[open] > summary::after { content: "－"; }
-.evidence-list { display: grid; gap: 12px; padding-bottom: 24px; }
-.evidence-secondary { margin-top: 8px; border-top: 1px solid var(--color-border); }
-.evidence-secondary-label { display: flex; align-items: center; gap: 10px; padding: 14px 0; cursor: pointer; list-style: none; color: var(--color-muted); font-size: .78rem; }
+.evidence-list { display: grid; gap: 12px; padding-bottom: 22px; }
+.evidence-secondary { margin-top: 8px; border-top: 1px solid var(--hairline); }
+.evidence-secondary-label { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 12px 0; cursor: pointer; list-style: none; color: var(--color-muted); font-size: 0.8rem; font-weight: 600; }
 .evidence-secondary-label::-webkit-details-marker { display: none; }
-.evidence-secondary-label::after { margin-left: auto; color: var(--color-accent); content: "＋"; font-size: .9rem; }
+.evidence-secondary-label::after { margin-left: auto; color: var(--brand-accent); content: "＋"; font-size: 0.9rem; }
 .evidence-secondary[open] .evidence-secondary-label::after { content: "－"; }
 .evidence-text-long { margin: 10px 0 0; }
 .evidence-text-long > summary { cursor: pointer; list-style: none; }
 .evidence-text-long > summary::-webkit-details-marker { display: none; }
-.evidence-text-long > summary.evidence-quote { max-width: 38ch; overflow-wrap: anywhere; font-family: var(--font-heading); font-size: clamp(1.3rem, 4vw, 2rem); line-height: 1.4; }
+.evidence-text-long > summary.evidence-quote { max-width: 42ch; overflow-wrap: anywhere; font-family: var(--font-body); font-size: 1.05rem; line-height: 1.72; }
 .evidence-text-long > summary.evidence-note { color: var(--color-muted); overflow-wrap: anywhere; }
 .evidence-text-long > p { margin-top: 8px; }
-/* Photo gallery: clickable thumbnails and hero */
-.photo[role="button"] { cursor: zoom-in; }
-/* B-9c: 32px rounded corners on editorial photos (not archive thumbnails) */
-.memory-lead .memory-photo .photo { border-radius: var(--r-card); }
-.memory-entry .memory-photo .photo { border-radius: var(--r-card); }
-.moment-hero { border-radius: var(--r-card); }
-.detail-hero { border-radius: var(--r-card); }
 
-/* B-9c: Scroll-triggered entry reveal — photo first, text 8% later */
+.photo[role="button"] { cursor: zoom-in; }
+.memory-lead .memory-photo .photo,
+.memory-entry .memory-photo .photo { border-radius: var(--r-card); }
+
+/* Scroll-triggered entry reveal & IntersectionObserver fallback */
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    .memory-entry .memory-photo { animation: fadeInUp .45s var(--ease) both; animation-timeline: view(); animation-range: entry 0% entry 28%; }
-    .memory-entry .memory-copy { animation: fadeInUp .5s var(--ease) both; animation-timeline: view(); animation-range: entry 8% entry 36%; }
-    .month-moment { animation: fadeInUp .5s var(--ease) both; animation-timeline: view(); animation-range: entry 0% entry 30%; }
+    .memory-entry .memory-photo { animation: fadeInUp 0.42s var(--ease-spring) both; animation-timeline: view(); animation-range: entry 0% entry 28%; }
+    .memory-entry .memory-copy { animation: fadeInUp 0.48s var(--ease-spring) both; animation-timeline: view(); animation-range: entry 8% entry 36%; }
+    .month-moment { animation: fadeInUp 0.45s var(--ease-spring) both; animation-timeline: view(); animation-range: entry 0% entry 30%; }
+    .month-card { animation: fadeInUp 0.42s var(--ease-spring) both; animation-timeline: view(); animation-range: entry 0% entry 28%; }
   }
 }
-
-/* B-9d: IntersectionObserver fallback for animation-timeline:view() (iOS Safari).
-   When the root has .io-reveal-pending (set by scroll-reveal.tsx when view() is unsupported),
-   elements start hidden and are revealed by JS adding .is-visible. */
 @media (prefers-reduced-motion: no-preference) {
   .io-reveal-pending .memory-entry .memory-photo,
   .io-reveal-pending .memory-entry .memory-copy,
-  .io-reveal-pending .month-moment { opacity: 0; transform: translateY(24px); transition: opacity .45s var(--ease), transform .45s var(--ease); }
+  .io-reveal-pending .month-moment,
+  .io-reveal-pending .month-card {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 0.42s var(--ease-spring), transform 0.42s var(--ease-spring);
+  }
   .io-reveal-pending .memory-entry .memory-photo.is-visible,
-  .io-reveal-pending .month-moment.is-visible { opacity: 1; transform: none; }
-  .io-reveal-pending .memory-entry .memory-copy.is-visible { opacity: 1; transform: none; transition-delay: 0.1s; }
+  .io-reveal-pending .month-moment.is-visible,
+  .io-reveal-pending .month-card.is-visible { opacity: 1; transform: none; }
+  .io-reveal-pending .memory-entry .memory-copy.is-visible { opacity: 1; transform: none; transition-delay: 0.08s; }
+  img { transition: opacity 0.35s var(--ease-out); }
 }
 
-/* Photo viewer overlay — frosted dark glass */
-.photo-viewer { position: fixed; inset: 0; margin: 0; padding: 0; border: 0; width: 100%; height: 100dvh; max-width: none; max-height: none; overflow: hidden; z-index: 300; flex-direction: column; background: #161616; color: #fff; }
+/* ── Fullscreen Photo Lightbox Overlay ─────────────────────────────────────── */
+.photo-viewer {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  overflow: hidden;
+  z-index: 300;
+  flex-direction: column;
+  background: #0B1120;
+  color: #FFFFFF;
+}
 .photo-viewer[open] { display: flex; }
-.photo-viewer::backdrop { background: #161616; }
-.viewer-header { display: flex; align-items: center; gap: 16px; padding: max(12px, env(safe-area-inset-top)) 16px 12px; flex-shrink: 0; }
-.viewer-close { background: none; border: none; color: #fff; font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 6px 10px; min-width: 44px; min-height: 44px; flex-shrink: 0; }
-.viewer-caption { display: flex; gap: 14px; align-items: baseline; margin: 0; color: rgba(255,255,255,.85); font-size: .85rem; }
+.photo-viewer::backdrop { background: #0B1120; }
+.viewer-header { display: flex; align-items: center; gap: 14px; padding: max(12px, env(safe-area-inset-top)) 16px 12px; flex-shrink: 0; }
+.viewer-close {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--r-badge);
+  color: #FFFFFF;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 6px 10px;
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+.viewer-close:hover { background: rgba(255, 255, 255, 0.2); }
+.viewer-caption { display: flex; gap: 12px; align-items: baseline; margin: 0; color: rgba(255, 255, 255, 0.88); font-size: 0.85rem; }
 .viewer-caption time { font-weight: 600; }
+.viewer-zoom {
+  margin-left: auto;
+  min-width: 56px;
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: var(--r-badge);
+  background: rgba(255, 255, 255, 0.1);
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.viewer-zoom:hover { background: rgba(255, 255, 255, 0.2); }
 .viewer-reel { flex: 1; min-height: 0; min-width: 0; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior: contain; }
 .viewer-reel::-webkit-scrollbar { display: none; }
 .viewer-slide { flex: 0 0 100%; min-width: 0; height: 100%; scroll-snap-align: start; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.viewer-image { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; transition: transform .2s; }
+.viewer-image { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; transition: transform 0.22s var(--ease-spring); }
 .viewer-image-zoomed { transform: scale(2.5); touch-action: pinch-zoom; cursor: zoom-out; }
 @media (prefers-reduced-motion: reduce) { .viewer-image { transition: none; } }
-.viewer-nav { display: flex; align-items: center; justify-content: center; gap: 24px; flex-shrink: 0; padding: 8px 16px; padding-bottom: max(8px, env(safe-area-inset-bottom)); color: rgba(255,255,255,.85); font-size: .8rem; }
-.viewer-nav button { width: 44px; height: 44px; border: 0; background: transparent; color: #fff; font-size: 2rem; cursor: pointer; }
-.viewer-nav button:disabled { opacity: .25; cursor: default; }
-/* 接着读 — the story before and the story after, at the foot of the reading. Two equal cards at
-   reading width, stacked on a phone. Each one is a whole link and therefore a whole target: on a
-   phone that is the full column, not a chevron. Deliberately NOT floating arrows at the edges of a
-   desktop window, which would sit over the photographs and compete with the picture viewer's own
-   left/right. When only one side exists the other is an empty grid cell, so a 下一篇 alone still
-   sits on the right where it belongs rather than sliding under 上一篇's place. */
-.story-steps { display: grid; gap: 12px; padding: 16px 0 0; }
-.story-step { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border-radius: var(--r-card); background: var(--card-soft); transition: transform .3s var(--ease-hover), box-shadow .3s var(--ease-hover); }
-.story-step .section-mark { color: var(--color-muted); }
-.story-step-title { font-size: 1.15rem; line-height: 1.4; color: var(--color-text); }
-.story-step-when { color: var(--color-muted); font-size: .78rem; letter-spacing: .04em; }
-.story-step-next { text-align: right; }
-@media (hover: hover) { .story-step:hover { transform: translateY(-3px); box-shadow: var(--shadow); } }
-.story-step:active { transform: scale(.99); }
-@media (min-width: 700px) {
-  .story-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-  .story-step-next { align-items: flex-end; }
-}
-.detail-footer { padding: 40px 0 96px; }
+.viewer-nav { display: flex; align-items: center; justify-content: center; gap: 24px; flex-shrink: 0; padding: 8px 16px; padding-bottom: max(10px, env(safe-area-inset-bottom)); color: rgba(255, 255, 255, 0.88); font-family: var(--font-display); font-size: 0.82rem; }
+.viewer-nav button { width: 44px; height: 44px; border: 0; border-radius: var(--r-badge); background: rgba(255, 255, 255, 0.08); color: #FFFFFF; font-size: 1.6rem; cursor: pointer; }
+.viewer-nav button:disabled { opacity: 0.25; cursor: default; background: transparent; }
 
-/* 404 */
-.not-found { padding: clamp(64px, 12vw, 160px) 0; }
-.not-found h1 { margin: 12px 0 16px; font-size: clamp(2.2rem, 7vw, 4rem); line-height: 1.1; }
-.not-found .lede { margin: 0; color: var(--color-muted); }
-.not-found-links { display: flex; gap: 24px; margin-top: 32px; }
-.not-found-links a { border-bottom: 1px solid currentColor; font-size: .85rem; font-weight: 700; }
-
-/* B-11: Memory index page — directory of month cards */
-/* margin-block, not the `margin` shorthand: this nav also carries .reading-wrap, whose
-   `margin-inline: auto` is what centres it in the story column. A shorthand here resets
-   margin-inline to 0 and the year pills slide to the viewport's left edge. */
-.memory-year-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 32px 0; }
-.memory-year-nav-group { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; }
-.memory-year-nav-group + .memory-year-nav-group { margin-left: 12px; padding-left: 20px; border-left: 1px solid #D4A882; }
-.memory-year-nav-label { font-size: .8rem; font-weight: 600; white-space: nowrap; }
-.memory-year-nav-links { display: flex; flex-wrap: wrap; gap: 8px; }
-.memory-life-chapter { margin-bottom: 28px; }
-.memory-life-label { margin: 0 0 8px; font-size: .85rem; font-weight: 700; letter-spacing: .15em; }
-.memory-life-title { margin: 0; font-size: clamp(1.7rem, 4vw, 2.3rem); line-height: 1.4; }
-.memory-birth-boundary { margin-top: 12px; margin-bottom: 32px; padding-top: clamp(32px, 6vw, 56px); border-top: 2px solid #C8845A; }
-.memory-birth-milestone { margin: 0; color: #7A4520; font-size: clamp(1rem, 3vw, 1.2rem); font-weight: 700; line-height: 1.8; }
-.memory-birth-note { margin: 8px 0 0; font-size: .85rem; line-height: 1.8; }
-.memory-prenatal-chapter { margin-top: clamp(32px, 6vw, 48px); padding: 24px; border-left: 3px solid #C8845A; background: #F0E0C8; color: #7A4520; }
-@media (max-width: 480px) {
-  .memory-year-nav { flex-direction: column; align-items: flex-start; gap: 0; }
-  .memory-year-nav-group + .memory-year-nav-group { margin-left: 0; padding-left: 0; border-left: 0; }
+/* ── Story Steps & Day Neighbors ("接着读") ────────────────────────────────── */
+.story-steps,
+.day-neighbors {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 16px 0 0;
 }
-.year-pill { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 20px; border-radius: var(--r-badge); background: #fff; color: var(--clay-ink); font-size: .92rem; font-weight: 600; box-shadow: var(--shadow-badge); transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out); }
-.year-pill:hover { transform: translateY(-2px); box-shadow: var(--shadow); color: var(--clay-ink); }
-.year-pill--active { background: var(--clay); color: var(--color-primary); }
-/* 出生前年份（2024及更早）：温暖的赭石色，与出生后的年份在视觉上明显区分。 */
-.year-pill--prebirth { background: #F0E0C8; color: #7A4520; border: 1px solid #D4A882; }
-.year-pill--prebirth:hover { color: #7A4520; }
-.year-pill--prebirth.year-pill--active { background: #C8845A; color: #3D1500; border-color: #C8845A; }
-.memory-year-section { padding: clamp(32px, 5vw, 56px) 0; }
-/* 年份分节的标题跟卡片网格同一条左对齐线（网格自己有 .reading-wrap 的版心）。 */
-.memory-year-heading { width: min(760px, calc(100% - 32px)); margin: 0 auto clamp(12px, 2vw, 18px); }
-.memory-year-section--prebirth .memory-year-heading { color: #7A4520; }
-.prebirth-cue { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px; background: #F0E0C8; color: #7A4520; font-size: .72rem; font-weight: 700; letter-spacing: .06em; vertical-align: middle; }
-/* PAGE-0915-FULL-REMEDIATION-R1 D1：grid 默认 align-items:stretch 会把同一行里没有封面照片的卡
-   （通常是内容还很少的当前月）拉伸到跟旁边有照片的卡一样高，那张卡自己的 #fff 背景就把多出来的
-   高度填成一块空白——读起来像一张没做完的卡。改成 start，每张卡按自己内容的高度显示。 */
-.memory-month-grid { display: grid; grid-template-columns: 1fr; align-items: start; gap: clamp(14px, 2.5vw, 20px); }
-.month-card { display: block; background: #fff; border-radius: var(--r-card); overflow: hidden; box-shadow: var(--shadow); transition: transform .4s var(--ease-hover), box-shadow .4s var(--ease-hover); }
-/* 没有封面照片的卡（月份刚开始、内容还少）：更紧凑的内边距，不假装自己有一张要展示的照片。 */
-.month-card--compact .month-card-body { padding: 16px 20px 20px; }
-@media (hover: hover) { .month-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-hover); } }
-.month-card:active { transform: scale(.98); }
-/* Crop mode (Photo fit="crop"): the card owns the height, the photo fills it. */
-.month-card-photo { position: relative; height: clamp(160px, 40vw, 240px); overflow: hidden; background: var(--card-soft); }
-.month-card-photo .photo-crop { position: absolute; inset: 0; }
-.month-card-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% var(--card-focal-mobile, 30%); }
+.day-neighbors { margin-block: 32px 8px; padding: 0; }
+.story-step,
+.day-neighbors a.day-neighbor {
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 22px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  transition:
+    transform 260ms var(--ease-spring),
+    border-color 220ms ease,
+    box-shadow 260ms var(--ease-spring);
+}
+.story-step .section-mark { color: var(--accent-blue); }
+.story-step-title,
+.day-neighbor-title {
+  font-family: var(--font-heading);
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--color-primary);
+}
+.story-step-when { color: var(--color-muted); font-family: var(--font-display); font-size: 0.78rem; }
+.story-step-next,
+.day-neighbor-next { text-align: right; }
+@media (hover: hover) {
+  .story-step:hover,
+  .day-neighbors a.day-neighbor:hover {
+    transform: translateY(-3px);
+    border-color: rgba(37, 99, 235, 0.24);
+    box-shadow: var(--shadow-hover);
+  }
+}
+.story-step:active,
+.day-neighbors a.day-neighbor:active { transform: scale(0.99); }
+@media (min-width: 640px) {
+  .story-steps,
+  .day-neighbors { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .story-step-next,
+  .day-neighbor-next { align-items: flex-end; }
+}
+.detail-footer { padding: 36px 0 72px; }
+
+/* ── 404 Not Found ─────────────────────────────────────────────────────────── */
+.not-found {
+  margin-block: clamp(40px, 8vw, 96px);
+  padding: clamp(32px, 6vw, 56px);
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.not-found h1 { margin: 10px 0 14px; font-size: clamp(1.9rem, 5vw, 3rem); line-height: 1.16; }
+.not-found .lede { margin: 0; color: var(--color-muted); max-width: 44ch; }
+.not-found-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.not-found-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--r-badge);
+  background: var(--tint-blue);
+  color: var(--accent-blue);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 700;
+  transition: transform 200ms var(--ease-spring), background-color 180ms ease;
+}
+@media (hover: hover) {
+  .not-found-links a:hover { transform: translateY(-2px); background: #DCE9FF; }
+}
+
+/* ── Memory Directory & Concentric Month Cards ─────────────────────────────── */
+.memory-page .page-masthead { padding: clamp(20px, 3.5vw, 38px) 0 clamp(12px, 2vw, 18px); }
+.memory-page .page-masthead h1 { margin: 4px 0 8px; font-size: clamp(2rem, 4.8vw, 3.1rem); line-height: 1.18; }
+.memory-page .page-masthead > p { margin: 0; font-size: 0.96rem; color: var(--color-muted); }
+
+.memory-year-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-block: 10px 0;
+  padding: 10px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.memory-year-nav-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0; }
+.memory-year-nav-group + .memory-year-nav-group { margin-left: 4px; padding-left: 16px; border-left: 1px solid var(--hairline-strong); }
+.memory-year-nav-label { font-family: var(--font-display); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.06em; color: var(--color-muted); white-space: nowrap; }
+.memory-year-nav-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.memory-year-nav-mode { margin-left: auto; }
+@media (max-width: 540px) {
+  .memory-year-nav { padding: 10px 12px; gap: 8px 12px; }
+  .memory-year-nav-group + .memory-year-nav-group { margin-left: 0; padding-left: 12px; }
+  .memory-year-nav-mode { width: 100%; display: flex; justify-content: flex-end; border-top: 1px solid var(--hairline); padding-top: 8px; }
+}
+
+.year-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 6px 16px;
+  border-radius: var(--r-badge);
+  border: 1px solid var(--hairline);
+  background: var(--card-soft);
+  color: var(--color-secondary);
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition:
+    background-color 200ms var(--ease-spring),
+    color 200ms var(--ease-spring),
+    border-color 200ms ease,
+    transform 180ms var(--ease-spring),
+    box-shadow 200ms var(--ease-spring);
+}
+@media (hover: hover) {
+  .year-pill:hover {
+    background: var(--tint-blue);
+    color: var(--accent-blue);
+    border-color: rgba(37, 99, 235, 0.2);
+    transform: translateY(-1px);
+  }
+}
+.year-pill--active,
+.year-pill--active:hover {
+  background: var(--color-primary);
+  color: #FFFFFF;
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.16);
+}
+/* Pre-birth chapter uses warm peach micro-pastel instead of sepia/ochre */
+.year-pill--prebirth {
+  background: var(--tint-peach);
+  color: var(--accent-peach);
+  border-color: rgba(194, 65, 12, 0.14);
+}
+@media (hover: hover) {
+  .year-pill--prebirth:hover {
+    background: #FFE8DA;
+    color: var(--accent-peach);
+    border-color: rgba(194, 65, 12, 0.28);
+  }
+}
+.year-pill--prebirth.year-pill--active,
+.year-pill--prebirth.year-pill--active:hover {
+  background: var(--accent-peach);
+  color: #FFFFFF;
+  border-color: var(--accent-peach);
+}
+
+.memory-year-section { padding: clamp(20px, 3.2vw, 34px) 0 clamp(24px, 4vw, 40px); }
+.memory-life-chapter { margin-bottom: 14px; }
+.memory-life-label { font-family: var(--font-display); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.1em; color: var(--accent-blue); margin: 0 0 4px; }
+.memory-life-title { font-size: clamp(1.38rem, 3.2vw, 1.82rem); font-weight: 700; line-height: 1.3; color: var(--color-primary); margin: 0; }
+.memory-year-heading { width: min(780px, calc(100% - 32px)); margin: 0 auto 14px; }
+.memory-year-section--prebirth .memory-year-heading { color: var(--accent-peach); }
+.prebirth-cue {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 10px;
+  border-radius: var(--r-badge);
+  background: var(--tint-peach);
+  color: var(--accent-peach);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+.memory-birth-boundary {
+  margin-top: 12px;
+  margin-bottom: 24px;
+  padding: 20px 24px;
+  background: var(--tint-peach);
+  border: 1px solid rgba(194, 65, 12, 0.14);
+  border-radius: var(--r-card);
+}
+.memory-birth-milestone { margin: 0; font-family: var(--font-heading); font-weight: 700; font-size: clamp(1.08rem, 2.8vw, 1.3rem); line-height: 1.5; color: var(--accent-peach); }
+.memory-birth-note { margin: 6px 0 0; font-size: 0.88rem; line-height: 1.7; color: var(--color-secondary); }
+.memory-prenatal-chapter {
+  margin-top: clamp(22px, 4vw, 32px);
+  padding: 20px 24px;
+  background: var(--tint-peach);
+  border: 1px solid rgba(194, 65, 12, 0.14);
+  border-radius: var(--r-card);
+  color: var(--accent-peach);
+}
+
+/* MonthCard grid contract (align-items: start tested in test/month-card.test.mjs) */
+.memory-month-grid { display: grid; grid-template-columns: 1fr; align-items: start; gap: clamp(14px, 2.2vw, 20px); }
+.month-card {
+  display: block;
+  background: var(--color-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition:
+    transform 340ms var(--ease-spring),
+    box-shadow 340ms var(--ease-spring),
+    border-color 220ms ease;
+}
+.month-card:has(.month-card-photo) {
+  padding: 10px 10px 0;
+}
+.month-card--compact {
+  background: linear-gradient(180deg, var(--tint-blue) 0%, var(--color-surface) 72%);
+  border-color: rgba(37, 99, 235, 0.14);
+}
+@media (hover: hover) {
+  .month-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-hover);
+    border-color: var(--hairline-strong);
+  }
+}
+.month-card:active { transform: scale(0.985); }
+.month-card-photo {
+  position: relative;
+  height: clamp(172px, 38vw, 234px);
+  border-radius: var(--r-media);
+  overflow: hidden;
+  background: var(--card-soft);
+}
+.month-card-photo .photo-crop { position: absolute; inset: 0; border-radius: 0; }
+.month-card-photo .photo-crop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% var(--card-focal-mobile, 30%);
+  transition: transform 480ms var(--ease-spring);
+}
+@media (hover: hover) {
+  .month-card:hover .month-card-photo .photo-crop img { transform: scale(1.03); }
+}
 .month-card-photo--square { height: auto; aspect-ratio: 1; }
 .month-card-photo--full { height: auto; }
-/* The card is a wide letterbox, so the vertical focal point decides whether a chin survives the
-   crop. 30% was measured against the phone card (a 400x200-ish box, MEMORY-02 R2.2); the desktop
-   card is shorter relative to its width, and the same 30% rides too high there. Verified in the
-   real card container at 390px and 1280px, not on a mock. An edited month whose cover is a different
-   photograph sets its own pair (--card-focal-mobile / --card-focal-desktop), measured the same way. */
 @media (min-width: 721px) {
   .month-card-photo .photo-crop img { object-position: 50% var(--card-focal-desktop, 45%); }
 }
-.month-card-body { padding: 18px 22px 22px; }
-.month-card-label { display: block; font-size: 1.3rem; font-weight: 600; color: var(--color-text); }
-.month-card-age { display: block; margin-top: 4px; color: var(--muted); font-size: .8rem; }
-.month-card-blurb { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin: 10px 0 0; color: var(--muted); font-size: .9rem; line-height: 1.55; }
-/* B-11 scroll-reveal: view() on supporting browsers, IO fallback on iOS Safari */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .month-card { animation: fadeInUp .45s var(--ease) both; animation-timeline: view(); animation-range: entry 0% entry 28%; }
-  }
+.month-card-body { padding: 14px 14px 18px; }
+.month-card--compact .month-card-body { padding: 18px 20px 20px; }
+.month-card-label {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.28;
+  color: var(--color-primary);
 }
-@media (prefers-reduced-motion: no-preference) {
-  .io-reveal-pending .month-card { opacity: 0; transform: translateY(24px); transition: opacity .45s var(--ease), transform .45s var(--ease); }
-  .io-reveal-pending .month-card.is-visible { opacity: 1; transform: none; }
+.month-card-age {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 2px 10px;
+  border-radius: var(--r-badge);
+  background: var(--tint-blue);
+  color: var(--accent-blue);
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.month-card-blurb {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin: 10px 0 0;
+  font-family: var(--font-body);
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  line-height: 1.62;
 }
 
-/* B-12: Event detail page shell */
-.detail-head h1 { font-weight: 800; }
-/* Date + age as a Badge on the detail page (matching the home cover badge) */
-.detail-head .time-signature { display: inline-flex; gap: 6px; background: #fff; padding: 8px 16px; border-radius: var(--r-badge); font-size: .9rem; color: var(--clay-ink); font-weight: 600; box-shadow: var(--shadow-badge); width: fit-content; white-space: nowrap; }
-.detail-head .time-signature time, .detail-head .time-signature span { color: inherit; font-size: inherit; font-weight: inherit; letter-spacing: 0; }
-.detail-hero { box-shadow: var(--shadow); }
-/* Evidence disclosure: card style, no outer 1px lines */
-.evidence-disclosure { margin-top: 28px; background: var(--card-soft); border-radius: 20px; border: 0; overflow: hidden; padding: 0 24px; }
-.evidence-disclosure > summary { padding-left: 0; padding-right: 0; }
-
-/* B-14: Home recent photographs — no text, no count. See components/home-cluster.tsx.
-   No shared height here on purpose. The block used to be a fixed-height row (one tile at flex:2,
-   a stack of the rest at flex:1, every tile object-fit:cover), which can only hold pictures of
-   different proportions by cutting them: with the two photographs the archive currently vouches
-   for, the second arrived as a 1:2 strip, 111×220 beside 223×220 at a 391px viewport. Each
-   picture now keeps its own aspect-ratio and the columns follow the count. */
-.home-cluster { padding: 0 0 clamp(56px, 8vw, 96px); }
-.home-cluster-grid { display: grid; gap: 10px; align-items: start; }
-/* One picture, alone in a 760px column, has to be stopped or it is simply enlarged into the space.
-   The ceiling is the file's own width — components/home-cluster.tsx sets --cluster-single-max to
-   min(original, 480), 480 being what lib/media/processing.ts resizes a thumbnail to without
-   enlarging it — so a 240px file stops at 240 instead of being run up to the design maximum. */
+/* Home Cluster Grid */
+.home-cluster { padding: 0 0 clamp(44px, 6vw, 72px); }
+.home-cluster-grid { display: grid; gap: 12px; align-items: start; }
 .home-cluster-grid[data-count="1"] { grid-template-columns: minmax(0, 1fr); max-width: var(--cluster-single-max, 480px); }
-/* Two, on a phone, one under the other. Side by side they are 175px wide, and two landscape frames
-   at 175px are a contact sheet rather than two photographs — the pair the archive has now came to
-   about half the area the cropped row gave them. Full column width each, so both are the same size
-   and both are the size of a picture. Three stay two across even on a phone: three stacked at full
-   width is most of a screen for a block that carries no words. */
 .home-cluster-grid[data-count="2"] { grid-template-columns: minmax(0, 1fr); }
 .home-cluster-grid[data-count="3"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-/* Where there is room: two beside each other, three across. A third of a 760px column is 247px,
-   which is still a photograph; a third of a phone would be about 120px, which is a stamp. */
 @media (min-width: 700px) {
   .home-cluster-grid[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home-cluster-grid[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-.cluster-item { position: relative; display: block; overflow: hidden; border-radius: var(--r-card); box-shadow: var(--shadow); transition: transform .4s var(--ease-hover), box-shadow .4s var(--ease-hover); }
-@media (hover: hover) { .cluster-item:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); } }
-.cluster-item:active { transform: scale(.98); }
-
-/* The front page's own vertical rhythm on a desktop screen. Phone widths keep everything they had.
-   The title block. At 1448 it stood 407px tall — 47% of the screen — and the story began at y=490,
-   57% of the way down a page whose one job is to say how he is lately. The air above it comes down
-   and the serif's ceiling with it (4rem rather than 6rem, the same face at the same weight), which
-   puts the story at y=332. The reading column, the module order and the type family are untouched.
-   The gaps. Each one was TWO paddings meeting, not one: .home-lead's bottom and .home-change's top
-   are both clamp(...) reaching 96px at this width, so the white band between the day's story and
-   the month's overview measured 214px. 照片→忽然想起 was 186 and 忽然想起→月份入口 152.
-   The values below are paddings, and a padding is not the band a reader sees: the link and heading
-   at each seam carry margins of their own, 10 to 25px of them. These were tuned against the
-   measured band rather than the arithmetic, which is why they are not all the same number. The
-   bands they produce are 49 / 55 / 57 / 62 / 56 — a break between 一天的故事 and 整月的概览 that
-   is still a break, without a hole in the page. */
-@media (min-width: 720px) {
-  /* Continuous across 720, which the first version of this was not: a 4.6vw ceiling bottomed out
-     on its own 2.4rem floor until ~835px (4.6vw = 38.4px there), so the headline JUMPED DOWN from
-     50.3px at 719 to 38.4px at 721 and did not climb back to where it had been at 719 until about
-     1094px — the title got smaller as the screen got wider, over a range of some 375px.
-     Measured at 700 / 719 / 721 / 760 / 860 before it was caught. 7vw is the same curve the phone
-     rule already follows, so 720 is not a step in it; 3.15rem is that curve's own value at 720, and
-     4rem caps it from ~914px on. The padding falls with width instead of rising, which no clamp on
-     vw can express, so it is written as the line it is: 64px at the breakpoint, 48px at 1448. */
-  .home-masthead { padding-top: clamp(32px, calc(64px - (100vw - 720px) * 0.022), 64px); padding-bottom: 40px; }
-  .home-masthead h1 { font-size: clamp(3.15rem, 7vw, 4rem); }
-  .home-overview { padding-top: 20px; padding-bottom: 20px; }
-  .home-prior-review { padding-top: 8px; padding-bottom: 24px; }
-  .home-lead { padding-bottom: 16px; }
-  .home-cluster { padding-bottom: 26px; }
-  .home-resurface { padding-top: 26px; padding-bottom: 28px; }
-  .home-entries { padding-top: 28px; }
+.cluster-item {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  transition: transform 340ms var(--ease-spring), box-shadow 340ms var(--ease-spring);
 }
+@media (hover: hover) { .cluster-item:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); } }
+.cluster-item:active { transform: scale(0.985); }
 
+/* Responsive Layout Grids */
 @media (min-width: 720px) {
   .memory-month-grid { grid-template-columns: repeat(2, 1fr); }
+  .home-lead .memory-lead .memory-copy p { max-width: 34em; }
 }
-
 @media (min-width: 700px) {
-  .site-shell { padding-bottom: 0; }
-  .site-footer { padding: 32px 16px 28px; }
-  .header-inner { width: min(1400px, calc(100% - 64px)); }
-  .desktop-nav { display: flex; align-items: center; justify-self: end; gap: 36px; }
-  .desktop-nav a { position: relative; display: inline-flex; min-height: 44px; align-items: center; font-size: .82rem; letter-spacing: .04em; }
-  .desktop-nav a::after { position: absolute; bottom: 7px; left: 50%; width: 0; height: 2px; background: var(--sage); content: ""; transform: translateX(-50%); border-radius: 2px; transition: width .3s var(--ease-hover); }
-  .desktop-nav a:hover::after, .desktop-nav a.is-active::after { width: 100%; }
-  .bottom-nav { display: none; }
-  .wide-wrap { width: min(1400px, calc(100% - 64px)); }
-  .reading-wrap { width: min(760px, calc(100% - 64px)); }
+  .wide-wrap { width: min(1360px, calc(100% - 64px)); }
+  .reading-wrap { width: min(780px, calc(100% - 64px)); }
   .photo-wrap { width: min(1200px, calc(100% - 64px)); }
+  .memory-year-heading { width: min(780px, calc(100% - 64px)); }
   .memory-entry { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 32px; align-items: start; }
   .memory-entry:not(:has(.memory-photo)) { grid-template-columns: 1fr; }
   .memory-entry .photo-portrait, .memory-entry .photo-square { max-width: 100%; }
   .memory-lead { grid-template-columns: 1fr; }
   .memory-lead .photo-portrait { max-width: min(100%, 480px); }
-  .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .photo-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .photo-strip-4, .photo-strip-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .photo-strip-2 { grid-template-columns: repeat(2, minmax(0, 360px)); }
   .photo-strip .photo { max-height: 320px; }
-  .story-layer { grid-template-columns: minmax(0, 1fr) 200px; gap: 56px; }
+  .story-layer { grid-template-columns: minmax(0, 1fr) 210px; gap: 48px; }
   .story-layer:not(:has(.story-aside)) { grid-template-columns: 1fr; }
   .monthly-focus-heading { grid-template-columns: minmax(0, 1fr) 280px; align-items: end; gap: 48px; }
   .monthly-focus-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .monthly-focus-item { padding: 28px 28px 30px 0; }
-  .monthly-focus-item:nth-child(even) { padding-right: 0; padding-left: 28px; border-left: 1px solid var(--color-border); }
-  .capture-form-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 768px) {
+  .site-shell { padding-bottom: 0; }
+  .site-footer { padding: 24px 0 36px; }
+  .site-footer-inner {
+    width: min(1360px, calc(100% - 64px));
+    flex-direction: row;
+    text-align: left;
+  }
 }
 
-/* ── 时间标签减重：首页的日期＋当时年龄，记忆的年份选择 ──────────────────
-   Two places, nowhere else.
-
-   The date is not a button, and it was set as one: white fill, 20px radius, a drop shadow, sitting
-   directly above the story's title — so the most pressable-looking thing on the front page was a
-   label that does nothing. The shadow goes, the fill becomes a tint of the clay the text is already
-   set in, and the radius comes down, so it reads as a marker on the paper rather than a chip
-   floating above it. Both clocks keep their weight and colour: 「2026 年 9 月 5 日 当时 1 岁 8 个月」
-   is as legible as it was (原则二).
-
-   The year nav IS pressable, so it stays a capsule — a flat one. A hairline instead of a raised
-   white card; the selected year keeps its solid clay fill, because "which year am I reading" has to
-   survive the whole thing being made quieter. The target was 37px tall, under the 44 a thumb wants,
-   and is 44 now. The global :focus-visible ring (2px sage, 4px offset) is untouched and still shows
-   on both. */
-.home-lead .memory-lead .time-signature {
-  background: color-mix(in srgb, var(--clay) 12%, transparent);
-  box-shadow: none;
-  border-radius: 10px;
-  padding: 6px 12px;
-}
-.year-pill { min-height: 44px; background: transparent; box-shadow: none; border: 1px solid var(--color-border); }
-.year-pill:hover { transform: none; box-shadow: none; background: color-mix(in srgb, var(--clay) 10%, transparent); }
-.year-pill--active { background: var(--clay); color: var(--color-primary); border-color: var(--clay); }
-.year-pill--active:hover { background: var(--clay); color: var(--color-primary); }
-
-/* ── 首页的阅读宽度 ───────────────────────────────────────────────────────
-   The front page only. One column at every width.
-
-   THE MEASURE. The lead story's paragraph is capped with `ch`, which is the advance width of the
-   font's "0" — a unit with no stable relation to how many Chinese characters fit on a line. `em` is
-   the font size itself, which is what the month pages already cap this kind of prose with
-   (.month-reading .moment-memory_led .memory-copy p). Measured on the lead paragraph's own box at a
-   1448px viewport: 383px under the old cap, 571px under this one. The rule is inside a media query
-   rather than at the top level so that "desktop only" is structural rather than incidental: below
-   720px it does not apply at all and the old cap stands.
-
-   THE RAIL IS GONE (2026-09-12). From 1200px up, .home-change (the month's overview) and
-   .home-month (the month entry) used to move into a 320px right-hand rail beside the 760px story
-   column. Two things were wrong with it and both were reader-facing, not aesthetic:
-
-     1. The desktop reading ORDER stopped being the phone's. Grid placement, not document order,
-        decided what a desktop reader met after the greeting — and what they met was one ordinary
-        drawn day, with the answer to 「他最近怎么样」 parked to the right of it.
-     2. A 320px column at this page's type scale is small text. The block that summarises a whole
-        month of a child's life was the least prominent thing on the page, which is a judgement
-        about importance made by a layout rather than by anyone.
-
-   So the page is one column and the order in app/page.tsx is the order every reader gets:
-   greeting → 近况 → 上个月回顾 → 一段生活 → 照片 → 忽然想起 → 入口. The width a wide screen has
-   spare is spent on air and on pictures at their own proportions, not on a sidebar. */
-@media (min-width: 720px) {
-  .home-lead .memory-lead .memory-copy p { max-width: 34em; }
-}
-
-/* ── 只给读屏的文字 ─────────────────────────────────────────────────────────── */
-/* 原来只定义在 app/home.css 里（首页专属样式表），月页的 DayPhotos 也要用它把重复的
-   「这一天的照片」标题藏起来、却留给读屏——那里拿不到 home.css。所以提到全局，只此一份。
-   用 clip-path + 1px 盒子，而不是 display:none —— 后者读屏也读不到。 */
+/* Screen-reader only text */
 .visually-hidden {
   position: absolute !important;
   width: 1px;
@@ -1156,55 +2118,68 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   border: 0;
 }
 
-/* ── P-1: PhotoGrid ─────────────────────────────────────────────────────────
-   Smart grid layouts for 1–9+ photos. .pg = container; .pg-cell = one slot.
-   All cells are aspect-ratio boxes with object-fit: cover inside. */
-.pg { display: grid; gap: 4px; width: 100%; }
+/* ── PhotoGrid Concentric Mosaic (1–9+ photos) ─────────────────────────────── */
+.pg {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  border-radius: var(--r-media);
+  overflow: hidden;
+}
 .pg-cell {
   position: relative;
   overflow: hidden;
   margin: 0;
   cursor: pointer;
-  background: #f0f0f0;
-  /* default 1:1 square; individual layouts may override */
+  background: var(--paper-dark);
+  border-radius: 6px;
   aspect-ratio: 1 / 1;
 }
-.pg-cell img { object-fit: cover; }
+.pg-cell img {
+  object-fit: cover;
+  transition: transform 420ms var(--ease-spring), opacity 300ms var(--ease-out);
+}
+@media (hover: hover) {
+  .pg-cell[role="button"]:hover img { transform: scale(1.03); }
+}
 .pg-cell-video { cursor: default; aspect-ratio: 16 / 9; }
-/* Inside a grid a video is a cell like the rest: same square, poster cropped to fill it. */
 .pg-2 .pg-cell-video, .pg-4 .pg-cell-video, .pg-3-row .pg-cell-video { aspect-ratio: 1 / 1; }
 .pg-3 .pg-cell-video { aspect-ratio: unset; }
 .pg-cell-video video { width: 100%; height: 100%; object-fit: cover; display: block; background: var(--paper-dark); }
 
-/* 1 photo — centred, tall-capped */
-.pg-1 { max-height: 400px; }
-.pg-1 .pg-cell { aspect-ratio: unset; height: min(400px, 55vw); }
+/* 1 photo */
+.pg-1 { max-height: 460px; border-radius: var(--r-media); }
+.pg-1 .pg-cell { aspect-ratio: unset; height: min(460px, 64vw); border-radius: var(--r-media); }
 
-/* 2 photos — side by side */
+/* 2 photos */
 .pg-2 { grid-template-columns: 1fr 1fr; }
 .pg-2 .pg-cell { aspect-ratio: 1 / 1; }
 
-/* 3 photos — left large (2fr) + right column (1fr, 2 stacked) */
-.pg-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 4px; }
+/* 3 photos */
+.pg-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; }
 .pg-3 > .pg-cell { aspect-ratio: unset; height: 240px; }
-.pg-3 > .pg-col { display: flex; flex-direction: column; gap: 4px; }
+.pg-3 > .pg-col { display: flex; flex-direction: column; gap: 6px; }
 .pg-3 .pg-col .pg-cell { flex: 1; aspect-ratio: unset; min-height: 0; }
 @media (max-width: 480px) {
   .pg-3 > .pg-cell,
   .pg-3 > .pg-col { min-height: 0; }
-  .pg-3 > .pg-cell { height: 160px; }
+  .pg-3 > .pg-cell { height: 168px; }
 }
 
-/* 4 photos — 2 × 2 */
+/* 4 photos */
 .pg-4 { grid-template-columns: 1fr 1fr; }
 .pg-4 .pg-cell { aspect-ratio: 1 / 1; }
 
-/* 5–9+ photos — 3-column rows */
+/* 5–9+ photos */
 .pg-3-row { grid-template-columns: repeat(3, 1fr); }
 .pg-3-row .pg-cell { aspect-ratio: 1 / 1; }
+.pg-hero-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-flow: dense; }
+.pg-hero-grid .pg-cell-hero { grid-column: span 2; grid-row: span 2; aspect-ratio: 1 / 1; }
+.pg-mosaic { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.pg-mosaic .pg-span-3 { grid-column: span 3; aspect-ratio: 4 / 3; }
+.pg-mosaic .pg-span-2 { grid-column: span 2; aspect-ratio: 1 / 1; }
 
-/* 「展开」 on the last drawn cell: a light veil, the photo still visible under it, and the words say
-   what the control does — never how many are left (原则三). */
+/* Expand veil on final cell (Principle 3: never shows photo count) */
 .pg-more {
   position: absolute;
   inset: 0;
@@ -1214,581 +2189,18 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: rgb(250 247 242 / .62);
-  color: var(--color-text);
-  font-size: 1rem;
-  letter-spacing: .12em;
+  background: rgba(15, 23, 42, 0.52);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  backdrop-filter: blur(8px) saturate(140%);
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   cursor: pointer;
+  transition: background-color 200ms ease;
 }
-.pg-more:hover { background: rgb(250 247 242 / .5); }
-.pg-more:focus-visible { outline: 2px solid var(--color-secondary); outline-offset: -2px; }
+.pg-more:hover { background: rgba(15, 23, 42, 0.68); color: #FFFFFF; }
+.pg-more:focus-visible { outline: 2px solid #FFFFFF; outline-offset: -3px; }
 
-.day-neighbors { display: flex; justify-content: space-between; gap: 2rem; margin-block: 3rem; }
-.day-neighbors a { max-width: 48%; }
-.month-highlights { margin-block: 2rem; }
-.month-highlights a { display: block; padding-block: .5rem; text-underline-offset: .25em; }
-[id^="day-"] { scroll-margin-top: 2rem; }
-
-/* Archive search is a small global entrance, separate from the five destinations. */
-.header-inner { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-.header-search { display: inline-flex; justify-content: center; align-items: center; width: 44px; height: 44px; color: var(--color-secondary); }
-@media (max-width: 480px) { .brand-copy { flex-direction: column; align-items: flex-start; gap: 4px; white-space: normal; } }
-@media (min-width: 700px) { .header-inner { grid-template-columns: minmax(0, 1fr) auto auto; } }
-
-/* ── 私家摄影散文年鉴设计系统（Literary Monograph，2026-11-11）──────────────────────────
-   气质：温润棉浆书页 + 暗房亚麻衬卡 + 楷书题签与清晰正文双层排印。
-   - 标题与题签：Lora（拉丁/数字）+ 霞鹜文楷（汉字），全部用原生 400 字重，绝不合成假粗体；
-   - 阅读正文与界面注记：Nunito + 系统黑体（苹方 / 思源黑体 / 雅黑），长文久读不累；
-   - 日期与年龄时钟：Poppins / lining tabular numerals，像书眉页码一样对齐；
-   - 纸面：退掉工程感圆点网格，保留极淡棉纸纤维微纹理，照片四角与书签卡片统一为安静的装帧圆角。 */
-:root {
-  --color-bg: #F8F4EC;
-  --color-surface: #FCF9F4;
-  --paper-dark: #EFE9DE;
-  --card-soft: #F1ECE2;
-  --color-primary: #2C2823;
-  --color-text: #2C2823;
-  --color-muted: #696258;
-  --muted: #696258;
-  --brand-accent: #9E543B;
-  --sage: #9BAA8E;
-  --clay: #C2A687;
-  --sage-ink: #55634A;
-  --clay-ink: #7C5E3F;
-  --color-secondary: var(--sage-ink);
-  --color-accent: var(--brand-accent);
-  --color-border: #E4DDD1;
-  --hairline: rgb(44 40 35 / .09);
-  --hairline-strong: rgb(44 40 35 / .17);
-  --font-serif: var(--font-lora, 'Lora'), 'LXGW WenKai', 'Songti SC', 'Noto Serif SC', serif;
-  --font-heading: var(--font-serif);
-  --font-body: var(--font-nunito, 'Nunito'), -apple-system, 'PingFang SC', 'Source Han Sans SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
-  --font-display: var(--font-poppins, 'Poppins'), -apple-system, 'PingFang SC', 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
-  --r-card: 14px;
-  --r-badge: 8px;
-  --shadow: 0 0 0 1px var(--hairline), 0 2px 6px rgb(44 40 35 / .04), 0 16px 34px -20px rgb(44 40 35 / .16);
-  --shadow-hover: 0 0 0 1px var(--hairline-strong), 0 4px 10px rgb(44 40 35 / .06), 0 24px 44px -20px rgb(44 40 35 / .22);
-  --shadow-badge: 0 0 0 1px var(--hairline);
-}
-
-body {
-  font-family: var(--font-body);
-  line-height: 1.82;
-  letter-spacing: .005em;
-  -webkit-font-smoothing: antialiased;
-}
-
-body::before {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.045'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
-  opacity: .24;
-  -webkit-mask-image: none;
-  mask-image: none;
-}
-
-/* 文学标题层：霞鹜文楷只走原生 400 字重，靠字号、墨色与留白建立层级 */
-h1, h2, h3, .serif, .home-title-line, .section-heading h2 {
-  font-family: var(--font-serif);
-  font-weight: 400;
-  letter-spacing: .01em;
-}
-.detail-head h1, .day-detail-title, .day-entry-title, .month-card-label {
-  font-family: var(--font-serif);
-  font-weight: 400;
-}
-
-/* 书眉与时间戳层 */
-.section-mark, .eyebrow, .layer-label {
-  font-family: var(--font-display);
-  font-size: .76rem;
-  font-weight: 600;
-  font-style: normal;
-  letter-spacing: .12em;
-  color: var(--clay-ink);
-}
-time, .evidence-time, .monthly-focus-meta, .monthly-focus-origin {
-  font-family: var(--font-display);
-  font-variant-numeric: lining-nums tabular-nums;
-  letter-spacing: .015em;
-}
-
-/* 页眉与底部导航：安静的藏书票书眉 */
-.site-header {
-  position: sticky;
-  top: 0;
-  border-bottom: 1px solid var(--hairline);
-  background: rgb(248 244 236 / .86);
-  -webkit-backdrop-filter: saturate(1.25) blur(14px);
-  backdrop-filter: saturate(1.25) blur(14px);
-  animation: none;
-}
-.header-inner { min-height: 66px; }
-.brand { gap: 11px; }
-.brand-mark {
-  width: 40px;
-  height: 40px;
-  border: 1.5px solid var(--brand-accent);
-  border-radius: 10px;
-  font-family: var(--font-serif);
-  font-size: 21px;
-  font-weight: 400;
-  background: rgb(158 84 59 / .04);
-  transition: transform .24s var(--ease-out), background-color .24s var(--ease-out);
-}
-.brand-mark:hover { transform: translateY(-1px); background: rgb(158 84 59 / .09); }
-.brand-copy strong {
-  font-family: var(--font-serif);
-  font-size: clamp(.95rem, 2vw, 1.12rem);
-  font-weight: 500;
-  letter-spacing: .01em;
-}
-.brand-copy small {
-  font-family: var(--font-body);
-  font-size: .72rem;
-  letter-spacing: .08em;
-  color: var(--color-muted);
-}
-.desktop-nav { gap: 30px; }
-.desktop-nav a {
-  font-size: .86rem;
-  color: var(--color-muted);
-  letter-spacing: .05em;
-  transition: color .2s var(--ease-out);
-}
-.desktop-nav a:hover, .desktop-nav a.is-active { color: var(--color-primary); }
-.desktop-nav a::after { height: 1.5px; background: var(--brand-accent); bottom: 9px; }
-
-.bottom-nav {
-  border-top: 1px solid var(--hairline);
-  background: rgb(252 249 244 / .94);
-  -webkit-backdrop-filter: saturate(1.25) blur(14px);
-  backdrop-filter: saturate(1.25) blur(14px);
-}
-.bottom-nav > a { position: relative; font-size: .78rem; letter-spacing: .03em; }
-.bottom-nav > a.is-active { color: var(--brand-accent); font-weight: 600; }
-.bottom-nav > a.is-active::before {
-  content: "";
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  width: 20px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--brand-accent);
-  transform: translateX(-50%);
-}
-
-/* 记忆目录页：收紧刊头与卷标层，退掉黑胶囊与橙色厚左框，首屏直接看见当月摄影与题签 */
-.memory-page .page-masthead {
-  padding: clamp(18px, 3vw, 34px) 0 clamp(10px, 1.8vw, 16px);
-}
-.memory-page .page-masthead h1 {
-  margin: 4px 0 8px;
-  font-size: clamp(2.05rem, 4.8vw, 3.2rem);
-  line-height: 1.16;
-  letter-spacing: 0;
-}
-.memory-page .page-masthead h1 em { color: var(--brand-accent); }
-.memory-page .page-masthead > p { margin: 0; font-size: .95rem; color: var(--color-muted); }
-
-.memory-year-nav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 16px;
-  margin-block: 6px 0;
-  padding: 4px 0;
-  border-block: 1px solid var(--hairline-strong);
-}
-.memory-year-nav-group { padding: 2px 0; gap: 8px; }
-.memory-year-nav-group + .memory-year-nav-group { margin-left: 4px; padding-left: 16px; border-left: 1px solid var(--hairline-strong); }
-.memory-year-nav-label { font-family: var(--font-display); font-size: .76rem; font-weight: 600; letter-spacing: .08em; color: var(--color-muted); }
-.memory-year-nav-links { gap: 4px; }
-.memory-year-nav-mode { margin-left: auto; }
-@media (max-width: 540px) {
-  .memory-year-nav { flex-direction: row; align-items: center; gap: 2px 12px; }
-  .memory-year-nav-group + .memory-year-nav-group { margin-left: 0; padding-left: 12px; border-left: 1px solid var(--hairline-strong); }
-  .memory-year-nav-mode { width: 100%; display: flex; justify-content: flex-end; border-top: 1px dashed var(--hairline); padding-top: 2px; margin-top: 2px; }
-}
-
-.year-pill {
-  min-height: 44px;
-  padding: 6px 10px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  font-family: var(--font-display);
-  font-size: .9rem;
-  font-weight: 500;
-  letter-spacing: .02em;
-  color: var(--color-muted);
-  transition: color .18s var(--ease-out), border-color .18s var(--ease-out);
-}
-.year-pill:hover {
-  transform: none;
-  box-shadow: none;
-  background: transparent;
-  color: var(--color-primary);
-  border-bottom-color: var(--hairline-strong);
-}
-.year-pill--active,
-.year-pill--active:hover {
-  background: transparent;
-  color: var(--brand-accent);
-  border-color: transparent;
-  border-bottom-color: var(--brand-accent);
-  font-weight: 600;
-}
-.year-pill--prebirth {
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  color: #8A532B;
-}
-.year-pill--prebirth:hover {
-  background: transparent;
-  color: #6B3C1B;
-  border-bottom-color: rgb(200 132 90 / .45);
-}
-.year-pill--prebirth.year-pill--active,
-.year-pill--prebirth.year-pill--active:hover {
-  background: transparent;
-  color: #7A4520;
-  border-color: transparent;
-  border-bottom-color: #C8845A;
-}
-
-.memory-year-section { padding: clamp(16px, 2.8vw, 28px) 0 clamp(24px, 4vw, 40px); }
-.memory-life-chapter { margin-bottom: 12px; }
-.memory-life-label { font-family: var(--font-display); font-size: .76rem; font-weight: 600; letter-spacing: .14em; color: var(--clay-ink); margin: 0 0 4px; }
-.memory-life-title { font-size: clamp(1.38rem, 3.2vw, 1.82rem); line-height: 1.32; color: var(--color-primary); }
-.memory-year-heading { margin: 0 auto 12px; }
-.memory-birth-boundary { margin-top: 8px; margin-bottom: 24px; padding-top: clamp(28px, 5vw, 44px); border-top: 1px solid rgb(200 132 90 / .45); }
-.memory-birth-milestone { font-family: var(--font-serif); font-weight: 400; font-size: clamp(1.15rem, 3vw, 1.38rem); color: #7A4520; }
-.memory-prenatal-chapter {
-  margin-top: clamp(22px, 4vw, 32px);
-  padding: 16px 0 0;
-  border: 0;
-  border-top: 1px dashed rgb(200 132 90 / .42);
-  background: transparent;
-  color: #7A4520;
-}
-
-.month-card {
-  background: var(--color-surface);
-  border-radius: var(--r-card);
-}
-.month-card:has(.month-card-photo) {
-  padding: 8px 8px 0;
-}
-.month-card--compact {
-  border-top: 2px solid var(--clay);
-  background: linear-gradient(180deg, #FAF5EB 0%, var(--color-surface) 100%);
-}
-.month-card-photo {
-  height: clamp(176px, 38vw, 232px);
-  border-radius: 9px;
-  background: var(--paper-dark);
-}
-.month-card-body { padding: 14px 14px 18px; }
-.month-card--compact .month-card-body { padding: 18px 20px 20px; }
-.month-card-label { font-size: 1.36rem; line-height: 1.28; }
-.month-card-age { margin-top: 3px; font-family: var(--font-display); font-size: .78rem; letter-spacing: .03em; color: var(--clay-ink); }
-.month-card-blurb { margin-top: 9px; font-family: var(--font-body); font-size: .92rem; line-height: 1.68; color: var(--color-muted); }
-
-/* 月度卷（/memory/[year]/[month]）：专著卷首目录（无左厚边卡片）+ 书眉周次索引（无胶囊堆砌）+ 逐日分隔呼吸 */
-.month-page .chapter-masthead {
-  padding: clamp(22px, 4vw, 44px) 0 clamp(18px, 3vw, 28px);
-  border-bottom: 1px solid var(--hairline-strong);
-}
-.month-page .chapter-masthead .back-link { margin-bottom: 12px; }
-.month-page .chapter-masthead h1 { font-size: clamp(2.15rem, 5.4vw, 3.2rem); letter-spacing: 0; line-height: 1.16; }
-.month-page .chapter-age { font-family: var(--font-display); color: var(--clay-ink); font-size: .88rem; letter-spacing: .03em; }
-.month-page .chapter-summary {
-  max-width: 34em;
-  margin-top: 14px;
-  font-family: var(--font-serif);
-  font-size: clamp(1.1rem, 2.4vw, 1.3rem);
-  font-weight: 400;
-  line-height: 1.74;
-  color: var(--color-text);
-}
-.month-highlights {
-  margin-block: 20px 12px;
-  padding: 14px 0 10px;
-  border: 0;
-  border-block: 1px solid var(--hairline-strong);
-  border-radius: 0;
-  background: transparent;
-}
-.month-highlights .section-mark { margin: 0 0 6px; }
-.month-highlights a {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 44px;
-  padding-block: 7px;
-  font-family: var(--font-serif);
-  font-size: 1.05rem;
-  color: var(--color-text);
-  text-decoration: none;
-  border-bottom: 1px dotted var(--hairline-strong);
-  transition: color .18s var(--ease-out);
-}
-.month-highlights a::after {
-  content: "↓";
-  flex: none;
-  font-family: var(--font-display);
-  font-size: .78rem;
-  color: var(--clay-ink);
-  opacity: .72;
-}
-.month-highlights a:last-of-type { border-bottom: 0; padding-bottom: 2px; }
-.month-highlights a:hover { color: var(--brand-accent); }
-.month-highlights a:hover::after { color: var(--brand-accent); opacity: 1; }
-
-.month-jump {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 18px;
-  margin: 2px 0 10px;
-}
-.month-jump a {
-  min-height: 44px;
-  padding: 0 2px;
-  border: 0;
-  border-bottom: 1.5px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  font-family: var(--font-display);
-  font-size: .8rem;
-  letter-spacing: .03em;
-  color: var(--color-muted);
-  transition: color .18s var(--ease-out), border-color .18s var(--ease-out);
-}
-.month-jump a:hover {
-  border-color: transparent;
-  border-bottom-color: var(--brand-accent);
-  color: var(--brand-accent);
-}
-
-.week-mark {
-  margin: clamp(28px, 4.5vw, 42px) 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--hairline-strong);
-  font-family: var(--font-display);
-  font-size: .76rem;
-  font-weight: 600;
-  letter-spacing: .12em;
-  color: var(--clay-ink);
-}
-.month-week:first-of-type .week-mark { margin-top: 12px; }
-
-/* 注意特异性：覆盖 650 行 `.month-days .month-moment { padding: 0; border-bottom: 0; }`，
-   让每一天的故事、照片与「读这一天的原记录 →」形成清晰收束的单日章节，不再紧贴下一天的日期。 */
-.moment-day-entry,
-.month-days .moment-day-entry {
-  padding: clamp(24px, 3.8vw, 34px) 0 clamp(24px, 3.6vw, 32px);
-  border-bottom: 1px solid var(--hairline);
-}
-.month-days .month-day:last-child > .moment-day-entry {
-  border-bottom: 0;
-}
-.moment-day-entry .month-day-date {
-  margin-bottom: 8px;
-  font-size: .8rem;
-  letter-spacing: .03em;
-}
-.moment-day-entry .month-day-date time { color: var(--clay-ink); font-weight: 600; }
-.day-entry-title {
-  margin: 0 0 12px;
-  font-size: clamp(1.28rem, 3vw, 1.56rem);
-  line-height: 1.38;
-  color: var(--color-primary);
-  text-wrap: pretty;
-}
-.day-entry-text {
-  max-width: 37em;
-  margin: 0 0 .88em;
-  font-family: var(--font-body);
-  font-size: 1.03rem;
-  line-height: 1.9;
-  color: var(--color-text);
-}
-.moment-day-lead,
-.month-days .moment-day-lead {
-  position: relative;
-  padding-top: clamp(34px, 5.2vw, 48px);
-}
-.moment-day-lead .day-entry-title {
-  margin-bottom: 14px;
-  font-size: clamp(1.54rem, 4vw, 2.04rem);
-  line-height: 1.32;
-  color: var(--color-primary);
-}
-.moment-day-lead .month-day-date time { color: var(--brand-accent); }
-.day-entry-more { margin: 14px 0 0; }
-.day-entry-more .text-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  font-size: .82rem;
-  font-weight: 500;
-  color: var(--color-muted);
-  border-bottom-color: var(--hairline-strong);
-}
-.day-entry-more .text-link:hover { color: var(--brand-accent); border-bottom-color: var(--brand-accent); }
-
-.other-years { margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--hairline-strong); }
-.other-years p { margin: 10px 0 0; font-family: var(--font-serif); font-size: 1.24rem; gap: 6px 16px; }
-
-/* ── PhotoGrid 画册拼版增强：6/9 张主次 L 型画版 + 5/7/8/10+ 无孤格六栏拼图 ── */
-.pg { gap: 6px; border-radius: 12px; overflow: hidden; }
-.pg-cell { background: var(--paper-dark); border-radius: 3px; }
-.pg-cell img { transition: transform .45s var(--ease-out), opacity .35s var(--ease-out); }
-@media (hover: hover) {
-  .pg-cell[role="button"]:hover img { transform: scale(1.025); }
-}
-.pg-1 { max-height: 460px; border-radius: 12px; }
-.pg-1 .pg-cell { height: min(460px, 64vw); border-radius: 12px; }
-.pg-hero-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-flow: dense; }
-.pg-hero-grid .pg-cell-hero { grid-column: span 2; grid-row: span 2; aspect-ratio: 1 / 1; }
-.pg-mosaic { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-.pg-mosaic .pg-span-3 { grid-column: span 3; aspect-ratio: 4 / 3; }
-.pg-mosaic .pg-span-2 { grid-column: span 2; aspect-ratio: 1 / 1; }
-.pg-more {
-  background: rgb(246 241 232 / .88);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  box-shadow: inset 0 0 0 1px var(--hairline-strong);
-  font-family: var(--font-serif);
-  font-size: 1.06rem;
-  letter-spacing: .16em;
-  color: var(--color-primary);
-}
-.pg-more:hover { background: rgb(246 241 232 / .76); color: var(--brand-accent); }
-
-/* ── 日详情页（/memory/[y]/[m]/[d]）与事件详情页（/events/[id]）统一书页排印 ─────────── */
-.day-detail .detail-head,
-.detail-page .detail-head {
-  padding: clamp(22px, 4vw, 44px) 0 clamp(18px, 3vw, 26px);
-  border-bottom: 1px solid var(--hairline);
-}
-.day-detail .detail-head .back-link,
-.detail-page .detail-head .back-link { margin-bottom: 10px; }
-.day-detail-when,
-.detail-page .detail-head .time-signature {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  font-family: var(--font-display);
-  font-size: .84rem;
-  font-weight: 500;
-  letter-spacing: .03em;
-  color: var(--color-muted);
-}
-.day-detail-when time,
-.detail-page .detail-head .time-signature time { color: var(--brand-accent); font-weight: 600; }
-.day-detail-title,
-.detail-page .detail-head h1 {
-  max-width: 18em;
-  margin-top: 6px;
-  font-size: clamp(1.62rem, 4.6vw, 2.42rem);
-  font-weight: 400;
-  line-height: 1.32;
-  text-wrap: pretty;
-}
-.detail-page .detail-supporting { margin-top: clamp(20px, 3.5vw, 30px); }
-.day-detail .story-layer,
-.detail-page .story-layer { padding: clamp(24px, 4vw, 40px) 0 clamp(12px, 2vw, 20px); }
-.day-detail .story-column,
-.detail-page .story-column { max-width: 36em; }
-.day-detail .story-column > p,
-.detail-page .story-column > p,
-.detail-page .story-column .story-lead {
-  margin: 0 0 1.18em;
-  font-family: var(--font-body);
-  font-size: clamp(1.05rem, 2.2vw, 1.125rem);
-  line-height: 1.94;
-  color: var(--color-text);
-}
-.day-detail .story-column > p:last-child,
-.detail-page .story-column > p:last-child { margin-bottom: 0; }
-.day-detail-photos { margin-top: clamp(16px, 3vw, 28px); padding-bottom: clamp(20px, 3.5vw, 32px); }
-
-.evidence-disclosure {
-  margin-top: 22px;
-  background: var(--color-surface);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-card);
-  padding: 0 22px;
-}
-.evidence-disclosure > summary span { font-family: var(--font-serif); font-size: 1.18rem; }
-.evidence-quote {
-  font-family: var(--font-body);
-  font-size: clamp(1rem, 2.2vw, 1.1rem);
-  line-height: 1.76;
-  color: var(--color-text);
-}
-
-.day-neighbors {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-block: 36px 8px;
-}
-@media (min-width: 640px) {
-  .day-neighbors { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-}
-.day-neighbors a.day-neighbor,
-.story-steps .story-step {
-  max-width: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 20px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-card);
-  background: var(--color-surface);
-  transition: transform .24s var(--ease-out), border-color .24s var(--ease-out), box-shadow .24s var(--ease-out);
-}
-.day-neighbors a.day-neighbor:hover,
-.story-steps .story-step:hover {
-  transform: translateY(-2px);
-  border-color: var(--clay);
-  box-shadow: var(--shadow);
-}
-.day-neighbor-next { text-align: right; align-items: flex-end; }
-.day-neighbor-title,
-.story-step-title { font-size: 1.12rem; line-height: 1.4; color: var(--color-primary); }
-
-.viewer-zoom {
-  margin-left: auto;
-  min-width: 52px;
-  min-height: 40px;
-  padding: 6px 12px;
-  border: 1px solid rgb(255 255 255 / .28);
-  border-radius: 999px;
-  background: rgb(255 255 255 / .1);
-  color: #fff;
-  font-size: .8rem;
-  cursor: pointer;
-}
-.viewer-zoom:hover { background: rgb(255 255 255 / .2); }
-
-.primary-button { border-radius: 10px !important; box-shadow: inset 0 1px 0 rgb(255 255 255 / .14), 0 1px 2px rgb(44 40 35 / .18); }
-.text-link, .back-link { border-bottom: 1px solid var(--hairline-strong); font-weight: 500; }
-.text-link:hover, .back-link:hover { border-bottom-color: var(--brand-accent); color: var(--brand-accent); transform: translateX(2px); }
-.capture-form input, .capture-form select, .capture-form textarea { border-radius: 8px; border-color: var(--hairline-strong); }
-:focus-visible { outline-offset: 3px; border-radius: 4px; }
-@media (prefers-reduced-motion: no-preference) { img { transition: opacity .4s var(--ease-out); } }
+[id^="day-"] { scroll-margin-top: 5.5rem; }

@@ -19,6 +19,7 @@ import { DayDetail } from "@/components/day-detail";
 import { readDay } from "@/lib/day-reading";
 import { dayForEventId, loadMonthContent } from "@/lib/month-content";
 import { shanghaiDay } from "@/lib/shanghai-time";
+import "../../memory/memory-modern.css";
 
 // 2026-09-06 incident (docs/INCIDENT-2026-09-06-neon-egress.md §3.2): generateStaticParams used
 // to prerender every publishable event (651 and growing) on every build, each pulling the full
@@ -130,39 +131,41 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const neighbourEntry = (neighbour: NeighbourCandidate, direction: "previous" | "next") => {
     const sig = timeSignatureFor(neighbour.occurredAt, birthDay);
     return <Link className={`story-step story-step-${direction}`} href={`/events/${neighbour.id}`}>
-      <span className="section-mark">{direction === "previous" ? "上一篇" : "下一篇"}</span>
+      <span className="section-mark">{direction === "previous" ? "← 上一篇" : "下一篇 →"}</span>
       <span className="serif story-step-title">{memoryTitle(neighbour)}</span>
       {sig ? <span className="story-step-when">{sig.dateLabel}{sig.ageLabel ? ` · 当时 ${sig.ageLabel}` : ""}</span> : null}
     </Link>;
   };
 
   return <article className="detail-page">
-    <header className="reading-wrap detail-head">
-      <Link className="back-link" href={monthHref}>← 回到 {monthLabel}</Link>
-      {signature ? <TimeSignature signature={signature} className="detail-signature" /> : null}
-      <h1 className="serif">{title}</h1>
-      {people.length > 0 || location ? <p className="detail-context">{[people.join("、"), location].filter(Boolean).join(" · ")}</p> : null}
-    </header>
-    {(hero || supporting.length > 0) ? <div className="reading-wrap detail-supporting">
-      <PhotoGallery
-        photos={[...(hero ? [hero] : []), ...supporting]}
-        heroIndex={hero ? 0 : undefined}
-        heroClassName="detail-hero"
-        dateLabel={signature?.dateLabel ?? ""}
-        ageLabel={signature?.ageLabel}
-        priority
-        heroSizes="(max-width: 700px) 100vw, 1120px"
-        stripSizes="(max-width: 700px) 30vw, 200px"
-      />
-      {layout.remaining > 0 ? <p className="sequence-more">那天还有 {layout.remaining} 张照片，收在下面的资料里。</p> : null}
-    </div> : null}
-    {paragraphs.length > 0 || growth.length > 0 || care.length > 0 ? <section className="story-layer reading-wrap">
-      {paragraphs.length > 0 ? <div className="story-column">{paragraphs.map((text, index) => <p key={index} className={index === 0 ? "story-lead" : undefined}>{text}</p>)}</div> : null}
-      {growth.length > 0 || care.length > 0 ? <aside className="story-aside">
-        {growth.map((record) => <div className="story-note" key={record.id}><span className="section-mark">{GROWTH_LABEL[record.kind] ?? "那时"}</span><p>{record.note}</p></div>)}
-        {care.map((record) => <div className="story-note" key={record.id}><span className="section-mark">{record.title}</span><p>{record.note}</p></div>)}
-      </aside> : null}
-    </section> : null}
+    <div className="detail-card reading-wrap">
+      <header className="detail-head">
+        <Link className="back-link" href={monthHref}>← 回到 {monthLabel}</Link>
+        {signature ? <TimeSignature signature={signature} className="detail-signature" /> : null}
+        <h1 className="serif">{title}</h1>
+        {people.length > 0 || location ? <p className="detail-context">{[people.join("、"), location].filter(Boolean).join(" · ")}</p> : null}
+      </header>
+      {(hero || supporting.length > 0) ? <div className="detail-supporting">
+        <PhotoGallery
+          photos={[...(hero ? [hero] : []), ...supporting]}
+          heroIndex={hero ? 0 : undefined}
+          heroClassName="detail-hero"
+          dateLabel={signature?.dateLabel ?? ""}
+          ageLabel={signature?.ageLabel}
+          priority
+          heroSizes="(max-width: 700px) 100vw, 1120px"
+          stripSizes="(max-width: 700px) 30vw, 200px"
+        />
+        {layout.remaining > 0 ? <p className="sequence-more">那天还有 {layout.remaining} 张照片，收在下面的资料里。</p> : null}
+      </div> : null}
+      {paragraphs.length > 0 || growth.length > 0 || care.length > 0 ? <section className="story-layer">
+        {paragraphs.length > 0 ? <div className="story-column">{paragraphs.map((text, index) => <p key={index} className={index === 0 ? "story-lead" : undefined}>{text}</p>)}</div> : null}
+        {growth.length > 0 || care.length > 0 ? <aside className="story-aside">
+          {growth.map((record) => <div className="story-note" key={record.id}><span className="section-mark">{GROWTH_LABEL[record.kind] ?? "那时"}</span><p>{record.note}</p></div>)}
+          {care.map((record) => <div className="story-note" key={record.id}><span className="section-mark">{record.title}</span><p>{record.note}</p></div>)}
+        </aside> : null}
+      </section> : null}
+    </div>
     {materialCount > 0 ? <details className="evidence-disclosure reading-wrap">
       {/* 2026-09-16 视觉验收：原来这里还挂着 `<small>{materialCount} 项</small>`，线上读作
           「当时留下的资料 7 项」。原则三把「计数式描述」列为违反方式，而 `<summary>` 本身
