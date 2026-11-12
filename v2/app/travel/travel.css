@@ -369,7 +369,10 @@
   line-height: 1.2;
   color: var(--color-primary, #0F172A);
 }
-.travel-reel { --home-serif: var(--font-heading); }
+.travel-reel {
+  --home-serif: var(--font-heading);
+  --home-photo-h: clamp(380px, 56vh, 520px);
+}
 .travel-reel .home-memory { margin-bottom: 0; }
 .travel-reel .memory-actions { display: none; }
 .travel-reel .memory-caption-line { bottom: 60px; line-height: 1.5; }

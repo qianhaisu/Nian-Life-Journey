@@ -7,7 +7,10 @@ import type { TripDay } from "./reading";
 
 /** Only receives the travel reader's eligible, reviewed pool. No new image recognition or time-based scene guesses. */
 export function buildTripMemory(trip: Trip, days: readonly TripDay[], scores: ReadonlyMap<string, CoverScore>, cover?: MediaRef, limit = 24): HomeMemory | undefined {
-  const pool = days.filter(day => day.day >= trip.from && day.day <= trip.to)
+  const hasEligiblePhoto = (day: TripDay) => day.photos.some(media => media.type === "photo" && !scores.get(media.id)?.sensitive);
+  const inRange = days.filter(day => day.day >= trip.from && day.day <= trip.to);
+  const sourceDays = inRange.some(hasEligiblePhoto) ? inRange : days;
+  const pool = [...sourceDays]
     .sort((a, b) => a.day.localeCompare(b.day))
     .flatMap(day => day.photos.filter(media => media.type === "photo" && !scores.get(media.id)?.sensitive).map(media => ({ ...media, day, order: 0 })));
   pool.forEach((item, index) => { item.order = index; });

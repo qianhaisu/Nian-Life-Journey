@@ -493,16 +493,74 @@ const TOPIC_THEMES: ReadonlyArray<{ key: CarouselTheme; title: string; basis: st
   { key: "toy", title: "和玩具在一起", basis: "实际正在玩玩具" },
   { key: "hold", title: "被抱着的时候", basis: "实际被家人抱着" },
 ];
+
+export type TopicTextDayContext = {
+  title?: string | null;
+  paragraphs?: readonly string[];
+  photoCaptions?: Readonly<Record<string, string>>;
+};
+
+export type SelectHomeMemoriesContext = {
+  dayContext?: ReadonlyMap<string, TopicTextDayContext>;
+};
+
+const THEME_TEXT_PATTERNS: Partial<Record<CarouselTheme, RegExp>> = {
+  water: /泳池|游泳|玩水|戏水|喷泉|水花|水里|泡水|泼水|踩水|水枪|海边/,
+  sleep: /睡着|午睡|睡觉|入睡|困了|熟睡|梦乡|睡得|小床.*睡|窝在.*睡/,
+  laugh: /笑|开心|乐得|咯咯|咧嘴|眯眼/,
+  eat: /吃饭|吃东西|辅食|拿勺|用勺|握勺|喂饭|喝奶|面条|米糊|白粥|面包|馒头|水果|桔子|橙子|草莓|蓝莓|西瓜|苹果|香蕉|鸡翅|排骨|鸡蛋|零食|酸奶|饼干|碗|餐椅|胃口|吃得|一口/,
+  outdoor: /公园|草地|散步|户外|滑梯|院子|江边|湖边|海边|晒太阳|树叶|稻田|广场|植物园|动物园|出门|外头/,
+  toy: /玩具|积木|小车|汽车|挖掘机|火车|绘本|玩球|小球|皮球|泡泡|拼图|玩偶|卡片|磁力片/,
+  hold: /抱着|抱起|怀里|背着|肩上|搂着/,
+};
+
+/**
+ * 主题选片文本相关性加权（纯函数）：
+ * 视觉评分合格后，优先挑这张照片自身图注（photoCaptions）或所在日正文与该主题吻合的照片；
+ * 若照片自身图注明确在写另一个不兼容活动且未提及当前主题，则降权，避免「吃饭这件事」混入无关画面。
+ */
+export function topicTextRelevanceBonus(
+  themeKey: CarouselTheme,
+  mediaId: string,
+  dayCtx: TopicTextDayContext | undefined,
+): number {
+  if (!dayCtx) return 0;
+  const pattern = THEME_TEXT_PATTERNS[themeKey];
+  if (!pattern) return 0;
+  let bonus = 0;
+  const caption = dayCtx.photoCaptions?.[mediaId]?.trim();
+  if (caption) {
+    if (pattern.test(caption)) {
+      bonus += 0.25;
+    } else {
+      const matchesOtherExclusive = (["water", "sleep", "eat", "outdoor", "toy"] as const)
+        .some((other) => other !== themeKey && Boolean(THEME_TEXT_PATTERNS[other]?.test(caption)));
+      if (matchesOtherExclusive) bonus -= 0.2;
+    }
+  }
+  const prose = [dayCtx.title, ...(dayCtx.paragraphs ?? [])].filter(Boolean).join(" ");
+  if (prose && pattern.test(prose)) {
+    bonus += 0.1;
+  }
+  return bonus;
+}
+
 function buildTopicMemory(input: {
   theme: (typeof TOPIC_THEMES)[number];
   photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup; birthDay?: string;
   /** 已经被更早的段用掉的照片（跨段去重，见 excludeUsedBursts）。 */
   usedIds?: ReadonlySet<string>;
+  dayContext?: ReadonlyMap<string, TopicTextDayContext>;
 }): HomeMemory | undefined {
-  const { theme, photos, privilege, birthDay } = input;
+  const { theme, photos, privilege, birthDay, dayContext } = input;
+  const mediaDayById = dayContext ? new Map(photos.map((photo) => [photo.id, dayOf(photo)])) : undefined;
   const topics: PhotoTopicLookup = id => {
     const label = input.topics(id);
-    return label?.carousel ? { ...label, value: carouselValue(label, theme.key) } : label;
+    if (!label?.carousel) return label;
+    const base = carouselValue(label, theme.key);
+    const day = mediaDayById?.get(id);
+    const bonus = day ? topicTextRelevanceBonus(theme.key, id, dayContext?.get(day)) : 0;
+    return { ...label, value: base + bonus };
   };
   const usedIds = input.usedIds ?? new Set<string>();
 
@@ -661,6 +719,7 @@ function buildSpanMemory(input: {
 export function selectHomeMemories(
   archive: FamilyArchive,
   topics: PhotoTopicLookup = NO_TOPICS,
+  context?: SelectHomeMemoriesContext,
 ): { memories: HomeMemory[]; absence?: HomeMemoryAbsence } {
   const { chapters, privilege, birthDay } = archive;
   const today = archive.time.today;
@@ -719,7 +778,7 @@ export function selectHomeMemories(
   // 顺序就是 TOPIC_THEMES 的顺序（Teddy 点名的三个排在前面）——先建的段先挑照片。
   const topicMemories: HomeMemory[] = [];
   for (const theme of TOPIC_THEMES) {
-    const memory = buildTopicMemory({ theme, photos: allPhotos, privilege, topics, birthDay, usedIds });
+    const memory = buildTopicMemory({ theme, photos: allPhotos, privilege, topics, birthDay, usedIds, dayContext: context?.dayContext });
     if (keep(memory)) topicMemories.push(memory);
   }
 

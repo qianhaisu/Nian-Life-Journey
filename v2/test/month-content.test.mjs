@@ -186,3 +186,32 @@ test("the material section never draws a picture a reviewer withdrew", () => {
   assert.deepEqual(gateMaterialMedia(carried, undefined).map((m) => m.id), ["m1", "withdrawn", "m3"]);
   assert.deepEqual(gateMaterialMedia(carried, new Set()).map((m) => m.id), ["m1", "withdrawn", "m3"]);
 });
+
+test("optional paragraphMedia, photoCaptions, featuredQuote and homeHeroMediaId are validated strictly while legacy files remain valid", () => {
+  const enriched = doc({
+    homeHeroMediaId: "m1",
+    days: [
+      day({
+        paragraphs: ["第一段", "第二段"],
+        paragraphMedia: [["m1"], ["m2"]],
+        photoCaptions: { m1: "午后捧着漏水杯", m2: "伸手够池边套杯" },
+        featuredQuote: { text: "他跟读了单词", speaker: "老师", sourceId: "src-1" },
+      }),
+    ],
+  });
+  assert.ok(validateMonthContent(enriched, MONTH));
+
+  // Malformed shapes on any new optional field are refused
+  const badCases = [
+    doc({ homeHeroMediaId: "   " }),
+    doc({ days: [day({ paragraphMedia: [["m1"], ["m2"]] })] }), // length mismatch (1 paragraph vs 2 slots)
+    doc({ days: [day({ paragraphMedia: [["not-in-expanded"]] })] }),
+    doc({ days: [day({ photoCaptions: { m1: "" } })] }),
+    doc({ days: [day({ photoCaptions: { mX: "不属于当天展开池" } })] }),
+    doc({ days: [day({ featuredQuote: { text: "", speaker: "老师" } })] }),
+    doc({ days: [day({ featuredQuote: { text: "好", speaker: "" } })] }),
+  ];
+  for (const bad of badCases) {
+    assert.equal(validateMonthContent(bad, MONTH), null);
+  }
+});

@@ -203,3 +203,145 @@ test("validateLiteraryStyle：拦截空泛套话、聊天室转播腔与机械�
     "家人原话里的词在引号内不误伤",
   );
 });
+
+// ── 2026-11-12：STYLE.zhang.md 第二版逐条对齐测试 ────────────────────────────
+
+test("照片说明书腔：叙述中全部拦下，引号与书名号内放行", () => {
+  const banned = [
+    "照片里他捧着一只黄杯子。",
+    "画面中小年正蹲在草地上。",
+    "镜头里能看到一排彩球。",
+    "视频里他跑得很快。",
+    "有一张他双手捧着杯子。",
+    "一张里他在低头捡树叶。",
+    "另一张里他已经站起来了。",
+    "这张照片拍在午饭后。",
+  ];
+  for (const line of banned) {
+    const errs = validateLiteraryStyle(day([line]));
+    assert.ok(errs.some((e) => e.includes("照片说明书腔")), `应拦截照片说明书腔：${line}`);
+  }
+  assert.deepEqual(validateLiteraryStyle(day(["妈妈说「这张照片拍得好」，桌上摆着《画面中的世界》。"])), []);
+});
+
+test("群聊转播腔补漏：发来照片/视频/一段、又发来、陆续发来、传来好消息、叙述点赞全部拦下，引号与书名号内放行", () => {
+  const banned = [
+    "妈妈发来几张照片。",
+    "下午爸爸发来一段小视频。",
+    "老师发来消息报平安。",
+    "傍晚妈妈又发来两张。",
+    "家里人陆续发来问候。",
+    "午后传来了好消息。",
+    "爸爸分享了一段视频。",
+    "奶奶在群里说他长高了。",
+    "家人群里聊起他学走路的事。",
+    "有一条留言写道真棒。",
+    "这通电话通话时长十分钟。",
+    "爷爷看完给小年点赞。",
+  ];
+  for (const line of banned) {
+    const errs = validateLiteraryStyle(day([line]));
+    assert.ok(errs.some((e) => e.includes("群聊转播腔")), `应拦截群聊转播腔：${line}`);
+  }
+  // 合规：引号里原话「必须点赞」与普通「视频传回家里」不误杀
+  assert.deepEqual(validateLiteraryStyle(day(["视频传回家里，爷爷评语最短，「必须点赞」，旁边放着《点赞中国》。"])), []);
+});
+
+test("编辑旁白：这里把、不必写成、值得记下的是全部拦下，引号内放行", () => {
+  const banned = [
+    "这里把两段合在一起记。",
+    "小磕碰不必写成大事。",
+    "这件事不必被写成转折。",
+    "值得记下的是他自己拿稳了勺子。",
+  ];
+  for (const line of banned) {
+    const errs = validateLiteraryStyle(day([line]));
+    assert.ok(errs.some((e) => e.includes("编辑旁白")), `应拦截编辑旁白：${line}`);
+  }
+  assert.deepEqual(validateLiteraryStyle(day(["爸爸说「值得记下的是今天」。"])), []);
+});
+
+test("育儿套话清单：与 STYLE.zhang.md 第五节 17 项完全同步，引号与书名号内放行", () => {
+  const cliches = [
+    "成长的足迹", "成长的印记", "满满的", "岁月静好", "快乐成长", "健康快乐",
+    "元气满满", "未来可期", "治愈", "仪式感", "小小的身体有大大的能量",
+    "见证成长", "时光飞逝", "美好的一天", "充实的一天", "快乐的一天", "温馨的画面",
+  ];
+  for (const term of cliches) {
+    const errs = validateLiteraryStyle(day([`午后在院子里玩耍，真是${term}。`]));
+    assert.ok(errs.some((e) => e.includes("育儿套话")), `应拦截育儿套话：${term}`);
+  }
+  assert.deepEqual(validateLiteraryStyle(day(["外婆说「祝宝宝健康快乐」，书架上有本《岁月静好》。"])), []);
+});
+
+test("引语数量上限：单段超过 2 处或全篇超过 4 处即报错；合规 ≤2 / ≤4 放行", () => {
+  const overSingle = day(["妈妈说「好」，爸爸说「行」，奶奶说「棒」。"]);
+  assert.ok(validateLiteraryStyle(overSingle).some((e) => e.includes("第 1 段: 引语超量")));
+
+  const overTotal = day([
+    "妈妈说「早安」。爸爸说「出发」。",
+    "奶奶说「吃饭」。爷爷说「真香」。",
+    "外婆说「午睡吧」。",
+  ]);
+  assert.ok(validateLiteraryStyle(overTotal).some((e) => e.includes("整体: 引语超量")));
+
+  const withinLimit = day([
+    "妈妈说「早安」。爸爸说「出发」。",
+    "奶奶说「吃饭」。爷爷说「真香」。",
+  ]);
+  assert.deepEqual(validateLiteraryStyle(withinLimit), []);
+});
+
+test("跨日无依据断言：叙述中无来源的「终于」「比以前」拦下，来源或引号中有依据则放行", () => {
+  assert.match(validateDayText(day(["他终于自己把鞋穿上了。"]), SRC).errors.join(), /「终于」/);
+  assert.deepEqual(validateDayText(day(["他终于自己把鞋穿上了。"]), [src("妈妈", "今天终于自己把鞋穿上了")]).errors, []);
+  assert.deepEqual(validateDayText(day(["妈妈说「终于睡着了」。"]), [src("妈妈", "终于睡着了")]).errors, []);
+
+  assert.match(validateDayText(day(["他今天走得比以前稳多了。"]), SRC).errors.join(), /跨日比较/);
+  assert.deepEqual(validateDayText(day(["他今天走得比以前稳多了。"]), [src("妈妈", "今天走得比以前稳多了")]).errors, []);
+});
+
+test("STYLE.zhang.md 第九节示范：『合格的写法』完整通过，『要淘汰的写法』被拦下并报出照片说明书腔、转播腔和引语超量", () => {
+  const demoSources = [
+    { id: "demo-1", speaker: "外公", text: "今天去游泳池玩水了，凉快。" },
+    { id: "demo-2", speaker: "爷爷", text: "小年年下水玩必须点赞" },
+    { id: "demo-3", speaker: "奶奶", text: "带个游泳圈自己就会游。" },
+    { id: "demo-4", speaker: "奶奶", text: "宝宝第一次这么喜欢水" },
+  ];
+
+  const goodEntry = {
+    day: "2026-07-18",
+    title: "水总是从杯底漏走",
+    paragraphs: [
+      "泳池浅水区的水刚到他腿上。小年站在里头，一点不慌，像个来视察的。",
+      "池边码着一摞彩色套杯，他伸手够下来一只黄色的，杯底全是小孔。舀起一杯水，水立刻哗哗地从孔里漏回池子。再舀，再漏。这一下午他大概弄明白了一件事：水是留不住的，但可以一直舀下去。",
+      "一捧水花溅到脸上，他眯了一下眼，张着嘴笑了。",
+      "视频传回家里，几位老人隔着屏幕各下了结论。奶奶说「宝宝第一次这么喜欢水」，还出了个主意：「带个游泳圈自己就会游。」爷爷的评语最短，「必须点赞」。",
+    ],
+  };
+  const goodRes = validateDayText(goodEntry, demoSources, { literary: true });
+  assert.deepEqual(goodRes.errors, [], `第九节合格示范必须零报错通过，实际报错：${goodRes.errors.join(" | ")}`);
+  assert.equal(goodRes.evidence.quotes.length, 3);
+  assert.equal(goodRes.evidence.quotes[2].label, "爷爷");
+
+  // 第九节原文「要淘汰的写法」（原样 + 填入对应引语两种形态都必须同时报出三类违规）
+  const badLiteral = day([
+    "他在泳池浅水区玩了一场水。有一张他双手捧着黄色带孔的杯子……下午外公说「……」，爷爷说「……」，奶奶说「……」。妈妈又发来一段……",
+  ]);
+  const badLiteralErrs = validateLiteraryStyle(badLiteral).join(" | ");
+  assert.match(badLiteralErrs, /照片说明书腔/);
+  assert.match(badLiteralErrs, /群聊转播腔/);
+  assert.match(badLiteralErrs, /引语超量/);
+
+  const badWithQuotes = {
+    day: "2026-07-18",
+    title: "玩水的一天",
+    paragraphs: [
+      "他在泳池浅水区玩了一场水。有一张他双手捧着黄色带孔的杯子。下午外公说「今天去游泳池玩水了，凉快。」，爷爷说「小年年下水玩必须点赞」，奶奶说「宝宝第一次这么喜欢水」。妈妈又发来一段视频。",
+    ],
+  };
+  const badFullErrs = validateDayText(badWithQuotes, [...demoSources, { id: "demo-5", speaker: "妈妈", text: "[视频]" }], { literary: true }).errors.join(" | ");
+  assert.match(badFullErrs, /照片说明书腔/);
+  assert.match(badFullErrs, /群聊转播腔/);
+  assert.match(badFullErrs, /引语超量/);
+});

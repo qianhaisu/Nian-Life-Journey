@@ -12,11 +12,19 @@ body:has(.film-page) .site-shell { min-height: 100svh; padding-bottom: 0; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(14px, 2.4vh, 22px);
-  padding: clamp(24px, 4vh, 44px) 16px calc(24px + env(safe-area-inset-bottom));
+  gap: clamp(12px, 2vh, 18px);
+  padding: clamp(58px, 7vh, 68px) 16px calc(20px + env(safe-area-inset-bottom));
   background:
     radial-gradient(circle at 50% 18%, rgba(37, 99, 235, 0.06), transparent 46%),
     var(--color-bg, #F3F5F9);
+}
+
+.film-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
 }
 
 .film-title {
@@ -30,9 +38,24 @@ body:has(.film-page) .site-shell { min-height: 100svh; padding-bottom: 0; }
   animation: fadeInUp .7s var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
+.film-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-heading);
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--color-muted, #526075);
+  font-variant-numeric: tabular-nums;
+}
+
 .film-video {
   display: block;
-  width: min(100%, calc((100svh - 148px) * 9 / 16));
+  width: min(100%, calc((100svh - 196px) * 9 / 16));
   height: auto;
   aspect-ratio: 9 / 16;
   border: 6px solid var(--color-surface, #FFFFFF);
@@ -44,10 +67,10 @@ body:has(.film-page) .site-shell { min-height: 100svh; padding-bottom: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .film-title, .film-video, .film-home-mark { animation: none; transition: none; }
+  .film-title, .film-video, .film-home, .film-home-mark { animation: none; transition: none; }
 }
 
-/* 回首页：左上角的钴蓝渐变"年"字应用标，与顶部导航栏品牌标保持一致，热区 >=44x44 */
+/* 回首页：左上角轻量胶囊返回入口（品牌标 + ← 首页），热区 >=44x44 */
 .film-home {
   position: absolute;
   top: calc(14px + env(safe-area-inset-top));
@@ -56,31 +79,53 @@ body:has(.film-page) .site-shell { min-height: 100svh; padding-bottom: 0; }
   display: inline-flex;
   min-width: 44px;
   min-height: 44px;
+  padding: 4px 14px 4px 5px;
+  gap: 8px;
   align-items: center;
   justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid var(--hairline-strong, rgba(15, 23, 42, 0.12));
+  box-shadow: var(--shadow-badge, 0 1px 3px rgba(15, 23, 42, 0.05));
+  color: var(--color-primary, #0F172A);
+  text-decoration: none;
+  transition: transform .22s var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1)), background-color .18s ease, border-color .18s ease;
 }
 .film-home-mark {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border: 0;
-  border-radius: 12px;
+  border-radius: 50%;
   background: linear-gradient(135deg, #2563EB, #60A5FA);
   color: #FFFFFF;
   font-family: var(--font-heading);
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 700;
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.24);
-  transition: transform .25s var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1)), box-shadow .25s ease;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  transition: transform .25s var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.film-home-label {
+  font-family: var(--font-heading);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-secondary, #334155);
 }
 @media (hover: hover) {
-  .film-home:hover .film-home-mark {
-    transform: translateY(-1.5px) scale(1.04);
-    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  .film-home:hover {
+    transform: translateX(-2px);
+    background: var(--tint-blue, #EDF4FF);
+    border-color: rgba(37, 99, 235, 0.24);
+  }
+  .film-home:hover .film-home-label {
+    color: #1D4ED8;
   }
 }
-.film-home:focus-visible { outline: 2.5px solid var(--brand-accent, #2563EB); outline-offset: 3px; border-radius: 14px; }
+.film-home:focus-visible { outline: 2.5px solid var(--brand-accent, #2563EB); outline-offset: 3px; border-radius: 999px; }
 
 /* 给微信分享卡片抓取用的方形缩略图：在页面里，但看不见、不占位置。 */
 .film-share-image { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }

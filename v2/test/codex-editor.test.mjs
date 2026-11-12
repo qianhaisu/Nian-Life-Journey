@@ -147,14 +147,21 @@ test("a production change during transfer is refused", (t) => {
 
 test("explicit allowRewriteDays archives prior version in _revisions, preserves media, and protects human days", () => {
   const src9 = source({ id: "source-9", day: "2026-10-09", text: "小年把积木一块一块摆齐了。", speaker: "爸爸" });
+  const priorDoc = original();
+  priorDoc.days[0].paragraphMedia = [["photo-9"]];
+  priorDoc.days[0].photoCaptions = { "photo-9": "旧版积木图注" };
+  priorDoc.days[0].featuredQuote = { text: "旧版原话", speaker: "爸爸", sourceId: "source-9" };
+
   const rebuilt = buildCandidate({
     month: "2026-10",
-    original: original(),
+    original: priorDoc,
     decisions: [{
       day: "2026-10-09",
       decision: "write",
       title: "把积木摆齐",
-      paragraphs: [{ text: "爸爸说「小年把积木一块一块摆齐了」。", sourceIds: ["source-9"] }],
+      paragraphs: [{ text: "爸爸说「小年把积木一块一块摆齐了」。", sourceIds: ["source-9"], mediaIds: ["photo-9"] }],
+      photoCaptions: { "photo-9": "蹲在地垫上把木块排成一列" },
+      featuredQuote: { text: "小年把积木一块一块摆齐了", speaker: "爸爸", sourceId: "source-9" },
     }],
     sources: [src9],
     currentSources: [src9],
@@ -166,9 +173,15 @@ test("explicit allowRewriteDays archives prior version in _revisions, preserves 
   const day9 = rebuilt.content.days.find((d) => d.day === "2026-10-09");
   assert.equal(day9.title, "把积木摆齐");
   assert.deepEqual(day9.firstScreenMediaIds, ["photo-9"], "curated media preserved across text rewrite");
+  assert.deepEqual(day9.paragraphMedia, [["photo-9"]]);
+  assert.deepEqual(day9.photoCaptions, { "photo-9": "蹲在地垫上把木块排成一列" });
+  assert.deepEqual(day9.featuredQuote, { text: "小年把积木一块一块摆齐了", speaker: "爸爸", sourceId: "source-9" });
   assert.equal(day9._revisions.length, 1, "prior published version archived in _revisions");
   assert.equal(day9._revisions[0].title, "原有记录");
   assert.deepEqual(day9._revisions[0].paragraphs, ["留着原来的每一句话。"]);
+  assert.deepEqual(day9._revisions[0].paragraphMedia, [["photo-9"]], "_revisions preserves prior paragraphMedia");
+  assert.deepEqual(day9._revisions[0].photoCaptions, { "photo-9": "旧版积木图注" }, "_revisions preserves prior photoCaptions");
+  assert.deepEqual(day9._revisions[0].featuredQuote, { text: "旧版原话", speaker: "爸爸", sourceId: "source-9" }, "_revisions preserves prior featuredQuote");
 
   const humanDoc = original();
   humanDoc.days[0]._source = "human";
@@ -179,7 +192,8 @@ test("explicit allowRewriteDays archives prior version in _revisions, preserves 
       day: "2026-10-09",
       decision: "write",
       title: "把积木摆齐",
-      paragraphs: [{ text: "爸爸说「小年把积木一块一块摆齐了」。", sourceIds: ["source-9"] }],
+      paragraphs: [{ text: "爸爸说「小年把积木一块一块摆齐了」。", sourceIds: ["source-9"], mediaIds: ["photo-9"] }],
+      photoCaptions: { "photo-9": "蹲在地垫上把木块排成一列" },
     }],
     sources: [src9],
     currentSources: [src9],
@@ -187,6 +201,195 @@ test("explicit allowRewriteDays archives prior version in _revisions, preserves 
     now,
     allowRewriteDays: ["2026-10-09"],
   }), { code: "HUMAN_DAY_PROTECTED" });
+});
+
+test("photo anchoring, photoCaptions, featuredQuote, and homeHeroMediaId enforce hard gates", () => {
+  const s1 = source({ id: "s-1", day: "2026-10-10", time: "15:10:00", text: "今天去游泳池玩水了，凉快。", speaker: "外公" });
+  const s2 = source({ id: "s-2", day: "2026-10-10", time: "15:40:00", text: "小年年下水玩必须点赞", speaker: "爷爷" });
+  const s3 = source({ id: "s-3", day: "2026-10-10", time: "16:05:00", text: "宝宝第一次这么喜欢水", speaker: "奶奶" });
+  const sources = [s1, s2, s3];
+  const dayMedia = {
+    "2026-10-10": {
+      firstScreenMediaIds: ["pic-a", "pic-b"],
+      expandedMediaIds: ["pic-a", "pic-b", "pic-c"],
+      allApprovedMediaIds: ["pic-a", "pic-b", "pic-c"],
+    },
+  };
+
+  // 1) Missing mediaIds when firstScreenMediaIds is non-empty -> PHOTO_ANCHOR_REQUIRED
+  assert.throws(() => buildCandidate({
+    month: "2026-10",
+    original: original(),
+    sources,
+    currentSources: sources,
+    dayMedia,
+    now,
+    literary: true,
+    decisions: [{
+      day: "2026-10-10",
+      decision: "write",
+      title: "水总是从杯底漏走",
+      paragraphs: [{ text: "下午小年站在浅水池里舀水玩。", sourceIds: ["s-1"] }],
+      photoCaptions: { "pic-a": "水从杯底漏光了", "pic-b": "伸手够池边的套杯" },
+    }],
+  }), { code: "PHOTO_ANCHOR_REQUIRED" });
+
+  // 2) Missing photoCaptions for any firstScreenMediaIds item -> PHOTO_CAPTION_REQUIRED
+  assert.throws(() => buildCandidate({
+    month: "2026-10",
+    original: original(),
+    sources,
+    currentSources: sources,
+    dayMedia,
+    now,
+    literary: true,
+    decisions: [{
+      day: "2026-10-10",
+      decision: "write",
+      title: "水总是从杯底漏走",
+      paragraphs: [{ text: "下午小年站在浅水池里舀水玩。", sourceIds: ["s-1"], mediaIds: ["pic-a"] }],
+      photoCaptions: { "pic-a": "水从杯底漏光了" },
+    }],
+  }), { code: "PHOTO_CAPTION_REQUIRED" });
+
+  // 3) Unknown mediaId or duplicate anchor across paragraphs -> UNKNOWN_MEDIA / DUPLICATE_MEDIA_ANCHOR
+  assert.throws(() => buildCandidate({
+    month: "2026-10",
+    original: original(),
+    sources,
+    currentSources: sources,
+    dayMedia,
+    now,
+    literary: true,
+    decisions: [{
+      day: "2026-10-10",
+      decision: "write",
+      title: "水总是从杯底漏走",
+      paragraphs: [{ text: "下午小年站在浅水池里舀水玩。", sourceIds: ["s-1"], mediaIds: ["unapproved-pic"] }],
+      photoCaptions: { "pic-a": "水从杯底漏光了", "pic-b": "伸手够池边的套杯" },
+    }],
+  }), { code: "UNKNOWN_MEDIA" });
+
+  assert.throws(() => buildCandidate({
+    month: "2026-10",
+    original: original(),
+    sources,
+    currentSources: sources,
+    dayMedia,
+    now,
+    literary: true,
+    decisions: [{
+      day: "2026-10-10",
+      decision: "write",
+      title: "水总是从杯底漏走",
+      paragraphs: [
+        { text: "下午小年站在浅水池里舀水玩。", sourceIds: ["s-1"], mediaIds: ["pic-a"] },
+        { text: "奶奶说「宝宝第一次这么喜欢水」。", sourceIds: ["s-3"], mediaIds: ["pic-a"] },
+      ],
+      photoCaptions: { "pic-a": "水从杯底漏光了", "pic-b": "伸手够池边的套杯" },
+    }],
+  }), { code: "DUPLICATE_MEDIA_ANCHOR" });
+
+  // 4) Caption > 20 chars -> INVALID_PHOTO_CAPTION; caption with photo-speak or real name -> TEXT_VALIDATION_FAILED
+  assert.throws(() => buildCandidate({
+    month: "2026-10",
+    original: original(),
+    sources,
+    currentSources: sources,
+    dayMedia,
+    now,
+    literary: true,
+    decisions: [{
+      day: "2026-10-10",
+      decision: "write",
+      title: "水总是从杯底漏走",
+      paragraphs: [{ text: "下午小年站在浅水池里舀水玩。", sourceIds: ["s-1"], mediaIds: ["pic-a"] }],
+      photoCaptions: {
+        "pic-a": "这是一条超过二十个汉字长度上限的照片图注内容呀",
+        "pic-b": "伸手够池边的套杯",
+      },
+    }],
+  }), { code: "INVALID_PHOTO_CAPTION" });
+
+  assert.throws(() => buildCandidate({
+    month: "2026-10",
+    original: original(),
+    sources,
+    currentSources: sources,
+    dayMedia,
+    now,
+    literary: true,
+    decisions: [{
+      day: "2026-10-10",
+      decision: "write",
+      title: "水总是从杯底漏走",
+      paragraphs: [{ text: "下午小年站在浅水池里舀水玩。", sourceIds: ["s-1"], mediaIds: ["pic-a"] }],
+      photoCaptions: {
+        "pic-a": "照片里捧着漏水黄杯子",
+        "pic-b": "伸手够池边的套杯",
+      },
+    }],
+  }), { code: "TEXT_VALIDATION_FAILED" });
+
+  // 5) featuredQuote fabricated or wrong speaker -> TEXT_VALIDATION_FAILED
+  assert.throws(() => buildCandidate({
+    month: "2026-10",
+    original: original(),
+    sources,
+    currentSources: sources,
+    dayMedia,
+    now,
+    literary: true,
+    decisions: [{
+      day: "2026-10-10",
+      decision: "write",
+      title: "水总是从杯底漏走",
+      paragraphs: [{ text: "下午小年站在浅水池里舀水玩。", sourceIds: ["s-1"], mediaIds: ["pic-a"] }],
+      photoCaptions: { "pic-a": "水从杯底漏光了", "pic-b": "伸手够池边的套杯" },
+      featuredQuote: { text: "宝宝第一次这么喜欢水", speaker: "外公" },
+    }],
+  }), { code: "TEXT_VALIDATION_FAILED" });
+
+  // 6) Valid full payload builds candidate with paragraphMedia, photoCaptions, featuredQuote, and homeHeroMediaId
+  const ok = buildCandidate({
+    month: "2026-10",
+    original: original(),
+    sources,
+    currentSources: sources,
+    dayMedia,
+    now,
+    literary: true,
+    monthMeta: { homeHeroMediaId: "pic-a" },
+    decisions: [{
+      day: "2026-10-10",
+      decision: "write",
+      emphasis: "lead",
+      title: "水总是从杯底漏走",
+      paragraphs: [
+        { text: "下午浅水区的水刚到腿上，小年伸手够池边的彩色套杯。", sourceIds: ["s-1"], mediaIds: ["pic-a", "pic-b"] },
+        { text: "奶奶说「宝宝第一次这么喜欢水」，爷爷的评语最短，「必须点赞」。", sourceIds: ["s-2", "s-3"], mediaIds: ["pic-c"] },
+      ],
+      photoCaptions: {
+        "pic-a": "水从杯底漏光了",
+        "pic-b": "伸手够池边的套杯",
+        "pic-c": "水花扑脸，还在笑",
+      },
+      featuredQuote: { text: "宝宝第一次这么喜欢水", speaker: "奶奶" },
+    }],
+  });
+  const builtDay = ok.content.days.find((d) => d.day === "2026-10-10");
+  assert.deepEqual(builtDay.paragraphMedia, [["pic-a", "pic-b"], ["pic-c"]]);
+  assert.deepEqual(builtDay.photoCaptions, {
+    "pic-a": "水从杯底漏光了",
+    "pic-b": "伸手够池边的套杯",
+    "pic-c": "水花扑脸，还在笑",
+  });
+  assert.deepEqual(builtDay.featuredQuote, {
+    text: "宝宝第一次这么喜欢水",
+    speaker: "奶奶",
+    sourceId: "s-3",
+  });
+  assert.equal(ok.content.homeHeroMediaId, "pic-a");
 });
 
 test("the CLI writes refusal details outside the repository while logging only a safe code", (t) => {

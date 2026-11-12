@@ -1,7 +1,7 @@
-// Prepare private evidence for Codex, then validate its file-backed editorial decisions.
+// Prepare private evidence for editorial sessions, then validate file-backed editorial decisions.
 // No provider/model calls, database writes, or production publishing are performed here.
 // node --import tsx scripts/editor/codex-editor.mjs prepare --out <private-directory>
-// node --import tsx scripts/editor/codex-editor.mjs apply --out <same-directory> --decisions <private-json>
+// node --import tsx scripts/editor/codex-editor.mjs apply --out <same-directory> --decisions <private-json> --literary
 import fs from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
@@ -11,10 +11,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveEcsConnection } from "../lib/ecs-connection.mjs";
 import { assertOutsideRepository } from "../lib/repo-containment.mjs";
 import { validateMonthContent } from "../../lib/month-content.ts";
-import { labelForSender } from "./identity-rules.mjs";
-import { validateDayText } from "./validate-day.mjs";
+import { labelForSender, registeredLabels } from "./identity-rules.mjs";
+import { validateDayText, validateLiteraryStyle, quoteHits, SENSITIVE_TEXT } from "./validate-day.mjs";
 import { addDays, shanghaiToday, isReadable, checkDecision, timeWordProblems, sensitiveHits } from "./plan.mjs";
 import { appendDay } from "./append-day.mjs";
+import { aggregateDayMedia } from "./day-media.mjs";
 
 const PACK_SCHEMA = "nianlife.codex-editor.sources/1";
 const RECEIPT_SCHEMA = "nianlife.codex-editor.review/1";
@@ -23,6 +24,9 @@ const REPO_LITERAL = path.resolve(fileURLToPath(new URL("../../../", import.meta
 const REPO = { literal: REPO_LITERAL, real: fs.realpathSync.native(REPO_LITERAL) };
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const nonempty = (value) => typeof value === "string" && value.trim().length > 0;
+const TECHNICAL_RE = /\[(media|图片|视频|表情包|语音|文件|动画表情)\]|\]\(media\/|https?:\/\/|undefined|Quark|微信|群聊|会话|导入|数据库|网站/i;
+const MAX_PHOTO_CAPTION_CHARS = 20;
+const MAX_FEATURED_QUOTE_CHARS = 72;
 
 export class CodexEditorError extends Error {
   constructor(code, message, details = {}) {
@@ -72,6 +76,15 @@ function assertSourcesUnchanged(sources, currentSources) {
   }
 }
 
+function stripOuterQuotes(raw) {
+  const s = String(raw ?? "").trim();
+  const m = s.match(/^(?:「([\s\S]*)」|“([\s\S]*)”)$/);
+  if (!m) return s;
+  const inner = (m[1] ?? m[2] ?? "").trim();
+  if (inner.includes("」") || inner.includes("「") || inner.includes("”") || inner.includes("“")) return s;
+  return inner;
+}
+
 /**
  * Pure candidate builder. Every existing day is immutable by default, regardless of its editor/source.
  * Explicit rewrites are allowed ONLY for days listed in allowRewriteDays (never _source="human"),
@@ -89,6 +102,7 @@ export function buildCandidate({
   allowRewriteDays = [],
   literary = false,
   monthMeta = null,
+  dayMedia = null,
 }) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) refuse("INVALID_MONTH", "Invalid month.");
   if (!nonempty(now) || Number.isNaN(Date.parse(now))) refuse("INVALID_TIME", "A valid review timestamp is required.");
@@ -96,6 +110,7 @@ export function buildCandidate({
   if (!Array.isArray(decisions)) refuse("INVALID_DECISIONS", "Decisions must be an array.");
   assertSourcesUnchanged(sources, currentSources);
   const rewriteAllowSet = new Set(allowRewriteDays);
+  const allowedSpeakerLabels = new Set(registeredLabels());
   const lookup = new Map(sources.map((source) => [source.id, source]));
   const priorByDay = new Map((original?.days ?? []).map((day) => [day.day, structuredClone(day)]));
   const protectedDays = new Map(
@@ -137,13 +152,75 @@ export function buildCandidate({
         refuse("UNKNOWN_SOURCE", "Each paragraph must cite prepared sources from its own day.", { day: decision.day });
       }
     }
-    const allowedKinds = prior ? ["story", "visual-description", "text-only"] : ["story", "text-only"];
+
+    const curatedForDay = dayMedia?.[decision.day] ?? null;
+    const firstScreenMediaIds = decision.firstScreenMediaIds
+      ?? (prior?.firstScreenMediaIds?.length ? prior.firstScreenMediaIds : curatedForDay?.firstScreenMediaIds)
+      ?? [];
+    const expandedMediaIds = decision.expandedMediaIds
+      ?? (prior?.expandedMediaIds?.length ? prior.expandedMediaIds : curatedForDay?.expandedMediaIds)
+      ?? (decision.firstScreenMediaIds ? [...decision.firstScreenMediaIds] : []);
+    if (!Array.isArray(firstScreenMediaIds) || !firstScreenMediaIds.every(nonempty)
+      || !Array.isArray(expandedMediaIds) || !expandedMediaIds.every(nonempty)) {
+      refuse("INVALID_DECISIONS", "firstScreenMediaIds and expandedMediaIds must be arrays of non-empty media IDs.", { day: decision.day });
+    }
+    const expandedSet = new Set(expandedMediaIds);
+    if (!firstScreenMediaIds.every((id) => expandedSet.has(id))) {
+      refuse("INVALID_DECISIONS", "firstScreenMediaIds must be a subset of expandedMediaIds.", { day: decision.day });
+    }
+    if (curatedForDay) {
+      const approvedPool = new Set([
+        ...(curatedForDay.allApprovedMediaIds ?? []),
+        ...(curatedForDay.expandedMediaIds ?? []),
+        ...(prior?.expandedMediaIds ?? []),
+      ]);
+      const unapproved = expandedMediaIds.filter((id) => !approvedPool.has(id));
+      if (unapproved.length > 0) {
+        refuse("UNKNOWN_MEDIA", "Media IDs must belong to the day's approved curated photo pool.", { day: decision.day, mediaIds: unapproved });
+      }
+    }
+
+    const allowedKinds = prior || expandedMediaIds.length > 0 ? ["story", "visual-description", "text-only"] : ["story", "text-only"];
     const shape = checkDecision(
       { ...decision, kind: decision.kind ?? prior?.kind ?? "story", paragraphs: paragraphs.map((paragraph) => ({ text: paragraph.text, sources: paragraph.sourceIds })) },
       new Set(lookup.keys()),
       { kinds: allowedKinds },
     );
     if (!shape.ok) refuse("INVALID_DECISIONS", "Decision shape failed validation.", { day: decision.day, error: shape.error });
+
+    // Validate paragraph photo anchoring (paragraphs[i].mediaIds -> paragraphMedia)
+    const anchoredMediaSet = new Set();
+    let hasExplicitParagraphMedia = false;
+    const paragraphMedia = [];
+    for (const [index, paragraph] of paragraphs.entries()) {
+      if (paragraph.mediaIds !== undefined) {
+        hasExplicitParagraphMedia = true;
+        if (!Array.isArray(paragraph.mediaIds) || !paragraph.mediaIds.every(nonempty)) {
+          refuse("INVALID_DECISIONS", "Paragraph mediaIds must be an array of non-empty media IDs.", { day: decision.day, paragraph: index + 1 });
+        }
+        const cleanedIds = [];
+        for (const rawMid of paragraph.mediaIds) {
+          const mid = rawMid.trim();
+          if (!expandedSet.has(mid)) {
+            refuse("UNKNOWN_MEDIA", "Paragraph mediaIds must be a subset of the day's approved photos.", { day: decision.day, paragraph: index + 1, mediaId: mid });
+          }
+          if (anchoredMediaSet.has(mid)) {
+            refuse("DUPLICATE_MEDIA_ANCHOR", "Each photo may be anchored to at most one paragraph on the same day.", { day: decision.day, paragraph: index + 1, mediaId: mid });
+          }
+          anchoredMediaSet.add(mid);
+          cleanedIds.push(mid);
+        }
+        paragraphMedia.push(cleanedIds);
+      } else {
+        paragraphMedia.push([]);
+      }
+    }
+    if (firstScreenMediaIds.length > 0 && anchoredMediaSet.size === 0) {
+      refuse("PHOTO_ANCHOR_REQUIRED", "When firstScreenMediaIds is non-empty, at least one paragraph must anchor photos via mediaIds.", {
+        day: decision.day,
+        firstScreenMediaIds,
+      });
+    }
 
     const evidence = { quotes: [], persons: [], paragraphSources: [] };
     const errors = [];
@@ -156,18 +233,139 @@ export function buildCandidate({
       for (const key of ["quotes", "persons"]) evidence[key].push(...checked.evidence[key].map((entry) => ({ ...entry, where: `第 ${index + 1} 段` })));
       evidence.paragraphSources.push({ paragraph: index + 1, sources: cited.map((source) => ({ id: source.id, fingerprint: source.fingerprint })) });
     }
+
     const ids = [...new Set(paragraphs.flatMap((paragraph) => paragraph.sourceIds))];
     const cited = ids.map((id) => lookup.get(id));
+    const daySources = sources.filter((source) => source.day === decision.day);
+
     const titleCheck = validateDayText({ day: decision.day, title: decision.title, paragraphs: [] }, cited, { realNames });
     errors.push(...titleCheck.errors);
     if (literary) {
-      const fullLiteraryCheck = validateDayText({ day: decision.day, title: decision.title, paragraphs: paragraphs.map((p) => p.text) }, cited, { realNames, literary: true });
-      for (const e of fullLiteraryCheck.errors) if (e.includes("非虚构禁用") || e.includes("按时间段机械罗列")) errors.push(e);
+      errors.push(...validateLiteraryStyle({ title: decision.title, paragraphs: paragraphs.map((p) => p.text) }));
     }
     const badTitleTimes = timeWordProblems(decision.title, cited.map((source) => Number(source.time.slice(0, 2))));
     if (badTitleTimes.length) errors.push(`标题时间不符：${badTitleTimes.join("、")}`);
     const hits = sensitiveHits({ title: decision.title, paragraphs: paragraphs.map((paragraph) => paragraph.text) });
     if (hits.length) errors.push(...hits.map((hit) => `敏感兜底：${hit.category}`));
+
+    // Validate photoCaptions (required for every firstScreenMediaIds entry; <= 20 chars; privacy/quote/style gated)
+    let normalizedCaptions = undefined;
+    if (decision.photoCaptions !== undefined && decision.photoCaptions !== null) {
+      if (typeof decision.photoCaptions !== "object" || Array.isArray(decision.photoCaptions)) {
+        refuse("INVALID_DECISIONS", "photoCaptions must be an object mapping mediaId to caption.", { day: decision.day });
+      }
+      normalizedCaptions = {};
+      for (const [rawMid, rawCaption] of Object.entries(decision.photoCaptions)) {
+        const mid = rawMid.trim();
+        if (!expandedSet.has(mid)) {
+          refuse("UNKNOWN_MEDIA", "photoCaptions key must belong to the day's approved photos.", { day: decision.day, mediaId: mid });
+        }
+        if (typeof rawCaption !== "string") {
+          refuse("INVALID_PHOTO_CAPTION", "photoCaptions value must be a string.", { day: decision.day, mediaId: mid });
+        }
+        const trimmedCaption = rawCaption.trim();
+        if (!trimmedCaption) {
+          refuse("INVALID_PHOTO_CAPTION", "photoCaptions value must be non-empty.", { day: decision.day, mediaId: mid });
+        }
+        const captionLen = [...trimmedCaption].length;
+        if (captionLen > MAX_PHOTO_CAPTION_CHARS) {
+          refuse("INVALID_PHOTO_CAPTION", `Each photoCaption must be at most ${MAX_PHOTO_CAPTION_CHARS} characters.`, {
+            day: decision.day,
+            mediaId: mid,
+            length: captionLen,
+          });
+        }
+        if (typeof decision.title === "string" && trimmedCaption === decision.title.trim()) {
+          errors.push(`图注[${mid}]: 图注不能直接重复当天标题`);
+        }
+        const capCheck = validateDayText({ day: decision.day, title: trimmedCaption, paragraphs: [] }, daySources, { realNames, literary: true });
+        errors.push(...capCheck.errors.map((e) => e.replace(/^标题:/, `图注[${mid}]:`)));
+        const capSensitive = sensitiveHits({ title: trimmedCaption, paragraphs: [] });
+        if (capSensitive.length) {
+          errors.push(...capSensitive.map((hit) => `图注[${mid}]: 敏感兜底（${hit.category}）`));
+        }
+        normalizedCaptions[mid] = trimmedCaption;
+      }
+    }
+    if (firstScreenMediaIds.length > 0) {
+      const missingCaptions = firstScreenMediaIds.filter((mid) => !normalizedCaptions || !nonempty(normalizedCaptions[mid]));
+      if (missingCaptions.length > 0) {
+        refuse("PHOTO_CAPTION_REQUIRED", "Every photo in firstScreenMediaIds must have a non-empty photoCaptions entry.", {
+          day: decision.day,
+          missingMediaIds: missingCaptions,
+        });
+      }
+    }
+
+    // Validate featuredQuote (optional; at most 1 verbatim-verified family quote per day)
+    let normalizedFeaturedQuote = undefined;
+    const extraCitedSources = [];
+    if (decision.featuredQuote !== undefined && decision.featuredQuote !== null) {
+      if (typeof decision.featuredQuote !== "object" || Array.isArray(decision.featuredQuote)) {
+        refuse("INVALID_FEATURED_QUOTE", "featuredQuote must be an object { text, speaker, sourceId? }.", { day: decision.day });
+      }
+      const rawSpeaker = typeof decision.featuredQuote.speaker === "string" ? decision.featuredQuote.speaker.trim() : "";
+      if (!rawSpeaker || !allowedSpeakerLabels.has(rawSpeaker)) {
+        refuse("INVALID_FEATURED_QUOTE", "featuredQuote.speaker must be a registered family/teacher label.", {
+          day: decision.day,
+          speaker: decision.featuredQuote.speaker ?? null,
+        });
+      }
+      if (typeof decision.featuredQuote.text !== "string") {
+        refuse("INVALID_FEATURED_QUOTE", "featuredQuote.text must be a string.", { day: decision.day });
+      }
+      const cleanedQuote = stripOuterQuotes(decision.featuredQuote.text);
+      const quoteLen = [...cleanedQuote].length;
+      if (!cleanedQuote || quoteLen > MAX_FEATURED_QUOTE_CHARS) {
+        refuse("INVALID_FEATURED_QUOTE", `featuredQuote.text must be non-empty and at most ${MAX_FEATURED_QUOTE_CHARS} characters.`, {
+          day: decision.day,
+          length: quoteLen,
+        });
+      }
+      let candidateQuoteSources = daySources;
+      if (decision.featuredQuote.sourceId !== undefined) {
+        if (!nonempty(decision.featuredQuote.sourceId) || !lookup.has(decision.featuredQuote.sourceId)
+          || lookup.get(decision.featuredQuote.sourceId).day !== decision.day) {
+          refuse("UNKNOWN_SOURCE", "featuredQuote.sourceId must reference a prepared source from the same day.", {
+            day: decision.day,
+            sourceId: decision.featuredQuote.sourceId,
+          });
+        }
+        candidateQuoteSources = [lookup.get(decision.featuredQuote.sourceId)];
+      }
+      if (TECHNICAL_RE.test(cleanedQuote)) {
+        errors.push("featuredQuote: 含工程/技术字样");
+      }
+      for (const [sLabel, sRe] of SENSITIVE_TEXT) {
+        const m = cleanedQuote.match(sRe);
+        if (m) errors.push(`featuredQuote: 敏感信息（${sLabel}）「${m[0]}」`);
+      }
+      for (const hit of sensitiveHits({ title: cleanedQuote, paragraphs: [] })) {
+        errors.push(`featuredQuote: 敏感兜底（${hit.category}）`);
+      }
+      for (const name of realNames) {
+        if (name && cleanedQuote.includes(name)) errors.push("featuredQuote: 出现真实姓名，请换成称呼或节选避开");
+      }
+      const qHits = quoteHits(cleanedQuote, candidateQuoteSources);
+      if (!qHits || qHits.length === 0) {
+        errors.push(`featuredQuote: 引语找不到当天原消息来源「${cleanedQuote}」`);
+      } else {
+        const matchedSource = qHits.find((src) => src.speaker === rawSpeaker);
+        if (!matchedSource) {
+          const actual = [...new Set(qHits.map((src) => src.speaker ?? "未登记的人"))].join("、");
+          errors.push(`featuredQuote: 引语归属不对，「${cleanedQuote}」写成${rawSpeaker}说的，原消息发送人是${actual}`);
+        } else {
+          normalizedFeaturedQuote = {
+            text: cleanedQuote,
+            speaker: rawSpeaker,
+            sourceId: matchedSource.id,
+          };
+          extraCitedSources.push(matchedSource);
+          evidence.featuredQuote = normalizedFeaturedQuote;
+        }
+      }
+    }
+
     if (errors.length) refuse("TEXT_VALIDATION_FAILED", "Draft failed attribution, privacy, quote, literary, or time checks.", { day: decision.day, errors });
 
     if (prior) {
@@ -175,27 +373,30 @@ export function buildCandidate({
       if (existingIdx >= 0) content.days[existingIdx]._source = "machine";
     }
 
-    const firstScreenMediaIds = decision.firstScreenMediaIds ?? prior?.firstScreenMediaIds ?? [];
-    const expandedMediaIds = decision.expandedMediaIds ?? prior?.expandedMediaIds ?? [];
     const storyBoundMediaIds = decision.storyBoundMediaIds ?? prior?.storyBoundMediaIds ?? [];
     const eventIds = decision.eventIds ?? prior?.eventIds ?? (prior?.eventId ? [prior.eventId] : []);
+    const allSpeakerSources = [...cited, ...extraCitedSources];
+    const allCitedIds = [...new Set([...ids, ...extraCitedSources.map((s) => s.id)])];
 
     content = appendDay(content, {
       day: decision.day,
       kind: decision.kind ?? prior?.kind ?? "story",
       title: decision.title,
       paragraphs: paragraphs.map((paragraph) => paragraph.text),
-      sourceIds: ids,
+      sourceIds: allCitedIds,
       firstScreenMediaIds,
       expandedMediaIds,
       storyBoundMediaIds,
+      ...(anchoredMediaSet.size > 0 || hasExplicitParagraphMedia ? { paragraphMedia } : {}),
+      ...(normalizedCaptions && Object.keys(normalizedCaptions).length > 0 ? { photoCaptions: normalizedCaptions } : {}),
+      ...(normalizedFeaturedQuote ? { featuredQuote: normalizedFeaturedQuote } : {}),
       eventIds,
       evidence,
     }, {
       birthDay: "2025-01-03",
       now,
       dataCutoff: decision.day,
-      speakerBySourceId: Object.fromEntries(cited.map((source) => [source.id, source.speaker ?? "未登记的人"])),
+      speakerBySourceId: Object.fromEntries(allSpeakerSources.map((source) => [source.id, source.speaker ?? "未登记的人"])),
     }).content;
 
     const targetDay = content.days.find((day) => day.day === decision.day);
@@ -213,12 +414,15 @@ export function buildCandidate({
           kind: priorSnapshot.kind,
           paragraphs: priorSnapshot.paragraphs,
           sourceIds: priorSnapshot.sourceIds ?? [],
+          ...(priorSnapshot.paragraphMedia !== undefined ? { paragraphMedia: priorSnapshot.paragraphMedia } : {}),
+          ...(priorSnapshot.photoCaptions !== undefined ? { photoCaptions: priorSnapshot.photoCaptions } : {}),
+          ...(priorSnapshot.featuredQuote !== undefined ? { featuredQuote: priorSnapshot.featuredQuote } : {}),
           _source: priorSnapshot._source ?? null,
         },
       ];
-      rewritten.push({ day: decision.day, priorSha256: sha256(JSON.stringify(priorSnapshot)), sourceIds: ids });
+      rewritten.push({ day: decision.day, priorSha256: sha256(JSON.stringify(priorSnapshot)), sourceIds: allCitedIds });
     }
-    wrote.push({ day: decision.day, sourceIds: ids, rewritten: Boolean(prior) });
+    wrote.push({ day: decision.day, sourceIds: allCitedIds, rewritten: Boolean(prior) });
   }
 
   let metaChanged = false;
@@ -227,10 +431,11 @@ export function buildCandidate({
       cardLine: content.cardLine,
       intro: content.intro,
       coverMediaId: content.coverMediaId,
+      homeHeroMediaId: content.homeHeroMediaId,
       coverFocal: content.coverFocal,
       coverFrame: content.coverFrame,
     };
-    for (const key of ["cardLine", "intro", "coverMediaId", "coverFocal", "coverFrame"]) {
+    for (const key of ["cardLine", "intro", "coverMediaId", "homeHeroMediaId", "coverFocal", "coverFrame"]) {
       if (monthMeta[key] !== undefined && JSON.stringify(monthMeta[key]) !== JSON.stringify(content[key])) {
         content[key] = monthMeta[key];
         metaChanged = true;
@@ -306,6 +511,97 @@ async function loadSources(client, from, until) {
   });
 }
 
+async function loadApprovedDayMedia(client, from, until) {
+  const rows = (await client.query(`
+    with deduped as (
+      select distinct on (coalesce(m.media_asset_id, m.id))
+             m.id,
+             m.type,
+             m.width,
+             m.height,
+             m.duration_seconds,
+             m.taken_at,
+             to_char(m.taken_at, 'YYYY-MM-DD') as day,
+             to_char(m.taken_at, 'YYYY-MM-DD"T"HH24:MI:SS') as ts
+        from media m
+       where m.visibility <> 'private'
+         and m.taken_at >= $1::date
+         and m.taken_at < $2::date
+         and (
+           (m.type = 'photo' and coalesce(m.width, 0) >= 480 and coalesce(m.height, 0) >= 480 and (
+             select decision from content_quality_reviews q
+              where q.target_kind = 'media_subject_check' and q.target_id = m.id
+              order by q.reviewed_at desc limit 1
+           ) = 'approved')
+           or (m.type = 'video' and coalesce((
+             select decision from content_quality_reviews q
+              where q.target_kind = 'media_subject_check' and q.target_id = m.id
+              order by q.reviewed_at desc limit 1
+           ), 'approved') <> 'store_only')
+         )
+         and exists (
+           select 1 from media_locations l
+            where l.media_asset_id = m.media_asset_id
+              and l.variant in ('web', 'thumbnail', 'poster')
+              and l.status = 'ready'
+              and l.provider in ('oss', 'hot')
+         )
+       order by coalesce(m.media_asset_id, m.id),
+                (coalesce(m.width, 0) * coalesce(m.height, 0)) desc,
+                m.taken_at desc,
+                m.id asc
+    )
+    select id, type, width, height, duration_seconds, day, ts
+      from deduped
+     order by taken_at asc, id asc
+  `, [from, until])).rows;
+
+  const byDay = new Map();
+  for (const r of rows) {
+    if (!byDay.has(r.day)) byDay.set(r.day, []);
+    byDay.get(r.day).push(r);
+  }
+
+  const foldBursts = (list) => {
+    const outList = [];
+    let burst = [];
+    let lastMs = 0;
+    const flush = () => {
+      if (!burst.length) return;
+      const videos = burst.filter((x) => x.type === "video");
+      const photos = burst.filter((x) => x.type !== "video");
+      const topPhotos = [...photos]
+        .sort((a, b) => ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)))
+        .slice(0, 3);
+      outList.push(...[...videos, ...topPhotos].sort((a, b) => a.ts.localeCompare(b.ts) || a.id.localeCompare(b.id)));
+      burst = [];
+    };
+    for (const item of list) {
+      const ms = Date.parse(`${item.ts}+08:00`);
+      if (burst.length && ms - lastMs > 90_000) flush();
+      burst.push(item);
+      lastMs = ms;
+    }
+    flush();
+    return outList;
+  };
+
+  const out = {};
+  for (const [day, list] of [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const folded = foldBursts(list);
+    const agg = aggregateDayMedia(
+      folded.map((x) => ({ id: x.id, type: x.type === "video" ? "video" : "photo", takenAt: x.ts, allowed: true })),
+      { max: 40 },
+    );
+    out[day] = {
+      firstScreenMediaIds: agg.firstScreenMediaIds,
+      expandedMediaIds: agg.expandedMediaIds,
+      allApprovedMediaIds: list.map((x) => x.id),
+    };
+  }
+  return out;
+}
+
 function privateDirectory(directory) {
   if (!nonempty(directory)) refuse("PRIVATE_OUTPUT_REQUIRED", "Specify a private directory with --out.");
   const resolved = path.resolve(directory);
@@ -320,8 +616,15 @@ function writePrivateJson(file, value) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
 }
 
+function resolveNightRdsUrl() {
+  const local = new URL("../../.data/night-rds.mjs", import.meta.url);
+  if (fs.existsSync(fileURLToPath(local))) return local.href;
+  const fallback = process.env.NIANLIFE_NIGHT_RDS ?? path.join(homedir(), "Documents", "Nianlife", "v2", ".data", "night-rds.mjs");
+  return pathToFileURL(fallback).href;
+}
+
 async function connectReadOnly() {
-  const { openRds } = await import(new URL("../../.data/night-rds.mjs", import.meta.url));
+  const { openRds } = await import(resolveNightRdsUrl());
   return openRds({ readOnly: true, localPort: Number(process.env.NIANLIFE_RDS_PORT ?? (15470 + Math.floor(Math.random() * 100))) });
 }
 
@@ -362,14 +665,43 @@ export async function prepare(out, { today = shanghaiToday(), lookbackDays = 14,
   });
   const rds = await connectReadOnly();
   let allSources;
-  try { allSources = await loadSources(rds.client, from, today); } finally { await rds.close(); }
-  const covered = new Set(snapshots.flatMap((snapshot) => snapshot.content?.days.map((day) => day.day) ?? []));
+  let rdsDayMedia;
+  try {
+    allSources = await loadSources(rds.client, from, today);
+    rdsDayMedia = await loadApprovedDayMedia(rds.client, from, today);
+  } finally {
+    await rds.close();
+  }
+  const priorByDay = new Map(snapshots.flatMap((s) => (s.content?.days ?? []).map((d) => [d.day, d])));
+  const covered = new Set(priorByDay.keys());
   const rewriteSet = new Set(rewriteDays);
   for (const rd of rewriteSet) {
     if (!covered.has(rd)) refuse("INVALID_REWRITE_DAY", "Cannot rewrite a day that is not currently published.", { day: rd });
   }
-  const days = allDays.filter((day) => (rewriteSet.has(day) || !covered.has(day)) && allSources.some((source) => source.day === day && isReadable(source.text)));
+  const days = allDays.filter((day) => (rewriteSet.has(day) || !covered.has(day)) && (
+    allSources.some((source) => source.day === day && isReadable(source.text))
+    || ((rdsDayMedia[day]?.firstScreenMediaIds?.length ?? 0) > 0 && allSources.some((source) => source.day === day))
+  ));
   const sources = allSources.filter((source) => days.includes(source.day));
+  const dayMedia = {};
+  for (const d of days) {
+    const prior = priorByDay.get(d);
+    const live = rdsDayMedia[d];
+    if (prior) {
+      dayMedia[d] = {
+        firstScreenMediaIds: prior.firstScreenMediaIds?.length ? prior.firstScreenMediaIds : (live?.firstScreenMediaIds ?? []),
+        expandedMediaIds: prior.expandedMediaIds?.length ? prior.expandedMediaIds : (live?.expandedMediaIds ?? []),
+        allApprovedMediaIds: [...new Set([
+          ...(prior.expandedMediaIds ?? []),
+          ...(live?.allApprovedMediaIds ?? []),
+        ])],
+      };
+    } else if (live) {
+      dayMedia[d] = live;
+    } else {
+      dayMedia[d] = { firstScreenMediaIds: [], expandedMediaIds: [], allApprovedMediaIds: [] };
+    }
+  }
   const pack = {
     schema: PACK_SCHEMA,
     generatedAt: new Date().toISOString(),
@@ -380,6 +712,7 @@ export async function prepare(out, { today = shanghaiToday(), lookbackDays = 14,
     readyThrough,
     days,
     sources,
+    dayMedia,
     sourceFingerprint: sha256(JSON.stringify(sources)),
     months: snapshots.map(({ month, revision, snapshotFile }) => ({ month, revision, snapshotFile })),
     coveredDays: [...covered].sort(),
@@ -446,6 +779,7 @@ export async function apply(out, decisionsFile, { literary = false, monthMetaFil
       allowRewriteDays: allowRewriteDays.filter((d) => d.startsWith(`${month}-`)),
       literary,
       monthMeta: monthMetaByMonth[month] ?? null,
+      dayMedia: pack.dayMedia ?? null,
     });
     results.push({ ...built, expectedRevision: prepared.revision });
   }

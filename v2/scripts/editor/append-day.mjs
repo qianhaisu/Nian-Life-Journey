@@ -10,6 +10,7 @@
 
 const KINDS = new Set(["story", "visual-description", "text-only"]);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const nonempty = (v) => typeof v === "string" && v.trim().length > 0;
 
 export function birthAge(birthDay, day) {
   const [by, bm, bd] = birthDay.split("-").map(Number);
@@ -22,25 +23,52 @@ export function birthAge(birthDay, day) {
 
 /**
  * @param {object} content   现有的月内容（会被深拷贝，不改入参）
- * @param {object} entry     {day,kind,title,paragraphs,sourceIds?,firstScreenMediaIds?,expandedMediaIds?,storyBoundMediaIds?,eventIds?,evidence?}
+ * @param {object} entry     {day,kind,title,paragraphs,sourceIds?,firstScreenMediaIds?,expandedMediaIds?,storyBoundMediaIds?,paragraphMedia?,photoCaptions?,featuredQuote?,eventIds?,evidence?}
  *   evidence：validateDayText 返回的依据（每句引语的来源与发送人、每处点名的依据），原样存在这一天的 _evidence 上，
  *   页面不读它；验收和抽检读它。
  * @param {{birthDay:string, speakerBySourceId?:Record<string,string>, dataCutoff?:string, now?:string}} opts
  *
  * 人工编辑过的天（_source="human"，或者没有 _source——判断不出来源的一律按人工处理）**永远不覆盖**，
  * 返回 skipped=true。这里没有 force 开关：人工改过的字，机器没有任何办法覆盖它（Teddy 2026-09-23 硬约束）。
- * 9/19 批量生成的天要先经 mark-source.mjs 对着生成日志确认是机器写的，补上 _source:"machine"，才可替换。
  */
 export function appendDay(content, entry, opts) {
   const month = content.month;
   if (!DAY.test(entry.day)) throw new Error(`日期格式不对：${entry.day}`);
   if (!entry.day.startsWith(`${month}-`)) throw new Error(`这一天 ${entry.day} 不属于 ${month}`);
   if (!KINDS.has(entry.kind)) throw new Error(`kind 不合法：${entry.kind}`);
-  if (!(entry.title === null || (typeof entry.title === "string" && entry.title.trim()))) throw new Error("title 必须是非空字符串或 null");
-  if (!Array.isArray(entry.paragraphs) || entry.paragraphs.some((p) => typeof p !== "string" || !p.trim())) throw new Error("paragraphs 必须是非空字符串数组");
+  if (!(entry.title === null || nonempty(entry.title))) throw new Error("title 必须是非空字符串或 null");
+  if (!Array.isArray(entry.paragraphs) || entry.paragraphs.some((p) => !nonempty(p))) throw new Error("paragraphs 必须是非空字符串数组");
   const expanded = entry.expandedMediaIds ?? [];
   const first = entry.firstScreenMediaIds ?? [];
-  if (!first.every((id) => expanded.includes(id))) throw new Error("firstScreenMediaIds 必须是 expandedMediaIds 的开头子集");
+  const expandedSet = new Set(expanded);
+  if (!first.every((id) => expandedSet.has(id))) throw new Error("firstScreenMediaIds 必须是 expandedMediaIds 的开头子集");
+  if (entry.paragraphMedia !== undefined) {
+    if (!Array.isArray(entry.paragraphMedia) || entry.paragraphMedia.length !== entry.paragraphs.length) {
+      throw new Error("paragraphMedia 长度必须与 paragraphs 一致");
+    }
+    for (const ids of entry.paragraphMedia) {
+      if (!Array.isArray(ids) || ids.some((id) => !nonempty(id) || !expandedSet.has(id))) {
+        throw new Error("paragraphMedia 中的照片 ID 必须是当天 expandedMediaIds 的子集");
+      }
+    }
+  }
+  if (entry.photoCaptions !== undefined) {
+    if (!entry.photoCaptions || typeof entry.photoCaptions !== "object" || Array.isArray(entry.photoCaptions)) {
+      throw new Error("photoCaptions 必须是对象映射");
+    }
+    for (const [id, cap] of Object.entries(entry.photoCaptions)) {
+      if (!nonempty(id) || !expandedSet.has(id) || !nonempty(cap)) {
+        throw new Error("photoCaptions 键必须属于当天 expandedMediaIds 且内容非空");
+      }
+    }
+  }
+  if (entry.featuredQuote !== undefined && entry.featuredQuote !== null) {
+    if (typeof entry.featuredQuote !== "object" || Array.isArray(entry.featuredQuote)
+      || !nonempty(entry.featuredQuote.text) || !nonempty(entry.featuredQuote.speaker)
+      || (entry.featuredQuote.sourceId !== undefined && !nonempty(entry.featuredQuote.sourceId))) {
+      throw new Error("featuredQuote 必须包含非空的 text 与 speaker");
+    }
+  }
   if (entry.title === null && entry.paragraphs.length === 0 && expanded.length === 0) throw new Error("一天既没有文字也没有照片");
 
   const next = JSON.parse(JSON.stringify(content));
@@ -53,6 +81,9 @@ export function appendDay(content, entry, opts) {
     firstScreenMediaIds: first,
     expandedMediaIds: expanded,
     storyBoundMediaIds: entry.storyBoundMediaIds ?? [],
+    ...(entry.paragraphMedia !== undefined ? { paragraphMedia: entry.paragraphMedia } : {}),
+    ...(entry.photoCaptions !== undefined ? { photoCaptions: entry.photoCaptions } : {}),
+    ...(entry.featuredQuote !== undefined ? { featuredQuote: entry.featuredQuote } : {}),
     eventId: entry.eventIds?.[0] ?? null,
     eventIds: entry.eventIds ?? [],
     sourceIds: entry.sourceIds ?? [],
