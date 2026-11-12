@@ -115,6 +115,17 @@ export type HomeMemorySlide = {
   linkLabel?: string;
 };
 
+export type HomeHeroCover = {
+  media: MediaRef;
+  day: string;
+  dateLabel: string;
+  ageLabel?: string;
+  dayTitle?: string;
+  caption?: string;
+  href?: string;
+  linkLabel?: string;
+};
+
 export type HomeMemory = {
   kind: MemoryThemeKind;
   /** React key 与切换用的稳定标识。 */
@@ -809,7 +820,32 @@ export function selectHomeMemories(
     if (keep(memory)) seasonMemories.push(memory);
   }
 
-  const memories = interleaveKinds([topicMemories, seasonMemories], HOME_MEMORIES_MAX);
+  // P5.2：保留原有建段去重顺序，但展示顺序优先把睁眼清晰、鲜活欢快的主题（「笑起来的时候」「吃饭这件事」等）
+  // 排在前面，把闭眼主题（「睡着的样子」）移到末尾，确保首屏默认初始主题绝不落在闭眼睡眠段，
+  // 同时「换一段」仍可完整轮换到所有合格段。
+  const preferredTopicOrder = [
+    "topic:laugh",
+    "topic:eat",
+    "topic:water",
+    "topic:outdoor",
+    "topic:toy",
+    "topic:hold",
+    "topic:sleep",
+  ];
+  const orderedTopicMemories = [...topicMemories].sort((a, b) => {
+    const ia = preferredTopicOrder.indexOf(a.key);
+    const ib = preferredTopicOrder.indexOf(b.key);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  const memories = interleaveKinds([orderedTopicMemories, seasonMemories], HOME_MEMORIES_MAX);
+  if (memories.length > 1 && memories[0]?.key === "topic:sleep") {
+    const firstAwakeIdx = memories.findIndex((m) => m.key !== "topic:sleep");
+    if (firstAwakeIdx > 0) {
+      const [awake] = memories.splice(firstAwakeIdx, 1);
+      memories.unshift(awake);
+    }
+  }
   if (memories.length === 0) {
     return {
       memories: [],

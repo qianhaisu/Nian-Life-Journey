@@ -139,6 +139,11 @@ function makeSampleMonthContents() {
           paragraphs: [
             "下午阳光正好，小年在小区草坪上追着泡泡跑了一整圈。妈妈笑着说：「慢点跑，泡泡还在前面等你呢[旺柴]」",
           ],
+          featuredQuote: {
+            text: "慢点跑，泡泡还在前面等你呢[旺柴]",
+            speaker: "妈妈",
+            sourceId: "src-1110",
+          },
           firstScreenMediaIds: ["m-1110"],
           expandedMediaIds: ["m-1110"],
         },
@@ -149,6 +154,11 @@ function makeSampleMonthContents() {
           paragraphs: [
             "晚饭后自己走到书架前把小熊绘本抱过来。爸爸说：「今天要讲两遍小熊刷牙吗？」他用力点点头。",
           ],
+          featuredQuote: {
+            text: "今天要讲两遍小熊刷牙吗？",
+            speaker: "爸爸",
+            sourceId: "src-1108",
+          },
           firstScreenMediaIds: ["m-1108"],
           expandedMediaIds: ["m-1108"],
         },
@@ -159,6 +169,11 @@ function makeSampleMonthContents() {
           paragraphs: [
             "潇潇老师在群里说：「小年今天自己把南瓜粥喝完啦，还帮旁边小朋友递纸巾[呲牙]」[media]",
           ],
+          featuredQuote: {
+            text: "小年今天自己把南瓜粥喝完啦，还帮旁边小朋友递纸巾[呲牙]",
+            speaker: "潇潇老师",
+            sourceId: "src-1106",
+          },
           firstScreenMediaIds: ["m-1106"],
           expandedMediaIds: ["m-1106"],
         },
@@ -169,6 +184,11 @@ function makeSampleMonthContents() {
           paragraphs: [
             "外婆说：「小家伙一听到小鸟叫就指着树梢看半天。」",
           ],
+          featuredQuote: {
+            text: "小家伙一听到小鸟叫就指着树梢看半天。",
+            speaker: "外婆",
+            sourceId: "src-1104",
+          },
           firstScreenMediaIds: ["m-1104"],
           expandedMediaIds: ["m-1104"],
         },
@@ -463,7 +483,7 @@ test("selectRecentJournalDays：优先挑选近期窗口内带公开照片的日
   );
 });
 
-test("selectFamilyVoices：优先挑 10–72 字的完整对话原句，短碎词仅在不足时兜底", () => {
+test("selectFamilyVoices：只读取 featuredQuote，优先挑 10–72 字的完整对话原句，未标注正文的后勤句绝不抓取", () => {
   const archive = makeBaseArchive();
   const monthContents = [
     {
@@ -475,8 +495,28 @@ test("selectFamilyVoices：优先挑 10–72 字的完整对话原句，短碎�
           kind: "story",
           title: "安稳睡整觉",
           paragraphs: [
-            "昨晚睡得很踏实，妈妈说：「几乎没醒」，潇潇老师夸：「你们有魔法」。",
+            "昨晚睡得很踏实，潇潇老师夸：「你们有魔法」。",
           ],
+          featuredQuote: {
+            text: "你们有魔法",
+            speaker: "潇潇老师",
+            sourceId: "src-1111",
+          },
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-10",
+          kind: "story",
+          title: "翻开小汽车绘本",
+          paragraphs: [
+            "妈妈笑着说：「今天小年自己翻开绘本指着小汽车念个不停。」",
+          ],
+          featuredQuote: {
+            text: "今天小年自己翻开绘本指着小汽车念个不停。",
+            speaker: "妈妈",
+            sourceId: "src-1110",
+          },
           firstScreenMediaIds: [],
           expandedMediaIds: [],
         },
@@ -485,7 +525,22 @@ test("selectFamilyVoices：优先挑 10–72 字的完整对话原句，短碎�
           kind: "story",
           title: "绘本角讲故事",
           paragraphs: [
-            "妈妈笑着说：「今天小年自己翻开绘本指着小汽车念个不停。」爸爸说：「晚上回来再给你讲一遍挖掘机好不好？」",
+            "爸爸说：「晚上回来再给你讲一遍挖掘机好不好？」",
+          ],
+          featuredQuote: {
+            text: "晚上回来再给你讲一遍挖掘机好不好？",
+            speaker: "爸爸",
+            sourceId: "src-1109",
+          },
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-08",
+          kind: "story",
+          title: "清早请假晚到",
+          paragraphs: [
+            "妈妈在群里说：「昨晚半夜不睡觉现在还在睡，今天迟一点」。",
           ],
           firstScreenMediaIds: [],
           expandedMediaIds: [],
@@ -498,12 +553,14 @@ test("selectFamilyVoices：优先挑 10–72 字的完整对话原句，短碎�
   const topTwo = selectFamilyVoices(archive, days, "2026-11-12", 2);
   assert.equal(topTwo.length, 2);
   assert.ok(topTwo.every((v) => [...v.quote].length >= 10), "完整对话充足时不应选 4–5 字短词");
+  assert.ok(topTwo.every((v) => !v.quote.includes("迟一点")), "未设 featuredQuote 的正文请假后勤话不得入选");
 
-  // 若请求 3 条而完整句只有 2 条，第 3 条才回退到短句兜底
+  // 若请求 3 条而完整句只有 2 条，第 3 条才回退到已核验 featuredQuote 短句兜底（仍不抓未核验正文）
   const topThree = selectFamilyVoices(archive, days, "2026-11-12", 3);
   assert.equal(topThree.length, 3);
   assert.equal([...topThree[0].quote].length >= 10 && [...topThree[1].quote].length >= 10, true);
   assert.equal(topThree[2].quote, "你们有魔法");
+  assert.equal(topThree.some((v) => v.quote.includes("迟一点")), false);
 });
 
 test("智能封面与防雷同（未标注新月份）：动态识别托班集体横屏餐桌照，优先选家庭群/竖版独照", () => {
@@ -918,6 +975,11 @@ test("跨磁贴文案去重：成长亮点导语/标签与家人的话均不重�
           kind: "text-only",
           title: "骑小自行车绕客厅",
           paragraphs: ["爷爷夸他：「小年年会骑自行车转弯啦！」"],
+          featuredQuote: {
+            text: "小年年会骑自行车转弯啦！",
+            speaker: "爷爷",
+            sourceId: "src-1107",
+          },
           firstScreenMediaIds: [],
           expandedMediaIds: [],
         },
@@ -942,6 +1004,11 @@ test("跨磁贴文案去重：成长亮点导语/标签与家人的话均不重�
           kind: "text-only",
           title: "搬把小椅子去门口",
           paragraphs: ["老师在群里夸：「小年看到家长在门口，主动搬椅子过去了，给家长坐坐。」"],
+          featuredQuote: {
+            text: "小年看到家长在门口，主动搬椅子过去了，给家长坐坐。",
+            speaker: "老师",
+            sourceId: "src-1104",
+          },
           firstScreenMediaIds: [],
           expandedMediaIds: [],
         },
@@ -950,6 +1017,11 @@ test("跨磁贴文案去重：成长亮点导语/标签与家人的话均不重�
           kind: "text-only",
           title: "补完早觉听外语歌",
           paragraphs: ["妈妈笑着说：「我宣布，这是我张小年正确的打开方式。」"],
+          featuredQuote: {
+            text: "我宣布，这是我张小年正确的打开方式。",
+            speaker: "妈妈",
+            sourceId: "src-1103",
+          },
           firstScreenMediaIds: [],
           expandedMediaIds: [],
         },
@@ -958,6 +1030,11 @@ test("跨磁贴文案去重：成长亮点导语/标签与家人的话均不重�
           kind: "text-only",
           title: "睡前一本本收好书",
           paragraphs: ["爸爸说：「今天自己把绘本全部放回书架，太棒了。」"],
+          featuredQuote: {
+            text: "今天自己把绘本全部放回书架，太棒了。",
+            speaker: "爸爸",
+            sourceId: "src-1102",
+          },
           firstScreenMediaIds: [],
           expandedMediaIds: [],
         },
@@ -1094,6 +1171,11 @@ test("2026-11 真实导语全碰撞场景：当 intro 各句均复述已展示�
           paragraphs: [
             "小年捧着绘本翻看时神情专注，到了快午睡的点，不用催促便默默把书一本一本收拢叠好，妈妈看着直乐，说「我宣布，这是我张小年正确的打开方式」。",
           ],
+          featuredQuote: {
+            text: "我宣布，这是我张小年正确的打开方式",
+            speaker: "妈妈",
+            sourceId: "src-1102",
+          },
           firstScreenMediaIds: [],
           expandedMediaIds: [],
         },
@@ -1123,6 +1205,7 @@ test("2026-11 真实导语全碰撞场景：当 intro 各句均复述已展示�
     (model.growth.headline.match(/」/g) ?? []).length,
   );
   assert.ok(model.voices.some((v) => v.quote.includes("这是我张小年正确的打开方式")));
+  assert.equal(model.voices.some((v) => v.quote.includes("迟一点")), false);
 
   // 标签中「搬把小椅子去门口」与 RecentAnswer「门口…主动搬椅子过去」语义重复，必须跳过，从而浮现「骑小自行车」
   assert.equal(model.growth.tags.includes("搬把小椅子去门口"), false);

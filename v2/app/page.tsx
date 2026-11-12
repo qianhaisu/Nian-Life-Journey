@@ -14,7 +14,7 @@ import {
 } from "@/components/home-bento-sections";
 import { readHomeFeed, type HomeFeed } from "@/lib/home-feed";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
-import { buildHomeBentoModel } from "@/lib/home-bento";
+import { buildHomeBentoModel, selectHomeHeroCover } from "@/lib/home-bento";
 import { selectHomeMemories } from "@/lib/home-memory";
 import { topicLookupFrom } from "@/lib/home-memory-topics";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
@@ -65,14 +65,21 @@ export default async function HomePage() {
   ).filter((item) => item.line);
 
   const answer = selectHomeAnswer(archive.snapshots, feed.clock.today, archive.birthDay, editedLines);
+  const heroCover = selectHomeHeroCover({
+    archive,
+    monthContents,
+    topics,
+    today: feed.clock.today,
+  });
   const activeLeadDay =
-    memories.length > 0
+    heroCover?.day ??
+    (memories.length > 0
       ? memories[0].kind === "day"
         ? memories[0].dateTime
         : undefined
-      : feed.lead?.story.day;
+      : feed.lead?.story.day);
 
-  const excludePhotoIds =
+  const memoryCoverIds =
     memories.length > 0
       ? memories
           .map((memory) => (memory.slides[memory.coverIndex] ?? memory.slides[0])?.media.id)
@@ -80,6 +87,9 @@ export default async function HomePage() {
       : feed.lead?.photo?.media.id
         ? [feed.lead.photo.media.id]
         : [];
+  const excludePhotoIds = heroCover
+    ? [...new Set([heroCover.media.id, ...memoryCoverIds])]
+    : memoryCoverIds;
   const memorySlidePhotoIds = memories.flatMap((memory) =>
     memory.slides.map((slide) => slide.media.id),
   );
@@ -128,8 +138,8 @@ export default async function HomePage() {
         </header>
 
         <div className={bentoClasses}>
-          {memories.length > 0 ? (
-            <HomeMemory memories={memories} />
+          {memories.length > 0 || heroCover ? (
+            <HomeMemory memories={memories} heroCover={heroCover} />
           ) : (
             <MemoryFallback feed={feed} reason={absence?.reason} />
           )}

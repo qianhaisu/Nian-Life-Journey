@@ -5,7 +5,7 @@ import { mediaDeliveryUrl } from "@/lib/media/paths";
 import Image from "next/image";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import type { HomeMemory as HomeMemoryData } from "@/lib/home-memory";
+import type { HomeHeroCover, HomeMemory as HomeMemoryData } from "@/lib/home-memory";
 import { MEMORY_TIMING } from "@/lib/home-memory";
 import { pickTrack } from "@/lib/home-memory-mood";
 
@@ -44,29 +44,43 @@ function ensureDualClockSubtitle(memory: HomeMemoryData): string {
 
 export function HomeMemory({
   memories,
+  heroCover,
   ariaLabel = "最近的一段回忆",
   closeLabel = "关闭，回到首页",
 }: {
   memories: HomeMemoryData[];
+  heroCover?: HomeHeroCover;
   ariaLabel?: string;
   closeLabel?: string;
 }) {
   const [index, setIndex] = useState(0);
+  const [switched, setSwitched] = useState(false);
   const [playing, setPlaying] = useState(false);
   const playButton = useRef<HTMLButtonElement>(null);
-  const memory = memories[Math.min(index, memories.length - 1)];
-  if (!memory) return null;
+  const memory = memories.length > 0 ? memories[Math.min(index, memories.length - 1)] : undefined;
+  if (!memory && !heroCover) return null;
+
+  const activeHeroCover = !switched ? heroCover : undefined;
+  const canSwitch = memories.length > 1 || (Boolean(activeHeroCover) && memories.length === 1);
 
   return (
     <section className="home-memory tile-lead-photo" aria-label={ariaLabel}>
       <MemoryPreview
         memory={memory}
-        total={memories.length}
-        onOpen={() => setPlaying(true)}
-        onSwitch={() => setIndex((i) => (i + 1) % memories.length)}
+        heroCover={activeHeroCover}
+        canSwitch={canSwitch}
+        onOpen={() => {
+          if (memory) setPlaying(true);
+        }}
+        onSwitch={() => {
+          setSwitched(true);
+          if (memories.length > 1) {
+            setIndex((i) => (i + 1) % memories.length);
+          }
+        }}
         playRef={playButton}
       />
-      {playing ? (
+      {playing && memory ? (
         <MemoryPlayer
           memory={memory}
           onClose={() => setPlaying(false)}
@@ -80,13 +94,15 @@ export function HomeMemory({
 
 function MemoryPreview({
   memory,
-  total,
+  heroCover,
+  canSwitch,
   onOpen,
   onSwitch,
   playRef,
 }: {
-  memory: HomeMemoryData;
-  total: number;
+  memory?: HomeMemoryData;
+  heroCover?: HomeHeroCover;
+  canSwitch: boolean;
   onOpen: () => void;
   onSwitch: () => void;
   playRef: React.RefObject<HTMLButtonElement | null>;
@@ -95,25 +111,61 @@ function MemoryPreview({
   const stage = useRef<HTMLDivElement>(null);
   const onScreen = useOnScreen(stage);
   const index = useSlideshow(
-    memory.key,
-    memory.slides.length,
-    !reduced && onScreen,
+    memory?.key ?? "hero-only",
+    memory?.slides.length ?? 0,
+    !heroCover && Boolean(memory) && !reduced && onScreen,
     MEMORY_TIMING.slideSeconds * 1000,
-    memory.coverIndex,
+    memory?.coverIndex ?? 0,
   );
-  const current = memory.slides[index] ?? memory.slides[0];
-  const subtitle = useMemo(() => ensureDualClockSubtitle(memory), [memory]);
+  const current = memory ? (memory.slides[index] ?? memory.slides[0]) : undefined;
+  const subtitle = useMemo(
+    () => (memory ? ensureDualClockSubtitle(memory) : ""),
+    [memory],
+  );
 
-  const isTripReel = memory.key.startsWith("trip:");
-  const showSlideProvenance = memory.kind !== "day" && !isTripReel && Boolean(current?.day && current?.dateLabel);
-  const readHref = showSlideProvenance ? (current?.href ?? memory.href) : (memory.href ?? current?.href);
-  const readLabel = showSlideProvenance
-    ? (current?.href && current.linkLabel ? current.linkLabel : memory.linkLabel)
-    : memory.linkLabel
-      ? memory.linkLabel
-      : current?.href && current.linkLabel
-        ? `${current.dateLabel ? `${current.dateLabel.replace(/^\d{4}\s*年\s*/, "")} · ` : ""}${current.linkLabel}`
-        : undefined;
+  const isTripReel = Boolean(memory?.key.startsWith("trip:"));
+  const showHeroCover = Boolean(heroCover) && !isTripReel;
+
+  const showSlideProvenance =
+    !showHeroCover &&
+    Boolean(memory) &&
+    memory?.kind !== "day" &&
+    !isTripReel &&
+    Boolean(current?.day && current?.dateLabel);
+
+  const readHref = showHeroCover
+    ? heroCover?.href
+    : showSlideProvenance
+      ? (current?.href ?? memory?.href)
+      : (memory?.href ?? current?.href);
+
+  const readLabel = showHeroCover
+    ? heroCover?.linkLabel
+    : showSlideProvenance
+      ? (current?.href && current.linkLabel ? current.linkLabel : memory?.linkLabel)
+      : memory?.linkLabel
+        ? memory.linkLabel
+        : current?.href && current.linkLabel
+          ? `${current.dateLabel ? `${current.dateLabel.replace(/^\d{4}\s*年\s*/, "")} · ` : ""}${current.linkLabel}`
+          : undefined;
+
+  const displayTitle = showHeroCover
+    ? (heroCover?.dayTitle ?? heroCover?.caption ?? memory?.title ?? heroCover?.dateLabel ?? "")
+    : (memory?.title ?? "");
+
+  const displayNote = showHeroCover
+    ? heroCover?.caption && heroCover.caption !== displayTitle
+      ? heroCover.caption
+      : undefined
+    : memory?.kind !== "day" && current?.caption && current.caption !== memory?.title
+      ? current.caption
+      : undefined;
+
+  const heroAgeText = heroCover?.ageLabel
+    ? heroCover.ageLabel === "出生的那天"
+      ? "出生那天"
+      : `当时 ${heroCover.ageLabel}`
+    : undefined;
 
   return (
     <div className="memory-stage" ref={stage}>
@@ -123,46 +175,81 @@ function MemoryPreview({
         onClick={(event) => {
           const target = event.target as HTMLElement | null;
           if (target?.closest("a, button")) return;
-          onOpen();
+          if (memory) onOpen();
         }}
       >
-        {memory.slides.map((slide, i) =>
-          isNear(i, index, memory.slides.length) ? (
-            // eslint-disable-next-line @next/next/no-img-element
+        {showHeroCover && heroCover ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              key={`bg-${slide.key}`}
-              className={i === index ? "memory-backdrop is-current" : "memory-backdrop"}
-              src={slide.media.thumbnailSrc ?? mediaDeliveryUrl(slide.media.id, "thumbnail")}
+              key={`bg-hero-${heroCover.media.id}`}
+              className="memory-backdrop is-current"
+              src={heroCover.media.thumbnailSrc ?? mediaDeliveryUrl(heroCover.media.id, "thumbnail")}
               alt=""
               aria-hidden="true"
             />
-          ) : null,
-        )}
-        {memory.slides.map((slide, i) =>
-          isNear(i, index, memory.slides.length) ? (
             <Image
-              key={slide.key}
-              className={i === index ? "memory-frame is-current" : "memory-frame"}
-              data-fx={i % 4}
-              src={slide.media.src || mediaDeliveryUrl(slide.media.id, "web")}
-              alt={slide.media.alt}
-              width={slide.media.width || 4}
-              height={slide.media.height || 3}
+              key={`hero-${heroCover.media.id}`}
+              className="memory-frame is-current memory-frame--pinned"
+              src={heroCover.media.src || mediaDeliveryUrl(heroCover.media.id, "web")}
+              alt={heroCover.media.alt}
+              width={heroCover.media.width || 4}
+              height={heroCover.media.height || 5}
               sizes="(max-width: 899px) 96vw, 580px"
-              priority={i === memory.coverIndex}
+              priority
               unoptimized
-              aria-hidden={i !== index}
             />
-          ) : null,
-        )}
+          </>
+        ) : memory ? (
+          <>
+            {memory.slides.map((slide, i) =>
+              isNear(i, index, memory.slides.length) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`bg-${slide.key}`}
+                  className={i === index ? "memory-backdrop is-current" : "memory-backdrop"}
+                  src={slide.media.thumbnailSrc ?? mediaDeliveryUrl(slide.media.id, "thumbnail")}
+                  alt=""
+                  aria-hidden="true"
+                />
+              ) : null,
+            )}
+            {memory.slides.map((slide, i) =>
+              isNear(i, index, memory.slides.length) ? (
+                <Image
+                  key={slide.key}
+                  className={i === index ? "memory-frame is-current" : "memory-frame"}
+                  data-fx={i % 4}
+                  src={slide.media.src || mediaDeliveryUrl(slide.media.id, "web")}
+                  alt={slide.media.alt}
+                  width={slide.media.width || 4}
+                  height={slide.media.height || 3}
+                  sizes="(max-width: 899px) 96vw, 580px"
+                  priority={i === memory.coverIndex}
+                  unoptimized
+                  aria-hidden={i !== index}
+                />
+              ) : null,
+            )}
+          </>
+        ) : null}
 
         <div className="memory-scrim" aria-hidden="true" />
 
         <div className="memory-top-bar">
           <p className="memory-caption-line">
-            {memory.dateTime ? <time dateTime={memory.dateTime}>{subtitle}</time> : <span>{subtitle}</span>}
+            {showHeroCover && heroCover ? (
+              <>
+                <time dateTime={heroCover.day}>{heroCover.dateLabel}</time>
+                {heroAgeText ? <span> · {heroAgeText}</span> : null}
+              </>
+            ) : memory?.dateTime ? (
+              <time dateTime={memory.dateTime}>{subtitle}</time>
+            ) : (
+              <span>{subtitle}</span>
+            )}
           </p>
-          {total > 1 ? (
+          {canSwitch ? (
             <button
               type="button"
               className="memory-switch"
@@ -180,10 +267,8 @@ function MemoryPreview({
 
         <div className="memory-colophon">
           <div className="memory-colophon-copy">
-            <h2 className="memory-title">{memory.title}</h2>
-            {memory.kind !== "day" && current?.caption && current.caption !== memory.title ? (
-              <p className="memory-slide-note">{current.caption}</p>
-            ) : null}
+            {displayTitle ? <h2 className="memory-title">{displayTitle}</h2> : null}
+            {displayNote ? <p className="memory-slide-note">{displayNote}</p> : null}
             {showSlideProvenance && current?.day ? (
               <p className="memory-slide-meta">
                 <time dateTime={current.day}>{current.dateLabel}</time>
@@ -195,37 +280,57 @@ function MemoryPreview({
                 ) : null}
               </p>
             ) : null}
-            {readHref && readLabel ? (
+            {(!isTripReel && memory) || (readHref && readLabel) ? (
               <div className="memory-actions">
-                <Link
-                  className="memory-read"
-                  href={readHref}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <span>{readLabel}</span>
-                  <span aria-hidden="true">↗</span>
-                </Link>
+                {!isTripReel && memory ? (
+                  <button
+                    ref={playRef}
+                    type="button"
+                    className="memory-play-cta"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpen();
+                    }}
+                    aria-label={`播放回忆 · ${memory.title}`}
+                  >
+                    <PlayGlyph />
+                    <span className="memory-play-cta-label">播放回忆 · {memory.title}</span>
+                  </button>
+                ) : null}
+                {readHref && readLabel ? (
+                  <Link
+                    className="memory-read"
+                    href={readHref}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span>{readLabel}</span>
+                    <span aria-hidden="true">↗</span>
+                  </Link>
+                ) : null}
               </div>
             ) : null}
           </div>
-          <button
-            ref={playRef}
-            type="button"
-            className="memory-play"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpen();
-            }}
-            aria-label="播放回忆"
-          >
-            <PlayGlyph />
-          </button>
+          {isTripReel && memory ? (
+            <button
+              ref={playRef}
+              type="button"
+              className="memory-play"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen();
+              }}
+              aria-label="播放回忆"
+            >
+              <PlayGlyph />
+            </button>
+          ) : null}
         </div>
       </div>
 
       <p className="visually-hidden" role="status">
-        {memory.title}，{subtitle}。
-        {current?.caption ? `画面里记着：${current.caption}。` : ""}
+        {displayTitle}
+        {subtitle ? `，${subtitle}` : ""}。
+        {displayNote ? `画面里记着：${displayNote}。` : ""}
       </p>
     </div>
   );

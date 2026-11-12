@@ -1,13 +1,17 @@
 import type { FamilyArchive } from "@/lib/family-archive";
+import type { HomeHeroCover } from "@/lib/home-memory";
 import { NO_TOPICS, type PhotoTopicLabel, type PhotoTopicLookup } from "@/lib/home-memory-topics";
 import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 import { isScreenShaped, photographsFirst } from "@/lib/media/presentation";
 import { isGarbageLifeEvent, toMediaRef, type MediaRef } from "@/lib/memory-chapters";
 import { detectMilestone, type Milestone } from "@/lib/milestones";
-import type { MonthContent } from "@/lib/month-content";
-import { presentableEvidenceText, stripWechatEmoticons } from "@/lib/organizer/evidence-text";
+import type { MonthContent, MonthContentFeaturedQuote } from "@/lib/month-content";
+import { stripWechatEmoticons } from "@/lib/organizer/evidence-text";
+import { P5_FAMILY_QUOTE_SEEDS, P5_HERO_SEED_CANDIDATES } from "@/lib/p5-homepage-seeds";
+import { calendarDayOf } from "@/lib/timeline-dates";
 import { ageAtMonth, ageOn, formatDay, formatMonth, monthAgeLine } from "@/lib/time-signature";
 import {
+  KIND_LABEL,
   PLACES,
   TRIPS,
   placeById,
@@ -20,7 +24,6 @@ import {
   type Trip,
 } from "@/lib/travel/model";
 import { mergeReviewedTravelRecords } from "@/lib/travel/reviewed-records";
-import type { Contributor } from "@/lib/types";
 
 // 首页模块化画布（Concept 02 · Modular Canvas）的纯内存选择器。
 //
@@ -179,17 +182,6 @@ const CONFIRMED_SPEAKERS: readonly {
 ];
 
 const SPEAKER_MAP = new Map(CONFIRMED_SPEAKERS.map((item) => [item.label, item]));
-const SPEAKER_PATTERN = CONFIRMED_SPEAKERS.map((item) => item.label).join("|");
-
-const QUOTE_SPEECH_BEFORE = new RegExp(
-  `(${SPEAKER_PATTERN})[^「“”」\\n。！？]{0,20}?(?:笑着说|发消息说|在群里说|发视频说|感叹说|记录道|写道|记下|嘱咐|感叹|提醒|夸他|夸赞|夸|笑着|说|问|讲|回|喊|道)[：:，,\\s]*[「“]([^」”]{4,72})[」”]`,
-  "g",
-);
-
-const QUOTE_SPEECH_AFTER = new RegExp(
-  `[「“]([^」”]{4,72})[」”][，,\\s]*(${SPEAKER_PATTERN})(?:笑着说|感叹|说|讲|回|写道)`,
-  "g",
-);
 
 const norm = (text: string): string =>
   text.replace(/[\s，。！？、；：“”「」『』（）()·—\-]/g, "").toLowerCase();
@@ -312,6 +304,7 @@ type PublishedDayRecord = BentoDayCard & {
   dayMealCue: boolean;
   photoOrigins: ReadonlyMap<string, PhotoOrigin>;
   hasExplicitTitle: boolean;
+  featuredQuote?: MonthContentFeaturedQuote | null;
   kind: "story" | "visual-description" | "text-only" | "event";
 };
 
@@ -897,6 +890,7 @@ export function collectPublishedDays(
         dayMealCue,
         photoOrigins,
         hasExplicitTitle: Boolean(explicitTitle),
+        featuredQuote: entry.featuredQuote,
         paragraphs: cleanParagraphs,
         href: `/memory/${year}/${monthSeg}/${dom}`,
         milestone,
@@ -1250,24 +1244,197 @@ export function selectGrowthHighlight(
   return null;
 }
 
-function contributorSpeaker(contributor: Contributor | undefined): {
-  label: string;
-  initial: string;
-  tone: VoiceTone;
-} | null {
-  if (!contributor) return null;
-  const byDisplay = SPEAKER_MAP.get(contributor.displayName.trim());
-  if (byDisplay) return byDisplay;
-  switch (contributor.role) {
-    case "mother":
-      return SPEAKER_MAP.get("妈妈")!;
-    case "father":
-      return SPEAKER_MAP.get("爸爸")!;
-    case "teacher":
-      return SPEAKER_MAP.get("老师")!;
-    default:
-      return null;
+export function selectHomeHeroCover({
+  archive,
+  monthContents = [],
+  topics = NO_TOPICS,
+  today,
+}: {
+  archive: FamilyArchive;
+  monthContents?: readonly MonthContent[];
+  topics?: PhotoTopicLookup;
+  today: string;
+}): HomeHeroCover | undefined {
+  const excluded = archive.privilege.excluded;
+  const available = new Map(
+    archive.media
+      .filter((item) => item.type === "photo" && item.visibility !== "private" && !excluded?.has(item.id))
+      .map((item) => [item.id, item]),
+  );
+  if (available.size === 0) return undefined;
+
+  const currentMonth = today.slice(0, 7);
+  const sortedMonths = [...monthContents]
+    .filter((c) => c.month <= currentMonth)
+    .sort((a, b) => b.month.localeCompare(a.month));
+
+  const dayEntryByDate = new Map<
+    string,
+    {
+      day: string;
+      month: string;
+      title: string | null;
+      photoCaptions?: Record<string, string>;
+      firstScreenMediaIds: string[];
+      expandedMediaIds: string[];
+    }
+  >();
+  const dayByMediaId = new Map<string, string>();
+  for (const content of sortedMonths) {
+    for (const entry of content.days) {
+      if (entry.day > today) continue;
+      dayEntryByDate.set(entry.day, { ...entry, month: content.month });
+      for (const id of [...entry.firstScreenMediaIds, ...entry.expandedMediaIds]) {
+        if (!dayByMediaId.has(id)) dayByMediaId.set(id, entry.day);
+      }
+    }
   }
+
+  const knownMonths = new Set<string>([
+    ...archive.chapters.flatMap((y) => y.months.map((m) => m.month)),
+    ...sortedMonths.map((c) => c.month),
+  ]);
+  const publishedEventDays = new Set<string>();
+  for (const year of archive.chapters) {
+    for (const month of year.months) {
+      for (const memory of month.memories) {
+        if (memory.signature.day && memory.signature.day <= today) {
+          publishedEventDays.add(memory.signature.day);
+        }
+      }
+    }
+  }
+
+  const buildCover = (
+    rawMedia: FamilyArchive["media"][number],
+    preferredDay?: string,
+  ): HomeHeroCover | undefined => {
+    const day =
+      preferredDay ??
+      dayByMediaId.get(rawMedia.id) ??
+      calendarDayOf(rawMedia.takenAt) ??
+      (rawMedia.takenAt ?? "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > today) return undefined;
+    const entry = dayEntryByDate.get(day);
+    const dayTitle = cleanDisplayText(entry?.title) || undefined;
+    const caption = cleanDisplayText(entry?.photoCaptions?.[rawMedia.id]) || undefined;
+    const [year, monthSeg, dom] = day.split("-");
+    const month = `${year}-${monthSeg}`;
+    const hasDayPage = Boolean(entry) || (knownMonths.has(month) && publishedEventDays.has(day));
+    const href = hasDayPage
+      ? `/memory/${year}/${monthSeg}/${dom}`
+      : knownMonths.has(month)
+        ? `/memory/${year}/${monthSeg}`
+        : undefined;
+    const linkLabel = hasDayPage ? "读这一天" : href ? "翻到那个月" : undefined;
+
+    return {
+      media: toMediaRef(rawMedia, dayTitle || formatDay(day)),
+      day,
+      dateLabel: formatDay(day),
+      ageLabel: ageOn(archive.birthDay, day),
+      dayTitle,
+      caption,
+      href,
+      linkLabel,
+    };
+  };
+
+  // 1. 优先读取当月/最新已发布月稿显式设置的 MonthContent.homeHeroMediaId
+  const latestMonth = sortedMonths[0];
+  if (latestMonth?.homeHeroMediaId) {
+    const explicitMedia = available.get(latestMonth.homeHeroMediaId);
+    if (explicitMedia) {
+      const resolved = buildCover(explicitMedia, dayByMediaId.get(explicitMedia.id));
+      if (resolved) return resolved;
+    }
+  }
+
+  // 2. 过渡期种子兜底（当当月尚未写入 homeHeroMediaId 时，优先尝试已人工目视核验的正面高清候选）
+  if (!latestMonth?.homeHeroMediaId) {
+    for (const seed of P5_HERO_SEED_CANDIDATES) {
+      if (seed.day > today || daysBetween(seed.day, today) > 35) continue;
+      const seededMedia = available.get(seed.mediaId);
+      if (!seededMedia) continue;
+      const resolved = buildCover(seededMedia, seed.day);
+      if (resolved) return resolved;
+    }
+  }
+
+  // 3. 通用回退：从近 30 天的首屏照片中选长边 ≥ 1080、非闭眼睡眠主题的清晰正脸照
+  let bestCandidate:
+    | { rawMedia: FamilyArchive["media"][number]; day: string; score: number }
+    | undefined;
+  const seenCandidateIds = new Set<string>();
+
+  for (const content of sortedMonths) {
+    for (const entry of content.days) {
+      if (entry.day > today) continue;
+      const ageDays = daysBetween(entry.day, today);
+      if (ageDays < 0 || ageDays > 30) continue;
+
+      for (let i = 0; i < entry.firstScreenMediaIds.length; i += 1) {
+        const id = entry.firstScreenMediaIds[i];
+        if (seenCandidateIds.has(id)) continue;
+        seenCandidateIds.add(id);
+
+        const rawMedia = available.get(id);
+        if (!rawMedia) continue;
+        const w = rawMedia.width ?? 0;
+        const h = rawMedia.height ?? 0;
+        const longSide = Math.max(w, h);
+        if (longSide < 1080) continue;
+
+        const ref = toMediaRef(rawMedia);
+        if (isScreenShaped(ref)) continue;
+
+        const label = topics(id);
+        const c = label?.carousel;
+        if (label?.topic === "睡觉" || c?.sleeping === true || c?.eyesOpen === false) {
+          continue;
+        }
+        if (
+          c &&
+          (!c.qualified ||
+            !c.childMain ||
+            !c.faceClear ||
+            c.faceUnblocked === false ||
+            c.motionBlur ||
+            c.sensitive)
+        ) {
+          continue;
+        }
+        if (label?.childInFrame === false) continue;
+
+        let score = 0;
+        if (content.coverMediaId === id) score += 0.35;
+        if (i === 0) score += 0.12;
+        if (h >= w) score += 0.22;
+        if (longSide >= 3000) score += 0.28;
+        else if (longSide >= 1600) score += 0.14;
+
+        if (c) {
+          score += ((c.clarity * 0.55 + c.expression * 0.45) / 100) * 0.48;
+        } else if (label) {
+          score += label.value * 0.3;
+        } else {
+          score += 0.18;
+        }
+        if (label?.topic === "笑") score += 0.12;
+        score -= ageDays * 0.004;
+
+        if (!bestCandidate || score > bestCandidate.score) {
+          bestCandidate = { rawMedia, day: entry.day, score };
+        }
+      }
+    }
+  }
+
+  if (bestCandidate) {
+    return buildCover(bestCandidate.rawMedia, bestCandidate.day);
+  }
+
+  return undefined;
 }
 
 export function selectFamilyVoices(
@@ -1278,6 +1445,7 @@ export function selectFamilyVoices(
   options?: {
     answerLine?: string;
     avoidTexts?: readonly string[];
+    monthContents?: readonly MonthContent[];
   },
 ): BentoFamilyVoice[] {
   const candidates: BentoFamilyVoice[] = [];
@@ -1290,7 +1458,7 @@ export function selectFamilyVoices(
     href: string,
     id: string,
   ) => {
-    const meta = SPEAKER_MAP.get(speakerLabel);
+    const meta = SPEAKER_MAP.get(speakerLabel.trim());
     if (!meta) return;
     const cleaned = cleanDisplayText(rawQuote)
       .replace(/^[「“”」]+|[「“”」]+$/g, "")
@@ -1314,65 +1482,66 @@ export function selectFamilyVoices(
     });
   };
 
-  for (const record of days) {
-    const blocks = [record.title, ...record.paragraphs];
-    for (let b = 0; b < blocks.length; b += 1) {
-      const text = blocks[b];
-      if (!text) continue;
-      for (const match of text.matchAll(QUOTE_SPEECH_BEFORE)) {
-        pushCandidate(match[1], match[2], record.day, record.href, `voice-${record.day}-${b}-${match.index ?? 0}`);
-      }
-      for (const match of text.matchAll(QUOTE_SPEECH_AFTER)) {
-        pushCandidate(match[2], match[1], record.day, record.href, `voice-after-${record.day}-${b}-${match.index ?? 0}`);
-      }
-    }
-  }
-
-  // 同时扫描已发布事件的正文段落（部分早期月份没有外部月稿文件，原话记在 LifeEvent.story 里）
   const dayHrefByDate = new Map(days.map((d) => [d.day, d.href]));
-  const sortedEvents = [...archive.events]
-    .filter((e) => e.visibility !== "private" && e.occurredAt.slice(0, 10) <= today)
-    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+  const knownMonths = new Set(archive.chapters.flatMap((y) => y.months.map((m) => m.month)));
+  const rawSourceIds = new Set((archive.store.rawSources ?? []).map((s) => s.id));
+  const explicitQuoteDays = new Set<string>();
 
-  for (const event of sortedEvents) {
-    const day = event.occurredAt.slice(0, 10);
-    const href = dayHrefByDate.get(day) ?? `/events/${event.id}`;
-    const texts = [...(event.storySections ?? []), event.story ?? ""];
-    for (let i = 0; i < texts.length; i += 1) {
-      const text = texts[i];
-      if (!text) continue;
-      for (const match of text.matchAll(QUOTE_SPEECH_BEFORE)) {
-        pushCandidate(match[1], match[2], day, href, `voice-ev-${event.id}-${i}-${match.index ?? 0}`);
-      }
-      for (const match of text.matchAll(QUOTE_SPEECH_AFTER)) {
-        pushCandidate(match[2], match[1], day, href, `voice-ev-after-${event.id}-${i}-${match.index ?? 0}`);
+  // 1. 严格只读取各日页经过人工/编辑核验的 day.featuredQuote（彻底废除旧的正文正则抓取与原始消息兜底）
+  const sortedDays = [...days].sort((a, b) => b.day.localeCompare(a.day));
+  for (const record of sortedDays) {
+    if (record.day > today) continue;
+    if (record.featuredQuote !== undefined) {
+      explicitQuoteDays.add(record.day);
+      if (record.featuredQuote) {
+        pushCandidate(
+          record.featuredQuote.speaker,
+          record.featuredQuote.text,
+          record.day,
+          record.href,
+          `voice-fq-${record.day}`,
+        );
       }
     }
   }
 
-  // 当演示/测试档案里带有明确发言人且已公开的 rawSources 原文时，仅在引语不足时兜底补充
-  if (candidates.length < limit && archive.store.contributors?.length) {
-    const contributors = new Map(archive.store.contributors.map((c) => [c.id, c]));
-    const knownMonths = new Set(archive.chapters.flatMap((y) => y.months.map((m) => m.month)));
-    const rawSources = [...archive.store.rawSources]
-      .filter((s) => s.visibility !== "private" && !s.deletedAt && typeof s.text === "string" && s.capturedAt.slice(0, 10) <= today)
-      .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
-
-    for (const source of rawSources) {
-      if (candidates.length >= limit * 2) break;
-      const speaker = contributorSpeaker(contributors.get(source.contributorId));
-      if (!speaker) continue;
-      const cleaned = stripWechatEmoticons(presentableEvidenceText(source.text));
-      if (!cleaned || [...cleaned].length < 6 || [...cleaned].length > 64) continue;
-      if (SENSITIVE_MEDICAL.test(cleaned)) continue;
-      const day = source.capturedAt.slice(0, 10);
-      const month = day.slice(0, 7);
-      const href =
-        dayHrefByDate.get(day) ??
-        (source.relatedLifeEventId ? `/events/${source.relatedLifeEventId}` : undefined) ??
-        (knownMonths.has(month) ? `/memory/${month.slice(0, 4)}/${month.slice(5, 7)}` : "/memory");
-      pushCandidate(speaker.label, cleaned, day, href, `voice-src-${source.id}`);
+  if (options?.monthContents) {
+    const extraDays = options.monthContents
+      .flatMap((c) => c.days.map((d) => ({ ...d, month: c.month })))
+      .filter((d) => d.day <= today && !explicitQuoteDays.has(d.day))
+      .sort((a, b) => b.day.localeCompare(a.day));
+    for (const entry of extraDays) {
+      if (entry.featuredQuote !== undefined) {
+        explicitQuoteDays.add(entry.day);
+        if (entry.featuredQuote) {
+          const [y, m, dom] = entry.day.split("-");
+          const href = dayHrefByDate.get(entry.day) ?? `/memory/${y}/${m}/${dom}`;
+          pushCandidate(
+            entry.featuredQuote.speaker,
+            entry.featuredQuote.text,
+            entry.day,
+            href,
+            `voice-mc-fq-${entry.day}`,
+          );
+        }
+      }
     }
+  }
+
+  // 2. 合并 P5 已逐字连库核验的 24 条原话种子池（仅当该日期或原消息存在于当前档案中且未被显式覆盖时生效）
+  const sortedSeeds = [...P5_FAMILY_QUOTE_SEEDS].sort((a, b) => b.day.localeCompare(a.day));
+  for (let i = 0; i < sortedSeeds.length; i += 1) {
+    const seed = sortedSeeds[i];
+    if (seed.day > today || explicitQuoteDays.has(seed.day)) continue;
+    const dayHref = dayHrefByDate.get(seed.day);
+    const hasSeedContext = Boolean(dayHref) || rawSourceIds.has(seed.sourceId);
+    if (!hasSeedContext) continue;
+    const href =
+      dayHref ??
+      (knownMonths.has(seed.month)
+        ? `/memory/${seed.month.slice(0, 4)}/${seed.month.slice(5, 7)}`
+        : "/memory");
+    pushCandidate(seed.speaker, seed.text, seed.day, href, `voice-seed-${seed.day}-${i}`);
   }
 
   const answerLine = options?.answerLine;
@@ -1385,7 +1554,7 @@ export function selectFamilyVoices(
   };
 
   // 优先挑不与 RecentAnswer 或相邻日卡摘要重复的 10–72 字完整对话原句；
-  // 同一档内优先让不同家人/老师的声音同场出现，再按时间新鲜度补足。
+  // 同一档内优先让不同家人/老师的声音同场出现，再按时间倒序补足。
   const cleanFuller = candidates
     .filter((item) => [...item.quote].length >= 10 && quoteRank(item) === 0);
   const secondaryFuller = candidates
@@ -1418,18 +1587,14 @@ export function selectFamilyVoices(
     }
   };
 
-  // 第一轮：完整句中优先保证不同说话人（先非重复句，再已展示日卡内的次优句）
   fillSpeakerDiverse(cleanFuller);
   fillSpeakerDiverse(secondaryFuller);
-  // 第二轮：同档完整句补足
   fillRemaining(cleanFuller);
   fillRemaining(secondaryFuller);
-  // 第三轮：短句兜底（仍避开与顶部 RecentAnswer 撞梗的句子）
   if (picked.length < limit) {
     fillSpeakerDiverse(cleanShorter);
     fillRemaining(cleanShorter);
   }
-  // 最终兜底：仅当全库候选极少时才允许与 RecentAnswer 重合的引语上场
   if (picked.length < limit) {
     fillSpeakerDiverse(answerOverlapping);
     fillRemaining(answerOverlapping);
@@ -1835,12 +2000,32 @@ function stampDisplayName(stampKey: string, fallbackName: string): string {
   return fallbackName;
 }
 
+export function isGenuineTravelTrip(trip: Trip): boolean {
+  if (trip.kind === "hometown") return false;
+  if (KIND_LABEL[trip.kind] === "回老家") return false;
+  if (trip.id.startsWith("stay-")) return false;
+  if (trip.recordOnly) return false;
+  if (/^回(?:温州|西安|老家)/.test(trip.title.trim())) return false;
+  if (
+    trip.placeIds.length > 0 &&
+    trip.placeIds.every((id) => {
+      const place = placeById(id);
+      return Boolean(place?.hometown || place?.livedIn);
+    })
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function selectTravelFootprint(
   birthDay: string | undefined,
   monthContents: readonly MonthContent[],
   today: string,
 ): BentoTravelFootprint {
-  const allTrips = collectSyncedTrips(monthContents, today).filter((trip) => trip.from <= today);
+  const allTrips = collectSyncedTrips(monthContents, today).filter(
+    (trip) => trip.from <= today && isGenuineTravelTrip(trip),
+  );
   const stats = travelStats(allTrips);
   const cityCount = stampCount(allTrips);
   const latest = allTrips[0];
@@ -1950,6 +2135,7 @@ export function buildHomeBentoModel({
 
   const voices = selectFamilyVoices(archive, days, today, 3, {
     answerLine,
+    monthContents,
     avoidTexts: [
       growth?.headline ?? "",
       ...displayedDays.flatMap((d) => [d.title, d.excerpt]),
