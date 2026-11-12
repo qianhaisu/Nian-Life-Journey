@@ -1,10 +1,12 @@
 // Model-session visual photo review & curation tool (zero external LLM calls per AGENTS.md 2026-10-12).
 // Subcommands:
-//   prepare --since YYYY-MM-DD --out <private-dir>
-//   apply   --out <private-dir> --verdicts <verdicts.json>
-//   curate  --from YYYY-MM-DD --until YYYY-MM-DD --out <day-media.json> [--leads <leads.json>]
+//   prepare    --since YYYY-MM-DD --out <private-dir>
+//   apply      --out <private-dir> --verdicts <verdicts.json>
+//   curate     --from YYYY-MM-DD --until YYYY-MM-DD --out <day-media.json> [--leads <leads.json>]
+//   day-sheets --out <private-dir> [--source-pack <source-pack.json>] [--day-media <day-media.json>] [--days d1,d2] [--all-expanded]
 import fs from "node:fs";
 import path from "node:path";
+import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import sharp from "sharp";
@@ -15,9 +17,17 @@ const REPO_LITERAL = path.resolve(fileURLToPath(new URL("../../../", import.meta
 const REPO = { literal: REPO_LITERAL, real: fs.realpathSync.native(REPO_LITERAL) };
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
+function resolveNightRdsUrl() {
+  const local = new URL("../../.data/night-rds.mjs", import.meta.url);
+  if (fs.existsSync(fileURLToPath(local))) return local.href;
+  const fallback = process.env.NIANLIFE_NIGHT_RDS ?? path.join(homedir(), "Documents", "Nianlife", "v2", ".data", "night-rds.mjs");
+  return pathToFileURL(fallback).href;
+}
+
 function ensureOssEnv() {
-  return import(new URL("../../.data/night-rds.mjs", import.meta.url)).then(({ parseEnvFile, openRds }) => {
-    const oss = parseEnvFile("C:\\Users\\teddy\\nianlife-oss.env");
+  return import(resolveNightRdsUrl()).then(({ parseEnvFile, openRds }) => {
+    const ossPath = process.env.NIANLIFE_OSS_ENV ?? path.join(homedir(), "nianlife-oss.env");
+    const oss = parseEnvFile(ossPath);
     if (oss.OSS_ENDPOINT?.includes("-internal")) oss.OSS_ENDPOINT = oss.OSS_ENDPOINT.replace("-internal", "");
     for (const [k, v] of Object.entries(oss)) {
       if (!k.startsWith("R2_") && v && !process.env[k]) process.env[k] = v;
@@ -417,18 +427,346 @@ export async function curateDayMedia({ from, until, out, leadsFile = null }) {
   return { daysWithPhotos: Object.keys(result).length, totalApprovedPhotos: rows.length };
 }
 
+function selectViewingIdsForDay(firstScreenMediaIds = [], expandedMediaIds = [], { allExpanded = false } = {}) {
+  const first = Array.isArray(firstScreenMediaIds) ? firstScreenMediaIds : [];
+  const expanded = Array.isArray(expandedMediaIds) ? expandedMediaIds : first;
+  const firstSet = new Set(first);
+  if (allExpanded || first.length < 4) {
+    return [
+      ...first.map((id, i) => ({ id, role: "firstScreen", slot: i + 1 })),
+      ...expanded.filter((id) => !firstSet.has(id)).map((id, i) => ({ id, role: "expanded", slot: i + 1 })),
+    ];
+  }
+  return first.map((id, i) => ({ id, role: "firstScreen", slot: i + 1 }));
+}
+
+async function renderDaySheetGroup(day, items, thumbDir, sheetDir) {
+  fs.mkdirSync(sheetDir, { recursive: true });
+  const COLS = 3;
+  const ROWS = 4;
+  const PER_SHEET = COLS * ROWS;
+  const CELL_W = 460;
+  const CELL_H = 440;
+  const HEADER_H = 54;
+  const IMG_H = CELL_H - HEADER_H;
+  const sheets = [];
+
+  for (let offset = 0; offset < items.length; offset += PER_SHEET) {
+    const chunk = items.slice(offset, offset + PER_SHEET);
+    const actualRows = Math.ceil(chunk.length / COLS);
+    const width = COLS * CELL_W;
+    const height = actualRows * CELL_H;
+    const composites = [];
+
+    for (let i = 0; i < chunk.length; i += 1) {
+      const item = chunk[i];
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      const x = col * CELL_W;
+      const y = row * CELL_H;
+      const badge = item.role === "firstScreen" ? `[首屏 ${item.slot}]` : `[展开 ${item.slot}]`;
+      const badgeColor = item.role === "firstScreen" ? "#f6d38b" : "#d6cfc2";
+      const spec = item.type === "video"
+        ? `视频${item.durationSeconds ? ` ${Math.round(item.durationSeconds)}s` : ""}`
+        : `${item.width || "?"}x${item.height || "?"}`;
+      const line1 = `${badge}  ${day} ${item.time ? item.time.slice(0, 5) : ""}  (${spec})`;
+      const line2 = item.id;
+
+      const labelSvg = Buffer.from(
+        `<svg width="${CELL_W}" height="${HEADER_H}" xmlns="http://www.w3.org/2000/svg">
+          <rect width="${CELL_W}" height="${HEADER_H}" fill="#1f1c18"/>
+          <rect x="0" y="${HEADER_H - 1}" width="${CELL_W}" height="1" fill="#463f36"/>
+          <text x="10" y="21" fill="${badgeColor}" font-family="Microsoft YaHei, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">${escapeXml(line1)}</text>
+          <text x="10" y="42" fill="#ffffff" font-family="Consolas, Segoe UI, monospace" font-size="12" font-weight="600">${escapeXml(line2)}</text>
+        </svg>`,
+      );
+      composites.push({ input: labelSvg, left: x, top: y });
+
+      const thumbPath = path.join(thumbDir, `${sha256(item.id).slice(0, 24)}.img`);
+      if (fs.existsSync(thumbPath)) {
+        const thumb = await sharp(thumbPath)
+          .resize(CELL_W - 8, IMG_H - 8, { fit: "contain", background: { r: 244, g: 239, b: 230, alpha: 1 } })
+          .jpeg({ quality: 86 })
+          .toBuffer();
+        composites.push({ input: thumb, left: x + 4, top: y + HEADER_H + 4 });
+      }
+    }
+
+    const totalPages = Math.ceil(items.length / PER_SHEET);
+    const sheetName = totalPages === 1
+      ? `${day}.jpg`
+      : `${day}-${String(Math.floor(offset / PER_SHEET) + 1).padStart(2, "0")}.jpg`;
+    const sheetPath = path.join(sheetDir, sheetName);
+    await sharp({
+      create: { width, height, channels: 3, background: { r: 244, g: 239, b: 230 } },
+    })
+      .composite(composites)
+      .jpeg({ quality: 88 })
+      .toFile(sheetPath);
+    sheets.push(sheetPath);
+  }
+  return sheets;
+}
+
+/**
+ * Read-only per-day labeled contact sheet builder for mandatory pre-writing visual inspection (STYLE.zhang.md §3.1)
+ * and P7 batch rewrites. Never writes to RDS, OSS, or the repository.
+ */
+export async function buildDaySheets({
+  out,
+  sourcePackFile = null,
+  dayMediaFile = null,
+  days = null,
+  allExpanded = false,
+}) {
+  if (!out) throw new Error("Specify --out <private-dir>.");
+  const dir = path.resolve(out);
+  assertOutsideRepository(dir, REPO);
+  fs.mkdirSync(dir, { recursive: true });
+  const thumbDir = path.join(dir, "thumbs");
+  const sheetDir = path.join(dir, "sheets");
+  fs.mkdirSync(thumbDir, { recursive: true });
+
+  const filterSet = Array.isArray(days) && days.length > 0 ? new Set(days) : null;
+  const mediaMap = new Map();
+
+  if (sourcePackFile) {
+    const packPath = path.resolve(sourcePackFile);
+    assertOutsideRepository(packPath, REPO);
+    const pack = JSON.parse(fs.readFileSync(packPath, "utf8"));
+    const packDir = path.dirname(packPath);
+    const priorByDay = new Map();
+    for (const m of pack.months ?? []) {
+      if (m.snapshotFile) {
+        const snapPath = path.join(packDir, m.snapshotFile);
+        if (fs.existsSync(snapPath)) {
+          const snap = JSON.parse(fs.readFileSync(snapPath, "utf8"));
+          for (const d of snap.days ?? []) priorByDay.set(d.day, d);
+        }
+      }
+    }
+    for (const d of pack.days ?? []) {
+      if (filterSet && !filterSet.has(d)) continue;
+      const curated = pack.dayMedia?.[d];
+      const prior = priorByDay.get(d);
+      mediaMap.set(d, {
+        firstScreenMediaIds: curated?.firstScreenMediaIds ?? prior?.firstScreenMediaIds ?? [],
+        expandedMediaIds: curated?.expandedMediaIds ?? prior?.expandedMediaIds ?? [],
+      });
+    }
+  }
+
+  if (dayMediaFile) {
+    const dmPath = path.resolve(dayMediaFile);
+    assertOutsideRepository(dmPath, REPO);
+    const dm = JSON.parse(fs.readFileSync(dmPath, "utf8"));
+    for (const [d, entry] of Object.entries(dm)) {
+      if (filterSet && !filterSet.has(d)) continue;
+      if (!sourcePackFile || mediaMap.has(d)) {
+        mediaMap.set(d, {
+          firstScreenMediaIds: entry.firstScreenMediaIds ?? [],
+          expandedMediaIds: entry.expandedMediaIds ?? entry.firstScreenMediaIds ?? [],
+        });
+      }
+    }
+  }
+
+  const { openRds } = await ensureOssEnv();
+  const { getStorageForProvider } = await import("../../lib/storage/hot-storage.ts");
+
+  const rds = await openRds({ readOnly: true, localPort: 15920 + Math.floor(Math.random() * 60) });
+  let mediaRows = [];
+  try {
+    if (!sourcePackFile && !dayMediaFile) {
+      if (!filterSet || filterSet.size === 0) {
+        throw new Error("Provide at least one of --source-pack, --day-media, or --days.");
+      }
+      const targetDays = [...filterSet].sort();
+      const rawDayRows = (await rds.client.query(`
+        with deduped as (
+          select distinct on (coalesce(m.media_asset_id, m.id))
+                 m.id,
+                 m.type,
+                 m.width,
+                 m.height,
+                 m.taken_at,
+                 to_char(m.taken_at, 'YYYY-MM-DD') as day,
+                 to_char(m.taken_at, 'YYYY-MM-DD"T"HH24:MI:SS') as ts
+            from media m
+           where m.visibility <> 'private'
+             and to_char(m.taken_at, 'YYYY-MM-DD') = any($1)
+             and (
+               (m.type = 'photo' and coalesce(m.width, 0) >= 480 and coalesce(m.height, 0) >= 480 and (
+                 select decision from content_quality_reviews q
+                  where q.target_kind = 'media_subject_check' and q.target_id = m.id
+                  order by q.reviewed_at desc limit 1
+               ) = 'approved')
+               or (m.type = 'video' and coalesce((
+                 select decision from content_quality_reviews q
+                  where q.target_kind = 'media_subject_check' and q.target_id = m.id
+                  order by q.reviewed_at desc limit 1
+               ), 'approved') <> 'store_only')
+             )
+             and exists (
+               select 1 from media_locations l
+                where l.media_asset_id = m.media_asset_id
+                  and l.variant in ('web', 'thumbnail', 'poster')
+                  and l.status = 'ready'
+                  and l.provider in ('oss', 'hot')
+             )
+           order by coalesce(m.media_asset_id, m.id),
+                    (coalesce(m.width, 0) * coalesce(m.height, 0)) desc,
+                    m.taken_at desc,
+                    m.id asc
+        )
+        select id, type, width, height, day, ts from deduped order by taken_at asc, id asc
+      `, [targetDays])).rows;
+      for (const d of targetDays) {
+        const list = rawDayRows.filter((r) => r.day === d);
+        const agg = aggregateDayMedia(
+          list.map((x) => ({ id: x.id, type: x.type === "video" ? "video" : "photo", takenAt: x.ts, allowed: true })),
+          { max: 40 },
+        );
+        mediaMap.set(d, { firstScreenMediaIds: agg.firstScreenMediaIds, expandedMediaIds: agg.expandedMediaIds });
+      }
+    }
+
+    const wantedIds = new Set();
+    for (const [, entry] of mediaMap) {
+      for (const item of selectViewingIdsForDay(entry.firstScreenMediaIds, entry.expandedMediaIds, { allExpanded })) {
+        wantedIds.add(item.id);
+      }
+    }
+
+    if (wantedIds.size > 0) {
+      mediaRows = (await rds.client.query(`
+        select distinct on (m.id)
+               m.id,
+               m.type,
+               to_char(m.taken_at, 'YYYY-MM-DD') as day,
+               to_char(m.taken_at, 'HH24:MI:SS') as time,
+               m.width,
+               m.height,
+               m.duration_seconds,
+               l.variant,
+               l.provider,
+               l.provider_ref
+          from media m
+          join media_locations l
+            on l.media_asset_id = m.media_asset_id
+           and l.status = 'ready'
+           and l.provider in ('oss', 'hot')
+           and (
+             (m.type = 'photo' and l.variant in ('web', 'thumbnail'))
+             or (m.type = 'video' and l.variant in ('poster', 'thumbnail'))
+           )
+         where m.id = any($1)
+           and m.visibility <> 'private'
+         order by m.id,
+                  (case l.variant when 'web' then 0 when 'poster' then 0 else 1 end)
+      `, [[...wantedIds]])).rows;
+    }
+  } finally {
+    await rds.close();
+  }
+
+  const rowById = new Map(mediaRows.map((r) => [r.id, r]));
+  const toDownload = [...rowById.values()];
+  let downloaded = 0;
+  let failed = 0;
+  let cursor = 0;
+  await Promise.all(Array.from({ length: 6 }, async () => {
+    while (cursor < toDownload.length) {
+      const row = toDownload[cursor++];
+      const dst = path.join(thumbDir, `${sha256(row.id).slice(0, 24)}.img`);
+      if (fs.existsSync(dst)) {
+        downloaded += 1;
+        continue;
+      }
+      try {
+        const bytes = await getStorageForProvider(row.provider).get(row.provider_ref);
+        if (bytes) {
+          fs.writeFileSync(dst, Buffer.from(bytes));
+          downloaded += 1;
+        } else {
+          failed += 1;
+        }
+      } catch {
+        failed += 1;
+      }
+    }
+  }));
+
+  const manifestDays = {};
+  let totalSheets = 0;
+  for (const [day, entry] of [...mediaMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const selected = selectViewingIdsForDay(entry.firstScreenMediaIds, entry.expandedMediaIds, { allExpanded });
+    const enriched = selected.map((s) => {
+      const row = rowById.get(s.id);
+      return {
+        ...s,
+        type: row?.type ?? "photo",
+        time: row?.time ?? "",
+        width: row?.width ?? null,
+        height: row?.height ?? null,
+        durationSeconds: row?.duration_seconds ?? null,
+        ready: Boolean(row && fs.existsSync(path.join(thumbDir, `${sha256(s.id).slice(0, 24)}.img`))),
+      };
+    });
+    const sheets = enriched.length > 0 ? await renderDaySheetGroup(day, enriched, thumbDir, sheetDir) : [];
+    totalSheets += sheets.length;
+    manifestDays[day] = {
+      firstScreenMediaIds: entry.firstScreenMediaIds,
+      expandedMediaIds: entry.expandedMediaIds,
+      viewedCount: enriched.length,
+      sheets,
+      items: enriched,
+    };
+  }
+
+  const manifest = {
+    schema: "nianlife.day-photo-sheets/1",
+    generatedAt: new Date().toISOString(),
+    allExpanded,
+    daysCount: Object.keys(manifestDays).length,
+    totalMediaViewed: toDownload.length,
+    downloaded,
+    failed,
+    days: manifestDays,
+  };
+  const manifestPath = path.join(dir, "day-sheets.json");
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return {
+    days: Object.keys(manifestDays).length,
+    sheets: totalSheets,
+    downloaded,
+    failed,
+    manifest: manifestPath,
+  };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const cmd = args[0];
   const opt = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
+  const flag = (name) => args.includes(`--${name}`);
   if (cmd === "prepare") {
     console.log(JSON.stringify(await prepareSheets({ since: opt("since") ?? "2026-10-24", out: opt("out") })));
   } else if (cmd === "apply") {
     console.log(JSON.stringify(await applyVerdicts({ out: opt("out"), verdictsFile: opt("verdicts") })));
   } else if (cmd === "curate") {
     console.log(JSON.stringify(await curateDayMedia({ from: opt("from"), until: opt("until"), out: opt("out"), leadsFile: opt("leads") ?? null })));
+  } else if (cmd === "day-sheets") {
+    const daysOpt = opt("days") ? opt("days").split(",").map((s) => s.trim()).filter(Boolean) : null;
+    console.log(JSON.stringify(await buildDaySheets({
+      out: opt("out"),
+      sourcePackFile: opt("source-pack") ?? null,
+      dayMediaFile: opt("day-media") ?? null,
+      days: daysOpt,
+      allExpanded: flag("all-expanded"),
+    })));
   } else {
-    throw new Error("Usage: session-photo-review.mjs <prepare|apply|curate> ...");
+    throw new Error("Usage: session-photo-review.mjs <prepare|apply|curate|day-sheets> ...");
   }
 }
 

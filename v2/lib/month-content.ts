@@ -22,6 +22,12 @@ import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 // review ledger (see resolveMonthContentMedia). A curated list can never outvote a `store_only`
 // written after it.
 
+export type MonthContentFeaturedQuote = {
+  text: string;
+  speaker: string;
+  sourceId?: string;
+};
+
 export type MonthContentDay = {
   day: string;
   ageLabel?: string;
@@ -31,6 +37,12 @@ export type MonthContentDay = {
   firstScreenMediaIds: string[];
   expandedMediaIds: string[];
   storyBoundMediaIds?: string[];
+  /** Per-paragraph photo ids aligned 1-to-1 by index with `paragraphs`. */
+  paragraphMedia?: string[][];
+  /** Short action captions keyed by media id (within `expandedMediaIds`). */
+  photoCaptions?: Record<string, string>;
+  /** At most one verbatim-verified family quote from this day for the home page. */
+  featuredQuote?: MonthContentFeaturedQuote | null;
   eventId?: string | null;
   /** Every original life_event merged into this day. An old /events/<id> link resolves through it. */
   eventIds?: string[];
@@ -52,6 +64,7 @@ export type MonthContent = {
   cardLine?: string;
   intro?: string;
   coverMediaId?: string;
+  homeHeroMediaId?: string;
   coverFocal?: { mobilePercent: number; desktopPercent: number };
   /** Opt-in framing for a reviewed portrait; omitted keeps existing cards unchanged. */
   coverFrame?: "square" | "full";
@@ -137,6 +150,21 @@ function isUsableDay(value: unknown, month: string): value is MonthContentDay {
   // The first screen is meant to be the opening of the expanded set, not a second, different list.
   const expanded = new Set(day.expandedMediaIds);
   if (!day.firstScreenMediaIds.every((id) => expanded.has(id))) return false;
+  if (day.paragraphMedia !== undefined) {
+    if (!Array.isArray(day.paragraphMedia) || day.paragraphMedia.length !== day.paragraphs.length) return false;
+    if (!day.paragraphMedia.every((ids) => isStringArray(ids) && ids.every((id) => expanded.has(id)))) return false;
+  }
+  if (day.photoCaptions !== undefined) {
+    if (!day.photoCaptions || typeof day.photoCaptions !== "object" || Array.isArray(day.photoCaptions)) return false;
+    const entries = Object.entries(day.photoCaptions as Record<string, unknown>);
+    if (!entries.every(([id, cap]) => isNonEmptyString(id) && expanded.has(id) && isNonEmptyString(cap))) return false;
+  }
+  if (day.featuredQuote !== undefined && day.featuredQuote !== null) {
+    if (typeof day.featuredQuote !== "object" || Array.isArray(day.featuredQuote)) return false;
+    const fq = day.featuredQuote as Record<string, unknown>;
+    if (!isNonEmptyString(fq.text) || !isNonEmptyString(fq.speaker)) return false;
+    if (fq.sourceId !== undefined && !isNonEmptyString(fq.sourceId)) return false;
+  }
   // A day with neither words nor pictures would render as an empty dated block.
   if (day.title === null && day.paragraphs.length === 0 && day.expandedMediaIds.length === 0) return false;
   return true;
@@ -154,6 +182,7 @@ export function validateMonthContent(parsed: unknown, month: string): MonthConte
   if (doc.cardLine !== undefined && !isNonEmptyString(doc.cardLine)) return null;
   if (doc.intro !== undefined && !isNonEmptyString(doc.intro)) return null;
   if (doc.coverMediaId !== undefined && !isNonEmptyString(doc.coverMediaId)) return null;
+  if (doc.homeHeroMediaId !== undefined && !isNonEmptyString(doc.homeHeroMediaId)) return null;
   if (doc.coverFocal !== undefined && !isCoverFocal(doc.coverFocal)) return null;
   if (doc.coverFrame !== undefined && doc.coverFrame !== "square" && doc.coverFrame !== "full") return null;
   if (doc.speakerBySourceId !== undefined) {

@@ -117,3 +117,34 @@ test("替换机器写的天：依据存进 _evidence，eventIds 带上", () => {
   assert.equal(d.eventId, "ev-1");
   assert.ok(validateMonthContent(content, "2026-09"));
 });
+
+test("paragraphMedia、photoCaptions、featuredQuote 写入与边界校验，且旧天缺省完全兼容", () => {
+  const rich = entry({
+    paragraphs: ["第一段玩水。", "第二段笑得很开心。"],
+    firstScreenMediaIds: ["p1", "p2"],
+    expandedMediaIds: ["p1", "p2", "p3"],
+    paragraphMedia: [["p1"], ["p2", "p3"]],
+    photoCaptions: { p1: "双手捧着漏水杯", p2: "低头够彩色套杯" },
+    featuredQuote: { text: "宝宝很喜欢水", speaker: "奶奶", sourceId: "src-b" },
+  });
+  const { content } = appendDay(base(), rich, OPTS);
+  const d = content.days.find((x) => x.day === "2026-09-18");
+  assert.deepEqual(d.paragraphMedia, [["p1"], ["p2", "p3"]]);
+  assert.deepEqual(d.photoCaptions, { p1: "双手捧着漏水杯", p2: "低头够彩色套杯" });
+  assert.deepEqual(d.featuredQuote, { text: "宝宝很喜欢水", speaker: "奶奶", sourceId: "src-b" });
+  assert.ok(validateMonthContent(content, "2026-09"));
+
+  // paragraphMedia 长度与 paragraphs 不一致、或含非 expandedMediaIds 成员时拒绝
+  assert.throws(() => appendDay(base(), entry({
+    paragraphs: ["第一段"],
+    firstScreenMediaIds: ["p1"],
+    expandedMediaIds: ["p1"],
+    paragraphMedia: [["p1"], []],
+  }), OPTS), /paragraphMedia/);
+  assert.throws(() => appendDay(base(), entry({
+    paragraphs: ["第一段"],
+    firstScreenMediaIds: ["p1"],
+    expandedMediaIds: ["p1"],
+    paragraphMedia: [["not-in-expanded"]],
+  }), OPTS), /expandedMediaIds/);
+});

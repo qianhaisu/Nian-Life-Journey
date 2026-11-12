@@ -1,20 +1,9 @@
 // 一天的编辑稿守门人（纯函数，不读库、不读文件、不联网）。
 //
-// 这套规则原来只存在于 NianlifeOps\memory-tab-20260917\10-history-rollout\_tools\build-content.mjs
-// （不受 git 管，而且是逐月定制的）。2026-09-20 为「每晚自动整理」搬进仓库：无论草稿是人写的、
-// 我在会话里写的，还是以后夜里无头 Claude 写的，都必须过这一关；**过不了就不发布，不是降级发布**。
-//
-// 它只做机械可判定的事——引语逐字对得上原消息、引语归在真正发这条消息的人名下、点名的人有证据、
-// 没有含糊的「有人」、没有真实姓名、没有技术字样、没有无来源的「第一次」、没有注册表里没有的称谓。
-// 它**不**判断这一天该不该写、写得好不好、有没有踩「不写的内容」清单（钱款、夫妻争执、排泄、伤痕来由……）：
-// 那些需要判断，仍然只能由编辑（Claude）负责，见 EDITOR-BRIEF。所以通过校验 ≠ 可以发布。
-//
-// 2026-09-23（第三轮）加了三件事，都来自 /memory/2025/12 上家人能看到的错误：
-//   1. 称谓白名单从 family-registry 自动生成（identity-rules.mjs），校验器里不再手写身份名单。
-//   2. 引语归属：「X 说「……」」里的 X 必须就是那条原消息的发送人（按注册表解析）。
-//      12 月 13 日一句话先被写成外公说、后被写成外婆说，两次都没人拦。
-//   3. 点名证据：正文里点名一个人在场/做了什么，要有来源——他自己发的消息，或者有消息提到了他。
-//      只凭照片里「戴眼镜」「年长」就写成爸爸、外婆，拦下。
+// 2026-09-20 为「每晚自动整理」搬进仓库：无论草稿是谁写的，都必须过这一关；过不了就不发布，不是降级发布。
+// 2026-09-23（第三轮）：称谓白名单从 family-registry 自动生成、引语归属核对原消息发送人、点名人物需有证据。
+// 2026-11-12（STYLE.zhang 第二版对齐）：新增照片说明书腔拦截、群聊转播腔补漏（含叙述「点赞」「又发来」）、
+// 编辑旁白拦截、引语数量上限（全篇 ≤4、单段 ≤2）、育儿套话清单同步，以及无依据跨日比较词（「终于」「比以前」）核验。
 import { unconfirmedNames, registeredLabels, mentionsOf } from "./identity-rules.mjs";
 
 /** 引语比对口径：去掉空白、表情符号、方括号表情与转义符，其余逐字比对。 */
@@ -35,7 +24,7 @@ export function quotesOf(text) {
 }
 
 /** 同 quotesOf，但带位置：{text, start, end}（start 是左引号下标）。支持「」与“”，不配对时末尾加 {text:null}。 */
-function quoteSpans(text) {
+export function quoteSpans(text) {
   const out = [];
   const stack = [];
   const s = String(text);
@@ -84,6 +73,24 @@ const stripQuotes = (text) => {
   return res + s.slice(cursor);
 };
 
+function stripBookTitles(text) {
+  return String(text ?? "").replace(/《[^》]*》/g, "《》");
+}
+
+/** 将引号与书名号内容替换为空壳占位，确保只检查引号与书名号之外的叙述文字，且两侧字符不会因拼接误匹配。 */
+function stripQuotesAndBookTitles(text) {
+  const s = String(text ?? "");
+  const spans = quoteSpans(s).filter((q) => q.text !== null && q.start >= 0);
+  let unquoted = "";
+  let cursor = 0;
+  for (const q of spans) {
+    unquoted += s.slice(cursor, q.start) + "「」";
+    cursor = q.end + 1;
+  }
+  unquoted += s.slice(cursor);
+  return stripBookTitles(unquoted);
+}
+
 const TECHNICAL = /\[(media|图片|视频|表情包|语音|文件|动画表情)\]|\]\(media\/|https?:\/\/|undefined|Quark|微信|群聊|会话|导入|数据库|网站/i;
 
 /**
@@ -120,10 +127,12 @@ export const SENSITIVE_TEXT = [
 ];
 
 const FIRST_TIME = /第一次|首次|头一回/;
+const CROSS_DAY_FINALLY = /终于/;
+const CROSS_DAY_COMPARE = /比以前|比平时|比往常/;
 const BAD_AGE = /两岁|2岁|二岁/;
 
-// 说话类动词：称谓后面跟着它，这个称谓就是一句话的说话人。
-const SPEECH_VERB = "说|问|回|答|讲|喊|叫|感叹|感慨|提醒|叮嘱|嘱咐|交代|告诉|补充|夸|笑|接话|写道|留言|评论|吐槽|解释|发现|总结|提议|建议|担心|念叨|附和|回应|安慰|催|强调|报告|汇报|确认|猜";
+// 说话类动词/名词提示：称谓后面跟着它，这个称谓就是一句话的说话人。
+const SPEECH_VERB = "说|问|回|答|讲|喊|叫|感叹|感慨|提醒|叮嘱|嘱咐|交代|告诉|补充|夸|笑|接话|写道|留言|评论|评语|评价|点评|打趣|调侃|吐槽|解释|发现|总结|提议|建议|担心|念叨|附和|回应|安慰|催|强调|报告|汇报|确认|猜";
 // 发送/拍摄类动词：称谓后面跟着它，说的是「这个人发了/拍了」——证据是这个人自己发的消息。
 const SEND_VERB = "发|拍|录|分享|转|晒|记|在群里|上传|传";
 
@@ -160,13 +169,31 @@ export function personMentions(text, labels = registeredLabels()) {
   return out;
 }
 
+/** 判断前一个引号是否在句末标点后结束了整句（如 `「……就会游。」爷爷的评语最短`）。 */
+function isClosedQuoteSentenceBoundary(rawText, prevSpan, nextIndex) {
+  if (!prevSpan || prevSpan.end < 0 || prevSpan.end >= nextIndex) return false;
+  const innerLast = rawText[prevSpan.end - 1];
+  if (innerLast !== "。" && innerLast !== "！" && innerLast !== "？") return false;
+  const between = rawText.slice(prevSpan.end + 1, nextIndex);
+  if (!between.trim()) return false;
+  if (/^\s*[，,、；]/.test(between)) return false;
+  return true;
+}
+
 /**
  * 一句引语是谁说的：同一句（到上一个句号为止）里、引语之前最后一个「称谓+说话动词」；
  * 没有说话动词时退到这一句里引语之前最后一个称谓。都没有就返回 null（没有说明是谁说的）。
  */
 export function attributedLabel(text, quoteStart, labels = registeredLabels()) {
-  const s = blankQuotes(text).slice(0, quoteStart);
-  const sentenceStart = Math.max(s.lastIndexOf("。"), s.lastIndexOf("！"), s.lastIndexOf("？"), s.lastIndexOf("；")) + 1;
+  const raw = String(text);
+  const s = blankQuotes(raw).slice(0, quoteStart);
+  let sentenceStart = Math.max(s.lastIndexOf("。"), s.lastIndexOf("！"), s.lastIndexOf("？"), s.lastIndexOf("；"), s.lastIndexOf("\n")) + 1;
+  const priorSpans = quoteSpans(raw).filter((q) => q.text !== null && q.start >= 0 && q.end < quoteStart);
+  for (const prev of priorSpans) {
+    if (isClosedQuoteSentenceBoundary(raw, prev, quoteStart) && prev.end + 1 > sentenceStart) {
+      sentenceStart = prev.end + 1;
+    }
+  }
   const sentence = s.slice(sentenceStart);
   const mentions = personMentions(sentence, labels);
   const speakers = mentions.filter((m) => m.role === "speech");
@@ -175,44 +202,112 @@ export function attributedLabel(text, quoteStart, labels = registeredLabels()) {
   return mentions.length ? mentions[mentions.length - 1].label : null;
 }
 
-function quoteHits(quote, sources) {
-  const nq = normalizeForQuote(quote.replace(/[「」“”]/g, ""));
+export function quoteHits(quote, sources) {
+  const nq = normalizeForQuote(String(quote ?? "").replace(/[「」“”]/g, ""));
   if (!nq) return null; // 空引语不核对
   const parts = nq.split(/……|\.\.\./).filter(Boolean);
+  if (!parts.length) return [];
   // 省略号表示节选：每一段都要在同一条来源里找到。
-  return sources.filter((src) => { const ns = normalizeForQuote(src.text); return parts.every((part) => ns.includes(part)); });
+  const srcs = sources.map(asSource);
+  return srcs.filter((src) => { const ns = normalizeForQuote(src.text); return parts.every((part) => ns.includes(part)); });
 }
 
+/** 照片说明书腔（STYLE.zhang 第二版第五节：引号和书名号外禁用） */
+export const PHOTO_SPEAK_RE = /照片里|画面中|镜头里|视频里|有一张|一张里|另一张里|这张照片/;
+
+/** 群聊转播腔（STYLE.zhang 第二版第五节：引号和书名号外禁用，含叙述中的「点赞」「又发来」等） */
+export const CHAT_RELAY_RE =
+  /发来[^，。；！？]{0,6}?(照片|视频|消息|一段|几张|段)|又发来|陆续发来|传来(了)?(好)?消息|分享了一段视频|在(家人)?群里(说|聊起|问|发)?|家人群里聊起|有一条留言写道|通话时长|点赞/;
+
+/**
+ * 编辑旁白禁词清单（解释写法或取舍的元叙述，引号和书名号外禁用；后续如发现新的编辑旁白表达可在此扩充）。
+ */
+export const EDITORIAL_ASIDE_RE = /这里把|不必被?写成|值得记下的是/;
+
+/** 育儿套话清单（与 STYLE.zhang 第二版第五节完全同步，并保留历史套话拦截项） */
+export const PARENTING_CLICHE_RE =
+  /成长的足迹|成长的印记|成长的每一步|满满的|岁月静好|快乐成长|健康快乐|元气满满|未来可期|治愈|仪式感|小小的身体[^。！？]{0,4}?大大的能量|见证成长|时光飞逝|美好的一天|充实的一天|快乐的一天|温馨的画面|平凡而温暖|每天都进步的宝贝/;
+
+/** 叙述人称越界（STYLE.zhang 第二版：统一用第三人称「小年」或「他」，不用「你」「我」「我们」） */
+export const NARRATIVE_PERSON_RE =
+  /(?:^|[，。；！？、\s]|老师说|妈妈说|爸爸说|外婆说|外公说|奶奶说)[^，。；！？]{0,4}?(你自己|给你|你已经|你喜欢|你新学会|你会|你把|你跟|看着你|陪着你|我们家|我们宝贝|我们一起)/;
+
 export const LITERARY_CLICHE = [
-  [/满满的/, "通用套话「满满的…」"],
-  [/成长的足迹|成长的印记|成长的每一步/, "通用套话「成长的足迹/印记」"],
-  [/美好的一天|充实的一天|快乐的一天|平凡而温暖/, "通用套话「美好/充实的一天」"],
-  [/每天都进步的宝贝|未来可期|岁月静好|治愈了/, "空泛抒情套话"],
-  [/传来(好)?消息|发来(了)?[^，。；！？]{0,12}?(照片|视频|消息)|分享了一段视频|在(家人)?群里(说|聊起|问|发)|有一条留言写道|通话时长/, "聊天室转播腔（「发来照片/在群里说/通话时长」）"],
-  [/(?:^|[，。；！？、\s]|老师说|妈妈说|爸爸说|外婆说|外公说|奶奶说)[^，。；！？]{0,4}?(你自己|给你|你已经|你喜欢|你新学会|你会|你把|你跟|我们家|我们宝贝)/, "叙述人称越界（须统一第三人称「小年/他」，禁用「你/我们」）"],
+  [PHOTO_SPEAK_RE, "照片说明书腔"],
+  [CHAT_RELAY_RE, "群聊转播腔"],
+  [EDITORIAL_ASIDE_RE, "编辑旁白"],
+  [PARENTING_CLICHE_RE, "育儿套话"],
+  [NARRATIVE_PERSON_RE, "叙述人称越界（须统一第三人称「小年/他」，禁用「你/我们」）"],
 ];
 
-function stripBookTitles(text) {
-  return String(text ?? "").replace(/《[^》]*》/g, "《》");
+/**
+ * 统计一段文字中的引语处数：
+ * 同一句内同一已登记说话人被拆成两半的引语（如 `奶奶说「A」，还出了个主意：「B。」`）算作 1 处发言引语（最多合并 2 个相邻片段）；
+ * 不同说话人、跨句引语或未标说话人的引语均逐处累加。
+ */
+export function countQuotesInText(text, labels = registeredLabels()) {
+  const raw = String(text ?? "");
+  const spans = quoteSpans(raw).filter((q) => q.text !== null && q.start >= 0 && q.text.trim().length > 0);
+  if (!spans.length) return 0;
+  const blanked = blankQuotes(raw);
+  let count = 0;
+  let prevSpan = null;
+  let prevSpeaker = null;
+  let prevMerged = false;
+
+  for (const span of spans) {
+    const speaker = attributedLabel(raw, span.start, labels);
+    let canMergeWithPrev = false;
+    if (prevSpan && !prevMerged && prevSpeaker !== null && speaker === prevSpeaker) {
+      const betweenBlanked = blanked.slice(prevSpan.end + 1, span.start);
+      const hasSentenceBreak = /[。！？；\n]/.test(betweenBlanked) || isClosedQuoteSentenceBoundary(raw, prevSpan, span.start);
+      if (!hasSentenceBreak) {
+        canMergeWithPrev = true;
+      }
+    }
+    if (canMergeWithPrev) {
+      prevMerged = true;
+    } else {
+      count += 1;
+      prevMerged = false;
+    }
+    prevSpan = span;
+    prevSpeaker = speaker;
+  }
+  return count;
 }
 
 /**
- * 家庭非虚构文风检查（引号与书名号外）：拒绝套话、聊天室转播腔、人称分裂与「上午…中午…下午…傍晚…」机械排班表。
+ * 家庭成长故事文风与红线检查（引号与书名号外）：
+ * 拒绝照片说明书腔、群聊转播腔、编辑旁白、育儿套话、人称越界、引语超量（全篇 >4 或单段 >2）与四段以上时间报账。
  */
 export function validateLiteraryStyle(entry) {
   const errors = [];
-  const chunks = [["标题", entry.title ?? ""], ...(entry.paragraphs ?? []).map((p, i) => [`第 ${i + 1} 段`, p])];
+  const labels = registeredLabels();
+  const paragraphs = entry.paragraphs ?? [];
+  const chunks = [["标题", entry.title ?? ""], ...paragraphs.map((p, i) => [`第 ${i + 1} 段`, p])];
   let periodLeadCount = 0;
+  let totalQuoteCount = 0;
+
   for (const [where, text] of chunks) {
     if (!text) continue;
-    const outside = stripBookTitles(stripQuotes(text));
+    const outside = stripQuotesAndBookTitles(text);
     for (const [re, label] of LITERARY_CLICHE) {
-      if (re.test(outside)) errors.push(`${where}: 含非虚构禁用套话或转播腔（${label}）`);
+      const m = outside.match(re);
+      if (m) errors.push(`${where}: 含非虚构禁用${label}（命中「${m[0].trim()}」）`);
+    }
+    const quoteCount = countQuotesInText(text, labels);
+    totalQuoteCount += quoteCount;
+    if (where !== "标题" && quoteCount > 2) {
+      errors.push(`${where}: 引语超量（单段最多 2 处，实为 ${quoteCount} 处）`);
     }
     if (where !== "标题") {
-      const leads = [...outside.matchAll(/(?:^|[。！？\n])\s*(凌晨|早上|上午|中午|下午|傍晚|晚上|夜里)[，、]/g)];
+      const leads = [...outside.matchAll(/(?:^|[。！？\n])\s*(凌晨|早上|上午|下午|中午|傍晚|晚上|夜里)[，、]/g)];
       periodLeadCount += leads.length;
     }
+  }
+  if (totalQuoteCount > 4) {
+    errors.push(`整体: 引语超量（全篇最多 4 处，实为 ${totalQuoteCount} 处）`);
   }
   if (periodLeadCount >= 4) {
     errors.push(`整体: 按时间段机械罗列（出现 ${periodLeadCount} 处「上午/中午/下午/晚上，」句首报账），请按场面与细节重新组织`);
@@ -227,7 +322,7 @@ export function validateLiteraryStyle(entry) {
  * @param {(string|{id?:string,text:string,speaker?:string|null})[]} sources
  *   这一段（或这一天）引用的那些原消息。对象形式要带 speaker：按 family-registry 解析出的发送人称谓，
  *   未登记的人是 null。只给字符串时无法核对引语归属，每一句带引语的都会被拦下。
- * @param {{realNames?:string[]}} [opts]  真实姓名清单（来自私有的 speaker-map，绝不写进仓库）
+ * @param {{realNames?:string[], literary?:boolean}} [opts]  真实姓名清单（来自私有的 speaker-map，绝不写进仓库）
  * @returns {{errors:string[], evidence:{quotes:object[], persons:object[]}}}
  *   evidence 是每一处引语、每一处点名的依据，交给调用方落账（quote-provenance / photo-person-evidence）。
  */
@@ -237,7 +332,7 @@ export function validateDayText(entry, sources, opts = {}) {
   const err = (where, msg) => errors.push(`${where}: ${msg}`);
   const srcs = sources.map(asSource);
   const labels = registeredLabels();
-  const chunks = [["标题", entry.title ?? ""], ...entry.paragraphs.map((p, i) => [`第 ${i + 1} 段`, p])];
+  const chunks = [["标题", entry.title ?? ""], ...(entry.paragraphs ?? []).map((p, i) => [`第 ${i + 1} 段`, p])];
 
   for (const [where, text] of chunks) {
     if (!text) continue;
@@ -247,8 +342,9 @@ export function validateDayText(entry, sources, opts = {}) {
     if (spans.some((q) => q.text === null)) err(where, "引号不配对");
 
     const outside = stripQuotes(text);
-    for (const name of UNCONFIRMED_NAMES) if (outside.includes(name)) err(where, `引号外出现注册表里没有的称谓「${name}」`);
-    for (const [re, label] of VAGUE_PERSON) if (re.test(outside)) err(where, `含糊的指人写法「${label}」：能解析发送人的写称谓，解析不出的不写`);
+    const outsideNoBook = stripBookTitles(outside);
+    for (const name of UNCONFIRMED_NAMES) if (outsideNoBook.includes(name)) err(where, `引号外出现注册表里没有的称谓「${name}」`);
+    for (const [re, label] of VAGUE_PERSON) if (re.test(outsideNoBook)) err(where, `含糊的指人写法「${label}」：能解析发送人的写称谓，解析不出的不写`);
     for (const [label, re] of SENSITIVE_TEXT) { const m = String(text).match(re); if (m) err(where, `敏感信息（${label}）「${m[0]}」：不写进故事`); }
     // 真实姓名连引号里也不行（EDITOR-BRIEF：已确认身份的人也只能用称呼，不能用真名）。
     for (const name of opts.realNames ?? []) if (name && text.includes(name)) err(where, "出现真实姓名，请换成称呼");
@@ -296,12 +392,18 @@ export function validateDayText(entry, sources, opts = {}) {
     }
 
     const sourceTexts = srcs.map((src) => src.text);
-    if (FIRST_TIME.test(outside) && !sourceTexts.some((source) => FIRST_TIME.test(source))) {
+    if (FIRST_TIME.test(outsideNoBook) && !sourceTexts.some((source) => FIRST_TIME.test(source))) {
       err(where, "写了「第一次」但引用的来源里没有");
     }
-    if (BAD_AGE.test(outside)) err(where, "出现与出生日期不符的岁数");
+    if (CROSS_DAY_FINALLY.test(outsideNoBook) && !sourceTexts.some((source) => /终于|总算|好不容易/.test(source))) {
+      err(where, "写了「终于」但引用的来源里没有");
+    }
+    if (CROSS_DAY_COMPARE.test(outsideNoBook) && !sourceTexts.some((source) => /比以前|比平时|比往常|以前|平时|往常/.test(source))) {
+      err(where, "写了无来源的跨日比较（「比以前/比平时/比往常」）");
+    }
+    if (BAD_AGE.test(outsideNoBook)) err(where, "出现与出生日期不符的岁数");
   }
   if (opts.literary) errors.push(...validateLiteraryStyle(entry));
-  if (entry.paragraphs.length === 0 && !entry.title) err("整体", "一天既没有标题也没有正文");
+  if ((entry.paragraphs ?? []).length === 0 && !entry.title) err("整体", "一天既没有标题也没有正文");
   return { errors, evidence };
 }
