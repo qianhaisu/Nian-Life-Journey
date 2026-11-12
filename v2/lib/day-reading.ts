@@ -3,12 +3,19 @@ import { loadFamilyArchiveForIsr } from "@/lib/family-archive";
 import { getSourcesByIds } from "@/lib/db/repository";
 import { deliverableMediaIds } from "@/lib/media/deliverability";
 import { identifyDisplayMedia } from "@/lib/media/display-identity";
+import { resolveCardThumbnail, type ThumbnailChoice } from "@/lib/day-photo-layout";
 import type { MediaRef } from "@/lib/memory-chapters";
 import { dayForDate, gateMaterialMedia, loadMonthContent, type MonthContent, type MonthContentDay } from "@/lib/month-content";
 import { formatMonth } from "@/lib/time-signature";
 import { buildMonthTimeline, type TimelineStory } from "@/lib/month-timeline";
 import { resolveDaySpeakers } from "@/lib/day-speakers";
 import type { Media, RawSource } from "@/lib/types";
+
+export type DayNeighbor = {
+  href: string;
+  title: string;
+  thumbnail?: ThumbnailChoice;
+};
 
 export type DayReading = {
   content: MonthContent;
@@ -25,8 +32,8 @@ export type DayReading = {
   monthHref: string;
   monthLabel: string;
   stories: TimelineStory[];
-  previous?: { href: string; title: string };
-  next?: { href: string; title: string };
+  previous?: DayNeighbor;
+  next?: DayNeighbor;
 };
 
 const dateLabelOf = (day: string) => `${Number(day.slice(5, 7))} 月 ${Number(day.slice(8, 10))} 日`;
@@ -52,16 +59,27 @@ export const readDay = cache(async function readDay(dayKey: string): Promise<Day
   if (!entry) return null;
   const ordered = [...timeline!.byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
   const position = ordered.findIndex((item) => item.day === dayKey);
-  const neighbor = async (offset: number) => {
+  const neighbor = async (offset: number): Promise<DayNeighbor | undefined> => {
     const item = ordered[position + offset];
-    if (item) return { href: item.href, title: `${item.dateLabel} · ${item.title ?? "这一天"}` };
+    if (item) {
+      return {
+        href: item.href,
+        title: `${item.dateLabel} · ${item.title ?? "这一天"}`,
+        thumbnail: resolveCardThumbnail(item.photos, item.firstScreenMediaIds),
+      };
+    }
     const months = archive.chapters.flatMap((year) => year.months.map((chapter) => chapter.month)).sort();
     const adjacent = months[months.indexOf(month) + offset];
     if (!adjacent) return undefined;
     const other = await buildMonthTimeline(archive, adjacent.slice(0, 4), adjacent.slice(5, 7));
     const days = other ? [...other.byDay.values()].sort((a, b) => a.day.localeCompare(b.day)) : [];
     const edge = offset < 0 ? days.at(-1) : days[0];
-    return edge ? { href: edge.href, title: `${formatMonth(adjacent)} · ${edge.dateLabel} · ${edge.title ?? "这一天"}` }
+    return edge
+      ? {
+          href: edge.href,
+          title: `${formatMonth(adjacent)} · ${edge.dateLabel} · ${edge.title ?? "这一天"}`,
+          thumbnail: resolveCardThumbnail(edge.photos, edge.firstScreenMediaIds),
+        }
       : { href: `/memory/${adjacent.slice(0, 4)}/${adjacent.slice(5, 7)}`, title: formatMonth(adjacent) };
   };
   const [previous, next] = await Promise.all([neighbor(-1), neighbor(1)]);

@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CardThumbnail } from "@/components/card-thumbnail";
 import { MonthDayEntry } from "@/components/month-day-entry";
+import type { ThumbnailChoice } from "@/lib/day-photo-layout";
 import type { TimelineDay, TimelineWeek } from "@/lib/month-timeline";
 
 // Every week can be passed on the initial server render (`entries`, so native #week-N and #day-YYYY-MM-DD
@@ -23,7 +25,7 @@ export function MonthTimeline({
   weeks: TimelineWeek[];
   entries?: TimelineDay[][];
   initial?: TimelineDay[];
-  highlights?: { day: string; title: string }[];
+  highlights?: { day: string; title: string; thumbnail?: ThumbnailChoice }[];
 }) {
   const seedWeeks: (TimelineDay[] | undefined)[] = weeks.map((_, index) => {
     if (entries && entries[index] !== undefined) return entries[index];
@@ -145,6 +147,7 @@ export function MonthTimeline({
         {highlights.map((item) => <a
           key={item.day}
           href={`#day-${item.day}`}
+          className={item.thumbnail ? "month-highlight-chip month-highlight-chip--with-thumb" : "month-highlight-chip"}
           onClick={(event) => {
             const idx = weeks.findIndex((w) => w.days.includes(item.day));
             if (idx >= 0 && weekData[idx] === undefined) {
@@ -156,7 +159,12 @@ export function MonthTimeline({
               });
             }
           }}
-        >{Number(item.day.slice(8))} 日 · {item.title}</a>)}
+        >
+          {item.thumbnail ? (
+            <CardThumbnail thumbnail={item.thumbnail} className="month-highlight-thumb" sizes="44px" />
+          ) : null}
+          <span className="month-highlight-label">{Number(item.day.slice(8))} 日 · {item.title}</span>
+        </a>)}
       </div>
     </nav> : null}
     {weeks.length > 1 ? <nav className="month-jump" aria-label="跳到这个月的某一周">

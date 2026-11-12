@@ -138,9 +138,11 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   };
 
   return <article className="detail-page">
+    <nav className="detail-breadcrumb reading-wrap" aria-label="返回路径">
+      <Link className="back-link" href={monthHref}>← {monthLabel}</Link>
+    </nav>
     <div className="detail-card reading-wrap">
       <header className="detail-head">
-        <Link className="back-link" href={monthHref}>← 回到 {monthLabel}</Link>
         {signature ? <TimeSignature signature={signature} className="detail-signature" /> : null}
         <h1 className="serif">{title}</h1>
         {people.length > 0 || location ? <p className="detail-context">{[people.join("、"), location].filter(Boolean).join(" · ")}</p> : null}

@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { CardThumbnail } from "@/components/card-thumbnail";
+import { DayDetailCard } from "@/components/day-detail-card";
 import { DayMaterial } from "@/components/day-material";
-import { PhotoGrid } from "@/components/photo-grid";
+import type { DayNeighbor } from "@/lib/day-reading";
 import type { TimelineStory } from "@/lib/month-timeline";
 import type { MediaRef } from "@/lib/memory-chapters";
 import type { MonthContentDay } from "@/lib/month-content";
@@ -10,10 +12,9 @@ import type { Media, RawSource } from "@/lib/types";
 // page (for days the Organizer never made an event for) and an old /events/<id> link (for the days
 // whose several fragments were merged into one story).
 //
-// Photographs are ALL shown, not a first screen with a button. A month page is a place to skim, so
-// it draws six and folds the rest behind 「+N」; a detail page is where somebody arrived to look at one day, so
-// folding anything there is asking them to click to get what they came for. "All" is the curated
-// set from MEMORY-03, re-gated on every render — never the day's whole raw roll.
+// Photographs are ALL shown, never folded: photo #1 serves as the hero plate, paragraph-anchored
+// photos sit right after the paragraph that speaks of them, and any remaining curated photos appear
+// in the closing mosaic — with strict deduplication across all three zones.
 export function DayDetail({
   day, dateLabel, ageLabel, title, paragraphs, photos, sources, sourceMedia,
   speakerBySourceId, deliverableIds, monthHref, monthLabel, mergedNote, stories = [], previous, next,
@@ -33,8 +34,8 @@ export function DayDetail({
   /** Rendered only for a reader who followed an old link into a day that was merged. */
   mergedNote?: string;
   stories?: TimelineStory[];
-  previous?: { href: string; title: string };
-  next?: { href: string; title: string };
+  previous?: DayNeighbor;
+  next?: DayNeighbor;
 }) {
   const ageText = ageLabel
     ? (/^(当时|出生)/.test(ageLabel) ? ageLabel : `当时 ${ageLabel}`)
@@ -42,39 +43,20 @@ export function DayDetail({
 
   return (
     <article className="detail-page day-detail">
-      <div className="detail-card reading-wrap">
-        <header className="detail-head">
-          <Link className="back-link" href={monthHref}>← 回到 {monthLabel}</Link>
-          <p className="detail-signature day-detail-when">
-            <time dateTime={day.day}>{dateLabel}</time>
-            {ageText ? <span>{ageText}</span> : null}
-          </p>
-          <h1 className="serif day-detail-title">{title}</h1>
-        </header>
+      <nav className="detail-breadcrumb reading-wrap" aria-label="返回路径">
+        <Link className="back-link" href={monthHref}>← {monthLabel}</Link>
+      </nav>
 
-        {paragraphs.length > 0 ? (
-          <section className="story-layer">
-            <div className="story-column">
-              {paragraphs.map((text, index) => (
-                <p key={index}>{text}</p>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {stories.length > 0 ? <section className="story-layer">{stories.map((story) => <div className="story-column" key={story.id}>
-          {story.title ? <h2 className="serif">{story.title}</h2> : null}
-          {story.paragraphs.map((text, index) => <p key={index}>{text}</p>)}
-        </div>)}</section> : null}
-
-        {/* The month page's grid (components/photo-grid.tsx), every photograph drawn: somebody came to
-            this page to look at one day, so nothing is folded behind a 「+N」 here. Tapping opens the viewer. */}
-        {photos.length > 0 ? (
-          <div className="detail-supporting day-detail-photos">
-            <PhotoGrid photos={photos} dateLabel={dateLabel} ageLabel={ageLabel} priority />
-          </div>
-        ) : null}
-      </div>
+      <DayDetailCard
+        day={day}
+        dateLabel={dateLabel}
+        ageLabel={ageLabel}
+        ageText={ageText}
+        title={title}
+        paragraphs={paragraphs}
+        photos={photos}
+        stories={stories}
+      />
 
       <DayMaterial
         sources={sources}
@@ -87,15 +69,33 @@ export function DayDetail({
 
       <nav className="reading-wrap day-neighbors" aria-label="继续读日子">
         {previous ? (
-          <Link className="day-neighbor day-neighbor-prev" href={previous.href} prefetch={false}>
-            <span className="section-mark">← 上一日</span>
-            <span className="serif day-neighbor-title">{previous.title}</span>
+          <Link
+            className={`day-neighbor day-neighbor-prev${previous.thumbnail ? " day-neighbor--with-thumb" : ""}`}
+            href={previous.href}
+            prefetch={false}
+          >
+            {previous.thumbnail ? (
+              <CardThumbnail thumbnail={previous.thumbnail} className="day-neighbor-thumb" sizes="64px" />
+            ) : null}
+            <span className="day-neighbor-copy">
+              <span className="section-mark">← 上一日</span>
+              <span className="serif day-neighbor-title">{previous.title}</span>
+            </span>
           </Link>
-        ) : <span />}
+        ) : <span className="day-neighbor-spacer" aria-hidden="true" />}
         {next ? (
-          <Link className="day-neighbor day-neighbor-next" href={next.href} prefetch={false}>
-            <span className="section-mark">下一日 →</span>
-            <span className="serif day-neighbor-title">{next.title}</span>
+          <Link
+            className={`day-neighbor day-neighbor-next${next.thumbnail ? " day-neighbor--with-thumb" : ""}`}
+            href={next.href}
+            prefetch={false}
+          >
+            <span className="day-neighbor-copy">
+              <span className="section-mark">下一日 →</span>
+              <span className="serif day-neighbor-title">{next.title}</span>
+            </span>
+            {next.thumbnail ? (
+              <CardThumbnail thumbnail={next.thumbnail} className="day-neighbor-thumb" sizes="64px" />
+            ) : null}
           </Link>
         ) : null}
       </nav>

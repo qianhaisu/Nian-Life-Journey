@@ -37,6 +37,9 @@ export type TimelineDay = {
   stories: TimelineStory[];
   eventIds?: string[];
   photos: MediaRef[];
+  firstScreenMediaIds?: string[];
+  paragraphMedia?: string[][];
+  photoCaptions?: Record<string, string>;
   href: string;
   lead: boolean;
   emphasis?: "lead" | "quiet";
@@ -109,7 +112,10 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
   for (const entry of content.days) {
     // The curated order is a proposal; deliverability and the latest store_only decide.
     const photos = resolveMonthContentMedia(entry.expandedMediaIds, available, privilege.excluded)
-      .map((item) => toMediaRef(item, entry.title ?? undefined));
+      .map((item) => {
+        const caption = entry.photoCaptions?.[item.id]?.trim();
+        return toMediaRef(item, caption || entry.title || undefined);
+      });
     // A visual description is derived from its pictures, not an independent story. If every
     // picture was explicitly withdrawn, an older content file must not restore their description.
     if (entry.kind === "visual-description" && entry.expandedMediaIds.length > 0
@@ -124,6 +130,9 @@ export async function buildMonthTimeline(archive: FamilyArchive, year: string, m
       stories: [],
       eventIds: [...new Set([...(entry.eventIds ?? []), ...(entry.eventId ? [entry.eventId] : [])])],
       photos,
+      firstScreenMediaIds: entry.firstScreenMediaIds,
+      paragraphMedia: entry.paragraphMedia,
+      photoCaptions: entry.photoCaptions,
       // All entrances share the day address; old event URLs continue to resolve to this day.
       href: `/memory/${year}/${monthSegment}/${entry.day.slice(8, 10)}`,
       lead: false, emphasis: entry.emphasis, milestone: null,
