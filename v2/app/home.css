@@ -453,7 +453,7 @@ a.bento-tile:active {
 
 .memory-slide-note {
   margin: 0;
-  color: rgba(255, 255, 255, 0.84);
+  color: rgba(255, 255, 255, 0.9);
   font-size: 13.5px;
   font-weight: 500;
   line-height: 1.45;
@@ -461,6 +461,16 @@ a.bento-tile:active {
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.memory-slide-meta {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 8px rgba(9, 13, 22, 0.32);
 }
 
 .memory-actions {
@@ -1861,7 +1871,7 @@ a.weekly-title {
   }
 
   .memory-frames {
-    height: var(--home-photo-h);
+    height: var(--home-photo-h, min(calc(100svh - 220px), 520px));
     max-height: none;
     aspect-ratio: auto;
   }

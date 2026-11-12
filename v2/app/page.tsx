@@ -41,12 +41,19 @@ export default async function HomePage() {
   const archive = await loadFamilyArchiveOnDemand();
   const feed = await readHomeFeed({ archive });
   const topics = topicLookupFrom(await loadTopicCache());
-  const selected = selectHomeMemories(archive, topics);
-  const memories = await attachMemoryReading(selected.memories, archive);
-  const absence = selected.absence;
-
   // 复用月稿进程内缓存（loadFamilyArchive 已预热过，零数据库查询）。
   const monthContents = await listEditedMonthContents();
+  const dayContext = new Map(
+    monthContents.flatMap((content) =>
+      content.days.map((d) => [
+        d.day,
+        { title: d.title, paragraphs: d.paragraphs, photoCaptions: d.photoCaptions },
+      ] as const),
+    ),
+  );
+  const selected = selectHomeMemories(archive, topics, { dayContext });
+  const memories = await attachMemoryReading(selected.memories, archive, monthContents);
+  const absence = selected.absence;
   const todayMonth = feed.clock.today.slice(0, 7);
   const editedLines = (
     await Promise.all(

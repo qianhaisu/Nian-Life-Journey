@@ -104,12 +104,16 @@ function MemoryPreview({
   const current = memory.slides[index] ?? memory.slides[0];
   const subtitle = useMemo(() => ensureDualClockSubtitle(memory), [memory]);
 
-  const readHref = memory.href ?? current?.href;
-  const readLabel = memory.linkLabel
-    ? memory.linkLabel
-    : current?.href && current.linkLabel
-      ? `${current.dateLabel ? `${current.dateLabel.replace(/^\d{4}\s*年\s*/, "")} · ` : ""}${current.linkLabel}`
-      : undefined;
+  const isTripReel = memory.key.startsWith("trip:");
+  const showSlideProvenance = memory.kind !== "day" && !isTripReel && Boolean(current?.day && current?.dateLabel);
+  const readHref = showSlideProvenance ? (current?.href ?? memory.href) : (memory.href ?? current?.href);
+  const readLabel = showSlideProvenance
+    ? (current?.href && current.linkLabel ? current.linkLabel : memory.linkLabel)
+    : memory.linkLabel
+      ? memory.linkLabel
+      : current?.href && current.linkLabel
+        ? `${current.dateLabel ? `${current.dateLabel.replace(/^\d{4}\s*年\s*/, "")} · ` : ""}${current.linkLabel}`
+        : undefined;
 
   return (
     <div className="memory-stage" ref={stage}>
@@ -140,7 +144,7 @@ function MemoryPreview({
               key={slide.key}
               className={i === index ? "memory-frame is-current" : "memory-frame"}
               data-fx={i % 4}
-              src={slide.media.src}
+              src={slide.media.src || mediaDeliveryUrl(slide.media.id, "web")}
               alt={slide.media.alt}
               width={slide.media.width || 4}
               height={slide.media.height || 3}
@@ -179,6 +183,17 @@ function MemoryPreview({
             <h2 className="memory-title">{memory.title}</h2>
             {memory.kind !== "day" && current?.caption && current.caption !== memory.title ? (
               <p className="memory-slide-note">{current.caption}</p>
+            ) : null}
+            {showSlideProvenance && current?.day ? (
+              <p className="memory-slide-meta">
+                <time dateTime={current.day}>{current.dateLabel}</time>
+                {current.ageLabel ? (
+                  <span>
+                    {" · "}
+                    {current.ageLabel === "出生的那天" ? "出生那天" : `当时 ${current.ageLabel}`}
+                  </span>
+                ) : null}
+              </p>
             ) : null}
             {readHref && readLabel ? (
               <div className="memory-actions">
@@ -452,7 +467,7 @@ function MemoryPlayer({
                   <Image
                     className={i === index ? "memory-player-frame is-current" : "memory-player-frame"}
                     data-fx={(i + j) % 4}
-                    src={entry.media.src}
+                    src={entry.media.src || mediaDeliveryUrl(entry.media.id, "web")}
                     alt={entry.media.alt}
                     fill
                     sizes="100vw"

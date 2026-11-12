@@ -40,12 +40,13 @@ function Cell({
 }) {
   const isVideo = photo.type === "video";
   const [full, setFull] = useState(large);
+  const [loaded, setLoaded] = useState(false);
   const thumbCandidate = photo.thumbnailSrc
     ?? (photo.src.startsWith("/api/media/") ? mediaDeliveryUrl(photo.id, "thumbnail") : photo.src);
   const videoPoster = photo.posterSrc
     ?? (photo.src.startsWith("/api/media/") ? mediaDeliveryUrl(photo.id, "poster") : photo.src);
   const src = isVideo ? videoPoster : full ? photo.src : thumbCandidate;
-  const cls = ["pg-cell", className].filter(Boolean).join(" ");
+  const cls = ["pg-cell", loaded ? "pg-cell--loaded" : "", className].filter(Boolean).join(" ");
   if (isVideo && !onMore) {
     return (
       <figure className={`${cls} pg-cell-video`} data-media-id={photo.id} style={alone ? videoFrameStyle(photo) : undefined}>
@@ -70,8 +71,11 @@ function Cell({
         fill
         sizes={sizes}
         priority={priority}
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
         unoptimized
         style={{ objectFit: "cover" }}
+        onLoad={() => setLoaded(true)}
         onError={() => { if (!full) setFull(true); }}
       />
       {onMore ? <button type="button" className="pg-more" onClick={onMore} aria-label="展开这一天的其他照片">展开</button> : null}
@@ -161,7 +165,7 @@ export function PhotoGrid({
     return (
       <>
         <div className="pg pg-3">
-          <Cell key={displayed[0].id} photo={displayed[0]} onClick={() => openStill(0)} ariaLabel={labelFor(0)} sizes={twoThirdSizes} priority={priority} large />
+          <Cell key={displayed[0].id} photo={displayed[0]} onClick={() => openStill(0)} ariaLabel={labelFor(0)} sizes={twoThirdSizes} priority={priority} />
           <div className="pg-col">
             <Cell key={displayed[1].id} photo={displayed[1]} onClick={() => openStill(1)} ariaLabel={labelFor(1)} sizes={thirdSizes} />
             <Cell key={displayed[2].id} photo={displayed[2]} onClick={() => openStill(2)} ariaLabel={labelFor(2)} sizes={thirdSizes} />
@@ -200,7 +204,6 @@ export function PhotoGrid({
               onMore={isMore ? onExpand : undefined}
               sizes={isHero ? twoThirdSizes : thirdSizes}
               priority={priority && isHero}
-              large={isHero}
             />;
           })}
         </div>
@@ -226,7 +229,6 @@ export function PhotoGrid({
             onMore={isMore ? onExpand : undefined}
             sizes={isWide ? halfSizes : thirdSizes}
             priority={priority && i === 0}
-            large={i === 0 && isWide}
           />;
         })}
       </div>
