@@ -8,7 +8,7 @@
   --card-bg: var(--color-surface, #FFFFFF);
   --ink-strong: var(--color-primary, #0F172A);
   --ink-body: var(--color-text, #334155);
-  --ink-soft: var(--color-muted, #64748B);
+  --ink-soft: var(--color-muted, #526075);
   --cobalt: var(--brand-accent, #2563EB);
   --cobalt-ink: #1D4ED8;
   --cobalt-tint: var(--tint-blue, #EDF4FF);
@@ -93,15 +93,18 @@
 }
 
 .home-answer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-  max-width: 760px;
+  max-width: 780px;
   margin: 2px 0 0;
   color: var(--ink-body);
   font-size: clamp(15px, 3.8vw, 16.5px);
-  line-height: 1.65;
+  line-height: 1.68;
+}
+
+.home-answer--provenance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
 }
 
 .home-answer-core {
@@ -112,26 +115,57 @@
 .home-answer-source {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   min-height: 44px;
+  color: var(--cobalt-ink);
+  font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition:
+    color 180ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease,
+    text-decoration-color 200ms ease,
+    transform 240ms var(--spring);
+}
+
+.home-answer-source--inline {
+  margin-left: 10px;
+  margin-block: -9px;
+  padding: 9px 4px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: underline;
+  text-decoration-color: rgba(29, 78, 216, 0.28);
+  text-underline-offset: 4px;
+  vertical-align: baseline;
+}
+
+.home-answer-source--pill {
+  gap: 4px;
   padding: 6px 14px;
   border-radius: 999px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
-  color: var(--cobalt-ink);
   font-size: 13px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  transition:
-    background-color 200ms ease,
-    border-color 200ms ease,
-    transform 240ms var(--spring);
+}
+
+.home-answer-arrow {
+  font-size: 0.92em;
+  line-height: 1;
 }
 
 @media (hover: hover) {
-  .home-answer-source:hover {
+  .home-answer-source--inline:hover {
+    color: var(--cobalt);
+    text-decoration-color: currentColor;
+    transform: translateX(1px);
+  }
+  .home-answer-source--pill:hover {
     background: var(--cobalt-tint);
     border-color: var(--card-border-hover);
     transform: translateY(-1px);
@@ -601,14 +635,13 @@ a.bento-tile:active {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: var(--cobalt-tint);
+  padding: 0;
   color: var(--cobalt-ink);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.35;
+  letter-spacing: 0.01em;
 }
 
 .day-slice-title {
@@ -946,26 +979,31 @@ a.bento-tile:active {
 .j-card-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 0;
+  margin: 0 0 8px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
 }
 
 .j-card-date {
-  color: var(--ink-strong);
-  font-size: 13px;
-  font-weight: 800;
+  color: var(--ink-body);
+  font-size: 12.5px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
+.j-card-meta-sep {
+  margin-inline: 6px;
+  color: var(--ink-soft);
+}
+
 .j-card-age {
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: #F1F5F9;
-  color: var(--ink-body);
-  font-size: 12px;
-  font-weight: 700;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 

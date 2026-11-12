@@ -505,3 +505,769 @@ test("selectFamilyVoices：优先挑 10–72 字的完整对话原句，短碎�
   assert.equal([...topThree[0].quote].length >= 10 && [...topThree[1].quote].length >= 10, true);
   assert.equal(topThree[2].quote, "你们有魔法");
 });
+
+test("智能封面与防雷同（未标注新月份）：动态识别托班集体横屏餐桌照，优先选家庭群/竖版独照", () => {
+  const media = [
+    // 11-10：爸爸/妈妈家庭故事日，[0] 为托班横屏餐桌，[1] 为托班户外竖图，[2] 为家庭群竖版独照（位于 expandedMediaIds）
+    makeMedia("m-1110-lunch", "2026-11-10T19:35:00Z", { width: 1706, height: 1280, rawSourceId: "src-nursery-1110-a" }),
+    makeMedia("m-1110-slide", "2026-11-10T21:00:00Z", { width: 1280, height: 1706, rawSourceId: "src-nursery-1110-b" }),
+    makeMedia("m-1110-car", "2026-11-10T02:52:00Z", { width: 1280, height: 1707, rawSourceId: "src-family-1110" }),
+    // 11-09：月度封面 13MP 竖版原图
+    makeMedia("m-1109-cover", "2026-11-09T12:00:00Z", { width: 3120, height: 4160, rawSourceId: "src-family-1109" }),
+    // 11-06：纯托班故事日，[0] 餐桌横图，[1] 午睡横图，[2] 涂贝壳竖版独照
+    makeMedia("m-1106-lunch", "2026-11-06T19:26:00Z", { width: 1706, height: 1280, rawSourceId: "src-nursery-1106-a" }),
+    makeMedia("m-1106-nap", "2026-11-06T21:24:00Z", { width: 1706, height: 1280, rawSourceId: "src-nursery-1106-b" }),
+    makeMedia("m-1106-shell", "2026-11-06T21:32:00Z", { width: 1280, height: 1706, rawSourceId: "src-nursery-1106-c" }),
+    // 11-05：混合故事日，[0] 餐桌横图，[1] 指认字母竖版独照
+    makeMedia("m-1105-lunch", "2026-11-05T19:25:00Z", { width: 1706, height: 1280, rawSourceId: "src-nursery-1105-a" }),
+    makeMedia("m-1105-alpha", "2026-11-05T21:07:00Z", { width: 1280, height: 1706, rawSourceId: "src-nursery-1105-b" }),
+  ];
+
+  const rawSources = [
+    { id: "src-nursery-1110-a", profileId: "zhang-nian", sourceType: "wechat", sourceLabel: "conversation:nursery-room" },
+    { id: "src-nursery-1110-b", profileId: "zhang-nian", sourceType: "wechat", sourceLabel: "conversation:nursery-room" },
+    { id: "src-family-1110", profileId: "zhang-nian", sourceType: "wechat", sourceLabel: "conversation:home-family" },
+    { id: "src-family-1109", profileId: "zhang-nian", sourceType: "family_photo", sourceLabel: "quark-album" },
+    { id: "src-nursery-1106-a", profileId: "zhang-nian", sourceType: "wechat", sourceLabel: "conversation:nursery-room" },
+    { id: "src-nursery-1106-b", profileId: "zhang-nian", sourceType: "wechat", sourceLabel: "conversation:nursery-room" },
+    { id: "src-nursery-1106-c", profileId: "zhang-nian", sourceType: "wechat", sourceLabel: "conversation:nursery-room" },
+    { id: "src-nursery-1105-a", profileId: "zhang-nian", sourceType: "wechat", sourceLabel: "conversation:nursery-room" },
+    { id: "src-nursery-1105-b", profileId: "zhang-nian", sourceType: "wechat", sourceLabel: "conversation:nursery-room" },
+  ];
+
+  const base = makeBaseArchive({ media });
+  const archive = {
+    ...base,
+    store: {
+      ...base.store,
+      media,
+      rawSources,
+    },
+  };
+
+  const monthContents = [
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-11",
+      coverMediaId: "m-1109-cover",
+      speakerBySourceId: {
+        "txt-dad-1110": "爸爸",
+        "txt-mom-1110": "妈妈",
+        "txt-teacher-1106": "老师",
+        "txt-mom-1105": "妈妈",
+        "txt-teacher-1105": "老师",
+      },
+      days: [
+        {
+          day: "2026-11-10",
+          kind: "story",
+          title: "开了暖风一觉到天亮",
+          paragraphs: ["入夜房间开了暖风，小年一觉睡到大天亮。"],
+          sourceIds: ["txt-dad-1110", "txt-mom-1110"],
+          firstScreenMediaIds: ["m-1110-lunch", "m-1110-slide"],
+          expandedMediaIds: ["m-1110-lunch", "m-1110-slide", "m-1110-car"],
+        },
+        {
+          day: "2026-11-09",
+          kind: "story",
+          title: "外婆带来的棉服",
+          paragraphs: ["杭州降温后穿上了外婆带来的厚棉服。"],
+          sourceIds: ["txt-mom-1110"],
+          firstScreenMediaIds: ["m-1109-cover"],
+          expandedMediaIds: ["m-1109-cover"],
+        },
+        {
+          day: "2026-11-06",
+          kind: "story",
+          title: "把苹果叫成阿果",
+          paragraphs: ["嘴边常挂着《一闪一闪亮晶晶》，唯独把同学苹果叫成阿果。"],
+          sourceIds: ["txt-teacher-1106"],
+          firstScreenMediaIds: ["m-1106-lunch", "m-1106-nap", "m-1106-shell"],
+          expandedMediaIds: ["m-1106-lunch", "m-1106-nap", "m-1106-shell"],
+        },
+        {
+          day: "2026-11-05",
+          kind: "story",
+          title: "坐着新马桶数英文",
+          paragraphs: ["坐在绿色小马桶上跟着大人数英文数字。"],
+          sourceIds: ["txt-mom-1105", "txt-teacher-1105"],
+          firstScreenMediaIds: ["m-1105-lunch", "m-1105-alpha"],
+          expandedMediaIds: ["m-1105-lunch", "m-1105-alpha"],
+        },
+      ],
+    },
+  ];
+
+  const model = buildHomeBentoModel({
+    archive,
+    monthContents,
+    topics: () => undefined,
+    today: "2026-11-12",
+  });
+
+  assert.equal(model.latestDay?.day, "2026-11-10");
+  assert.equal(model.latestDay?.photo?.id, "m-1110-car", "纯家庭叙事日应优先挑家庭来源竖版独照，而非托班集体午饭");
+  assert.deepEqual(
+    model.journal.days.map((d) => [d.day, d.photo?.id]),
+    [
+      ["2026-11-09", "m-1109-cover"],
+      ["2026-11-06", "m-1106-shell"],
+      ["2026-11-05", "m-1105-alpha"],
+    ],
+    "4 张近期卡片应全部避开 1706x1280 托班集体餐桌/午睡横图",
+  );
+});
+
+test("跨卡场景去重：多图日在撞场景时自动换图；单图同场景吃饭日在有其他候选日时自动错开", () => {
+  const media = [
+    makeMedia("m-d1-eat", "2026-11-10T12:00:00Z"),
+    makeMedia("m-d2-eat", "2026-11-09T12:00:00Z"),
+    makeMedia("m-d2-outdoor", "2026-11-09T16:00:00Z"),
+    makeMedia("m-d3-eat-only", "2026-11-08T12:00:00Z"),
+    makeMedia("m-d4-toy", "2026-11-07T17:00:00Z"),
+    makeMedia("m-d5-hold", "2026-11-06T18:00:00Z"),
+  ];
+  const archive = makeBaseArchive({ media });
+  const topicTable = {
+    "m-d1-eat": { topic: "吃饭", water: false, value: 0.88, confidence: 0.9 },
+    "m-d2-eat": { topic: "吃饭", water: false, value: 0.9, confidence: 0.9 },
+    "m-d2-outdoor": { topic: "户外", water: false, value: 0.86, confidence: 0.9 },
+    "m-d3-eat-only": { topic: "吃饭", water: false, value: 0.89, confidence: 0.9 },
+    "m-d4-toy": { topic: "玩玩具", water: false, value: 0.85, confidence: 0.9 },
+    "m-d5-hold": { topic: "抱着", water: false, value: 0.84, confidence: 0.9 },
+  };
+
+  const monthContents = [
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-11",
+      days: [
+        {
+          day: "2026-11-10",
+          kind: "story",
+          title: "自己稳稳舀米饭",
+          paragraphs: ["中午自己握着小勺把米饭舀进嘴里。"],
+          firstScreenMediaIds: ["m-d1-eat"],
+          expandedMediaIds: ["m-d1-eat"],
+        },
+        {
+          day: "2026-11-09",
+          kind: "story",
+          title: "午饭后去公园跑",
+          paragraphs: ["吃完饭去公园草地上追落叶。"],
+          firstScreenMediaIds: ["m-d2-eat", "m-d2-outdoor"],
+          expandedMediaIds: ["m-d2-eat", "m-d2-outdoor"],
+        },
+        {
+          day: "2026-11-08",
+          kind: "story",
+          title: "餐椅上喝南瓜粥",
+          paragraphs: ["坐在餐椅上喝完了半碗南瓜粥。"],
+          firstScreenMediaIds: ["m-d3-eat-only"],
+          expandedMediaIds: ["m-d3-eat-only"],
+        },
+        {
+          day: "2026-11-07",
+          kind: "story",
+          title: "在地垫搭高积木",
+          paragraphs: ["把木头积木一块块叠成高塔。"],
+          firstScreenMediaIds: ["m-d4-toy"],
+          expandedMediaIds: ["m-d4-toy"],
+        },
+        {
+          day: "2026-11-06",
+          kind: "story",
+          title: "窝在妈妈怀里看灯",
+          paragraphs: ["傍晚被妈妈抱着看窗外亮起的路灯。"],
+          firstScreenMediaIds: ["m-d5-hold"],
+          expandedMediaIds: ["m-d5-hold"],
+        },
+      ],
+    },
+  ];
+
+  const model = buildHomeBentoModel({
+    archive,
+    monthContents,
+    topics: (id) => topicTable[id],
+    today: "2026-11-12",
+  });
+
+  // LatestDay 选 11-10（吃饭）；11-09 自动从吃饭首图切换为户外图；11-08 因只有吃饭图而让位给 11-07 与 11-06
+  assert.equal(model.latestDay?.day, "2026-11-10");
+  assert.equal(model.latestDay?.photo?.id, "m-d1-eat");
+  assert.deepEqual(
+    model.journal.days.map((d) => [d.day, d.photo?.id]),
+    [
+      ["2026-11-09", "m-d2-outdoor"],
+      ["2026-11-07", "m-d4-toy"],
+      ["2026-11-06", "m-d5-hold"],
+    ],
+  );
+});
+
+test("跨模块媒体去重与时间胶囊多样化：避开 HomeMemory 封面/幻灯片图片，并输出无重复月份的 fullDateLabel", () => {
+  const media = [
+    makeMedia("m-1110-cover-dup", "2026-11-10T09:00:00Z"),
+    makeMedia("m-1110-alt", "2026-11-10T16:00:00Z"),
+    makeMedia("m-1108", "2026-11-08T10:00:00Z"),
+    makeMedia("m-1106", "2026-11-06T10:00:00Z"),
+    makeMedia("m-1104", "2026-11-04T10:00:00Z"),
+    makeMedia("m-0820-mem-cover", "2026-08-20T10:00:00Z"),
+    makeMedia("m-0820-alt", "2026-08-20T15:00:00Z"),
+    makeMedia("m-0515-slide", "2026-05-15T10:00:00Z"),
+    makeMedia("m-0515-fresh", "2026-05-15T16:00:00Z"),
+    makeMedia("m-0310-laugh", "2026-03-10T10:00:00Z"),
+    makeMedia("m-0210-water", "2026-02-10T10:00:00Z"),
+    makeMedia("m-2511-step", "2025-11-12T10:00:00Z"),
+  ];
+  const archive = makeBaseArchive({
+    media,
+    privilege: {
+      confirmed: new Set(media.map((m) => m.id)),
+      trusted: new Set(media.map((m) => m.id)),
+      checked: new Set(media.map((m) => m.id)),
+      excluded: new Set(),
+    },
+  });
+
+  const topicTable = {
+    "m-0820-alt": { topic: "笑", water: false, value: 0.9, confidence: 0.9 },
+    "m-0515-slide": { topic: "户外", water: false, value: 0.91, confidence: 0.9 },
+    "m-0515-fresh": { topic: "户外", water: false, value: 0.88, confidence: 0.9 },
+    "m-0310-laugh": { topic: "笑", water: false, value: 0.89, confidence: 0.9 },
+    "m-0210-water": { topic: "玩水", water: true, value: 0.82, confidence: 0.9 },
+    "m-2511-step": { topic: "玩玩具", water: false, value: 0.86, confidence: 0.9 },
+  };
+
+  const monthContents = [
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-11",
+      days: [
+        {
+          day: "2026-11-10",
+          kind: "story",
+          title: "午后追阳光",
+          paragraphs: ["在客厅地板上追着窗帘漏进来的光斑。"],
+          firstScreenMediaIds: ["m-1110-cover-dup", "m-1110-alt"],
+          expandedMediaIds: ["m-1110-cover-dup", "m-1110-alt"],
+        },
+        {
+          day: "2026-11-08",
+          kind: "story",
+          title: "翻看小汽车书",
+          paragraphs: ["自己坐在地垫上翻看小汽车绘本。"],
+          firstScreenMediaIds: ["m-1108"],
+          expandedMediaIds: ["m-1108"],
+        },
+        {
+          day: "2026-11-06",
+          kind: "story",
+          title: "阳台看小鸟",
+          paragraphs: ["站在窗边听树上的麻雀叽叽喳喳。"],
+          firstScreenMediaIds: ["m-1106"],
+          expandedMediaIds: ["m-1106"],
+        },
+        {
+          day: "2026-11-04",
+          kind: "story",
+          title: "推小推车散步",
+          paragraphs: ["傍晚在小区步道上推着小车走。"],
+          firstScreenMediaIds: ["m-1104"],
+          expandedMediaIds: ["m-1104"],
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-08",
+      days: [
+        {
+          day: "2026-08-20",
+          kind: "story",
+          title: "蹦床边笑个不停",
+          paragraphs: ["午后在蹦床边咯咯笑个不停。"],
+          firstScreenMediaIds: ["m-0820-mem-cover", "m-0820-alt"],
+          expandedMediaIds: ["m-0820-mem-cover", "m-0820-alt"],
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-05",
+      days: [
+        {
+          day: "2026-05-15",
+          kind: "story",
+          title: "公园树荫散步",
+          paragraphs: ["五月的风很轻，扶着小推车散步。"],
+          firstScreenMediaIds: ["m-0515-slide", "m-0515-fresh"],
+          expandedMediaIds: ["m-0515-slide", "m-0515-fresh"],
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-03",
+      days: [
+        {
+          day: "2026-03-10",
+          kind: "story",
+          title: "对着镜子大笑",
+          paragraphs: ["早上醒来对着穿衣镜拍手大笑。"],
+          firstScreenMediaIds: ["m-0310-laugh"],
+          expandedMediaIds: ["m-0310-laugh"],
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-02",
+      days: [
+        {
+          day: "2026-02-10",
+          kind: "story",
+          title: "温水泳池踢水花",
+          paragraphs: ["在婴儿泳池里开心地用脚丫踢起水花。"],
+          firstScreenMediaIds: ["m-0210-water"],
+          expandedMediaIds: ["m-0210-water"],
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2025-11",
+      days: [
+        {
+          day: "2025-11-12",
+          kind: "story",
+          title: "抓起彩色摇铃",
+          paragraphs: ["坐在爬行垫上稳稳抓起彩色摇铃。"],
+          firstScreenMediaIds: ["m-2511-step"],
+          expandedMediaIds: ["m-2511-step"],
+        },
+      ],
+    },
+  ];
+
+  const model = buildHomeBentoModel({
+    archive,
+    monthContents,
+    topics: (id) => topicTable[id],
+    today: "2026-11-12",
+    excludePhotoIds: ["m-1110-cover-dup", "m-0820-mem-cover"],
+    memorySlidePhotoIds: ["m-0515-slide"],
+  });
+
+  assert.equal(model.latestDay?.photo?.id, "m-1110-alt", "LatestDay 应避开 HomeMemory 封面已占用的图");
+  const capsulePhotoIds = model.capsules.map((c) => c.photo.id);
+  assert.ok(!capsulePhotoIds.includes("m-0820-mem-cover"), "时间胶囊硬性避开 HomeMemory 封面图");
+  assert.ok(capsulePhotoIds.includes("m-0820-alt"), "同日有替代合格图时自动换用");
+  assert.ok(capsulePhotoIds.includes("m-0515-fresh"), "优先避开已在幻灯片轮播中的 m-0515-slide");
+  // 08-20 已占「笑」主题，第 4 张 season 胶囊优先挑「玩水」(02-10) 而非重复挑「笑」(03-10)
+  assert.ok(capsulePhotoIds.includes("m-0210-water"));
+  assert.equal(model.capsules.find((c) => c.day === "2026-08-20")?.fullDateLabel, "2026 年 8 月 20 日");
+});
+
+test("跨磁贴文案去重：成长亮点导语/标签与家人的话均不重复 RecentAnswer 或相邻日卡已展示内容", () => {
+  const media = [
+    makeMedia("m-1110", "2026-11-10T10:00:00Z"),
+    makeMedia("m-1109", "2026-11-09T10:00:00Z"),
+    makeMedia("m-1106", "2026-11-06T10:00:00Z"),
+    makeMedia("m-1105", "2026-11-05T10:00:00Z"),
+  ];
+  const archive = makeBaseArchive({
+    media,
+    snapshots: [],
+  });
+  const monthContents = [
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-11",
+      cardLine: "十一月杭州天冷下来，小年挑完碗里的米饭，看见门口站着家长主动搬椅子过去",
+      intro:
+        "十一月初杭州天冷，小年穿上了外婆带来的棉服，还备上带扣子的灰色毛衣。回家喜欢骑小自行车，睡前还会一本本把绘本收好。",
+      days: [
+        {
+          day: "2026-11-10",
+          kind: "story",
+          title: "开了暖风一觉到天亮",
+          paragraphs: ["晚上开了暖风睡得很沉。"],
+          firstScreenMediaIds: ["m-1110"],
+          expandedMediaIds: ["m-1110"],
+        },
+        {
+          day: "2026-11-09",
+          kind: "story",
+          title: "外婆带来的棉服",
+          paragraphs: ["降温后穿上了外婆带来的厚棉服。"],
+          firstScreenMediaIds: ["m-1109"],
+          expandedMediaIds: ["m-1109"],
+        },
+        {
+          day: "2026-11-08",
+          kind: "text-only",
+          title: "进教室一直戴着帽",
+          paragraphs: ["早上进了教室也舍不得摘下小帽子。"],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-07",
+          kind: "text-only",
+          title: "骑小自行车绕客厅",
+          paragraphs: ["爷爷夸他：「小年年会骑自行车转弯啦！」"],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-06",
+          kind: "story",
+          title: "把苹果叫成阿果",
+          paragraphs: ["认识班里小伙伴，唯独把苹果叫成阿果。"],
+          firstScreenMediaIds: ["m-1106"],
+          expandedMediaIds: ["m-1106"],
+        },
+        {
+          day: "2026-11-05",
+          kind: "story",
+          title: "坐着新马桶数英文",
+          paragraphs: ["坐在新买的小马桶上数英文数字。"],
+          firstScreenMediaIds: ["m-1105"],
+          expandedMediaIds: ["m-1105"],
+        },
+        {
+          day: "2026-11-04",
+          kind: "text-only",
+          title: "搬把小椅子去门口",
+          paragraphs: ["老师在群里夸：「小年看到家长在门口，主动搬椅子过去了，给家长坐坐。」"],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-03",
+          kind: "text-only",
+          title: "补完早觉听外语歌",
+          paragraphs: ["妈妈笑着说：「我宣布，这是我张小年正确的打开方式。」"],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-02",
+          kind: "text-only",
+          title: "睡前一本本收好书",
+          paragraphs: ["爸爸说：「今天自己把绘本全部放回书架，太棒了。」"],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+      ],
+    },
+  ];
+
+  const model = buildHomeBentoModel({
+    archive,
+    monthContents,
+    today: "2026-11-12",
+    answerLine: "十一月杭州天冷下来，小年挑完碗里的米饭，看见门口站着家长主动搬椅子过去",
+  });
+
+  const shownDayTitles = new Set([
+    model.latestDay?.title,
+    ...model.journal.days.map((d) => d.title),
+  ]);
+  assert.deepEqual(
+    [...shownDayTitles],
+    ["开了暖风一觉到天亮", "外婆带来的棉服", "把苹果叫成阿果", "坐着新马桶数英文"],
+  );
+
+  // 1. 成长亮点导语自动切到不与「外婆带来的棉服」撞车的第二句
+  assert.ok(model.growth);
+  assert.equal(model.growth.isCurrentMonth, true);
+  assert.equal(model.growth.headline, "回家喜欢骑小自行车，睡前还会一本本把绘本收好。");
+
+  // 2. 成长亮点标签绝不复读已展示的 4 张日卡标题，而是展示当月其余独立片段
+  assert.ok(model.growth.tags.length >= 2);
+  for (const tag of model.growth.tags) {
+    assert.equal(shownDayTitles.has(tag), false, `成长标签不应重复已展示日卡标题：${tag}`);
+  }
+  assert.ok(model.growth.tags.includes("进教室一直戴着帽"));
+  assert.ok(model.growth.tags.includes("补完早觉听外语歌"));
+
+  // 3. 家人的话自动避开与顶部 RecentAnswer 同一件事的「主动搬椅子过去」引语
+  assert.equal(model.voices.length, 3);
+  for (const v of model.voices) {
+    assert.doesNotMatch(v.quote, /主动搬椅子过去/);
+  }
+});
+
+test("2026-11 真实导语全碰撞场景：当 intro 各句均复述已展示日卡或 RecentAnswer 时，自动提取未展示日的新鲜故事句并过滤撞梗标签", () => {
+  const media = [
+    makeMedia("m-1110", "2026-11-10T10:00:00Z"),
+    makeMedia("m-1109", "2026-11-09T10:00:00Z"),
+    makeMedia("m-1106", "2026-11-06T10:00:00Z"),
+    makeMedia("m-1105", "2026-11-05T10:00:00Z"),
+  ];
+  const archive = makeBaseArchive({
+    media,
+    snapshots: [],
+  });
+  const cardLine = "十一月杭州天冷下来，小年挑完碗里的米饭，看见门口站着家长主动搬椅子过去";
+  const monthContents = [
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-11",
+      cardLine,
+      intro:
+        "十一月初杭州天冷，穿上了外婆带来的厚棉服。在托班把苹果叫成「阿果」，看见门口有家长还会主动搬椅子过去。家里新添了马桶，他坐上去嘴里数着英文数字，屋里开了热空调那宿安安稳稳睡到天亮。",
+      days: [
+        {
+          day: "2026-11-10",
+          kind: "story",
+          title: "开了暖风一觉到天亮",
+          paragraphs: ["这宿屋里一直开着热空调，没有踢被子，安安稳稳睡到天亮。"],
+          firstScreenMediaIds: ["m-1110"],
+          expandedMediaIds: ["m-1110"],
+        },
+        {
+          day: "2026-11-09",
+          kind: "story",
+          title: "外婆带来的棉服",
+          paragraphs: ["降温后穿上了外婆带来的厚棉服。"],
+          firstScreenMediaIds: ["m-1109"],
+          expandedMediaIds: ["m-1109"],
+        },
+        {
+          day: "2026-11-08",
+          kind: "text-only",
+          title: "进教室一直戴着帽",
+          paragraphs: ["早上进了教室也一直戴着小帽子不肯摘下来。"],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-07",
+          kind: "text-only",
+          title: "骑小自行车",
+          paragraphs: ["傍晚在客厅里稳稳骑着小自行车转圈。"],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-06",
+          kind: "story",
+          title: "把苹果叫成阿果",
+          paragraphs: ["认识班里小伙伴，唯独把苹果叫成「阿果」。"],
+          firstScreenMediaIds: ["m-1106"],
+          expandedMediaIds: ["m-1106"],
+        },
+        {
+          day: "2026-11-05",
+          kind: "story",
+          title: "坐着新马桶数英文",
+          paragraphs: ["家里新添置的小马桶到了，坐上去嘴里还一串串数着英文。"],
+          firstScreenMediaIds: ["m-1105"],
+          expandedMediaIds: ["m-1105"],
+        },
+        {
+          day: "2026-11-04",
+          kind: "story",
+          title: "搬把小椅子去门口",
+          paragraphs: ["看见门口站着其他家长，自己主动搬起小椅子送过去。"],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-03",
+          kind: "story",
+          title: "补完早觉听外语歌",
+          paragraphs: [
+            "头天半夜醒来折腾了一阵，清早还在补觉，妈妈说「昨晚半夜不睡觉现在还在睡，今天迟一点」。",
+          ],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+        {
+          day: "2026-11-02",
+          kind: "story",
+          title: "睡前一本本收书",
+          paragraphs: [
+            "小年捧着绘本翻看时神情专注，到了快午睡的点，不用催促便默默把书一本一本收拢叠好，妈妈看着直乐，说「我宣布，这是我张小年正确的打开方式」。",
+          ],
+          firstScreenMediaIds: [],
+          expandedMediaIds: [],
+        },
+      ],
+    },
+  ];
+
+  const model = buildHomeBentoModel({
+    archive,
+    monthContents,
+    today: "2026-11-12",
+    answerLine: cardLine,
+  });
+
+  assert.ok(model.growth);
+  // intro 的三句话全部与已展示日卡（棉服 / 阿果 / 马桶英文 + 热空调睡到天亮）碰撞，不得选入 headline
+  assert.doesNotMatch(model.growth.headline, /马桶|英文|睡到天亮|棉服|阿果|搬椅子/);
+  // 11-03 的「半夜醒来折腾 / 补觉 / 迟一点」并非成长瞬间，应被压低，优先浮现 11-02 自主收绘本的成长句
+  assert.doesNotMatch(model.growth.headline, /半夜醒|折腾|补觉|不睡觉|迟一点/);
+  // 剥离句末家人引语子句，绝不出现未闭合的「/“ 或截断在引语中间，同时把妈妈的金句留给「家人的话」
+  assert.equal(
+    model.growth.headline,
+    "小年捧着绘本翻看时神情专注，到了快午睡的点，不用催促便默默把书一本一本收拢叠好。",
+  );
+  assert.equal(
+    (model.growth.headline.match(/「/g) ?? []).length,
+    (model.growth.headline.match(/」/g) ?? []).length,
+  );
+  assert.ok(model.voices.some((v) => v.quote.includes("这是我张小年正确的打开方式")));
+
+  // 标签中「搬把小椅子去门口」与 RecentAnswer「门口…主动搬椅子过去」语义重复，必须跳过，从而浮现「骑小自行车」
+  assert.equal(model.growth.tags.includes("搬把小椅子去门口"), false);
+  assert.equal(model.growth.tags.includes("骑小自行车"), true);
+  // 已充当 headline 的那一天（11-02）不再重复出现在 tags 中
+  assert.equal(model.growth.tags.includes("睡前一本本收书"), false);
+  assert.deepEqual(model.growth.tags, ["补完早觉听外语歌", "进教室一直戴着帽", "骑小自行车"]);
+});
+
+test("selectTravelFootprint：当最近旅程 summary 首句复述标题时自动剥离首句，保留后续干货信息", () => {
+  const monthContents = [
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-10",
+      days: [],
+      travelRecords: [
+        {
+          id: "2026-10-yiwu-stopover",
+          title: "回杭州路上在义乌住一晚",
+          kind: "travel",
+          from: "2026-10-04",
+          to: "2026-10-05",
+          placeIds: ["cn-zj-yiwu"],
+          summary: "回杭州的路上，在义乌住了一晚。10 月 5 日下午从义乌出发，傍晚回到杭州的家。",
+          evidence: ["2026-10-04 义乌入住记录"],
+          reviewStatus: "approved",
+          reviewedBy: "codex",
+          visibility: "public",
+          childPresent: true,
+          reviewedAt: "2026-10-06T00:00:00Z",
+          sourceFingerprints: [{ id: "wechat-message:yiwu-1", sha256: "a".repeat(64) }],
+        },
+      ],
+    },
+  ];
+
+  const footprint = selectTravelFootprint("2025-01-03", monthContents, "2026-11-12");
+  assert.ok(footprint.latestTrip);
+  assert.equal(footprint.latestTrip.title, "回杭州路上在义乌住一晚");
+  assert.equal(footprint.latestTrip.summary, "10 月 5 日下午从义乌出发，傍晚回到杭州的家。");
+});
+
+test("selectTimeCapsules：单一主题（含标题带「笑」的未标注瞬间）最多占 2 张，确保 4 张时间胶囊画面主题多样", () => {
+  const media = [
+    makeMedia("m-2606-art", "2026-06-10T10:00:00Z"),
+    makeMedia("m-2511-laugh", "2025-11-16T10:00:00Z"),
+    makeMedia("m-2508-water", "2025-08-12T10:00:00Z"),
+    makeMedia("m-2503-laugh", "2025-03-18T10:00:00Z"),
+    makeMedia("m-2501-first-laugh", "2025-01-19T10:00:00Z"),
+  ];
+  const archive = makeBaseArchive({
+    media,
+    privilege: {
+      confirmed: new Set(media.map((m) => m.id)),
+      trusted: new Set(media.map((m) => m.id)),
+      checked: new Set(media.map((m) => m.id)),
+      excluded: new Set(),
+    },
+  });
+  const monthContents = [
+    {
+      schema: "nianlife.month-content/1",
+      month: "2026-06",
+      days: [
+        {
+          day: "2026-06-10",
+          kind: "story",
+          title: "荔枝拓印画，他还是最爱橘子",
+          paragraphs: ["在桌前印出一串红荔枝，手里攥着小橘子不撒手。"],
+          firstScreenMediaIds: ["m-2606-art"],
+          expandedMediaIds: ["m-2606-art"],
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2025-11",
+      days: [
+        {
+          day: "2025-11-16",
+          kind: "story",
+          title: "星期天去湖边，扶着方向盘大笑",
+          paragraphs: ["坐在驾驶座上扶着方向盘咯咯大笑。"],
+          firstScreenMediaIds: ["m-2511-laugh"],
+          expandedMediaIds: ["m-2511-laugh"],
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2025-08",
+      days: [
+        {
+          day: "2025-08-12",
+          kind: "story",
+          title: "傍晚小泳池踩水花",
+          paragraphs: ["坐在院子小泳池里扑腾水花。"],
+          firstScreenMediaIds: ["m-2508-water"],
+          expandedMediaIds: ["m-2508-water"],
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2025-03",
+      days: [
+        {
+          day: "2025-03-18",
+          kind: "story",
+          title: "睡觉扭来扭去，洗完澡笑得开心",
+          paragraphs: ["洗完温水澡裹着浴巾笑得合不拢嘴。"],
+          firstScreenMediaIds: ["m-2503-laugh"],
+          expandedMediaIds: ["m-2503-laugh"],
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2025-01",
+      days: [
+        {
+          day: "2025-01-19",
+          kind: "story",
+          title: "第一次笑得这么开心",
+          paragraphs: ["躺在小床上第一次笑得这么开心。"],
+          firstScreenMediaIds: ["m-2501-first-laugh"],
+          expandedMediaIds: ["m-2501-first-laugh"],
+        },
+      ],
+    },
+  ];
+
+  const topicTable = {
+    "m-2606-art": { topic: "玩玩具", water: false, value: 0.88, confidence: 0.9 },
+    "m-2511-laugh": { topic: "玩玩具", water: false, value: 0.92, confidence: 0.9 },
+    "m-2508-water": { topic: "玩水", water: true, value: 0.84, confidence: 0.9 },
+    "m-2503-laugh": { topic: "笑", water: false, value: 0.95, confidence: 0.9 },
+    // m-2501-first-laugh 故意不给 topic，模拟早期未标注但标题含「第一次笑」的里程碑
+  };
+
+  const days = collectPublishedDays(archive, monthContents, "2026-11-12", (id) => topicTable[id]);
+  const capsules = selectTimeCapsules(archive, days, (id) => topicTable[id], "2026-11-12", 4);
+
+  assert.equal(capsules.length, 4);
+  const laughCount = capsules.filter((c) => /笑/.test(c.title)).length;
+  assert.ok(laughCount <= 2, `「笑」主题胶囊不得超过 2 张，实际为 ${laughCount}`);
+  assert.ok(capsules.some((c) => c.day === "2025-08-12"), "应选入玩水主题月份替代第 3 张大笑胶囊");
+});

@@ -45,8 +45,12 @@ export type HomeAnswer = {
   parts: HomeAnswerPart[];
   /** "2026-09" */
   month: string;
+  /** 是否与今天同属一个日历月（同月时首屏顶部问候栏已给出完整日期与「现在」年龄）。 */
+  isCurrentMonth: boolean;
   /** 「2026 年 9 月 · 现在 1 岁 8 个月」——出处，供链接文案用。 */
   sourceLabel: string;
+  /** 同月时收束为轻量阅读入口（如「翻看 11 月记录」），跨月回退时保留完整双时钟出处。 */
+  compactSourceLabel: string;
   /** "/memory/2026/09" */
   href: string;
 };
@@ -82,17 +86,24 @@ export function selectHomeAnswer(
     .find((raw) => raw.length > 0);
   if (!line) return undefined;
 
+  const isCurrentMonth = snapshot.month === today.slice(0, 7);
   const age = ageAtMonth(birthDay, snapshot.month);
   // 「出生的那个月」接在「当时」后面读不通（见 home-memory.ts ageSpan 同样的判断），这种时候只留月份。
   const clock = age && !age.startsWith("出生")
     ? ` · ${monthAgeQualifier(snapshot.month, today)} ${age}`
     : "";
   const [year, month] = snapshot.month.split("-");
+  const sourceLabel = `${formatMonth(snapshot.month)}${clock}`;
+  const monthNum = Number(month);
+  const compactSourceLabel =
+    isCurrentMonth && !Number.isNaN(monthNum) ? `翻看 ${monthNum} 月记录` : sourceLabel;
   return {
     line,
     parts: splitAnswerParts(line),
     month: snapshot.month,
-    sourceLabel: `${formatMonth(snapshot.month)}${clock}`,
+    isCurrentMonth,
+    sourceLabel,
+    compactSourceLabel,
     href: `/memory/${year}/${month}`,
   };
 }

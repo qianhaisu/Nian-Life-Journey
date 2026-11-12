@@ -64,6 +64,10 @@ export function LatestDayTile({
 }
 
 export function GrowthHighlightTile({ growth }: { growth: BentoGrowthHighlight }) {
+  const monthNum = Number(growth.month.slice(5, 7));
+  const compactMonthText =
+    growth.isCurrentMonth && !Number.isNaN(monthNum) ? `${monthNum} 月` : growth.monthLabel;
+
   return (
     <Link
       className="bento-tile tile-growth"
@@ -74,7 +78,7 @@ export function GrowthHighlightTile({ growth }: { growth: BentoGrowthHighlight }
         <div className="tile-growth-head">
           <span className="tile-label tile-label--lavender">近月成长</span>
           <span className="tile-growth-clock">
-            <time dateTime={growth.month}>{growth.monthLabel}</time>
+            <time dateTime={growth.month}>{compactMonthText}</time>
             {growth.ageDisplay ? <span> · {growth.ageDisplay}</span> : null}
           </span>
         </div>
@@ -180,12 +184,17 @@ export function RecentJournalSection({
                 />
               </div>
             ) : null}
-            <div className="j-card-meta">
+            <p className="j-card-meta">
               <time className="j-card-date" dateTime={item.day}>
                 {item.weekdayDateLabel}
               </time>
-              {item.ageDisplay ? <span className="j-card-age">{item.ageDisplay}</span> : null}
-            </div>
+              {item.ageDisplay ? (
+                <>
+                  <span className="j-card-meta-sep" aria-hidden="true">·</span>
+                  <span className="j-card-age">{item.ageDisplay}</span>
+                </>
+              ) : null}
+            </p>
             <h3 className="j-card-title">{item.title}</h3>
             {item.excerpt ? <p className="j-card-excerpt">{item.excerpt}</p> : null}
             <div className="j-card-foot">
@@ -236,7 +245,7 @@ export function TimeCapsuleSection({ capsules }: { capsules: BentoTimeCapsule[] 
             <span className="capsule-badge">{capsule.badgeLabel}</span>
             <span className="capsule-info">
               <time className="capsule-date" dateTime={capsule.day}>
-                {capsule.monthLabel} · {capsule.shortDateLabel}
+                {capsule.fullDateLabel}
               </time>
               <span className="capsule-title">{capsule.title}</span>
             </span>

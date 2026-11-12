@@ -90,3 +90,25 @@ test("an edited month card line beats the organizer snapshot and a newer month w
   // No edited lines → behaviour unchanged.
   assert.equal(selectHomeAnswer(snapshots, "2026-10-27", "2025-01-03")?.month, "2026-09");
 });
+
+test("首屏时间去重：当月答案给出精简动作入口 compactSourceLabel，跨月回退时保留完整双时钟出处", () => {
+  const current = selectHomeAnswer(
+    [],
+    "2026-11-12",
+    BIRTH,
+    [{ month: "2026-11", line: "十一月杭州天冷下来，小年看见门口站着家长主动搬椅子过去。" }],
+  );
+  assert.equal(current?.isCurrentMonth, true);
+  assert.equal(current?.sourceLabel, "2026 年 11 月 · 现在 1 岁 10 个月");
+  assert.equal(current?.compactSourceLabel, "翻看 11 月记录");
+
+  const fallback = selectHomeAnswer(
+    [],
+    "2026-11-01",
+    BIRTH,
+    [{ month: "2026-10", line: "十月开始清楚喊出同伴的名字。" }],
+  );
+  assert.equal(fallback?.isCurrentMonth, false);
+  assert.equal(fallback?.sourceLabel, "2026 年 10 月 · 当时 1 岁 9 个月");
+  assert.equal(fallback?.compactSourceLabel, "2026 年 10 月 · 当时 1 岁 9 个月");
+});

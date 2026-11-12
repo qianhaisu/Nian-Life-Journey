@@ -67,7 +67,6 @@ export default async function HomePage() {
   ).filter((item) => item.line);
 
   const answer = selectHomeAnswer(archive.snapshots, feed.clock.today, archive.birthDay, editedLines);
-  const answerCore = answer?.parts.find((part) => part.core)?.text;
   const activeLeadDay =
     memories.length > 0
       ? memories[0].kind === "day"
@@ -75,13 +74,27 @@ export default async function HomePage() {
         : undefined
       : feed.lead?.story.day;
 
+  const excludePhotoIds =
+    memories.length > 0
+      ? memories
+          .map((memory) => (memory.slides[memory.coverIndex] ?? memory.slides[0])?.media.id)
+          .filter((id): id is string => Boolean(id))
+      : feed.lead?.photo?.media.id
+        ? [feed.lead.photo.media.id]
+        : [];
+  const memorySlidePhotoIds = memories.flatMap((memory) =>
+    memory.slides.map((slide) => slide.media.id),
+  );
+
   const bento = buildHomeBentoModel({
     archive,
     monthContents,
     topics,
     today: feed.clock.today,
     activeLeadDay,
-    answerLine: answerCore,
+    answerLine: answer?.line,
+    excludePhotoIds,
+    memorySlidePhotoIds,
   });
 
   const hasLatestDay = bento.latestDay !== null;
@@ -152,8 +165,14 @@ function prevMonth(month: string): string {
 
 function RecentAnswer({ answer }: { answer: HomeAnswer | undefined }) {
   if (!answer) return null;
+  const answerClassName = answer.isCurrentMonth
+    ? "home-answer home-answer--current"
+    : "home-answer home-answer--provenance";
+  const sourceClassName = answer.isCurrentMonth
+    ? "home-answer-source home-answer-source--inline"
+    : "home-answer-source home-answer-source--pill";
   return (
-    <p className="home-answer">
+    <p className={answerClassName}>
       <span className="home-answer-text">
         {answer.parts.map((part, i) =>
           part.core ? (
@@ -165,9 +184,13 @@ function RecentAnswer({ answer }: { answer: HomeAnswer | undefined }) {
           ),
         )}
       </span>
-      <Link className="home-answer-source" href={answer.href}>
-        <span>{answer.sourceLabel}</span>
-        <span aria-hidden="true">↗</span>
+      <Link
+        className={sourceClassName}
+        href={answer.href}
+        aria-label={answer.isCurrentMonth ? `${answer.compactSourceLabel}（${answer.sourceLabel}）` : undefined}
+      >
+        <span>{answer.compactSourceLabel}</span>
+        <span className="home-answer-arrow" aria-hidden="true">↗</span>
       </Link>
     </p>
   );
