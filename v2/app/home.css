@@ -840,8 +840,8 @@ a.bento-tile:active {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 12px;
-  padding: 20px 22px;
+  gap: 11px;
+  padding: 18px 20px;
   background: linear-gradient(160deg, var(--peach-tint) 0%, #FFF9F5 100%);
   border-color: rgba(194, 65, 12, 0.10);
 }
@@ -882,7 +882,7 @@ a.bento-tile:active {
 .chat-bubbles {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
 }
 
 .chat-msg {
@@ -890,7 +890,7 @@ a.bento-tile:active {
   align-items: flex-start;
   gap: 11px;
   min-height: 48px;
-  padding: 11px 14px;
+  padding: 10px 13px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(194, 65, 12, 0.10);
@@ -957,7 +957,7 @@ a.bento-tile:active {
   font-weight: 600;
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

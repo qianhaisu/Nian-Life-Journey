@@ -1481,11 +1481,11 @@ test("需求 3：computeHomeRotationSeed 与 buildHomeBentoModel 在不同时间
   }
 
   // 2. 纯轮换函数直接测试：不越界且无重复
-  assert.equal(pickRotatedVoices(m0.voicePool, 2, 99).length, 2);
+  assert.equal(pickRotatedVoices(m0.voicePool, 3, 99).length, 3);
   assert.equal(pickRotatedJournalDays(m0.journal.pool, 3, 99).length, 3);
   assert.equal(pickRotatedCapsules(m0.capsulePool, 4, 99).length, 4);
 
-  // 3. 组件渲染「换一批」按钮：候选池大于展示数量时显示，小于等于时不显示
+  // 3. 组件渲染「换一批」按钮：候选池大于展示数量时显示，小于等于时不显示；默认展示 3 条家人的话
   const voicesHtml = renderToStaticMarkup(
     React.createElement(FamilyVoicesTile, { voices: m0.voices, pool: m0.voicePool }),
   );
@@ -1501,11 +1501,12 @@ test("需求 3：computeHomeRotationSeed 与 buildHomeBentoModel 在不同时间
     React.createElement(TimeCapsuleSection, { capsules: m0.capsules, pool: m0.capsulePool }),
   );
   assert.match(voicesHtml, /换一批/);
+  assert.equal((voicesHtml.match(/class="chat-msg"/g) ?? []).length, 3);
   assert.match(journalHtml, /换一批/);
   assert.match(capsulesHtml, /换一批/);
 
   const smallVoicesHtml = renderToStaticMarkup(
-    React.createElement(FamilyVoicesTile, { voices: m0.voices.slice(0, 2), pool: m0.voices.slice(0, 2) }),
+    React.createElement(FamilyVoicesTile, { voices: m0.voices.slice(0, 3), pool: m0.voices.slice(0, 3) }),
   );
   assert.doesNotMatch(smallVoicesHtml, /换一批/);
 });

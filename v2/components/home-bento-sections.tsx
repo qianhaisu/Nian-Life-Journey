@@ -120,8 +120,8 @@ export function FamilyVoicesTile({
   if (voices.length === 0) return null;
   const effectivePool = pool && pool.length > 0 ? pool : voices;
   const shown =
-    step === 0 ? voices.slice(0, 2) : pickRotatedVoices(effectivePool, 2, initialSlot + step);
-  const canRotate = effectivePool.length > 2;
+    step === 0 ? voices.slice(0, 3) : pickRotatedVoices(effectivePool, 3, initialSlot + step);
+  const canRotate = effectivePool.length > 3;
 
   return (
     <section className="bento-tile tile-voices" aria-labelledby="home-voices-heading">
