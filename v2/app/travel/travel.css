@@ -438,3 +438,110 @@
 @media (max-width: 480px) {
   .travel-sources a { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; }
 }
+
+/* ── P6 旅行改版：首屏精选、回老家折叠组、详情页图文穿插 / 日子缩略图 / 上下段导航 ───────────── */
+.travel-featured {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--hairline, rgba(15, 23, 42, 0.06));
+  border-radius: 26px;
+  background: var(--color-surface, #FFFFFF);
+  box-shadow: var(--shadow);
+  transition: translate .26s var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1)), box-shadow .26s ease;
+}
+@media (hover: hover) { .travel-featured:hover { translate: 0 -3px; box-shadow: var(--shadow-hover); } }
+.travel-featured-photo { position: relative; display: block; min-height: 260px; background: var(--card-soft, #EEF2F8); }
+.travel-featured-photo .photo-crop { position: absolute; inset: 0; margin: 0; border-radius: 0; }
+.travel-featured-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
+.travel-featured-body { display: grid; align-content: center; gap: 8px; padding: clamp(18px, 3vw, 30px); }
+.travel-featured-kicker { justify-self: start; padding: 3px 11px; border-radius: 999px; background: var(--tint-blue, #EDF4FF); color: #1D4ED8; font-size: .74rem; font-weight: 700; letter-spacing: .02em; }
+.travel-featured-body strong { font-family: var(--font-heading); font-size: clamp(1.4rem, 3.4vw, 1.9rem); line-height: 1.22; letter-spacing: -0.02em; color: var(--color-primary, #0F172A); }
+.travel-featured-when { color: #1D4ED8; font-size: .86rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.travel-featured-summary {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  color: var(--color-secondary, #334155); font-size: .95rem; line-height: 1.7;
+}
+.travel-featured-go { display: inline-flex; align-items: center; min-height: 44px; color: #1D4ED8; font-weight: 700; font-size: .92rem; }
+@media (max-width: 719px) {
+  .travel-featured { grid-template-columns: minmax(0, 1fr); }
+  .travel-featured-photo { min-height: 0; aspect-ratio: 4 / 3; }
+}
+
+.travel-home-group {
+  margin-top: 4px;
+  padding: 4px 18px;
+  border: 1px solid var(--hairline, rgba(15, 23, 42, 0.06));
+  border-radius: var(--r-card, 24px);
+  background: var(--color-surface, #FFFFFF);
+  box-shadow: var(--shadow);
+}
+.travel-home-group summary {
+  display: flex; align-items: center; min-height: 48px;
+  font-family: var(--font-heading); font-weight: 700; color: #1D4ED8; cursor: pointer;
+}
+.travel-home-note { margin: 0 0 6px; color: var(--color-muted, #526075); font-size: .86rem; }
+.travel-postcards--grid {
+  grid-auto-flow: row; grid-auto-columns: auto;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  margin: 0; padding: 6px 0 16px; overflow: visible;
+}
+
+.travel-essay-block { margin-bottom: 1.2em; }
+.travel-essay-block > p { margin: 0 0 1.2em; }
+.travel-essay-block > p:last-child { margin-bottom: 0; }
+.travel-essay-media { display: grid; gap: 10px; margin: 0 0 1.4em; }
+.travel-essay-media--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.travel-essay-media--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.travel-essay-figure { margin: 0; }
+.travel-essay-figure .photo { border-radius: 16px; overflow: hidden; background: var(--card-soft, #EEF2F8); }
+.travel-essay-media--1 .travel-essay-figure .photo { max-width: 100%; }
+.travel-essay-media--2 .photo-crop, .travel-essay-media--3 .photo-crop { aspect-ratio: 4 / 5; margin: 0; }
+.travel-essay-media--2 .photo-crop img, .travel-essay-media--3 .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
+.travel-essay-figure figcaption { margin-top: 6px; color: var(--color-muted, #526075); font-size: .82rem; line-height: 1.5; }
+
+.travel-days { margin-top: clamp(24px, 4vw, 40px); }
+.travel-day-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.travel-day-card {
+  display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 12px;
+  min-height: 76px; height: 100%; padding: 8px; border: 1px solid var(--hairline, rgba(15, 23, 42, 0.06));
+  border-radius: 18px; background: var(--color-surface, #FFFFFF); box-shadow: var(--shadow);
+  transition: translate .22s var(--ease-spring, ease), box-shadow .22s ease;
+}
+.travel-day-card--text { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; }
+@media (hover: hover) { .travel-day-card:hover { translate: 0 -2px; box-shadow: var(--shadow-hover); } }
+.travel-day-thumb { position: relative; display: block; width: 76px; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--card-soft, #EEF2F8); }
+.travel-day-thumb .photo-crop { position: absolute; inset: 0; margin: 0; }
+.travel-day-thumb .photo-crop img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
+.travel-day-body { display: grid; gap: 3px; min-width: 0; }
+.travel-day-body time { color: #1D4ED8; font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.travel-day-age { color: var(--color-muted, #526075); font-weight: 600; }
+.travel-day-body strong {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-family: var(--font-heading); font-size: .98rem; line-height: 1.4; color: var(--color-primary, #0F172A);
+}
+
+.travel-neighbors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: clamp(28px, 5vw, 48px); }
+.travel-neighbor {
+  display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 10px 14px;
+  border: 1px solid var(--hairline, rgba(15, 23, 42, 0.06)); border-radius: 20px;
+  background: var(--color-surface, #FFFFFF); box-shadow: var(--shadow);
+  transition: translate .22s var(--ease-spring, ease), box-shadow .22s ease;
+}
+.travel-neighbor.is-empty { visibility: hidden; box-shadow: none; border: 0; }
+.travel-neighbor--next { flex-direction: row-reverse; text-align: right; }
+@media (hover: hover) { a.travel-neighbor:hover { translate: 0 -2px; box-shadow: var(--shadow-hover); } }
+.travel-neighbor-photo { flex: none; position: relative; width: 56px; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--card-soft, #EEF2F8); }
+.travel-neighbor-photo .photo-crop { position: absolute; inset: 0; margin: 0; }
+.travel-neighbor-photo .photo-crop img { width: 100%; height: 100%; object-fit: cover; }
+.travel-neighbor-body { display: grid; gap: 2px; min-width: 0; }
+.travel-neighbor-dir { color: #1D4ED8; font-size: .76rem; font-weight: 700; }
+.travel-neighbor-body strong { font-family: var(--font-heading); font-size: .98rem; line-height: 1.35; color: var(--color-primary, #0F172A); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.travel-neighbor-when { color: var(--color-muted, #526075); font-size: .76rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .travel-neighbors { grid-template-columns: minmax(0, 1fr); }
+  .travel-neighbor.is-empty { display: none; }
+  .travel-neighbor--next { flex-direction: row; text-align: left; }
+  .travel-essay-media--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) { .travel-featured, .travel-day-card, .travel-neighbor { transition: none; } }

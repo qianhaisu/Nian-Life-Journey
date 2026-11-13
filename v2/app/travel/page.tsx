@@ -5,7 +5,7 @@ import { renderOnDemand } from "@/lib/render-on-demand";
 import { ageOn, formatMonth } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
 import chinaGeo from "@/lib/travel/geo/china.json";
-import { KIND_LABEL, PLACES, tripRange, leadLine, stampKeyOf, unitOf, whenAge, type Unit } from "@/lib/travel/model";
+import { isHomeTrip, pickFeaturedTrip, placeNames, PLACES, tripRange, tripTag, leadLine, stampKeyOf, unitOf, whenAge, type Unit } from "@/lib/travel/model";
 import { readTravelIndex } from "@/lib/travel/reading";
 import "./travel.css";
 
@@ -77,12 +77,17 @@ export default async function TravelPage() {
     const card = cardById.get(t.id);
     const tripUnits = t.placeIds.map(unitOf).filter((u): u is Unit => !!u);
     return {
-      id: t.id, title: t.title, kind: t.kind, tag: KIND_LABEL[t.kind], from: t.from,
+      id: t.id, title: t.title, kind: t.kind, tag: tripTag(t), from: t.from,
+      group: isHomeTrip(t, publishedTrips) ? "home" : "travel",
+      summary: t.recordOnly ? undefined : t.summary, places: placeNames(t),
       rangeLabel: tripRange(t), ageText: whenAge(card?.ageLabel), cover: card?.cover, scenery: card?.scenery,
       unitKeys: [...new Set(tripUnits.map((u) => u.key))],
       provinces: [...new Set(tripUnits.map((u) => u.province).filter((x): x is string => !!x))],
     };
   });
+  // 首屏精选（P6.2）：trips.json 里 featured 的优先，否则最近一次有照片的非回老家行程。
+  const hasCover = (t: { id: string }) => Boolean(cardById.get(t.id)?.cover);
+  const featuredId = pickFeaturedTrip(publishedTrips, hasCover)?.id;
 
   return (
     <div className="travel-page">
@@ -91,7 +96,7 @@ export default async function TravelPage() {
         <p className="travel-lead">{leadLine(publishedTrips, birthDay, today)}</p>
       </header>
       <div className="reading-wrap">
-        <TravelAtlas trips={trips} units={units} stamps={stamps} places={places} provinceColors={provinceColors} provinceNames={provinceNames} homeUnitKey={homeUnit?.key} />
+        <TravelAtlas trips={trips} units={units} stamps={stamps} places={places} provinceColors={provinceColors} provinceNames={provinceNames} homeUnitKey={homeUnit?.key} featuredId={featuredId} />
       </div>
     </div>
   );

@@ -37,7 +37,7 @@ export function mergeReviewedTravelRecords(contents: readonly MonthContent[], ex
       records.push({ id: trip.id, title: trip.title, kind: trip.kind, from: trip.from, to: trip.to,
         placeIds: trip.placeIds, summary: trip.summary, evidence: trip.evidence,
         ...(trip.coverDay ? { coverDay: trip.coverDay } : {}), ...(trip.coverMediaId ? { coverMediaId: trip.coverMediaId } : {}),
-        ...(trip.recordOnly ? { recordOnly: true } : {}) });
+        ...(trip.recordOnly ? { recordOnly: true } : {}), ...(trip.featured ? { featured: true } : {}) });
     }
   }
   // A confirmed stay can replace an automatic single-day record for that same stay.

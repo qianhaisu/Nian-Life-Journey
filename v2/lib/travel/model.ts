@@ -19,6 +19,8 @@ export type TripKind = "birthplace" | "hometown" | "travel" | "daytrip";
 export type Trip = {
   id: string; title: string; kind: TripKind; from: string; to: string;
   recordOnly?: boolean;
+  /** 人工指定为旅行页首屏精选（P6.2）；多条同时为 true 时取最新的一条。 */
+  featured?: boolean;
   placeIds: string[]; coverDay?: string; coverMediaId?: string; summary: string; evidence: string[];
 };
 
@@ -72,7 +74,12 @@ export function validateTrips(raw: unknown, places: readonly Place[]): Trip[] {
     if (typeof t.summary !== "string" || !t.summary.trim()) throw new Error(`${where}: summary`);
     if (!Array.isArray(t.evidence) || !t.evidence.length) throw new Error(`${where}: evidence 不能为空（每条旅程都要说得出凭什么）`);
     if (t.coverMediaId !== undefined && (typeof t.coverMediaId !== "string" || !t.coverMediaId)) throw new Error(`${where}: coverMediaId`);
-    return { id: t.id, title: t.title, kind: t.kind, from: t.from, to: t.to, placeIds: [...t.placeIds], coverDay: t.coverDay, coverMediaId: t.coverMediaId, summary: t.summary, evidence: [...t.evidence] };
+    if (t.featured !== undefined && typeof t.featured !== "boolean") throw new Error(`${where}: featured 只能是 true/false`);
+    return {
+      id: t.id, title: t.title, kind: t.kind, from: t.from, to: t.to, placeIds: [...t.placeIds], coverDay: t.coverDay, coverMediaId: t.coverMediaId,
+      ...(t.featured ? { featured: true } : {}),
+      summary: t.summary, evidence: [...t.evidence],
+    };
   });
 }
 
@@ -228,4 +235,45 @@ export function leadLine(trips: readonly Trip[], birthDay: string | undefined, t
 /** A dated travel record does not claim that the family returned that day. */
 export function tripRange(trip: Trip): string {
   return `${formatRange(trip.from, trip.to)}${trip.recordOnly ? " · 出行记录" : ""}`;
+}
+
+/** 地点档案里的居住段（`places.json#livedIn` → sync.ts 生成的 `stay-*`）：是在那里住了一段日子，不是一次出门。 */
+export function isStayRecord(trip: Pick<Trip, "id">): boolean {
+  return trip.id.startsWith("stay-");
+}
+
+const overlaps = (a: Pick<Trip, "from" | "to">, b: Pick<Trip, "from" | "to">) => a.from <= b.to && b.from <= a.to;
+
+/**
+ * 旅行页的两组（P6.1）：真正出门玩的「旅行」，和「回老家 / 常住」。
+ * 归入回老家组的：kind 为 hometown；地点档案里的居住段（《住在温州的日子》在温州住了三个月，是住，不是旅行）；
+ * 以及和某次回老家行程共用出行日的连程（如 2026-10「飞回温州」后「回杭州路上在义乌住一晚」——它是回老家的返程一站）。
+ */
+export function isHomeTrip(trip: Trip, all: readonly Trip[] = []): boolean {
+  if (trip.kind === "hometown" || isStayRecord(trip)) return true;
+  if (trip.kind === "birthplace") return false;
+  return all.some((other) => other.id !== trip.id && other.kind === "hometown" && overlaps(trip, other));
+}
+
+/** 卡片角标：居住段读作「常住」，其余沿用 KIND_LABEL。 */
+export function tripTag(trip: Trip): string | undefined {
+  return isStayRecord(trip) ? "常住" : KIND_LABEL[trip.kind];
+}
+
+/**
+ * 首屏精选行程（P6.2）：人工 `featured: true` 且有封面的最新一条优先；
+ * 否则取最近一次有封面照片、非回老家、非单日出发记录的行程。都没有时返回 undefined（首屏不显示空卡）。
+ */
+export function pickFeaturedTrip<T extends Trip>(trips: readonly T[], hasCover: (trip: T) => boolean): T | undefined {
+  const newest = [...trips].sort((a, b) => b.from.localeCompare(a.from) || a.id.localeCompare(b.id));
+  return newest.find((t) => t.featured && hasCover(t))
+    ?? newest.find((t) => !t.recordOnly && !isHomeTrip(t, trips) && hasCover(t));
+}
+
+/** 详情页底部「上一段 / 下一段旅程」：按出发日期排，上一段更早、下一段更晚。 */
+export function tripNeighbors<T extends Trip>(trip: Pick<Trip, "id">, all: readonly T[]): { prev?: T; next?: T } {
+  const ordered = [...all].sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.id.localeCompare(b.id));
+  const i = ordered.findIndex((t) => t.id === trip.id);
+  if (i < 0) return {};
+  return { prev: ordered[i - 1], next: ordered[i + 1] };
 }
