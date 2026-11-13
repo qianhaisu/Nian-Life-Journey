@@ -1,12 +1,17 @@
-import React from "react";
+"use client";
+
+import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import type {
-  BentoDayCard,
-  BentoFamilyVoice,
-  BentoGrowthHighlight,
-  BentoTimeCapsule,
-  BentoTravelFootprint,
+import {
+  pickRotatedCapsules,
+  pickRotatedJournalDays,
+  pickRotatedVoices,
+  type BentoDayCard,
+  type BentoFamilyVoice,
+  type BentoGrowthHighlight,
+  type BentoTimeCapsule,
+  type BentoTravelFootprint,
 } from "@/lib/home-bento";
 
 // 首页 Bento 子模块与下方章节组件（服务端无状态组件，零客户端额外 JS 负担）。
@@ -102,9 +107,21 @@ export function GrowthHighlightTile({ growth }: { growth: BentoGrowthHighlight }
   );
 }
 
-export function FamilyVoicesTile({ voices }: { voices: BentoFamilyVoice[] }) {
+export function FamilyVoicesTile({
+  voices,
+  pool,
+  initialSlot = 0,
+}: {
+  voices: BentoFamilyVoice[];
+  pool?: BentoFamilyVoice[];
+  initialSlot?: number;
+}) {
+  const [step, setStep] = useState(0);
   if (voices.length === 0) return null;
-  const shown = voices.slice(0, 2);
+  const effectivePool = pool && pool.length > 0 ? pool : voices;
+  const shown =
+    step === 0 ? voices.slice(0, 2) : pickRotatedVoices(effectivePool, 2, initialSlot + step);
+  const canRotate = effectivePool.length > 2;
 
   return (
     <section className="bento-tile tile-voices" aria-labelledby="home-voices-heading">
@@ -112,6 +129,16 @@ export function FamilyVoicesTile({ voices }: { voices: BentoFamilyVoice[] }) {
         <h2 className="tile-label tile-label--peach" id="home-voices-heading">
           家人的话
         </h2>
+        {canRotate ? (
+          <button
+            type="button"
+            className="tile-rotate-btn"
+            onClick={() => setStep((prev) => prev + 1)}
+            aria-label="换一批家人的话"
+          >
+            换一批
+          </button>
+        ) : null}
       </div>
       <div className="chat-bubbles">
         {shown.map((voice) => (
@@ -142,14 +169,23 @@ export function FamilyVoicesTile({ voices }: { voices: BentoFamilyVoice[] }) {
 
 export function RecentJournalSection({
   days,
+  pool,
+  initialSlot = 0,
   latestMonthHref,
   latestMonthLabel,
 }: {
   days: BentoDayCard[];
+  pool?: BentoDayCard[];
+  initialSlot?: number;
   latestMonthHref?: string;
   latestMonthLabel?: string;
 }) {
+  const [step, setStep] = useState(0);
   if (days.length === 0) return null;
+  const effectivePool = pool && pool.length > 0 ? pool : days;
+  const visibleDays =
+    step === 0 ? days : pickRotatedJournalDays(effectivePool, 3, initialSlot + step);
+  const canRotate = effectivePool.length > 3;
 
   return (
     <section className="mod-section mod-section--journal" aria-labelledby="home-journal-heading">
@@ -157,15 +193,27 @@ export function RecentJournalSection({
         <h2 className="mod-sec-title" id="home-journal-heading">
           近期日常
         </h2>
-        {latestMonthHref && latestMonthLabel ? (
-          <Link className="mod-sec-pill" href={latestMonthHref}>
-            <span>{latestMonthLabel}</span>
-            <span aria-hidden="true">→</span>
-          </Link>
-        ) : null}
+        <div className="mod-sec-actions">
+          {canRotate ? (
+            <button
+              type="button"
+              className="mod-sec-pill mod-sec-rotate"
+              onClick={() => setStep((prev) => prev + 1)}
+              aria-label="换一批近期日常"
+            >
+              换一批
+            </button>
+          ) : null}
+          {latestMonthHref && latestMonthLabel ? (
+            <Link className="mod-sec-pill" href={latestMonthHref}>
+              <span>{latestMonthLabel}</span>
+              <span aria-hidden="true">→</span>
+            </Link>
+          ) : null}
+        </div>
       </div>
-      <div className={`journal-grid journal-grid--count-${Math.min(days.length, 3)}`}>
-        {days.map((item) => (
+      <div className={`journal-grid journal-grid--count-${Math.min(visibleDays.length, 3)}`}>
+        {visibleDays.map((item) => (
           <Link
             key={item.day}
             className={item.photo ? "j-card" : "j-card j-card--text-only"}
@@ -208,9 +256,22 @@ export function RecentJournalSection({
   );
 }
 
-export function TimeCapsuleSection({ capsules }: { capsules: BentoTimeCapsule[] }) {
+export function TimeCapsuleSection({
+  capsules,
+  pool,
+  initialSlot = 0,
+}: {
+  capsules: BentoTimeCapsule[];
+  pool?: BentoTimeCapsule[];
+  initialSlot?: number;
+}) {
+  const [step, setStep] = useState(0);
   // 原则六：不足 2 张合格过往瞬间时整节收起
   if (capsules.length < 2) return null;
+  const effectivePool = pool && pool.length > 0 ? pool : capsules;
+  const visibleCapsules =
+    step === 0 ? capsules : pickRotatedCapsules(effectivePool, 4, initialSlot + step);
+  const canRotate = effectivePool.length > 4;
 
   return (
     <section className="mod-section mod-section--capsules" aria-labelledby="home-capsules-heading">
@@ -220,13 +281,25 @@ export function TimeCapsuleSection({ capsules }: { capsules: BentoTimeCapsule[] 
             过去的张年
           </h2>
         </div>
-        <Link className="mod-sec-pill" href="/memory">
-          <span>全部记忆</span>
-          <span aria-hidden="true">→</span>
-        </Link>
+        <div className="mod-sec-actions">
+          {canRotate ? (
+            <button
+              type="button"
+              className="mod-sec-pill mod-sec-rotate"
+              onClick={() => setStep((prev) => prev + 1)}
+              aria-label="换一批过去的张年"
+            >
+              换一批
+            </button>
+          ) : null}
+          <Link className="mod-sec-pill" href="/memory">
+            <span>全部记忆</span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        </div>
       </div>
-      <div className={`capsule-strip capsule-strip--count-${Math.min(capsules.length, 4)}`}>
-        {capsules.map((capsule) => (
+      <div className={`capsule-strip capsule-strip--count-${Math.min(visibleCapsules.length, 4)}`}>
+        {visibleCapsules.map((capsule) => (
           <Link
             key={capsule.day}
             className="capsule-card"

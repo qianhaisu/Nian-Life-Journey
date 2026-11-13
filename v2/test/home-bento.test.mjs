@@ -9,6 +9,10 @@ import {
   buildHomeClockHeader,
   cleanDisplayText,
   collectPublishedDays,
+  computeHomeRotationSeed,
+  pickRotatedCapsules,
+  pickRotatedJournalDays,
+  pickRotatedVoices,
   selectFamilyVoices,
   selectRecentJournalDays,
   selectTimeCapsules,
@@ -1353,4 +1357,155 @@ test("selectTimeCapsules：单一主题（含标题带「笑」的未标注瞬�
   const laughCount = capsules.filter((c) => /笑/.test(c.title)).length;
   assert.ok(laughCount <= 2, `「笑」主题胶囊不得超过 2 张，实际为 ${laughCount}`);
   assert.ok(capsules.some((c) => c.day === "2025-08-12"), "应选入玩水主题月份替代第 3 张大笑胶囊");
+});
+
+test("需求 3：computeHomeRotationSeed 与 buildHomeBentoModel 在不同时间窗/槽位下轮换家人的话、近期日常与过去的张年", () => {
+  assert.equal(computeHomeRotationSeed(undefined), 0);
+  const t0 = Date.UTC(2026, 10, 13, 8, 0, 0);
+  const t1 = t0 + 30 * 60 * 1000;
+  const t2 = t0 + 60 * 60 * 1000;
+  assert.notEqual(computeHomeRotationSeed(t0), computeHomeRotationSeed(t1));
+  assert.notEqual(computeHomeRotationSeed(t1), computeHomeRotationSeed(t2));
+
+  const recentDays = [
+    "2026-11-11",
+    "2026-11-10",
+    "2026-11-09",
+    "2026-11-08",
+    "2026-11-07",
+    "2026-11-06",
+    "2026-11-05",
+    "2026-11-04",
+  ];
+  const pastDays = [
+    "2026-08-15",
+    "2026-07-18",
+    "2026-06-25",
+    "2026-05-04",
+    "2026-03-12",
+    "2025-12-26",
+    "2025-10-10",
+    "2025-08-12",
+  ];
+  const allDays = [...recentDays, ...pastDays];
+  const media = allDays.map((d) => makeMedia(`m-${d}`, `${d}T10:00:00Z`));
+  const topicsMap = Object.fromEntries(
+    media.map((m, idx) => [
+      m.id,
+      {
+        topic: ["户外", "玩水", "玩玩具", "吃饭", "笑"][idx % 5],
+        water: idx % 5 === 1,
+        value: 0.9,
+        confidence: 0.95,
+      },
+    ]),
+  );
+
+  const speakers = ["妈妈", "爸爸", "外公", "奶奶", "雪姨", "老师"];
+  const byMonth = new Map();
+  for (let i = 0; i < allDays.length; i += 1) {
+    const day = allDays[i];
+    const month = day.slice(0, 7);
+    if (!byMonth.has(month)) byMonth.set(month, []);
+    byMonth.get(month).push({
+      day,
+      kind: "story",
+      title: `${day} 留影记事`,
+      paragraphs: [`${day} 这一天的真实日常片段记录。`],
+      firstScreenMediaIds: [`m-${day}`],
+      expandedMediaIds: [`m-${day}`],
+      featuredQuote: {
+        speaker: speakers[i % speakers.length],
+        text: `这是第 ${i + 1} 条经过核验的家人原话记录`,
+        sourceId: `src-${day}`,
+      },
+    });
+  }
+  const monthContents = [...byMonth.entries()].map(([month, days]) => ({
+    schema: "nianlife.month-content/1",
+    month,
+    days,
+  }));
+
+  const archive = makeBaseArchive({
+    media,
+    privilege: {
+      confirmed: new Set(media.map((m) => m.id)),
+      checked: new Set(media.map((m) => m.id)),
+    },
+  });
+
+  const m0 = buildHomeBentoModel({
+    archive,
+    monthContents,
+    topics: (id) => topicsMap[id],
+    today: "2026-11-12",
+    activeLeadDay: "2026-11-11",
+    rotationSlot: 0,
+  });
+  const m1 = buildHomeBentoModel({
+    archive,
+    monthContents,
+    topics: (id) => topicsMap[id],
+    today: "2026-11-12",
+    activeLeadDay: "2026-11-11",
+    rotationSlot: 1,
+  });
+
+  // 1. 三个板块候选池充足，且不同槽位产出的组合不同、无重复、无空卡
+  assert.ok(m0.voicePool.length > 3);
+  assert.ok(m0.journal.pool.length > 3);
+  assert.ok(m0.capsulePool.length > 4);
+
+  assert.notDeepEqual(
+    m0.voices.map((v) => v.id),
+    m1.voices.map((v) => v.id),
+  );
+  assert.notDeepEqual(
+    m0.journal.days.map((d) => d.day),
+    m1.journal.days.map((d) => d.day),
+  );
+  assert.notDeepEqual(
+    m0.capsules.map((c) => c.day),
+    m1.capsules.map((c) => c.day),
+  );
+
+  for (const model of [m0, m1]) {
+    const voiceSpeakers = new Set(model.voices.map((v) => v.speaker));
+    assert.equal(voiceSpeakers.size, model.voices.length, "家人的话同批应保持说话人多样");
+    assert.equal(model.journal.days.length, 3);
+    assert.equal(new Set(model.journal.days.map((d) => d.day)).size, 3);
+    assert.ok(model.journal.days.every((d) => d.title && d.photo && d.href));
+    assert.equal(model.capsules.length, 4);
+    assert.equal(new Set(model.capsules.map((c) => c.month)).size, 4, "过去的张年同批应跨月去重");
+  }
+
+  // 2. 纯轮换函数直接测试：不越界且无重复
+  assert.equal(pickRotatedVoices(m0.voicePool, 2, 99).length, 2);
+  assert.equal(pickRotatedJournalDays(m0.journal.pool, 3, 99).length, 3);
+  assert.equal(pickRotatedCapsules(m0.capsulePool, 4, 99).length, 4);
+
+  // 3. 组件渲染「换一批」按钮：候选池大于展示数量时显示，小于等于时不显示
+  const voicesHtml = renderToStaticMarkup(
+    React.createElement(FamilyVoicesTile, { voices: m0.voices, pool: m0.voicePool }),
+  );
+  const journalHtml = renderToStaticMarkup(
+    React.createElement(RecentJournalSection, {
+      days: m0.journal.days,
+      pool: m0.journal.pool,
+      latestMonthHref: m0.journal.latestMonthHref,
+      latestMonthLabel: m0.journal.latestMonthLabel,
+    }),
+  );
+  const capsulesHtml = renderToStaticMarkup(
+    React.createElement(TimeCapsuleSection, { capsules: m0.capsules, pool: m0.capsulePool }),
+  );
+  assert.match(voicesHtml, /换一批/);
+  assert.match(journalHtml, /换一批/);
+  assert.match(capsulesHtml, /换一批/);
+
+  const smallVoicesHtml = renderToStaticMarkup(
+    React.createElement(FamilyVoicesTile, { voices: m0.voices.slice(0, 2), pool: m0.voices.slice(0, 2) }),
+  );
+  assert.doesNotMatch(smallVoicesHtml, /换一批/);
 });

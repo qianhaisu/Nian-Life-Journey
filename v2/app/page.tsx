@@ -103,6 +103,7 @@ export default async function HomePage() {
     answerLine: answer?.line,
     excludePhotoIds,
     memorySlidePhotoIds,
+    now: new Date(),
   });
 
   const hasLatestDay = bento.latestDay !== null;
@@ -146,17 +147,29 @@ export default async function HomePage() {
 
           {bento.latestDay ? <LatestDayTile card={bento.latestDay} wide={!hasGrowth} /> : null}
           {bento.growth ? <GrowthHighlightTile growth={bento.growth} /> : null}
-          {hasVoices ? <FamilyVoicesTile voices={bento.voices} /> : null}
+          {hasVoices ? (
+            <FamilyVoicesTile
+              voices={bento.voices}
+              pool={bento.voicePool}
+              initialSlot={bento.rotationSlot}
+            />
+          ) : null}
           <HomeFilmEntry className={!hasVoices ? "tile-film--wide" : undefined} />
         </div>
 
         <RecentJournalSection
           days={bento.journal.days}
+          pool={bento.journal.pool}
+          initialSlot={bento.rotationSlot}
           latestMonthHref={bento.journal.latestMonthHref}
           latestMonthLabel={bento.journal.latestMonthLabel}
         />
 
-        <TimeCapsuleSection capsules={bento.capsules} />
+        <TimeCapsuleSection
+          capsules={bento.capsules}
+          pool={bento.capsulePool}
+          initialSlot={bento.rotationSlot}
+        />
 
         {hasTravel ? (
           <div className="bottom-widgets">
