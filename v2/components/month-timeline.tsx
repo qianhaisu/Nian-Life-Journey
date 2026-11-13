@@ -14,6 +14,7 @@ export function MonthTimeline({
   year,
   month,
   monthAgeLabel,
+  availableMonths,
   weeks,
   entries,
   initial,
@@ -22,6 +23,7 @@ export function MonthTimeline({
   year: string;
   month?: string;
   monthAgeLabel?: string;
+  availableMonths?: string[];
   weeks: TimelineWeek[];
   entries?: TimelineDay[][];
   initial?: TimelineDay[];
@@ -269,6 +271,7 @@ export function MonthTimeline({
             month={resolvedMonth}
             days={resolvedCalendarDays}
             activeDay={activeDay}
+            availableMonths={availableMonths}
             onSelectDay={handleSelectDay}
           />
         </aside>
@@ -319,6 +322,8 @@ export function MonthTimeline({
                 month={resolvedMonth}
                 days={resolvedCalendarDays}
                 activeDay={activeDay}
+                availableMonths={availableMonths}
+                onBeforeNavigate={() => setDrawerOpen(false)}
                 onSelectDay={(event, day) => {
                   setDrawerOpen(false);
                   handleSelectDay(event, day);

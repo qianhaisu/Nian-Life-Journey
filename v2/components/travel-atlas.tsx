@@ -221,11 +221,17 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
             <li key={u.key}>
               <button type="button" className={`travel-stamp${u.unitKeys.some((k) => selectedUnits.has(k)) ? " is-on" : ""}`} style={{ "--stamp": u.color } as React.CSSProperties}
                 onClick={() => { pickStamp(u); mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
-                <TravelStampMotif stampKey={u.key} />
-                <span className="travel-stamp-name">{u.name}</span>
-                <span className="travel-stamp-first">{u.firstMonth}</span>
-                {u.firstAge ? <span className="travel-stamp-age">{u.firstAge}</span> : null}
-                <span className="travel-stamp-dots" aria-hidden="true">{Array.from({ length: Math.min(u.visits, 6) }, (_, i) => <i key={i} />)}</span>
+                <span className="travel-stamp-art" aria-hidden="true">
+                  <TravelStampMotif stampKey={u.key} />
+                </span>
+                <span className="travel-stamp-meta">
+                  <span className="travel-stamp-name">{u.name}</span>
+                  <span className="travel-stamp-when">
+                    <span className="travel-stamp-first">{u.firstMonth}</span>
+                    {u.firstAge ? <span className="travel-stamp-age"> · {u.firstAge}</span> : null}
+                  </span>
+                  <span className="travel-stamp-dots" aria-hidden="true">{Array.from({ length: Math.min(u.visits, 6) }, (_, i) => <i key={i} />)}</span>
+                </span>
               </button>
             </li>
           ))}

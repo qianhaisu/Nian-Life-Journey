@@ -74,6 +74,8 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const focusGoals = summary ? focusGoalsForSnapshot(store.monthlyFocusGoals, month) : [];
   const yearChapter = chapters.find((item) => item.year === year);
   const siblings = yearChapter?.months.filter((item) => item.month !== month) ?? [];
+  const allArchiveMonths = [...new Set([...chapters.flatMap((yc) => yc.months.map((m) => m.month)), month])]
+    .sort((a, b) => a.localeCompare(b));
   const archivePhotoCount = composition.archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
   const dayGroups = new Map(composition.dayPhotoGroups.map((day) => [day.day, day]));
   const albumDays = dayAlbumDays(composition);
@@ -114,6 +116,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         year={year}
         month={monthSegment}
         monthAgeLabel={chapter.ageLabel}
+        availableMonths={allArchiveMonths}
         weeks={timeline.weeks}
         entries={entries}
         calendarDays={[...timeline.byDay.values()].map((day) => ({

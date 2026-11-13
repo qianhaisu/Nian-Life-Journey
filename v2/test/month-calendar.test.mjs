@@ -56,6 +56,7 @@ test("MonthCalendar 与 MonthTimeline: 渲染月历卡片并去掉周跳转胶�
         { day: "2026-11-11", title: "看绘本", hasPhotos: false },
       ],
       activeDay: "2026-11-11",
+      availableMonths: ["2025-12", "2026-10", "2026-11", "2026-12"],
       onSelectDay: () => {},
     }),
   );
@@ -63,6 +64,11 @@ test("MonthCalendar 与 MonthTimeline: 渲染月历卡片并去掉周跳转胶�
   assert.match(calHtml, /href="#day-2026-11-10"/);
   assert.match(calHtml, /href="#day-2026-11-11"/);
   assert.match(calHtml, /aria-current="date"/);
+  assert.match(calHtml, /class="month-cal-nav"/);
+  assert.match(calHtml, /href="\/memory\/2026\/10"/);
+  assert.match(calHtml, /href="\/memory\/2026\/12"/);
+  assert.match(calHtml, /class="month-cal-select"/);
+  assert.match(calHtml, /2025 年 12 月/);
 
   const timelineHtml = renderToStaticMarkup(
     React.createElement(MonthTimeline, {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { MouseEvent } from "react";
 import { CardThumbnail } from "@/components/card-thumbnail";
 import { MonthTextSticker } from "@/components/month-text-sticker";
@@ -76,19 +77,40 @@ export function MonthCalendar({
   month,
   days,
   activeDay,
+  availableMonths,
   onSelectDay,
+  onBeforeNavigate,
 }: {
   year: string;
   month: string;
   days: readonly MonthCalendarDay[];
   activeDay?: string;
+  availableMonths?: readonly string[];
   onSelectDay: (event: MouseEvent<HTMLAnchorElement>, day: string) => void;
+  onBeforeNavigate?: () => void;
 }) {
   const cells = buildMonthCalendarGrid(year, month, days);
   if (cells.length === 0) return null;
 
   const hasMilestones = days.some((d) => d.isMilestone);
   const monthNum = Number(month);
+  const currentMonthKey = `${year}-${month.padStart(2, "0")}`;
+  const sortedMonths =
+    availableMonths && availableMonths.length > 0
+      ? [...new Set([...availableMonths, currentMonthKey])].sort((a, b) => a.localeCompare(b))
+      : [];
+  const currentIdx = sortedMonths.indexOf(currentMonthKey);
+  const prevMonth = currentIdx > 0 ? sortedMonths[currentIdx - 1] : undefined;
+  const nextMonth =
+    currentIdx >= 0 && currentIdx < sortedMonths.length - 1 ? sortedMonths[currentIdx + 1] : undefined;
+  const monthHref = (ym: string) => `/memory/${ym.slice(0, 4)}/${ym.slice(5, 7)}`;
+  const monthGroupsByYear = new Map<string, string[]>();
+  for (const ym of sortedMonths) {
+    const y = ym.slice(0, 4);
+    const list = monthGroupsByYear.get(y);
+    if (list) list.push(ym);
+    else monthGroupsByYear.set(y, [ym]);
+  }
 
   return (
     <nav className="month-calendar" aria-label={`${year} 年 ${monthNum} 月日历`}>
@@ -110,6 +132,71 @@ export function MonthCalendar({
           </span>
         </div>
       </div>
+
+      {sortedMonths.length > 1 ? (
+        <div className="month-cal-nav" aria-label="跨月快速切换">
+          {prevMonth ? (
+            <Link
+              href={monthHref(prevMonth)}
+              className="month-cal-nav-btn"
+              aria-label={`切换到 ${prevMonth.slice(0, 4)} 年 ${Number(prevMonth.slice(5, 7))} 月`}
+              onClick={onBeforeNavigate}
+            >
+              ‹ {Number(prevMonth.slice(5, 7))}月
+            </Link>
+          ) : (
+            <span className="month-cal-nav-btn is-disabled" aria-disabled="true">
+              ‹ 最早
+            </span>
+          )}
+
+          <label className="month-cal-select-wrap">
+            <span className="month-cal-select-label">
+              {year} 年 {monthNum} 月 <span aria-hidden="true">▾</span>
+            </span>
+            <select
+              className="month-cal-select"
+              aria-label="选择归档月份"
+              value={currentMonthKey}
+              onChange={(event) => {
+                const target = event.target.value;
+                if (!target || target === currentMonthKey) return;
+                onBeforeNavigate?.();
+                window.location.assign(monthHref(target));
+              }}
+            >
+              {[...monthGroupsByYear.entries()]
+                .sort((a, b) => b[0].localeCompare(a[0]))
+                .map(([groupYear, list]) => (
+                  <optgroup key={groupYear} label={`${groupYear} 年`}>
+                    {[...list]
+                      .sort((a, b) => b.localeCompare(a))
+                      .map((ym) => (
+                        <option key={ym} value={ym}>
+                          {groupYear} 年 {Number(ym.slice(5, 7))} 月
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+            </select>
+          </label>
+
+          {nextMonth ? (
+            <Link
+              href={monthHref(nextMonth)}
+              className="month-cal-nav-btn"
+              aria-label={`切换到 ${nextMonth.slice(0, 4)} 年 ${Number(nextMonth.slice(5, 7))} 月`}
+              onClick={onBeforeNavigate}
+            >
+              {Number(nextMonth.slice(5, 7))}月 ›
+            </Link>
+          ) : (
+            <span className="month-cal-nav-btn is-disabled" aria-disabled="true">
+              最新 ›
+            </span>
+          )}
+        </div>
+      ) : null}
 
       <div className="month-cal-weekdays" aria-hidden="true">
         {WEEKDAYS.map((label, idx) => (
