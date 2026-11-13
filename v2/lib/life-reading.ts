@@ -253,13 +253,21 @@ function matchAllTermsTier(text: string, terms: readonly SearchTerm[]): number {
   return minTier * 10 + totalTier;
 }
 
+const SEARCH_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
+  "maternal-grandfather": ["外公", "姥爷"],
+  "maternal-grandmother": ["外婆", "姥姥"],
+  mother: ["妈妈", "苏静", "阿静", "老妈"],
+  father: ["爸爸", "老爸"],
+};
+
 export function searchTerms(query: string): SearchTerm[] {
   let text = compact(query).slice(0, 100);
   const terms: SearchTerm[] = [];
   for (const person of READING_PEOPLE) {
-    if (person.aliases.some(alias => text.includes(alias))) {
-      terms.push({ alternatives: [...person.aliases] });
-      for (const alias of person.aliases) text = text.split(alias).join(" ");
+    const alts = SEARCH_SYNONYMS[person.id] ?? person.aliases;
+    if (alts.some((alias) => text.includes(alias))) {
+      terms.push({ alternatives: [...alts] });
+      for (const alias of alts) text = text.split(alias).join(" ");
     }
   }
   if (/自己(?:吃饭|吃东西|进食)/.test(text)) {
@@ -268,8 +276,20 @@ export function searchTerms(query: string): SearchTerm[] {
   }
   // Question framing is not evidence. "第一次" selects the earliest *matching record*, and the UI
   // names it that way; missing earlier records must never become a claim about a real-life first.
-  text = text.replace(/什么时候|哪一天|哪天|什么时候开始|开始|第一次|最早|后来|最近|有哪些|有没有|去过哪里|去过哪些地方|去过|在哪里|哪里|怎样|怎么|关于|张年|小年|的|了|和|与|一起|会|说|喊|叫|请|找|找找|记录|记忆|[，。！？?！「」“”"、：:]/g, " ");
-  for (const part of text.split(/\s+/).filter(Boolean)) terms.push({ alternatives: [part] });
+  text = text.replace(/什么时候开始|什么时候|的时候|的日子|那一天|那天|哪一天|哪天|开始|第一次|最早|后来|最近|有哪些|有没有|去过哪里|去过哪些地方|去过|在哪里|哪里|怎样|怎么|关于|张小年|小年年|张年|小年|年年|宝宝|一起|跟着|陪着|带着|照片|故事|日子|的|了|和|跟|与|在|去|会|说|喊|叫|请|找|找找|记录|记忆|[，。！？?！「」“”"、：:]/g, " ");
+  text = text.replace(/(?<![\p{Script=Han}])(?:带|陪)(?![\p{Script=Han}])/gu, " ");
+  for (const part of text.split(/\s+/).filter(Boolean)) {
+    if (ZH_WORD_SEGMENTER && part.length >= 4 && /[\p{Script=Han}]/u.test(part)) {
+      const segs = [...ZH_WORD_SEGMENTER.segment(part)]
+        .filter((s) => s.isWordLike && s.segment.trim().length > 0)
+        .map((s) => s.segment.trim());
+      if (segs.length > 1) {
+        for (const seg of segs) terms.push({ alternatives: [seg] });
+        continue;
+      }
+    }
+    terms.push({ alternatives: [part] });
+  }
   return terms;
 }
 
@@ -393,6 +413,23 @@ export function searchArchive(entries: readonly ReadingDay[], query: string): Se
         bestExcerpt = text;
       }
     }
+    if (!bestExcerpt && terms.length >= 2 && !speechIntent && !travelTogether) {
+      const combined = texts.join(" ");
+      const dayScore = matchAllTermsTier(combined, terms);
+      if (dayScore > 0) {
+        let bestHits = 0;
+        let fallbackExcerpt = texts[0];
+        for (const text of texts) {
+          const hits = terms.reduce((acc, term) => acc + (termTierInText(text, term) > 0 ? 1 : 0), 0);
+          if (hits > bestHits) {
+            bestHits = hits;
+            fallbackExcerpt = text;
+          }
+        }
+        bestExcerpt = fallbackExcerpt;
+        bestScore = Math.max(1, Math.floor(dayScore / 2));
+      }
+    }
     if (!bestExcerpt) return [];
     return [{ entry, excerpt: bestExcerpt, quotes: quotesIn(bestExcerpt), leadPhoto: entry.photos[0], tierScore: bestScore }];
   }).sort((a, b) => {
@@ -455,6 +492,23 @@ export function searchArchiveAll(input: {
             if (score > bestScore) {
               bestScore = score;
               bestExcerpt = text;
+            }
+          }
+          if (!bestExcerpt && terms.length >= 2 && !speechIntent && !travelTogether) {
+            const combined = candidates.join(" ");
+            const monthScore = matchAllTermsTier(combined, terms);
+            if (monthScore > 0) {
+              let bestHits = 0;
+              let fallbackExcerpt = candidates[0];
+              for (const text of candidates) {
+                const hits = terms.reduce((acc, term) => acc + (termTierInText(text, term) > 0 ? 1 : 0), 0);
+                if (hits > bestHits) {
+                  bestHits = hits;
+                  fallbackExcerpt = text;
+                }
+              }
+              bestExcerpt = fallbackExcerpt;
+              bestScore = Math.max(1, Math.floor(monthScore / 2));
             }
           }
           if (!bestExcerpt) return [];
