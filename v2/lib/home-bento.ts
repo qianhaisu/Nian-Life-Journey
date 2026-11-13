@@ -123,15 +123,19 @@ export type BentoTravelFootprint = {
 
 export type HomeBentoModel = {
   clock: HomeClockHeader;
+  rotationSlot: number;
   latestDay: BentoDayCard | null;
   growth: BentoGrowthHighlight | null;
   voices: BentoFamilyVoice[];
+  voicePool: BentoFamilyVoice[];
   journal: {
     days: BentoDayCard[];
+    pool: BentoDayCard[];
     latestMonthHref?: string;
     latestMonthLabel?: string;
   };
   capsules: BentoTimeCapsule[];
+  capsulePool: BentoTimeCapsule[];
   travel: BentoTravelFootprint;
 };
 
@@ -148,6 +152,10 @@ export type BuildHomeBentoInput = {
   excludePhotoIds?: Iterable<string>;
   /** 首屏各段回忆幻灯片包含的照片 ID，时间胶囊与近期卡片在有替代照片时优先避让。 */
   memorySlidePhotoIds?: Iterable<string>;
+  /** 当前服务端请求时间（每 30 分钟轮换一次首页「家人的话」「近期日常」「过去的张年」）。 */
+  now?: Date | number;
+  /** 显式轮换槽位（覆盖 now 推导的槽位，主要用于确定性测试）。 */
+  rotationSlot?: number;
 };
 
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"] as const;
@@ -1610,6 +1618,7 @@ export function selectRecentJournalDays(
   excludeDays: ReadonlySet<string>,
   limit = 3,
   tracker?: PhotoSelectionTracker,
+  options?: { preservePickOrder?: boolean },
 ): HomeBentoModel["journal"] {
   const activeTracker = tracker ?? createPhotoTracker({ privilege: archive.privilege });
   const eligible = days.filter(
@@ -1618,7 +1627,7 @@ export function selectRecentJournalDays(
   // 优先在近 45 天内选片（与「过去的张年」≥45 天严格错开），且同窗口内带公开照片的日子优先；
   // 仅当近 45 天总篇数不足 limit 时才向更早的候选窗口回退。
   const nearDays = eligible.filter((d) => daysBetween(d.day, today) < 45).slice(0, 30);
-  const recentWindow = nearDays.length >= limit ? nearDays : eligible.slice(0, 30);
+  const recentWindow = nearDays.length >= Math.min(limit, 3) ? nearDays : eligible.slice(0, 30);
 
   const withPhoto = recentWindow.filter((d) => d.photos.length > 0 || d.photo !== undefined);
   const textOnly = recentWindow.filter((d) => d.photos.length === 0 && d.photo === undefined);
@@ -1672,7 +1681,9 @@ export function selectRecentJournalDays(
     }
   }
 
-  const filtered = pickedCards.sort((a, b) => b.day.localeCompare(a.day));
+  const filtered = options?.preservePickOrder
+    ? pickedCards
+    : pickedCards.sort((a, b) => b.day.localeCompare(a.day));
 
   const latestMonth =
     days[0]?.month ??
@@ -1684,6 +1695,7 @@ export function selectRecentJournalDays(
 
   return {
     days: filtered,
+    pool: filtered,
     latestMonthHref: latestMonth ? `/memory/${latestMonth.slice(0, 4)}/${latestMonth.slice(5, 7)}` : undefined,
     latestMonthLabel: latestMonth ? `翻到 ${formatMonth(latestMonth)}` : undefined,
   };
@@ -1728,6 +1740,7 @@ export function selectTimeCapsules(
     excludePhotoIds?: ReadonlySet<string>;
     softExcludePhotoIds?: ReadonlySet<string>;
     excludeDays?: ReadonlySet<string>;
+    preservePickOrder?: boolean;
   },
 ): BentoTimeCapsule[] {
   const currentMonth = today.slice(0, 7);
@@ -1908,9 +1921,10 @@ export function selectTimeCapsules(
   }
 
   // 按时间倒序排列（从较近的过往阶段一路回看更小的时候，像翻相机胶卷）
-  return picked
-    .sort((a, b) => b.day.localeCompare(a.day))
-    .map(({ score: _score, daysAgo: _daysAgo, topic: _topic, ...capsule }) => capsule);
+  const ordered = options?.preservePickOrder
+    ? picked
+    : picked.sort((a, b) => b.day.localeCompare(a.day));
+  return ordered.map(({ score: _score, daysAgo: _daysAgo, topic: _topic, ...capsule }) => capsule);
 }
 
 function collectSyncedTrips(monthContents: readonly MonthContent[], today: string): Trip[] {
@@ -2097,6 +2111,88 @@ export function buildHomeClockHeader(birthDay: string | undefined, today: string
   };
 }
 
+export const HOME_ROTATION_WINDOW_MS = 30 * 60 * 1000;
+
+export function computeHomeRotationSeed(now?: Date | number): number {
+  if (now === undefined) return 0;
+  const ms = typeof now === "number" ? now : now.getTime();
+  if (!Number.isFinite(ms) || ms < 0) return 0;
+  return Math.floor(ms / HOME_ROTATION_WINDOW_MS);
+}
+
+export function pickRotatedVoices(
+  pool: readonly BentoFamilyVoice[],
+  count: number,
+  slot: number,
+): BentoFamilyVoice[] {
+  if (pool.length <= count) return [...pool];
+  const step = Math.min(count, Math.max(1, pool.length - count));
+  const offset = (((slot * step) % pool.length) + pool.length) % pool.length;
+  const picked: BentoFamilyVoice[] = [];
+  const usedIds = new Set<string>();
+  const usedSpeakers = new Set<string>();
+
+  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
+    const item = pool[(offset + i) % pool.length];
+    if (usedIds.has(item.id) || usedSpeakers.has(item.speaker)) continue;
+    usedIds.add(item.id);
+    usedSpeakers.add(item.speaker);
+    picked.push(item);
+  }
+  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
+    const item = pool[(offset + i) % pool.length];
+    if (usedIds.has(item.id)) continue;
+    usedIds.add(item.id);
+    picked.push(item);
+  }
+  return picked;
+}
+
+export function pickRotatedJournalDays(
+  pool: readonly BentoDayCard[],
+  count: number,
+  slot: number,
+): BentoDayCard[] {
+  if (pool.length <= count) return [...pool];
+  const offset = (((slot * count) % pool.length) + pool.length) % pool.length;
+  const picked: BentoDayCard[] = [];
+  const usedDays = new Set<string>();
+  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
+    const item = pool[(offset + i) % pool.length];
+    if (usedDays.has(item.day)) continue;
+    usedDays.add(item.day);
+    picked.push(item);
+  }
+  return picked.sort((a, b) => b.day.localeCompare(a.day));
+}
+
+export function pickRotatedCapsules(
+  pool: readonly BentoTimeCapsule[],
+  count: number,
+  slot: number,
+): BentoTimeCapsule[] {
+  if (pool.length <= count) return [...pool].sort((a, b) => b.day.localeCompare(a.day));
+  const offset = (((slot * count) % pool.length) + pool.length) % pool.length;
+  const picked: BentoTimeCapsule[] = [];
+  const usedDays = new Set<string>();
+  const usedMonths = new Set<string>();
+
+  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
+    const item = pool[(offset + i) % pool.length];
+    if (usedDays.has(item.day) || usedMonths.has(item.month)) continue;
+    usedDays.add(item.day);
+    usedMonths.add(item.month);
+    picked.push(item);
+  }
+  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
+    const item = pool[(offset + i) % pool.length];
+    if (usedDays.has(item.day)) continue;
+    usedDays.add(item.day);
+    picked.push(item);
+  }
+  return picked.sort((a, b) => b.day.localeCompare(a.day));
+}
+
 export function buildHomeBentoModel({
   archive,
   monthContents = [],
@@ -2106,7 +2202,10 @@ export function buildHomeBentoModel({
   answerLine,
   excludePhotoIds,
   memorySlidePhotoIds,
+  now,
+  rotationSlot,
 }: BuildHomeBentoInput): HomeBentoModel {
+  const slot = rotationSlot ?? computeHomeRotationSeed(now);
   const clock = buildHomeClockHeader(archive.birthDay, today);
   const photoTracker = createPhotoTracker({
     topics,
@@ -2123,7 +2222,40 @@ export function buildHomeBentoModel({
   if (activeLeadDay) excludeJournalDays.add(activeLeadDay);
   if (latestDay) excludeJournalDays.add(latestDay.day);
 
-  const journal = selectRecentJournalDays(archive, days, today, excludeJournalDays, 3, photoTracker);
+  const journalTracker: PhotoSelectionTracker = {
+    ...photoTracker,
+    hardExcludeIds: new Set(photoTracker.hardExcludeIds),
+    hardExcludeDisplayKeys: new Set(photoTracker.hardExcludeDisplayKeys),
+    hardExcludeSceneKeys: new Set(photoTracker.hardExcludeSceneKeys),
+    softExcludeIds: new Set(photoTracker.softExcludeIds),
+    usedBursts: [...photoTracker.usedBursts],
+    usedScenes: new Set(photoTracker.usedScenes),
+  };
+  const journalBase = selectRecentJournalDays(
+    archive,
+    days,
+    today,
+    excludeJournalDays,
+    12,
+    journalTracker,
+    { preservePickOrder: true },
+  );
+  const journalPool = journalBase.days;
+  const journalDays = pickRotatedJournalDays(journalPool, 3, slot);
+  for (const card of journalDays) {
+    if (card.photo) {
+      photoTracker.hardExcludeIds.add(card.photo.id);
+      if (card.photo.displayKey) {
+        photoTracker.hardExcludeDisplayKeys.add(card.photo.displayKey);
+      }
+    }
+  }
+  const journal = {
+    days: journalDays,
+    pool: journalPool,
+    latestMonthHref: journalBase.latestMonthHref,
+    latestMonthLabel: journalBase.latestMonthLabel,
+  };
 
   const displayedDays = [latestDay, ...journal.days].filter(
     (d): d is BentoDayCard => d !== null && d !== undefined,
@@ -2133,7 +2265,7 @@ export function buildHomeBentoModel({
     displayedDays,
   });
 
-  const voices = selectFamilyVoices(archive, days, today, 3, {
+  const voicePool = selectFamilyVoices(archive, days, today, 16, {
     answerLine,
     monthContents,
     avoidTexts: [
@@ -2141,25 +2273,31 @@ export function buildHomeBentoModel({
       ...displayedDays.flatMap((d) => [d.title, d.excerpt]),
     ],
   });
+  const voices = pickRotatedVoices(voicePool, 3, slot);
 
   const excludeCapsuleDays = new Set<string>(displayedDays.map((d) => d.day));
   if (activeLeadDay) excludeCapsuleDays.add(activeLeadDay);
 
-  const capsules = selectTimeCapsules(archive, days, topics, today, 4, {
+  const capsulePool = selectTimeCapsules(archive, days, topics, today, 12, {
     excludePhotoIds: photoTracker.hardExcludeIds,
     softExcludePhotoIds: photoTracker.softExcludeIds,
     excludeDays: excludeCapsuleDays,
+    preservePickOrder: true,
   });
+  const capsules = pickRotatedCapsules(capsulePool, 4, slot);
 
   const travel = selectTravelFootprint(archive.birthDay, monthContents, today);
 
   return {
     clock,
+    rotationSlot: slot,
     latestDay,
     growth,
     voices,
+    voicePool,
     journal,
     capsules,
+    capsulePool,
     travel,
   };
 }

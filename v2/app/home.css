@@ -850,6 +850,33 @@ a.bento-tile:active {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+}
+
+.tile-rotate-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--card-border);
+  color: var(--ink-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.tile-rotate-btn:hover {
+  background: var(--card-bg);
+  border-color: var(--card-border-hover);
+  color: var(--cobalt-ink);
 }
 
 .chat-bubbles {
@@ -971,6 +998,13 @@ a.bento-tile:active {
   line-height: 1.25;
 }
 
+.mod-sec-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .mod-sec-pill {
   display: inline-flex;
   align-items: center;
@@ -982,14 +1016,21 @@ a.bento-tile:active {
   border: 1px solid var(--card-border);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
   color: var(--cobalt-ink);
+  font-family: inherit;
   font-size: 13.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  cursor: pointer;
   transition:
     background-color 200ms ease,
     border-color 200ms ease,
     transform 240ms var(--spring);
+}
+
+.mod-sec-rotate {
+  color: var(--ink-muted);
+  font-weight: 600;
 }
 
 @media (hover: hover) {
