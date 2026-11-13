@@ -23,7 +23,7 @@ const {
 } = await import("../lib/home-memory.ts");
 const { CAROUSEL_THEMES } = await import("../lib/home-memory-topics.ts");
 const { validateMonthContent } = await import("../lib/month-content.ts");
-const { HomeMemory } = await import("../components/home-memory.tsx");
+const { HomeMemory, MemoryPlayer } = await import("../components/home-memory.tsx");
 const { PhotoGrid } = await import("../components/photo-grid.tsx");
 const { default: XueyiFilmPage } = await import("../app/films/xueyi/page.tsx");
 
@@ -413,6 +413,30 @@ test("3.3 字幕防错位：有 photoCaptions 显示专属图注；无 photoCapt
     }),
   );
   assert.match(htmlWithCaption, /坐在餐椅里抓着西兰花啃/);
+
+  const playerHtml = renderToStaticMarkup(
+    React.createElement(MemoryPlayer, {
+      memory: {
+        kind: "topic",
+        key: "topic:eat",
+        title: "吃饭这件事",
+        subtitle: "2025 年 3 月 — 2026 年 7 月 · 当时 2 个月 — 1 岁 6 个月",
+        slides: [withCaption],
+        coverIndex: 0,
+        durationSeconds: 5,
+        mood: "warm",
+        moodReason: "test",
+        reason: "test",
+      },
+      onClose: () => {},
+      returnFocusTo: { current: null },
+      closeLabel: "关闭播放回忆",
+    }),
+  );
+  assert.match(playerHtml, /坐在餐椅里抓着西兰花啃/);
+  assert.match(playerHtml, /2025 年 3 月 30 日/);
+  assert.match(playerHtml, /当时 2 个月/);
+  assert.doesNotMatch(playerHtml, /读这一天/, "MemoryPlayer 放映器不再输出「读这一天」链接");
 });
 
 test("3.3 主题选片相关性优化：「吃饭这件事」优先选择图注或当日正文与吃饭相关的照片，降权无关活动图注", () => {

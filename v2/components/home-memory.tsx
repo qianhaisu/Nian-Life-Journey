@@ -395,7 +395,7 @@ function pairSomePortraits(scenes: MemoryScene[]): MemoryScene[] {
   return out;
 }
 
-function MemoryPlayer({
+export function MemoryPlayer({
   memory,
   onClose,
   returnFocusTo,
@@ -522,7 +522,7 @@ function MemoryPlayer({
   }
 
   const titleId = `memory-player-${memory.key.replace(/[^a-zA-Z0-9]+/g, "-")}`;
-  return createPortal(
+  const dialog = (
     <div
       className="memory-player"
       role="dialog"
@@ -590,7 +590,6 @@ function MemoryPlayer({
                         {entry.ageLabel === "出生的那天" ? "出生那天" : `当时 ${entry.ageLabel}`}
                       </span>
                     ) : null}
-                    {entry.href ? <a href={entry.href}>{entry.linkLabel} ↗</a> : null}
                   </p>
                 ) : null}
               </div>
@@ -625,9 +624,9 @@ function MemoryPlayer({
         {caption ? `。${caption}` : ""}
         {done ? "。这一段放完了。" : ""}
       </p>
-    </div>,
-    document.body,
+    </div>
   );
+  return typeof document === "undefined" ? dialog : createPortal(dialog, document.body);
 }
 
 function usePrefersReducedMotion(): boolean {
