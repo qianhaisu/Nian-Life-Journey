@@ -185,6 +185,34 @@ test("3.5 关键词查询「外婆」：同时召回月度综述（intro/cardLin
   assert.ok(segs.some((s) => s.hit && s.text === "外婆"));
 });
 
+test("需求 7 自然语言搜索：和外公一起的日子 / 外婆带小年散步 / 称呼同义扩展", () => {
+  const months = [
+    {
+      month: "2026-09",
+      href: "/memory/2026/09",
+      label: "2026 年 9 月",
+      cardLine: "外公在院子里陪他看星星",
+      intro: "外公每天傍晚抱着他在院子门口散步。",
+    },
+  ];
+  const entries = [
+    mkDay("2026-09-10", "外公一早推着婴儿车带他去买早饭。"),
+    mkDay("2026-09-11", "今天姥爷也打电话问他长牙没。"),
+    mkDay("2026-09-12", ["外婆上午切好了水果。", "下午大家一起下楼散步晒太阳。"]),
+    mkDay("2026-09-13", "爸爸带他去公园滑滑梯。"),
+  ];
+
+  const r1 = searchArchiveAll({ entries, months, query: "和外公一起的日子" });
+  assert.ok(r1.highlightTerms.includes("外公"));
+  assert.ok(r1.items.some((i) => i.kind === "month" && i.month.month === "2026-09"));
+  assert.ok(r1.items.some((i) => i.kind === "day" && i.entry.day === "2026-09-10"));
+  assert.ok(r1.items.some((i) => i.kind === "day" && i.entry.day === "2026-09-11"), "外公应同义扩展召回姥爷");
+  assert.ok(!r1.items.some((i) => i.kind === "day" && i.entry.day === "2026-09-13"));
+
+  const r2 = searchArchiveAll({ entries, months, query: "外婆带小年散步" });
+  assert.ok(r2.items.some((i) => i.kind === "day" && i.entry.day === "2026-09-12"), "跨句也应召回外婆+散步");
+});
+
 // ── 3.2 旅行义乌无图空卡回退测试 ──────────────────────────────────────────────────────────
 
 test("3.2 旅行回退：当行程日为 text-only（firstScreen/expanded 均空）时自动回退当日已审核照片做封面与相册", () => {

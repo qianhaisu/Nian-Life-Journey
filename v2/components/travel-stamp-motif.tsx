@@ -6,170 +6,174 @@ const MOTIFS: Record<string, MotifRenderer> = {
   // 杭州：三潭印月小石塔 + 西湖拱桥
   "cn:330100": () => (
     <>
-      <path d="M16 68 Q34 54 50 68 Q66 54 84 68" strokeWidth="1.7" />
-      <path d="M12 74 Q32 71 50 74 Q68 77 88 74" strokeWidth="1.5" />
-      <path d="M47 46 L50 32 L53 46 Z" strokeWidth="1.6" />
-      <circle cx="50" cy="52" r="5.5" strokeWidth="1.6" />
-      <path d="M46 57 L45 66 M54 57 L55 66" strokeWidth="1.6" />
+      <path d="M12 72 Q34 52 50 72 Q66 52 88 72" strokeWidth="2.3" />
+      <path d="M10 78 Q32 74 50 78 Q68 82 90 78" strokeWidth="1.9" />
+      <path d="M46 42 L50 24 L54 42 Z" fill="currentColor" fillOpacity="0.18" strokeWidth="2.1" />
+      <circle cx="50" cy="49" r="6.5" fill="currentColor" fillOpacity="0.14" strokeWidth="2.1" />
+      <path d="M45 55 L44 68 M55 55 L56 68" strokeWidth="2.1" />
     </>
   ),
   // 温州：江心屿双塔 + 瓯江帆影
   "cn:330300": () => (
     <>
-      <path d="M27 64 L31 32 L35 64 M26 44 H36 M25 54 H37" strokeWidth="1.6" />
-      <path d="M65 64 L69 30 L73 64 M64 42 H74 M63 53 H75" strokeWidth="1.6" />
-      <path d="M44 66 L52 44 L58 66 Z" strokeWidth="1.5" />
-      <path d="M14 73 Q36 69 52 73 Q70 77 86 73" strokeWidth="1.5" />
+      <path d="M23 70 L28 24 L33 70 Z" fill="currentColor" fillOpacity="0.16" strokeWidth="2.1" />
+      <path d="M22 38 H34 M21 50 H35 M20 61 H36" strokeWidth="1.8" />
+      <path d="M67 70 L72 22 L77 70 Z" fill="currentColor" fillOpacity="0.16" strokeWidth="2.1" />
+      <path d="M66 36 H78 M65 49 H79 M64 60 H80" strokeWidth="1.8" />
+      <path d="M43 72 L51 46 L59 72 Z" fill="currentColor" fillOpacity="0.14" strokeWidth="1.9" />
+      <path d="M12 78 Q36 73 52 78 Q70 83 88 78" strokeWidth="2.0" />
     </>
   ),
   // 湖州：太湖月亮酒店 + 莫干山竹影
   "cn:330500": () => (
     <>
-      <path d="M31 70 A21 21 0 1 1 69 70" strokeWidth="2.1" />
-      <path d="M38 70 A14 14 0 1 1 62 70" strokeWidth="1.5" />
-      <path d="M18 72 Q50 68 82 72" strokeWidth="1.5" />
-      <path d="M20 62 L23 30 M22 44 L15 39 M22 36 L29 31" strokeWidth="1.5" />
+      <path d="M28 73 A24 24 0 1 1 72 73" strokeWidth="3.0" />
+      <path d="M36 73 A16 16 0 1 1 64 73" fill="currentColor" fillOpacity="0.12" strokeWidth="2.0" />
+      <path d="M14 75 Q50 70 86 75" strokeWidth="2.0" />
+      <path d="M18 66 L21 26 M20 44 L12 38 M20 35 L28 29" strokeWidth="2.0" />
     </>
   ),
   // 绍兴：乌篷船 + 石拱桥
   "cn:330600": () => (
     <>
-      <path d="M16 64 Q50 40 84 64" strokeWidth="1.8" />
-      <path d="M26 64 A24 18 0 0 1 74 64" strokeWidth="1.5" />
-      <path d="M30 73 Q50 79 70 73 L66 68 H34 Z" strokeWidth="1.6" />
-      <path d="M39 68 Q50 58 61 68" strokeWidth="1.6" />
-      <path d="M14 79 Q50 75 86 79" strokeWidth="1.4" />
+      <path d="M12 66 Q50 36 88 66" strokeWidth="2.5" />
+      <path d="M24 66 A26 20 0 0 1 76 66" fill="currentColor" fillOpacity="0.12" strokeWidth="2.0" />
+      <path d="M26 75 Q50 83 74 75 L69 68 H31 Z" fill="currentColor" fillOpacity="0.2" strokeWidth="2.2" />
+      <path d="M37 68 Q50 56 63 68" fill="currentColor" fillOpacity="0.16" strokeWidth="2.1" />
+      <path d="M12 83 Q50 79 88 83" strokeWidth="1.8" />
     </>
   ),
   // 宁波：天一阁飞檐 + 三江口帆影
   "cn:330200": () => (
     <>
-      <path d="M22 48 Q50 38 78 48 L72 52 H28 Z" strokeWidth="1.7" />
-      <path d="M32 52 V68 M44 52 V68 M56 52 V68 M68 52 V68" strokeWidth="1.5" />
-      <path d="M24 68 H76" strokeWidth="1.6" />
-      <path d="M18 75 Q50 71 82 75" strokeWidth="1.4" />
+      <path d="M18 46 Q50 32 82 46 L74 52 H26 Z" fill="currentColor" fillOpacity="0.18" strokeWidth="2.3" />
+      <path d="M26 37 Q50 28 74 37" strokeWidth="1.9" />
+      <path d="M30 52 V72 M43 52 V72 M57 52 V72 M70 52 V72" strokeWidth="2.1" />
+      <path d="M20 72 H80" strokeWidth="2.2" />
+      <path d="M14 79 Q50 74 86 79" strokeWidth="1.8" />
     </>
   ),
-  // 舟山：跨海斜拉桥 + 岛屿灯塔
+  // 舟山：跨海斜拉桥 + 海浪
   "cn:330900": () => (
     <>
-      <path d="M48 68 L50 28 L52 68" strokeWidth="1.8" />
-      <path d="M50 32 L20 64 M50 38 L30 64 M50 32 L80 64 M50 38 L70 64" strokeWidth="1.35" />
-      <path d="M14 66 H86" strokeWidth="1.7" />
-      <path d="M16 75 Q34 71 50 75 Q68 79 84 75" strokeWidth="1.5" />
+      <path d="M47 70 L50 22 L53 70 Z" fill="currentColor" fillOpacity="0.18" strokeWidth="2.3" />
+      <path d="M50 27 L16 66 M50 36 L28 66 M50 27 L84 66 M50 36 L72 66" strokeWidth="1.75" />
+      <path d="M10 68 H90" strokeWidth="2.4" />
+      <path d="M14 78 Q34 73 50 78 Q68 83 86 78" strokeWidth="2.0" />
     </>
   ),
   // 金华/义乌：拨浪鼓 + 商贸拱廊
   "cn:330700": () => (
     <>
-      <circle cx="50" cy="44" r="14" strokeWidth="1.8" />
-      <path d="M50 58 V76" strokeWidth="2.0" />
-      <path d="M36 44 Q30 48 27 52 M64 44 Q70 48 73 52" strokeWidth="1.5" />
-      <circle cx="26" cy="53" r="2.3" strokeWidth="1.5" />
-      <circle cx="74" cy="53" r="2.3" strokeWidth="1.5" />
-      <path d="M22 72 Q36 62 50 72 Q64 62 78 72" strokeWidth="1.4" />
+      <circle cx="50" cy="40" r="16" fill="currentColor" fillOpacity="0.15" strokeWidth="2.4" />
+      <path d="M50 56 V79" strokeWidth="2.6" />
+      <path d="M34 40 Q27 45 23 51 M66 40 Q73 45 77 51" strokeWidth="1.9" />
+      <circle cx="22" cy="52" r="3.2" fill="currentColor" fillOpacity="0.28" strokeWidth="1.9" />
+      <circle cx="78" cy="52" r="3.2" fill="currentColor" fillOpacity="0.28" strokeWidth="1.9" />
+      <path d="M18 75 Q34 62 50 75 Q66 62 82 75" strokeWidth="1.9" />
     </>
   ),
   // 嘉兴：南湖画舫 + 烟雨楼重檐
   "cn:330400": () => (
     <>
-      <path d="M34 40 Q50 32 66 40 H34 Z M28 50 Q50 43 72 50 H28 Z" strokeWidth="1.6" />
-      <path d="M36 50 V62 M64 50 V62" strokeWidth="1.5" />
-      <path d="M24 68 L30 74 H70 L76 68 Z" strokeWidth="1.7" />
-      <path d="M16 78 Q50 74 84 78" strokeWidth="1.4" />
+      <path d="M32 36 Q50 26 68 36 H32 Z M24 48 Q50 39 76 48 H24 Z" fill="currentColor" fillOpacity="0.18" strokeWidth="2.1" />
+      <path d="M34 48 V64 M66 48 V64" strokeWidth="2.0" />
+      <path d="M20 70 L28 78 H72 L80 70 Z" fill="currentColor" fillOpacity="0.2" strokeWidth="2.2" />
+      <path d="M14 83 Q50 78 86 83" strokeWidth="1.8" />
     </>
   ),
   // 台州：神仙居奇峰云海
   "cn:331000": () => (
     <>
-      <path d="M20 72 L34 36 L44 62 L56 26 L68 58 L80 72" strokeWidth="1.8" />
-      <path d="M18 64 Q36 58 50 64 Q66 70 84 62" strokeWidth="1.5" />
+      <path d="M16 74 L32 32 L44 60 L58 22 L72 56 L84 74 Z" fill="currentColor" fillOpacity="0.16" strokeWidth="2.3" />
+      <path d="M14 64 Q36 56 52 64 Q68 72 86 62" strokeWidth="2.0" />
     </>
   ),
   // 丽水：梯田云雾山
   "cn:331100": () => (
     <>
-      <path d="M18 66 Q38 46 58 62 Q70 50 84 66" strokeWidth="1.7" />
-      <path d="M20 72 Q46 60 80 72 M24 78 Q50 68 76 78" strokeWidth="1.5" />
-      <circle cx="68" cy="34" r="5" strokeWidth="1.5" />
+      <path d="M14 68 Q36 42 58 62 Q72 48 86 68" fill="currentColor" fillOpacity="0.14" strokeWidth="2.2" />
+      <path d="M16 74 Q46 60 84 74 M22 81 Q50 69 78 81" strokeWidth="2.0" />
+      <circle cx="72" cy="30" r="6" fill="currentColor" fillOpacity="0.16" strokeWidth="2.0" />
     </>
   ),
   // 上海：东方明珠 + 外滩天际线
   "cn:310000": () => (
     <>
-      <path d="M50 18 V31 M47 68 L50 38 L53 68" strokeWidth="1.7" />
-      <circle cx="50" cy="35" r="4.5" strokeWidth="1.7" />
-      <circle cx="50" cy="54" r="7" strokeWidth="1.7" />
-      <path d="M22 72 V56 H32 V72 M68 72 V50 H78 V72 M14 72 H86" strokeWidth="1.6" />
+      <path d="M50 14 V28 M46 72 L50 36 L54 72" strokeWidth="2.2" />
+      <circle cx="50" cy="33" r="5.5" fill="currentColor" fillOpacity="0.2" strokeWidth="2.2" />
+      <circle cx="50" cy="54" r="8.5" fill="currentColor" fillOpacity="0.2" strokeWidth="2.2" />
+      <path d="M18 76 V54 H30 V76 M70 76 V48 H82 V76 M10 76 H90" fill="currentColor" fillOpacity="0.14" strokeWidth="2.1" />
     </>
   ),
   // 苏州：虎丘塔 + 园林月亮门
   "cn:320500": () => (
     <>
-      <circle cx="50" cy="54" r="22" strokeWidth="1.5" />
-      <path d="M44 68 L48 26 L53 26 L56 68" strokeWidth="1.65" />
-      <path d="M43 36 H57 M42 46 H58 M41 56 H59" strokeWidth="1.45" />
+      <circle cx="50" cy="52" r="26" strokeWidth="2.0" />
+      <path d="M42 74 L47 22 L53 22 L58 74 Z" fill="currentColor" fillOpacity="0.18" strokeWidth="2.1" />
+      <path d="M41 34 H59 M40 46 H60 M39 58 H61" strokeWidth="1.9" />
     </>
   ),
-  // 南京：紫金山城墙垛口 + 梧桐枝
+  // 南京：紫金山城墙垛口 + 梧桐弧
   "cn:320100": () => (
     <>
-      <path d="M18 68 V50 H26 V55 H34 V50 H42 V55 H58 V50 H66 V55 H74 V50 H82 V68 Z" strokeWidth="1.65" />
-      <path d="M24 44 Q50 24 76 44" strokeWidth="1.5" />
+      <path d="M14 72 V50 H24 V56 H34 V50 H44 V56 H56 V50 H66 V56 H76 V50 H86 V72 Z" fill="currentColor" fillOpacity="0.18" strokeWidth="2.2" />
+      <path d="M22 42 Q50 20 78 42" strokeWidth="2.0" />
     </>
   ),
-  // 无锡：太湖鼋头渚帆船 + 樱花枝
+  // 无锡：太湖鼋头渚帆船
   "cn:320200": () => (
     <>
-      <path d="M48 64 V28 L68 58 H48 M46 64 V36 L32 58 H46" strokeWidth="1.7" />
-      <path d="M26 68 L32 74 H68 L74 68 Z" strokeWidth="1.6" />
-      <path d="M16 78 Q50 74 84 78" strokeWidth="1.4" />
+      <path d="M48 66 V22 L72 58 H48 Z" fill="currentColor" fillOpacity="0.18" strokeWidth="2.2" />
+      <path d="M45 66 V32 L28 58 H45 Z" fill="currentColor" fillOpacity="0.14" strokeWidth="2.0" />
+      <path d="M22 70 L30 78 H70 L78 70 Z" fill="currentColor" fillOpacity="0.2" strokeWidth="2.2" />
+      <path d="M14 83 Q50 78 86 83" strokeWidth="1.8" />
     </>
   ),
-  // 成都（含川西）：大熊猫 + 雪山远峰 + 竹枝
+  // 成都（含川西）：大熊猫 + 雪山远峰
   "cn:510100": () => (
     <>
-      <path d="M14 66 L32 38 L46 58 L64 34 L86 66" strokeWidth="1.4" />
-      <circle cx="38" cy="44" r="5" strokeWidth="1.7" />
-      <circle cx="62" cy="44" r="5" strokeWidth="1.7" />
-      <circle cx="50" cy="56" r="13" strokeWidth="1.75" />
-      <circle cx="44" cy="54" r="2.2" strokeWidth="1.6" />
-      <circle cx="56" cy="54" r="2.2" strokeWidth="1.6" />
-      <path d="M48 61 Q50 63 52 61" strokeWidth="1.5" />
+      <path d="M12 72 L30 40 L46 62 L66 34 L88 72" strokeWidth="1.8" />
+      <circle cx="35" cy="36" r="6.5" fill="currentColor" fillOpacity="0.26" strokeWidth="2.2" />
+      <circle cx="65" cy="36" r="6.5" fill="currentColor" fillOpacity="0.26" strokeWidth="2.2" />
+      <circle cx="50" cy="52" r="16" fill="currentColor" fillOpacity="0.12" strokeWidth="2.3" />
+      <circle cx="43" cy="50" r="3" fill="currentColor" fillOpacity="0.28" strokeWidth="2.0" />
+      <circle cx="57" cy="50" r="3" fill="currentColor" fillOpacity="0.28" strokeWidth="2.0" />
+      <path d="M47 59 Q50 62 53 59" strokeWidth="2.0" />
     </>
   ),
   // 西安：大雁塔 + 古城墙
   "cn:610100": () => (
     <>
-      <path d="M49 22 L50 16 L51 22" strokeWidth="1.6" />
-      <path d="M39 68 L44 26 H56 L61 68" strokeWidth="1.75" />
-      <path d="M41 34 H59 M40 42 H60 M39 50 H61 M38 58 H62" strokeWidth="1.5" />
-      <path d="M18 72 H82" strokeWidth="1.7" />
+      <path d="M49 20 L50 13 L51 20" strokeWidth="2.0" />
+      <path d="M36 72 L42 22 H58 L64 72 Z" fill="currentColor" fillOpacity="0.18" strokeWidth="2.3" />
+      <path d="M39 32 H61 M38 42 H62 M37 52 H63 M36 62 H64" strokeWidth="1.9" />
+      <path d="M14 76 H86" strokeWidth="2.3" />
     </>
   ),
   // 洛杉矶：圣莫尼卡摩天轮 + 棕榈树
   "us:us-ca-losangeles": () => (
     <>
-      <circle cx="60" cy="46" r="16" strokeWidth="1.65" />
-      <path d="M60 30 V62 M44 46 H76 M49 35 L71 57 M71 35 L49 57 M52 72 L60 62 L68 72" strokeWidth="1.35" />
-      <path d="M28 72 Q30 54 26 38" strokeWidth="1.8" />
-      <path d="M26 38 Q16 34 14 42 M26 38 Q22 28 32 30 M26 38 Q36 36 36 44" strokeWidth="1.5" />
+      <circle cx="62" cy="44" r="19" fill="currentColor" fillOpacity="0.12" strokeWidth="2.2" />
+      <path d="M62 25 V63 M43 44 H81 M49 31 L75 57 M75 31 L49 57 M52 76 L62 63 L72 76" strokeWidth="1.75" />
+      <path d="M25 76 Q28 54 23 34" strokeWidth="2.4" />
+      <path d="M23 34 Q11 29 9 39 M23 34 Q18 22 30 24 M23 34 Q35 31 35 42" strokeWidth="2.0" />
     </>
   ),
   // 北京：天坛祈年殿
   "cn:110000": () => (
     <>
-      <path d="M50 20 L34 34 H66 Z M30 44 L50 33 L70 44 H30 Z M26 55 L50 44 L74 55 H26 Z" strokeWidth="1.65" />
-      <path d="M32 55 V68 H68 V55 M22 72 H78" strokeWidth="1.6" />
+      <path d="M50 16 L32 32 H68 Z M28 44 L50 31 L72 44 H28 Z M24 57 L50 44 L76 57 H24 Z" fill="currentColor" fillOpacity="0.18" strokeWidth="2.1" />
+      <path d="M30 57 V72 H70 V57 M18 76 H82" strokeWidth="2.2" />
     </>
   ),
 };
 
 const FALLBACK_MOTIF: MotifRenderer = () => (
   <>
-    <path d="M18 68 L38 40 L54 60 L68 42 L84 68" strokeWidth="1.7" />
-    <circle cx="70" cy="30" r="5" strokeWidth="1.5" />
-    <path d="M14 74 Q50 70 86 74" strokeWidth="1.4" />
+    <path d="M14 72 L36 38 L54 60 L70 40 L86 72 Z" fill="currentColor" fillOpacity="0.15" strokeWidth="2.2" />
+    <circle cx="72" cy="28" r="6" fill="currentColor" fillOpacity="0.18" strokeWidth="2.0" />
+    <path d="M12 78 Q50 73 88 78" strokeWidth="1.9" />
   </>
 );
 
