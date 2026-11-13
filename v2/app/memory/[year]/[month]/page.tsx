@@ -124,6 +124,14 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
           }))}
         weeks={timeline.weeks}
         entries={entries}
+        calendarDays={[...timeline.byDay.values()].map((day) => ({
+          day: day.day,
+          title: day.title ?? day.dateLabel,
+          thumbnail: resolveCardThumbnail(day.photos, day.firstScreenMediaIds),
+          hasPhotos: day.photos.length > 0,
+          isMilestone: Boolean(day.milestone || day.emphasis === "lead"),
+          badge: day.milestone?.badge,
+        }))}
       /> : null}
 
       {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { CardThumbnail } from "@/components/card-thumbnail";
+import { MonthCalendar, type MonthCalendarDay } from "@/components/month-calendar";
 import { MonthDayEntry } from "@/components/month-day-entry";
-import type { ThumbnailChoice } from "@/lib/day-photo-layout";
+import { resolveCardThumbnail, type ThumbnailChoice } from "@/lib/day-photo-layout";
 import type { TimelineDay, TimelineWeek } from "@/lib/month-timeline";
 
 // Every week can be passed on the initial server render (`entries`, so native #week-N and #day-YYYY-MM-DD
@@ -18,6 +19,7 @@ export function MonthTimeline({
   entries,
   initial,
   highlights = [],
+  calendarDays,
 }: {
   year: string;
   month?: string;
@@ -26,6 +28,7 @@ export function MonthTimeline({
   entries?: TimelineDay[][];
   initial?: TimelineDay[];
   highlights?: { day: string; title: string; thumbnail?: ThumbnailChoice }[];
+  calendarDays?: MonthCalendarDay[];
 }) {
   const seedWeeks: (TimelineDay[] | undefined)[] = weeks.map((_, index) => {
     if (entries && entries[index] !== undefined) return entries[index];
@@ -35,9 +38,11 @@ export function MonthTimeline({
 
   const [weekData, setWeekData] = useState<(TimelineDay[] | undefined)[]>(seedWeeks);
   const [loadingWeek, setLoadingWeek] = useState(false);
-  const [activeWeekId, setActiveWeekId] = useState<string | undefined>(weeks[0]?.id);
+  const [activeDay, setActiveDay] = useState<string | undefined>(weeks[0]?.days[0]);
+  const [highlightedDay, setHighlightedDay] = useState<string | undefined>(undefined);
   const inflightRef = useRef<Set<string>>(new Set());
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasUnloadedWeeks = Boolean(month && weekData.some((items) => items === undefined));
 
@@ -117,11 +122,37 @@ export function MonthTimeline({
     }
   }, [hasUnloadedWeeks, loadThroughIndex, weekData, weeks]);
 
-  // Active segmented week pill tracking on scroll
+  const flashDayTarget = useCallback((day: string) => {
+    setActiveDay(day);
+    setHighlightedDay(day);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedDay((prev) => (prev === day ? undefined : prev));
+    }, 1800);
+  }, []);
+
   useEffect(() => {
-    if (weeks.length <= 1 || typeof IntersectionObserver === "undefined") return;
-    const elements = weeks
-      .map((w) => document.getElementById(w.id))
+    return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    };
+  }, []);
+
+  const scrollToDay = useCallback(
+    (day: string) => {
+      const target = document.getElementById(`day-${day}`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      flashDayTarget(day);
+    },
+    [flashDayTarget],
+  );
+
+  // Active calendar day tracking on scroll
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const dayIds = weekData.flatMap((items) => (items ?? []).map((entry) => entry.day));
+    const elements = dayIds
+      .map((day) => document.getElementById(`day-${day}`))
       .filter((el): el is HTMLElement => Boolean(el));
     if (elements.length === 0) return;
 
@@ -130,17 +161,62 @@ export function MonthTimeline({
         const visible = records
           .filter((r) => r.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]?.target.id) {
-          setActiveWeekId(visible[0].target.id);
+        const topId = visible[0]?.target.id;
+        if (topId?.startsWith("day-")) {
+          setActiveDay(topId.slice(4));
         }
       },
-      { rootMargin: "-140px 0px -55% 0px", threshold: [0, 0.1] },
+      { rootMargin: "-110px 0px -58% 0px", threshold: [0, 0.1] },
     );
     for (const el of elements) observer.observe(el);
     return () => observer.disconnect();
-  }, [weeks, weekData]);
+  }, [weekData]);
+
+  const resolvedMonth = month ?? weeks[0]?.days[0]?.slice(5, 7);
+  const resolvedCalendarDays = useMemo<MonthCalendarDay[]>(() => {
+    if (calendarDays && calendarDays.length > 0) return calendarDays;
+    const byDay = new Map<string, MonthCalendarDay>();
+    for (const items of weekData) {
+      if (!items) continue;
+      for (const entry of items) {
+        byDay.set(entry.day, {
+          day: entry.day,
+          title: entry.title ?? entry.dateLabel,
+          thumbnail: resolveCardThumbnail(entry.photos, entry.firstScreenMediaIds),
+          hasPhotos: entry.photos.length > 0,
+          isMilestone: Boolean(entry.milestone || entry.emphasis === "lead"),
+          badge: entry.milestone?.badge,
+        });
+      }
+    }
+    return [...byDay.values()];
+  }, [calendarDays, weekData]);
+
+  const handleSelectDay = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>, day: string) => {
+      event.preventDefault();
+      const targetIndex = weeks.findIndex((w) => w.days.includes(day));
+      if (targetIndex >= 0 && weekData[targetIndex] === undefined) {
+        void loadThroughIndex(targetIndex).then(() => {
+          requestAnimationFrame(() => scrollToDay(day));
+        });
+        return;
+      }
+      scrollToDay(day);
+    },
+    [loadThroughIndex, scrollToDay, weekData, weeks],
+  );
 
   return <>
+    {resolvedMonth && resolvedCalendarDays.length > 0 ? (
+      <MonthCalendar
+        year={year}
+        month={resolvedMonth}
+        days={resolvedCalendarDays}
+        activeDay={activeDay}
+        onSelectDay={handleSelectDay}
+      />
+    ) : null}
     {highlights.length > 0 ? <nav className="month-highlights" aria-label="这个月值得再读的日子">
       <p className="section-mark">值得再读</p>
       <div className="month-highlights-chips">
@@ -148,17 +224,7 @@ export function MonthTimeline({
           key={item.day}
           href={`#day-${item.day}`}
           className={item.thumbnail ? "month-highlight-chip month-highlight-chip--with-thumb" : "month-highlight-chip"}
-          onClick={(event) => {
-            const idx = weeks.findIndex((w) => w.days.includes(item.day));
-            if (idx >= 0 && weekData[idx] === undefined) {
-              event.preventDefault();
-              void loadThroughIndex(idx).then(() => {
-                requestAnimationFrame(() => {
-                  document.getElementById(`day-${item.day}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                });
-              });
-            }
-          }}
+          onClick={(event) => handleSelectDay(event, item.day)}
         >
           {item.thumbnail ? (
             <CardThumbnail thumbnail={item.thumbnail} className="month-highlight-thumb" sizes="44px" />
@@ -167,41 +233,19 @@ export function MonthTimeline({
         </a>)}
       </div>
     </nav> : null}
-    {weeks.length > 1 ? <nav className="month-jump" aria-label="跳到这个月的某一周">
-      {weeks.map((week, index) => {
-        const isActive = activeWeekId === week.id;
-        return <a
-          key={week.id}
-          href={`#${week.id}`}
-          className={isActive ? "is-active" : undefined}
-          aria-current={isActive ? "location" : undefined}
-          onClick={(event) => {
-            setActiveWeekId(week.id);
-            if (weekData[index] === undefined) {
-              event.preventDefault();
-              void loadThroughIndex(index).then(() => {
-                requestAnimationFrame(() => {
-                  document.getElementById(week.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                });
-              });
-            }
-          }}
-        >{week.label}</a>;
-      })}
-    </nav> : null}
     <section className="month-days month-days--edited" aria-label="这个月">
-      {weeks.map((week, index) => {
-        const dayEntries = weekData[index];
-        if (!dayEntries) return null;
-        return <div className="month-week" id={week.id} key={week.id}>
-          {weeks.length > 1 ? <p className="week-mark">{week.label}</p> : null}
-          <ol>
-            {dayEntries.map((entry) => <li className="month-day" key={entry.day}>
+      <ol>
+        {weekData.flatMap((dayEntries) =>
+          (dayEntries ?? []).map((entry) => (
+            <li
+              className={highlightedDay === entry.day ? "month-day is-calendar-target" : "month-day"}
+              key={entry.day}
+            >
               <MonthDayEntry entry={entry} year={year} monthAgeLabel={monthAgeLabel} />
-            </li>)}
-          </ol>
-        </div>;
-      })}
+            </li>
+          )),
+        )}
+      </ol>
       {hasUnloadedWeeks ? <div className="month-timeline-sentinel" ref={sentinelRef}>
         <button
           type="button"

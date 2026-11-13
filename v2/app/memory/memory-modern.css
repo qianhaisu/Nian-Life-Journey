@@ -861,6 +861,264 @@
   padding: 0;
 }
 
+.month-page .month-day.is-calendar-target .moment-day-entry {
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22), var(--mem-shadow);
+}
+
+/* Cute Family-Journal Month Calendar */
+.month-page .month-calendar {
+  margin: 0 0 22px;
+  padding: 16px 18px 18px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FBF9F6 100%);
+  border: 1px solid var(--mem-border-strong);
+  border-radius: 24px;
+  box-shadow: var(--mem-shadow);
+}
+
+.month-cal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.month-cal-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.month-cal-kicker {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.month-cal-title {
+  font-family: var(--font-heading);
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--mem-ink);
+  letter-spacing: -0.01em;
+}
+
+.month-cal-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75rem;
+  color: var(--mem-ink-muted);
+}
+
+.month-cal-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.month-cal-legend-item.is-milestone .month-cal-star {
+  color: #D97706;
+}
+
+.month-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.month-cal-weekday {
+  text-align: center;
+  font-family: var(--font-heading);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--mem-ink-muted);
+  padding: 2px 0;
+}
+
+.month-cal-weekday.is-weekend {
+  color: #C26B48;
+}
+
+.month-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.month-cal-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 66px;
+  padding: 6px;
+  border-radius: 14px;
+  overflow: hidden;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.month-cal-cell.is-empty {
+  background: transparent;
+}
+
+.month-cal-cell.is-blank {
+  background: rgba(241, 245, 249, 0.55);
+  border: 1px dashed rgba(148, 163, 184, 0.22);
+}
+
+.month-cal-cell.is-blank.is-weekend {
+  background: rgba(254, 243, 199, 0.24);
+}
+
+.month-cal-cell.is-blank .month-cal-num {
+  color: var(--mem-ink-faint);
+  font-weight: 500;
+}
+
+.month-cal-cell.is-recorded {
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  background: #F4F7FF;
+  color: var(--mem-ink);
+  transition: transform 0.18s var(--mem-spring), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.month-cal-cell.is-recorded.is-weekend:not(.has-thumb) {
+  background: #FFF7EE;
+  border-color: rgba(217, 119, 6, 0.18);
+}
+
+.month-cal-cell.is-recorded.is-text-day {
+  background: linear-gradient(155deg, #F5F3FF 0%, #EEF2FF 100%);
+  border-color: rgba(109, 40, 217, 0.16);
+}
+
+.month-cal-cell.is-recorded.is-milestone:not(.has-thumb) {
+  background: linear-gradient(155deg, #FEF3C7 0%, #FDE68A 100%);
+  border-color: rgba(217, 119, 6, 0.34);
+}
+
+.month-cal-cell.is-recorded:hover {
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.1);
+}
+
+.month-cal-cell.is-recorded.is-active {
+  border-color: var(--mem-ink);
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.85), 0 6px 14px rgba(15, 23, 42, 0.12);
+}
+
+.month-cal-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 22%;
+}
+
+.month-cal-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.22) 0%, rgba(15, 23, 42, 0.04) 55%, rgba(15, 23, 42, 0.18) 100%);
+  pointer-events: none;
+}
+
+.month-cal-cell-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  width: 100%;
+}
+
+.month-cal-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.month-cal-cell.has-thumb .month-cal-num {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--mem-ink);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+}
+
+.month-cal-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #3B82F6;
+  flex-shrink: 0;
+}
+
+.month-cal-cell.has-thumb .month-cal-dot {
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
+}
+
+.month-cal-star {
+  width: 13px;
+  height: 13px;
+  color: #D97706;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.8));
+}
+
+.month-cal-cell.has-thumb .month-cal-star {
+  color: #FBBF24;
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.6));
+}
+
+@media (max-width: 560px) {
+  .month-page .month-calendar {
+    padding: 12px 10px 14px;
+    border-radius: 20px;
+  }
+
+  .month-cal-weekdays,
+  .month-cal-grid {
+    gap: 4px;
+  }
+
+  .month-cal-cell {
+    min-height: 46px;
+    padding: 4px;
+    border-radius: 10px;
+  }
+
+  .month-cal-num {
+    font-size: 0.74rem;
+  }
+
+  .month-cal-cell.has-thumb .month-cal-num {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+  }
+
+  .month-cal-star {
+    width: 11px;
+    height: 11px;
+  }
+}
+
 /* Elevated #FFFFFF 24px Journal Card per Day */
 .month-page .moment-day-entry,
 .month-page .month-days .moment-day-entry {
