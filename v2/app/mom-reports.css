@@ -51,7 +51,7 @@
 
 .mr-app { width: min(100%, var(--mr-max)); margin-inline: auto; padding: 18px 15px 0; }
 
-.mr-section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin: 0 3px 10px; }
+.mr-section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 4px 10px; margin: 0 3px 10px; }
 .mr-section-heading h2 { margin: 0; font-family: var(--mr-display); font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
 .mr-section-heading > span, .mr-eyebrow { font-size: .76rem; font-weight: 600; color: var(--mr-muted); }
 .mr-section-note { margin: -4px 3px 14px; font-size: .95rem; line-height: 1.7; color: #475569; }
@@ -89,7 +89,7 @@
   display: inline-flex;
   padding: 7px 13px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(15, 23, 42, 0.06);
   font-weight: 700;
   font-size: .82rem;
@@ -109,10 +109,10 @@
 }
 .mr-hero-title { margin: 0 0 8px; font-size: 2rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.08; }
 .mr-hero-subtitle { margin: 0; color: #475569; font-size: .95rem; font-weight: 500; }
-.mr-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
-.mr-hero-stats div { text-align: center; padding: 11px 4px; border-radius: 16px; background: #F8FAFC; border: 1px solid var(--mr-line); min-width: 0; }
-.mr-hero-stats strong { display: block; font-family: var(--mr-display); font-size: 1.05rem; font-weight: 700; white-space: nowrap; }
-.mr-hero-stats small { display: block; margin-top: 2px; font-size: .68rem; color: var(--mr-muted); white-space: nowrap; }
+.mr-hero-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: 8px; margin-top: 14px; }
+.mr-hero-stats div { text-align: center; padding: 11px 6px; border-radius: 12px; background: #F8FAFC; border: 1px solid var(--mr-line); min-width: 0; }
+.mr-hero-stats strong { display: block; font-family: var(--mr-display); font-size: 1.05rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.mr-hero-stats small { display: block; margin-top: 3px; font-size: .75rem; color: var(--mr-muted); line-height: 1.35; overflow-wrap: anywhere; }
 
 .mr-month-picker { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .mr-month-picker label { font-size: .78rem; font-weight: 600; color: var(--mr-muted); }
@@ -144,8 +144,8 @@
 .mr-tags li { padding: 6px 11px; border-radius: 999px; font-size: .76rem; font-weight: 700; background: var(--tone-soft); color: var(--tone-ink); }
 
 /* 基本概况 — 2-column grid inside one card */
-.mr-aspects-card { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); }
-.mr-aspect { padding: 14px; border: 1px solid var(--mr-line); border-radius: 18px; background: #FFFFFF; min-width: 0; }
+.mr-aspects-card { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+.mr-aspect { padding: 14px; border: 1px solid var(--mr-line); border-radius: 12px; background: #FFFFFF; min-width: 0; }
 .mr-aspect-top { display: flex; align-items: center; gap: 10px; }
 .mr-aspect-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 13px; background: var(--tone-soft); font-size: 1.1rem; flex-shrink: 0; }
 .mr-aspect h3 { margin: 0; font-family: var(--mr-display); font-size: .95rem; font-weight: 700; }
@@ -166,7 +166,7 @@
 .mr-chart-legend { display: flex; gap: 14px; margin-top: 8px; font-size: .76rem; font-weight: 600; }
 .mr-legend-height { color: #1D4ED8; }
 .mr-legend-weight { color: #1f6e3f; }
-.mr-chart-note { margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: #F8FAFC; border: 1px solid var(--mr-line); font-size: .82rem; color: #475569; }
+.mr-chart-note { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: #F8FAFC; border: 1px solid var(--mr-line); font-size: .82rem; color: #334155; }
 
 .mr-measurement-detail { margin-top: 14px; border-top: 1px solid var(--mr-line); padding-top: 10px; }
 .mr-measurement-detail summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; min-height: 44px; font-size: .84rem; font-weight: 600; color: #334155; }
@@ -189,7 +189,7 @@
 /* 健康与关注 */
 .mr-care-list { display: grid; gap: 10px; }
 .mr-care-item { display: grid; grid-template-columns: 42px 1fr auto; gap: 10px; align-items: start; padding: 15px; border: 1px solid var(--mr-line); border-radius: 18px; background: #FFFFFF; }
-.mr-care-item.is-settled { opacity: .86; box-shadow: none; background: #F8FAFC; }
+.mr-care-item.is-settled { box-shadow: none; background: #F8FAFC; }
 .mr-care-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--tone-soft); font-size: 1.05rem; }
 .mr-care-title { margin: 0; font-family: var(--mr-display); font-size: .95rem; font-weight: 700; grid-column: 2; }
 .mr-pill { grid-column: 3; font-style: normal; font-size: .72rem; font-weight: 700; padding: 5px 9px; border-radius: 999px; white-space: nowrap; }
@@ -204,16 +204,16 @@
 /* 睡眠旅程 */
 .mr-sleep-card { background: linear-gradient(135deg, var(--mr-blue-soft), #FFFFFF); overflow: hidden; }
 .mr-sleep-card h2 { margin: 2px 0 0; font-size: 1.18rem; }
-.mr-sleep-key { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin: 13px 0; }
-.mr-sleep-key div { padding: 12px 14px; border-radius: 16px; background: #FFFFFF; border: 1px solid var(--mr-line); }
-.mr-sleep-key small { display: block; color: var(--mr-muted); font-size: .7rem; font-weight: 500; }
-.mr-sleep-key strong { font-family: var(--mr-display); font-size: 1rem; font-weight: 700; }
+.mr-sleep-key { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: 9px; margin: 13px 0; }
+.mr-sleep-key div { padding: 12px 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid var(--mr-line); min-width: 0; }
+.mr-sleep-key small { display: block; color: var(--mr-muted); font-size: .75rem; font-weight: 500; }
+.mr-sleep-key strong { font-family: var(--mr-display); font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
 .mr-sleep-svg { width: 100%; height: auto; }
 .mr-sleep-baseline { stroke: #CBD5E1; stroke-width: 2; stroke-dasharray: 4 6; }
 .mr-sleep-curve { fill: none; stroke: var(--mr-blue); stroke-width: 6; stroke-linecap: round; }
 .mr-sleep-svg circle { fill: #FFFFFF; stroke: var(--mr-blue); stroke-width: 4; }
 .mr-sleep-svg circle.is-current { fill: var(--mr-blue); }
-.mr-sleep-labels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; color: var(--mr-muted); font-size: .7rem; text-align: center; }
+.mr-sleep-labels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; color: var(--mr-muted); font-size: .75rem; text-align: center; overflow-wrap: anywhere; }
 .mr-sleep-labels li.is-current { color: var(--mr-blue-ink); font-weight: 700; }
 .mr-sleep-caption { margin: 11px 0 0; font-size: .88rem; line-height: 1.72; color: #334155; }
 
@@ -233,19 +233,19 @@
 .mr-food-guide-card { background: linear-gradient(135deg, #F8FAFC, #FFFFFF); }
 .mr-food-guide-card h2 { margin: 2px 0 0; font-size: 1.16rem; }
 .mr-food-principle { margin: 6px 0 0; font-family: var(--mr-display); font-size: 1.08rem; font-weight: 700; letter-spacing: -0.02em; }
-.mr-food-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 14px; }
+.mr-food-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 12px; margin-top: 14px; }
 .mr-food-scene { display: grid; grid-template-columns: 38% 1fr; min-height: 130px; border: 1px solid var(--mr-line); border-radius: 20px; background: #FFFFFF; overflow: hidden; }
 .mr-food-photo { position: relative; padding: 8px; background: linear-gradient(145deg, #EEF2F8, #ECFDF5); }
-.mr-food-photo img { width: 100%; height: 100%; object-fit: contain; }
+.mr-food-photo img { width: 100%; height: 100%; object-fit: contain; border-radius: 12px; }
 .mr-food-copy { display: flex; flex-direction: column; justify-content: center; padding: 12px; min-width: 0; }
 .mr-food-copy h3 { margin: 0; font-family: var(--mr-display); font-size: .92rem; font-weight: 700; }
-.mr-food-items { margin: 4px 0 0; font-size: .78rem; color: #475569; line-height: 1.45; }
-.mr-food-tip { align-self: flex-start; margin-top: 8px; padding: 4px 9px; border-radius: 999px; background: var(--mr-yellow-soft); color: var(--mr-yellow-ink); font-size: .68rem; font-weight: 700; }
-.mr-food-fallback { margin-top: 12px; padding: 15px; border-radius: 18px; background: var(--mr-blue-soft); text-align: center; color: #1E40AF; font-size: .95rem; font-weight: 700; }
+.mr-food-items { margin: 4px 0 0; font-size: .78rem; color: #334155; line-height: 1.45; }
+.mr-food-tip { align-self: flex-start; margin-top: 8px; padding: 4px 9px; border-radius: 999px; background: var(--mr-yellow-soft); color: var(--mr-yellow-ink); font-size: .75rem; font-weight: 700; line-height: 1.35; }
+.mr-food-fallback { margin-top: 12px; padding: 15px; border-radius: 12px; background: var(--mr-blue-soft); text-align: center; color: #1E40AF; font-size: .95rem; font-weight: 700; }
 .mr-food-fallback strong { color: #1D4ED8; }
 
 /* 下月重点关注 */
-.mr-next-notes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.mr-next-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 10px; }
 .mr-next-notes article { padding: 15px 16px; border-radius: 18px; border: 1px solid var(--mr-line); background: #FFFFFF; box-shadow: var(--mr-shadow-soft); }
 .mr-next-notes h3 { margin: 0 0 4px; font-size: .92rem; font-family: var(--mr-display); font-weight: 700; }
 .mr-next-notes p { margin: 0; font-size: .82rem; color: var(--mr-muted); line-height: 1.65; }
@@ -261,8 +261,10 @@
   .mr-hero-photo { height: 320px; }
   .mr-hero-panel { margin: -24px 10px 0; padding: 16px; }
   .mr-hero-title { font-size: 1.7rem; }
+  .mr-food-entry { grid-template-columns: 52px 1fr; }
+  .mr-food-entry-link { grid-column: 2; justify-self: start; }
   .mr-sleep-key { grid-template-columns: 1fr; }
-  .mr-sleep-labels { font-size: .62rem; }
+  .mr-sleep-labels { font-size: .68rem; }
   .mr-care-detail > div { grid-template-columns: 44px 1fr; }
 }
 

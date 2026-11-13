@@ -69,7 +69,7 @@ export default async function MomReportsPage({ searchParams }: { searchParams: S
         </div>
       </div>
 
-      <main id="mr-main">
+      <div id="mr-main" tabIndex={-1}>
         <section id="mr-summary" className="mr-section mr-card mr-summary" aria-labelledby="mr-summary-title">
           <h2 id="mr-summary-title" className="mr-serif">本月情况总结</h2>
           <p className="mr-summary-copy">{content.summaryBody}</p>
@@ -130,7 +130,7 @@ export default async function MomReportsPage({ searchParams }: { searchParams: S
         <footer className="mr-footer">
           <p>{content.footerNote}</p>
         </footer>
-      </main>
+      </div>
     </div>
   </div>;
 }

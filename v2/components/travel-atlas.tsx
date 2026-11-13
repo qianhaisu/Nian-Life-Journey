@@ -140,6 +140,34 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
 
   const homePin = CHINA.pins.find((p) => placeById.get(p.placeId)?.home);
   const provinceGeo = provinceCode ? geo[provinceCode] : undefined;
+  const cnTabRef = useRef<HTMLButtonElement>(null);
+  const usTabRef = useRef<HTMLButtonElement>(null);
+  const isUsTab = view.kind === "us";
+
+  const selectTab = (target: "china" | "us", moveFocus = false) => {
+    if (target === "china") {
+      setView({ kind: "china" });
+      setSel({ kind: "recent" });
+      if (moveFocus) cnTabRef.current?.focus();
+    } else {
+      setView({ kind: "us" });
+      setSel({ kind: "us" });
+      if (moveFocus) usTabRef.current?.focus();
+    }
+  };
+
+  const handleTabKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      selectTab(isUsTab ? "china" : "us", true);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      selectTab("china", true);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      selectTab("us", true);
+    }
+  };
 
   return (
     <div className="travel-atlas">
@@ -155,14 +183,38 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
           </span>
         </Link>
       ) : null}
-      <div className="travel-map-tabs" role="tablist" aria-label="地图">
-        <button type="button" role="tab" aria-selected={view.kind !== "us"} className={view.kind !== "us" ? "is-on" : ""}
-          onClick={() => { setView({ kind: "china" }); setSel({ kind: "recent" }); }}>中国</button>
-        <button type="button" role="tab" aria-selected={view.kind === "us"} className={view.kind === "us" ? "is-on" : ""}
-          onClick={() => { setView({ kind: "us" }); setSel({ kind: "us" }); }}>美国</button>
+      <div className="travel-map-tabs" role="tablist" aria-label="地图" onKeyDown={handleTabKeyDown}>
+        <button
+          ref={cnTabRef}
+          id="travel-tab-china"
+          type="button"
+          role="tab"
+          aria-selected={!isUsTab}
+          aria-controls="travel-map-panel"
+          tabIndex={!isUsTab ? 0 : -1}
+          className={!isUsTab ? "is-on" : ""}
+          onClick={() => selectTab("china")}
+        >中国</button>
+        <button
+          ref={usTabRef}
+          id="travel-tab-us"
+          type="button"
+          role="tab"
+          aria-selected={isUsTab}
+          aria-controls="travel-map-panel"
+          tabIndex={isUsTab ? 0 : -1}
+          className={isUsTab ? "is-on" : ""}
+          onClick={() => selectTab("us")}
+        >美国</button>
       </div>
 
-      <div className="travel-map" ref={mapRef}>
+      <div
+        id="travel-map-panel"
+        className="travel-map"
+        role="tabpanel"
+        aria-labelledby={isUsTab ? "travel-tab-us" : "travel-tab-china"}
+        ref={mapRef}
+      >
         {view.kind === "province" ? (
           <button type="button" className="travel-map-back" onClick={() => { setView({ kind: "china" }); setSel({ kind: "recent" }); }}>← 全国</button>
         ) : null}

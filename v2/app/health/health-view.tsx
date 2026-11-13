@@ -46,21 +46,57 @@ function AttLink({ a }: { a: Att }) {
 function AttViewer({ a, onClose }: { a: Att; onClose: () => void }) {
   const [zoom, setZoom] = useState(1);
   const [asFrame, setAsFrame] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const back = useRef<HTMLButtonElement>(null);
+  const zoomOut = useCallback(() => setZoom((z) => Math.max(1, +(z - 0.5).toFixed(1))), []);
+  const zoomIn = useCallback(() => setZoom((z) => Math.min(5, +(z + 0.5).toFixed(1))), []);
   useEffect(() => {
-    const prev = document.body.style.overflow; document.body.style.overflow = "hidden";
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    addEventListener("keydown", key); back.current?.focus();
-    return () => { document.body.style.overflow = prev; removeEventListener("keydown", key); };
-  }, [onClose]);
-  return <div className="hp-view" role="dialog" aria-modal="true" aria-label={`报告附件：${a.label}`}>
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (!asFrame) {
+        if (e.key === "+" || e.key === "=") { e.preventDefault(); zoomIn(); return; }
+        if (e.key === "-" || e.key === "_") { e.preventDefault(); zoomOut(); return; }
+        if (e.key === "0") { e.preventDefault(); setZoom(1); return; }
+      }
+      if (e.key === "Tab" && dialogRef.current) {
+        const focusables = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], iframe, [tabindex]:not([tabindex="-1"])'
+        ));
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        if (e.shiftKey) {
+          if (!active || active === first || !dialogRef.current.contains(active)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else if (!active || active === last || !dialogRef.current.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    addEventListener("keydown", key);
+    back.current?.focus();
+    return () => {
+      document.body.style.overflow = prev;
+      removeEventListener("keydown", key);
+      previousFocus?.focus({ preventScroll: true });
+    };
+  }, [onClose, asFrame, zoomIn, zoomOut]);
+  const zoomPct = Math.round(zoom * 100);
+  return <div ref={dialogRef} className="hp-view" role="dialog" aria-modal="true" aria-label={`报告附件：${a.label}`}>
     <div className="hp-view-bar">
       <button type="button" className="hp-view-back" ref={back} data-act="att-back" onClick={onClose}><Icon kind="left" />返回</button>
       <span className="hp-view-t">{a.label}</span>
-      {asFrame ? null : <span className="hp-view-z">
-        <button type="button" aria-label="缩小" onClick={() => setZoom((z) => Math.max(1, +(z - 0.5).toFixed(1)))}>－</button>
-        <button type="button" aria-label="还原" onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
-        <button type="button" aria-label="放大" onClick={() => setZoom((z) => Math.min(5, +(z + 0.5).toFixed(1)))}>＋</button>
+      {asFrame ? null : <span className="hp-view-z" role="group" aria-label="缩放控制">
+        <button type="button" aria-label="缩小" disabled={zoom <= 1} onClick={zoomOut}>－</button>
+        <button type="button" aria-label={`还原，当前 ${zoomPct}%`} disabled={zoom <= 1} onClick={() => setZoom(1)}>{zoomPct}%</button>
+        <button type="button" aria-label="放大" disabled={zoom >= 5} onClick={zoomIn}>＋</button>
       </span>}
     </div>
     <div className="hp-view-body">
@@ -82,7 +118,7 @@ export function HealthView({ page }: { page: HealthPage }) {
     const pop = () => { if (!(history.state && history.state.hpAtt)) setAtt(null); };
     addEventListener("popstate", pop); return () => removeEventListener("popstate", pop);
   }, []);
-  return <AttCtx.Provider value={open}><div className="hp">
+  return <AttCtx.Provider value={open}><div className="hp" aria-hidden={att ? true : undefined}>
     <div className="hp-head"><h1 className="hp-h1">健康</h1><Link className="hp-btn" href="/health/record">＋ 记一笔</Link></div>
     <JumpBar />
     <section className="hp-part" id="hp-s1" aria-labelledby="hp-t1">
@@ -93,8 +129,7 @@ export function HealthView({ page }: { page: HealthPage }) {
       <section className="hp-part" id="hp-s3" aria-labelledby="hp-t3"><h2 id="hp-t3">观察与护理</h2><FollowUp page={page} /></section>
       <p className="hp-disc">辅助整理，不是诊断，不能代替医生。</p>
     </div>
-    {att ? <AttViewer a={att} onClose={close} /> : null}
-  </div></AttCtx.Provider>;
+  </div>{att ? <AttViewer a={att} onClose={close} /> : null}</AttCtx.Provider>;
 }
 
 function JumpBar() {
@@ -210,7 +245,7 @@ function Timeline({ page }: { page: HealthPage }) {
       <button type="button" className="hp-arr" data-arr="-1" aria-label="向左" onClick={() => sc.current?.scrollBy({ left: -240, behavior: "smooth" })}><Icon kind="left" /></button>
       <button type="button" className="hp-arr" data-arr="1" aria-label="向右" onClick={() => sc.current?.scrollBy({ left: 240, behavior: "smooth" })}><Icon kind="right" /></button>
     </div>
-    {sickDays > 0 ? <div className="hp-sick-days">年度累计生病 😷 {sickDays} 天<button type="button" className="hp-sick-info" aria-label="计算说明" onClick={() => setShowSickInfo((x) => !x)}>ⓘ</button>{showSickInfo ? <span className="hp-sick-tip">含疑似时段；短间隔和结束不明时按约定补算，不是确诊患病天数。</span> : null}</div> : null}
+    {sickDays > 0 ? <div className="hp-sick-days">年度记录与估算生病 😷 {sickDays} 天<span className="hp-sick-note">（按现有记录推算，非确诊天数）</span><button type="button" className="hp-sick-info" aria-label="计算说明" aria-expanded={showSickInfo} onClick={() => setShowSickInfo((x) => !x)}>ⓘ</button>{showSickInfo ? <span className="hp-sick-tip">含疑似时段；短间隔和结束不明时按约定补算，不是确诊患病天数。</span> : null}</div> : null}
     <div className="hp-scroll" ref={sc} tabIndex={0} aria-label="详细时间轴，可左右滑动">
       <div className="hp-track" style={{ width: W }}>
         {Array.from({ length: 12 }, (_, i) => i).filter((i) => Date.UTC(year, i, 1) < Y1).map((i) => { const x = X(Date.UTC(year, i, 1)); return <div key={i}><div className="hp-monl" style={{ left: x }} /><div className="hp-mon" style={{ left: Math.max(x, PAD + 10) }}>{i + 1}月</div></div>; })}

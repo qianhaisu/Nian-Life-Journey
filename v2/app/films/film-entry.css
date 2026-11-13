@@ -1,15 +1,16 @@
 .home-film,
 .bento-tile.home-film,
 .home-v2 .bento-tile.tile-film {
+  --film-pad: 14px;
   position: relative;
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 16px;
   min-height: 120px;
-  padding: 14px 18px 14px 14px;
+  padding: var(--film-pad) 18px var(--film-pad) var(--film-pad);
   border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: var(--r-card, 26px);
+  border-radius: var(--r-card, 24px);
   background: linear-gradient(165deg, #0F172A 0%, #162036 100%);
   color: #FFFFFF;
   box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18), 0 1px 2px rgba(15, 23, 42, 0.12);
@@ -44,7 +45,7 @@ a.bento-tile.home-film:active {
   flex: 0 0 108px;
   width: 108px;
   height: 108px;
-  border-radius: 14px;
+  border-radius: max(6px, calc(var(--r-card, 24px) - var(--film-pad, 14px)));
   overflow: hidden;
   background: #1E293B;
 }
@@ -142,12 +143,13 @@ a.bento-tile.home-film:active {
   .home-film,
   .bento-tile.home-film,
   .home-v2 .bento-tile.tile-film {
+    --film-pad: 16px;
     flex-direction: column;
     align-items: stretch;
     justify-content: space-between;
     gap: 14px;
     min-height: 220px;
-    padding: 18px;
+    padding: var(--film-pad);
   }
 
   .home-film-poster {
@@ -155,7 +157,7 @@ a.bento-tile.home-film:active {
     width: 100%;
     height: 128px;
     min-height: 116px;
-    border-radius: var(--r-media, 16px);
+    border-radius: max(6px, calc(var(--r-card, 24px) - var(--film-pad, 16px)));
   }
 
   .home-film-duration {
@@ -185,6 +187,18 @@ a.bento-tile.home-film:active {
   .home-v2 .bento-tile.tile-film,
   .home-film-poster img,
   .home-film-arrow {
-    transition: none;
+    transition-property: opacity, color, background-color, border-color, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+  }
+
+  .home-film:hover,
+  a.bento-tile.home-film:hover,
+  .home-v2 a.bento-tile.tile-film:hover,
+  .home-film:active,
+  a.bento-tile.home-film:active,
+  .home-film:hover .home-film-poster img,
+  .home-film:hover .home-film-arrow {
+    transform: none;
   }
 }

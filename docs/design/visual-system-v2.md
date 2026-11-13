@@ -1,3 +1,7 @@
+> **[SUPERSEDED — 2026-11-12]** This 2026-09-05 Earth Tones specification has been superseded by the **Modular Daylight Canvas** design system (Amie / Apple Journal / Retro.app inspired `#F3F5F9` canvas, `#FFFFFF` elevated surfaces, self-hosted `Poppins`/`Nunito` + CJK system sans, micro-pastel accents, and concentric radii). See the authoritative specification in [`DESIGN.md`](../../DESIGN.md) and product truth in [`PRODUCT.md`](../../PRODUCT.md). Historical text below is preserved verbatim for archive reference.
+
+---
+
 # Nianlife 视觉系统 V2 — 大地色 · 圆角 · 呼吸感 · 丝滑微动效（Teddy 定稿）
 
 > 2026-09-05。**设计方向由 Teddy 给出**（本文 §1–§3 是他的设计稿原文的规范化转写，参考实现见 `docs/design/reference-earth-tones.html`）。Cowork 只补了 §4「落地约束」和 §5「分阶段与验收」。

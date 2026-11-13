@@ -119,7 +119,7 @@ function Workspace({ label, onLost: lost, onLogout }: { label: string; onLost: (
   return (
     <div className="hr-app">
       <header className="top"><h1>健康记录<small>给张年记一笔 · 由家长录入</small></h1>
-        <div className="who"><a className="btn ghost" style={{ minHeight: 36, padding: "4px 8px", textDecoration: "none" }} href="/health">返回健康</a><span>{label}</span><button className="btn ghost" style={{ minHeight: 36, padding: "4px 8px" }} onClick={onLogout}>换录入人</button></div></header>
+        <div className="who"><a className="btn ghost" style={{ textDecoration: "none" }} href="/health">返回健康</a><span>{label}</span><button type="button" className="btn ghost" onClick={onLogout}>换录入人</button></div></header>
       {toast ? <div className="toast" role="status">{toast}</div> : null}
       <main id="hr-view">
         <div hidden={tab !== "note"}><NoteForm onLost={lost} say={say} onSaved={() => setListVersion((v) => v + 1)} onOpen={(id) => { setTab("hist"); setOpenId(id); }} /></div>
@@ -370,10 +370,56 @@ function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: (
   // The in-flight action (correct / overwrite / void / restore) is frozen with its request ID: if the outcome is unknown, a retry
   // replays exactly this request (the server answers "already applied" instead of applying it twice).
   const pending = useRef<{ tag: string; path: string; body: Record<string, unknown> } | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const [uncertain, setUncertain] = useState(false);
   const [conflict, setConflict] = useState<Detail | null>(null); const [needsConfirm, setNeedsConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { (async () => { const r = await api("GET", `entries/${encodeURIComponent(id)}`); if (r.status === 401) { onLost(); return; } if (r.ok) setD({ record: r.json.record, history: r.json.history }); else setMsg(r.json?.message ?? "读取失败。"); })(); }, [id, onLost]);
+
+  const loadDetail = useCallback(async () => {
+    setMsg("");
+    const r = await api("GET", `entries/${encodeURIComponent(id)}`);
+    if (r.status === 401) { onLost(); return; }
+    if (r.ok) setD({ record: r.json.record, history: r.json.history });
+    else setMsg(r.json?.message ?? "读取失败。");
+  }, [id, onLost]);
+
+  useEffect(() => { loadDetail(); }, [loadDetail]);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    sheetRef.current?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (e.key === "Tab" && sheetRef.current) {
+        const focusables = Array.from(sheetRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ));
+        if (focusables.length === 0) {
+          e.preventDefault();
+          sheetRef.current.focus();
+          return;
+        }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        if (e.shiftKey) {
+          if (!active || active === first || active === sheetRef.current || !sheetRef.current.contains(active)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else if (!active || active === last || !sheetRef.current.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      previousFocus?.focus({ preventScroll: true });
+    };
+  }, [onClose]);
+
   const rec = d?.record;
 
   const send = async (tag: string, path: string, make: () => Record<string, unknown>, okMsg: string) => {
@@ -403,9 +449,9 @@ function Sheet({ id, onClose, onLost, say, onChanged }: { id: string; onClose: (
 
   return (
     <div className="sheet-wrap" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={edit ? "更正" : "记录详情"}>
+      <div ref={sheetRef} tabIndex={-1} className="sheet" role="dialog" aria-modal="true" aria-label={edit ? "更正" : "记录详情"}>
         <div className="grab" />
-        {!rec ? <><p className="hint" role={msg ? "alert" : undefined}>{msg || "读取中…"}</p><div className="actions"><button className="btn sec" onClick={onClose}>关闭</button></div></> : edit ? (
+        {!rec ? <><p className="hint" role={msg ? "alert" : undefined}>{msg || "读取中…"}</p><div className="actions">{msg ? <button type="button" className="btn sec" onClick={loadDetail}>重试</button> : null}<button type="button" className="btn sec" onClick={onClose}>关闭</button></div></> : edit ? (
           <>
             <h2>更正</h2><p className="hint">改的地方会写进历史，原来的内容不会丢。取消一个选项只表示“不记”，不会变成“没有”或“正常”。</p>
             {msg ? <div className="err" role="alert">{msg}{needsConfirm ? <div className="actions"><button className="btn" onClick={() => save(true)}>确认无误，保存</button></div> : null}{uncertain ? <div className="actions"><button className="btn sec" onClick={giveUp}>放弃这次操作</button></div> : null}</div> : null}

@@ -426,7 +426,7 @@
   }
 }
 
-/* Concentric MonthCard: 24px outer radius + 10px padding + 16px inner photo radius */
+/* Concentric MonthCard: 24px outer radius + 10px padding + 14px inner photo radius */
 .memory-page .month-card {
   display: flex;
   flex-direction: column;
@@ -444,6 +444,12 @@
 
 .memory-page .month-card:has(.month-card-photo) {
   padding: 10px;
+}
+
+.memory-page .month-card:has(.month-card-photo) .month-card-photo,
+.memory-page .month-card:has(.month-card-photo) .month-card-photo--square,
+.memory-page .month-card:has(.month-card-photo) .month-card-photo--full {
+  border-radius: calc(var(--mem-r-card) - 10px);
 }
 
 .memory-page .month-card--compact {
@@ -934,8 +940,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 0 10px;
+  min-height: 44px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid rgba(15, 23, 42, 0.1);
   background: #FFFFFF;
@@ -965,8 +971,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 0 10px;
+  min-height: 44px;
+  padding: 4px 12px;
   border-radius: 999px;
   border: 1px solid rgba(37, 99, 235, 0.22);
   background: linear-gradient(180deg, #F8FAFF 0%, #EFF6FF 100%);
@@ -980,12 +986,14 @@
 .month-cal-select-label {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 4px;
   font-family: var(--font-heading);
   font-size: 0.8rem;
   font-weight: 700;
   color: #1E3A8A;
-  white-space: nowrap;
+  text-align: center;
   pointer-events: none;
 }
 

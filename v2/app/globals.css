@@ -166,8 +166,8 @@ time,
   align-items: center;
   gap: 11px;
   min-height: 44px;
-  padding: 4px 6px 4px 0;
-  border-radius: 14px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 15px;
 }
 .brand-mark {
   display: grid;
@@ -296,19 +296,27 @@ time,
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
-  padding: 0 6px;
+  padding: 6px 4px;
   border-radius: var(--r-badge);
   font-family: var(--font-sans);
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0;
-  white-space: nowrap;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: break-word;
   color: var(--color-secondary);
   transition:
     background-color 220ms var(--ease-spring),
     color 220ms var(--ease-spring),
     transform 180ms var(--ease-spring),
     box-shadow 220ms var(--ease-spring);
+}
+@media (max-width: 374px) {
+  .bottom-nav > a {
+    font-size: 0.75rem;
+    padding: 6px 2px;
+  }
 }
 .bottom-nav > a:active { transform: scale(0.95); }
 .bottom-nav > a.is-active {
@@ -644,13 +652,79 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  html,
+  * {
     scroll-behavior: auto !important;
+  }
+  .reveal,
+  .memory-entry .memory-photo,
+  .memory-entry .memory-copy,
+  .month-moment,
+  .month-card {
+    animation: none !important;
+  }
+  .skip-link {
+    transition: none;
+  }
+  .brand-mark,
+  .header-search,
+  .bottom-nav > a,
+  .desktop-nav a,
+  .text-link,
+  .back-link,
+  .primary-button,
+  .candidate-actions button,
+  .moment-photo-col .moment-hero,
+  .home-lead .memory-lead .memory-photo .photo,
+  .home-month-card,
+  .month-jump a,
+  .day-album-open,
+  .other-years a,
+  .video-play-mark,
+  .story-step,
+  .day-neighbors a.day-neighbor,
+  .not-found-links a,
+  .year-pill,
+  .month-card,
+  .month-card-photo .photo-crop img,
+  .cluster-item,
+  .pg-cell img {
+    transition-property: opacity, color, background-color, border-color, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+  }
+  .brand:hover .brand-mark,
+  .header-search:hover,
+  .header-search:active,
+  .bottom-nav > a:active,
+  .desktop-nav a:active,
+  .text-link:hover,
+  .back-link:hover,
+  .primary-button:hover,
+  .candidate-actions button:hover,
+  .moment-photo-col .moment-hero:hover,
+  .moment-photo-col .moment-hero:active,
+  .home-lead .memory-lead .memory-photo:hover .photo,
+  .home-month-card:hover,
+  .home-month-card:active,
+  .month-jump a:hover,
+  .day-album-open:hover,
+  .other-years a:hover,
+  .video-play:hover .video-play-mark,
+  .video-play:focus-visible .video-play-mark,
+  .story-step:hover,
+  .story-step:active,
+  .day-neighbors a.day-neighbor:hover,
+  .day-neighbors a.day-neighbor:active,
+  .not-found-links a:hover,
+  .year-pill:hover,
+  .month-card:hover,
+  .month-card:active,
+  .month-card:hover .month-card-photo .photo-crop img,
+  .cluster-item:hover,
+  .cluster-item:active,
+  .pg-cell[role="button"]:hover img {
+    transform: none;
   }
 }
 
@@ -1990,7 +2064,8 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
     border-color 220ms ease;
 }
 .month-card:has(.month-card-photo) {
-  padding: 10px 10px 0;
+  --month-card-pad: 10px;
+  padding: var(--month-card-pad) var(--month-card-pad) 0;
 }
 .month-card--compact {
   background: linear-gradient(180deg, var(--tint-blue) 0%, var(--color-surface) 72%);
@@ -2007,7 +2082,7 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 .month-card-photo {
   position: relative;
   height: clamp(172px, 38vw, 234px);
-  border-radius: var(--r-media);
+  border-radius: max(6px, calc(var(--r-card) - var(--month-card-pad, 10px)));
   overflow: hidden;
   background: var(--card-soft);
 }

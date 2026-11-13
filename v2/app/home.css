@@ -20,7 +20,7 @@
   --mint-ink: var(--accent-mint, #047857);
   --card-border: var(--hairline, rgba(15, 23, 42, 0.06));
   --card-border-hover: rgba(37, 99, 235, 0.22);
-  --card-radius: var(--r-card, 26px);
+  --card-radius: var(--r-card, 24px);
   --inner-radius: var(--r-media, 16px);
   --card-shadow:
     0 1px 2px rgba(15, 23, 42, 0.03),
@@ -55,6 +55,8 @@
 .greeting-kicker {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 8px;
   margin: 0;
   padding: 6px 14px;
@@ -145,6 +147,7 @@
 
 .home-answer-source--pill {
   gap: 4px;
+  max-width: 100%;
   padding: 6px 14px;
   border-radius: 999px;
   background: var(--card-bg);
@@ -152,6 +155,13 @@
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
   font-size: 13px;
   font-weight: 700;
+}
+
+@media (max-width: 420px) {
+  .home-answer-source--pill {
+    white-space: normal;
+    text-align: left;
+  }
 }
 
 .home-answer-arrow {
@@ -170,6 +180,10 @@
     border-color: var(--card-border-hover);
     transform: translateY(-1px);
   }
+}
+
+.home-answer-source--pill:active {
+  transform: scale(0.97);
 }
 
 /* ── 2. 12 列 Bento 首屏马赛克 ───────────────────────────────────────────── */
@@ -414,7 +428,7 @@ a.bento-tile:active {
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(9, 13, 22, 0.18);
-  transition: background-color 200ms ease, transform 220ms var(--spring);
+  transition: background-color 160ms ease, transform 180ms var(--spring);
 }
 
 @media (hover: hover) {
@@ -422,6 +436,10 @@ a.bento-tile:active {
     background: rgba(15, 23, 42, 0.72);
     transform: translateY(-1px);
   }
+}
+
+.memory-switch:active {
+  transform: scale(0.96);
 }
 
 .memory-colophon {
@@ -454,6 +472,8 @@ a.bento-tile:active {
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.28;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
   text-shadow: 0 2px 12px rgba(9, 13, 22, 0.36);
 }
 
@@ -463,6 +483,7 @@ a.bento-tile:active {
   font-size: 13.5px;
   font-weight: 500;
   line-height: 1.45;
+  text-wrap: pretty;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
@@ -568,6 +589,10 @@ a.bento-tile:active {
   }
 }
 
+.memory-read:active {
+  transform: scale(0.97);
+}
+
 .memory-play {
   pointer-events: auto;
   flex-shrink: 0;
@@ -659,10 +684,11 @@ a.bento-tile:active {
 /* ── Tile 2：最新日切片卡（LatestDayTile） ───────────────────────────────── */
 
 .tile-latest-day {
+  --tile-pad: 12px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  padding: 20px;
+  gap: 14px;
+  padding: var(--tile-pad);
   background: var(--card-bg);
 }
 
@@ -671,12 +697,18 @@ a.bento-tile:active {
   align-items: stretch;
 }
 
+@media (max-width: 359px) {
+  .tile-latest-day--with-photo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .day-slice-thumb {
   position: relative;
   display: block;
   width: 100%;
   min-height: 148px;
-  border-radius: var(--inner-radius);
+  border-radius: max(6px, calc(var(--card-radius) - var(--tile-pad)));
   overflow: hidden;
   background: #E2E8F0;
 }
@@ -720,10 +752,12 @@ a.bento-tile:active {
 .day-slice-title {
   color: var(--ink-strong);
   font-family: var(--font-heading);
-  font-size: 18.5px;
+  font-size: clamp(16.5px, 4.4vw, 18.5px);
   font-weight: 800;
   letter-spacing: -0.015em;
   line-height: 1.32;
+  text-wrap: balance;
+  overflow-wrap: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -734,6 +768,8 @@ a.bento-tile:active {
   color: var(--ink-body);
   font-size: 14px;
   line-height: 1.6;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -754,11 +790,12 @@ a.bento-tile:active {
 /* ── Tile 3：近月成长亮点卡（Soft Lavender） ─────────────────────────────── */
 
 .tile-growth {
+  --tile-pad: 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 16px;
-  padding: 22px;
+  padding: var(--tile-pad);
   background: linear-gradient(160deg, var(--lavender-tint) 0%, #FAF8FF 100%);
   border-color: rgba(109, 40, 217, 0.10);
 }
@@ -798,6 +835,8 @@ a.bento-tile:active {
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.45;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -814,6 +853,7 @@ a.bento-tile:active {
 }
 
 .growth-tag {
+  max-width: 100%;
   padding: 5px 11px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.92);
@@ -837,11 +877,12 @@ a.bento-tile:active {
 /* ── Tile 4：家人的话（Warm Peach） ──────────────────────────────────────── */
 
 .tile-voices {
+  --tile-pad: 12px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   gap: 11px;
-  padding: 18px 20px;
+  padding: var(--tile-pad);
   background: linear-gradient(160deg, var(--peach-tint) 0%, #FFF9F5 100%);
   border-color: rgba(194, 65, 12, 0.10);
 }
@@ -857,26 +898,35 @@ a.bento-tile:active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  padding: 0 11px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.78);
   border: 1px solid var(--card-border);
-  color: var(--ink-muted);
+  color: var(--ink-soft);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 180ms var(--spring);
 }
 
-.tile-rotate-btn:hover {
-  background: var(--card-bg);
-  border-color: var(--card-border-hover);
-  color: var(--cobalt-ink);
+@media (hover: hover) {
+  .tile-rotate-btn:hover {
+    background: var(--card-bg);
+    border-color: var(--card-border-hover);
+    color: var(--cobalt-ink);
+    transform: translateY(-1px);
+  }
+}
+
+.tile-rotate-btn:active {
+  transform: scale(0.96);
 }
 
 .chat-bubbles {
@@ -891,7 +941,7 @@ a.bento-tile:active {
   gap: 11px;
   min-height: 48px;
   padding: 10px 13px;
-  border-radius: 16px;
+  border-radius: max(6px, calc(var(--card-radius) - var(--tile-pad)));
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(194, 65, 12, 0.10);
   box-shadow: 0 2px 8px rgba(194, 65, 12, 0.04);
@@ -907,6 +957,10 @@ a.bento-tile:active {
     border-color: rgba(194, 65, 12, 0.24);
     transform: translateY(-1px);
   }
+}
+
+.chat-msg:active {
+  transform: scale(0.985);
 }
 
 .chat-avatar {
@@ -956,6 +1010,8 @@ a.bento-tile:active {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -984,6 +1040,7 @@ a.bento-tile:active {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -1023,13 +1080,14 @@ a.bento-tile:active {
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color 200ms ease,
-    border-color 200ms ease,
-    transform 240ms var(--spring);
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 180ms var(--spring);
 }
 
 .mod-sec-rotate {
-  color: var(--ink-muted);
+  color: var(--ink-soft);
   font-weight: 600;
 }
 
@@ -1041,6 +1099,10 @@ a.bento-tile:active {
   }
 }
 
+.mod-sec-pill:active {
+  transform: scale(0.97);
+}
+
 .journal-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1048,10 +1110,11 @@ a.bento-tile:active {
 }
 
 .j-card {
+  --j-card-pad: 12px;
   display: flex;
   flex-direction: column;
-  padding: 18px;
-  border-radius: 24px;
+  padding: var(--j-card-pad);
+  border-radius: var(--card-radius);
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   box-shadow: var(--card-shadow);
@@ -1072,12 +1135,16 @@ a.bento-tile:active {
   }
 }
 
+.j-card:active {
+  transform: scale(0.988);
+}
+
 .j-card-photo {
   position: relative;
   width: 100%;
   aspect-ratio: 4 / 3.2;
   margin-bottom: 15px;
-  border-radius: var(--inner-radius);
+  border-radius: max(6px, calc(var(--card-radius) - var(--j-card-pad)));
   overflow: hidden;
   background: #E2E8F0;
 }
@@ -1129,6 +1196,8 @@ a.bento-tile:active {
   font-weight: 800;
   letter-spacing: -0.015em;
   line-height: 1.35;
+  text-wrap: balance;
+  overflow-wrap: break-word;
 }
 
 .j-card-excerpt {
@@ -1136,6 +1205,8 @@ a.bento-tile:active {
   color: var(--ink-body);
   font-size: 14.5px;
   line-height: 1.65;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -1150,7 +1221,7 @@ a.bento-tile:active {
   flex: 1 1 auto;
   margin: 4px 0 16px;
   padding: 18px 20px;
-  border-radius: var(--inner-radius);
+  border-radius: max(6px, calc(var(--card-radius) - var(--j-card-pad)));
   background: linear-gradient(155deg, #F8FAFC 0%, var(--cobalt-tint) 100%);
   border: 1px solid rgba(37, 99, 235, 0.10);
   color: var(--ink-strong);
@@ -1188,7 +1259,7 @@ a.bento-tile:active {
   position: relative;
   display: block;
   aspect-ratio: 3 / 3.9;
-  border-radius: 22px;
+  border-radius: var(--card-radius);
   overflow: hidden;
   background: #0F172A;
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -1216,6 +1287,10 @@ a.bento-tile:active {
   }
 }
 
+.capsule-card:active {
+  transform: scale(0.985);
+}
+
 .capsule-scrim {
   position: absolute;
   inset: 0;
@@ -1230,6 +1305,7 @@ a.bento-tile:active {
   top: 12px;
   left: 12px;
   z-index: 2;
+  max-width: calc(100% - 24px);
   padding: 5px 11px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
@@ -1268,6 +1344,8 @@ a.bento-tile:active {
   font-size: 15px;
   font-weight: 800;
   line-height: 1.32;
+  text-wrap: balance;
+  overflow-wrap: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1287,11 +1365,13 @@ a.bento-tile:active {
 
 .widget-panel,
 .weekly {
+  --panel-pad: 12px;
+  --panel-inner-radius: max(12px, calc(var(--card-radius) - var(--panel-pad)));
   border-radius: var(--card-radius);
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   box-shadow: var(--card-shadow);
-  padding: 24px;
+  padding: var(--panel-pad);
 }
 
 .widget-head {
@@ -1350,14 +1430,19 @@ a.bento-tile:active {
   color: var(--cobalt-ink);
   font-size: 13px;
   font-weight: 700;
-  transition: background-color 200ms ease, border-color 200ms ease;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms var(--spring);
 }
 
 @media (hover: hover) {
   .widget-head-link:hover {
     background: var(--cobalt-tint);
     border-color: var(--card-border-hover);
+    transform: translateY(-1px);
   }
+}
+
+.widget-head-link:active {
+  transform: scale(0.97);
 }
 
 /* 每周提醒（HomeReminders & HomeHealthReminders） */
@@ -1386,7 +1471,7 @@ a.bento-tile:active {
 
 .weekly-item {
   padding: 12px 14px;
-  border-radius: 16px;
+  border-radius: var(--panel-inner-radius);
   background: #F8FAFC;
   border: 1px solid rgba(15, 23, 42, 0.05);
   transition: background-color 180ms ease, border-color 180ms ease;
@@ -1484,6 +1569,7 @@ a.bento-tile:active {
 .weekly-title {
   font-weight: 700;
   color: var(--ink-strong);
+  overflow-wrap: break-word;
 }
 
 a.weekly-title {
@@ -1533,6 +1619,7 @@ a.weekly-title {
   color: var(--ink-body);
   font-size: 13.5px;
   line-height: 1.55;
+  overflow-wrap: break-word;
 }
 
 .weekly-sources {
@@ -1546,7 +1633,7 @@ a.weekly-title {
 
 .weekly-source {
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: max(6px, calc(var(--panel-inner-radius) - 10px));
   background: #FFFFFF;
   border: 1px solid var(--card-border);
 }
@@ -1580,6 +1667,7 @@ a.weekly-title {
   color: var(--ink-body);
   font-size: 13.5px;
   line-height: 1.55;
+  overflow-wrap: break-word;
 }
 
 .weekly-source-link {
@@ -1623,7 +1711,7 @@ a.weekly-title {
   gap: 6px;
   min-height: 64px;
   padding: 16px 18px;
-  border-radius: 18px;
+  border-radius: var(--panel-inner-radius);
   background: linear-gradient(155deg, #F8FAFC 0%, var(--cobalt-tint) 100%);
   border: 1px solid rgba(37, 99, 235, 0.12);
   transition:
@@ -1638,6 +1726,10 @@ a.weekly-title {
     border-color: rgba(37, 99, 235, 0.28);
     box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
   }
+}
+
+.footprint-latest:active {
+  transform: scale(0.988);
 }
 
 .footprint-latest-kicker {
@@ -1714,6 +1806,10 @@ a.weekly-title {
   }
 }
 
+.footprint-pill:active {
+  transform: scale(0.96);
+}
+
 /* ── 全屏沉浸回忆剧场（MemoryPlayer Portal） ─────────────────────────────── */
 
 .memory-player {
@@ -1749,12 +1845,19 @@ a.weekly-title {
   color: #FFFFFF;
   font-size: 16px;
   cursor: pointer;
-  transition: background-color 180ms ease;
+  transition: background-color 160ms ease, transform 180ms var(--spring);
 }
 
-.memory-player-close:hover,
-.memory-player-mute:hover {
-  background: rgba(255, 255, 255, 0.18);
+@media (hover: hover) {
+  .memory-player-close:hover,
+  .memory-player-mute:hover {
+    background: rgba(255, 255, 255, 0.18);
+  }
+}
+
+.memory-player-close:active,
+.memory-player-mute:active {
+  transform: scale(0.94);
 }
 
 .memory-player-mute svg {
@@ -1809,7 +1912,7 @@ a.weekly-title {
   gap: 10px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 720ms ease;
+  transition: opacity 360ms var(--ease-out, ease);
 }
 
 .memory-player-scene.is-current {
@@ -1818,10 +1921,11 @@ a.weekly-title {
 }
 
 .memory-player-slot {
+  --slot-radius: 20px;
   position: relative;
   flex: 1 1 0;
   min-height: 0;
-  border-radius: 18px;
+  border-radius: var(--slot-radius);
   overflow: hidden;
   background: #0F172A;
 }
@@ -1833,12 +1937,12 @@ a.weekly-title {
 
 .memory-scene-reading {
   position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 12px;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
   margin: 0;
   padding: 8px 14px;
-  border-radius: 14px;
+  border-radius: max(6px, calc(var(--slot-radius) - 10px));
   background: rgba(9, 13, 22, 0.68);
   border: 1px solid rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(14px);
@@ -1904,7 +2008,20 @@ a.weekly-title {
   background: rgba(255, 255, 255, 0.08);
   color: #FFFFFF;
   cursor: pointer;
-  transition: background-color 180ms ease, transform 180ms ease;
+  transition: background-color 160ms ease, transform 180ms var(--spring);
+}
+
+@media (hover: hover) {
+  .memory-player-controls button:not(:disabled):hover {
+    background: rgba(255, 255, 255, 0.18);
+  }
+  .memory-player-controls button.memory-player-toggle:hover {
+    background: #F1F5F9;
+  }
+}
+
+.memory-player-controls button:not(:disabled):active {
+  transform: scale(0.94);
 }
 
 .memory-player-controls button.memory-player-toggle {
@@ -1965,6 +2082,11 @@ a.weekly-title {
   .journal-grid--count-1 {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .widget-panel,
+  .weekly {
+    --panel-pad: 12px;
+  }
 }
 
 /* ── 桌面端 12 列 Bento 马赛克（900px+） ─────────────────────────────────── */
@@ -2006,9 +2128,9 @@ a.weekly-title {
   }
 
   .bento-hero .tile-latest-day {
+    --tile-pad: 12px;
     grid-column: 6 / 10;
     grid-row: 1 / 2;
-    padding: 18px;
   }
 
   .bento-hero .tile-latest-day--with-photo {
@@ -2109,7 +2231,7 @@ a.weekly-title {
 
 @media (min-width: 1180px) {
   .bento-hero .tile-latest-day {
-    padding: 20px;
+    --tile-pad: 12px;
   }
 
   .bento-hero .tile-latest-day--with-photo {
@@ -2121,24 +2243,79 @@ a.weekly-title {
 /* ── 减少动态效果偏好 ────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
+  .memory-frame,
+  .memory-frame.is-current,
+  .memory-player-frame,
+  .memory-player-frame.is-current {
+    animation: none !important;
+  }
+
+  .memory-backdrop,
+  .memory-frame,
+  .memory-player-scene {
+    transition: opacity 220ms ease;
+  }
+
   .bento-tile,
   .j-card,
   .capsule-card,
   .capsule-card img,
   .j-card-photo img,
   .day-slice-thumb img,
-  .memory-backdrop,
-  .memory-frame,
-  .memory-player-scene,
   .memory-play,
   .memory-play-cta,
   .memory-switch,
   .memory-read,
+  .tile-rotate-btn,
+  .chat-msg,
   .mod-sec-pill,
   .home-answer-source,
+  .widget-head-link,
   .footprint-latest,
-  .footprint-pill {
-    transition: none !important;
-    animation: none !important;
+  .footprint-pill,
+  .memory-player-close,
+  .memory-player-mute,
+  .memory-player-controls button {
+    transition-property: opacity, color, background-color, border-color, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+  }
+
+  a.bento-tile:hover,
+  a.bento-tile:active,
+  .j-card:hover,
+  .j-card:active,
+  .j-card:hover .j-card-photo img,
+  .capsule-card:hover,
+  .capsule-card:active,
+  .capsule-card:hover img,
+  .tile-latest-day:hover .day-slice-thumb img,
+  .memory-play:hover,
+  .memory-play:active,
+  .memory-play-cta:hover,
+  .memory-play-cta:active,
+  .memory-switch:hover,
+  .memory-switch:active,
+  .memory-read:hover,
+  .memory-read:active,
+  .tile-rotate-btn:hover,
+  .tile-rotate-btn:active,
+  .chat-msg:hover,
+  .chat-msg:active,
+  .mod-sec-pill:hover,
+  .mod-sec-pill:active,
+  .home-answer-source--inline:hover,
+  .home-answer-source--pill:hover,
+  .home-answer-source--pill:active,
+  .widget-head-link:hover,
+  .widget-head-link:active,
+  .footprint-latest:hover,
+  .footprint-latest:active,
+  .footprint-pill:hover,
+  .footprint-pill:active,
+  .memory-player-close:active,
+  .memory-player-mute:active,
+  .memory-player-controls button:not(:disabled):active {
+    transform: none;
   }
 }
