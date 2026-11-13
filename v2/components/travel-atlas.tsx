@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Photo } from "@/components/photo";
 import { ChinaSvg, ProvinceSvg, UsSvg, type MapPin } from "@/components/travel-map-svg";
+import { TravelStampMotif } from "@/components/travel-stamp-motif";
 import type { MediaRef } from "@/lib/memory-chapters";
 import chinaGeoFile from "@/lib/travel/geo/china.json";
 import usGeoFile from "@/lib/travel/geo/us-ca.json";
@@ -220,6 +221,7 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
             <li key={u.key}>
               <button type="button" className={`travel-stamp${u.unitKeys.some((k) => selectedUnits.has(k)) ? " is-on" : ""}`} style={{ "--stamp": u.color } as React.CSSProperties}
                 onClick={() => { pickStamp(u); mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
+                <TravelStampMotif stampKey={u.key} />
                 <span className="travel-stamp-name">{u.name}</span>
                 <span className="travel-stamp-first">{u.firstMonth}</span>
                 {u.firstAge ? <span className="travel-stamp-age">{u.firstAge}</span> : null}

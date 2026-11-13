@@ -242,3 +242,25 @@ test("6.4 合入 5 篇新游记：essays.json 校验通过且 5 个行程均命�
     }
   }
 });
+
+test("足迹印章标志物：PLACES 所有 stampKeyOf 均有专属非兜底标志物且兜底纹样可用", async () => {
+  const { unitOf, stampKeyOf } = await import("../lib/travel/model.ts");
+  const { TravelStampMotif, hasCityStampMotif } = await import("../components/travel-stamp-motif.tsx");
+  const allKeys = new Set();
+  for (const p of PLACES) {
+    const u = unitOf(p.id);
+    if (u) allKeys.add(stampKeyOf(u.key));
+  }
+  assert.ok(allKeys.size >= 17, `应覆盖 PLACES 全部城市印章 key（实际 ${allKeys.size}）`);
+  for (const key of allKeys) {
+    assert.equal(hasCityStampMotif(key), true, `城市印章 ${key} 缺少专属标志物 SVG`);
+    const svg = renderToStaticMarkup(React.createElement(TravelStampMotif, { stampKey: key }));
+    assert.match(svg, /class="travel-stamp-motif"/);
+    assert.match(svg, /aria-hidden="true"/);
+    assert.match(svg, /<(?:path|circle)\b/);
+  }
+  assert.equal(hasCityStampMotif("cn:999900"), false);
+  const fallbackSvg = renderToStaticMarkup(React.createElement(TravelStampMotif, { stampKey: "cn:999900" }));
+  assert.match(fallbackSvg, /class="travel-stamp-motif"/);
+  assert.match(fallbackSvg, /<path\b/);
+});

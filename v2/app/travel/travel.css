@@ -159,7 +159,7 @@
 @media (prefers-reduced-motion: reduce) {
   .travel-mist-lane { animation: travel-breathe 9s ease-in-out infinite alternate; }
   .travel-cloud, .travel-route, .travel-pin.is-active { animation: none; }
-  .travel-postcard, .travel-stamp, .travel-map-tabs button, .travel-map-back { transition: none; }
+  .travel-postcard, .travel-stamp, .travel-stamp-motif, .travel-map-tabs button, .travel-map-back { transition: none; }
 }
 @keyframes travel-breathe { from { opacity: .5; } to { opacity: 1; } }
 
@@ -297,6 +297,8 @@
 }
 .travel-stamp {
   --stamp: #93C5FD;
+  position: relative;
+  overflow: hidden;
   display: grid;
   place-items: center;
   align-content: center;
@@ -316,6 +318,33 @@
   cursor: pointer;
   transition: rotate .28s var(--ease-spring, ease), scale .28s var(--ease-spring, ease), box-shadow .24s ease, border-color .2s ease;
 }
+.travel-stamp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 52%, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.34) 48%, rgba(255, 255, 255, 0) 76%);
+  pointer-events: none;
+  z-index: 1;
+}
+.travel-stamp-motif {
+  position: absolute;
+  inset: 5px;
+  width: calc(100% - 10px);
+  height: calc(100% - 10px);
+  color: color-mix(in srgb, var(--stamp) 60%, #334155);
+  opacity: 0.22;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity .24s ease, transform .28s var(--ease-spring, ease), color .2s ease;
+}
+.travel-stamp-name,
+.travel-stamp-first,
+.travel-stamp-age,
+.travel-stamp-dots {
+  position: relative;
+  z-index: 2;
+}
 .travel-stamps li:nth-child(3n+1) .travel-stamp { rotate: -2deg; }
 .travel-stamps li:nth-child(3n+2) .travel-stamp { rotate: 1.8deg; }
 .travel-stamp.is-on {
@@ -324,11 +353,20 @@
   border: 2px solid var(--brand-accent, #2563EB);
   box-shadow: 0 8px 22px rgba(37, 99, 235, 0.16), inset 0 0 0 2px #FFFFFF;
 }
+.travel-stamp.is-on .travel-stamp-motif {
+  color: var(--brand-accent, #2563EB);
+  opacity: 0.28;
+  transform: scale(1.06);
+}
 @media (hover: hover) {
   .travel-stamp:hover {
     rotate: 0deg;
     scale: 1.03;
     box-shadow: var(--shadow-hover), inset 0 2px 0 rgba(255, 255, 255, 0.9);
+  }
+  .travel-stamp:hover .travel-stamp-motif {
+    opacity: 0.30;
+    transform: scale(1.05);
   }
 }
 .travel-stamp-name {
