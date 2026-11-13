@@ -380,7 +380,7 @@ test("3.3 字幕防错位：有 photoCaptions 显示专属图注；无 photoCapt
   assert.doesNotMatch(htmlWithoutCaption, /memory-slide-note/, "无图注时不渲染 .memory-slide-note");
   assert.match(htmlWithoutCaption, /2025 年 3 月 30 日/);
   assert.match(htmlWithoutCaption, /当时 2 个月/);
-  assert.match(htmlWithoutCaption, /读这一天/);
+  assert.doesNotMatch(htmlWithoutCaption, /读这一天/, "首页不再渲染「读这一天」胶囊");
 
   // 有 photoCaptions：优先展示当前照片自己的图注
   const withCaption = resolveSlideReading({

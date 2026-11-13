@@ -297,7 +297,7 @@ function MemoryPreview({
                     <span className="memory-play-cta-label">播放回忆 · {memory.title}</span>
                   </button>
                 ) : null}
-                {readHref && readLabel ? (
+                {isTripReel && readHref && readLabel ? (
                   <Link
                     className="memory-read"
                     href={readHref}

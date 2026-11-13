@@ -9,6 +9,7 @@ Module.createRequire(import.meta.url).extensions[".css"] = () => {};
 
 const { buildMonthCalendarGrid, MonthCalendar } = await import("../components/month-calendar.tsx");
 const { MonthTimeline } = await import("../components/month-timeline.tsx");
+const { pickMonthTextStickerTheme } = await import("../components/month-text-sticker.tsx");
 
 test("buildMonthCalendarGrid: 2026-11 按周一到周日对齐，30 天共 6 行 42 格", () => {
   const cells = buildMonthCalendarGrid("2026", "11", [
@@ -104,10 +105,23 @@ test("MonthCalendar 与 MonthTimeline: 渲染月历卡片并去掉周跳转胶�
     }),
   );
 
+  assert.match(timelineHtml, /class="month-timeline-shell has-calendar"/);
+  assert.match(timelineHtml, /class="month-calendar-rail"/);
   assert.match(timelineHtml, /class="month-calendar"/);
+  assert.match(timelineHtml, /class="month-text-sticker month-text-sticker--reading"/);
+  assert.match(timelineHtml, /class="month-text-sticker month-text-sticker--walk"/);
   assert.match(timelineHtml, /id="day-2026-11-11"/);
   assert.match(timelineHtml, /id="day-2026-11-02"/);
   assert.doesNotMatch(timelineHtml, /class="month-jump"/);
   assert.doesNotMatch(timelineHtml, /class="week-mark"/);
   assert.doesNotMatch(timelineHtml, /第 1 周/);
+  assert.doesNotMatch(timelineHtml, /值得再读/);
+  assert.doesNotMatch(timelineHtml, /month-highlights/);
+});
+
+test("pickMonthTextStickerTheme: 按标题与摘要语义匹配手账贴纸主题并兜底", () => {
+  assert.equal(pickMonthTextStickerTheme("抱来小汽车书", ""), "reading");
+  assert.equal(pickMonthTextStickerTheme("公园滑梯晒太阳", ""), "outdoor");
+  assert.equal(pickMonthTextStickerTheme("午睡小床", ""), "sleep");
+  assert.equal(pickMonthTextStickerTheme("普通的一天", "记录一些日常小事"), "journal");
 });

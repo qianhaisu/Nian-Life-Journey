@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { CardThumbnail } from "@/components/card-thumbnail";
 import { MonthCalendar, type MonthCalendarDay } from "@/components/month-calendar";
 import { MonthDayEntry } from "@/components/month-day-entry";
-import { resolveCardThumbnail, type ThumbnailChoice } from "@/lib/day-photo-layout";
+import { resolveCardThumbnail } from "@/lib/day-photo-layout";
 import type { TimelineDay, TimelineWeek } from "@/lib/month-timeline";
 
 // Every week can be passed on the initial server render (`entries`, so native #week-N and #day-YYYY-MM-DD
@@ -18,7 +17,6 @@ export function MonthTimeline({
   weeks,
   entries,
   initial,
-  highlights = [],
   calendarDays,
 }: {
   year: string;
@@ -27,7 +25,6 @@ export function MonthTimeline({
   weeks: TimelineWeek[];
   entries?: TimelineDay[][];
   initial?: TimelineDay[];
-  highlights?: { day: string; title: string; thumbnail?: ThumbnailChoice }[];
   calendarDays?: MonthCalendarDay[];
 }) {
   const seedWeeks: (TimelineDay[] | undefined)[] = weeks.map((_, index) => {
@@ -40,8 +37,11 @@ export function MonthTimeline({
   const [loadingWeek, setLoadingWeek] = useState(false);
   const [activeDay, setActiveDay] = useState<string | undefined>(weeks[0]?.days[0]);
   const [highlightedDay, setHighlightedDay] = useState<string | undefined>(undefined);
+  const [showMobileFloat, setShowMobileFloat] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const inflightRef = useRef<Set<string>>(new Set());
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const topCalRef = useRef<HTMLElement | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasUnloadedWeeks = Boolean(month && weekData.some((items) => items === undefined));
@@ -182,6 +182,7 @@ export function MonthTimeline({
         byDay.set(entry.day, {
           day: entry.day,
           title: entry.title ?? entry.dateLabel,
+          summary: entry.paragraphs[0],
           thumbnail: resolveCardThumbnail(entry.photos, entry.firstScreenMediaIds),
           hasPhotos: entry.photos.length > 0,
           isMilestone: Boolean(entry.milestone || entry.emphasis === "lead"),
@@ -192,9 +193,51 @@ export function MonthTimeline({
     return [...byDay.values()];
   }, [calendarDays, weekData]);
 
-  const handleSelectDay = useCallback(
-    (event: MouseEvent<HTMLAnchorElement>, day: string) => {
-      event.preventDefault();
+  const orderedDays = useMemo(() => {
+    const fromWeeks = weeks.flatMap((w) => w.days);
+    if (fromWeeks.length > 0) return fromWeeks;
+    return resolvedCalendarDays.map((d) => d.day);
+  }, [resolvedCalendarDays, weeks]);
+
+  const currentDay = activeDay ?? orderedDays[0];
+  const currentDayIndex = currentDay ? orderedDays.indexOf(currentDay) : -1;
+  const prevDay = currentDayIndex > 0 ? orderedDays[currentDayIndex - 1] : undefined;
+  const nextDay =
+    currentDayIndex >= 0 && currentDayIndex < orderedDays.length - 1
+      ? orderedDays[currentDayIndex + 1]
+      : undefined;
+  const currentDayLabel = currentDay
+    ? `${Number(currentDay.slice(5, 7))}月${Number(currentDay.slice(8, 10))}日`
+    : `${Number(resolvedMonth ?? 1)}月`;
+
+  useEffect(() => {
+    const el = topCalRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (records) => {
+        const record = records[0];
+        if (!record) return;
+        const scrolledPast = !record.isIntersecting && record.boundingClientRect.bottom < 72;
+        setShowMobileFloat(scrolledPast);
+        if (!scrolledPast) setDrawerOpen(false);
+      },
+      { threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [resolvedCalendarDays.length]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDrawerOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [drawerOpen]);
+
+  const jumpToDay = useCallback(
+    (day: string) => {
       const targetIndex = weeks.findIndex((w) => w.days.includes(day));
       if (targetIndex >= 0 && weekData[targetIndex] === undefined) {
         void loadThroughIndex(targetIndex).then(() => {
@@ -207,55 +250,127 @@ export function MonthTimeline({
     [loadThroughIndex, scrollToDay, weekData, weeks],
   );
 
+  const handleSelectDay = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>, day: string) => {
+      event.preventDefault();
+      jumpToDay(day);
+    },
+    [jumpToDay],
+  );
+
+  const hasCalendar = Boolean(resolvedMonth && resolvedCalendarDays.length > 0);
+
   return <>
-    {resolvedMonth && resolvedCalendarDays.length > 0 ? (
-      <MonthCalendar
-        year={year}
-        month={resolvedMonth}
-        days={resolvedCalendarDays}
-        activeDay={activeDay}
-        onSelectDay={handleSelectDay}
-      />
-    ) : null}
-    {highlights.length > 0 ? <nav className="month-highlights" aria-label="这个月值得再读的日子">
-      <p className="section-mark">值得再读</p>
-      <div className="month-highlights-chips">
-        {highlights.map((item) => <a
-          key={item.day}
-          href={`#day-${item.day}`}
-          className={item.thumbnail ? "month-highlight-chip month-highlight-chip--with-thumb" : "month-highlight-chip"}
-          onClick={(event) => handleSelectDay(event, item.day)}
-        >
-          {item.thumbnail ? (
-            <CardThumbnail thumbnail={item.thumbnail} className="month-highlight-thumb" sizes="44px" />
-          ) : null}
-          <span className="month-highlight-label">{Number(item.day.slice(8))} 日 · {item.title}</span>
-        </a>)}
-      </div>
-    </nav> : null}
-    <section className="month-days month-days--edited" aria-label="这个月">
-      <ol>
-        {weekData.flatMap((dayEntries) =>
-          (dayEntries ?? []).map((entry) => (
-            <li
-              className={highlightedDay === entry.day ? "month-day is-calendar-target" : "month-day"}
-              key={entry.day}
+    <div className={hasCalendar ? "month-timeline-shell has-calendar" : "month-timeline-shell"}>
+      {hasCalendar && resolvedMonth ? (
+        <aside className="month-calendar-rail" ref={topCalRef} aria-label="月份日历导航">
+          <MonthCalendar
+            year={year}
+            month={resolvedMonth}
+            days={resolvedCalendarDays}
+            activeDay={activeDay}
+            onSelectDay={handleSelectDay}
+          />
+        </aside>
+      ) : null}
+      <section className="month-days month-days--edited" aria-label="这个月">
+        <ol>
+          {weekData.flatMap((dayEntries) =>
+            (dayEntries ?? []).map((entry) => (
+              <li
+                className={highlightedDay === entry.day ? "month-day is-calendar-target" : "month-day"}
+                key={entry.day}
+              >
+                <MonthDayEntry entry={entry} year={year} monthAgeLabel={monthAgeLabel} />
+              </li>
+            )),
+          )}
+        </ol>
+        {hasUnloadedWeeks ? <div className="month-timeline-sentinel" ref={sentinelRef}>
+          <button
+            type="button"
+            className="month-timeline-more-btn"
+            disabled={loadingWeek}
+            onClick={() => { void loadNextWeek(); }}
+          >
+            {loadingWeek ? "正在翻开接下来的日子…" : "继续往下读这个月"}
+          </button>
+        </div> : null}
+      </section>
+    </div>
+
+    {hasCalendar && resolvedMonth && showMobileFloat ? (
+      <>
+        {drawerOpen ? (
+          <>
+            <div
+              className="month-cal-drawer-backdrop"
+              aria-hidden="true"
+              onClick={() => setDrawerOpen(false)}
+            />
+            <div
+              id="month-cal-drawer"
+              className="month-cal-drawer"
+              role="dialog"
+              aria-label="快速切换日期"
             >
-              <MonthDayEntry entry={entry} year={year} monthAgeLabel={monthAgeLabel} />
-            </li>
-          )),
-        )}
-      </ol>
-      {hasUnloadedWeeks ? <div className="month-timeline-sentinel" ref={sentinelRef}>
-        <button
-          type="button"
-          className="month-timeline-more-btn"
-          disabled={loadingWeek}
-          onClick={() => { void loadNextWeek(); }}
-        >
-          {loadingWeek ? "正在翻开接下来的日子…" : "继续往下读这个月"}
-        </button>
-      </div> : null}
-    </section>
+              <MonthCalendar
+                year={year}
+                month={resolvedMonth}
+                days={resolvedCalendarDays}
+                activeDay={activeDay}
+                onSelectDay={(event, day) => {
+                  setDrawerOpen(false);
+                  handleSelectDay(event, day);
+                }}
+              />
+            </div>
+          </>
+        ) : null}
+        <div className="month-cal-floatbar" role="region" aria-label="快速切日">
+          <button
+            type="button"
+            className="month-cal-float-step"
+            aria-label="上一天"
+            disabled={!prevDay}
+            onClick={() => {
+              if (prevDay) {
+                setDrawerOpen(false);
+                jumpToDay(prevDay);
+              }
+            }}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            className="month-cal-float-trigger"
+            aria-expanded={drawerOpen}
+            aria-controls="month-cal-drawer"
+            onClick={() => setDrawerOpen((prev) => !prev)}
+          >
+            <span aria-hidden="true">📅</span>
+            <span>{currentDayLabel}</span>
+            <span className="month-cal-float-caret" aria-hidden="true">
+              {drawerOpen ? "▴" : "▾"}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="month-cal-float-step"
+            aria-label="下一天"
+            disabled={!nextDay}
+            onClick={() => {
+              if (nextDay) {
+                setDrawerOpen(false);
+                jumpToDay(nextDay);
+              }
+            }}
+          >
+            ›
+          </button>
+        </div>
+      </>
+    ) : null}
   </>;
 }

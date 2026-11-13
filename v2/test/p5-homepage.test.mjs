@@ -400,7 +400,8 @@ test("5.2 & 5.3 selectHomeMemories + HomeMemory：首段永不把「睡着的样
   assert.doesNotMatch(html, /class="memory-play"/, "首页不再使用右下角无字小圆按钮");
   assert.match(html, /穿着红卫衣去公园/);
   assert.match(html, /睁大眼睛望着镜头/);
-  assert.match(html, /href="\/memory\/2026\/11\/09"/);
+  assert.doesNotMatch(html, /class="memory-read"/, "首页不再渲染「读这一天」胶囊");
+  assert.doesNotMatch(html, /读这一天/);
   assert.match(html, /换一段/);
 
   // 行程详情页（trip: 前缀）保持原有小圆按钮与行程封面，不受首页 heroCover 影响
