@@ -1546,6 +1546,9 @@
 .day-inline-media {
   margin: 2px 0 4px;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .day-inline-figure {
@@ -1554,6 +1557,7 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .day-inline-figure--single {
@@ -1596,6 +1600,9 @@
 .day-inline-figure--trio-lead,
 .day-inline-figure--video-span {
   grid-column: 1 / -1;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .day-inline-grid .day-inline-frame {
@@ -1649,9 +1656,31 @@
 
 .day-inline-video {
   width: min(100%, calc(72svh * var(--media-ar, 1.7778)));
+  max-width: 100%;
+  min-width: 0;
   border-radius: var(--mem-r-media);
   overflow: hidden;
   background: var(--mem-muted-bg);
+}
+
+.day-inline-media .video-frame,
+.day-inline-video .video-frame {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  overflow: hidden;
+  border-radius: var(--mem-r-media);
+}
+
+.day-inline-media video,
+.day-inline-video video,
+.video-frame .video-player {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  box-sizing: border-box;
 }
 
 .detail-card .story-aside {
