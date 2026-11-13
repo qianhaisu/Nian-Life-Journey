@@ -22,18 +22,42 @@ const US = usGeoFile as UsGeo;
 export type AtlasTrip = {
   id: string; title: string; kind: string; tag?: string; from: string; rangeLabel: string; ageText: string;
   cover?: MediaRef; scenery?: MediaRef; unitKeys: string[]; provinces: string[];
+  /** P6.1：「回老家 / 常住」组里的行程默认折叠，不和真正的旅行混排。 */
+  group: "travel" | "home";
+  summary?: string; places?: string;
 };
 export type AtlasUnit = { key: string; name: string; kind: "cn" | "us"; province?: string; color: string; firstMonth: string; firstAge?: string; visits: number };
 /** 足迹印章：一枚章可以盖住几格（美国几处 → 洛杉矶，成都 + 阿坝 → 成都）。 */
 export type AtlasStamp = { key: string; name: string; unitKeys: string[]; color: string; firstMonth: string; firstAge?: string; visits: number };
 export type AtlasPlace = { id: string; name: string; unitKey?: string; home?: boolean };
 
+/** 一张旅程明信片：总览默认列表、「回老家」折叠组、按地点筛出来的列表共用同一个样子。 */
+function TripPostcard({ t }: { t: AtlasTrip }) {
+  const photo = t.cover ?? t.scenery;
+  return (
+    <Link href={`/travel/${t.id}`} className={photo ? "travel-postcard" : "travel-postcard travel-postcard--text"}>
+      {photo ? <span className="travel-postcard-photo">
+        <Photo media={photo} variant="thumbnail" fit="crop" sizes="220px" />
+        {t.cover && t.scenery ? <span className="travel-postcard-scenery"><Photo media={t.scenery} variant="thumbnail" fit="crop" sizes="96px" /></span> : null}
+      </span> : null}
+      <span className="travel-postcard-body">
+        {t.tag ? <span className="travel-tag">{t.tag}</span> : null}
+        <strong>{t.title}</strong>
+        <span className="travel-postcard-when">{t.rangeLabel}</span>
+        {t.ageText ? <span className="travel-postcard-age">{t.ageText.replace(/^ · /, "")}</span> : null}
+      </span>
+    </Link>
+  );
+}
+
 type View = { kind: "china" } | { kind: "province"; code: string } | { kind: "us" };
 type Selection = { kind: "recent" } | { kind: "province"; code: string } | { kind: "unit"; key: string } | { kind: "stamp"; key: string } | { kind: "us" };
 
-export function TravelAtlas({ trips, units, stamps, places, provinceColors, provinceNames, homeUnitKey }: {
+export function TravelAtlas({ trips, units, stamps, places, provinceColors, provinceNames, homeUnitKey, featuredId }: {
   trips: AtlasTrip[]; units: AtlasUnit[]; stamps: AtlasStamp[]; places: AtlasPlace[];
   provinceColors: Record<string, string>; provinceNames: Record<string, string>; homeUnitKey?: string;
+  /** P6.2：首屏精选行程（trips.json 的 featured，或最近一次有照片的非回老家行程）。 */
+  featuredId?: string;
 }) {
   const [view, setView] = useState<View>({ kind: "china" });
   const [sel, setSel] = useState<Selection>({ kind: "recent" });
@@ -94,8 +118,11 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
     }
     if (sel.kind === "province") return { title: provinceNames[sel.code] ?? "", sub: "", trips: oldest(trips.filter((t) => t.provinces.includes(sel.code))) };
     if (sel.kind === "us") return { title: "美国", sub: "", trips: oldest(trips.filter((t) => t.unitKeys.some((k) => k.startsWith("us:")))) };
-    return { title: "最近去的地方", sub: "", trips: newest(trips).slice(0, 3) };
-  }, [sel, trips, unitByKey, stampByKey, provinceNames]);
+    // 默认视图只放真正的旅行；首屏已经单独放大的精选行程不在这里再重复一次。
+    return { title: "最近去的地方", sub: "", trips: newest(trips.filter((t) => t.group === "travel" && t.id !== featuredId)).slice(0, 3) };
+  }, [sel, trips, unitByKey, stampByKey, provinceNames, featuredId]);
+  const featured = featuredId ? trips.find((t) => t.id === featuredId && t.cover) : undefined;
+  const homeTrips = useMemo(() => [...trips.filter((t) => t.group === "home")].sort((x, y) => y.from.localeCompare(x.from)), [trips]);
 
   // 选中的格子：点格子是一格，点印章是这枚章盖住的所有格子
   const selectedUnits = new Set(sel.kind === "unit" ? [sel.key] : sel.kind === "stamp" ? stampByKey.get(sel.key)?.unitKeys ?? [] : []);
@@ -115,6 +142,18 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
 
   return (
     <div className="travel-atlas">
+      {featured ? (
+        <Link href={`/travel/${featured.id}`} className="travel-featured" aria-label={`精选行程：${featured.title}`}>
+          <span className="travel-featured-photo"><Photo media={featured.cover!} variant="web" fit="crop" priority sizes="(max-width: 760px) 100vw, 760px" /></span>
+          <span className="travel-featured-body">
+            <span className="travel-featured-kicker">精选行程</span>
+            <strong>{featured.title}</strong>
+            <span className="travel-featured-when">{featured.rangeLabel}{featured.ageText}</span>
+            {featured.summary ? <span className="travel-featured-summary">{featured.summary}</span> : null}
+            <span className="travel-featured-go">翻开这一程 →</span>
+          </span>
+        </Link>
+      ) : null}
       <div className="travel-map-tabs" role="tablist" aria-label="地图">
         <button type="button" role="tab" aria-selected={view.kind !== "us"} className={view.kind !== "us" ? "is-on" : ""}
           onClick={() => { setView({ kind: "china" }); setSel({ kind: "recent" }); }}>中国</button>
@@ -161,23 +200,17 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
           {panel.sub ? <p>{panel.sub}</p> : null}
         </header>
         <ul className="travel-postcards">
-          {panel.trips.map((t) => (
-            <li key={t.id}>
-              <Link href={`/travel/${t.id}`} className={t.cover || t.scenery ? "travel-postcard" : "travel-postcard travel-postcard--text"}>
-                {t.cover || t.scenery ? <span className="travel-postcard-photo">
-                  <Photo media={(t.cover ?? t.scenery)!} variant="thumbnail" fit="crop" sizes="220px" />
-                  {t.cover && t.scenery ? <span className="travel-postcard-scenery"><Photo media={t.scenery} variant="thumbnail" fit="crop" sizes="96px" /></span> : null}
-                </span> : null}
-                <span className="travel-postcard-body">
-                  {t.tag ? <span className="travel-tag">{t.tag}</span> : null}
-                  <strong>{t.title}</strong>
-                  <span className="travel-postcard-when">{t.rangeLabel}</span>
-                  {t.ageText ? <span className="travel-postcard-age">{t.ageText.replace(/^ · /, "")}</span> : null}
-                </span>
-              </Link>
-            </li>
-          ))}
+          {panel.trips.map((t) => <li key={t.id}><TripPostcard t={t} /></li>)}
         </ul>
+        {sel.kind === "recent" && homeTrips.length > 0 ? (
+          <details className="travel-home-group">
+            <summary>回老家 · {homeTrips.length} 次</summary>
+            <p className="travel-home-note">回温州、回西安，以及在温州住的那段日子，单独收在这里。</p>
+            <ul className="travel-postcards travel-postcards--grid">
+              {homeTrips.map((t) => <li key={t.id}><TripPostcard t={t} /></li>)}
+            </ul>
+          </details>
+        ) : null}
       </section>
 
       <section className="travel-stamps-wrap" aria-labelledby="travel-stamps-title">

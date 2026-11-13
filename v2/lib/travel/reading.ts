@@ -18,7 +18,7 @@ import { isSubjectChecked } from "@/lib/publication-moments";
 import { calendarDayOf } from "@/lib/timeline-dates";
 import { ageOn } from "@/lib/time-signature";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
-import { coverScore, daysOf, type CoverScore, type Trip } from "./model";
+import { coverScore, daysOf, isHomeTrip, tripNeighbors, type CoverScore, type Trip } from "./model";
 import { syncTrips } from "./sync";
 import sceneryFile from "./scenery.json";
 import curationFile from "./curation.json";
@@ -289,8 +289,32 @@ export async function readTravelIndex(): Promise<{ cards: TripCard[]; trips: Tri
 
 /**
  * 一条旅程：既有审核池组成精选回忆，已确认行程对应独立散文。日子保留作来源链接，不再逐日铺开。
+ * P6.3 起：essay 带 `paragraphMedia` 锚定时，essayMedia[i] 是接在第 i 段后的照片（已过日页同一道发布门）；
+ * neighbors 是同一组（旅行 / 回老家·常住）里按时间相邻的上一段、下一段。
  */
-export type TripReadingData = { trip: Trip; ageLabel?: string; memory?: HomeMemory; essay: TripEssay; days: TripDay[] };
+export type EssayPhoto = { media: MediaRef; caption?: string };
+export type TripNeighbor = { trip: Trip; cover?: MediaRef; ageLabel?: string };
+export type TripReadingData = {
+  trip: Trip; ageLabel?: string; memory?: HomeMemory; essay: TripEssay; days: TripDay[];
+  essayMedia?: EssayPhoto[][]; neighbors: { prev?: TripNeighbor; next?: TripNeighbor }; home: boolean;
+};
+
+/** essay 锚定的照片 id → 已发布可展示的 MediaRef（同一张只出现一次；过不了发布门的静默跳过）。 */
+export function resolveEssayPhotos(
+  essay: Pick<TripEssay, "paragraphMedia" | "photoCaptions">,
+  resolve: (ids: readonly string[]) => MediaRef[],
+): EssayPhoto[][] | undefined {
+  if (!essay.paragraphMedia?.some((group) => group.length)) return undefined;
+  const seen = new Set<string>();
+  const groups = essay.paragraphMedia.map((ids) =>
+    resolve(ids).filter((m) => {
+      if (m.type === "video" || seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    }).map((media) => ({ media, caption: essay.photoCaptions?.[media.id] })),
+  );
+  return groups.some((group) => group.length) ? groups : undefined;
+}
 
 export async function readTrip(id: string): Promise<TripReadingData | null> {
   const allTrips = syncTrips(await listEditedMonthContents());
@@ -301,7 +325,11 @@ export async function readTrip(id: string): Promise<TripReadingData | null> {
   const approvedOfDay = approvedPhotosByDay(archive);
   const range = daysOf(trip);
   const fallbackRange = connectedTripFallbackDays(trip, allTrips);
-  const months = await monthsFor([...range, ...fallbackRange]);
+  const home = isHomeTrip(trip, allTrips);
+  const sameGroup = allTrips.filter((t) => isHomeTrip(t, allTrips) === home);
+  const { prev, next } = tripNeighbors(trip, sameGroup);
+  const neighborDays = [prev, next].flatMap((t) => (t ? [...daysOf(t), ...connectedTripFallbackDays(t, allTrips)] : []));
+  const months = await monthsFor([...range, ...fallbackRange, ...neighborDays]);
   const timelines = new Map(await Promise.all([...months.keys()].map(async (month) => [month, await buildMonthTimeline(archive, month.slice(0, 4), month.slice(5, 7))] as const)));
   const days: TripDay[] = [];
   const curated = CURATION[trip.id];
@@ -371,5 +399,18 @@ export async function readTrip(id: string): Promise<TripReadingData | null> {
   }
   const cover = pickTripCover(trip, effectivePools, scores, siblingUsedCoverIds);
   const memoryDays = hasOwnPhotos ? days : [...days, ...fallbackTripDays];
-  return { trip, ageLabel: ageOn(archive.birthDay, trip.from), memory: buildTripMemory(trip, memoryDays, scores, cover), essay: tripEssay(trip), days };
+  const essay = tripEssay(trip);
+  const essayMedia = resolveEssayPhotos(essay, (ids) => photosOf(ids, trip.title));
+  const neighborOf = (t: Trip | undefined): TripNeighbor | undefined => {
+    if (!t) return undefined;
+    const own = buildTripDayPoolsForDays(daysOf(t), t, months, photosOf, approvedOfDay, archive);
+    const pools = own.some((p) => p.photos.some((m) => m.type !== "video"))
+      ? own
+      : buildTripDayPoolsForDays(connectedTripFallbackDays(t, allTrips), t, months, photosOf, approvedOfDay, archive);
+    return { trip: t, cover: pickTripCover(t, pools, scores), ageLabel: ageOn(archive.birthDay, t.from) };
+  };
+  return {
+    trip, ageLabel: ageOn(archive.birthDay, trip.from), memory: buildTripMemory(trip, memoryDays, scores, cover),
+    essay, essayMedia, days, home, neighbors: { prev: neighborOf(prev), next: neighborOf(next) },
+  };
 }
