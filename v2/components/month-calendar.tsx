@@ -2,11 +2,13 @@
 
 import type { MouseEvent } from "react";
 import { CardThumbnail } from "@/components/card-thumbnail";
+import { MonthTextSticker } from "@/components/month-text-sticker";
 import type { ThumbnailChoice } from "@/lib/day-photo-layout";
 
 export type MonthCalendarDay = {
   day: string;
   title?: string;
+  summary?: string;
   thumbnail?: ThumbnailChoice;
   hasPhotos?: boolean;
   isMilestone?: boolean;
@@ -168,7 +170,13 @@ export function MonthCalendar({
                   />
                   <span className="month-cal-scrim" aria-hidden="true" />
                 </>
-              ) : null}
+              ) : (
+                <MonthTextSticker
+                  day={cell.day}
+                  title={cell.entry.title}
+                  summary={cell.entry.summary}
+                />
+              )}
               <span className="month-cal-cell-top">
                 <span className="month-cal-num">{cell.dateNumber}</span>
                 {cell.entry.isMilestone ? (
