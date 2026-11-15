@@ -78,23 +78,37 @@ export function parseWeflowJson(input: {
 
     const mediaRefs: ChatMediaRef[] = [];
     let text = content;
-    if (MEDIA_KINDS.has(kind) && content) {
-      const resolved = safeTarget(input.root, input.document, content.replaceAll("\\", "/"));
-      const relativePath = resolved ?? `unresolved-${id(content)}`;
-      const meta = resolved ? input.media.get(resolved) : undefined;
-      mediaRefs.push({
-        id: `media-ref:${id(relativePath)}:0`,
-        relativePath,
-        checksum: meta?.checksum,
-        availability: meta?.availability ?? (resolved ? "missing" : "invalid"),
-        mimeType: meta?.mimeType,
-        fileSize: meta?.fileSize,
-        width: meta?.width,
-        height: meta?.height,
-      });
-      // The path is provenance, not something a family member said. Keeping it as text would put a
-      // file path on a month page.
-      text = "";
+    if (MEDIA_KINDS.has(kind)) {
+      const trimmed = content.trim();
+      if (!trimmed) {
+        text = "";
+      } else if (/^\[[^\]/\\]+\]$/.test(trimmed)) {
+        // Bracketed placeholders like "[图片]", "[视频]", "[语音]", "[文件]" are not file paths on
+        // disk; keep mediaRefs empty and store "[media]" so sanitizeText and content dedupe treat
+        // them consistently without creating bogus missing media references.
+        text = "[media]";
+      } else if (/^\[(?:文件|语音消息|语音)\]\s+/.test(trimmed)) {
+        // Unexported file titles ("[文件] foo.pdf") or transcribed voice text ("[语音消息] ...")
+        // are readable message text rather than relative media paths.
+        text = trimmed;
+      } else {
+        const resolved = safeTarget(input.root, input.document, trimmed.replaceAll("\\", "/"));
+        const relativePath = resolved ?? `unresolved-${id(content)}`;
+        const meta = resolved ? input.media.get(resolved) : undefined;
+        mediaRefs.push({
+          id: `media-ref:${id(relativePath)}:0`,
+          relativePath,
+          checksum: meta?.checksum,
+          availability: meta?.availability ?? (resolved ? "missing" : "invalid"),
+          mimeType: meta?.mimeType,
+          fileSize: meta?.fileSize,
+          width: meta?.width,
+          height: meta?.height,
+        });
+        // The path is provenance, not something a family member said. Keeping it as text would put a
+        // file path on a month page.
+        text = "";
+      }
     }
 
     const messageType: ChatMessageType = mediaRefs.length ? (text.trim() ? "mixed" : "image") : "text";

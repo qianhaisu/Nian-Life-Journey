@@ -279,63 +279,211 @@ async function queryRdsDayEvidence(client, from, untilExclusive, labelForSender)
   return dayEvidence;
 }
 
-function inspectWeFlowUpstream(today) {
-  const yesterday = addDays(today, -1);
-  const srcDir = process.env.NIANLIFE_WECHAT_EXPORT_TEXTS ?? "E:/WechatHis/texts";
-  let maxExportedDay = null;
-  let transcriptCount = 0;
-  const dateRe = /\b(202\d)\\?-([01]\d)\\?-([0-3]\d)\b/g;
+const SHANGHAI_OFFSET_MS = 8 * 3600 * 1000;
+const VALID_TRANSCRIPT_DAY_RE = /^20[2-9]\d-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
+const MD_DATE_RE = /\b(20[2-9]\d)\\?-([01]\d)\\?-([0-3]\d)\b/g;
+const DEFAULT_WEFLOW_COMMUNITY_CONFIG = "E:/WeFlowCommunity5/profile/WeFlow-config.json";
+const DEFAULT_WEFLOW_LEGACY_CONFIG = path.join(os.homedir(), "AppData", "Roaming", "weflow", "WeFlow-config.json");
 
-  if (fs.existsSync(srcDir)) {
-    const files = [];
-    for (const ent of fs.readdirSync(srcDir, { withFileTypes: true })) {
-      if (ent.isDirectory()) {
-        for (const f of fs.readdirSync(path.join(srcDir, ent.name), { withFileTypes: true })) {
-          if (f.isFile() && /\.md$/i.test(f.name)) files.push(path.join(srcDir, ent.name, f.name));
-        }
-      } else if (ent.isFile() && /\.md$/i.test(ent.name)) {
-        files.push(path.join(srcDir, ent.name));
-      }
-    }
-    transcriptCount = files.length;
-    for (const f of files) {
-      const buf = fs.readFileSync(f);
-      const tail = buf.subarray(Math.max(0, buf.length - 131072)).toString("utf8");
-      for (const m of tail.matchAll(dateRe)) {
-        const d = `${m[1]}-${m[2]}-${m[3]}`;
-        if (d <= today && (!maxExportedDay || d > maxExportedDay)) maxExportedDay = d;
-      }
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function toIsoStringOrNull(raw) {
+  if (!raw) return null;
+  const numeric = typeof raw === "number" ? raw : Number(raw);
+  const ms = Number.isFinite(numeric) ? numeric : Date.parse(String(raw));
+  if (!Number.isFinite(ms) || ms <= 0 || Math.abs(ms) > 8.64e15) return null;
+  return new Date(ms).toISOString();
+}
+
+function shanghaiDayFromMs(ms) {
+  if (!Number.isFinite(ms) || Math.abs(ms) > 8.64e15 - SHANGHAI_OFFSET_MS) return null;
+  const d = new Date(ms + SHANGHAI_OFFSET_MS).toISOString().slice(0, 10);
+  return VALID_TRANSCRIPT_DAY_RE.test(d) ? d : null;
+}
+
+function shanghaiDayFromWeflowMessage(msg) {
+  if (!isPlainObject(msg)) return null;
+  if (msg.createTime !== undefined && msg.createTime !== null && msg.createTime !== "") {
+    const raw = typeof msg.createTime === "number" ? msg.createTime : Number(msg.createTime);
+    if (Number.isFinite(raw) && raw > 0) {
+      const ms = raw > 1e12 ? raw : raw * 1000;
+      const d = shanghaiDayFromMs(ms);
+      if (d) return d;
     }
   }
+  if (typeof msg.formattedTime === "string") {
+    const trimmed = msg.formattedTime.trim();
+    if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed)) {
+      const ms = Date.parse(trimmed);
+      if (Number.isFinite(ms)) return shanghaiDayFromMs(ms);
+    }
+    const m = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})\b/);
+    if (m) {
+      const d = `${m[1]}-${m[2]}-${m[3]}`;
+      if (VALID_TRANSCRIPT_DAY_RE.test(d)) return d;
+    }
+  }
+  return null;
+}
 
+/**
+ * Lists top-level and one-level-nested `.md` / `.json` files under `srcDir`, skipping dotfiles.
+ */
+export function listTranscriptCandidates(srcDir) {
+  const files = [];
+  if (!fs.existsSync(srcDir)) return files;
+  for (const ent of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    if (ent.name.startsWith(".")) continue;
+    if (ent.isDirectory()) {
+      for (const f of fs.readdirSync(path.join(srcDir, ent.name), { withFileTypes: true })) {
+        if (f.name.startsWith(".")) continue;
+        if (f.isFile() && /\.(md|json)$/i.test(f.name)) {
+          files.push(path.join(ent.name, f.name));
+        }
+      }
+    } else if (ent.isFile() && /\.(md|json)$/i.test(ent.name)) {
+      files.push(ent.name);
+    }
+  }
+  return files.sort();
+}
+
+/**
+ * Inspects a `.md` or `.json` buffer for WeChat transcript membership, session key, and max day.
+ * Skips auxiliary/non-WeFlow JSONs by returning `{ isTranscript: false }`.
+ */
+export function inspectTranscriptBuffer({ relPath, buf, today }) {
+  const normRel = relPath.replaceAll("\\", "/");
+  const fallbackSessionKey = `file:${normRel.replace(/\.(md|json)$/i, "")}`;
+
+  if (/\.md$/i.test(normRel)) {
+    const head = buf.subarray(0, 4096).toString("utf8").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+    const separatorIdx = head.indexOf("\n---");
+    const headerSlice = separatorIdx >= 0 ? head.slice(0, separatorIdx) : head;
+    const sessionMatch = headerSlice.match(/^-\s*会话ID[:：]\s*`?([^`\r\n]*?)`?\s*$/m);
+    const sessionId = sessionMatch?.[1]?.trim();
+    const sessionKey = sessionId ? `wechat-session:${sessionId}` : fallbackSessionKey;
+
+    const tail = buf.subarray(Math.max(0, buf.length - 131072)).toString("utf8");
+    let maxDay = null;
+    for (const m of tail.matchAll(MD_DATE_RE)) {
+      const d = `${m[1]}-${m[2]}-${m[3]}`;
+      if (VALID_TRANSCRIPT_DAY_RE.test(d) && (!today || d <= today) && (!maxDay || d > maxDay)) {
+        maxDay = d;
+      }
+    }
+    return { isTranscript: true, format: "markdown", maxDay, sessionKey };
+  }
+
+  if (/\.json$/i.test(normRel)) {
+    const head = buf.subarray(0, 8192).toString("utf8").replace(/^\uFEFF/, "").trimStart();
+    if (!head.startsWith("{")) {
+      return { isTranscript: false, format: "json", maxDay: null, sessionKey: null };
+    }
+    if (buf.length > 65536 && !head.includes('"weflow"') && !head.includes('"session"') && !head.includes('"messages"')) {
+      return { isTranscript: false, format: "json", maxDay: null, sessionKey: null };
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(buf.toString("utf8").replace(/^\uFEFF/, ""));
+    } catch {
+      return { isTranscript: false, format: "json", maxDay: null, sessionKey: null };
+    }
+    if (!isPlainObject(parsed) || !Array.isArray(parsed.messages) || (!isPlainObject(parsed.weflow) && !isPlainObject(parsed.session))) {
+      return { isTranscript: false, format: "json", maxDay: null, sessionKey: null };
+    }
+    const wxid = typeof parsed.session?.wxid === "string" ? parsed.session.wxid.trim() : "";
+    const sessionKey = wxid ? `wechat-session:${wxid}` : fallbackSessionKey;
+    let maxDay = null;
+    for (const msg of parsed.messages) {
+      const d = shanghaiDayFromWeflowMessage(msg);
+      if (d && (!today || d <= today) && (!maxDay || d > maxDay)) {
+        maxDay = d;
+      }
+    }
+    return { isTranscript: true, format: "json", maxDay, sessionKey };
+  }
+
+  return { isTranscript: false, format: "other", maxDay: null, sessionKey: null };
+}
+
+/**
+ * Resolves the WeFlow config path, preferring WeFlow 5.0 Community over legacy `%APPDATA%/weflow`.
+ */
+export function resolveWeFlowConfigPath({
+  configPath = process.env.NIANLIFE_WEFLOW_CONFIG,
+  communityPath = DEFAULT_WEFLOW_COMMUNITY_CONFIG,
+  legacyPath = DEFAULT_WEFLOW_LEGACY_CONFIG,
+} = {}) {
+  for (const candidate of [configPath, communityPath, legacyPath]) {
+    if (candidate && fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Reads enabled WeFlow scheduled export task metadata without exposing keys or chat names.
+ */
+export function readWeFlowTasks(options = {}) {
   const tasks = [];
   try {
-    const wfPath = path.join(os.homedir(), "AppData", "Roaming", "weflow", "WeFlow-config.json");
-    if (fs.existsSync(wfPath)) {
-      const wf = JSON.parse(fs.readFileSync(wfPath, "utf8"));
-      for (const group of Object.values(wf.exportAutomationTaskMap ?? {})) {
-        for (const t of group?.tasks ?? []) {
-          if (!t?.enabled) continue;
-          const rs = t.runState ?? {};
-          tasks.push({
-            id: t.id,
-            lastRunStatus: rs.lastRunStatus ?? "unknown",
-            lastTriggeredAt: rs.lastTriggeredAt ? new Date(rs.lastTriggeredAt).toISOString() : null,
-            lastSuccessAt: rs.lastSuccessAt ? new Date(rs.lastSuccessAt).toISOString() : null,
-            wcdbDisconnected: typeof rs.lastError === "string" && rs.lastError.includes("WCDB"),
-            intervalDays: t.schedule?.intervalDays ?? null,
-            intervalHours: t.schedule?.intervalHours ?? null,
-            preset: t.template?.dateRangeConfig?.preset ?? null,
-          });
-        }
+    const wfPath = resolveWeFlowConfigPath(options);
+    if (!wfPath) return tasks;
+    const wf = JSON.parse(fs.readFileSync(wfPath, "utf8").replace(/^\uFEFF/, ""));
+    for (const group of Object.values(wf?.exportAutomationTaskMap ?? {})) {
+      for (const t of group?.tasks ?? []) {
+        if (!t?.enabled) continue;
+        const rs = t.runState ?? {};
+        tasks.push({
+          id: t.id,
+          lastRunStatus: rs.lastRunStatus ?? "unknown",
+          lastTriggeredAt: toIsoStringOrNull(rs.lastTriggeredAt),
+          lastSuccessAt: toIsoStringOrNull(rs.lastSuccessAt),
+          wcdbDisconnected: typeof rs.lastError === "string" && rs.lastError.includes("WCDB"),
+          intervalDays: t.schedule?.intervalDays ?? null,
+          intervalHours: t.schedule?.intervalHours ?? null,
+          preset: t.template?.dateRangeConfig?.preset ?? null,
+        });
       }
     }
   } catch { /* ignore */ }
+  return tasks;
+}
 
+/**
+ * Inspects exported WeChat transcripts (.md and WeFlow .json) and scheduled WeFlow task status.
+ */
+export function inspectWeFlowUpstream(today = shanghaiToday(), options = {}) {
+  const yesterday = addDays(today, -1);
+  const srcDir = options.srcDir ?? process.env.NIANLIFE_WECHAT_EXPORT_TEXTS ?? "E:/WechatHis/texts";
+  let maxExportedDay = null;
+  let markdownCount = 0;
+  let jsonCount = 0;
+  const sessions = new Set();
+
+  for (const rel of listTranscriptCandidates(srcDir)) {
+    const buf = fs.readFileSync(path.join(srcDir, rel));
+    const info = inspectTranscriptBuffer({ relPath: rel, buf, today });
+    if (!info.isTranscript) continue;
+    if (info.format === "markdown") markdownCount += 1;
+    else if (info.format === "json") jsonCount += 1;
+    if (info.sessionKey) sessions.add(info.sessionKey);
+    if (info.maxDay && (!maxExportedDay || info.maxDay > maxExportedDay)) {
+      maxExportedDay = info.maxDay;
+    }
+  }
+
+  const transcriptCount = markdownCount + jsonCount;
+  const tasks = readWeFlowTasks(options);
   const stale = !maxExportedDay || maxExportedDay < yesterday;
   return {
     ok: !stale,
     transcriptCount,
+    markdownCount,
+    jsonCount,
+    sessionCount: sessions.size,
     maxExportedDay,
     expectedAtLeast: yesterday,
     stale,

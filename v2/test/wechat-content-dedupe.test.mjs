@@ -27,10 +27,10 @@ const msg = (ordinal, sentAt, text, { sender = "妈妈", refs = [] } = {}) => ({
   sourceLocator: { recordOrdinal: ordinal },
 });
 // One archived row, as raw_sources holds it.
-const row = (sessionKey, sentAt, text, { sender = "妈妈", evidence = [], checksums = [], rowId = "row" } = {}) => ({
+const row = (sessionKey, sentAt, text, { sender = "妈妈", evidence = [], checksums = [], rowId = "row", state = "present" } = {}) => ({
   sessionKey, sentAt, text, rowId,
   senderDigest: digestOf(sender),
-  mediaEvidence: evidence.map((path) => ({ digest: sha256(path), state: "present" })),
+  mediaEvidence: evidence.map((path) => ({ digest: sha256(path), state })),
   checksums,
 });
 
@@ -209,4 +209,132 @@ test("since-days is a Shanghai calendar date", () => {
   assert.equal(shanghaiDateDaysAgo(3, new Date("2026-09-15T15:30:00Z")), "2026-09-12");
   assert.equal(shanghaiDateDaysAgo(0, new Date("2026-09-15T16:30:00Z")), "2026-09-16");
   assert.throws(() => shanghaiDateDaysAgo(-1), /WECHAT_SINCE_DAYS_INVALID/);
+});
+
+test("unattached [media] placeholders match archived media and MD placeholder rows cleanly", () => {
+  const index = buildArchiveIndex([
+    row(CHAT_A, "2026-09-14T10:00:00+08:00", "", { evidence: ["texts/c/media/images/a.jpg"], checksums: [sha256("img-a")], rowId: "row-img" }),
+    row(CHAT_A, "2026-09-14T10:00:05+08:00", "\n[media]\n", { rowId: "row-media-text" }),
+    row(CHAT_A, "2026-09-14T10:00:10+08:00", "\\[语音\\]", { rowId: "row-voice-md" }),
+  ]);
+  const result = classifyDocumentMessages([
+    msg(1, "2026-09-14T10:00:00+08:00", "[media]"),
+    msg(2, "2026-09-14T10:00:05+08:00", "[media]"),
+    msg(3, "2026-09-14T10:00:10+08:00", "[media]"),
+  ], index, CHAT_A);
+  assert.equal(result.alreadyArchived, 3);
+  assert.equal(result.ordinals.size, 0);
+  assert.deepEqual(result.ambiguous, []);
+});
+
+test("evidenced messages claim archived slots before an unattached [media] placeholder in the same second", () => {
+  const index = buildArchiveIndex([
+    row(CHAT_A, "2026-09-14T10:01:00+08:00", "", { evidence: ["texts/c/media/images/real.jpg"], checksums: [sha256("real-bytes")], rowId: "row-evidenced" }),
+  ]);
+  const result = classifyDocumentMessages([
+    msg(1, "2026-09-14T10:01:00+08:00", "[media]"),
+    msg(2, "2026-09-14T10:01:00+08:00", "![](texts/c/media/images/real.jpg)", {
+      refs: [{ relativePath: "texts/c/media/images/real.jpg", checksum: sha256("real-bytes") }],
+    }),
+  ], index, CHAT_A);
+  assert.equal(result.alreadyArchived, 1);
+  assert.deepEqual([...result.ordinals], [1]);
+  assert.deepEqual(result.ambiguous, []);
+});
+
+test("multiplicity and unmapped safety hold for unattached [media] placeholders", () => {
+  const index = buildArchiveIndex([
+    row(CHAT_A, "2026-09-14T10:02:00+08:00", "", { evidence: ["texts/c/media/images/b.jpg"], checksums: [sha256("b")], rowId: "row-1" }),
+    { sessionKey: undefined, sentAt: "2026-09-14T10:03:00+08:00", text: "", senderDigest: digestOf("妈妈"), mediaEvidence: [{ digest: sha256("texts/c/media/x.jpg"), state: "present" }], checksums: [], rowId: "row-unmapped" },
+  ]);
+  const result = classifyDocumentMessages([
+    msg(1, "2026-09-14T10:02:00+08:00", "[media]"),
+    msg(2, "2026-09-14T10:02:00+08:00", "[media]"),
+    msg(3, "2026-09-14T10:03:00+08:00", "[media]"),
+  ], index, CHAT_A);
+  assert.equal(result.alreadyArchived, 1);
+  assert.deepEqual([...result.ordinals], [2]);
+  assert.deepEqual(
+    result.ambiguous.map((item) => [item.recordOrdinal, item.reason, item.archivedRowIds]),
+    [[3, "unmapped_conversation", ["row-unmapped"]]],
+  );
+});
+
+test("in-place HD upgrade at the exact same relativePath matches as alreadyArchived", () => {
+  const relPath = "texts/私聊_阿静/media/images/2217.jpg";
+  const index = buildArchiveIndex([
+    row(CHAT_A, "2026-11-13T14:00:00+08:00", "", {
+      evidence: [relPath],
+      checksums: [`sha256:${"1".repeat(64)}`],
+      rowId: "row-thumb",
+    }),
+  ]);
+  const result = classifyDocumentMessages([
+    msg(1, "2026-11-13T14:00:00+08:00", "", {
+      refs: [{ relativePath: relPath, checksum: `sha256:${"f".repeat(64)}` }],
+    }),
+  ], index, CHAT_A);
+  assert.equal(result.alreadyArchived, 1);
+  assert.equal(result.ordinals.size, 0);
+  assert.deepEqual(result.ambiguous, []);
+});
+
+test("legacy -<10char_hash> folder rename matches emoji (.gif, state: invalid) and present archived paths", () => {
+  const index = buildArchiveIndex([
+    row(CHAT_A, "2026-10-30T09:10:00+08:00", "\n[media]\n", {
+      evidence: ["texts/群聊_张小年小群-11d5c84780/media/emojis/smile.gif"],
+      checksums: [],
+      state: "invalid",
+      rowId: "row-legacy-gif",
+    }),
+    row(CHAT_A, "2026-10-30T09:11:00+08:00", "\n[media]\n", {
+      evidence: ["texts/群聊_作战部队-a32b77c8d6/media/emojis/wave.gif"],
+      checksums: [],
+      state: "present",
+      rowId: "row-legacy-ops",
+    }),
+  ]);
+  const result = classifyDocumentMessages([
+    msg(1, "2026-10-30T09:10:00+08:00", "![](texts/群聊_张小年小群/media/emojis/smile.gif)", {
+      refs: [{ relativePath: "texts/群聊_张小年小群/media/emojis/smile.gif" }],
+    }),
+    msg(2, "2026-10-30T09:11:00+08:00", "![](texts/群聊_👶🏻张小年成长主力作战部队/media/emojis/wave.gif)", {
+      refs: [{ relativePath: "texts/群聊_👶🏻张小年成长主力作战部队/media/emojis/wave.gif" }],
+    }),
+  ], index, CHAT_A);
+  assert.equal(result.alreadyArchived, 2);
+  assert.equal(result.ordinals.size, 0);
+  assert.deepEqual(result.ambiguous, []);
+});
+
+test("archived row with non-asset missing evidence matches repaired incoming media without ambiguous", () => {
+  const index = buildArchiveIndex([
+    row(CHAT_A, "2026-11-08T19:00:00+08:00", "\n[media]\n", {
+      evidence: ["texts/私聊_阿静-341ea5e49d/media/images/repaired.jpg"],
+      checksums: [],
+      state: "missing",
+      rowId: "row-missing-before",
+    }),
+    // Safeguard: an archived row with state "present" and no checksums at an unrelated path stays unknown.
+    row(CHAT_A, "2026-11-08T19:01:00+08:00", "\n[media]\n", {
+      evidence: ["texts/unrelated/media/images/other.jpg"],
+      checksums: [],
+      state: "present",
+      rowId: "row-present-nohash",
+    }),
+  ]);
+  const result = classifyDocumentMessages([
+    msg(1, "2026-11-08T19:00:00+08:00", "", {
+      refs: [{ relativePath: "texts/私聊_阿静/media/images/repaired_new.jpg", checksum: `sha256:${"a".repeat(64)}` }],
+    }),
+    msg(2, "2026-11-08T19:01:00+08:00", "", {
+      refs: [{ relativePath: "texts/私聊_阿静/media/images/different.jpg", checksum: `sha256:${"b".repeat(64)}` }],
+    }),
+  ], index, CHAT_A);
+  assert.equal(result.alreadyArchived, 1);
+  assert.equal(result.ordinals.size, 0);
+  assert.deepEqual(
+    result.ambiguous.map((item) => [item.recordOrdinal, item.reason, item.archivedRowIds]),
+    [[2, "attachment_evidence_unknown", ["row-present-nohash"]]],
+  );
 });

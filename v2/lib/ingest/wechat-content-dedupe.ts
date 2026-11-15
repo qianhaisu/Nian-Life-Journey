@@ -81,9 +81,32 @@ export function senderDigestsFor(message: { senderId?: string; senderName?: stri
   return digests;
 }
 
-export type AttachmentEvidence = { pathDigests: string[]; checksums: string[] };
+export type AttachmentEvidence = {
+  pathDigests: string[];
+  legacyPathDigests?: string[];
+  checksums: string[];
+  nonAssetOnly?: boolean;
+};
 
 const sorted = (values: Iterable<string>) => [...new Set(values)].sort();
+
+const LEGACY_FOLDER_ALIASES: ReadonlyArray<readonly [string, string]> = [
+  ["texts/群聊_张小年小群/", "texts/群聊_张小年小群-11d5c84780/"],
+  ["texts/群聊_2028届好奇星辰星班🌟小年家庭群/", "texts/群聊_2028届好奇星辰星班🌟小年家庭群-57fc0f857d/"],
+  ["texts/私聊_阿静/", "texts/私聊_阿静-341ea5e49d/"],
+  ["texts/群聊_亲爱的爸爸妈妈/", "texts/群聊_亲爱的爸爸妈妈-a32b77c8d6/"],
+  ["texts/群聊_👶🏻张小年成长主力作战部队/", "texts/群聊_作战部队-a32b77c8d6/"],
+];
+
+function toLegacyPath(relativePath: string): string {
+  const normalized = relativePath.replaceAll("\\", "/");
+  for (const [canonicalPrefix, legacyPrefix] of LEGACY_FOLDER_ALIASES) {
+    if (normalized.startsWith(canonicalPrefix)) {
+      return legacyPrefix + normalized.slice(canonicalPrefix.length);
+    }
+  }
+  return normalized;
+}
 
 /** A transcript message's attachments, in the shape the importer records them. */
 // A media link the parser does not turn into a mediaRef — `[视频文件](media/videos/x.mp4)`, which
@@ -103,19 +126,24 @@ export function attachmentEvidenceOfRefs(
   refs: ReadonlyArray<{ relativePath: string; checksum?: string }>,
   text?: string | null,
 ): AttachmentEvidence {
+  const rawPaths = [...refs.map((ref) => ref.relativePath.replaceAll("\\", "/")), ...mediaLinkTargets(text)];
   return {
-    pathDigests: sorted([...refs.map((ref) => ref.relativePath.replaceAll("\\", "/")), ...mediaLinkTargets(text)].map(sha256)),
+    pathDigests: sorted(rawPaths.map(sha256)),
+    legacyPathDigests: sorted(rawPaths.map((p) => sha256(toLegacyPath(p)))),
     checksums: sorted(refs.map((ref) => (ref.checksum ?? "").replace(/^sha256:/i, "").toLowerCase()).filter(Boolean)),
   };
 }
 
 /** An archived row's attachments: metadata.mediaEvidence digests plus its assets' checksums. */
-export function attachmentEvidenceOfRow(row: { mediaEvidence?: ReadonlyArray<{ digest?: string }> | null; checksums?: ReadonlyArray<string | null> | null; text?: string | null }): AttachmentEvidence {
+export function attachmentEvidenceOfRow(row: { mediaEvidence?: ReadonlyArray<{ digest?: string; state?: string }> | null; checksums?: ReadonlyArray<string | null> | null; text?: string | null }): AttachmentEvidence {
+  const evidenceItems = row.mediaEvidence ?? [];
+  const checksums = sorted((row.checksums ?? []).map((value) => String(value ?? "").replace(/^sha256:/i, "").toLowerCase()).filter(Boolean));
   return {
     // The stored row's own text carries the same unparsed media links (sanitizeText only rewrites
     // image syntax), so both sides of a comparison are built the same way.
-    pathDigests: sorted([...(row.mediaEvidence ?? []).map((item) => String(item?.digest ?? "")).filter(Boolean), ...mediaLinkTargets(row.text).map(sha256)]),
-    checksums: sorted((row.checksums ?? []).map((value) => String(value ?? "").replace(/^sha256:/i, "").toLowerCase()).filter(Boolean)),
+    pathDigests: sorted([...evidenceItems.map((item) => String(item?.digest ?? "")).filter(Boolean), ...mediaLinkTargets(row.text).map(sha256)]),
+    checksums,
+    nonAssetOnly: evidenceItems.length > 0 && evidenceItems.every((item) => item?.state === "missing" || item?.state === "invalid") && checksums.length === 0,
   };
 }
 
@@ -125,19 +153,18 @@ type AttachmentVerdict = "match" | "differ" | "unknown";
 
 function compareAttachments(message: AttachmentEvidence, archived: AttachmentEvidence): AttachmentVerdict {
   if (message.pathDigests.length === 0 && archived.pathDigests.length === 0) return "match";
+  const samePaths = sameList(message.pathDigests, archived.pathDigests)
+    || (message.legacyPathDigests !== undefined && sameList(message.legacyPathDigests, archived.pathDigests));
+  // Check exact/legacy path equality before checksums so in-place thumbnail-to-HD upgrades at
+  // the same relativePath match existing archived rows instead of triggering MEDIA_LOCATION_CONFLICT.
+  if (message.pathDigests.length > 0 && samePaths) return "match";
+  if (archived.nonAssetOnly && message.pathDigests.length === archived.pathDigests.length) return "match";
   // Content identity first, when both sides carry it for every attachment.
   if (message.checksums.length > 0 && message.checksums.length === message.pathDigests.length
     && archived.checksums.length > 0 && archived.checksums.length === archived.pathDigests.length) {
     return sameList(message.checksums, archived.checksums) ? "match" : "differ";
   }
   if (message.pathDigests.length > 0 && archived.pathDigests.length > 0) {
-    if (sameList(message.pathDigests, archived.pathDigests)) {
-      // Same file paths. If both sides also have checksums, they must agree; a path can be rewritten.
-      if (message.checksums.length > 0 && archived.checksums.length > 0) {
-        return sameList(message.checksums, archived.checksums) ? "match" : "differ";
-      }
-      return "match";
-    }
     // Different paths can still be the same content (two exports, two folders).
     if (message.checksums.length > 0 && archived.checksums.length > 0) {
       return sameList(message.checksums, archived.checksums) ? "match" : "differ";
@@ -154,7 +181,7 @@ export type ArchivedMessage = {
   sentAt: string | Date;
   senderDigest?: string | null;
   text: string | null | undefined;
-  mediaEvidence?: ReadonlyArray<{ digest?: string }> | null;
+  mediaEvidence?: ReadonlyArray<{ digest?: string; state?: string }> | null;
   checksums?: ReadonlyArray<string | null> | null;
   /** For reporting only — never used to decide a match. */
   rowId?: string;
@@ -216,6 +243,8 @@ export type Classification = {
 
 export type Reservation = { sessionKey: string; entries: Array<{ second: number; row: IndexedRow }>; pending: Array<{ second: number; row: IndexedRow }> };
 
+const MEDIA_PLACEHOLDER_ROW = /^\[(?:视频|图片|表情|动画表情|语音|语音消息|文件|media)\]$/;
+
 /**
  * Which of one document's messages are not yet in the archive.
  *
@@ -249,14 +278,31 @@ export function classifyDocumentMessages(
   };
   const left = (row: IndexedRow) => (remaining.get(row) ?? row.available) > 0;
 
-  for (const message of messages) {
-    const second = secondOf(message.sentAt);
-    const normalizedText = normalizeWechatText(message.text);
+  const prepared = messages.map((message) => {
     const attachments = attachmentEvidenceOfRefs(message.mediaRefs ?? [], message.text);
-    const senderDigests = senderDigestsFor(message);
+    return {
+      message,
+      second: secondOf(message.sentAt),
+      normalizedText: normalizeWechatText(message.text),
+      attachments,
+      senderDigests: senderDigestsFor(message),
+      // A JSON media message whose export carried only a bracketed placeholder ("[图片]", "[语音]",
+      // etc.) emits text "[media]" with no mediaRefs. It brings no attachment bytes of its own, so
+      // it runs in pass 2 after evidenced messages have claimed their exact rows.
+      isUnattachedPlaceholder: attachments.pathDigests.length === 0 && /^\s*\[media\]\s*$/.test(message.text),
+    };
+  });
+
+  const senderMatches = (row: IndexedRow, senderDigests: Set<string>) =>
+    row.senderDigest === "" || senderDigests.size === 0 || senderDigests.has(row.senderDigest);
+
+  // Pass 1: messages with non-placeholder text or attachment evidence claim exact matches first.
+  for (const item of prepared) {
+    if (item.isUnattachedPlaceholder) continue;
+    const { message, second, normalizedText, attachments, senderDigests } = item;
     const candidates = (buckets?.get(second) ?? []).filter((row) => left(row)
       && row.normalizedText === normalizedText
-      && (row.senderDigest === "" || senderDigests.size === 0 || senderDigests.has(row.senderDigest)));
+      && senderMatches(row, senderDigests));
 
     let matched = false;
     const undecided: IndexedRow[] = [];
@@ -274,7 +320,7 @@ export function classifyDocumentMessages(
     // them may be this very message, filed under a conversation label nothing has mapped yet.
     const unmapped = (index.unmappedBySecond.get(second) ?? []).filter((row) => left(row)
       && row.normalizedText === normalizedText
-      && (row.senderDigest === "" || senderDigests.size === 0 || senderDigests.has(row.senderDigest)));
+      && senderMatches(row, senderDigests));
     if (unmapped.length > 0) {
       ambiguous.push({ recordOrdinal: message.sourceLocator.recordOrdinal, sentAt: message.sentAt, reason: "unmapped_conversation", archivedRowIds: unmapped.map((row) => row.rowId ?? "").filter(Boolean) });
       continue;
@@ -284,6 +330,42 @@ export function classifyDocumentMessages(
     const row: IndexedRow = { senderDigest: [...senderDigests][0] ?? "", normalizedText, attachments, available: 0 };
     reservation.pending.push({ second, row });
   }
+
+  // Pass 2: unattached media placeholders match an unconsumed archived media/placeholder row in
+  // the same chat/second/sender (never stealing an evidenced row before pass 1, and never skipping
+  // an incoming message that carries a real media file).
+  const isMediaOrPlaceholderRow = (row: IndexedRow) =>
+    row.normalizedText === "" || MEDIA_PLACEHOLDER_ROW.test(row.normalizedText);
+
+  for (const item of prepared) {
+    if (!item.isUnattachedPlaceholder) continue;
+    const { message, second, normalizedText, attachments, senderDigests } = item;
+    const candidates = (buckets?.get(second) ?? []).filter((row) => left(row)
+      && isMediaOrPlaceholderRow(row)
+      && senderMatches(row, senderDigests));
+    // Prefer an unattached empty-text row first, then an archived media/placeholder row.
+    const ordered = [
+      ...candidates.filter((row) => row.normalizedText === "" && row.attachments.pathDigests.length === 0),
+      ...candidates.filter((row) => !(row.normalizedText === "" && row.attachments.pathDigests.length === 0)),
+    ];
+    let matched = false;
+    for (const row of ordered) {
+      if (take(row)) { alreadyArchived += 1; matched = true; break; }
+    }
+    if (matched) continue;
+    const unmapped = (index.unmappedBySecond.get(second) ?? []).filter((row) => left(row)
+      && isMediaOrPlaceholderRow(row)
+      && senderMatches(row, senderDigests));
+    if (unmapped.length > 0) {
+      ambiguous.push({ recordOrdinal: message.sourceLocator.recordOrdinal, sentAt: message.sentAt, reason: "unmapped_conversation", archivedRowIds: unmapped.map((row) => row.rowId ?? "").filter(Boolean) });
+      continue;
+    }
+    ordinals.add(message.sourceLocator.recordOrdinal);
+    const row: IndexedRow = { senderDigest: [...senderDigests][0] ?? "", normalizedText, attachments, available: 0 };
+    reservation.pending.push({ second, row });
+  }
+
+  ambiguous.sort((a, b) => a.recordOrdinal - b.recordOrdinal);
   return { ordinals, alreadyArchived, ambiguous, reservation };
 }
 
@@ -325,7 +407,7 @@ export function shanghaiDateDaysAgo(days: number, now: Date = new Date()): strin
 const QUOTE_SUFFIX = /\[引用 [^：:\]]{1,40}[：:][\s\S]*\]\s*$/;
 const QUOTE_PREFIX = /^\s*>\s*[^:：\n]{1,40}[:：][^\n]*\n+/;
 const BRACKET_TAG = /^\s*\[(链接|小程序|文件|视频号|名片|位置)\]/;
-const MEDIA_ONLY = /^\s*\[(视频|图片|表情|动画表情|语音|media)\]\s*$/;
+const MEDIA_ONLY = /^\s*\[(视频|图片|表情|动画表情|语音|语音消息|media)\]\s*$/;
 
 /** 跨导出比对用的正文：去掉引用、链接/小程序标签、纯媒体占位与转义，保留说出来的话。 */
 export function normalizeAcrossExports(text: string | null | undefined): string {

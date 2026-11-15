@@ -112,3 +112,57 @@ test("a transcript that is not parseable yields nothing rather than a partial co
   assert.deepEqual(empty.messages, []);
   assert.ok(empty.warnings.includes("weflow_json_no_messages"));
 });
+
+test("bracketed media placeholders yield [media] text and empty mediaRefs instead of bogus missing paths", () => {
+  const cases = [
+    ["图片消息", "[图片]"],
+    ["视频消息", "[视频]"],
+    ["语音消息", "[语音]"],
+    ["语音消息", "[语音消息]"],
+    ["文件消息", "[文件]"],
+    ["图片消息", "  [图片]  "],
+  ];
+  const parsed = parseWeflowJson({
+    root: ROOT,
+    document: DOC,
+    media: new Map(),
+    text: transcript([
+      ...cases.map(([type, content], i) => message({ localId: i + 1, createTime: 1771836203 + i, type, content })),
+      message({ localId: 99, createTime: 1771836299, type: "图片消息", content: "   " }),
+    ]),
+  });
+  assert.equal(parsed.messages.length, cases.length + 1);
+  for (let i = 0; i < cases.length; i++) {
+    assert.equal(parsed.messages[i].text, "[media]", `placeholder ${cases[i][1]} becomes [media]`);
+    assert.deepEqual(parsed.messages[i].mediaRefs, []);
+    assert.equal(parsed.messages[i].messageType, "text");
+  }
+  assert.equal(parsed.messages.at(-1).text, "");
+  assert.deepEqual(parsed.messages.at(-1).mediaRefs, []);
+  assert.equal(parsed.messages.at(-1).messageType, "text");
+});
+
+test("unexported file titles and voice transcripts stay readable text without mediaRefs, while real paths still resolve", () => {
+  const media = new Map([["群聊_x/media/files/plan.pdf", { checksum: "b".repeat(64), availability: "present" }]]);
+  const parsed = parseWeflowJson({
+    root: ROOT,
+    document: DOC,
+    media,
+    text: transcript([
+      message({ localId: 1, createTime: 1771836301, type: "文件消息", content: "[文件] report.pdf" }),
+      message({ localId: 2, createTime: 1771836302, type: "语音消息", content: "[语音消息] 今天去公园" }),
+      message({ localId: 3, createTime: 1771836303, type: "语音消息", content: "[语音] 好的" }),
+      message({ localId: 4, createTime: 1771836304, type: "文件消息", content: "media\\files\\plan.pdf" }),
+    ]),
+  });
+  assert.equal(parsed.messages[0].text, "[文件] report.pdf");
+  assert.deepEqual(parsed.messages[0].mediaRefs, []);
+  assert.equal(parsed.messages[0].messageType, "text");
+  assert.equal(parsed.messages[1].text, "[语音消息] 今天去公园");
+  assert.deepEqual(parsed.messages[1].mediaRefs, []);
+  assert.equal(parsed.messages[2].text, "[语音] 好的");
+  assert.deepEqual(parsed.messages[2].mediaRefs, []);
+  assert.equal(parsed.messages[3].text, "");
+  assert.equal(parsed.messages[3].mediaRefs.length, 1);
+  assert.equal(parsed.messages[3].mediaRefs[0].availability, "present");
+});
