@@ -9,9 +9,10 @@
 每日更新拆分为**原始资料同步**与**会话审编安装**两段独立幂等任务，状态统一写入本机私有账本 `C:/Users/teddy/NianlifeOps/ops-daily/state/`（不进 Git 仓库）：
 
 1. **23:30（Windows 计划任务 `Nianlife WeChat Daily Sync`，已禁用旧 `Nianlife Nightly Editor`）**：
-   - 入口：`v2/.data/daily-wechat-sync.cmd`（已开启 `WakeToRun`、`StartWhenAvailable`、`MultipleInstances=IgnoreNew`、防重入 PID 锁 `sync.lock`、防休眠锁 `--prevent-sleep`、SSH 隧道自愈重连、失败重试 `--retries 2` 及真实退出码记录）。
-   - 执行 `t35-archive-exports.mjs` 归档 WeFlow 导出并检测上游水位是否滞后，再通过 `t20-run-env.mjs` 运行 `nianlife-worker.mjs --since-days=21 --content-dedupe --no-organizer --no-review --no-revalidate` 将新增聊天与媒体写入阿里云 RDS 与阿里云 OSS（强制 `MEDIA_STORAGE_PROVIDER=oss` 并剥离继承环境中的 `R2_*`，严禁 R2）。
-   - 完成后调用 `scripts/editor/pipeline-status.mjs record-sync` 记录 `last-sync-run.json`（含归档阶段异常）。
+   - 入口：`v2/.data/daily-wechat-sync.cmd`（已开启 `WakeToRun`、`StartWhenAvailable`、`MultipleInstances=IgnoreNew`、防重入 PID 锁 `sync.lock`、防休眠锁 `--prevent-sleep`、SSH 隧道自愈重连、失败重试 `--retries 2` 及真实退出码记录；文件保持纯 ASCII 以兼容 Task Scheduler CP936）。
+   - **第一来源（微信聊天与媒体）**：执行 `t35-archive-exports.mjs` 归档 WeFlow 导出并检测上游水位是否滞后，再通过 `t20-run-env.mjs` 运行 `nianlife-worker.mjs --since-days=21 --content-dedupe --no-organizer --no-review --no-revalidate` 将新增聊天与媒体写入阿里云 RDS 与阿里云 OSS（强制 `MEDIA_STORAGE_PROVIDER=oss` 并剥离继承环境中的 `R2_*`，严禁 R2）。
+   - **第二来源（Quark 照片同步）**：在 `WORKER_EXIT` 非 `75`（未发生互斥锁冲突）时，继续复用 `sync.lock` 通过 `t20-run-env.mjs` 运行 `scripts/editor/quark-daily-sync.mjs --since-days 7 --out C:\Users\teddy\NianlifeOps\ops-daily\state\quark-daily-sync --apply --cleanup`（日志写入 `C:\Users\teddy\NianlifeOps\ops-daily\logs\quark-<STAMP>.log`）。该脚本扫描夸克网盘 `夸克上传文件`、`我的备份`（近期/活跃设备备份）与 `nianlife` 及按月相册检索，下载窗口内照片，提取 EXIF `DateTimeOriginal`（无 EXIF 时按一致的 `IMG_XXXX_YYYYMMDD` 文件名 + `l_shot_at` 回退），过滤无相机 EXIF 的 UI 截图（如 `758.png..767.png`、`1320x2868` 截屏等），将 `.heic`/`.heif` 经 `heic-convert`（quality `0.92`）转为 JPEG，再调用 `applyQuarkPhotoArtifact` 以 `visibility = 'private'`、`organize = false`、`sourceLabel = "Quark 照片同步"` 写入阿里云 RDS 与 OSS（同样强制 `MEDIA_STORAGE_PROVIDER=oss` 并剥离 `R2_*`），成功后清除本地临时 `downloads/` 与 `heic-converted/` 目录（若 Quark 返回 `-103`/`-1408` 认证错误则非零退出并等待重登）。
+   - 完成后调用 `scripts/editor/pipeline-status.mjs record-sync` 汇总两阶段退出码记录 `last-sync-run.json`（`stage` 为 `archive` / `worker` / `quark`）。
 
 2. **00:30（Antigravity 定时自动化 `Nianlife 每日内容更新`）**：
    - 每天北京时间（`Asia/Shanghai`）00:30 启动独立会话，按下方标准流程完成健康巡检、私密照片目视审核、待编来源导出、写稿前强制看图、非虚构写稿与照片锚定、`apply --literary` 强校验、ECS 原子安装、缓存刷新与账本回执。
@@ -29,7 +30,7 @@
    - 若上游微信未导出或网络/隧道/程序异常，必须如实记为 `blocked_upstream_export` 或 `failed_infra`（`pipeline-status.mjs record-editorial --failed <day>:<stage>:<code>`），**严禁将基础设施或程序失败永久标成当日无素材（`no_qualifying_material` / `skipped_no_material`）**。
 
 2. **私密照片目视审核与按日选片（零外部模型）**
-   - 新导入微信照片默认 `visibility = 'private'`。当 `photoReview.unreviewedCount > 0` 或 `approvedButPrivateCount > 0` 时运行：
+   - 新导入微信与 Quark 照片均默认 `visibility = 'private'`。当 `photoReview.unreviewedCount > 0` 或 `approvedButPrivateCount > 0` 时运行：
      `node --import tsx scripts/editor/session-photo-review.mjs prepare --since <起始日> --out <本次私有目录>/photo-review`
    - 会话使用 `read_file` 直接逐张查看生成的编号缩略图联版（`sheets/sheet-*.jpg`），依据儿童隐私原则拦截裸露、洗澡、如厕训练局部、证件、账单、地址门牌、病历、纯截图与无关画面，写出私有 `verdicts.json`。未成功下载缩略图的候选严禁默认放行。
    - 运行 `node --import tsx scripts/editor/session-photo-review.mjs apply --out <本次私有目录>/photo-review --verdicts <verdicts.json>` 在同一数据库事务中写入 `content_quality_reviews`（`provider = 'antigravity'`）并将通过审核的照片设为 `visibility = 'family'`。

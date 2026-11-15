@@ -11,7 +11,12 @@ import {
   selectHomeHeroCover,
   selectTravelFootprint,
 } from "../lib/home-bento.ts";
-import { selectHomeMemories } from "../lib/home-memory.ts";
+import {
+  buildDayMemory,
+  MEMORY_MAX_SLIDES,
+  MEMORY_MIN_SLIDES,
+  selectHomeMemories,
+} from "../lib/home-memory.ts";
 import { CAROUSEL_THEMES } from "../lib/home-memory-topics.ts";
 import {
   P5_FAMILY_QUOTE_SEEDS,
@@ -686,4 +691,388 @@ test("5.6 & 5.7 近月成长链接当月月页、旅行足迹只统计真正的�
     /href="[^"]*(?:\/memory\/growth|\/memory\/people|\/health)(?:["/?#])/,
     "首页任何模块不得包含指向已下线栏目的链接",
   );
+});
+
+function makeCarouselLabel(takenAt, matchOverrides = {}, extra = {}) {
+  const matches = Object.fromEntries(CAROUSEL_THEMES.map((k) => [k, 0]));
+  for (const [k, v] of Object.entries(matchOverrides)) {
+    matches[k] = v;
+  }
+  const clarity = extra.clarity ?? 92;
+  const expression = extra.expression ?? 90;
+  const approvedThemes = extra.approvedThemes ?? [...CAROUSEL_THEMES];
+  const sleeping = Boolean(extra.sleeping);
+  const eyesOpen = extra.eyesOpen ?? !sleeping;
+  return {
+    topic: extra.topic ?? "笑",
+    water: Boolean(matches.water >= 80),
+    childInFrame: true,
+    value: extra.value ?? 0.9,
+    confidence: 0.95,
+    carousel: {
+      promptVersion: "home-carousel-v4",
+      takenAt,
+      matches,
+      clarity,
+      expression,
+      qualified: true,
+      eyesOpen,
+      sleeping,
+      childMain: true,
+      faceClear: true,
+      faceUnblocked: true,
+      motionBlur: false,
+      sensitive: false,
+      approvedThemes,
+    },
+  };
+}
+
+test("5.2 selectHomeMemories：不传 rotationSlot 保持基线；传 rotationSlot 轮换清醒主题、跨主题优先权与近期 day 回忆且永不置顶睡着", () => {
+  const buildTopicDays = (prefix, month, count, startDay = 1) =>
+    Array.from({ length: count }, (_, idx) => {
+      const dayNum = startDay + idx;
+      const day = `${month}-${String(dayNum).padStart(2, "0")}`;
+      const p = makePhoto(`${prefix}-${dayNum}`, `${day}T10:00:00Z`);
+      return { day, dateLabel: `${day}`, ageLabel: "1 岁 8 个月", photos: [p] };
+    });
+
+  // 各主题独立素材（8 天各 1 张）+ 跨主题共享素材（8 天各 1 张，同时合格 laugh / eat / water）
+  const laughDays = buildTopicDays("laugh", "2026-06", 8, 1);
+  const eatDays = buildTopicDays("eat", "2026-06", 8, 11);
+  const waterDays = buildTopicDays("water", "2026-07", 8, 1);
+  const outdoorDays = buildTopicDays("outdoor", "2026-07", 8, 11);
+  const sleepDays = buildTopicDays("sleep", "2026-08", 8, 1);
+  const sharedDays = buildTopicDays("shared", "2026-08", 8, 11);
+  const summerSeasonDays = buildTopicDays("summer", "2026-08", 8, 21);
+
+  // 2026-11 三个已发布日：11-10（10张）、11-08（10张）丰富日 + 11-06（6张 < MEMORY_MIN_SLIDES）
+  const novDays = [
+    {
+      day: "2026-11-10",
+      dateLabel: "2026 年 11 月 10 日",
+      ageLabel: "1 岁 10 个月",
+      photos: Array.from({ length: 10 }, (_, i) =>
+        makePhoto(`nov10-${i}`, `2026-11-10T${String(9 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"}:00Z`),
+      ),
+    },
+    {
+      day: "2026-11-08",
+      dateLabel: "2026 年 11 月 8 日",
+      ageLabel: "1 岁 10 个月",
+      photos: Array.from({ length: 10 }, (_, i) =>
+        makePhoto(`nov08-${i}`, `2026-11-08T${String(9 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"}:00Z`),
+      ),
+    },
+    {
+      day: "2026-11-06",
+      dateLabel: "2026 年 11 月 6 日",
+      ageLabel: "1 岁 10 个月",
+      photos: Array.from({ length: 6 }, (_, i) =>
+        makePhoto(`nov06-${i}`, `2026-11-06T${String(9 + i).padStart(2, "0")}:00:00Z`),
+      ),
+    },
+  ];
+
+  const allDays = [
+    ...laughDays,
+    ...eatDays,
+    ...waterDays,
+    ...outdoorDays,
+    ...sleepDays,
+    ...sharedDays,
+    ...summerSeasonDays,
+    ...novDays,
+  ];
+  const byMonth = new Map();
+  for (const d of allDays) {
+    const m = d.day.slice(0, 7);
+    byMonth.set(m, [...(byMonth.get(m) ?? []), d]);
+  }
+  const allMedia = allDays.flatMap((d) => d.photos);
+  const byId = new Map(allMedia.map((p) => [p.id, p]));
+
+  const archive = makeArchive({
+    media: allMedia,
+    chapters: [
+      {
+        year: "2026",
+        ageSpan: "1 岁 到 1 岁 10 个月",
+        months: [...byMonth.entries()].map(([month, photoDays]) => ({
+          month,
+          label: month,
+          shortLabel: month,
+          ageLabel: "1 岁 10 个月",
+          memories: [],
+          traceDays: [],
+          photos: photoDays.flatMap((d) => d.photos),
+          photoCount: photoDays.reduce((sum, d) => sum + d.photos.length, 0),
+          videoCount: 0,
+          photoDays,
+          withheldMediaCount: 0,
+        })),
+      },
+    ],
+  });
+
+  const topics = (id) => {
+    const takenAt = byId.get(id)?.takenAt;
+    if (!takenAt) return undefined;
+    if (id.startsWith("laugh-")) return makeCarouselLabel(takenAt, { laugh: 92 });
+    if (id.startsWith("eat-")) return makeCarouselLabel(takenAt, { eat: 92 }, { topic: "吃饭" });
+    if (id.startsWith("water-")) return makeCarouselLabel(takenAt, { water: 92 }, { topic: "玩水" });
+    if (id.startsWith("outdoor-")) return makeCarouselLabel(takenAt, { outdoor: 92 }, { topic: "户外" });
+    if (id.startsWith("sleep-")) return makeCarouselLabel(takenAt, { sleep: 96 }, { topic: "睡觉", sleeping: true, clarity: 96, expression: 95 });
+    if (id.startsWith("shared-")) return makeCarouselLabel(takenAt, { laugh: 92, eat: 92, water: 92 });
+    if (id.startsWith("summer-")) return makeCarouselLabel(takenAt, { summer: 92 }, { topic: "其他" });
+    return undefined;
+  };
+
+  const dayContext = new Map([
+    ["2026-11-10", { title: "草坪追泡泡", paragraphs: ["下午在草坪上追泡泡。"] }],
+    ["2026-11-08", { title: "客厅开小汽车", paragraphs: ["骑着小车绕客厅。"] }],
+    ["2026-11-06", { title: "阳台看麻雀", paragraphs: ["看着树梢上的麻雀。"] }],
+  ]);
+
+  // 1) 缺省或显式传入 rotationSlot: undefined 时 100% 保持基线
+  const baselineOmitted = selectHomeMemories(archive, topics, { dayContext });
+  const baselineUndefined = selectHomeMemories(archive, topics, { dayContext, rotationSlot: undefined });
+  assert.deepEqual(baselineUndefined, baselineOmitted);
+  assert.equal(baselineOmitted.memories.some((m) => m.kind === "day"), false, "基线不混入 day 主题");
+  const baselineWater = baselineOmitted.memories.find((m) => m.key === "topic:water");
+  assert.ok(baselineWater?.slides.some((s) => s.media.id.startsWith("shared-")), "基线按 TOPIC_THEMES 先建 water，跨主题照片归 water");
+
+  // 2) 传入不同 rotationSlot：轮换清醒主题顺序与跨主题优先权，topic:sleep 留在末尾且绝不置顶
+  const leadKeys = [];
+  for (const slot of [0, 1, 2, 3]) {
+    const res = selectHomeMemories(archive, topics, { dayContext, rotationSlot: slot });
+    assert.ok(res.memories.length > 0);
+    assert.notEqual(res.memories[0].key, "topic:sleep", `slot=${slot} 首段绝不能是睡眠主题`);
+    leadKeys.push(res.memories[0].key);
+
+    const topicMemories = res.memories.filter((m) => m.kind === "topic");
+    assert.equal(topicMemories.at(-1)?.key, "topic:sleep", `slot=${slot} 睡眠主题保持在 topic 末尾`);
+
+    const dayMemories = res.memories.filter((m) => m.kind === "day");
+    assert.deepEqual(
+      dayMemories.map((m) => m.key),
+      ["day:2026-11-10", "day:2026-11-08"],
+      `slot=${slot} 应引入最近 2 个满足 >= MEMORY_MIN_SLIDES 场景的已发布日并跳过不足 8 场景的 11-06`,
+    );
+    assert.equal(dayMemories[0].title, "草坪追泡泡");
+    assert.equal(dayMemories[0].href, "/memory/2026/11/10");
+
+    // 全段跨主题/季节/日页照片零重复
+    const allIds = res.memories.flatMap((m) => m.slides.map((s) => s.media.id));
+    assert.equal(new Set(allIds).size, allIds.length, `slot=${slot} 跨段不得出现重复照片`);
+  }
+  assert.deepEqual(leadKeys, ["topic:laugh", "topic:eat", "topic:water", "topic:outdoor"]);
+
+  // 跨主题优先权：slot=0 时笑先拿 shared-*；slot=1 时吃饭先拿 shared-*
+  const slot0Laugh = selectHomeMemories(archive, topics, { dayContext, rotationSlot: 0 }).memories.find((m) => m.key === "topic:laugh");
+  const slot1Eat = selectHomeMemories(archive, topics, { dayContext, rotationSlot: 1 }).memories.find((m) => m.key === "topic:eat");
+  assert.ok(slot0Laugh?.slides.some((s) => s.media.id.startsWith("shared-")));
+  assert.ok(slot1Eat?.slides.some((s) => s.media.id.startsWith("shared-")));
+
+  // 3) 仅剩 topic:sleep + 季节/日页（无任何清醒 topic）时，首段仍绝不放 topic:sleep
+  const sleepAndSeasonOnly = allDays.filter((d) => d.day.startsWith("2026-08"));
+  const sleepOnlyMedia = sleepAndSeasonOnly.flatMap((d) => d.photos);
+  const sleepOnlyArchive = makeArchive({
+    media: sleepOnlyMedia,
+    chapters: [
+      {
+        year: "2026",
+        ageSpan: "1 岁 到 1 岁 10 个月",
+        months: [
+          {
+            month: "2026-08",
+            label: "2026 年 8 月",
+            shortLabel: "8 月",
+            ageLabel: "1 岁 7 个月",
+            memories: [],
+            traceDays: [],
+            photos: sleepOnlyMedia,
+            photoCount: sleepOnlyMedia.length,
+            videoCount: 0,
+            photoDays: sleepAndSeasonOnly,
+            withheldMediaCount: 0,
+          },
+        ],
+      },
+    ],
+  });
+  for (const slot of [0, 1, 2]) {
+    const res = selectHomeMemories(sleepOnlyArchive, topics, { rotationSlot: slot });
+    assert.ok(res.memories.length >= 2);
+    assert.notEqual(res.memories[0].key, "topic:sleep", `无清醒 topic 时 slot=${slot} 首段仍不得是 topic:sleep`);
+    assert.ok(res.memories.some((m) => m.key === "topic:sleep"));
+  }
+});
+
+test("5.2 pickSlides 与 coverIndexOf：候选富余时按 rotationSlot 轮换时间桶选片与最近 40% 窗口封面", () => {
+  // 1) 幻灯片轮换：14 天 × 每天 2 张 = 28 张（> MEMORY_MAX_SLIDES=20），每桶两张差值 0.04 <= 0.08；
+  //    再混入同桶低分候选（差值 0.17 > 0.08），验证仅在 0.08 容差内轮换且不选低分图。
+  const days = Array.from({ length: 14 }, (_, idx) => {
+    const day = `2026-07-${String(idx + 1).padStart(2, "0")}`;
+    return {
+      day,
+      dateLabel: day,
+      ageLabel: "1 岁 6 个月",
+      photos: [
+        makePhoto(`a-${idx}`, `${day}T09:00:00Z`),
+        makePhoto(`b-${idx}`, `${day}T15:00:00Z`),
+      ],
+    };
+  });
+  const surplusMedia = days.flatMap((d) => d.photos);
+  const surplusById = new Map(surplusMedia.map((p) => [p.id, p]));
+  const surplusArchive = makeArchive({
+    media: surplusMedia,
+    chapters: [
+      {
+        year: "2026",
+        ageSpan: "1 岁 6 个月",
+        months: [
+          {
+            month: "2026-07",
+            label: "2026 年 7 月",
+            shortLabel: "7 月",
+            ageLabel: "1 岁 6 个月",
+            memories: [],
+            traceDays: [],
+            photos: surplusMedia,
+            photoCount: surplusMedia.length,
+            videoCount: 0,
+            photoDays: days,
+            withheldMediaCount: 0,
+          },
+        ],
+      },
+    ],
+  });
+
+  const slideTopics = (id) => {
+    const takenAt = surplusById.get(id)?.takenAt;
+    if (!takenAt) return undefined;
+    const isB = id.startsWith("b-");
+    // a-*: value = 0.94; b-*: value = 0.90 (within 0.08), except b-0 = 0.77 (> 0.08 below 0.94)
+    if (id === "b-0") {
+      return makeCarouselLabel(takenAt, { laugh: 80 }, { clarity: 80, expression: 60, value: 0.77 });
+    }
+    const score = isB ? 90 : 94;
+    return makeCarouselLabel(takenAt, { laugh: score }, { clarity: score, expression: score, value: score / 100 });
+  };
+
+  const slot0Laugh = selectHomeMemories(surplusArchive, slideTopics, { rotationSlot: 0 }).memories.find((m) => m.key === "topic:laugh");
+  const slot1Laugh = selectHomeMemories(surplusArchive, slideTopics, { rotationSlot: 1 }).memories.find((m) => m.key === "topic:laugh");
+  assert.ok(slot0Laugh && slot1Laugh);
+  assert.equal(slot0Laugh.slides.length, MEMORY_MAX_SLIDES);
+  assert.equal(slot1Laugh.slides.length, MEMORY_MAX_SLIDES);
+  const slot0Ids = slot0Laugh.slides.map((s) => s.media.id);
+  const slot1Ids = slot1Laugh.slides.map((s) => s.media.id);
+  assert.notDeepEqual(slot0Ids, slot1Ids, "存在 0.08 容差内富余候选时，不同 rotationSlot 应轮换选片");
+  assert.equal(slot0Ids.includes("b-0"), false);
+  assert.equal(slot1Ids.includes("b-0"), false, "低分（>0.08 差距）候选不得被轮换进来");
+
+  // 2) 封面轮换：10 天 × 1 张（<= MEMORY_MAX_SLIDES，幻灯片固定），最近 40% 窗口（下标 6..9）取前 3 高分轮换，
+  //    前 60%（下标 0）即使满分 1.00 也绝不当封面。
+  const coverDays = Array.from({ length: 10 }, (_, idx) => {
+    const day = `2026-07-${String(idx + 1).padStart(2, "0")}`;
+    return { day, dateLabel: day, ageLabel: "1 岁 6 个月", photos: [makePhoto(`c-${idx}`, `${day}T10:00:00Z`)] };
+  });
+  const coverMedia = coverDays.flatMap((d) => d.photos);
+  const coverById = new Map(coverMedia.map((p) => [p.id, p]));
+  const coverArchive = makeArchive({
+    media: coverMedia,
+    chapters: [
+      {
+        year: "2026",
+        ageSpan: "1 岁 6 个月",
+        months: [
+          {
+            month: "2026-07",
+            label: "2026 年 7 月",
+            shortLabel: "7 月",
+            ageLabel: "1 岁 6 个月",
+            memories: [],
+            traceDays: [],
+            photos: coverMedia,
+            photoCount: coverMedia.length,
+            videoCount: 0,
+            photoDays: coverDays,
+            withheldMediaCount: 0,
+          },
+        ],
+      },
+    ],
+  });
+  const scoreMap = {
+    "c-0": 100,
+    "c-1": 85,
+    "c-2": 85,
+    "c-3": 85,
+    "c-4": 85,
+    "c-5": 85,
+    "c-6": 96,
+    "c-7": 94,
+    "c-8": 92,
+    "c-9": 84,
+  };
+  const coverTopics = (id) => {
+    const takenAt = coverById.get(id)?.takenAt;
+    const s = scoreMap[id];
+    if (!takenAt || !s) return undefined;
+    return makeCarouselLabel(takenAt, { laugh: s }, { clarity: s, expression: s, value: s / 100 });
+  };
+
+  const covers = [0, 1, 2, 3].map((slot) => {
+    const laugh = selectHomeMemories(coverArchive, coverTopics, { rotationSlot: slot }).memories.find((m) => m.key === "topic:laugh");
+    assert.ok(laugh);
+    assert.ok(laugh.coverIndex >= Math.ceil(laugh.slides.length * 0.6), `slot=${slot} 封面必须落在后 40% 窗口`);
+    return laugh.slides[laugh.coverIndex].media.id;
+  });
+  assert.deepEqual(covers, ["c-6", "c-7", "c-8", "c-6"], "封面应在后 40% 窗口的 top 3 中按 rotationSlot 取模轮换");
+
+  // 也验证单日 day memory（buildDayMemory）在富余候选时随 rotationSlot 轮换选片与封面
+  const dayPhotos = Array.from({ length: 24 }, (_, i) =>
+    makePhoto(`d-${i}`, `2026-11-10T${String(8 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "25"}:00Z`),
+  );
+  const dayTopics = (id) => {
+    const n = Number(id.split("-")[1]);
+    return { topic: n % 2 === 0 ? "笑" : "玩玩具", water: false, value: n % 2 === 0 ? 0.94 : 0.9, confidence: 0.9 };
+  };
+  const dayPublished = [
+    {
+      id: "ev-1110",
+      title: "草坪追泡泡",
+      weight: "memory",
+      signature: { day: "2026-11-10", dateLabel: "2026 年 11 月 10 日", ageLabel: "1 岁 10 个月" },
+      noPhoto: false,
+      photoCount: dayPhotos.length,
+      videoCount: 0,
+    },
+  ];
+  const day0 = buildDayMemory({
+    day: "2026-11-10",
+    dateLabel: "2026 年 11 月 10 日",
+    photos: dayPhotos,
+    published: dayPublished,
+    privilege: { checked: new Set(dayPhotos.map((p) => p.id)), confirmed: new Set(), trusted: new Set() },
+    topics: dayTopics,
+    rotationSlot: 0,
+  });
+  const day1 = buildDayMemory({
+    day: "2026-11-10",
+    dateLabel: "2026 年 11 月 10 日",
+    photos: dayPhotos,
+    published: dayPublished,
+    privilege: { checked: new Set(dayPhotos.map((p) => p.id)), confirmed: new Set(), trusted: new Set() },
+    topics: dayTopics,
+    rotationSlot: 1,
+  });
+  assert.ok(day0 && day1);
+  assert.equal(day0.slides.length, MEMORY_MAX_SLIDES);
+  assert.equal(day1.slides.length, MEMORY_MAX_SLIDES);
+  assert.notDeepEqual(day0.slides.map((s) => s.media.id), day1.slides.map((s) => s.media.id));
+  assert.notEqual(day0.slides[day0.coverIndex].media.id, day1.slides[day1.coverIndex].media.id);
 });

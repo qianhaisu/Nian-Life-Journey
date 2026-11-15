@@ -58,7 +58,7 @@ import type { FamilyArchive } from "@/lib/family-archive";
 import type { EditorialMemory, MediaRef, MonthChapter } from "@/lib/memory-chapters";
 import { burstGroups, isSubjectChecked, type MediaPrivilege } from "@/lib/publication-moments";
 import { heroSized } from "@/lib/media/hero";
-import { ageAtMonth, formatMonth } from "@/lib/time-signature";
+import { ageAtMonth, ageOn, formatDay, formatMonth } from "@/lib/time-signature";
 import { moodFor, type MemoryMood } from "@/lib/home-memory-mood";
 import { NO_TOPICS, carouselQualified, carouselValue, type CarouselTheme, type PhotoTopicLookup } from "@/lib/home-memory-topics";
 import { uniqueDisplayMedia } from "@/lib/media/display-identity";
@@ -341,7 +341,16 @@ function capPerDay(photos: readonly MediaRef[], perDay: number, topics: PhotoTop
  * 做法：跟第一步一样先分时间段，但段内候选按「这个话题在已选的里出现过几次」升序排、
  * 出现次数相同再比价值分——多次出现同一个话题的候选会被排到后面，等其他话题选完了才轮到它。
  */
-function pickSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLookup, diversify = false): MediaRef[] {
+const PICK_SLIDES_VALUE_TOLERANCE = 0.08;
+const FLOAT_EPSILON = 1e-9;
+
+function pickSlides(
+  reps: readonly MediaRef[],
+  max: number,
+  topics: PhotoTopicLookup,
+  diversify = false,
+  rotationSlot?: number,
+): MediaRef[] {
   if (reps.length <= max) return [...reps];
   const scored = reps.filter((media) => topics(media.id)?.value !== undefined);
   if (scored.length < max) return spread(reps, max);
@@ -350,8 +359,19 @@ function pickSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLo
   // **diversify 打开时不砍这一刀**——「前一半」在 Teddy 举的例子里几乎全是「吃饭」和「笑」，
   // 少数话题的照片在这一步就被切没了，第二步再怎么按话题次数排也没东西可选。
   // 保留全部有价值分的候选，交给第二步的按话题去重来筛，而不是先按价值分筛一遍再去重。
-  const keep = diversify ? scored.length : Math.max(max, Math.ceil(scored.length / 2));
-  const good = [...scored].sort(byValue(topics)).slice(0, keep).sort(byTime);
+  const sortedByValue = [...scored].sort(byValue(topics));
+  let keep = diversify ? scored.length : Math.max(max, Math.ceil(scored.length / 2));
+  if (!diversify && rotationSlot !== undefined && keep < sortedByValue.length) {
+    const cutoffValue = topics(sortedByValue[keep - 1].id)?.value;
+    if (cutoffValue !== undefined) {
+      while (keep < sortedByValue.length) {
+        const nextValue = topics(sortedByValue[keep].id)?.value;
+        if (nextValue === undefined || cutoffValue - nextValue > PICK_SLIDES_VALUE_TOLERANCE + FLOAT_EPSILON) break;
+        keep += 1;
+      }
+    }
+  }
+  const good = sortedByValue.slice(0, keep).sort(byTime);
 
   // 二、把这些按时间切成 max 段，每段取分最高的那一张——除非 diversify 打开，
   //    这时优先取一个"目前选得还不够多"的话题，价值分只用来在同等话题次数里排前后。
@@ -369,8 +389,28 @@ function pickSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLo
   for (let i = 0; i < max; i += 1) {
     const from = Math.floor((i * good.length) / max);
     const to = Math.max(from + 1, Math.floor(((i + 1) * good.length) / max));
-    const best = good.slice(from, to).sort(rankWithinBucket).find((media) => !taken.has(media.id));
-    if (!best) continue;
+    const bucket = good
+      .slice(from, to)
+      .filter((media) => !taken.has(media.id))
+      .sort(rankWithinBucket);
+    if (bucket.length === 0) continue;
+    let best = bucket[0];
+    if (rotationSlot !== undefined && bucket.length > 1) {
+      const topScore = topics(best.id)?.value;
+      const topTopicCount = diversify ? (topicCount.get(topics(best.id)?.topic ?? "") ?? 0) : 0;
+      if (topScore !== undefined) {
+        const nearTop = bucket.filter((media) => {
+          if (diversify && (topicCount.get(topics(media.id)?.topic ?? "") ?? 0) !== topTopicCount) {
+            return false;
+          }
+          const score = topics(media.id)?.value;
+          return score !== undefined && topScore - score <= PICK_SLIDES_VALUE_TOLERANCE + FLOAT_EPSILON;
+        });
+        if (nearTop.length > 1) {
+          best = nearTop[rotationSlot % nearTop.length];
+        }
+      }
+    }
     taken.add(best.id); picked.push(best);
     if (diversify) {
       const t = topics(best.id)?.topic ?? "";
@@ -394,7 +434,9 @@ function coverIndexOf(
   picked: readonly MediaRef[],
   topics: PhotoTopicLookup,
   preferRecent = false,
+  rotationSlot?: number,
 ): number {
+  if (picked.length === 0) return 0;
   const better = byValue(topics);
   // 跨时间的主题只在**靠后那一段**里挑封面。
   //
@@ -411,11 +453,17 @@ function coverIndexOf(
   // 跨越一生的主题里往往还是最早那一段的照片，它的价值分又最高，于是封面照样落回新生儿。
   // ceil(7.2)=8 才是真的"后 40%"。差一个下标，这条规则就整个不生效。
   const from = preferRecent ? Math.min(picked.length - 1, Math.ceil(picked.length * 0.6)) : 0;
-  let best = from;
-  for (let i = from + 1; i < picked.length; i += 1) {
-    if (better(picked[i], picked[best]) < 0) best = i;
+  if (rotationSlot === undefined) {
+    let best = from;
+    for (let i = from + 1; i < picked.length; i += 1) {
+      if (better(picked[i], picked[best]) < 0) best = i;
+    }
+    return best;
   }
-  return best;
+  const topRecent = Array.from({ length: picked.length - from }, (_, offset) => from + offset)
+    .sort((a, b) => better(picked[a], picked[b]) || a - b)
+    .slice(0, 3);
+  return topRecent[rotationSlot % topRecent.length] ?? from;
 }
 
 /** 至多两句配文，放在约三分之一与三分之二处；开头与结尾那张不压字。 */
@@ -447,10 +495,12 @@ export function buildDayMemory(input: {
   day: string; dateLabel: string; ageLabel?: string;
   photos: readonly MediaRef[]; published: readonly EditorialMemory[]; privilege: MediaPrivilege;
   topics?: PhotoTopicLookup;
-  /** 跨段去重用（见 excludeUsedBursts）；这个主题目前不接入 selectHomeMemories，默认空集不影响任何调用方。 */
+  /** 跨段去重用（见 excludeUsedBursts）；未接入轮换时默认空集，不影响已有调用方。 */
   usedIds?: ReadonlySet<string>;
+  rotationSlot?: number;
+  href?: string;
 }): HomeMemory | undefined {
-  const { day, dateLabel, ageLabel, photos, published, privilege } = input;
+  const { day, dateLabel, ageLabel, photos, published, privilege, rotationSlot } = input;
   const topics = input.topics ?? NO_TOPICS;
   const usedIds = input.usedIds ?? new Set<string>();
   // 没有已发布记忆的一天不做 day 主题：它得有真名字和能点进去的去处（原则八）。
@@ -460,7 +510,7 @@ export function buildDayMemory(input: {
   if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
   // diversify: true——一天里发生的事不止一种，不该被价值分最高的那一件事占满整段。
-  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics, true);
+  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics, true, rotationSlot);
   const titles = published.map((memory) => memory.title);
   const captions = captionAt(picked.length, titles);
   const lead = published[0];
@@ -473,10 +523,10 @@ export function buildDayMemory(input: {
     title: lead.title,
     subtitle: age ? `${dateLabel} · 当时 ${age}` : dateLabel,
     dateTime: day,
-    href: `/events/${lead.id}`,
+    href: input.href ?? `/events/${lead.id}`,
     linkLabel: "读读这一天",
     slides: picked.map((media, index) => ({ key: `${day}|${media.id}`, media, caption: captions.get(index) })),
-    coverIndex: coverIndexOf(picked, topics),
+    coverIndex: coverIndexOf(picked, topics, false, rotationSlot),
     durationSeconds: picked.length * SLIDE_SECONDS,
     mood: mood.mood,
     moodReason: mood.reason,
@@ -513,6 +563,7 @@ export type TopicTextDayContext = {
 
 export type SelectHomeMemoriesContext = {
   dayContext?: ReadonlyMap<string, TopicTextDayContext>;
+  rotationSlot?: number;
 };
 
 const THEME_TEXT_PATTERNS: Partial<Record<CarouselTheme, RegExp>> = {
@@ -562,8 +613,9 @@ function buildTopicMemory(input: {
   /** 已经被更早的段用掉的照片（跨段去重，见 excludeUsedBursts）。 */
   usedIds?: ReadonlySet<string>;
   dayContext?: ReadonlyMap<string, TopicTextDayContext>;
+  rotationSlot?: number;
 }): HomeMemory | undefined {
-  const { theme, photos, privilege, birthDay, dayContext } = input;
+  const { theme, photos, privilege, birthDay, dayContext, rotationSlot } = input;
   const mediaDayById = dayContext ? new Map(photos.map((photo) => [photo.id, dayOf(photo)])) : undefined;
   const topics: PhotoTopicLookup = id => {
     const label = input.topics(id);
@@ -590,7 +642,7 @@ function buildTopicMemory(input: {
 
     // 不传 diversify：这里的 pool 已逐张通过同一个主题的视觉评分，
     // "多样化" 在这里无从谈起——玩水的日子就该全是玩水，不需要也不该往里掺别的话题。
-    const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics);
+    const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics, false, rotationSlot);
     // 跨天主题没有逐张可依据的文字，所以**一句配文都不写**。
     const mood = moodOf(picked, pool, []);
     const days = new Set(picked.map(dayOf)).size;
@@ -602,7 +654,7 @@ function buildTopicMemory(input: {
       // 一个主题横跨很多个月，没有单一的去处——与其给一个「翻到 2026 年」这种对不上的链接，
       // 不如不给（原则八：标签必须跟着去处走）。
       slides: picked.map((media) => ({ key: `topic:${theme.key}|${media.id}`, media })),
-      coverIndex: coverIndexOf(picked, topics, true), // 跨时间主题：封面必须是近期的
+      coverIndex: coverIndexOf(picked, topics, true, rotationSlot), // 跨时间主题：封面必须是近期的
       durationSeconds: picked.length * SLIDE_SECONDS,
       mood: mood.mood,
       moodReason: mood.reason,
@@ -678,8 +730,9 @@ function buildSpanMemory(input: {
   photos: readonly MediaRef[]; privilege: MediaPrivilege; topics: PhotoTopicLookup;
   /** 已经被更早的段用掉的照片（跨段去重，见 excludeUsedBursts）。 */
   usedIds?: ReadonlySet<string>;
+  rotationSlot?: number;
 }): HomeMemory | undefined {
-  const { kind, key, title, subtitle, href, linkLabel, photos, privilege } = input;
+  const { kind, key, title, subtitle, href, linkLabel, photos, privilege, rotationSlot } = input;
   const theme = key.split("-").at(-1) as CarouselTheme;
   const topics: PhotoTopicLookup = id => {
     const label = input.topics(id);
@@ -694,7 +747,7 @@ function buildSpanMemory(input: {
   const reps = capPerDay(sceneRepresentatives(representatives(ordered), topics), CROSS_DAY_PER_DAY_MAX, topics, true);
   if (reps.length < MEMORY_MIN_SLIDES) return undefined;
 
-  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics, true);
+  const picked = pickSlides(reps, MEMORY_MAX_SLIDES, topics, true, rotationSlot);
   const mood = moodOf(picked, pool, []);
   const days = new Set(picked.map(dayOf)).size;
   const scored = picked.filter((media) => topics(media.id)?.value !== undefined).length;
@@ -706,7 +759,7 @@ function buildSpanMemory(input: {
     href,
     linkLabel,
     slides: picked.map((media) => ({ key: `${key}|${media.id}`, media })),
-    coverIndex: coverIndexOf(picked, topics, true), // 跨天主题：封面必须是近期的
+    coverIndex: coverIndexOf(picked, topics, true, rotationSlot), // 跨天主题：封面必须是近期的
     durationSeconds: picked.length * SLIDE_SECONDS,
     mood: mood.mood,
     moodReason: mood.reason,
@@ -718,11 +771,112 @@ function buildSpanMemory(input: {
 
 // ── 组装 ──────────────────────────────────────────────────────────────────────
 
+const AWAKE_TOPIC_KEYS = ["laugh", "eat", "water", "outdoor", "toy", "hold"] as const;
+const PREFERRED_TOPIC_ORDER = [
+  "topic:laugh",
+  "topic:eat",
+  "topic:water",
+  "topic:outdoor",
+  "topic:toy",
+  "topic:hold",
+  "topic:sleep",
+] as const;
+
+function buildRecentDayMemories(input: {
+  chapters: FamilyArchive["chapters"];
+  today: string;
+  birthDay?: string;
+  privilege: MediaPrivilege;
+  topics: PhotoTopicLookup;
+  dayContext?: ReadonlyMap<string, TopicTextDayContext>;
+  usedIds: Set<string>;
+  rotationSlot: number;
+  keep: (memory: HomeMemory | undefined, requireMultiDay?: boolean) => memory is HomeMemory;
+}): HomeMemory[] {
+  const { chapters, today, birthDay, privilege, topics, dayContext, usedIds, rotationSlot, keep } = input;
+  const dayEventsByDay = new Map<string, EditorialMemory[]>();
+  const photoDaysByDay = new Map<string, { day: string; dateLabel: string; ageLabel?: string; photos: MediaRef[] }>();
+
+  for (const year of chapters) {
+    for (const month of year.months) {
+      for (const memory of month.memories) {
+        const day = memory.signature.day;
+        if (!day || day > today) continue;
+        const list = dayEventsByDay.get(day);
+        if (list) list.push(memory);
+        else dayEventsByDay.set(day, [memory]);
+      }
+      for (const photoDay of month.photoDays) {
+        if (photoDay.day > today) continue;
+        const existing = photoDaysByDay.get(photoDay.day);
+        if (existing) {
+          existing.photos.push(...photoDay.photos);
+          if (!existing.ageLabel && photoDay.ageLabel) existing.ageLabel = photoDay.ageLabel;
+        } else {
+          photoDaysByDay.set(photoDay.day, {
+            day: photoDay.day,
+            dateLabel: photoDay.dateLabel,
+            ageLabel: photoDay.ageLabel,
+            photos: [...photoDay.photos],
+          });
+        }
+      }
+    }
+  }
+
+  const recent: HomeMemory[] = [];
+  const sortedDays = [...photoDaysByDay.values()].sort((a, b) => b.day.localeCompare(a.day));
+  for (const photoDay of sortedDays) {
+    if (recent.length >= 2) break;
+    const dayEvents = dayEventsByDay.get(photoDay.day) ?? [];
+    const ctxTitle = dayContext?.get(photoDay.day)?.title?.trim();
+    if (dayEvents.length === 0 && !ctxTitle) continue;
+
+    const dateLabel = photoDay.dateLabel || formatDay(photoDay.day);
+    const ageLabel = photoDay.ageLabel ?? ageOn(birthDay, photoDay.day);
+    const published: EditorialMemory[] =
+      dayEvents.length > 0
+        ? ctxTitle
+          ? [{ ...dayEvents[0], title: ctxTitle }, ...dayEvents.slice(1)]
+          : dayEvents
+        : [
+            {
+              id: `day-${photoDay.day}`,
+              title: ctxTitle!,
+              weight: "memory",
+              signature: { day: photoDay.day, dateLabel, ageLabel },
+              noPhoto: false,
+              photoCount: photoDay.photos.length,
+              videoCount: 0,
+            },
+          ];
+
+    const [yearSeg, monthSeg, domSeg] = photoDay.day.split("-");
+    const href = ctxTitle && yearSeg && monthSeg && domSeg
+      ? `/memory/${yearSeg}/${monthSeg}/${domSeg}`
+      : undefined;
+    const memory = buildDayMemory({
+      day: photoDay.day,
+      dateLabel,
+      ageLabel,
+      photos: photoDay.photos,
+      published,
+      privilege,
+      topics,
+      usedIds,
+      rotationSlot,
+      href,
+    });
+    if (keep(memory, false)) recent.push(memory);
+  }
+  return recent;
+}
+
 /**
  * 选出首页可以切换的那几段回忆，**三种主题混在一起**。
  *
- * 顺序：按 topic / season 轮流取（interleave），所以「换一段」按下去换到的多半是
- * 另一种主题，而不是同一种主题的另一个日期。全程确定，无随机。
+ * 顺序：按 topic / season（传 rotationSlot 时含近期 day）轮流取（interleave），所以「换一段」按下去
+ * 换到的多半是另一种主题，而不是同一种主题的另一个日期。全程确定，无随机。
  *
  * `topics` 读不到时（缓存缺失）**主题回忆一段都不出**——不知道画面里是什么，就不能说
  * 这是一段玩水的回忆；季节也需要画面依据，同样不展示。
@@ -734,6 +888,12 @@ export function selectHomeMemories(
 ): { memories: HomeMemory[]; absence?: HomeMemoryAbsence } {
   const { chapters, privilege, birthDay } = archive;
   const today = archive.time.today;
+  const rotationSlot =
+    context?.rotationSlot !== undefined &&
+    Number.isInteger(context.rotationSlot) &&
+    context.rotationSlot >= 0
+      ? context.rotationSlot
+      : undefined;
 
   const allPhotos: MediaRef[] = [];
   let scannedDays = 0;
@@ -751,7 +911,7 @@ export function selectHomeMemories(
     return { memories: [], absence: { kind: "empty_archive", reason: "档案里还没有一天带照片的记录" } };
   }
 
-  // 首页只展示跨日回忆，以最终展示照片的日期为准。
+  // 首页只展示跨日回忆（day 主题由近期已发布日显式引入，不在跨日规则内）。
   const spansMultipleDays = (memory: HomeMemory) =>
     new Set(memory.slides.map((slide) => dayOf(slide.media)).filter(Boolean)).size > 1;
 
@@ -774,8 +934,9 @@ export function selectHomeMemories(
     const scene = topics(photo.id)?.carousel?.sceneKey;
     if (scene) visualScenes.set(scene, [...(visualScenes.get(scene) ?? []), photo]);
   }
-  const keep = (memory: HomeMemory | undefined): memory is HomeMemory => {
-    if (!memory || !spansMultipleDays(memory)) return false;
+  const keep = (memory: HomeMemory | undefined, requireMultiDay = true): memory is HomeMemory => {
+    if (!memory) return false;
+    if (requireMultiDay && !spansMultipleDays(memory)) return false;
     for (const slide of memory.slides) {
       if (slide.media.displayKey) for (const alias of fileAliases.get(slide.media.displayKey) ?? []) usedIds.add(alias.id);
       for (const photo of scenesById.get(slide.media.id) ?? [slide.media]) usedIds.add(photo.id);
@@ -785,11 +946,33 @@ export function selectHomeMemories(
     return true;
   };
 
+  const themeByKey = new Map(TOPIC_THEMES.map((theme) => [theme.key, theme] as const));
+  const buildThemes =
+    rotationSlot === undefined
+      ? TOPIC_THEMES
+      : (() => {
+          const shift = rotationSlot % AWAKE_TOPIC_KEYS.length;
+          const rotatedAwake = [
+            ...AWAKE_TOPIC_KEYS.slice(shift),
+            ...AWAKE_TOPIC_KEYS.slice(0, shift),
+          ];
+          return [...rotatedAwake, "sleep" as const].map((key) => themeByKey.get(key)!);
+        })();
+
   // 主题回忆：玩水 / 睡觉 / 笑 …… 从**全部照片**里找，不限于某一天或某一季。
-  // 顺序就是 TOPIC_THEMES 的顺序（Teddy 点名的三个排在前面）——先建的段先挑照片。
+  // 传 rotationSlot 时先按轮换槽位重排清醒主题再建段，让不同主题轮流先挑跨主题照片。
   const topicMemories: HomeMemory[] = [];
-  for (const theme of TOPIC_THEMES) {
-    const memory = buildTopicMemory({ theme, photos: allPhotos, privilege, topics, birthDay, usedIds, dayContext: context?.dayContext });
+  for (const theme of buildThemes) {
+    const memory = buildTopicMemory({
+      theme,
+      photos: allPhotos,
+      privilege,
+      topics,
+      birthDay,
+      usedIds,
+      dayContext: context?.dayContext,
+      rotationSlot,
+    });
     if (keep(memory)) topicMemories.push(memory);
   }
 
@@ -816,29 +999,41 @@ export function selectHomeMemories(
       privilege,
       topics,
       usedIds,
+      rotationSlot,
     });
     if (keep(memory)) seasonMemories.push(memory);
   }
 
-  // P5.2：保留原有建段去重顺序，但展示顺序优先把睁眼清晰、鲜活欢快的主题（「笑起来的时候」「吃饭这件事」等）
-  // 排在前面，把闭眼主题（「睡着的样子」）移到末尾，确保首屏默认初始主题绝不落在闭眼睡眠段，
-  // 同时「换一段」仍可完整轮换到所有合格段。
-  const preferredTopicOrder = [
-    "topic:laugh",
-    "topic:eat",
-    "topic:water",
-    "topic:outdoor",
-    "topic:toy",
-    "topic:hold",
-    "topic:sleep",
-  ];
-  const orderedTopicMemories = [...topicMemories].sort((a, b) => {
-    const ia = preferredTopicOrder.indexOf(a.key);
-    const ib = preferredTopicOrder.indexOf(b.key);
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-  });
+  // P5.2：未传 rotationSlot 时保留原有静态优选顺序；传 rotationSlot 时保持已轮换顺序（topic:sleep 仍在末尾）。
+  const orderedTopicMemories =
+    rotationSlot === undefined
+      ? [...topicMemories].sort((a, b) => {
+          const ia = PREFERRED_TOPIC_ORDER.indexOf(a.key as (typeof PREFERRED_TOPIC_ORDER)[number]);
+          const ib = PREFERRED_TOPIC_ORDER.indexOf(b.key as (typeof PREFERRED_TOPIC_ORDER)[number]);
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        })
+      : topicMemories;
 
-  const memories = interleaveKinds([orderedTopicMemories, seasonMemories], HOME_MEMORIES_MAX);
+  const recentDayMemories =
+    rotationSlot === undefined
+      ? []
+      : buildRecentDayMemories({
+          chapters,
+          today,
+          birthDay,
+          privilege,
+          topics,
+          dayContext: context?.dayContext,
+          usedIds,
+          rotationSlot,
+          keep,
+        });
+
+  const groups =
+    rotationSlot === undefined
+      ? [orderedTopicMemories, seasonMemories]
+      : [orderedTopicMemories, seasonMemories, recentDayMemories];
+  const memories = interleaveKinds(groups, HOME_MEMORIES_MAX);
   if (memories.length > 1 && memories[0]?.key === "topic:sleep") {
     const firstAwakeIdx = memories.findIndex((m) => m.key !== "topic:sleep");
     if (firstAwakeIdx > 0) {

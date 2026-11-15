@@ -51,7 +51,9 @@ export default async function HomePage() {
       ] as const),
     ),
   );
-  const selected = selectHomeMemories(archive, topics, { dayContext });
+  const now = new Date();
+  const rotationSlot = Math.floor(now.getTime() / (12 * 3600 * 1000));
+  const selected = selectHomeMemories(archive, topics, { dayContext, rotationSlot });
   const memories = await attachMemoryReading(selected.memories, archive, monthContents);
   const absence = selected.absence;
   const todayMonth = feed.clock.today.slice(0, 7);
@@ -103,7 +105,7 @@ export default async function HomePage() {
     answerLine: answer?.line,
     excludePhotoIds,
     memorySlidePhotoIds,
-    now: new Date(),
+    now,
   });
 
   const hasLatestDay = bento.latestDay !== null;
