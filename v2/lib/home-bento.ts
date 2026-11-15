@@ -1,6 +1,6 @@
 import type { FamilyArchive } from "@/lib/family-archive";
 import type { HomeHeroCover } from "@/lib/home-memory";
-import { NO_TOPICS, type PhotoTopicLabel, type PhotoTopicLookup } from "@/lib/home-memory-topics";
+import { NO_TOPICS, prebirthRankScore, type PhotoTopicLabel, type PhotoTopicLookup } from "@/lib/home-memory-topics";
 import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 import { isScreenShaped, photographsFirst } from "@/lib/media/presentation";
 import { isGarbageLifeEvent, toMediaRef, type MediaRef } from "@/lib/memory-chapters";
@@ -228,6 +228,29 @@ export function formatAgeWhen(birthDay: string | undefined, day: string): string
   return `当时 ${age}`;
 }
 
+function isPrebirthDayOf(birthDay: string | undefined, day: string): boolean {
+  return Boolean(birthDay && day < birthDay && !ageOn(birthDay, day));
+}
+
+function resolvePublishedAgeDisplay(
+  birthDay: string | undefined,
+  day: string,
+  explicitAgeLabel?: string,
+): string | undefined {
+  const formatted = formatAgeWhen(birthDay, day);
+  if (formatted) return formatted;
+  if (explicitAgeLabel) {
+    return explicitAgeLabel.startsWith("出生") ? explicitAgeLabel : `当时 ${explicitAgeLabel}`;
+  }
+  return isPrebirthDayOf(birthDay, day) ? "出生前" : undefined;
+}
+
+function isPrebirthCarouselScoreQualified(
+  c: NonNullable<PhotoTopicLabel["carousel"]>,
+): boolean {
+  return Boolean(c.prebirthApproved && (c.prebirth ?? 0) >= 80 && !c.motionBlur && !c.sensitive);
+}
+
 export function cleanDisplayText(raw: string | undefined | null): string {
   if (!raw) return "";
   const unescaped = raw.replace(/\\([[\]().*_~`>#+\-!\\])/g, "$1");
@@ -314,6 +337,7 @@ type PublishedDayRecord = BentoDayCard & {
   hasExplicitTitle: boolean;
   featuredQuote?: MonthContentFeaturedQuote | null;
   kind: "story" | "visual-description" | "text-only" | "event";
+  isPrebirth?: boolean;
 };
 
 const TEACHER_SPEAKER_RE = /老师|园长|保育/;
@@ -764,9 +788,18 @@ function pickBestPhotoForDay(
     if (px >= 6_000_000) score += 0.24;
     if ((photo.height ?? 0) >= (photo.width ?? 0) && !isScreenShaped(photo)) score += 0.16;
 
+    const isPrebirth = Boolean(record.isPrebirth || record.ageDisplay === "出生前");
     const c = label?.carousel;
     if (c) {
-      if (
+      if (isPrebirth) {
+        if (c.motionBlur || c.sensitive) {
+          score -= 0.5;
+        } else if (isPrebirthCarouselScoreQualified(c)) {
+          score += 0.3 + prebirthRankScore(label) * 0.24;
+        } else if (!record.curatedLeadIds.has(photo.id)) {
+          score -= 0.5;
+        }
+      } else if (
         !c.qualified ||
         c.motionBlur ||
         c.sensitive ||
@@ -779,7 +812,7 @@ function pickBestPhotoForDay(
         score += 0.3 + ((c.clarity * 0.55 + c.expression * 0.45) / 100) * 0.24;
       }
     } else if (label) {
-      if (label.childInFrame === false) score -= 0.7;
+      if (!isPrebirth && label.childInFrame === false) score -= 0.7;
       else score += (label.value - 0.5) * 0.35;
     }
 
@@ -887,7 +920,7 @@ export function collectPublishedDays(
         fullDateLabel: formatDay(entry.day),
         weekdayDateLabel: weekdayDateLabel(entry.day),
         ageLabel,
-        ageDisplay: formatAgeWhen(archive.birthDay, entry.day) ?? (entry.ageLabel ? `当时 ${entry.ageLabel}` : undefined),
+        ageDisplay: resolvePublishedAgeDisplay(archive.birthDay, entry.day, entry.ageLabel),
         title,
         excerpt,
         photo: photos[0],
@@ -903,6 +936,7 @@ export function collectPublishedDays(
         href: `/memory/${year}/${monthSeg}/${dom}`,
         milestone,
         kind: entry.kind,
+        isPrebirth: isPrebirthDayOf(archive.birthDay, entry.day),
       };
       record.photo = pickBestPhotoForDay(record, defaultTracker, true)?.photo ?? photos[0];
       byDay.set(entry.day, record);
@@ -961,7 +995,7 @@ export function collectPublishedDays(
           fullDateLabel: formatDay(day),
           weekdayDateLabel: weekdayDateLabel(day),
           ageLabel: ageOn(archive.birthDay, day) ?? memory.signature.ageLabel,
-          ageDisplay: formatAgeWhen(archive.birthDay, day),
+          ageDisplay: resolvePublishedAgeDisplay(archive.birthDay, day, memory.signature.ageLabel),
           title: cleanTitle || `${shortDateLabel(day)}的记录`,
           excerpt: trimExcerpt(cleanExcerpt && norm(cleanExcerpt) !== norm(cleanTitle) ? cleanExcerpt : ""),
           photo: orderedPhotos[0],
@@ -976,6 +1010,7 @@ export function collectPublishedDays(
           href,
           milestone,
           kind: "event",
+          isPrebirth: isPrebirthDayOf(archive.birthDay, day),
         };
         record.photo = pickBestPhotoForDay(record, defaultTracker, true)?.photo ?? orderedPhotos[0];
         byDay.set(day, record);
@@ -1396,23 +1431,28 @@ export function selectHomeHeroCover({
         const ref = toMediaRef(rawMedia);
         if (isScreenShaped(ref)) continue;
 
+        const isPrebirth = isPrebirthDayOf(archive.birthDay, entry.day);
         const label = topics(id);
         const c = label?.carousel;
-        if (label?.topic === "睡觉" || c?.sleeping === true || c?.eyesOpen === false) {
-          continue;
+        if (isPrebirth) {
+          if (c && (c.motionBlur || c.sensitive)) continue;
+        } else {
+          if (label?.topic === "睡觉" || c?.sleeping === true || c?.eyesOpen === false) {
+            continue;
+          }
+          if (
+            c &&
+            (!c.qualified ||
+              !c.childMain ||
+              !c.faceClear ||
+              c.faceUnblocked === false ||
+              c.motionBlur ||
+              c.sensitive)
+          ) {
+            continue;
+          }
+          if (label?.childInFrame === false) continue;
         }
-        if (
-          c &&
-          (!c.qualified ||
-            !c.childMain ||
-            !c.faceClear ||
-            c.faceUnblocked === false ||
-            c.motionBlur ||
-            c.sensitive)
-        ) {
-          continue;
-        }
-        if (label?.childInFrame === false) continue;
 
         let score = 0;
         if (content.coverMediaId === id) score += 0.35;
@@ -1422,7 +1462,11 @@ export function selectHomeHeroCover({
         else if (longSide >= 1600) score += 0.14;
 
         if (c) {
-          score += ((c.clarity * 0.55 + c.expression * 0.45) / 100) * 0.48;
+          score += isPrebirth
+            ? isPrebirthCarouselScoreQualified(c)
+              ? prebirthRankScore(label) * 0.48
+              : 0.18
+            : ((c.clarity * 0.55 + c.expression * 0.45) / 100) * 0.48;
         } else if (label) {
           score += label.value * 0.3;
         } else {
@@ -1706,8 +1750,22 @@ function photoQualityScore(
   label: PhotoTopicLabel | undefined,
   privilege: FamilyArchive["privilege"],
   isCuratedLead: boolean,
+  isPrebirth = false,
 ): number | null {
   const c = label?.carousel;
+  if (isPrebirth) {
+    if (c) {
+      if (c.motionBlur || c.sensitive) return null;
+      if (isPrebirthCarouselScoreQualified(c)) {
+        return prebirthRankScore(label) + (isScreenShaped(photo) ? -0.15 : 0.2);
+      }
+    }
+    if (isCuratedLead && !isScreenShaped(photo)) {
+      return 0.68 + (privilege.confirmed.has(photo.id) ? 0.08 : 0);
+    }
+    return null;
+  }
+
   if (c) {
     if (!c.qualified || !c.childMain || !c.faceClear || c.faceUnblocked === false || c.motionBlur || c.sensitive) {
       return null;
@@ -1785,7 +1843,8 @@ export function selectTimeCapsules(
     if (!record.hasExplicitTitle && !record.milestone) continue;
     if (record.photos.length === 0) continue;
 
-    const ageDisplay = record.ageDisplay;
+    const isPrebirthDay = record.isPrebirth ?? isPrebirthDayOf(archive.birthDay, record.day);
+    const ageDisplay = record.ageDisplay || (isPrebirthDay ? "出生前" : undefined);
     if (!ageDisplay) continue;
 
     let bestPhoto: MediaRef | undefined;
@@ -1798,7 +1857,9 @@ export function selectTimeCapsules(
         photo,
         label,
         archive.privilege,
-        record.curatedLeadIds.has(photo.id) && record.kind === "story",
+        record.curatedLeadIds.has(photo.id) &&
+          (record.kind === "story" || (isPrebirthDay && record.kind !== "visual-description")),
+        isPrebirthDay,
       );
       if (q === null) continue;
       const adjusted = q - (softExcludeIds.has(photo.id) ? 0.55 : 0);

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -8,7 +8,6 @@ import { pathToFileURL } from "node:url";
 import exifr from "exifr";
 import heicConvert from "heic-convert";
 import sharp from "sharp";
-import { closePool } from "../../lib/db/client.ts";
 import { applyQuarkPhotoArtifact } from "../quark-photo-apply.mjs";
 import { requireQuarkStorageProvider } from "../quark-storage-guard.mjs";
 
@@ -131,11 +130,27 @@ export function parseQuarkCliArgs(argv) {
     throw new Error(`--since (${sinceDay}) must be <= --until (${untilDay})`);
   }
 
+  const concurrencyRaw = getOpt("concurrency");
+  let concurrency = 1;
+  if (concurrencyRaw !== null) {
+    concurrency = Number(concurrencyRaw);
+    if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 12) {
+      throw new Error(`Invalid --concurrency value: ${concurrencyRaw} (expected integer 1..12)`);
+    }
+  }
+
+  const downloadsDirRaw = getOpt("downloads-dir");
+  const downloadsDir = downloadsDirRaw
+    ? assertOutsideRepository(downloadsDirRaw, "--downloads-dir")
+    : null;
+
   return {
     help: false,
     sinceDay,
     untilDay,
     outDir,
+    downloadsDir,
+    concurrency,
     apply: hasFlag("apply"),
     cleanup: hasFlag("cleanup"),
     sessionId: getOpt("session-id") ?? defaultSessionId(),
@@ -244,7 +259,7 @@ function assertQuarkOk(events, res, commandLabel) {
   }
 }
 
-function runQuarkCli(subArgs, { sessionId, sessionInput, label }) {
+function buildQuarkCliArgs(subArgs, { sessionId, sessionInput }) {
   if (!fs.existsSync(QUARK_CLI)) {
     throw new Error(`Missing quark-drive.cjs at ${QUARK_CLI}`);
   }
@@ -252,6 +267,11 @@ function runQuarkCli(subArgs, { sessionId, sessionInput, label }) {
   if (sessionInput) {
     fullArgs.push("--session-input", sessionInput);
   }
+  return fullArgs;
+}
+
+function runQuarkCli(subArgs, { sessionId, sessionInput, label }) {
+  const fullArgs = buildQuarkCliArgs(subArgs, { sessionId, sessionInput });
   const res = spawnSync(process.execPath, fullArgs, {
     cwd: REPO_ROOT,
     encoding: "utf8",
@@ -261,6 +281,33 @@ function runQuarkCli(subArgs, { sessionId, sessionInput, label }) {
   const events = parseNdjsonLines(res.stdout);
   assertQuarkOk(events, res, label ?? subArgs[0]);
   return events;
+}
+
+export function runQuarkCliAsync(subArgs, { sessionId, sessionInput, label }) {
+  const fullArgs = buildQuarkCliArgs(subArgs, { sessionId, sessionInput });
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, fullArgs, {
+      cwd: REPO_ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    child.stdout.on("data", (chunk) => stdoutChunks.push(chunk));
+    child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+    child.on("error", (err) => reject(err));
+    child.on("close", (code) => {
+      const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+      const stderr = Buffer.concat(stderrChunks).toString("utf8");
+      try {
+        const events = parseNdjsonLines(stdout);
+        assertQuarkOk(events, { status: code, stdout, stderr }, label ?? subArgs[0]);
+        resolve(events);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  });
 }
 
 function readJsonlItems(filePath) {
@@ -359,9 +406,9 @@ function isValidYmdHms(y, mo, d, h, mi, s) {
   return dt.getUTCFullYear() === yn && dt.getUTCMonth() === mn - 1 && dt.getUTCDate() === dn;
 }
 
-function itemMatchesPreWindow(item, sinceDay, untilDay) {
-  const bufferStartDay = addDays(sinceDay, -1);
-  const bufferEndDay = addDays(untilDay, 1);
+export function itemMatchesPreWindow(item, sinceDay, untilDay) {
+  const bufferStartDay = addDays(sinceDay, -2);
+  const bufferEndDay = addDays(untilDay, 2);
   const { startMs, endMs } = dayToRangeMs(bufferStartDay, bufferEndDay);
 
   const lShot = Number(item.l_shot_at || 0);
@@ -474,14 +521,22 @@ async function discoverCandidates({ sinceDay, untilDay, browseDir, sessionId, se
   };
 }
 
-function parseExifRawDateString(rawVal, offsetRaw) {
+const UTC_OFFSETS = new Set(["Z", "+00:00", "-00:00", "+0000", "-0000"]);
+
+export function isUtcOffset(offsetRaw) {
+  return typeof offsetRaw === "string" && UTC_OFFSETS.has(offsetRaw.trim().toUpperCase());
+}
+
+export function parseExifRawDateString(rawVal, offsetRaw) {
   if (typeof rawVal === "string") {
-    const m = rawVal.trim().match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+    const trimmed = rawVal.trim();
+    const m = trimmed.match(/^(\d{4})[:-](\d{2})[:-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?\s*(Z|[+-]\d{2}:?\d{2})?/i);
     if (!m) return null;
-    const [, y, mo, d, h, mi, s] = m;
+    const [, y, mo, d, h, mi, s, inlineOffset] = m;
     if (!isValidYmdHms(y, mo, d, h, mi, s)) return null;
-    if (typeof offsetRaw === "string" && /^[+-]\d{2}:\d{2}$/.test(offsetRaw.trim())) {
-      const utcMs = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${s}${offsetRaw.trim()}`);
+    const effectiveOffset = typeof offsetRaw === "string" && offsetRaw.trim() ? offsetRaw : inlineOffset;
+    if (isUtcOffset(effectiveOffset)) {
+      const utcMs = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${s}Z`);
       if (Number.isFinite(utcMs)) return formatShanghaiMs(utcMs);
     }
     return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
@@ -490,6 +545,150 @@ function parseExifRawDateString(rawVal, offsetRaw) {
     return formatShanghaiMs(rawVal.getTime());
   }
   return null;
+}
+
+export function normalizeImgStem(name) {
+  const m = String(name ?? "").match(/\b(IMG_\d{4,})/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+/**
+ * Parse a YYYY-MM-DD HH:MM:SS wall-clock string in UTC so runner TZ never shifts +/-5s comparisons.
+ */
+export function parseWallClockEpochSeconds(value) {
+  if (typeof value !== "string") return null;
+  const m = value.trim().match(/^(\d{4})[:-](\d{2})[:-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  if (!isValidYmdHms(y, mo, d, h, mi, s)) return null;
+  return Math.floor(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)) / 1000);
+}
+
+export function buildExistingMediaIndex(rows = []) {
+  const bySha256 = new Map();
+  const byStem = new Map();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const rawSha = row.sha256 ?? row.asset_checksum ?? row.checksum ?? null;
+    const normalizedSha = typeof rawSha === "string" ? rawSha.trim().replace(/^sha256:/i, "").toLowerCase() : null;
+    if (normalizedSha) {
+      bySha256.set(normalizedSha, row);
+    }
+    const takenAtStr = typeof row.taken_at_str === "string"
+      ? row.taken_at_str
+      : (typeof row.taken_at === "string" ? row.taken_at : null);
+    const takenEpoch = parseWallClockEpochSeconds(takenAtStr)
+      ?? (Number.isFinite(Number(row.taken_epoch)) ? Math.round(Number(row.taken_epoch)) : null);
+    const stems = new Set(
+      [row.original_filename, row.asset_filename, row.storage_key, row.object_key, row.original_key, row.provider_ref]
+        .map(normalizeImgStem)
+        .filter(Boolean),
+    );
+    for (const stem of stems) {
+      if (!byStem.has(stem)) byStem.set(stem, []);
+      byStem.get(stem).push({ id: row.id, stem, takenEpoch, takenAtStr });
+    }
+  }
+  return { bySha256, byStem };
+}
+
+export function findExistingMediaMatch(candidate, index, toleranceSeconds = 5) {
+  if (!index) return null;
+  for (const rawSha of [candidate?.sha256, candidate?.origSha256]) {
+    const sha = typeof rawSha === "string" ? rawSha.trim().replace(/^sha256:/i, "").toLowerCase() : null;
+    if (sha && index.bySha256?.has(sha)) {
+      return { matchedBy: "sha256", existing: index.bySha256.get(sha) };
+    }
+  }
+  const stem = normalizeImgStem(candidate?.filename);
+  const candEpoch = parseWallClockEpochSeconds(candidate?.captureTimeText ?? candidate?.capture_time?.text ?? null);
+  if (!stem || candEpoch === null) return null;
+  const entries = index.byStem?.get(stem) ?? [];
+  for (const entry of entries) {
+    if (entry.takenEpoch === null) continue;
+    const diffSeconds = Math.abs(candEpoch - entry.takenEpoch);
+    if (diffSeconds <= toleranceSeconds) {
+      return { matchedBy: "stem_time", stem, existing: entry, diffSeconds };
+    }
+  }
+  return null;
+}
+
+const MIN_VALID_SHOT_MS = Date.parse("2015-01-01T00:00:00Z");
+
+export function isValidShotMs(shotMs, nowMs = Date.now()) {
+  return Number.isFinite(shotMs) && shotMs >= MIN_VALID_SHOT_MS && shotMs <= nowMs + DAY_MS;
+}
+
+function buildExistingStemTimeSkip(existingStemMatch, candidateTakenAt, extra = {}) {
+  return {
+    status: "skipped",
+    category: "existing_stem_time",
+    reason: "rds_stem_time_duplicate",
+    matchedMediaId: existingStemMatch.existing.id,
+    matchedStem: existingStemMatch.stem,
+    existingTakenAt: existingStemMatch.existing.takenAtStr,
+    candidateTakenAt,
+    diffSeconds: existingStemMatch.diffSeconds,
+    ...extra,
+  };
+}
+
+export function matchPreDownloadExistingStemTime(item, existingMediaIndex, { forceDownload = false, nowMs = Date.now() } = {}) {
+  if (forceDownload) return null;
+  const shotMs = Number(item?.l_shot_at || 0);
+  if (!isValidShotMs(shotMs, nowMs)) return null;
+  const candidateTakenAt = formatShanghaiMs(shotMs);
+  const existingStemMatch = findExistingMediaMatch(
+    { filename: item?.filename, captureTimeText: candidateTakenAt },
+    existingMediaIndex,
+  );
+  if (existingStemMatch?.matchedBy !== "stem_time") return null;
+  return buildExistingStemTimeSkip(existingStemMatch, candidateTakenAt, { preDownload: true });
+}
+
+export async function loadExistingRdsMediaWindow(client, sinceDay, untilDay) {
+  const windowStart = addDays(sinceDay, -2);
+  const windowEnd = addDays(untilDay, 3);
+  const res = await client.query(`
+    select m.id,
+           m.original_filename,
+           m.object_key,
+           to_char(m.taken_at, 'YYYY-MM-DD HH24:MI:SS') as taken_at_str,
+           a.checksum as asset_checksum,
+           a.original_filename as asset_filename,
+           l.provider_ref as original_key
+      from media m
+      left join media_assets a on a.id = m.media_asset_id
+      left join lateral (
+        select provider_ref
+          from media_locations loc
+         where loc.media_asset_id = m.media_asset_id
+         order by case when loc.variant = 'original' then 0 else 1 end, loc.created_at asc
+         limit 1
+      ) l on true
+     where m.taken_at >= $1::date
+       and m.taken_at < $2::date
+  `, [windowStart, windowEnd]);
+  return res.rows;
+}
+
+async function queryExistingRdsMedia(sinceDay, untilDay) {
+  if (process.env.DATABASE_URL?.trim()) {
+    const { getPool } = await import("../../lib/db/client.ts");
+    return loadExistingRdsMediaWindow(getPool(), sinceDay, untilDay);
+  }
+  const nightRdsUrl = new URL("../../.data/night-rds.mjs", import.meta.url);
+  if (!fs.existsSync(nightRdsUrl)) {
+    throw new Error("DATABASE_URL is not set and v2/.data/night-rds.mjs is unavailable for RDS deduplication.");
+  }
+  const { openRds } = await import(nightRdsUrl.href);
+  const rds = await openRds({ readOnly: true, localPort: 15820 + Math.floor(Math.random() * 60) });
+  try {
+    return await loadExistingRdsMediaWindow(rds.client, sinceDay, untilDay);
+  } finally {
+    await rds.close();
+  }
 }
 
 export async function extractExifTags(buf, sharpMeta) {
@@ -517,7 +716,7 @@ export function resolveCaptureTime({ filename, exif, lShotAt }) {
 
   const fnameDate = extractFilenameDate(filename);
   const shotMs = Number(lShotAt || 0);
-  const validShot = Number.isFinite(shotMs) && shotMs >= Date.parse("2015-01-01T00:00:00Z") && shotMs <= Date.now() + DAY_MS;
+  const validShot = isValidShotMs(shotMs);
   const shotText = validShot ? formatShanghaiMs(shotMs) : null;
   const shotDay = shotText ? shotText.slice(0, 10) : null;
 
@@ -585,20 +784,41 @@ export function classifyScreenshot({ filename, sharpMeta, exif, quarkShootDevice
   return { isScreenshot: false, reason: null, hasCameraExif: false };
 }
 
-function downloadQuarkItem(item, downloadsDir, ctx) {
+function resolveDownloadTarget(item, downloadsDir) {
   const subDir = path.join(downloadsDir, safeFidSlug(item.fid));
-  fs.mkdirSync(subDir, { recursive: true });
-  const expectedPath = path.join(subDir, path.basename(item.filename));
-  const events = runQuarkCli(["download", "--fid", item.fid, "--output-dir", subDir, "--overwrite"], {
-    ...ctx,
-    label: `download(${item.filename})`,
-  });
+  return {
+    subDir,
+    expectedPath: path.join(subDir, path.basename(item.filename)),
+  };
+}
+
+function verifyDownloadedPath(events, item, expectedPath) {
   const resultEv = [...events].reverse().find((e) => e?.action === "download" && e?.type === "result");
   const filePath = resultEv?.data?.filePath ? path.resolve(resultEv.data.filePath) : expectedPath;
   if (!fs.existsSync(filePath)) {
     throw new Error(`Downloaded file missing on disk for ${item.filename} (fid=${item.fid})`);
   }
   return filePath;
+}
+
+function downloadQuarkItem(item, downloadsDir, ctx) {
+  const { subDir, expectedPath } = resolveDownloadTarget(item, downloadsDir);
+  fs.mkdirSync(subDir, { recursive: true });
+  const events = runQuarkCli(["download", "--fid", item.fid, "--output-dir", subDir, "--overwrite"], {
+    ...ctx,
+    label: `download(${item.filename})`,
+  });
+  return verifyDownloadedPath(events, item, expectedPath);
+}
+
+export async function downloadQuarkItemAsync(item, downloadsDir, ctx) {
+  const { subDir, expectedPath } = resolveDownloadTarget(item, downloadsDir);
+  await mkdir(subDir, { recursive: true });
+  const events = await runQuarkCliAsync(["download", "--fid", item.fid, "--output-dir", subDir, "--overwrite"], {
+    ...ctx,
+    label: `download(${item.filename})`,
+  });
+  return verifyDownloadedPath(events, item, expectedPath);
 }
 
 function sha256Hex(buf) {
@@ -612,7 +832,15 @@ function mimeAndExtForSharpFormat(format) {
   return { ext: ".jpg", formatType: "image/jpeg" };
 }
 
-async function stageDownloadedItem({ item, localPath, convertedDir, seenSha256, sinceDay, untilDay }) {
+export async function stageDownloadedItem({
+  item,
+  localPath,
+  convertedDir,
+  seenSha256,
+  existingMediaIndex = null,
+  sinceDay,
+  untilDay,
+}) {
   const bytes = await readFile(localPath);
   let sharpMeta;
   try {
@@ -650,6 +878,33 @@ async function stageDownloadedItem({ item, localPath, convertedDir, seenSha256, 
   const captureDay = captureTime.text.slice(0, 10);
   if (captureDay < sinceDay || captureDay > untilDay) {
     return { status: "skipped", category: "out_of_window", reason: `capture_day=${captureDay}` };
+  }
+
+  const existingStemMatch = findExistingMediaMatch(
+    { filename: item.filename, captureTimeText: captureTime.text },
+    existingMediaIndex,
+  );
+  if (existingStemMatch?.matchedBy === "stem_time") {
+    return buildExistingStemTimeSkip(existingStemMatch, captureTime.text);
+  }
+
+  // Pre-conversion synchronous deduplication on raw bytes avoids redundant HEIC/WebP work.
+  const origPreSha256 = sha256Hex(bytes);
+  if (seenSha256.has(origPreSha256)) {
+    return { status: "skipped", category: "duplicate", reason: "batch_checksum_duplicate", sha256: origPreSha256 };
+  }
+  const existingPreShaMatch = findExistingMediaMatch(
+    { filename: item.filename, captureTimeText: captureTime.text, sha256: origPreSha256, origSha256: origPreSha256 },
+    existingMediaIndex,
+  );
+  if (existingPreShaMatch?.matchedBy === "sha256") {
+    return {
+      status: "skipped",
+      category: "duplicate",
+      reason: "rds_checksum_duplicate",
+      matchedMediaId: existingPreShaMatch.existing.id,
+      sha256: origPreSha256,
+    };
   }
 
   const extLower = path.extname(String(item.filename ?? "")).toLowerCase();
@@ -692,6 +947,19 @@ async function stageDownloadedItem({ item, localPath, convertedDir, seenSha256, 
   if (seenSha256.has(sha256) || seenSha256.has(origSha256)) {
     return { status: "skipped", category: "duplicate", reason: "batch_checksum_duplicate", sha256 };
   }
+  const existingShaMatch = findExistingMediaMatch(
+    { filename: item.filename, captureTimeText: captureTime.text, sha256, origSha256 },
+    existingMediaIndex,
+  );
+  if (existingShaMatch?.matchedBy === "sha256") {
+    return {
+      status: "skipped",
+      category: "duplicate",
+      reason: "rds_checksum_duplicate",
+      matchedMediaId: existingShaMatch.existing.id,
+      sha256,
+    };
+  }
   seenSha256.add(sha256);
   seenSha256.add(origSha256);
 
@@ -722,7 +990,7 @@ async function writeJsonl(filePath, rows) {
   await writeFile(filePath, body, "utf8");
 }
 
-async function runApplyBatch({ taskItems, artifactDir, originalsDir, apply }) {
+async function runApplyBatch({ taskItems, artifactDir, originalsDir, apply, applyDeps }) {
   if (!taskItems.length) {
     return {
       summary: { eligible: 0, newCount: 0, reusedCount: 0, skippedCount: 0, failedCount: 0 },
@@ -742,6 +1010,7 @@ async function runApplyBatch({ taskItems, artifactDir, originalsDir, apply }) {
     visibility: "private",
     organize: false,
     sourceLabel: "Quark 照片同步",
+    ...(applyDeps ? { deps: applyDeps } : {}),
   });
 }
 
@@ -754,17 +1023,50 @@ function mergeDateCounts(plainItems, convertedItems) {
   return Object.fromEntries(Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)));
 }
 
-export async function runQuarkDailySync(opts) {
-  ensureOssEnv();
-  if (opts.apply) {
-    const provider = requireQuarkStorageProvider();
-    if (provider !== "oss") {
-      throw new Error(`Quark daily sync requires MEDIA_STORAGE_PROVIDER="oss", got "${provider}"`);
+export async function mapWithConcurrency(items, concurrency, fn) {
+  const limit = Math.max(1, Math.min(12, Number(concurrency) || 1));
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  let fatalError = null;
+
+  async function worker() {
+    while (!fatalError) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      try {
+        results[index] = await fn(items[index], index);
+      } catch (err) {
+        if (!fatalError) fatalError = err;
+        return;
+      }
     }
   }
 
+  const workerCount = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  if (fatalError) throw fatalError;
+  return results;
+}
+
+export async function runQuarkDailySync(opts) {
+  ensureOssEnv();
+  stripR2Env();
+  const provider = requireQuarkStorageProvider();
+  if (provider !== "oss") {
+    throw new Error(`Quark daily sync requires MEDIA_STORAGE_PROVIDER="oss", got "${provider}"`);
+  }
+
+  const concurrency = opts.concurrency ?? 1;
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 12) {
+    throw new Error(`Invalid --concurrency value: ${opts.concurrency} (expected integer 1..12)`);
+  }
+
+  const sharedDownloadsDir = Boolean(opts.downloadsDir);
+  const downloadsDir = opts.downloadsDir
+    ? assertOutsideRepository(opts.downloadsDir, "--downloads-dir")
+    : path.join(opts.outDir, "downloads");
   const browseDir = path.join(opts.outDir, "quark-browse");
-  const downloadsDir = path.join(opts.outDir, "downloads");
   const convertedDir = path.join(opts.outDir, "heic-converted");
   const manifestsDir = path.join(opts.outDir, "manifests");
   const plainArtifactDir = path.join(opts.outDir, "artifacts-plain");
@@ -774,6 +1076,11 @@ export async function runQuarkDailySync(opts) {
   await mkdir(downloadsDir, { recursive: true });
   await mkdir(convertedDir, { recursive: true });
   await mkdir(manifestsDir, { recursive: true });
+
+  const existingRdsRows = Array.isArray(opts.existingRdsRows)
+    ? opts.existingRdsRows
+    : await queryExistingRdsMedia(opts.sinceDay, opts.untilDay);
+  const existingMediaIndex = buildExistingMediaIndex(existingRdsRows);
 
   const discoveredPath = path.join(manifestsDir, "discovered-candidates.json");
   let discovery;
@@ -794,11 +1101,28 @@ export async function runQuarkDailySync(opts) {
   const plainItems = [];
   const convertedItems = [];
   const skippedScreenshots = [];
+  const skippedExistingStemTime = [];
   const skippedOther = [];
   const downloadFailures = [];
   const seenSha256 = new Set();
+  const downloadFn = opts.downloadItem ?? downloadQuarkItemAsync;
 
-  for (const item of discovery.candidates) {
+  const slotResults = await mapWithConcurrency(discovery.candidates, concurrency, async (item, index) => {
+    const preDownloadMatch = matchPreDownloadExistingStemTime(item, existingMediaIndex, {
+      forceDownload: opts.forceDownload,
+    });
+    if (preDownloadMatch) {
+      return {
+        kind: "skipped_existing_stem_time",
+        row: {
+          filename: item.filename,
+          fid: item.fid,
+          l_shot_at: item.l_shot_at ?? null,
+          ...preDownloadMatch,
+        },
+      };
+    }
+
     let localPath;
     try {
       const candidatePath = path.join(downloadsDir, safeFidSlug(item.fid), path.basename(item.filename));
@@ -810,8 +1134,9 @@ export async function runQuarkDailySync(opts) {
       if ((opts.skipDownload && fs.existsSync(candidatePath)) || sameSizeOnDisk) {
         localPath = candidatePath;
       } else {
-        localPath = downloadQuarkItem(item, downloadsDir, {
-          sessionId: opts.sessionId,
+        const itemSessionId = concurrency > 1 ? `${opts.sessionId}-${index}` : opts.sessionId;
+        localPath = await downloadFn(item, downloadsDir, {
+          sessionId: itemSessionId,
           sessionInput: opts.sessionInput,
         });
       }
@@ -819,8 +1144,10 @@ export async function runQuarkDailySync(opts) {
       if (err instanceof QuarkAuthError) {
         throw err;
       }
-      downloadFailures.push({ filename: item.filename, fid: item.fid, error: err?.message ?? String(err) });
-      continue;
+      return {
+        kind: "download_failure",
+        row: { filename: item.filename, fid: item.fid, error: err?.message ?? String(err) },
+      };
     }
 
     const staged = await stageDownloadedItem({
@@ -828,21 +1155,33 @@ export async function runQuarkDailySync(opts) {
       localPath,
       convertedDir,
       seenSha256,
+      existingMediaIndex,
       sinceDay: opts.sinceDay,
       untilDay: opts.untilDay,
     });
+    return { kind: "staged", item, staged };
+  });
 
-    if (staged.status === "ready") {
-      if (staged.group === "converted") convertedItems.push(staged.taskItem);
-      else plainItems.push(staged.taskItem);
-    } else if (staged.category === "screenshot") {
-      skippedScreenshots.push({ filename: item.filename, fid: item.fid, l_shot_at: item.l_shot_at ?? null, ...staged });
+  for (const slot of slotResults) {
+    if (!slot) continue;
+    if (slot.kind === "skipped_existing_stem_time") {
+      skippedExistingStemTime.push(slot.row);
+    } else if (slot.kind === "download_failure") {
+      downloadFailures.push(slot.row);
+    } else if (slot.staged.status === "ready") {
+      if (slot.staged.group === "converted") convertedItems.push(slot.staged.taskItem);
+      else plainItems.push(slot.staged.taskItem);
+    } else if (slot.staged.category === "screenshot") {
+      skippedScreenshots.push({ filename: slot.item.filename, fid: slot.item.fid, l_shot_at: slot.item.l_shot_at ?? null, ...slot.staged });
+    } else if (slot.staged.category === "existing_stem_time") {
+      skippedExistingStemTime.push({ filename: slot.item.filename, fid: slot.item.fid, l_shot_at: slot.item.l_shot_at ?? null, ...slot.staged });
     } else {
-      skippedOther.push({ filename: item.filename, fid: item.fid, l_shot_at: item.l_shot_at ?? null, ...staged });
+      skippedOther.push({ filename: slot.item.filename, fid: slot.item.fid, l_shot_at: slot.item.l_shot_at ?? null, ...slot.staged });
     }
   }
 
   await writeJsonl(path.join(manifestsDir, "skipped-screenshots.jsonl"), skippedScreenshots);
+  await writeJsonl(path.join(manifestsDir, "skipped-existing-stem-time.jsonl"), skippedExistingStemTime);
   await writeJsonl(path.join(manifestsDir, "skipped-other.jsonl"), skippedOther);
   await writeJsonl(path.join(manifestsDir, "eligible-items.jsonl"), [...plainItems, ...convertedItems]);
 
@@ -851,12 +1190,14 @@ export async function runQuarkDailySync(opts) {
     artifactDir: plainArtifactDir,
     originalsDir: downloadsDir,
     apply: opts.apply,
+    applyDeps: opts.applyDeps,
   });
   const convertedResult = await runApplyBatch({
     taskItems: convertedItems,
     artifactDir: convertedArtifactDir,
     originalsDir: convertedDir,
     apply: opts.apply,
+    applyDeps: opts.applyDeps,
   });
 
   const combined = {
@@ -869,7 +1210,8 @@ export async function runQuarkDailySync(opts) {
 
   const cleanedDirs = [];
   if (opts.cleanup && (!opts.apply || combined.failedCount === 0)) {
-    for (const dir of [downloadsDir, convertedDir, browseDir]) {
+    const cleanTargets = sharedDownloadsDir ? [convertedDir, browseDir] : [downloadsDir, convertedDir, browseDir];
+    for (const dir of cleanTargets) {
       if (fs.existsSync(dir)) {
         await rm(dir, { recursive: true, force: true });
         cleanedDirs.push(dir);
@@ -881,6 +1223,9 @@ export async function runQuarkDailySync(opts) {
     schema: "nianlife.quark-daily-sync/1",
     ranAt: new Date().toISOString(),
     mode: opts.apply ? "apply" : "dry-run",
+    concurrency,
+    downloadsDir,
+    sharedDownloadsDir,
     window: { sinceDay: opts.sinceDay, untilDay: opts.untilDay },
     storageProvider: process.env.MEDIA_STORAGE_PROVIDER,
     visibility: "private",
@@ -890,11 +1235,13 @@ export async function runQuarkDailySync(opts) {
       totalDiscoveredImages: discovery.totalDiscoveredImages,
       dedupedImages: discovery.dedupedImages,
       windowCandidates: discovery.candidates.length,
+      rdsWindowMediaCount: existingRdsRows.length,
     },
     staging: {
       plainCount: plainItems.length,
       convertedHeicCount: convertedItems.length,
       skippedScreenshotsCount: skippedScreenshots.length,
+      skippedExistingStemTimeCount: skippedExistingStemTime.length,
       skippedOtherCount: skippedOther.length,
       downloadFailureCount: downloadFailures.length,
       eligibleByDate: mergeDateCounts(plainItems, convertedItems),
@@ -917,7 +1264,7 @@ async function cli() {
   const opts = parseQuarkCliArgs(process.argv.slice(2));
   if (opts.help) {
     console.log(
-      "Usage: node --import tsx scripts/editor/quark-daily-sync.mjs --out <private-dir> [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--since-days N] [--apply] [--cleanup] [--session-id <id>]"
+      "Usage: node --import tsx scripts/editor/quark-daily-sync.mjs --out <private-dir> [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--since-days N] [--apply] [--cleanup] [--session-id <id>] [--concurrency <1-12>] [--downloads-dir <private-dir>]"
     );
     return;
   }
@@ -935,6 +1282,9 @@ if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === imp
       process.exitCode = err instanceof QuarkAuthError ? 2 : 1;
     })
     .finally(async () => {
-      await closePool().catch(() => {});
+      if (process.env.DATABASE_URL?.trim()) {
+        const { closePool } = await import("../../lib/db/client.ts").catch(() => ({ closePool: null }));
+        await closePool?.().catch(() => {});
+      }
     });
 }

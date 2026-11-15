@@ -5,6 +5,54 @@
 // 2026-11-12（STYLE.zhang 第二版对齐）：新增照片说明书腔拦截、群聊转播腔补漏（含叙述「点赞」「又发来」）、
 // 编辑旁白拦截、引语数量上限（全篇 ≤4、单段 ≤2）、育儿套话清单同步，以及无依据跨日比较词（「终于」「比以前」）核验。
 import { unconfirmedNames, registeredLabels, mentionsOf } from "./identity-rules.mjs";
+import { timeWordProblems as planTimeWordProblems } from "./plan.mjs";
+
+const PREBIRTH_CUTOFF_DAY = "2025-01-03";
+
+/** Extract valid integer hours [0..23] from numbers, HH:MM strings, or timestamps; ignore empty/missing values so absent WeChat timestamps never become 0 (凌晨). */
+export function extractValidHours(sources = [], extraHours = []) {
+  const out = [];
+  const pushHour = (val) => {
+    if (typeof val === "number") {
+      if (Number.isInteger(val) && val >= 0 && val <= 23) out.push(val);
+      return;
+    }
+    if (typeof val === "string") {
+      const s = val.trim();
+      if (!s) return;
+      let m = s.match(/^([01]?\d|2[0-3])(?::[0-5]\d(?::[0-5]\d(?:\.\d+)?)?)?$/);
+      if (m) {
+        out.push(Number(m[1]));
+        return;
+      }
+      m = s.match(/^\d{4}-\d{2}-\d{2}[ T]([01]\d|2[0-3]):[0-5]\d/);
+      if (m) out.push(Number(m[1]));
+    }
+  };
+  for (const h of extraHours ?? []) pushHour(h);
+  for (const src of sources ?? []) {
+    if (!src || typeof src !== "object") continue;
+    if (src.hour !== undefined && src.hour !== null) pushHour(src.hour);
+    if (typeof src.time === "string") pushHour(src.time);
+    if (typeof src.takenAt === "string") pushHour(src.takenAt);
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * Photo-aware time-word check: merges explicit hours with optional captureHours/mediaHours/sources
+ * and returns [] when no valid capture or message hours exist.
+ */
+export function timeWordProblems(text, hours = [], opts = {}) {
+  const validHours = [
+    ...new Set([
+      ...extractValidHours([], Array.isArray(hours) ? hours : []),
+      ...extractValidHours(opts.sources ?? [], opts.captureHours ?? opts.mediaHours ?? []),
+    ]),
+  ];
+  if (validHours.length === 0) return [];
+  return planTimeWordProblems(text, validHours);
+}
 
 /** 引语比对口径：去掉空白、表情符号、方括号表情与转义符，其余逐字比对。 */
 export const normalizeForQuote = (t) =>
@@ -330,8 +378,26 @@ export function validateDayText(entry, sources, opts = {}) {
   const errors = [];
   const evidence = { quotes: [], persons: [] };
   const err = (where, msg) => errors.push(`${where}: ${msg}`);
-  const srcs = sources.map(asSource);
+  const rawSources = Array.isArray(sources) ? sources : [];
+  const srcs = rawSources.map(asSource);
   const labels = registeredLabels();
+  const isPrebirthPhotoBacked =
+    typeof entry.day === "string"
+    && entry.day < PREBIRTH_CUTOFF_DAY
+    && ((entry.firstScreenMediaIds?.length ?? 0) > 0 || opts.hasMedia === true);
+  const explicitCaptureHours = opts.captureHours ?? opts.mediaHours;
+  const hasTimestampedSource = rawSources.some((s) => s && typeof s === "object" && (typeof s.time === "string" || typeof s.takenAt === "string"));
+  const shouldCheckTimeWords = opts.checkTimeWords !== false && (
+    opts.checkTimeWords === true || explicitCaptureHours !== undefined || hasTimestampedSource
+  );
+  const checkHours = shouldCheckTimeWords
+    ? extractValidHours(
+        explicitCaptureHours !== undefined || opts.checkTimeWords === true
+          ? rawSources
+          : rawSources.filter((s) => s && typeof s === "object" && (typeof s.time === "string" || typeof s.takenAt === "string")),
+        explicitCaptureHours ?? [],
+      )
+    : [];
   const chunks = [["标题", entry.title ?? ""], ...(entry.paragraphs ?? []).map((p, i) => [`第 ${i + 1} 段`, p])];
 
   for (const [where, text] of chunks) {
@@ -348,6 +414,10 @@ export function validateDayText(entry, sources, opts = {}) {
     for (const [label, re] of SENSITIVE_TEXT) { const m = String(text).match(re); if (m) err(where, `敏感信息（${label}）「${m[0]}」：不写进故事`); }
     // 真实姓名连引号里也不行（EDITOR-BRIEF：已确认身份的人也只能用称呼，不能用真名）。
     for (const name of opts.realNames ?? []) if (name && text.includes(name)) err(where, "出现真实姓名，请换成称呼");
+    if (shouldCheckTimeWords && checkHours.length > 0) {
+      const badTimes = timeWordProblems(text, checkHours);
+      if (badTimes.length) err(where, `时间不符：${badTimes.join("、")}`);
+    }
 
     for (const q of spans.filter((x) => x.text !== null)) {
       const hits = quoteHits(q.text, srcs);
@@ -387,6 +457,11 @@ export function validateDayText(entry, sources, opts = {}) {
         // 这类依据单独标成 self-report，验收时逐条人工抽读。
         const self = srcs.find((src) => src.speaker === m.label && normalizeForQuote(src.text));
         if (self) { evidence.persons.push({ where, label: m.label, role: m.role, basis: "self-report", sourceId: self.id, snippet: String(self.text).slice(0, 80) }); continue; }
+        // 出生前（2025-01-03 以前）带照片的日子：爸妈的日常出镜允许在场点名，但发言/发来和「…」仍须微信证据。
+        if (isPrebirthPhotoBacked && m.role === "presence" && (m.label === "妈妈" || m.label === "爸爸")) {
+          evidence.persons.push({ where, label: m.label, role: m.role, basis: "prebirth-photo-presence", day: entry.day });
+          continue;
+        }
         err(where, `点名了${m.label}在场，但这一段的来源里没有消息提到${m.label}（只凭照片外貌不算）：写「家人」或只写他自己`);
       }
     }

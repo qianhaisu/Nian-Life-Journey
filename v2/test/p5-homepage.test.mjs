@@ -9,15 +9,24 @@ import {
   isGenuineTravelTrip,
   selectFamilyVoices,
   selectHomeHeroCover,
+  selectTimeCapsules,
   selectTravelFootprint,
 } from "../lib/home-bento.ts";
 import {
   buildDayMemory,
+  buildPrebirthMemory,
   MEMORY_MAX_SLIDES,
   MEMORY_MIN_SLIDES,
+  PREBIRTH_MIN_SLIDES,
   selectHomeMemories,
 } from "../lib/home-memory.ts";
-import { CAROUSEL_THEMES } from "../lib/home-memory-topics.ts";
+import {
+  CAROUSEL_PROMPT_VERSION,
+  CAROUSEL_THEMES,
+  prebirthCarouselQualified,
+  prebirthRankScore,
+  topicLookupFrom,
+} from "../lib/home-memory-topics.ts";
 import {
   P5_FAMILY_QUOTE_SEEDS,
   P5_HERO_SEED_CANDIDATES,
@@ -1075,4 +1084,472 @@ test("5.2 pickSlides 与 coverIndexOf：候选富余时按 rotationSlot 轮换�
   assert.equal(day1.slides.length, MEMORY_MAX_SLIDES);
   assert.notDeepEqual(day0.slides.map((s) => s.media.id), day1.slides.map((s) => s.media.id));
   assert.notEqual(day0.slides[day0.coverIndex].media.id, day1.slides[day1.coverIndex].media.id);
+});
+
+test("5.4 home-memory-topics：既有 v4 标注无 prebirth 字段仍有效，prebirthCarouselQualified 严格卡控出生前门槛", () => {
+  const legacyV4 = makeCarouselLabel("2025-08-01T10:00:00+08:00", { laugh: 90 }).carousel;
+  const approvedPrebirth = {
+    ...makeCarouselLabel("2024-09-12T10:00:00+08:00", {}, { clarity: 90, expression: 85 }).carousel,
+    childMain: false,
+    faceClear: false,
+    eyesOpen: false,
+    prebirth: 92,
+    prebirthApproved: true,
+    sceneKey: "nursery-prep",
+  };
+  const invalidScore = {
+    ...approvedPrebirth,
+    prebirth: 105,
+  };
+  const invalidFlag = {
+    ...approvedPrebirth,
+    prebirthApproved: "yes",
+  };
+
+  const lookup = topicLookupFrom({
+    version: 1,
+    model: "deepseek-chat",
+    promptVersion: CAROUSEL_PROMPT_VERSION,
+    assessedAt: "2026-11-15T00:00:00Z",
+    scope: "test",
+    topics: {
+      "v4-legacy": { topic: "笑", water: false, value: 0.9, confidence: 0.95, carousel: legacyV4 },
+      "pb-good": { topic: "其他", water: false, value: 0.7, confidence: 0.9, carousel: approvedPrebirth },
+      "pb-bad-score": { topic: "其他", water: false, value: 0.7, confidence: 0.9, carousel: invalidScore },
+      "pb-bad-flag": { topic: "其他", water: false, value: 0.7, confidence: 0.9, carousel: invalidFlag },
+    },
+  });
+
+  assert.equal(CAROUSEL_THEMES.length, 11);
+  assert.equal(CAROUSEL_PROMPT_VERSION, "home-carousel-v4");
+  assert.ok(lookup("v4-legacy")?.carousel, "existing v4 labels without prebirth remain valid");
+  assert.equal(prebirthRankScore(lookup("v4-legacy")), 0);
+  assert.ok(lookup("pb-good")?.carousel);
+  assert.equal(lookup("pb-good")?.carousel?.prebirth, 92);
+  assert.equal(lookup("pb-good")?.carousel?.prebirthApproved, true);
+  assert.equal(lookup("pb-bad-score")?.carousel, undefined);
+  assert.equal(lookup("pb-bad-flag")?.carousel, undefined);
+
+  const birthDay = "2025-01-03";
+  assert.equal(prebirthCarouselQualified(lookup("pb-good"), "2024-09-12T10:00:00+08:00", birthDay), true);
+  assert.equal(prebirthCarouselQualified(lookup("pb-good"), "2025-01-03T10:00:00+08:00", birthDay), false);
+  assert.equal(prebirthCarouselQualified(lookup("pb-good"), "", birthDay), false);
+  assert.ok(prebirthRankScore(lookup("pb-good")) > 0.85);
+
+  const rejectedChildMain = {
+    ...lookup("pb-good"),
+    carousel: { ...approvedPrebirth, childMain: true },
+  };
+  const rejectedLowScore = {
+    ...lookup("pb-good"),
+    carousel: { ...approvedPrebirth, prebirth: 79 },
+  };
+  const rejectedUnapproved = {
+    ...lookup("pb-good"),
+    carousel: { ...approvedPrebirth, prebirthApproved: false },
+  };
+  const rejectedBlur = {
+    ...lookup("pb-good"),
+    carousel: { ...approvedPrebirth, motionBlur: true },
+  };
+  assert.equal(prebirthCarouselQualified(rejectedChildMain, "2024-09-12T10:00:00+08:00", birthDay), false);
+  assert.equal(prebirthCarouselQualified(rejectedLowScore, "2024-09-12T10:00:00+08:00", birthDay), false);
+  assert.equal(prebirthCarouselQualified(rejectedUnapproved, "2024-09-12T10:00:00+08:00", birthDay), false);
+  assert.equal(prebirthCarouselQualified(rejectedBlur, "2024-09-12T10:00:00+08:00", birthDay), false);
+});
+
+test("5.5 buildPrebirthMemory & selectHomeMemories：2024 出生前照片按月均衡、正序带图注生成「等待你的日子」，且绝不漏入出生后主题/季节", () => {
+  const birthDay = "2025-01-03";
+  const labelMap = new Map();
+  const captions = new Map();
+  const prebirthMedia = [];
+
+  const addPrebirth = (id, takenAt, prebirthScore, extraCarousel = {}, caption = undefined) => {
+    prebirthMedia.push(makePhoto(id, takenAt));
+    const base = makeCarouselLabel(takenAt, {}, { clarity: 90, expression: 85 }).carousel;
+    labelMap.set(id, {
+      topic: "其他",
+      water: false,
+      childInFrame: false,
+      value: 0.7,
+      confidence: 0.9,
+      carousel: {
+        ...base,
+        childMain: false,
+        faceClear: false,
+        eyesOpen: false,
+        approvedThemes: [],
+        prebirth: prebirthScore,
+        prebirthApproved: true,
+        ...extraCarousel,
+      },
+    });
+    if (caption) captions.set(id, caption);
+  };
+
+  // < 6 张时不输出主题
+  assert.equal(PREBIRTH_MIN_SLIDES, 6);
+  addPrebirth("pb-few-1", "2024-06-02T10:00:00+08:00", 88);
+  addPrebirth("pb-few-2", "2024-08-02T10:00:00+08:00", 89);
+  assert.equal(buildPrebirthMemory(prebirthMedia, birthDay, labelMap, captions), undefined);
+
+  // 清空构造完整测试集合：6 月塞 18 张不同日期（测试跨月轮转均衡 + 同一天最多 2 张），
+  // 8/10/11/12 月各若干张，含同 sceneKey 去重，以及一张带 childMain:true / laugh:98 的 2024 混淆照片。
+  prebirthMedia.length = 0;
+  labelMap.clear();
+  captions.clear();
+
+  // 同一天 2024-06-05 放 3 张间隔 > 10 分钟，验证 CROSS_DAY_PER_DAY_MAX = 2 只保留最高分的 2 张
+  addPrebirth("pb-0605-a", "2024-06-05T09:00:00+08:00", 81);
+  addPrebirth("pb-0605-b", "2024-06-05T11:00:00+08:00", 95, {}, "窗边晒着刚洗好的小纱布");
+  addPrebirth("pb-0605-c", "2024-06-05T15:00:00+08:00", 90);
+  for (let d = 6; d <= 20; d += 1) {
+    addPrebirth(`pb-06-${d}`, `2024-06-${String(d).padStart(2, "0")}T10:00:00+08:00`, 80 + (d % 10));
+  }
+  // 共享同一个 sceneKey，仅高分 pb-0802-hi 留下
+  addPrebirth("pb-0802-lo", "2024-08-02T10:00:00+08:00", 82, { sceneKey: "shared-crib" });
+  addPrebirth("pb-0802-hi", "2024-08-04T10:00:00+08:00", 96, { sceneKey: "shared-crib" }, "婴儿床拼好了");
+  addPrebirth("pb-1012", "2024-10-12T10:00:00+08:00", 93, {}, "秋天傍晚去江边散步");
+  addPrebirth("pb-1220", "2024-12-20T18:00:00+08:00", 98, {}, "待产包最后核对了一遍");
+
+  const built = buildPrebirthMemory(prebirthMedia, birthDay, labelMap, captions);
+  assert.ok(built);
+  assert.equal(built.kind, "prebirth");
+  assert.equal(built.key, "prebirth:2024");
+  assert.equal(built.title, "等待你的日子");
+  assert.equal(built.subtitle, "2024 年 6 月 — 12 月 · 出生之前");
+  assert.equal(built.href, "/memory#year-2024");
+  assert.equal(built.linkLabel, "翻到 2024 年");
+  assert.equal(built.slides.length, MEMORY_MAX_SLIDES);
+
+  const builtIds = built.slides.map((s) => s.media.id);
+  // 同一天最高两张保留、最低分的 pb-0605-a 被淘汰
+  assert.equal(builtIds.includes("pb-0605-a"), false);
+  // 同 sceneKey 只留更高分 pb-0802-hi
+  assert.equal(builtIds.includes("pb-0802-lo"), false);
+  assert.ok(builtIds.includes("pb-0802-hi"));
+  // 按月 round-robin 均衡：8 月、10 月、12 月都必须入选，不会被 6 月挤掉
+  assert.ok(builtIds.includes("pb-1012"));
+  assert.ok(builtIds.includes("pb-1220"));
+  // 最终按拍摄时间升序排列
+  const times = built.slides.map((s) => s.media.takenAt);
+  assert.deepEqual(times, [...times].sort());
+  // 每张保留 dateLabel，带 caption 的正确挂载
+  assert.ok(built.slides.every((s) => Boolean(s.dateLabel)));
+  assert.equal(built.slides.find((s) => s.media.id === "pb-1220")?.caption, "待产包最后核对了一遍");
+
+  // 加上历史误标为 childMain:true / laugh:98 的 2024 照片与出生后 laugh 照片，验证零泄漏与排序置前
+  const sneakyPrebirthPhoto = makePhoto("pb-sneaky-laugh", "2024-11-29T10:00:00+08:00");
+  labelMap.set("pb-sneaky-laugh", makeCarouselLabel("2024-11-29T10:00:00+08:00", { laugh: 98, autumn: 95 }));
+
+  const postBirthPhotos = Array.from({ length: 8 }, (_, idx) => {
+    const day = `2025-08-${String(idx + 2).padStart(2, "0")}`;
+    const id = `post-laugh-${idx}`;
+    labelMap.set(id, makeCarouselLabel(`${day}T10:00:00+08:00`, { laugh: 94, summer: 90 }));
+    return makePhoto(id, `${day}T10:00:00+08:00`);
+  });
+
+  const allPre = [...prebirthMedia, sneakyPrebirthPhoto];
+  const allMedia = [...allPre, ...postBirthPhotos];
+  const groupByMonth = (items, monthPrefix) => {
+    const byDay = new Map();
+    for (const p of items) {
+      const d = p.takenAt.slice(0, 10);
+      if (!d.startsWith(monthPrefix)) continue;
+      if (!byDay.has(d)) byDay.set(d, []);
+      byDay.get(d).push(p);
+    }
+    return [...byDay.entries()].map(([day, photos]) => ({
+      day,
+      dateLabel: day,
+      photos,
+      withheldCount: 0,
+    }));
+  };
+
+  const archive = makeArchive({
+    media: allMedia,
+    privilege: {
+      confirmed: new Set(allMedia.map((m) => m.id)),
+      checked: new Set(allMedia.map((m) => m.id)),
+      excluded: new Set(),
+    },
+    chapters: [
+      {
+        year: "2025",
+        ageSpan: "出生 到 11 个月",
+        months: [
+          {
+            month: "2025-08",
+            label: "2025 年 8 月",
+            shortLabel: "8 月",
+            ageLabel: "7 个月",
+            memories: [],
+            traceDays: [],
+            photos: postBirthPhotos,
+            photoCount: postBirthPhotos.length,
+            videoCount: 0,
+            photoDays: groupByMonth(postBirthPhotos, "2025-08"),
+            withheldMediaCount: 0,
+          },
+        ],
+      },
+      {
+        year: "2024",
+        ageSpan: "出生之前",
+        months: [
+          {
+            month: "2024-06",
+            label: "2024 年 6 月",
+            shortLabel: "6 月",
+            memories: [],
+            traceDays: [],
+            photos: [],
+            photoCount: 0,
+            videoCount: 0,
+            photoDays: groupByMonth(allPre, "2024-06"),
+            withheldMediaCount: 0,
+          },
+          {
+            month: "2024-08",
+            label: "2024 年 8 月",
+            shortLabel: "8 月",
+            memories: [],
+            traceDays: [],
+            photos: [],
+            photoCount: 0,
+            videoCount: 0,
+            photoDays: groupByMonth(allPre, "2024-08"),
+            withheldMediaCount: 0,
+          },
+          {
+            month: "2024-10",
+            label: "2024 年 10 月",
+            shortLabel: "10 月",
+            memories: [],
+            traceDays: [],
+            photos: [],
+            photoCount: 0,
+            videoCount: 0,
+            photoDays: groupByMonth(allPre, "2024-10"),
+            withheldMediaCount: 0,
+          },
+          {
+            month: "2024-11",
+            label: "2024 年 11 月",
+            shortLabel: "11 月",
+            memories: [],
+            traceDays: [],
+            photos: [],
+            photoCount: 0,
+            videoCount: 0,
+            photoDays: groupByMonth(allPre, "2024-11"),
+            withheldMediaCount: 0,
+          },
+          {
+            month: "2024-12",
+            label: "2024 年 12 月",
+            shortLabel: "12 月",
+            memories: [],
+            traceDays: [],
+            photos: [],
+            photoCount: 0,
+            videoCount: 0,
+            photoDays: groupByMonth(allPre, "2024-12"),
+            withheldMediaCount: 0,
+          },
+        ],
+      },
+    ],
+    time: { today: "2026-11-15", hasExplicitDate: true },
+  });
+
+  const dayContext = new Map([
+    ["2024-12-20", { title: "待产清单", photoCaptions: { "pb-1220": "来自日上下文的待产包配文" } }],
+  ]);
+
+  const selected = selectHomeMemories(archive, (id) => labelMap.get(id), {
+    dayContext,
+    rotationSlot: 0,
+  });
+  assert.equal(selected.memories[0]?.key, "topic:laugh");
+  assert.equal(selected.memories[1]?.key, "prebirth:2024");
+  assert.equal(
+    selected.memories[1]?.slides.find((s) => s.media.id === "pb-1220")?.caption,
+    "来自日上下文的待产包配文",
+  );
+  for (const theme of selected.memories) {
+    if (theme.kind === "topic" || theme.kind === "season") {
+      for (const slide of theme.slides) {
+        assert.ok(
+          (slide.media.takenAt ?? "").slice(0, 10) >= birthDay,
+          `pre-birth photo ${slide.media.id} must never leak into ${theme.key}`,
+        );
+      }
+    }
+  }
+
+  // 纯出生前档案（无出生后主题）时，「等待你的日子」落在首位 index 0
+  const preOnlyArchive = {
+    ...archive,
+    media: allPre,
+    chapters: [archive.chapters[1]],
+  };
+  const preOnlySelected = selectHomeMemories(preOnlyArchive, (id) => labelMap.get(id), {
+    dayContext,
+  });
+  assert.equal(preOnlySelected.memories[0]?.key, "prebirth:2024");
+});
+
+test("5.6 selectTimeCapsules：2024 出生前日记（prebirthApproved 与 curated firstScreenMediaIds 兜底）以 ageDisplay「出生前」进入过去的张年", () => {
+  const mApproved = makePhoto("m-2408-approved", "2024-08-18T10:00:00+08:00");
+  const mCurated = makePhoto("m-2411-curated", "2024-11-10T10:00:00+08:00");
+  const mBlur = makePhoto("m-2409-blur", "2024-09-05T10:00:00+08:00");
+
+  const monthContents = [
+    {
+      schema: "nianlife.month-content/1",
+      month: "2024-08",
+      coverMediaId: null,
+      days: [
+        {
+          day: "2024-08-18",
+          title: "第一次布置婴儿床",
+          kind: "story",
+          paragraphs: ["阳光照进房间里，先把小床装好。"],
+          firstScreenMediaIds: [],
+          expandedMediaIds: ["m-2408-approved"],
+          photoCaptions: {},
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2024-09",
+      coverMediaId: null,
+      days: [
+        {
+          day: "2024-09-05",
+          title: "跑糊的一张试拍",
+          kind: "story",
+          paragraphs: ["当时没站稳。"],
+          firstScreenMediaIds: ["m-2409-blur"],
+          expandedMediaIds: ["m-2409-blur"],
+          photoCaptions: {},
+        },
+      ],
+    },
+    {
+      schema: "nianlife.month-content/1",
+      month: "2024-11",
+      coverMediaId: "m-2411-curated",
+      days: [
+        {
+          day: "2024-11-10",
+          title: "待产包清点了两遍",
+          kind: "story",
+          paragraphs: ["纱布巾和包被都叠进箱子里。"],
+          firstScreenMediaIds: ["m-2411-curated"],
+          expandedMediaIds: ["m-2411-curated"],
+          photoCaptions: {},
+        },
+      ],
+    },
+  ];
+
+  const topics = (id) => {
+    if (id === "m-2408-approved") {
+      return {
+        topic: "其他",
+        water: false,
+        childInFrame: false,
+        value: 0.72,
+        confidence: 0.9,
+        carousel: {
+          ...makeCarouselLabel("2024-08-18T10:00:00+08:00", {}, { clarity: 91, expression: 84 }).carousel,
+          childMain: false,
+          faceClear: false,
+          eyesOpen: false,
+          prebirth: 92,
+          prebirthApproved: true,
+        },
+      };
+    }
+    if (id === "m-2409-blur") {
+      return {
+        topic: "其他",
+        water: false,
+        childInFrame: false,
+        value: 0.4,
+        confidence: 0.9,
+        carousel: {
+          ...makeCarouselLabel("2024-09-05T10:00:00+08:00").carousel,
+          childMain: false,
+          motionBlur: true,
+          prebirth: 95,
+          prebirthApproved: true,
+        },
+      };
+    }
+    return undefined;
+  };
+
+  const archive = makeArchive({
+    birthDay: "2025-01-03",
+    media: [mApproved, mCurated, mBlur],
+    privilege: {
+      confirmed: new Set(["m-2408-approved", "m-2411-curated", "m-2409-blur"]),
+      checked: new Set(["m-2408-approved", "m-2411-curated", "m-2409-blur"]),
+      excluded: new Set(),
+    },
+    chapters: [
+      {
+        year: "2024",
+        ageSpan: "出生之前",
+        months: monthContents.map((mc) => ({
+          month: mc.month,
+          label: mc.month,
+          shortLabel: mc.month.slice(5),
+          memories: [],
+          traceDays: [],
+          photos: [],
+          photoCount: mc.days[0].expandedMediaIds.length,
+          videoCount: 0,
+          photoDays: [
+            {
+              day: mc.days[0].day,
+              dateLabel: mc.days[0].day,
+              photos: mc.days[0].expandedMediaIds.map((id) =>
+                [mApproved, mCurated, mBlur].find((m) => m.id === id),
+              ),
+              withheldCount: 0,
+            },
+          ],
+          withheldMediaCount: 0,
+        })),
+      },
+    ],
+    time: { today: "2026-11-15", hasExplicitDate: true },
+  });
+
+  const publishedDays = collectPublishedDays(archive, monthContents, "2026-11-15", topics);
+  const capsules = selectTimeCapsules(archive, publishedDays, topics, "2026-11-15", 4);
+
+  assert.deepEqual(
+    capsules.map((c) => c.day),
+    ["2024-11-10", "2024-08-18"],
+  );
+  assert.equal(capsules[0].ageDisplay, "出生前");
+  assert.equal(capsules[0].badgeLabel, "出生前");
+  assert.equal(capsules[1].ageDisplay, "出生前");
+  assert.equal(capsules[1].badgeLabel, "出生前");
+  assert.equal(capsules[0].photo.id, "m-2411-curated");
+  assert.equal(capsules[1].photo.id, "m-2408-approved");
+
+  // 即使调用方手动传入 ageDisplay 缺失的出生前记录，selectTimeCapsules 也应兜底为「出生前」
+  const manualDays = publishedDays.map((d) =>
+    d.day === "2024-08-18" ? { ...d, ageDisplay: undefined, isPrebirth: undefined } : d,
+  );
+  const manualCapsules = selectTimeCapsules(archive, manualDays, topics, "2026-11-15", 4);
+  assert.equal(manualCapsules.find((c) => c.day === "2024-08-18")?.ageDisplay, "出生前");
 });

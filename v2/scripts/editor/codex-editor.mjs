@@ -12,8 +12,8 @@ import { resolveEcsConnection } from "../lib/ecs-connection.mjs";
 import { assertOutsideRepository } from "../lib/repo-containment.mjs";
 import { validateMonthContent } from "../../lib/month-content.ts";
 import { labelForSender, registeredLabels } from "./identity-rules.mjs";
-import { validateDayText, validateLiteraryStyle, quoteHits, SENSITIVE_TEXT } from "./validate-day.mjs";
-import { addDays, shanghaiToday, isReadable, checkDecision, timeWordProblems, sensitiveHits } from "./plan.mjs";
+import { validateDayText, validateLiteraryStyle, quoteHits, SENSITIVE_TEXT, timeWordProblems, extractValidHours } from "./validate-day.mjs";
+import { addDays, shanghaiToday, isReadable, checkDecision, sensitiveHits } from "./plan.mjs";
 import { appendDay } from "./append-day.mjs";
 import { aggregateDayMedia } from "./day-media.mjs";
 
@@ -54,13 +54,22 @@ export function sourceFingerprint(source) {
 
 function checkedSources(sources) {
   if (!Array.isArray(sources)) refuse("INVALID_SOURCES", "Source evidence must be an array.");
-  const ids = new Set();
+  const seenKeys = new Set();
+  const seenNonFamilyIds = new Set();
+  const seenFamilyIds = new Set();
   for (const source of sources) {
     if (!source || !nonempty(source.id) || !validDay(source.day) || !/^(?:[01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?$/.test(source.time)
-      || typeof source.text !== "string" || !(source.speaker === null || nonempty(source.speaker)) || ids.has(source.id)) {
+      || typeof source.text !== "string" || !(source.speaker === null || nonempty(source.speaker))) {
       refuse("INVALID_SOURCES", "Invalid or duplicate source evidence.");
     }
-    ids.add(source.id);
+    const key = `${source.id}|${source.day}`;
+    const isFamilyPhoto = source.sourceType === "family_photo";
+    const duplicate = seenKeys.has(key)
+      || (isFamilyPhoto ? seenNonFamilyIds.has(source.id) : (seenNonFamilyIds.has(source.id) || seenFamilyIds.has(source.id)));
+    if (duplicate) refuse("INVALID_SOURCES", "Invalid or duplicate source evidence.");
+    seenKeys.add(key);
+    if (isFamilyPhoto) seenFamilyIds.add(source.id);
+    else seenNonFamilyIds.add(source.id);
     if (source.fingerprint !== sourceFingerprint(source)) refuse("SOURCE_PACK_CHANGED", "Prepared source evidence was modified.", { sourceId: source.id });
   }
   return sources;
@@ -69,8 +78,8 @@ function checkedSources(sources) {
 function assertSourcesUnchanged(sources, currentSources) {
   checkedSources(sources);
   checkedSources(currentSources);
-  const expected = sources.map((source) => `${source.id}:${source.fingerprint}`).sort();
-  const actual = currentSources.map((source) => `${source.id}:${source.fingerprint}`).sort();
+  const expected = sources.map((source) => `${source.id}|${source.day}:${source.fingerprint}`).sort();
+  const actual = currentSources.map((source) => `${source.id}|${source.day}:${source.fingerprint}`).sort();
   if (JSON.stringify(expected) !== JSON.stringify(actual)) {
     refuse("SOURCE_CHANGED", "Database evidence changed after preparation; prepare a fresh source pack.");
   }
@@ -111,7 +120,6 @@ export function buildCandidate({
   assertSourcesUnchanged(sources, currentSources);
   const rewriteAllowSet = new Set(allowRewriteDays);
   const allowedSpeakerLabels = new Set(registeredLabels());
-  const lookup = new Map(sources.map((source) => [source.id, source]));
   const priorByDay = new Map((original?.days ?? []).map((day) => [day.day, structuredClone(day)]));
   const protectedDays = new Map(
     (original?.days ?? [])
@@ -136,7 +144,9 @@ export function buildCandidate({
     if (prior && prior._source === "human") {
       refuse("HUMAN_DAY_PROTECTED", "A human-authored day cannot be rewritten.", { day: decision.day });
     }
-    if (!sources.some((source) => source.day === decision.day)) refuse("UNPREPARED_DAY", "Decision date has no prepared source evidence.", { day: decision.day });
+    const daySources = sources.filter((source) => source.day === decision.day);
+    if (daySources.length === 0) refuse("UNPREPARED_DAY", "Decision date has no prepared source evidence.", { day: decision.day });
+    const dayLookup = new Map(daySources.map((source) => [source.id, source]));
     if (decision.decision === "skip") {
       if (prior) refuse("INVALID_DECISIONS", "An explicit rewrite day cannot use decision=skip.", { day: decision.day });
       if (!nonempty(decision.reason)) refuse("INVALID_DECISIONS", "A skipped day requires a reason.", { day: decision.day });
@@ -148,7 +158,7 @@ export function buildCandidate({
     if (!Array.isArray(paragraphs)) refuse("INVALID_DECISIONS", "A write decision requires cited paragraphs.", { day: decision.day });
     for (const paragraph of paragraphs) {
       if (!paragraph || !Array.isArray(paragraph.sourceIds) || paragraph.sourceIds.length === 0
-        || paragraph.sourceIds.some((id) => !lookup.has(id) || lookup.get(id).day !== decision.day)) {
+        || paragraph.sourceIds.some((id) => !dayLookup.has(id))) {
         refuse("UNKNOWN_SOURCE", "Each paragraph must cite prepared sources from its own day.", { day: decision.day });
       }
     }
@@ -183,7 +193,7 @@ export function buildCandidate({
     const allowedKinds = prior || expandedMediaIds.length > 0 ? ["story", "visual-description", "text-only"] : ["story", "text-only"];
     const shape = checkDecision(
       { ...decision, kind: decision.kind ?? prior?.kind ?? "story", paragraphs: paragraphs.map((paragraph) => ({ text: paragraph.text, sources: paragraph.sourceIds })) },
-      new Set(lookup.keys()),
+      new Set(dayLookup.keys()),
       { kinds: allowedKinds },
     );
     if (!shape.ok) refuse("INVALID_DECISIONS", "Decision shape failed validation.", { day: decision.day, error: shape.error });
@@ -225,25 +235,40 @@ export function buildCandidate({
     const evidence = { quotes: [], persons: [], paragraphSources: [] };
     const errors = [];
     for (const [index, paragraph] of paragraphs.entries()) {
-      const cited = paragraph.sourceIds.map((id) => lookup.get(id));
-      const checked = validateDayText({ day: decision.day, title: null, paragraphs: [paragraph.text] }, cited, { realNames });
+      const cited = paragraph.sourceIds.map((id) => dayLookup.get(id));
+      const checked = validateDayText(
+        { day: decision.day, title: null, paragraphs: [paragraph.text], firstScreenMediaIds },
+        cited,
+        { realNames, checkTimeWords: false },
+      );
       errors.push(...checked.errors.map((error) => error.replace(/^第 1 段/, `第 ${index + 1} 段`)));
-      const badTimes = timeWordProblems(paragraph.text, cited.map((source) => Number(source.time.slice(0, 2))));
+      const anchoredMediaHours = (paragraphMedia[index] ?? [])
+        .map((mid) => curatedForDay?.mediaHoursById?.[mid])
+        .filter((h) => Number.isInteger(h) && h >= 0 && h <= 23);
+      const paraHours = extractValidHours(cited, anchoredMediaHours);
+      const badTimes = timeWordProblems(paragraph.text, paraHours);
       if (badTimes.length) errors.push(`第 ${index + 1} 段时间不符：${badTimes.join("、")}`);
       for (const key of ["quotes", "persons"]) evidence[key].push(...checked.evidence[key].map((entry) => ({ ...entry, where: `第 ${index + 1} 段` })));
       evidence.paragraphSources.push({ paragraph: index + 1, sources: cited.map((source) => ({ id: source.id, fingerprint: source.fingerprint })) });
     }
 
     const ids = [...new Set(paragraphs.flatMap((paragraph) => paragraph.sourceIds))];
-    const cited = ids.map((id) => lookup.get(id));
-    const daySources = sources.filter((source) => source.day === decision.day);
+    const cited = ids.map((id) => dayLookup.get(id));
 
-    const titleCheck = validateDayText({ day: decision.day, title: decision.title, paragraphs: [] }, cited, { realNames });
+    const titleCheck = validateDayText(
+      { day: decision.day, title: decision.title, paragraphs: [], firstScreenMediaIds },
+      cited,
+      { realNames, checkTimeWords: false },
+    );
     errors.push(...titleCheck.errors);
     if (literary) {
       errors.push(...validateLiteraryStyle({ title: decision.title, paragraphs: paragraphs.map((p) => p.text) }));
     }
-    const badTitleTimes = timeWordProblems(decision.title, cited.map((source) => Number(source.time.slice(0, 2))));
+    const dayMediaHours = [...new Set([
+      ...Object.values(curatedForDay?.mediaHoursById ?? {}),
+      ...(curatedForDay?.captureHours ?? []),
+    ])];
+    const badTitleTimes = timeWordProblems(decision.title, extractValidHours(cited, dayMediaHours));
     if (badTitleTimes.length) errors.push(`标题时间不符：${badTitleTimes.join("、")}`);
     const hits = sensitiveHits({ title: decision.title, paragraphs: paragraphs.map((paragraph) => paragraph.text) });
     if (hits.length) errors.push(...hits.map((hit) => `敏感兜底：${hit.category}`));
@@ -278,7 +303,11 @@ export function buildCandidate({
         if (typeof decision.title === "string" && trimmedCaption === decision.title.trim()) {
           errors.push(`图注[${mid}]: 图注不能直接重复当天标题`);
         }
-        const capCheck = validateDayText({ day: decision.day, title: trimmedCaption, paragraphs: [] }, daySources, { realNames, literary: true });
+        const capCheck = validateDayText(
+          { day: decision.day, title: trimmedCaption, paragraphs: [], firstScreenMediaIds },
+          daySources,
+          { realNames, literary: true, checkTimeWords: false },
+        );
         errors.push(...capCheck.errors.map((e) => e.replace(/^标题:/, `图注[${mid}]:`)));
         const capSensitive = sensitiveHits({ title: trimmedCaption, paragraphs: [] });
         if (capSensitive.length) {
@@ -324,14 +353,13 @@ export function buildCandidate({
       }
       let candidateQuoteSources = daySources;
       if (decision.featuredQuote.sourceId !== undefined) {
-        if (!nonempty(decision.featuredQuote.sourceId) || !lookup.has(decision.featuredQuote.sourceId)
-          || lookup.get(decision.featuredQuote.sourceId).day !== decision.day) {
+        if (!nonempty(decision.featuredQuote.sourceId) || !dayLookup.has(decision.featuredQuote.sourceId)) {
           refuse("UNKNOWN_SOURCE", "featuredQuote.sourceId must reference a prepared source from the same day.", {
             day: decision.day,
             sourceId: decision.featuredQuote.sourceId,
           });
         }
-        candidateQuoteSources = [lookup.get(decision.featuredQuote.sourceId)];
+        candidateQuoteSources = [dayLookup.get(decision.featuredQuote.sourceId)];
       }
       if (TECHNICAL_RE.test(cleanedQuote)) {
         errors.push("featuredQuote: 含工程/技术字样");
@@ -396,7 +424,11 @@ export function buildCandidate({
       birthDay: "2025-01-03",
       now,
       dataCutoff: decision.day,
-      speakerBySourceId: Object.fromEntries(allSpeakerSources.map((source) => [source.id, source.speaker ?? "未登记的人"])),
+      speakerBySourceId: Object.fromEntries(
+        allSpeakerSources
+          .filter((source) => !(source.sourceType === "family_photo" && (source.speaker === null || source.speaker === undefined)))
+          .map((source) => [source.id, source.speaker ?? "未登记的人"]),
+      ),
     }).content;
 
     const targetDay = content.days.find((day) => day.day === decision.day);
@@ -495,7 +527,7 @@ export function readProductionSnapshot(month, destination, ecs, run = spawnSync)
   return { month, revision, content };
 }
 
-async function loadSources(client, from, until) {
+export async function loadSources(client, from, until) {
   const result = await client.query(`select id, to_char(captured_at at time zone 'Asia/Shanghai','YYYY-MM-DD') AS "day",
     to_char(captured_at at time zone 'Asia/Shanghai','HH24:MI:SS.US') AS "time", text,
     source_label, metadata->>'senderDigest' sender_digest from raw_sources
@@ -505,10 +537,83 @@ async function loadSources(client, from, until) {
     order by captured_at,id`, [from, until]);
   // Retain media placeholders as evidence that a family member shared a file.
   // A placeholder never supplies evidence of what the unseen picture/video shows.
-  return result.rows.filter((row) => typeof row.text === "string" && row.text.trim()).map((row) => {
-    const source = { id: row.id, day: row.day, time: row.time, text: row.text, speaker: labelForSender(row.sender_digest, row.source_label) };
+  const wechatSources = result.rows.filter((row) => typeof row.text === "string" && row.text.trim()).map((row) => {
+    const source = {
+      id: row.id,
+      day: row.day,
+      time: row.time,
+      text: row.text,
+      speaker: labelForSender(row.sender_digest, row.source_label),
+      sourceType: "wechat",
+    };
     return { ...source, fingerprint: sourceFingerprint(source) };
   });
+
+  // Also load family_photo raw_sources linked to approved non-private media in [from, until)
+  // so photo-only days have real PostgreSQL raw_sources rows to cite without forcing fake speakers.
+  const familyPhotoResult = await client.query(`
+    select rs.id,
+           to_char(m.taken_at, 'YYYY-MM-DD') as "day",
+           to_char(min(m.taken_at), 'HH24:MI:SS.US') as "time",
+           coalesce(rs.text, '') as text,
+           rs.source_label,
+           rs.original_filename,
+           array_agg(m.id order by m.taken_at, m.id) as media_ids
+      from raw_sources rs
+      join media m
+        on (m.raw_source_id = rs.id or rs.media_ids @> to_jsonb(m.id::text))
+     where rs.source_type = 'family_photo'
+       and rs.visibility <> 'private'
+       and rs.deleted_at is null
+       and m.visibility <> 'private'
+       and m.taken_at >= $1::date
+       and m.taken_at < $2::date
+       and (
+         (m.type = 'photo' and coalesce(m.width, 0) >= 480 and coalesce(m.height, 0) >= 480 and (
+           select decision from content_quality_reviews q
+            where q.target_kind = 'media_subject_check' and q.target_id = m.id
+            order by q.reviewed_at desc limit 1
+         ) = 'approved')
+         or (m.type = 'video' and coalesce((
+           select decision from content_quality_reviews q
+            where q.target_kind = 'media_subject_check' and q.target_id = m.id
+            order by q.reviewed_at desc limit 1
+         ), 'approved') <> 'store_only')
+       )
+       and exists (
+         select 1 from media_locations l
+          where l.media_asset_id = m.media_asset_id
+            and l.variant in ('web', 'thumbnail', 'poster')
+            and l.status = 'ready'
+            and l.provider in ('oss', 'hot')
+       )
+     group by rs.id, to_char(m.taken_at, 'YYYY-MM-DD'), rs.text, rs.source_label, rs.original_filename
+     order by min(m.taken_at), rs.id
+  `, [from, until]);
+
+  const seenWechatIds = new Set(wechatSources.map((s) => s.id));
+  const seenFamilyKeys = new Set();
+  const familyPhotoSources = [];
+  for (const row of familyPhotoResult.rows ?? []) {
+    const key = row?.id && row?.day ? `${row.id}|${row.day}` : null;
+    if (!key || seenWechatIds.has(row.id) || seenFamilyKeys.has(key)) continue;
+    seenFamilyKeys.add(key);
+    const source = {
+      id: row.id,
+      day: row.day,
+      time: row.time,
+      text: typeof row.text === "string" ? row.text : "",
+      speaker: null,
+      sourceType: "family_photo",
+      ...(Array.isArray(row.media_ids) ? { mediaIds: row.media_ids } : {}),
+      ...(row.original_filename ? { originalFilename: row.original_filename } : {}),
+    };
+    familyPhotoSources.push({ ...source, fingerprint: sourceFingerprint(source) });
+  }
+
+  return [...wechatSources, ...familyPhotoSources].sort((a, b) => (
+    a.day.localeCompare(b.day) || a.time.localeCompare(b.time) || a.id.localeCompare(b.id)
+  ));
 }
 
 async function loadApprovedDayMedia(client, from, until) {
@@ -597,6 +702,7 @@ async function loadApprovedDayMedia(client, from, until) {
       firstScreenMediaIds: agg.firstScreenMediaIds,
       expandedMediaIds: agg.expandedMediaIds,
       allApprovedMediaIds: list.map((x) => x.id),
+      mediaHoursById: Object.fromEntries(list.map((x) => [x.id, Number(x.ts.slice(11, 13))]).filter(([, h]) => Number.isInteger(h) && h >= 0 && h <= 23)),
     };
   }
   return out;
@@ -637,9 +743,37 @@ function realNames() {
   return value.names;
 }
 
-export async function prepare(out, { today = shanghaiToday(), lookbackDays = 14, rewriteDays = [] } = {}) {
+export function resolvePrepareWindow({ today = shanghaiToday(), from = null, until = null, lookbackDays = 14 } = {}) {
   if (!validDay(today)) refuse("INVALID_TIME", "Invalid Shanghai date.");
-  const span = Math.max(1, Math.min(366, Number(lookbackDays) || 14));
+  if (from !== null && from !== undefined && !validDay(from)) refuse("INVALID_TIME", "Invalid --from YYYY-MM-DD date.");
+  if (until !== null && until !== undefined && !validDay(until)) refuse("INVALID_TIME", "Invalid --until YYYY-MM-DD date.");
+  const effectiveUntil = until ?? today;
+  let windowFrom;
+  let span;
+  if (from !== null && from !== undefined) {
+    if (from >= effectiveUntil) refuse("INVALID_TIME", "--from must be strictly earlier than --until / --today.");
+    windowFrom = from;
+    span = Math.max(1, Math.round((Date.parse(`${effectiveUntil}T00:00:00Z`) - Date.parse(`${windowFrom}T00:00:00Z`)) / 86_400_000));
+  } else {
+    span = Math.max(1, Math.min(366, Number(lookbackDays) || 14));
+    windowFrom = addDays(effectiveUntil, -span);
+  }
+  return { today, effectiveUntil, windowFrom, span, readyThrough: addDays(effectiveUntil, -1) };
+}
+
+export function shouldIncludeDay(day, { allSources, rdsDayMedia, covered, rewriteSet }) {
+  if (!rewriteSet.has(day) && covered.has(day)) return false;
+  return allSources.some((source) => source.day === day && isReadable(source.text))
+    || (rdsDayMedia[day]?.firstScreenMediaIds?.length ?? 0) > 0;
+}
+
+export async function prepare(out, { today = shanghaiToday(), from: fromOpt = null, until: untilOpt = null, lookbackDays = 14, rewriteDays = [] } = {}) {
+  const { effectiveUntil, windowFrom, span, readyThrough } = resolvePrepareWindow({
+    today,
+    from: fromOpt,
+    until: untilOpt,
+    lookbackDays,
+  });
   for (const rd of rewriteDays) {
     if (!validDay(rd) || rd >= today) refuse("INVALID_REWRITE_DAY", "Rewrite days must be valid past YYYY-MM-DD dates.", { day: rd });
   }
@@ -647,10 +781,10 @@ export async function prepare(out, { today = shanghaiToday(), lookbackDays = 14,
   if (fs.existsSync(path.join(directory, "source-pack.json"))) refuse("OUTPUT_EXISTS", "Source pack already exists; use a fresh private directory.");
   realNames();
   const ecs = resolveEcsConnection();
-  const windowFrom = addDays(today, -span);
   const earliestRewrite = [...rewriteDays].sort()[0] ?? windowFrom;
+  const latestRewrite = [...rewriteDays].sort().at(-1) ?? null;
   const from = earliestRewrite < windowFrom ? earliestRewrite : windowFrom;
-  const readyThrough = addDays(today, -1);
+  const queryUntil = latestRewrite && latestRewrite >= effectiveUntil ? addDays(latestRewrite, 1) : effectiveUntil;
   const allDays = [];
   for (let d = windowFrom; d <= readyThrough; d = addDays(d, 1)) allDays.push(d);
   for (const rd of rewriteDays) if (!allDays.includes(rd)) allDays.push(rd);
@@ -667,8 +801,8 @@ export async function prepare(out, { today = shanghaiToday(), lookbackDays = 14,
   let allSources;
   let rdsDayMedia;
   try {
-    allSources = await loadSources(rds.client, from, today);
-    rdsDayMedia = await loadApprovedDayMedia(rds.client, from, today);
+    allSources = await loadSources(rds.client, from, queryUntil);
+    rdsDayMedia = await loadApprovedDayMedia(rds.client, from, queryUntil);
   } finally {
     await rds.close();
   }
@@ -678,10 +812,7 @@ export async function prepare(out, { today = shanghaiToday(), lookbackDays = 14,
   for (const rd of rewriteSet) {
     if (!covered.has(rd)) refuse("INVALID_REWRITE_DAY", "Cannot rewrite a day that is not currently published.", { day: rd });
   }
-  const days = allDays.filter((day) => (rewriteSet.has(day) || !covered.has(day)) && (
-    allSources.some((source) => source.day === day && isReadable(source.text))
-    || ((rdsDayMedia[day]?.firstScreenMediaIds?.length ?? 0) > 0 && allSources.some((source) => source.day === day))
-  ));
+  const days = allDays.filter((day) => shouldIncludeDay(day, { allSources, rdsDayMedia, covered, rewriteSet }));
   const sources = allSources.filter((source) => days.includes(source.day));
   const dayMedia = {};
   for (const d of days) {
@@ -695,11 +826,12 @@ export async function prepare(out, { today = shanghaiToday(), lookbackDays = 14,
           ...(prior.expandedMediaIds ?? []),
           ...(live?.allApprovedMediaIds ?? []),
         ])],
+        ...(live?.mediaHoursById ? { mediaHoursById: live.mediaHoursById } : {}),
       };
     } else if (live) {
       dayMedia[d] = live;
     } else {
-      dayMedia[d] = { firstScreenMediaIds: [], expandedMediaIds: [], allApprovedMediaIds: [] };
+      dayMedia[d] = { firstScreenMediaIds: [], expandedMediaIds: [], allApprovedMediaIds: [], mediaHoursById: {} };
     }
   }
   const pack = {
@@ -707,6 +839,8 @@ export async function prepare(out, { today = shanghaiToday(), lookbackDays = 14,
     generatedAt: new Date().toISOString(),
     today,
     from,
+    until: effectiveUntil,
+    ...(queryUntil !== effectiveUntil ? { queryUntil } : {}),
     lookbackDays: span,
     rewriteDays: [...rewriteSet].sort(),
     readyThrough,
@@ -733,8 +867,10 @@ export async function apply(out, decisionsFile, { literary = false, monthMetaFil
   const decisions = JSON.parse(decisionBytes.toString("utf8"));
   const monthMetaByMonth = monthMetaFile ? JSON.parse(fs.readFileSync(path.resolve(monthMetaFile), "utf8")) : {};
   if (monthMetaFile) assertOutsideRepository(path.resolve(monthMetaFile), REPO);
+  const packUpper = pack.until ?? pack.today;
+  const queryUpper = pack.queryUntil ?? packUpper;
   if (pack.schema !== PACK_SCHEMA || !Array.isArray(pack.days) || !Array.isArray(pack.months)
-    || !validDay(pack.today) || !validDay(pack.from) || pack.readyThrough !== addDays(pack.today, -1)
+    || !validDay(pack.today) || !validDay(pack.from) || !validDay(packUpper) || pack.readyThrough !== addDays(packUpper, -1)
     || sha256(JSON.stringify(pack.sources)) !== pack.sourceFingerprint) refuse("INVALID_SOURCE_PACK", "Prepared source pack failed integrity checks.");
   checkedSources(pack.sources);
   if (!Array.isArray(decisions) || decisions.some((decision) => !decision || !pack.days.includes(decision.day))) refuse("UNPREPARED_DAY", "Decisions may only address prepared days.");
@@ -743,7 +879,7 @@ export async function apply(out, decisionsFile, { literary = false, monthMetaFil
   const ecs = resolveEcsConnection();
   const rds = await connectReadOnly();
   let currentSources;
-  try { currentSources = (await loadSources(rds.client, pack.from, pack.today)).filter((source) => pack.days.includes(source.day)); } finally { await rds.close(); }
+  try { currentSources = (await loadSources(rds.client, pack.from, queryUpper)).filter((source) => pack.days.includes(source.day)); } finally { await rds.close(); }
   assertSourcesUnchanged(pack.sources, currentSources);
 
   const candidateDir = path.join(directory, "candidates");
@@ -805,16 +941,26 @@ async function main() {
   const args = process.argv.slice(2);
   const option = (name) => { const at = args.indexOf(`--${name}`); return at >= 0 ? args[at + 1] : undefined; };
   const flag = (name) => args.includes(`--${name}`);
+  if (flag("help") || flag("h") || args[0] === "help") {
+    console.log("Usage: codex-editor.mjs prepare --out <private-dir> [--from YYYY-MM-DD] [--until YYYY-MM-DD] [--lookback-days N] [--rewrite-days d1,d2] | apply --out <private-dir> --decisions <json> [--literary] [--month-meta <json>]");
+    return;
+  }
   const out = option("out");
   try {
     if (args[0] === "prepare") {
       const lookbackDays = option("lookback-days") ? Number(option("lookback-days")) : 21;
       const rewriteDays = option("rewrite-days") ? option("rewrite-days").split(",").map((s) => s.trim()).filter(Boolean) : [];
-      console.log(JSON.stringify(await prepare(out, { today: option("today") ?? shanghaiToday(), lookbackDays, rewriteDays })));
+      console.log(JSON.stringify(await prepare(out, {
+        today: option("today") ?? shanghaiToday(),
+        from: option("from") ?? null,
+        until: option("until") ?? null,
+        lookbackDays,
+        rewriteDays,
+      })));
     } else if (args[0] === "apply") {
       console.log(JSON.stringify(await apply(out, option("decisions"), { literary: flag("literary"), monthMetaFile: option("month-meta") ?? null })));
     } else {
-      refuse("INVALID_COMMAND", "Use prepare --out <private-directory> [--lookback-days N] [--rewrite-days d1,d2] or apply --out <same-directory> --decisions <private-json> [--literary] [--month-meta <json>].");
+      refuse("INVALID_COMMAND", "Use prepare --out <private-directory> [--from YYYY-MM-DD] [--until YYYY-MM-DD] [--lookback-days N] [--rewrite-days d1,d2] or apply --out <same-directory> --decisions <private-json> [--literary] [--month-meta <json>].");
     }
   } catch (error) {
     // Detailed validation findings may contain private quotations. Save privately, never log them.

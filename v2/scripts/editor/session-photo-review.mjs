@@ -1,9 +1,9 @@
 // Model-session visual photo review & curation tool (zero external LLM calls per AGENTS.md 2026-10-12).
 // Subcommands:
-//   prepare    --since YYYY-MM-DD --out <private-dir>
+//   prepare    --since YYYY-MM-DD [--until YYYY-MM-DD] --out <private-dir>
 //   apply      --out <private-dir> --verdicts <verdicts.json>
 //   curate     --from YYYY-MM-DD --until YYYY-MM-DD --out <day-media.json> [--leads <leads.json>]
-//   day-sheets --out <private-dir> [--source-pack <source-pack.json>] [--day-media <day-media.json>] [--days d1,d2] [--all-expanded]
+//   day-sheets --out <private-dir> [--source-pack <source-pack.json>] [--day-media <day-media.json>] [--days d1,d2] [--from YYYY-MM-DD] [--until YYYY-MM-DD] [--all-expanded]
 import fs from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
@@ -16,6 +16,24 @@ import { aggregateDayMedia } from "./day-media.mjs";
 const REPO_LITERAL = path.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const REPO = { literal: REPO_LITERAL, real: fs.realpathSync.native(REPO_LITERAL) };
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+export function isValidDay(day) {
+  return typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)
+    && !Number.isNaN(Date.parse(`${day}T00:00:00Z`))
+    && new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day;
+}
+
+export function assertValidDateWindow(start, end, startFlag = "--from", endFlag = "--until") {
+  if (start !== null && start !== undefined && !isValidDay(start)) {
+    throw new Error(`Invalid ${startFlag} date: ${start}`);
+  }
+  if (end !== null && end !== undefined && !isValidDay(end)) {
+    throw new Error(`Invalid ${endFlag} date: ${end}`);
+  }
+  if (start && end && start >= end) {
+    throw new Error(`${startFlag} (${start}) must be strictly earlier than ${endFlag} (${end}).`);
+  }
+}
 
 function resolveNightRdsUrl() {
   const local = new URL("../../.data/night-rds.mjs", import.meta.url);
@@ -99,7 +117,9 @@ async function buildContactSheets(candidates, webpDir, sheetDir) {
   return sheets;
 }
 
-export async function prepareSheets({ since, out }) {
+export async function prepareSheets({ since, until = null, out }) {
+  assertValidDateWindow(since, until, "--since", "--until");
+  if (!since) throw new Error("Specify --since YYYY-MM-DD.");
   const dir = path.resolve(out);
   assertOutsideRepository(dir, REPO);
   fs.mkdirSync(dir, { recursive: true });
@@ -132,25 +152,27 @@ export async function prepareSheets({ since, out }) {
          and l.provider in ('oss', 'hot')
        where m.type = 'photo'
          and m.taken_at >= $1::date
+         and ($2::date is null or m.taken_at < $2::date)
          and not exists (
            select 1 from content_quality_reviews r
             where r.target_kind = 'media_subject_check' and r.target_id = m.id
          )
        order by m.id, (case when l.variant = 'web' then 0 else 1 end)
-    `, [since])).rows;
+    `, [since, until ?? null])).rows;
 
     stuckApprovedPrivate = (await rds.client.query(`
       select m.id, to_char(m.taken_at, 'YYYY-MM-DD') as day
         from media m
        where m.type = 'photo'
          and m.taken_at >= $1::date
+         and ($2::date is null or m.taken_at < $2::date)
          and m.visibility = 'private'
          and (
            select decision from content_quality_reviews r
             where r.target_kind = 'media_subject_check' and r.target_id = m.id
             order by r.reviewed_at desc limit 1
          ) = 'approved'
-    `, [since])).rows;
+    `, [since, until ?? null])).rows;
   } finally {
     await rds.close();
   }
@@ -197,6 +219,7 @@ export async function prepareSheets({ since, out }) {
     schema: "nianlife.session-photo-candidates/1",
     generatedAt: new Date().toISOString(),
     since,
+    until: until ?? null,
     totalCandidates: readyCandidates.length,
     downloaded,
     failed,
@@ -285,6 +308,21 @@ export async function applyVerdicts({ out, verdictsFile }) {
           [idsToFlip],
         );
         flippedCount = flipRes.rowCount;
+        await rds.client.query(
+          `update raw_sources rs
+              set visibility = 'family', updated_at = now()
+            where rs.source_type = 'family_photo'
+              and rs.visibility = 'private'
+              and rs.deleted_at is null
+              and rs.id in (
+                select m.raw_source_id
+                  from media m
+                 where m.id = any($1)
+                   and m.visibility <> 'private'
+                   and m.raw_source_id is not null
+              )`,
+          [idsToFlip],
+        );
       }
 
       await rds.client.query("commit");
@@ -319,6 +357,9 @@ export async function applyVerdicts({ out, verdictsFile }) {
 }
 
 export async function curateDayMedia({ from, until, out, leadsFile = null }) {
+  if (!from || !until) throw new Error("Specify both --from YYYY-MM-DD and --until YYYY-MM-DD.");
+  assertValidDateWindow(from, until, "--from", "--until");
+  if (!out) throw new Error("Specify --out <day-media.json>.");
   const outPath = path.resolve(out);
   assertOutsideRepository(outPath, REPO);
   const leads = leadsFile ? JSON.parse(fs.readFileSync(path.resolve(leadsFile), "utf8")) : {};
@@ -517,9 +558,12 @@ export async function buildDaySheets({
   sourcePackFile = null,
   dayMediaFile = null,
   days = null,
+  from = null,
+  until = null,
   allExpanded = false,
 }) {
   if (!out) throw new Error("Specify --out <private-dir>.");
+  assertValidDateWindow(from, until, "--from", "--until");
   const dir = path.resolve(out);
   assertOutsideRepository(dir, REPO);
   fs.mkdirSync(dir, { recursive: true });
@@ -528,6 +572,12 @@ export async function buildDaySheets({
   fs.mkdirSync(thumbDir, { recursive: true });
 
   const filterSet = Array.isArray(days) && days.length > 0 ? new Set(days) : null;
+  const inRange = (day) => {
+    if (filterSet && !filterSet.has(day)) return false;
+    if (from && day < from) return false;
+    if (until && day >= until) return false;
+    return true;
+  };
   const mediaMap = new Map();
 
   if (sourcePackFile) {
@@ -546,7 +596,7 @@ export async function buildDaySheets({
       }
     }
     for (const d of pack.days ?? []) {
-      if (filterSet && !filterSet.has(d)) continue;
+      if (!inRange(d)) continue;
       const curated = pack.dayMedia?.[d];
       const prior = priorByDay.get(d);
       mediaMap.set(d, {
@@ -561,7 +611,7 @@ export async function buildDaySheets({
     assertOutsideRepository(dmPath, REPO);
     const dm = JSON.parse(fs.readFileSync(dmPath, "utf8"));
     for (const [d, entry] of Object.entries(dm)) {
-      if (filterSet && !filterSet.has(d)) continue;
+      if (!inRange(d)) continue;
       if (!sourcePackFile || mediaMap.has(d)) {
         mediaMap.set(d, {
           firstScreenMediaIds: entry.firstScreenMediaIds ?? [],
@@ -578,10 +628,10 @@ export async function buildDaySheets({
   let mediaRows = [];
   try {
     if (!sourcePackFile && !dayMediaFile) {
-      if (!filterSet || filterSet.size === 0) {
-        throw new Error("Provide at least one of --source-pack, --day-media, or --days.");
+      if ((!filterSet || filterSet.size === 0) && !from) {
+        throw new Error("Provide at least one of --source-pack, --day-media, --days, or --from [--until].");
       }
-      const targetDays = [...filterSet].sort();
+      const targetDays = filterSet ? [...filterSet].filter(inRange).sort() : null;
       const rawDayRows = (await rds.client.query(`
         with deduped as (
           select distinct on (coalesce(m.media_asset_id, m.id))
@@ -594,7 +644,9 @@ export async function buildDaySheets({
                  to_char(m.taken_at, 'YYYY-MM-DD"T"HH24:MI:SS') as ts
             from media m
            where m.visibility <> 'private'
-             and to_char(m.taken_at, 'YYYY-MM-DD') = any($1)
+             and ($1::text[] is null or to_char(m.taken_at, 'YYYY-MM-DD') = any($1))
+             and ($2::date is null or m.taken_at >= $2::date)
+             and ($3::date is null or m.taken_at < $3::date)
              and (
                (m.type = 'photo' and coalesce(m.width, 0) >= 480 and coalesce(m.height, 0) >= 480 and (
                  select decision from content_quality_reviews q
@@ -620,8 +672,9 @@ export async function buildDaySheets({
                     m.id asc
         )
         select id, type, width, height, day, ts from deduped order by taken_at asc, id asc
-      `, [targetDays])).rows;
-      for (const d of targetDays) {
+      `, [targetDays, from ?? null, until ?? null])).rows;
+      const resolvedDays = targetDays ?? [...new Set(rawDayRows.map((r) => r.day))].sort();
+      for (const d of resolvedDays) {
         const list = rawDayRows.filter((r) => r.day === d);
         const agg = aggregateDayMedia(
           list.map((x) => ({ id: x.id, type: x.type === "video" ? "video" : "photo", takenAt: x.ts, allowed: true })),
@@ -750,8 +803,16 @@ async function main() {
   const cmd = args[0];
   const opt = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
   const flag = (name) => args.includes(`--${name}`);
+  if (flag("help") || flag("h") || cmd === "help") {
+    console.log("Usage: session-photo-review.mjs <prepare|apply|curate|day-sheets> [--since YYYY-MM-DD] [--from YYYY-MM-DD] [--until YYYY-MM-DD] [--days d1,d2] --out <path>");
+    return;
+  }
   if (cmd === "prepare") {
-    console.log(JSON.stringify(await prepareSheets({ since: opt("since") ?? "2026-10-24", out: opt("out") })));
+    console.log(JSON.stringify(await prepareSheets({
+      since: opt("since") ?? opt("from") ?? "2026-10-24",
+      until: opt("until") ?? null,
+      out: opt("out"),
+    })));
   } else if (cmd === "apply") {
     console.log(JSON.stringify(await applyVerdicts({ out: opt("out"), verdictsFile: opt("verdicts") })));
   } else if (cmd === "curate") {
@@ -763,6 +824,8 @@ async function main() {
       sourcePackFile: opt("source-pack") ?? null,
       dayMediaFile: opt("day-media") ?? null,
       days: daysOpt,
+      from: opt("from") ?? null,
+      until: opt("until") ?? null,
       allExpanded: flag("all-expanded"),
     })));
   } else {

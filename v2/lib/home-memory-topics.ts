@@ -65,10 +65,11 @@ export type PhotoTopicLabel = {
   childInFrame?: boolean;
 };
 
+export const CAROUSEL_PROMPT_VERSION = "home-carousel-v4" as const;
 export const CAROUSEL_THEMES = ["water", "sleep", "laugh", "eat", "outdoor", "toy", "hold", "spring", "summer", "autumn", "winter"] as const;
 export type CarouselTheme = typeof CAROUSEL_THEMES[number];
 export type CarouselScore = {
-  promptVersion: "home-carousel-v4";
+  promptVersion: typeof CAROUSEL_PROMPT_VERSION;
   takenAt: string;
   matches: Record<CarouselTheme, number>;
   clarity: number; expression: number;
@@ -78,11 +79,13 @@ export type CarouselScore = {
   excludedThemes?: CarouselTheme[];
   approvedThemes?: CarouselTheme[];
   sceneKey?: string;
+  prebirth?: number;
+  prebirthApproved?: boolean;
 };
 
 export function carouselQualified(label: PhotoTopicLabel | undefined, theme: CarouselTheme, takenAt?: string): boolean {
   const s = label?.carousel;
-  return !!s && s.promptVersion === "home-carousel-v4" && !!takenAt
+  return !!s && s.promptVersion === CAROUSEL_PROMPT_VERSION && !!takenAt
     && s.takenAt.slice(0, 10) === takenAt.slice(0, 10)
     && s.qualified && s.childMain && s.faceClear && s.faceUnblocked && !s.motionBlur && !s.sensitive
     && s.clarity >= 80 && s.expression >= 60 && s.matches[theme] >= 80
@@ -94,6 +97,33 @@ export function carouselQualified(label: PhotoTopicLabel | undefined, theme: Car
 export function carouselValue(label: PhotoTopicLabel, theme: CarouselTheme): number {
   const s = label.carousel!;
   return (s.matches[theme] * 0.5 + s.clarity * 0.35 + s.expression * 0.15) / 100;
+}
+
+export function prebirthCarouselQualified(
+  label: PhotoTopicLabel | undefined,
+  takenAt: string,
+  birthDay: string,
+): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(takenAt) || !/^\d{4}-\d{2}-\d{2}/.test(birthDay)) return false;
+  if (takenAt.slice(0, 10) >= birthDay) return false;
+  const s = label?.carousel;
+  return Boolean(
+    s
+      && s.promptVersion === CAROUSEL_PROMPT_VERSION
+      && s.qualified
+      && !s.motionBlur
+      && !s.sensitive
+      && s.clarity >= 80
+      && !s.childMain
+      && s.prebirthApproved === true
+      && (s.prebirth ?? 0) >= 80,
+  );
+}
+
+export function prebirthRankScore(label: PhotoTopicLabel | undefined): number {
+  const s = label?.carousel;
+  if (!s || s.prebirth === undefined) return 0;
+  return (s.prebirth * 0.6 + s.clarity * 0.25 + s.expression * 0.15) / 100;
 }
 
 export type PhotoTopicCache = {
@@ -135,12 +165,14 @@ function validLabel(raw: unknown): PhotoTopicLabel | undefined {
   const label: PhotoTopicLabel = { topic: topic as PhotoTopic, water, value, confidence };
   const c = record.carousel as CarouselScore | undefined;
   const score = (n: unknown) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 100;
-  if (c?.promptVersion === "home-carousel-v4" && typeof c.takenAt === "string"
+  if (c?.promptVersion === CAROUSEL_PROMPT_VERSION && typeof c.takenAt === "string"
     && CAROUSEL_THEMES.every(k => score(c.matches?.[k])) && score(c.clarity) && score(c.expression)
     && [c.qualified, c.eyesOpen, c.sleeping, c.childMain, c.faceClear, c.faceUnblocked, c.motionBlur, c.sensitive].every(v => typeof v === "boolean")
     && (c.excludedThemes === undefined || (Array.isArray(c.excludedThemes) && c.excludedThemes.every(k => CAROUSEL_THEMES.includes(k))))
     && (c.approvedThemes === undefined || (Array.isArray(c.approvedThemes) && c.approvedThemes.every(k => CAROUSEL_THEMES.includes(k))))
-    && (c.sceneKey === undefined || typeof c.sceneKey === "string")) label.carousel = c;
+    && (c.sceneKey === undefined || typeof c.sceneKey === "string")
+    && (c.prebirth === undefined || score(c.prebirth))
+    && (c.prebirthApproved === undefined || typeof c.prebirthApproved === "boolean")) label.carousel = c;
   // 这两项是可选的：没问过就没有。问过但值不合法，也当没问过，不猜。
   const { waterKind, swimming } = record;
   if (typeof waterKind === "string" && WATER_KINDS.has(waterKind)) {

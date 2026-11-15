@@ -60,10 +60,20 @@ import { burstGroups, isSubjectChecked, type MediaPrivilege } from "@/lib/public
 import { heroSized } from "@/lib/media/hero";
 import { ageAtMonth, ageOn, formatDay, formatMonth } from "@/lib/time-signature";
 import { moodFor, type MemoryMood } from "@/lib/home-memory-mood";
-import { NO_TOPICS, carouselQualified, carouselValue, type CarouselTheme, type PhotoTopicLookup } from "@/lib/home-memory-topics";
+import {
+  NO_TOPICS,
+  carouselQualified,
+  carouselValue,
+  prebirthCarouselQualified,
+  prebirthRankScore,
+  type CarouselTheme,
+  type PhotoTopicLabel,
+  type PhotoTopicLookup,
+} from "@/lib/home-memory-topics";
 import { uniqueDisplayMedia } from "@/lib/media/display-identity";
 
 export const MEMORY_MIN_SLIDES = 8;
+export const PREBIRTH_MIN_SLIDES = 6;
 /**
  * 一段回忆最多取几张。
  *
@@ -101,7 +111,7 @@ export const TOPIC_MIN_CONFIDENCE = 0.6;
  * 曾经有过第四种 `week`（最近一周，2026-09-17 Teddy「每周日更新」），2026-09-19 Teddy 桌面验收
  * 时明确要求「去掉最近一周的首页回忆」，整条已删除（窗口函数、副标题、组装都不在了）。
  */
-export type MemoryThemeKind = "day" | "topic" | "season";
+export type MemoryThemeKind = "day" | "topic" | "season" | "prebirth";
 
 export type HomeMemorySlide = {
   key: string;
@@ -769,6 +779,142 @@ function buildSpanMemory(input: {
   };
 }
 
+export type PrebirthLabelsInput =
+  | PhotoTopicLookup
+  | ReadonlyMap<string, PhotoTopicLabel>
+  | Readonly<Record<string, PhotoTopicLabel>>;
+
+export type PrebirthCaptionsInput =
+  | ReadonlyMap<string, string>
+  | Readonly<Record<string, string>>;
+
+export type BuildPrebirthMemoryOptions = {
+  privilege?: MediaPrivilege;
+  usedIds?: ReadonlySet<string>;
+  rotationSlot?: number;
+};
+
+function toTopicLookup(labels: PrebirthLabelsInput): PhotoTopicLookup {
+  if (typeof labels === "function") return labels;
+  if (labels instanceof Map) return (id) => labels.get(id);
+  const record = labels as Readonly<Record<string, PhotoTopicLabel>>;
+  return (id) => record[id];
+}
+
+function prebirthCaptionFor(captions: PrebirthCaptionsInput | undefined, id: string): string | undefined {
+  if (!captions) return undefined;
+  const raw = captions instanceof Map ? captions.get(id) : (captions as Readonly<Record<string, string>>)[id];
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function pickPrebirthSlides(reps: readonly MediaRef[], max: number, topics: PhotoTopicLookup): MediaRef[] {
+  const buckets = new Map<string, MediaRef[]>();
+  const better = byValue(topics);
+  for (const photo of reps) {
+    const month = monthOfMedia(photo);
+    const list = buckets.get(month);
+    if (list) list.push(photo);
+    else buckets.set(month, [photo]);
+  }
+  const sortedMonths = [...buckets.keys()].sort((a, b) => a.localeCompare(b));
+  for (const month of sortedMonths) {
+    buckets.get(month)!.sort(better);
+  }
+  const selected: MediaRef[] = [];
+  let round = 0;
+  while (selected.length < max) {
+    let addedInRound = false;
+    for (const month of sortedMonths) {
+      const candidate = buckets.get(month)![round];
+      if (!candidate) continue;
+      selected.push(candidate);
+      addedInRound = true;
+      if (selected.length >= max) break;
+    }
+    if (!addedInRound) break;
+    round += 1;
+  }
+  return selected.sort(byTime);
+}
+
+function prebirthSubtitle(slides: readonly MediaRef[]): string {
+  const months = slides.map(monthOfMedia).filter((m) => /^\d{4}-\d{2}$/.test(m));
+  if (months.length === 0) return "出生之前";
+  const first = months[0];
+  const last = months[months.length - 1];
+  if (first === last) return `${formatMonth(first)} · 出生之前`;
+  if (first.slice(0, 4) === last.slice(0, 4)) {
+    return `${formatMonth(first)} — ${Number(last.slice(5, 7))} 月 · 出生之前`;
+  }
+  return `${formatMonth(first)} — ${formatMonth(last)} · 出生之前`;
+}
+
+/** 出生之前的记忆主题：按月份均衡取高分画面，再按拍摄时间正序播放。 */
+export function buildPrebirthMemory(
+  media: readonly MediaRef[],
+  birthDay: string | undefined,
+  labels: PrebirthLabelsInput,
+  captions?: PrebirthCaptionsInput,
+  options?: BuildPrebirthMemoryOptions,
+): HomeMemory | undefined {
+  if (!birthDay) return undefined;
+  const rawTopics = toTopicLookup(labels);
+  const topics: PhotoTopicLookup = (id) => {
+    const label = rawTopics(id);
+    if (!label) return undefined;
+    return { ...label, value: prebirthRankScore(label) };
+  };
+
+  const base = options?.privilege
+    ? usable(media, options.privilege).filter((item) => !options.privilege!.excluded?.has(item.id))
+    : media.filter(heroSized);
+  const pool = base.filter((item) =>
+    prebirthCarouselQualified(rawTopics(item.id), item.takenAt ?? "", birthDay),
+  );
+  if (pool.length === 0) return undefined;
+
+  const usedIds = options?.usedIds ?? new Set<string>();
+  const ordered = excludeUsedBursts([...pool].sort(byTime), usedIds);
+  const reps = capPerDay(sceneRepresentatives(representatives(ordered), topics), CROSS_DAY_PER_DAY_MAX, topics);
+  if (reps.length < PREBIRTH_MIN_SLIDES) return undefined;
+
+  const picked = pickPrebirthSlides(reps, MEMORY_MAX_SLIDES, topics);
+  const anchorYear = monthOfMedia(picked[0])?.slice(0, 4) || "2024";
+  const key = `prebirth:${anchorYear}`;
+  const slideTitles: string[] = [];
+  const slides: HomeMemorySlide[] = picked.map((item) => {
+    const day = dayOf(item);
+    const caption = prebirthCaptionFor(captions, item.id);
+    if (caption) slideTitles.push(caption);
+    return {
+      key: `${key}|${item.id}`,
+      media: item,
+      ...(day ? { day, dateLabel: formatDay(day) } : {}),
+      ...(caption ? { caption } : {}),
+    };
+  });
+  const mood = moodOf(picked, pool, slideTitles);
+  const monthsCount = new Set(picked.map(monthOfMedia)).size;
+  const days = new Set(picked.map(dayOf)).size;
+
+  return {
+    kind: "prebirth",
+    key,
+    title: "等待你的日子",
+    subtitle: prebirthSubtitle(picked),
+    href: `/memory#year-${anchorYear}`,
+    linkLabel: `翻到 ${anchorYear} 年`,
+    slides,
+    coverIndex: coverIndexOf(picked, topics, false, options?.rotationSlot),
+    durationSeconds: picked.length * SLIDE_SECONDS,
+    mood: mood.mood,
+    moodReason: mood.reason,
+    reason: `出生之前：审校通过的 ${anchorYear} 影像 ${pool.length} 张，场景去重后每天最多取 ${CROSS_DAY_PER_DAY_MAX} 张得 ${reps.length} 张，`
+      + `跨 ${monthsCount} 个月均衡选出 ${picked.length} 张（来自 ${days} 天），按拍摄时间正序播放`,
+  };
+}
+
 // ── 组装 ──────────────────────────────────────────────────────────────────────
 
 const AWAKE_TOPIC_KEYS = ["laugh", "eat", "water", "outdoor", "toy", "hold"] as const;
@@ -946,6 +1092,19 @@ export function selectHomeMemories(
     return true;
   };
 
+  const prebirthPhotos = birthDay
+    ? allPhotos.filter((photo) => {
+        const day = dayOf(photo);
+        return Boolean(day) && day < birthDay;
+      })
+    : [];
+  const postBirthPhotos = birthDay
+    ? allPhotos.filter((photo) => {
+        const day = dayOf(photo);
+        return !day || day >= birthDay;
+      })
+    : allPhotos;
+
   const themeByKey = new Map(TOPIC_THEMES.map((theme) => [theme.key, theme] as const));
   const buildThemes =
     rotationSlot === undefined
@@ -959,13 +1118,13 @@ export function selectHomeMemories(
           return [...rotatedAwake, "sleep" as const].map((key) => themeByKey.get(key)!);
         })();
 
-  // 主题回忆：玩水 / 睡觉 / 笑 …… 从**全部照片**里找，不限于某一天或某一季。
+  // 主题回忆：玩水 / 睡觉 / 笑 …… 从**出生后全部照片**里找，不让出生前照片混入儿童主题。
   // 传 rotationSlot 时先按轮换槽位重排清醒主题再建段，让不同主题轮流先挑跨主题照片。
   const topicMemories: HomeMemory[] = [];
   for (const theme of buildThemes) {
     const memory = buildTopicMemory({
       theme,
-      photos: allPhotos,
+      photos: postBirthPhotos,
       privilege,
       topics,
       birthDay,
@@ -978,7 +1137,7 @@ export function selectHomeMemories(
 
   // 季节主题
   const seasonPhotos = new Map<string, { label: string; year: number; photos: MediaRef[] }>();
-  for (const photo of allPhotos) {
+  for (const photo of postBirthPhotos) {
     const season = seasonOf(monthOfMedia(photo));
     if (!season) continue;
     const key = `${season.year}-${season.key}`;
@@ -1041,6 +1200,30 @@ export function selectHomeMemories(
       memories.unshift(awake);
     }
   }
+
+  const prebirthCaptions = new Map<string, string>();
+  if (context?.dayContext && birthDay) {
+    for (const [day, dayCtx] of context.dayContext) {
+      if (day >= birthDay || !dayCtx.photoCaptions) continue;
+      for (const [mediaId, caption] of Object.entries(dayCtx.photoCaptions)) {
+        const trimmed = caption.trim();
+        if (trimmed) prebirthCaptions.set(mediaId, trimmed);
+      }
+    }
+  }
+  const prebirthMemory = buildPrebirthMemory(
+    prebirthPhotos,
+    birthDay,
+    topics,
+    prebirthCaptions,
+    { privilege, usedIds, rotationSlot },
+  );
+  if (keep(prebirthMemory)) {
+    const insertAt = memories.length > 0 ? 1 : 0;
+    memories.splice(insertAt, 0, prebirthMemory);
+    if (memories.length > HOME_MEMORIES_MAX) memories.length = HOME_MEMORIES_MAX;
+  }
+
   if (memories.length === 0) {
     return {
       memories: [],
