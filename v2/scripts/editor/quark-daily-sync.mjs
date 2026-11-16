@@ -270,10 +270,20 @@ function buildQuarkCliArgs(subArgs, { sessionId, sessionInput }) {
   return fullArgs;
 }
 
+function buildQuarkChildEnv() {
+  // Windows Task Scheduler runs outside an interactive agent shell, so provide
+  // the Antigravity marker expected by quark-drive.cjs (avoids code=-104).
+  if (process.env.ANTIGRAVITY_AGENT || process.env.ANTIGRAVITY_AGENTAPI_EXE) {
+    return process.env;
+  }
+  return { ...process.env, ANTIGRAVITY_AGENT: "1" };
+}
+
 function runQuarkCli(subArgs, { sessionId, sessionInput, label }) {
   const fullArgs = buildQuarkCliArgs(subArgs, { sessionId, sessionInput });
   const res = spawnSync(process.execPath, fullArgs, {
     cwd: REPO_ROOT,
+    env: buildQuarkChildEnv(),
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
     windowsHide: true,
@@ -288,6 +298,7 @@ export function runQuarkCliAsync(subArgs, { sessionId, sessionInput, label }) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, fullArgs, {
       cwd: REPO_ROOT,
+      env: buildQuarkChildEnv(),
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });

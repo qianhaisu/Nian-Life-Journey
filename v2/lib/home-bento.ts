@@ -1937,8 +1937,10 @@ export function selectTimeCapsules(
 
   const picked: ScoredCapsule[] = [];
   const usedMonths = new Set<string>();
+  const usedAgeLabels = new Set<string>();
   const topicCounts = new Map<string, number>();
   const usedCapsulePhotos = new Set<string>();
+  const usedCapsuleDisplayKeys = new Set<string>();
   const priorityOrder: TimeCapsuleReason[] = ["anniversary", "half_year", "milestone", "season"];
 
   const effectiveScore = (c: ScoredCapsule): number => {
@@ -1949,10 +1951,23 @@ export function selectTimeCapsules(
   const isUnderTopicCap = (c: ScoredCapsule): boolean =>
     !c.topic || (topicCounts.get(c.topic) ?? 0) < MAX_CAPSULES_PER_TOPIC;
 
+  const canPickCapsule = (c: ScoredCapsule): boolean => {
+    if (usedMonths.has(c.month)) return false;
+    if (c.badgeLabel !== "出生前" && usedAgeLabels.has(c.badgeLabel)) return false;
+    if (usedCapsulePhotos.has(c.photo.id)) return false;
+    const dk = (c.photo as { displayKey?: string }).displayKey;
+    if (dk && usedCapsuleDisplayKeys.has(dk)) return false;
+    if (picked.some((p) => Math.abs(daysBetween(p.day, c.day)) < 20)) return false;
+    return true;
+  };
+
   const commitPick = (c: ScoredCapsule) => {
     picked.push(c);
     usedMonths.add(c.month);
+    if (c.badgeLabel !== "出生前") usedAgeLabels.add(c.badgeLabel);
     usedCapsulePhotos.add(c.photo.id);
+    const dk = (c.photo as { displayKey?: string }).displayKey;
+    if (dk) usedCapsuleDisplayKeys.add(dk);
     if (c.topic) {
       topicCounts.set(c.topic, (topicCounts.get(c.topic) ?? 0) + 1);
     }
@@ -1960,9 +1975,7 @@ export function selectTimeCapsules(
 
   for (const reason of priorityOrder) {
     if (picked.length >= limit) break;
-    const reasonPool = candidates.filter(
-      (c) => c.reason === reason && !usedMonths.has(c.month) && !usedCapsulePhotos.has(c.photo.id),
-    );
+    const reasonPool = candidates.filter((c) => c.reason === reason && canPickCapsule(c));
     const uncapped = reasonPool.filter(isUnderTopicCap);
     // 若该关系槽位所有候选都撞上已满 2 张的主题上限，留给后续全局循环从其他不同主题月份挑选
     const match = uncapped.sort((a, b) => effectiveScore(b) - effectiveScore(a))[0];
@@ -1970,9 +1983,7 @@ export function selectTimeCapsules(
   }
 
   while (picked.length < limit) {
-    const remaining = candidates.filter(
-      (c) => !usedMonths.has(c.month) && !usedCapsulePhotos.has(c.photo.id),
-    );
+    const remaining = candidates.filter(canPickCapsule);
     if (remaining.length === 0) break;
     const uncapped = remaining.filter(isUnderTopicCap);
     const pool = uncapped.length > 0 ? uncapped : remaining;
@@ -2237,19 +2248,40 @@ export function pickRotatedCapsules(
   const picked: BentoTimeCapsule[] = [];
   const usedDays = new Set<string>();
   const usedMonths = new Set<string>();
+  const usedAgeLabels = new Set<string>();
+  const usedPhotoIds = new Set<string>();
+  const usedDisplayKeys = new Set<string>();
+
+  const recordPick = (item: BentoTimeCapsule) => {
+    usedDays.add(item.day);
+    usedMonths.add(item.month);
+    if (item.badgeLabel !== "出生前") usedAgeLabels.add(item.badgeLabel);
+    usedPhotoIds.add(item.photo.id);
+    const dk = (item.photo as { displayKey?: string }).displayKey;
+    if (dk) usedDisplayKeys.add(dk);
+    picked.push(item);
+  };
 
   for (let i = 0; i < pool.length && picked.length < count; i += 1) {
     const item = pool[(offset + i) % pool.length];
-    if (usedDays.has(item.day) || usedMonths.has(item.month)) continue;
-    usedDays.add(item.day);
-    usedMonths.add(item.month);
-    picked.push(item);
+    const dk = (item.photo as { displayKey?: string }).displayKey;
+    if (
+      usedDays.has(item.day) ||
+      usedMonths.has(item.month) ||
+      (item.badgeLabel !== "出生前" && usedAgeLabels.has(item.badgeLabel)) ||
+      usedPhotoIds.has(item.photo.id) ||
+      (dk && usedDisplayKeys.has(dk)) ||
+      picked.some((p) => Math.abs(daysBetween(p.day, item.day)) < 20)
+    ) {
+      continue;
+    }
+    recordPick(item);
   }
   for (let i = 0; i < pool.length && picked.length < count; i += 1) {
     const item = pool[(offset + i) % pool.length];
-    if (usedDays.has(item.day)) continue;
-    usedDays.add(item.day);
-    picked.push(item);
+    const dk = (item.photo as { displayKey?: string }).displayKey;
+    if (usedDays.has(item.day) || usedPhotoIds.has(item.photo.id) || (dk && usedDisplayKeys.has(dk))) continue;
+    recordPick(item);
   }
   return picked.sort((a, b) => b.day.localeCompare(a.day));
 }
