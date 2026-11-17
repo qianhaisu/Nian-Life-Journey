@@ -186,6 +186,148 @@
   transform: scale(0.97);
 }
 
+/* ── 1b. 轻量周末出行入口条（WeekendProposalStrip） ──────────────────────── */
+
+.weekend-entry-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 18px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  background: var(--card-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 6px 18px -6px rgba(15, 23, 42, 0.05);
+}
+
+.weekend-entry-strip--amber {
+  border-color: rgba(194, 65, 12, 0.18);
+  background: linear-gradient(135deg, #FFFFFF 0%, #FFF9F5 100%);
+}
+
+.weekend-entry-strip--mint {
+  border-color: rgba(4, 120, 87, 0.16);
+  background: linear-gradient(135deg, #FFFFFF 0%, #F4FBF7 100%);
+}
+
+.weekend-entry-strip--muted {
+  border-color: var(--card-border);
+  background: #F8FAFC;
+}
+
+.weekend-entry-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.weekend-entry-pill {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--cobalt-tint);
+  color: var(--cobalt-ink);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.weekend-entry-strip--amber .weekend-entry-pill {
+  background: var(--peach-tint);
+  color: var(--peach-ink);
+}
+
+.weekend-entry-strip--mint .weekend-entry-pill {
+  background: var(--mint-tint);
+  color: var(--mint-ink);
+}
+
+.weekend-entry-strip--muted .weekend-entry-pill {
+  background: #EAEFF6;
+  color: var(--ink-body);
+}
+
+.weekend-entry-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.weekend-entry-title {
+  color: var(--ink-strong);
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.weekend-entry-meta {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekend-entry-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  align-self: flex-start;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--cobalt-tint);
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  color: var(--cobalt-ink);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    transform 220ms var(--spring);
+}
+
+@media (min-width: 680px) {
+  .weekend-entry-strip {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 10px 8px 16px;
+  }
+
+  .weekend-entry-cta {
+    align-self: center;
+  }
+}
+
+@media (hover: hover) {
+  .weekend-entry-cta:hover {
+    background: var(--ink-strong);
+    border-color: var(--ink-strong);
+    color: #FFFFFF;
+    transform: translateY(-1px);
+  }
+}
+
+.weekend-entry-cta:active {
+  transform: scale(0.97);
+}
+
 /* ── 2. 12 列 Bento 首屏马赛克 ───────────────────────────────────────────── */
 
 .bento-hero {
@@ -1810,6 +1952,40 @@ a.weekly-title {
   transform: scale(0.96);
 }
 
+.footprint-plan-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid var(--card-border);
+}
+
+.footprint-plan-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--cobalt-ink);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  transition: background-color 180ms ease, transform 200ms var(--spring);
+}
+
+@media (hover: hover) {
+  .footprint-plan-link:hover {
+    background: var(--cobalt-tint);
+    transform: translateX(2px);
+  }
+}
+
+@media (min-width: 900px) {
+  .bottom-widgets:not(:has(.weekly)) .footprint-panel:has(.footprint-latest):has(.footprint-cities) > .footprint-plan-row {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ── 全屏沉浸回忆剧场（MemoryPlayer Portal） ─────────────────────────────── */
 
 .memory-player {
@@ -2273,6 +2449,8 @@ a.weekly-title {
   .widget-head-link,
   .footprint-latest,
   .footprint-pill,
+  .weekend-entry-cta,
+  .footprint-plan-link,
   .memory-player-close,
   .memory-player-mute,
   .memory-player-controls button {
@@ -2313,6 +2491,9 @@ a.weekly-title {
   .footprint-latest:active,
   .footprint-pill:hover,
   .footprint-pill:active,
+  .weekend-entry-cta:hover,
+  .weekend-entry-cta:active,
+  .footprint-plan-link:hover,
   .memory-player-close:active,
   .memory-player-mute:active,
   .memory-player-controls button:not(:disabled):active {

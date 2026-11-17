@@ -1,0 +1,148 @@
+{
+  "schema": "nianlife.weekend-media-manifest/1",
+  "generatedAt": "2026-11-17T08:49:10.047Z",
+  "provider": "oss",
+  "count": 14,
+  "assets": [
+    {
+      "filename": "atour-intl-ext.jpg",
+      "originalKey": "media/weekend/assets/originals/atour-intl-ext.jpg",
+      "webKey": "media/weekend/assets/web/atour-intl-ext.jpg",
+      "sha256": "607899833174b078c3bb32d094e303de751d7aaa262251004104e701a19c264b",
+      "bytes": 169424,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hotels.ctrip.com/hotels/detail/?hotelId=669015",
+      "alt": "上海浦东金桥国际商业广场亚朵酒店外观（沿线亚朵对比备选）"
+    },
+    {
+      "filename": "atour-metro-ext.jpg",
+      "originalKey": "media/weekend/assets/originals/atour-metro-ext.jpg",
+      "webKey": "media/weekend/assets/web/atour-metro-ext.jpg",
+      "sha256": "ac2957db94e7c88d2ab22beb616539dada7e6bce88238ebb4c0096144c1d5b1e",
+      "bytes": 192716,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hotels.ctrip.com/hotels/detail/?hotelId=113000369",
+      "alt": "上海浦东金桥地铁站亚朵酒店外观（主推酒店）"
+    },
+    {
+      "filename": "atour-metro-lobby.jpg",
+      "originalKey": "media/weekend/assets/originals/atour-metro-lobby.jpg",
+      "webKey": "media/weekend/assets/web/atour-metro-lobby.jpg",
+      "sha256": "79b82740e1191ad2b7d259fd7b8019efd144212a5ead2d98cc275a056b233073",
+      "bytes": 155544,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hotels.ctrip.com/hotels/detail/?hotelId=113000369",
+      "alt": "上海浦东金桥地铁站亚朵酒店大门入口"
+    },
+    {
+      "filename": "atour-metro-room1.jpg",
+      "originalKey": "media/weekend/assets/originals/atour-metro-room1.jpg",
+      "webKey": "media/weekend/assets/web/atour-metro-room1.jpg",
+      "sha256": "4322892eb1d3ada9047313e405b604dac9855dec7247feef18c5e8e963b4a820",
+      "bytes": 105820,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hotels.ctrip.com/hotels/detail/?hotelId=113000369",
+      "alt": "上海浦东金桥地铁站亚朵酒店高级大床房（26㎡ / 1.8m 大床）"
+    },
+    {
+      "filename": "deqing-xiazhuhu-reeds.jpg",
+      "originalKey": "media/weekend/assets/originals/deqing-xiazhuhu-reeds.jpg",
+      "webKey": "media/weekend/assets/web/deqing-xiazhuhu-reeds.jpg",
+      "sha256": "fa8477fdc8b147fc11db0b5b84e17f9881b67676a6c08bb7f593635481e7ffe8",
+      "bytes": 387242,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Xiazhu_Swamp_-_panoramio.jpg",
+      "alt": "浙江德清下渚湖湿地栈道与芦苇荡"
+    },
+    {
+      "filename": "deqing-xiazhuhu.jpg",
+      "originalKey": "media/weekend/assets/originals/deqing-xiazhuhu.jpg",
+      "webKey": "media/weekend/assets/web/deqing-xiazhuhu.jpg",
+      "sha256": "3fed5599ecebe8f8348a9c7a21fcea3f823950e9db8bff3ce39f3df2c757cdb9",
+      "bytes": 428523,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Xiazhu_Swamp_-_panoramio_-_CyberCop.jpg",
+      "alt": "浙江德清下渚湖湿地芦苇与水道"
+    },
+    {
+      "filename": "insp-baita-train.jpg",
+      "originalKey": "media/weekend/assets/originals/insp-baita-train.jpg",
+      "webKey": "media/weekend/assets/web/insp-baita-train.jpg",
+      "sha256": "a543ce099db8b2709405f27a991eda296061b92b271c1676ba81f7bd60381436",
+      "bytes": 82541,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hznews.hangzhou.com.cn/chengshi/content/2024-03/16/content_8702239_0.htm",
+      "alt": "杭州白塔公园·复古绿皮火车车厢实景"
+    },
+    {
+      "filename": "insp-jingwei-street.jpg",
+      "originalKey": "media/weekend/assets/originals/insp-jingwei-street.jpg",
+      "webKey": "media/weekend/assets/web/insp-jingwei-street.jpg",
+      "sha256": "ecd23388c683bbdc045ba267e469d8a517936066a5265b215f76b7786245356d",
+      "bytes": 64361,
+      "mimeType": "image/jpeg",
+      "sourcePage": "http://www.hzjwgj.com/about.aspx",
+      "alt": "杭州经纬国际创意产业园·梧桐大道与红砖街区实景"
+    },
+    {
+      "filename": "insp-qingshanhu-redwoods.jpg",
+      "originalKey": "media/weekend/assets/originals/insp-qingshanhu-redwoods.jpg",
+      "webKey": "media/weekend/assets/web/insp-qingshanhu-redwoods.jpg",
+      "sha256": "34ee739ccc63f63fc5ac94da8a197e36996c210bb114e2f5abf2e7f5d9728c08",
+      "bytes": 118036,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://pic.hangzhou.com.cn/hzyx/content/content_8108202.html",
+      "alt": "临安青山湖水上森林红水杉与栈道俯拍实景"
+    },
+    {
+      "filename": "insp-shanmo-farming.jpg",
+      "originalKey": "media/weekend/assets/originals/insp-shanmo-farming.jpg",
+      "webKey": "media/weekend/assets/web/insp-shanmo-farming.jpg",
+      "sha256": "6969a6c1f7376ee3c507c42dfc06d047611f05edf47c0aae3396384de7fa57b9",
+      "bytes": 325831,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://post.smzdm.com/p/a2646orp/",
+      "alt": "萧山山末址村·甘蔗田实地采收实景"
+    },
+    {
+      "filename": "shanghai-jufuchang-alt.jpg",
+      "originalKey": "media/weekend/assets/originals/shanghai-jufuchang-alt.jpg",
+      "webKey": "media/weekend/assets/web/shanghai-jufuchang-alt.jpg",
+      "sha256": "16179a198cdb93070c8fe6883904977a75b0b5c40cccf088649f200d0ebda700",
+      "bytes": 390415,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://commons.wikimedia.org/wiki/File:Changle_Rd._Shanghai.JPG",
+      "alt": "上海长乐路冬季街景与老房子（备选街头视图）"
+    },
+    {
+      "filename": "shanghai-jufuchang.jpg",
+      "originalKey": "media/weekend/assets/originals/shanghai-jufuchang.jpg",
+      "webKey": "media/weekend/assets/web/shanghai-jufuchang.jpg",
+      "sha256": "4f117c3a125e1e9716d418e4b56de4fa7a855103dec79e79b538cfbd1766983a",
+      "bytes": 390578,
+      "mimeType": "image/jpeg",
+      "sourcePage": "Replaced cand-jufuchang-changle-2.jpg from Wikimedia Commons (Shanghai French Concession streetscape)",
+      "alt": "上海静安·长乐路梧桐与沿街小店（巨富长街区）"
+    },
+    {
+      "filename": "yaao-mixc-street.jpg",
+      "originalKey": "media/weekend/assets/originals/yaao-mixc-street.jpg",
+      "webKey": "media/weekend/assets/web/yaao-mixc-street.jpg",
+      "sha256": "d93b49faa295c9af4e46667b11a17a05358e2b4585cd8285842142eb12ad1f0e",
+      "bytes": 346556,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://mooool.com/en/hangzhou-asiad-mixc-world-landscape-en-hancement%EF%BC%8C-let-nature-and-life-return-by-landtek-group.html",
+      "alt": "杭州亚奥万象天地「里巷」水景植物步道"
+    },
+    {
+      "filename": "yaao-mixc.jpg",
+      "originalKey": "media/weekend/assets/originals/yaao-mixc.jpg",
+      "webKey": "media/weekend/assets/web/yaao-mixc.jpg",
+      "sha256": "b9a6ade776bfa8370aca14abccc8aeb936af1e856cc3db49c067808d5cd6aac9",
+      "bytes": 331759,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://mooool.com/en/hangzhou-asiad-mixc-world-landscape-en-hancement%EF%BC%8C-let-nature-and-life-return-by-landtek-group.html",
+      "alt": "杭州亚奥万象天地「里巷」开放街区与 Mall 主立面"
+    }
+  ]
+}

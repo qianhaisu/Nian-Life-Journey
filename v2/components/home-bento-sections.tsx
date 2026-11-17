@@ -378,6 +378,13 @@ export function TravelFootprintCard({ footprint }: { footprint: BentoTravelFootp
           ))}
         </div>
       ) : null}
+
+      <div className="footprint-plan-row">
+        <Link className="footprint-plan-link" href="/travel?view=plan">
+          <span>看看这周末准备去哪</span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      </div>
     </section>
   );
 }

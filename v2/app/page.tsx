@@ -12,6 +12,7 @@ import {
   TimeCapsuleSection,
   TravelFootprintCard,
 } from "@/components/home-bento-sections";
+import { WeekendProposalStrip } from "@/components/weekend-proposal-strip";
 import { readHomeFeed, type HomeFeed } from "@/lib/home-feed";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
 import { buildHomeBentoModel, selectHomeHeroCover } from "@/lib/home-bento";
@@ -21,6 +22,9 @@ import { loadTopicCache } from "@/lib/home-memory-topics-load";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { selectHomeAnswer, type HomeAnswer } from "@/lib/home-answer";
 import { listEditedMonthContents, loadMonthContent } from "@/lib/month-content";
+import { readCurrentWeekendBundle } from "@/lib/weekend/content";
+import { DEFAULT_EXCLUDED_EXPERIENCE_TYPES, WeekendStateStore } from "@/lib/weekend/state-store";
+import type { ExcludedExperienceTypeItem, WeekendStateFile } from "@/lib/weekend/types";
 import "./home.css";
 
 // 首页（Modular Canvas · 模块化生活画布）：
@@ -38,7 +42,24 @@ import "./home.css";
 
 export default async function HomePage() {
   await renderOnDemand();
-  const archive = await loadFamilyArchiveOnDemand();
+  const [archive, weekendBundle] = await Promise.all([
+    loadFamilyArchiveOnDemand(),
+    readCurrentWeekendBundle(),
+  ]);
+  const weekendWeekId = weekendBundle.weekId ?? weekendBundle.historicalSnapshot?.weekId ?? null;
+  let weekendState: WeekendStateFile | null = null;
+  let weekendExcludedTypes: ExcludedExperienceTypeItem[] = [...DEFAULT_EXCLUDED_EXPERIENCE_TYPES];
+  try {
+    const weekendStore = new WeekendStateStore();
+    const [loadedState, loadedExcluded] = await Promise.all([
+      weekendWeekId ? weekendStore.readWeekState(weekendWeekId) : Promise.resolve(null),
+      weekendStore.readExcludedTypes(),
+    ]);
+    weekendState = loadedState;
+    weekendExcludedTypes = loadedExcluded;
+  } catch {
+    // Keep graceful read-only fallback if state files are unavailable.
+  }
   const feed = await readHomeFeed({ archive });
   const topics = topicLookupFrom(await loadTopicCache());
   // 复用月稿进程内缓存（loadFamilyArchive 已预热过，零数据库查询）。
@@ -139,6 +160,12 @@ export default async function HomePage() {
           </h1>
           <RecentAnswer answer={answer} />
         </header>
+
+        <WeekendProposalStrip
+          bundle={weekendBundle}
+          state={weekendState}
+          excludedTypes={weekendExcludedTypes}
+        />
 
         <div className={bentoClasses}>
           {memories.length > 0 || heroCover ? (

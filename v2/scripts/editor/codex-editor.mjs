@@ -16,6 +16,7 @@ import { validateDayText, validateLiteraryStyle, quoteHits, SENSITIVE_TEXT, time
 import { addDays, shanghaiToday, isReadable, checkDecision, sensitiveHits } from "./plan.mjs";
 import { appendDay } from "./append-day.mjs";
 import { aggregateDayMedia } from "./day-media.mjs";
+import { loadOverlappingTripHints } from "../weekend/candidate-trip-hint.mjs";
 
 const PACK_SCHEMA = "nianlife.codex-editor.sources/1";
 const RECEIPT_SCHEMA = "nianlife.codex-editor.review/1";
@@ -834,6 +835,18 @@ export async function prepare(out, { today = shanghaiToday(), from: fromOpt = nu
       dayMedia[d] = { firstScreenMediaIds: [], expandedMediaIds: [], allApprovedMediaIds: [], mediaHoursById: {} };
     }
   }
+  const opsDir = process.env.NIANLIFE_OPS_DIR ?? path.join(homedir(), "NianlifeOps", "ops-daily");
+  const weekendStateDir = process.env.NIANLIFE_WEEKEND_STATE_DIR ?? path.join(opsDir, "state", "weekend");
+  let weekendTripHints = [];
+  try {
+    weekendTripHints = loadOverlappingTripHints({
+      fromDay: from,
+      throughDay: readyThrough,
+      opsStateDir: weekendStateDir,
+    });
+  } catch {
+    weekendTripHints = [];
+  }
   const pack = {
     schema: PACK_SCHEMA,
     generatedAt: new Date().toISOString(),
@@ -851,9 +864,16 @@ export async function prepare(out, { today = shanghaiToday(), from: fromOpt = nu
     months: snapshots.map(({ month, revision, snapshotFile }) => ({ month, revision, snapshotFile })),
     coveredDays: [...covered].sort(),
     noReadableSourceDays: allDays.filter((day) => !covered.has(day) && !days.includes(day)),
+    ...(weekendTripHints.length > 0 ? { weekendTripHints } : {}),
   };
   writePrivateJson(path.join(directory, "source-pack.json"), pack);
-  return { days: days.length, rewriteDays: rewriteSet.size, sources: sources.length, sourcePack: path.join(directory, "source-pack.json") };
+  return {
+    days: days.length,
+    rewriteDays: rewriteSet.size,
+    sources: sources.length,
+    ...(weekendTripHints.length > 0 ? { weekendTripHints: weekendTripHints.length } : {}),
+    sourcePack: path.join(directory, "source-pack.json"),
+  };
 }
 
 export async function apply(out, decisionsFile, { literary = false, monthMetaFile = null } = {}) {

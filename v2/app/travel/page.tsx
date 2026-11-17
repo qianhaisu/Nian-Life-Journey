@@ -1,24 +1,124 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { TravelAtlas, type AtlasPlace, type AtlasStamp, type AtlasTrip, type AtlasUnit } from "@/components/travel-atlas";
 import { HOME_COLOR, STICKER_COLORS } from "@/components/travel-map-svg";
+import { WeekendPlanView } from "@/components/weekend-plan-view";
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { ageOn, formatMonth } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";
 import chinaGeo from "@/lib/travel/geo/china.json";
 import { isHomeTrip, pickFeaturedTrip, placeNames, PLACES, tripRange, tripTag, leadLine, stampKeyOf, unitOf, whenAge, type Unit } from "@/lib/travel/model";
 import { readTravelIndex } from "@/lib/travel/reading";
+import { readCurrentWeekendBundle } from "@/lib/weekend/content";
+import {
+  DEFAULT_EXCLUDED_EXPERIENCE_TYPES,
+  emptyWeekendState,
+  WeekendStateStore,
+} from "@/lib/weekend/state-store";
+import type { ExcludedExperienceTypeItem, WeekendStateFile } from "@/lib/weekend/types";
 import "./travel.css";
 
 export const metadata: Metadata = { title: "旅行" };
 
+function resolveTravelView(
+  viewParam: string | undefined,
+  effectiveStatus: string
+): "plan" | "visited" {
+  if (viewParam === "plan") return "plan";
+  if (viewParam === "visited") return "visited";
+  if (
+    effectiveStatus === "published" ||
+    effectiveStatus === "collecting" ||
+    effectiveStatus === "rest_recommended"
+  ) {
+    return "plan";
+  }
+  return "visited";
+}
+
 // 旅行（docs/travel-module-plan.md §4–5）。2026-09-25 按 Teddy 的意见重做：第一版按年排卡片，
 // 「和记忆页的形式太像了」；现在以地方为主——迷雾地图、点地方看那里的旅程、足迹印章。
 // 旅程页（/travel/<id>）不变，仍是逐日指回日页的索引。
-export default async function TravelPage() {
+export default async function TravelPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ view?: string }>;
+}) {
   // 与 /memory 同理：不在构建时用 mock 数据预渲染（lib/render-on-demand.ts）。
   await renderOnDemand();
-  const { cards, birthDay, trips: publishedTrips } = await readTravelIndex();
+  const resolvedParams = searchParams ? await searchParams : {};
+  const [travelIndex, weekendBundle] = await Promise.all([
+    readTravelIndex(),
+    readCurrentWeekendBundle(),
+  ]);
+
+  const activeView = resolveTravelView(resolvedParams.view, weekendBundle.effectiveStatus);
+  const { cards, birthDay, trips: publishedTrips } = travelIndex;
   const today = productToday();
+
+  const planBadgeText =
+    weekendBundle.effectiveStatus === "published" && weekendBundle.snapshot
+      ? `${weekendBundle.snapshot.proposals.length} 个备选`
+      : weekendBundle.effectiveStatus === "collecting"
+        ? "整理中"
+        : weekendBundle.effectiveStatus === "rest_recommended"
+          ? "居家推荐"
+          : null;
+
+  if (activeView === "plan") {
+    const activeWeekId =
+      weekendBundle.snapshot?.weekId ?? weekendBundle.historicalSnapshot?.weekId ?? null;
+    let initialState: WeekendStateFile | null = activeWeekId
+      ? emptyWeekendState(activeWeekId)
+      : null;
+    let initialExcludedTypes: ExcludedExperienceTypeItem[] = [
+      ...DEFAULT_EXCLUDED_EXPERIENCE_TYPES,
+    ];
+    try {
+      const store = new WeekendStateStore();
+      const [weekState, excludedTypes] = await Promise.all([
+        activeWeekId ? store.readWeekState(activeWeekId) : Promise.resolve(null),
+        store.readExcludedTypes(),
+      ]);
+      if (weekState) initialState = weekState;
+      initialExcludedTypes = excludedTypes;
+    } catch {
+      // 状态读取失败时保留安全默认，不阻断页面展示
+    }
+
+    const rangeLabel = weekendBundle.snapshot?.weekendRange.label;
+    const planLead =
+      rangeLabel && !weekendBundle.statusHeadline.includes(rangeLabel)
+        ? `${rangeLabel} · ${weekendBundle.statusHeadline}`
+        : weekendBundle.statusHeadline;
+
+    return (
+      <div className="travel-page travel-page--plan">
+        <header className="travel-plan-wrap travel-head">
+          <div className="travel-head-row">
+            <h1 className="serif">旅行</h1>
+            <nav className="travel-view-switch" aria-label="旅行视图切换">
+              <Link href="/travel?view=plan" className="travel-view-pill is-on" aria-current="page">
+                准备去哪
+                {planBadgeText ? <span className="travel-view-badge">{planBadgeText}</span> : null}
+              </Link>
+              <Link href="/travel?view=visited" className="travel-view-pill">
+                已经去过
+              </Link>
+            </nav>
+          </div>
+          <p className="travel-lead">{planLead}</p>
+        </header>
+        <div className="travel-plan-wrap">
+          <WeekendPlanView
+            bundle={weekendBundle}
+            initialState={initialState}
+            initialExcludedTypes={initialExcludedTypes}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // 地图上的格子：中国按地级市、美国按城市。颜色按第一次去的先后轮换；家那一格用固定的绿。
   // 家那一格（杭州市域）也放进来：千岛湖、桐庐的旅程要能在地图上点到，只是它不算进「去过几个城市」。
@@ -92,11 +192,32 @@ export default async function TravelPage() {
   return (
     <div className="travel-page">
       <header className="reading-wrap travel-head">
-        <h1 className="serif">旅行</h1>
+        <div className="travel-head-row">
+          <h1 className="serif">旅行</h1>
+          <nav className="travel-view-switch" aria-label="旅行视图切换">
+            <Link href="/travel?view=plan" className="travel-view-pill">
+              准备去哪
+              {planBadgeText ? <span className="travel-view-badge">{planBadgeText}</span> : null}
+            </Link>
+            <Link href="/travel?view=visited" className="travel-view-pill is-on" aria-current="page">
+              已经去过
+            </Link>
+          </nav>
+        </div>
         <p className="travel-lead">{leadLine(publishedTrips, birthDay, today)}</p>
       </header>
       <div className="reading-wrap">
-        <TravelAtlas trips={trips} units={units} stamps={stamps} places={places} provinceColors={provinceColors} provinceNames={provinceNames} homeUnitKey={homeUnit?.key} featuredId={featuredId} />
+        <TravelAtlas
+          trips={trips}
+          units={units}
+          stamps={stamps}
+          places={places}
+          provinceColors={provinceColors}
+          provinceNames={provinceNames}
+          homeUnitKey={homeUnit?.key}
+          featuredId={featuredId}
+          topNote="这里只收已经去过并留有照片或日子记录的旅程；周末备选提案不会提前放进这里。"
+        />
       </div>
     </div>
   );

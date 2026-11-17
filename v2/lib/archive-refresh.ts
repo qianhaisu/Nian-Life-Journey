@@ -53,21 +53,45 @@ export function isArchivePath(path: string): boolean {
   return MEMO_READERS.includes(path) || /^\/(memory|events|preview)(\/|$)/.test(path);
 }
 
+export const WEEKEND_REFRESH_TARGETS: readonly RefreshTarget[] = [
+  { path: "/" },
+  { path: "/travel" },
+  { path: "/travel/weekend/[weekId]", type: "page" },
+];
+
+export function weekendRefreshTargets(): RefreshTarget[] {
+  return WEEKEND_REFRESH_TARGETS.map((target) => ({ ...target }));
+}
+
+export function isWeekendPath(path: string): boolean {
+  return path === "/" || /^\/travel(\/|$)/.test(path);
+}
+
 export type RefreshRequest =
-  | { ok: true; scope: "archive" | "paths"; targets: RefreshTarget[]; clearsArchiveMemo: boolean }
+  | { ok: true; scope: "archive" | "weekend" | "paths"; targets: RefreshTarget[]; clearsArchiveMemo: boolean; clearsWeekendContent: boolean }
   | { ok: false; error: string };
 
-// Body: `{ scope: "archive" }` for everything the archive renders, or `{ paths: string[] }` (1–50
-// absolute paths) for exactly those. Anything else is refused rather than half-applied.
+// Body: `{ scope: "archive" }` for everything the archive renders, `{ scope: "weekend" }` for
+// weekend-planner pages and memo, or `{ paths: string[] }` (1–50 absolute paths) for exactly those.
+// Anything else is refused rather than half-applied.
 export function parseRefreshRequest(body: unknown): RefreshRequest {
   const record = body && typeof body === "object" ? body as Record<string, unknown> : undefined;
   if (record?.scope === "archive") {
-    return { ok: true, scope: "archive", targets: archiveRefreshTargets(), clearsArchiveMemo: true };
+    return { ok: true, scope: "archive", targets: archiveRefreshTargets(), clearsArchiveMemo: true, clearsWeekendContent: false };
+  }
+  if (record?.scope === "weekend") {
+    return { ok: true, scope: "weekend", targets: weekendRefreshTargets(), clearsArchiveMemo: false, clearsWeekendContent: true };
   }
   const raw = record?.paths;
   const paths = Array.isArray(raw) ? raw.filter((p): p is string => typeof p === "string" && p.startsWith("/") && p.length <= 200) : null;
   if (!paths || paths.length === 0 || paths.length > 50) {
-    return { ok: false, error: 'send { "scope": "archive" } or paths as a non-empty array of up to 50 absolute paths' };
+    return { ok: false, error: 'send { "scope": "archive" }, { "scope": "weekend" }, or paths as a non-empty array of up to 50 absolute paths' };
   }
-  return { ok: true, scope: "paths", targets: paths.map((path) => ({ path })), clearsArchiveMemo: paths.some(isArchivePath) };
+  return {
+    ok: true,
+    scope: "paths",
+    targets: paths.map((path) => ({ path })),
+    clearsArchiveMemo: paths.some(isArchivePath),
+    clearsWeekendContent: paths.some(isWeekendPath),
+  };
 }

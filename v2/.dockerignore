@@ -19,7 +19,7 @@ out
 
 # Local data stores, media manifests, and ad hoc dev artifacts.
 .data
-media-manifest.json
+/media-manifest.json
 db-check-tmp.mjs
 media-tools
 

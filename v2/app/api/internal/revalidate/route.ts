@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { parseRefreshRequest } from "@/lib/archive-refresh";
 import { invalidateOnDemandArchive } from "@/lib/family-archive";
 import { invalidateMonthContent } from "@/lib/month-content";
+import { invalidateWeekendContent } from "@/lib/weekend/content";
 
 function authorized(request: Request) {
   const expected = process.env.INGESTION_TOKEN;
@@ -37,11 +38,15 @@ export async function POST(request: Request) {
     // absent file that was remembered as "no content" must be re-checked once one appears.
     invalidateMonthContent();
   }
+  if (parsed.clearsWeekendContent) {
+    invalidateWeekendContent();
+  }
   return NextResponse.json({
     scope: parsed.scope,
     revalidated: parsed.targets.map((target) => target.type ? `${target.path} (${target.type})` : target.path),
     clearedArchiveMemo: parsed.clearsArchiveMemo,
     clearedMonthContent: parsed.clearsArchiveMemo,
+    clearedWeekendContent: parsed.clearsWeekendContent,
     at: new Date().toISOString(),
   });
 }

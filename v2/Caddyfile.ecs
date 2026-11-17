@@ -79,6 +79,19 @@ nianlife.cn {
 		}
 		reverse_proxy 127.0.0.1:3000
 	}
+	# 周末去哪（2026-11-17 C1）：免口令直写当周方案选择、周日轻反馈与体验类型排除列表。
+	# 只放行精确路径 POST /api/weekend-state（字段枚举与路径防穿越由服务端 state-store 校验），
+	# 其余所有写方法与路径仍然拦截为 405。
+	@weekendWrite {
+		method POST
+		path /api/weekend-state
+	}
+	handle @weekendWrite {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy 127.0.0.1:3000
+	}
 	@notRead not method GET HEAD
 	handle @notRead {
 		header Allow "GET, HEAD"

@@ -54,11 +54,13 @@ function TripPostcard({ t }: { t: AtlasTrip }) {
 type View = { kind: "china" } | { kind: "province"; code: string } | { kind: "us" };
 type Selection = { kind: "recent" } | { kind: "province"; code: string } | { kind: "unit"; key: string } | { kind: "stamp"; key: string } | { kind: "us" };
 
-export function TravelAtlas({ trips, units, stamps, places, provinceColors, provinceNames, homeUnitKey, featuredId }: {
+export function TravelAtlas({ trips, units, stamps, places, provinceColors, provinceNames, homeUnitKey, featuredId, topNote }: {
   trips: AtlasTrip[]; units: AtlasUnit[]; stamps: AtlasStamp[]; places: AtlasPlace[];
   provinceColors: Record<string, string>; provinceNames: Record<string, string>; homeUnitKey?: string;
   /** P6.2：首屏精选行程（trips.json 的 featured，或最近一次有照片的非回老家行程）。 */
   featuredId?: string;
+  /** 切换到已去过视图时的轻提示。 */
+  topNote?: string;
 }) {
   const [view, setView] = useState<View>({ kind: "china" });
   const [sel, setSel] = useState<Selection>({ kind: "recent" });
@@ -171,6 +173,7 @@ export function TravelAtlas({ trips, units, stamps, places, provinceColors, prov
 
   return (
     <div className="travel-atlas">
+      {topNote ? <p className="travel-atlas-note">{topNote}</p> : null}
       {featured ? (
         <Link href={`/travel/${featured.id}`} className="travel-featured" aria-label={`精选行程：${featured.title}`}>
           <span className="travel-featured-photo"><Photo media={featured.cover!} variant="web" fit="crop" priority sizes="(max-width: 760px) 100vw, 760px" /></span>

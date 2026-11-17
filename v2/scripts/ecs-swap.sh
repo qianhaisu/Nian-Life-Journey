@@ -13,15 +13,22 @@
 #   九月的编辑稿要从仓库外的私有目录读，容器需要看得到它；除此之外没有别的用途。
 #   不传就完全是原来的行为。
 #
+#   WEEKEND_STATE_MOUNT（第 9 个参数）—— 周末去哪家庭状态子挂载（/srv/nianlife-content/weekend/state）。
+#   内容目录保持 :ro，只有 state 子目录以 UID 1001（nextjs）单写者 :rw 挂载，切换前后同样做 writers 检查。
+#
 # Public web containers must close preview and capture while retaining the private source env.
 # The per-release target is derived atomically from the source; it is not the source of truth.
 set -euo pipefail
-SRC="$1"; TARGET="$2"; SHORT="$3"; ROLLBACK_NAME="$4"; POLL_N="${5:-48}"; POLL_S="${6:-5}"; MOUNT_SPEC="${7:-}"; HEALTH_MOUNTS="${8:-}"
+SRC="$1"; TARGET="$2"; SHORT="$3"; ROLLBACK_NAME="$4"; POLL_N="${5:-48}"; POLL_S="${6:-5}"; MOUNT_SPEC="${7:-}"; HEALTH_MOUNTS="${8:-}"; WEEKEND_STATE_MOUNT="${9:-}"
 HEALTH_MOUNTS="${HEALTH_MOUNTS//,/ }"   # ssh 会把带空格的参数拆开，所以传进来时用逗号分隔
 if [ -e "$TARGET" ]; then
   grep -qx 'PREVIEW_READING_ENABLED=0' "$TARGET" && grep -qx 'CAPTURE_ENABLED=0' "$TARGET" || { echo "STOP: $TARGET is not a public env"; exit 3; }
 else
   { grep -v -E '^(PREVIEW_READING_ENABLED|CAPTURE_ENABLED)=' "$SRC"; printf '%s\n' 'PREVIEW_READING_ENABLED=0' 'CAPTURE_ENABLED=0'; } > "$TARGET"
+fi
+if [ -n "$WEEKEND_STATE_MOUNT" ]; then
+  grep -q '^WEEKEND_CONTENT_DIR=' "$TARGET" || printf '%s\n' 'WEEKEND_CONTENT_DIR=/srv/nianlife-content/weekend' >> "$TARGET"
+  grep -q '^WEEKEND_STATE_DIR=' "$TARGET" || printf '%s\n' 'WEEKEND_STATE_DIR=/srv/nianlife-content/weekend/state' >> "$TARGET"
 fi
 rollback() {
   set +e
@@ -68,6 +75,17 @@ if [ -n "$HEALTH_MOUNTS" ]; then
   other=$(writers || true)
   if [ -n "$other" ]; then echo "STOP: another running container already holds the writable health record: $other"; docker start "$ROLLBACK_NAME" || true; exit 8; fi
 fi
+WEEKEND_STATE_RW="/srv/nianlife-content/weekend/state"
+weekend_writers() { docker ps --format '{{.Names}}' | while read -r n; do docker inspect -f '{{range .Mounts}}{{if and .RW (eq .Source "'"$WEEKEND_STATE_RW"'")}}{{println "W"}}{{end}}{{end}}' "$n" | grep -q W && echo "$n"; done; }
+if [ -n "$WEEKEND_STATE_MOUNT" ]; then
+  [ "$WEEKEND_STATE_MOUNT" = "$WEEKEND_STATE_RW:$WEEKEND_STATE_RW" ] || { echo "STOP: weekend state mount must be $WEEKEND_STATE_RW:$WEEKEND_STATE_RW"; docker start "$ROLLBACK_NAME" || true; exit 8; }
+  [ -d "$WEEKEND_STATE_RW" ] || { echo "STOP: weekend state dir $WEEKEND_STATE_RW does not exist"; docker start "$ROLLBACK_NAME" || true; exit 8; }
+  [ "$(stat -c '%u' "$WEEKEND_STATE_RW")" = "1001" ] || { echo "STOP: weekend state dir $WEEKEND_STATE_RW must be owned by UID 1001"; docker start "$ROLLBACK_NAME" || true; exit 8; }
+  other_w=$(weekend_writers || true)
+  if [ -n "$other_w" ]; then echo "STOP: another running container already holds the writable weekend state: $other_w"; docker start "$ROLLBACK_NAME" || true; exit 8; fi
+  mount_args+=(-v "$WEEKEND_STATE_MOUNT")
+  echo "WEEKEND_STATE_MOUNT=$WEEKEND_STATE_MOUNT"
+fi
 if ! docker run -d --name nianlife-diag-web --restart unless-stopped -p 127.0.0.1:3000:3000 --env-file "$TARGET" "${mount_args[@]}" "nianlife-web:$SHORT"; then
   echo "STOP: docker run failed"
   if rollback; then exit 5; else exit 7; fi
@@ -88,7 +106,12 @@ if [ -n "$HEALTH_MOUNTS" ]; then
   if [ "$w" != "nianlife-diag-web" ]; then echo "STOP: writable health record holders are '$w' (want exactly nianlife-diag-web)"; if rollback; then exit 6; else exit 7; fi; fi
   echo "SINGLE_WRITER=nianlife-diag-web"
 fi
+if [ -n "$WEEKEND_STATE_MOUNT" ]; then
+  ww=$(weekend_writers || true)
+  if [ "$ww" != "nianlife-diag-web" ]; then echo "STOP: writable weekend state holders are '$ww' (want exactly nianlife-diag-web)"; if rollback; then exit 6; else exit 7; fi; fi
+  echo "WEEKEND_SINGLE_WRITER=nianlife-diag-web"
+fi
 docker inspect nianlife-diag-web --format "POST_IMAGE={{.Config.Image}} POST_STATUS={{.State.Status}} POST_HEALTH={{.State.Health.Status}} POST_STARTED={{.State.StartedAt}}"
-docker inspect nianlife-diag-web --format '{{range .Config.Env}}{{println .}}{{end}}' | { grep -E '^(ORGANIZER_WORKER_ENABLED|MEMORY_ORGANIZER|AI_MODEL|NIANLIFE_BUILD_SHA|MONTH_CONTENT_DIR)=' || true; } | sort -u
+docker inspect nianlife-diag-web --format '{{range .Config.Env}}{{println .}}{{end}}' | { grep -E '^(ORGANIZER_WORKER_ENABLED|MEMORY_ORGANIZER|AI_MODEL|NIANLIFE_BUILD_SHA|MONTH_CONTENT_DIR|WEEKEND_CONTENT_DIR|WEEKEND_STATE_DIR)=' || true; } | sort -u
 docker inspect nianlife-diag-web --format 'POST_MOUNTS={{range .Mounts}}{{.Source}}->{{.Destination}}(rw={{.RW}}) {{end}}' 
 echo "SWAP_OK"

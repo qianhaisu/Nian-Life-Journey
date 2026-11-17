@@ -15,6 +15,10 @@
 #   content-rollback <月> <版本文件名>|--withdraw
 #                            撤回一个月的编辑稿：指回 versions/ 里的某个旧版本，或整月撤下（软链改名保留，
 #                            页面回到没有编辑稿时的原样）。不删除任何版本文件。
+#   weekend-install <周> <文件> [预期sha]
+#                            安装「周末去哪」周报快照（python3 宿主机严检 + versions/ 原子软链切换 weeks/<weekId>.json 与 current.json）
+#   weekend-rollback <周> <版本文件名>|--withdraw
+#                            撤回或回退某周「周末去哪」快照（不删除版本文件，绝不触碰 state/）
 #   preflight <sha>          部署前固定动作：git fetch、<sha> = origin/main（upload 自动跑）
 #   swap <short>             闸 a：线上 SHA 必须是 <short> 的祖先，否则 STOP（exit 11，无旁路）；
 #                            换 Web 容器，旧容器改名 nianlife-diag-web-pre-<short>-<时间> 保留；
@@ -42,6 +46,10 @@ ENV_SOURCE="${ENV_SOURCE:-/home/ecs-user/.env.runtime.a56fee4}"
 # 编辑稿放在仓库外的私有目录，只读挂进容器。留空则完全是原来的行为（没有挂载）。
 CONTENT_HOST_DIR="${CONTENT_HOST_DIR:-/srv/nianlife-content}"
 CONTENT_MOUNT="${CONTENT_MOUNT:-$CONTENT_HOST_DIR:$CONTENT_HOST_DIR:ro}"
+# 周末去哪：内容目录随 /srv/nianlife-content 保持 :ro，只有 state/ 单独以 UID 1001 :rw 子挂载。
+WEEKEND_HOST_DIR="${WEEKEND_HOST_DIR:-$CONTENT_HOST_DIR/weekend}"
+WEEKEND_STATE_HOST_DIR="${WEEKEND_STATE_HOST_DIR:-$WEEKEND_HOST_DIR/state}"
+WEEKEND_STATE_MOUNT="${WEEKEND_STATE_MOUNT:-$WEEKEND_STATE_HOST_DIR:$WEEKEND_STATE_HOST_DIR}"
 # 健康模块私有数据（HEALTH_MOUNTS 留空 = 完全是原来的行为）。整个目录只读，record 子目录单独可写。
 HEALTH_HOST_DIR="${HEALTH_HOST_DIR:-/srv/nianlife-health}"
 HEALTH_BACKUP_DIR="${HEALTH_BACKUP_DIR:-/srv/nianlife-health-backups}"
@@ -309,6 +317,257 @@ ls -1 "$dir/versions" | grep "^$month\." | tail -5
 EOF
     ;;
 
+  weekend-install)
+    week_id="${1:?usage: weekend-install <YYYY-MM-DD> <local file> [expected hash]}"; src="${2:?usage: weekend-install <YYYY-MM-DD> <local file> [expected hash]}"
+    expected="${3:-}"
+    [[ "$week_id" =~ ^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]] || { echo "STOP: weekId must be YYYY-MM-DD"; exit 2; }
+    [ -f "$src" ] || { echo "STOP: $src not found"; exit 2; }
+    stamp="$(date +%Y%m%d-%H%M%S)-$$"
+    scp -o BatchMode=yes -i "$ECS_KEY" "$src" "$ECS_SSH:/tmp/weekend-$week_id.$stamp.json.tmp"
+    remote "$week_id" "$stamp" "$WEEKEND_HOST_DIR" "$expected" <<'EOF'
+set -euo pipefail
+week_id="$1"; stamp="$2"; wdir="$3"; expected="${4:-}"
+exec 8>/home/ecs-user/.nianlife-weekend.lock
+flock -n 8 || { echo "STOP: another weekend publication is active"; exit 9; }
+if [ -n "$expected" ]; then
+  current="absent"
+  if [ -f "$wdir/weeks/$week_id.json" ]; then current="$(sha256sum "$wdir/weeks/$week_id.json" | cut -d' ' -f1)";
+  elif [ -e "$wdir/weeks/$week_id.json" ] || [ -L "$wdir/weeks/$week_id.json" ]; then echo "STOP: invalid current weekend snapshot"; exit 10; fi
+  [ "$current" = "$expected" ] || { echo "STOP: weekend snapshot changed since reading; retry from a fresh copy"; exit 10; }
+fi
+sudo mkdir -p "$wdir/versions" "$wdir/weeks" "$wdir/state"
+sudo chown 1001:1001 "$wdir/state"
+sudo chmod 0700 "$wdir/state"
+tmp="/tmp/weekend-$week_id.$stamp.json.tmp"
+python3 - "$tmp" "$week_id" <<'PYEOF'
+import datetime, json, re, sys, urllib.parse
+
+path, week_id = sys.argv[1], sys.argv[2]
+def bad(msg):
+    print("INVALID: " + msg)
+    sys.exit(3)
+
+def parse_ymd(s):
+    if not isinstance(s, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return None
+    try:
+        return datetime.date.fromisoformat(s)
+    except ValueError:
+        return None
+
+def parse_count(val):
+    if isinstance(val, (int, float)):
+        return max(0, int(val))
+    s = str(val or "").strip()
+    m_wan = re.search(r"(\d+(?:\.\d+)?)\s*万", s)
+    if m_wan:
+        return int(round(float(m_wan.group(1)) * 10000))
+    m_num = re.search(r"(\d+)", s)
+    return int(m_num.group(1)) if m_num else 0
+
+def is_root_homepage(url):
+    try:
+        u = urllib.parse.urlparse(str(url or "").strip())
+    except Exception:
+        return True
+    if not u.scheme or not u.netloc:
+        return True
+    p = u.path or "/"
+    if (p == "/" or re.fullmatch(r"/(index\.(html?|php|aspx?)|home|default\.aspx)", p, re.I)) and not u.query:
+        return True
+    if "xiaohongshu.com" in u.netloc.lower() and (p in ("/explore", "/explore/") or p.startswith("/search_result")):
+        return True
+    if "ctrip.com" in u.netloc.lower() and p in ("/", "/hotels", "/hotels/"):
+        return True
+    return False
+
+d = json.load(open(path, encoding="utf-8"))
+if not isinstance(d, dict): bad("root not object")
+if d.get("schema") != "nianlife.weekend-planner/1": bad("schema")
+if d.get("weekId") != week_id: bad("weekId mismatch")
+for forbidden_top in ("wechatShareTemplates", "actors", "votes", "consensus"):
+    if forbidden_top in d: bad("forbidden legacy key: " + forbidden_top)
+
+status = d.get("status")
+if status not in ("collecting", "published", "unavailable", "expired", "rest_recommended"):
+    bad("invalid status: " + str(status))
+
+wr = d.get("weekendRange") or {}
+from_dt = parse_ymd(wr.get("from"))
+to_dt = parse_ymd(wr.get("to"))
+if not from_dt or not to_dt or to_dt < from_dt: bad("weekendRange")
+for f in ("label", "satLabel", "sunLabel"):
+    if not isinstance(wr.get(f), str) or not wr[f].strip(): bad("weekendRange." + f)
+
+cp = d.get("childProfile") or {}
+if cp.get("birthDay") != "2025-01-03": bad("childProfile.birthDay")
+fb = d.get("familyBaseline") or {}
+if fb.get("totalTripBudget") is not None: bad("familyBaseline.totalTripBudget must be null")
+if (fb.get("hotelBudget") or {}).get("hardCapRmb") != 1000: bad("hotelBudget.hardCapRmb must be 1000")
+
+excl_raw = d.get("excludedExperienceTypes") or []
+excl_types = set()
+for item in excl_raw:
+    if isinstance(item, dict) and item.get("experienceType"):
+        t = str(item["experienceType"]).strip()
+        excl_types.add(t)
+        if t in ("art_exhibition", "art_museum_exhibition"):
+            excl_types.update(("art_exhibition", "art_museum_exhibition"))
+art_excluded = ("art_exhibition" in excl_types or "art_museum_exhibition" in excl_types or not excl_raw)
+if art_excluded:
+    excl_types.update(("art_exhibition", "art_museum_exhibition"))
+ART_RE = re.compile(r"(美术馆|艺术展|当代艺术|看展|设计周|art_exhibition|art_museum_exhibition)", re.I)
+XHS_URL_RE = re.compile(r"^https://www\.xiaohongshu\.com/explore/[a-zA-Z0-9]+\?.*xsec_token=[^&#]+")
+
+proposals = d.get("proposals")
+if not isinstance(proposals, list): bad("proposals must be list")
+
+if status == "unavailable":
+    un = d.get("unavailableNotice") or {}
+    if un.get("reason") not in ("xhs_auth_expired", "xhs_risk_stopped", "pc_offline_mon_to_wed", "insufficient_recent_notes"):
+        bad("unavailableNotice.reason")
+    if proposals: bad("unavailable snapshot must have empty proposals")
+elif status == "rest_recommended":
+    rr = d.get("restRecommendation") or {}
+    if not rr.get("reason"): bad("restRecommendation.reason")
+    if proposals: bad("rest_recommended snapshot must have empty proposals")
+elif status == "published":
+    if not (1 <= len(proposals) <= 3): bad("published proposals count")
+    for p in proposals:
+        if not isinstance(p, dict): bad("proposal not object")
+        pid = p.get("id", "?")
+        if p.get("experienceType") in excl_types:
+            bad("excluded experienceType on " + str(pid))
+        if art_excluded and ART_RE.search(str(p.get("title", "")) + " " + str(p.get("subtitle", ""))):
+            bad("art pattern on " + str(pid))
+        if p.get("signalStrength") not in ("strong", "weak"):
+            bad("signalStrength on " + str(pid))
+        notes = (p.get("xhsEvidence") or {}).get("notes") or []
+        valid_notes = []
+        for n in notes:
+            if not isinstance(n, dict): continue
+            if n.get("noImageUsed") is not True: bad("noImageUsed on " + str(pid))
+            if not XHS_URL_RE.match(str(n.get("url", ""))): bad("invalid xhs url on " + str(pid))
+            pub_dt = parse_ymd(n.get("publishedAt"))
+            if not pub_dt: bad("invalid publishedAt on " + str(pid))
+            age_days = (from_dt - pub_dt).days
+            if 0 <= age_days <= 30 and n.get("within30Days") is not False:
+                valid_notes.append(n)
+        if len(valid_notes) < 2:
+            bad("fewer than 2 near-30d xhs notes on " + str(pid))
+        has_high = any(
+            parse_count(n.get("likes")) >= 100 or max(parse_count(n.get("commentCountText")), parse_count(n.get("commentsCaptured"))) >= 10
+            for n in valid_notes
+        )
+        expected_sig = "strong" if has_high else "weak"
+        if expected_sig == "weak" and p.get("signalStrength") == "strong":
+            bad("signalStrength overstated on " + str(pid))
+
+        cb = p.get("costBreakdown") or {}
+        if cb.get("totalTripBudgetSet") is not False:
+            bad("totalTripBudgetSet must be false on " + str(pid))
+
+        imgs = []
+        if isinstance(p.get("heroImage"), dict) and p["heroImage"].get("src"):
+            imgs.append(p["heroImage"]["src"])
+        for g in p.get("galleryImages") or []:
+            if isinstance(g, dict) and g.get("src"):
+                imgs.append(g["src"])
+        for src in imgs:
+            if not str(src).startswith("/api/weekend-media/"):
+                bad("non-OSS media src on " + str(pid) + ": " + str(src))
+
+        for s in p.get("sources") or []:
+            if isinstance(s, dict) and s.get("verificationStatus") == "verified" and is_root_homepage(s.get("url")):
+                bad("root homepage marked verified on " + str(pid))
+
+        hotel = p.get("hotel") or {}
+        if p.get("isOvernight") or hotel.get("required") is True:
+            opts = hotel.get("options") or []
+            if not opts: bad("overnight proposal missing hotel options on " + str(pid))
+            if re.search(r"喜来登|sheraton", str(opts[0].get("name", "")), re.I):
+                bad("disliked hotel brand as primary on " + str(pid))
+            def min_bk_rate(opt):
+                rates = opt.get("liveRatesCny") or {}
+                bk = [v for k, v in rates.items() if isinstance(v, (int, float)) and "breakfast" in k.lower() and "nobreakfast" not in k.lower()]
+                if bk: return min(bk)
+                any_nums = [v for v in rates.values() if isinstance(v, (int, float))]
+                return min(any_nums) if any_nums else None
+            valid_h = [o for o in opts if not o.get("soldOut") and (min_bk_rate(o) is not None and min_bk_rate(o) <= 1000)]
+            if not valid_h:
+                bad("no affordable hotel <=1000 on " + str(pid))
+
+for insp in d.get("inspirationPool") or []:
+    if not isinstance(insp, dict): bad("inspiration item not object")
+    iid = insp.get("id", "?")
+    if insp.get("experienceType") in excl_types: bad("excluded type in inspiration " + str(iid))
+    if isinstance(insp.get("image"), dict) and insp["image"].get("src"):
+        if not str(insp["image"]["src"]).startswith("/api/weekend-media/"):
+            bad("non-OSS media src on inspiration " + str(iid))
+    ev = insp.get("xhsEvidence") or []
+    if not ev: bad("missing xhsEvidence on inspiration " + str(iid))
+    if not any(
+        n.get("noImageUsed") is True and n.get("within30Days") is not False
+        and XHS_URL_RE.match(str(n.get("url", ""))) and parse_ymd(n.get("publishedAt"))
+        and 0 <= (from_dt - parse_ymd(n["publishedAt"])).days <= 30
+        for n in ev if isinstance(n, dict)
+    ):
+        bad("no valid near-30d xhs note on inspiration " + str(iid))
+
+print("VALID weekId=%s status=%s proposals=%d inspiration=%d" % (
+    week_id, status, len(proposals), len(d.get("inspirationPool") or [])))
+PYEOF
+ver="$wdir/versions/$week_id.$stamp.json"
+sudo cp "$tmp" "$ver"; rm -f "$tmp"
+sudo chmod 0644 "$ver"; sudo chmod 0755 "$wdir" "$wdir/versions" "$wdir/weeks"
+sudo ln -sfn "$ver" "$wdir/weeks/.$week_id.json.new"
+sudo mv -T "$wdir/weeks/.$week_id.json.new" "$wdir/weeks/$week_id.json"
+sudo ln -sfn "$ver" "$wdir/.current.json.new"
+sudo mv -T "$wdir/.current.json.new" "$wdir/current.json"
+ls -l "$wdir/weeks/$week_id.json" "$wdir/current.json"
+ls -1 "$wdir/versions" | grep "^$week_id\." | tail -5
+echo "WEEKEND_VERSION=$week_id.$stamp.json"
+EOF
+    ;;
+
+  weekend-rollback)
+    week_id="${1:?usage: weekend-rollback <YYYY-MM-DD> <version file>|--withdraw}"; target="${2:?usage: weekend-rollback <YYYY-MM-DD> <version file>|--withdraw}"
+    [[ "$week_id" =~ ^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]] || { echo "STOP: weekId must be YYYY-MM-DD"; exit 2; }
+    remote "$week_id" "$target" "$WEEKEND_HOST_DIR" "$(date +%Y%m%d-%H%M%S)" <<'EOF'
+set -euo pipefail
+week_id="$1"; target="$2"; wdir="$3"; stamp="$4"
+exec 8>/home/ecs-user/.nianlife-weekend.lock
+flock -n 8 || { echo "STOP: another weekend publication is active"; exit 9; }
+[ -e "$wdir/weeks/$week_id.json" ] || [ -L "$wdir/weeks/$week_id.json" ] || { echo "STOP: $wdir/weeks/$week_id.json does not exist"; exit 3; }
+echo "before: $(ls -l "$wdir/weeks/$week_id.json")"
+cur_target="$(readlink -f "$wdir/current.json" 2>/dev/null || true)"
+if [ "$target" = "--withdraw" ]; then
+  sudo mv -T "$wdir/weeks/$week_id.json" "$wdir/weeks/.$week_id.json.withdrawn-$stamp"
+  case "$cur_target" in
+    *"/$week_id."*)
+      sudo mv -T "$wdir/current.json" "$wdir/.$week_id.current.json.withdrawn-$stamp"
+      echo "withdrawn current.json too (kept as .$week_id.current.json.withdrawn-$stamp)"
+      ;;
+  esac
+  echo "withdrawn: $week_id now has no active snapshot (link kept as weeks/.$week_id.json.withdrawn-$stamp)"
+else
+  case "$target" in */*|.*) echo "STOP: give a file name inside versions/, not a path"; exit 3;; esac
+  [ -f "$wdir/versions/$target" ] || { echo "STOP: versions/$target not found"; exit 3; }
+  case "$target" in "$week_id".*) ;; *) echo "STOP: $target is not a version of $week_id"; exit 3;; esac
+  sudo ln -sfn "$wdir/versions/$target" "$wdir/weeks/.$week_id.json.new"
+  sudo mv -T "$wdir/weeks/.$week_id.json.new" "$wdir/weeks/$week_id.json"
+  case "$cur_target" in
+    ""|*"/$week_id."*)
+      sudo ln -sfn "$wdir/versions/$target" "$wdir/.current.json.new"
+      sudo mv -T "$wdir/.current.json.new" "$wdir/current.json"
+      ;;
+  esac
+  echo "after: $(ls -l "$wdir/weeks/$week_id.json")"
+fi
+ls -1 "$wdir/versions" | grep "^$week_id\." | tail -5
+EOF
+    ;;
+
   preflight)
     preflight "$(git -C "$REPO_ROOT" rev-parse --verify "${1:?usage: preflight <sha>}^{commit}")"
     ;;
@@ -319,16 +578,22 @@ EOF
     swap_log="$(mktemp)"
     scp -o BatchMode=yes -i "$ECS_KEY" "$SCRIPT_DIR/ecs-swap.sh" "$ECS_SSH:/home/ecs-user/ecs-swap.sh"
     scp -o BatchMode=yes -i "$ECS_KEY" "$SCRIPT_DIR/ecs-retention.py" "$ECS_SSH:/home/ecs-user/ecs-retention.py"
-    remote "$short" "$ENV_SOURCE" "$CONTENT_MOUNT" "$HEALTH_MOUNTS" <<'EOF' | tee "$swap_log"
+    remote "$short" "$ENV_SOURCE" "$CONTENT_MOUNT" "$HEALTH_MOUNTS" "$WEEKEND_STATE_MOUNT" "$CONTENT_HOST_DIR" "$WEEKEND_HOST_DIR" "$WEEKEND_STATE_HOST_DIR" <<'EOF' | tee "$swap_log"
 set -euo pipefail
-short="$1"; env_src="$2"; mount_spec="$3"; health_mounts="${4:-}"
+short="$1"; env_src="$2"; mount_spec="$3"; health_mounts="${4:-}"; weekend_state_mount="${5:-}"; content_dir="$6"; weekend_dir="$7"; weekend_state_dir="$8"
 exec 9>/home/ecs-user/.nianlife-deploy.lock
 flock -n 9 || { echo "STOP: another deployment is active"; exit 9; }
+if [ -n "$weekend_state_mount" ]; then
+  sudo mkdir -p "$content_dir" "$weekend_dir" "$weekend_dir/weeks" "$weekend_dir/versions" "$weekend_state_dir"
+  sudo chown 1001:1001 "$weekend_state_dir"
+  sudo chmod 0700 "$weekend_state_dir"
+  sudo chmod 0755 "$content_dir" "$weekend_dir" "$weekend_dir/weeks" "$weekend_dir/versions"
+fi
 ts=$(date +%Y%m%d-%H%M%S)
 run="/home/ecs-user/d04-runs/swap-$short-$ts"
 mkdir -p "$run"; cp -p /home/ecs-user/ecs-swap.sh "$run/swap.sh"
 docker image inspect "nianlife-web:$short" >/dev/null
-bash "$run/swap.sh" "$env_src" "/home/ecs-user/.env.runtime.$short" "$short" "nianlife-diag-web-pre-$short-$ts" 48 5 "$mount_spec" "$health_mounts" 2>&1 | tee "$run/swap.log"
+bash "$run/swap.sh" "$env_src" "/home/ecs-user/.env.runtime.$short" "$short" "nianlife-diag-web-pre-$short-$ts" 48 5 "$mount_spec" "$health_mounts" "$weekend_state_mount" 2>&1 | tee "$run/swap.log"
 echo "ROLLBACK_CONTAINER=nianlife-diag-web-pre-$short-$ts"
 echo "RUN_DIR=$run"
 EOF
