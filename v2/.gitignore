@@ -18,3 +18,5 @@ out/
 
 # Sandboxed tool runs (Codex, etc.) sometimes point npm at a local cache dir here.
 .npm-cache/
+__pycache__/
+*.pyc

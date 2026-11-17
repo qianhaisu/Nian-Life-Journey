@@ -24,7 +24,9 @@
     "wechat:import": "node --import tsx scripts/wechat-import-worker.mjs",
     "wechat:import-all": "node --import tsx scripts/wechat-import-all.mjs",
     "worker": "node --import tsx scripts/nianlife-worker.mjs",
-    "media:migrate-oss": "node --import tsx scripts/oss-migrate-derivatives.mjs"
+    "media:migrate-oss": "node --import tsx scripts/oss-migrate-derivatives.mjs",
+    "stats": "python scripts/stats/server.py",
+    "stats:sync": "python scripts/stats/sync.py"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1120.0",
