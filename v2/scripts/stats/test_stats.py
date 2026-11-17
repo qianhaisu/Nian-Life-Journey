@@ -7,7 +7,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from parser import parse_device_and_ua, parse_log_line, clean_page_path, is_ip_masked
-from geo import build_location_label, is_private_or_loopback
+from geo import format_network_label, is_private_or_loopback, resolve_ip_offline
 
 
 class TestStatsParser(unittest.TestCase):
@@ -144,13 +144,49 @@ class TestStatsParser(unittest.TestCase):
         self.assertEqual(rec['page_view_type'], 'document')
         self.assertEqual(rec['path'], '/films/xueyi')
 
+    def test_head_request_excluded_from_pv(self):
+        entry = {
+            "ts": 1794927277.0,
+            "status": 200,
+            "request": {
+                "remote_ip": "125.119.85.238",
+                "method": "HEAD",
+                "uri": "/films/xueyi",
+                "headers": {
+                    "Accept": ["text/html"]
+                }
+            }
+        }
+        rec = parse_log_line(entry)
+        self.assertIsNotNone(rec)
+        self.assertEqual(rec['is_page_view'], 0)
+        self.assertEqual(rec['method'], 'HEAD')
+
+    def test_sensitive_query_sanitization(self):
+        from parser import sanitize_uri
+        uri = "/memory?token=SECRET123&user=admin&secret=XYZ&tab=growth"
+        cleaned = sanitize_uri(uri)
+        self.assertNotIn("SECRET123", cleaned)
+        self.assertNotIn("XYZ", cleaned)
+        self.assertIn("token=%5BREDACTED%5D", cleaned)
+        self.assertIn("secret=%5BREDACTED%5D", cleaned)
+        self.assertIn("user=admin", cleaned)
+        self.assertIn("tab=growth", cleaned)
+
     def test_geo_label_formatting(self):
-        label_cn = build_location_label("中国", "浙江", "杭州", "Chinanet")
-        self.assertEqual(label_cn, "浙江 杭州 (Chinanet)")
-        label_us = build_location_label("美国", "弗吉尼亚", "阿什本", "Amazon")
+        label_cn = format_network_label("中国", "浙江", "杭州", "中国电信", is_masked=True)
+        self.assertEqual(label_cn, "浙江 杭州 (中国电信) [网段归属]")
+        label_us = format_network_label("美国", "弗吉尼亚", "阿什本", "Amazon", is_masked=False)
         self.assertEqual(label_us, "美国 弗吉尼亚 阿什本 (Amazon)")
         self.assertTrue(is_private_or_loopback("127.0.0.1"))
         self.assertFalse(is_private_or_loopback("125.119.85.238"))
+
+    def test_offline_geo_resolution(self):
+        res = resolve_ip_offline("125.119.0.0")
+        self.assertEqual(res['country'], "中国")
+        self.assertEqual(res['region'], "浙江")
+        self.assertIn("中国电信", res['isp'])
+        self.assertIn("网段归属", res['location_label'])
 
 
 if __name__ == '__main__':

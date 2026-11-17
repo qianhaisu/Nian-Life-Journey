@@ -954,6 +954,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       </svg>
       <h1>Nianlife 访问统计</h1>
       <span class="badge badge-success">● 本地后台 127.0.0.1</span>
+      <span class="badge badge-accent">🔒 100% 离线 IP 解析 (零外部外发)</span>
       <span id="syncStatusBadge" class="badge">检查同步状态...</span>
     </div>
     <div class="header-actions">
@@ -968,13 +969,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <!-- Notice Card -->
     <div class="notice-card">
       <div>
-        <strong>📌 统计口径说明与数据说明：</strong>
-        独立 IP 数（UV）<strong>不等于实际人数，也不等于设备数</strong>。家庭/单位 Wi-Fi 共享同一出口公网 IP；移动网络基站切换会造成同一手机 IP 变动；同一手机可能在微信与 Safari 中分别访问。
+        <strong>📌 统计口径说明与技术边界：</strong>
+        来源 IP 数（UV）<strong>不等于实际人数，也不等于设备数</strong>。家庭/单位 Wi-Fi 共享同一公网出口；移动网络基站切换导致同一手机 IP 变动；同一手机分在微信与浏览器中访问。
       </div>
-      <div style="font-size: 12px; color: #94a3b8;">
-        • <strong>历史数据覆盖</strong>：2026-10-12 至 2026-11-17 期间线上 Caddy 按 /16 掩码打码并抹除了 User-Agent，历史数据如实展示打码 IP 与未知设备，不作虚构编造。<br>
-        • <strong>新版全量记录</strong>：2026-11-17 22:54:33 升级线上采集配置生效，开始记录完整 IP、精确时间（秒）与完整 User-Agent（解析操作系统、浏览器及微信内置标识）。<br>
-        • <strong>精确计数</strong>：自动剔除静态文件、图片视频媒体、Next.js Prefetch 预取、健康探针及漏洞探测；支持单页路由 (SPA) 客户端跳转；已识别网络爬虫单独归类。
+      <div style="font-size: 12px; color: #94a3b8; display: flex; flex-direction: column; gap: 4px;">
+        <div>• <strong>历史打码 IP 与 UV 解释</strong>：2026-10-12 至 2026-11-17 期间线上按 /16 掩码打码并抹除 User-Agent，历史数据如实展示打码网段与未知设备。在历史区间内，UV 实质上是<strong>活跃 /16 来源网段数</strong>，不同家庭同一网段被归并，数值显著低于真实物理 IP 数；新版已恢复独立 IP。</div>
+        <div>• <strong>网络归属地表述</strong>：IP 归属地由本地离线网段数据库匹配，<strong>完全在本地 Windows 运行，零外部网络请求，绝不外发 IP</strong>；所标地域为运营商网络接入地（网段注册地），非精确个人居住地址。</div>
+        <div>• <strong>Next.js 客户端缓存与服务端统计边界</strong>：Next.js App Router 具有客户端内存路由缓存（Router Cache）。用户在页面内点击已缓存链接时由浏览器内存直接渲染，<strong>不向服务端发起网络请求</strong>，服务端访问日志物理上无法捕获该部分纯内存切换；静态资源命中浏览器强缓存时同样不经过服务器。服务端 PV 准确反映的是回源访问负荷。</div>
+        <div>• <strong>常规访问与识别爬虫</strong>：HEAD 方法请求仅获取响应头，已严格排除在 PV 之外；系统仅能识别常见已知爬虫与自动化扫描特征，未特征化的隐蔽脚本仍会归入常规请求，无法承诺 100% 区分人与脚本。</div>
       </div>
     </div>
 
@@ -1006,9 +1008,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="filter-group">
         <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">访客筛选:</span>
         <select id="botFilterSelect" onchange="applyBotFilter()">
-          <option value="0">排除网络爬虫 (仅看真实访问)</option>
+          <option value="0">常规页面访问 (排除已识别爬虫)</option>
           <option value="1">包含全部访问 (含爬虫探测)</option>
-          <option value="only">仅看网络爬虫 / 探测</option>
+          <option value="only">仅看已识别爬虫 / 探测</option>
         </select>
       </div>
     </div>
@@ -1021,16 +1023,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <span>📄</span>
         </div>
         <div class="metric-value" id="valPV">-</div>
-        <div class="metric-sub" id="subPV">已排除静态文件与预取</div>
+        <div class="metric-sub" id="subPV">仅限成功 GET，已排 HEAD、静态与预取</div>
       </div>
 
       <div class="metric-card">
         <div class="metric-title">
-          <span>独立访问 IP (UV)</span>
+          <span>来源 IP / 历史网段 (UV)</span>
           <span>🌐</span>
         </div>
         <div class="metric-value" id="valUV">-</div>
-        <div class="metric-sub">不同公网 IP 数 (≠人数)</div>
+        <div class="metric-sub">独立公网 IP / 打码网段数 (≠人数)</div>
       </div>
 
       <div class="metric-card">
@@ -1110,7 +1112,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <thead>
               <tr>
                 <th>访问 IP (点击筛选)</th>
-                <th>归属地城市与网络</th>
+                <th>网络归属地 (ISP/网段注册)</th>
                 <th style="width: 70px; text-align: right;">PV 频次</th>
                 <th style="width: 130px;">最后访问时间</th>
               </tr>
@@ -1139,7 +1141,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <tr>
               <th style="width: 155px;">访问时间 (北京时间)</th>
               <th style="width: 140px;">来源 IP</th>
-              <th>地理位置与城市</th>
+              <th>网络归属地 (网段注册)</th>
               <th>访问页面</th>
               <th>设备 / 操作系统 / 浏览器</th>
               <th style="width: 70px; text-align: center;">状态</th>

@@ -31,6 +31,32 @@ STATIC_PREFIXES = (
     '/sitemap.xml', '/site.webmanifest'
 )
 
+SENSITIVE_QUERY_KEYS = (
+    'token', 'auth', 'key', 'secret', 'password', 'pwd', 'code',
+    'ticket', 'session', 'phone', 'mobile', 'email', 'openid',
+    'sign', 'signature', 'pass', 'api_key', 'apikey'
+)
+
+
+def sanitize_uri(uri: str) -> str:
+    """Sanitize sensitive query parameter values in URI, replacing values with [REDACTED]."""
+    if not uri or '?' not in uri:
+        return uri
+    try:
+        import urllib.parse
+        base, qs = uri.split('?', 1)
+        params = urllib.parse.parse_qsl(qs, keep_blank_values=True)
+        sanitized = []
+        for k, v in params:
+            k_lower = k.lower()
+            if any(s in k_lower for s in SENSITIVE_QUERY_KEYS):
+                sanitized.append((k, '[REDACTED]'))
+            else:
+                sanitized.append((k, v))
+        return f"{base}?{urllib.parse.urlencode(sanitized)}"
+    except Exception:
+        return uri.split('?')[0]
+
 
 def parse_device_and_ua(ua_str: Optional[str]) -> Dict[str, Any]:
     """Parse User-Agent string without fabricating specific phone models."""
@@ -228,12 +254,14 @@ def parse_log_line(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         is_prefetch = True
 
     # 5. Page View Classification
+    # HEAD requests are explicitly excluded: HEAD fetches headers only without a page body,
+    # and is used by crawlers, uptime monitors, or curl probes — never human page viewing.
     is_page_view = 0
     page_view_type = 'none'
     final_path = raw_path
 
     if (status in (200, 304, 206) and 
-        method in ('GET', 'HEAD') and 
+        method == 'GET' and 
         not is_static and 
         not is_api and 
         not is_prefetch and 
@@ -260,6 +288,9 @@ def parse_log_line(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             is_page_view = 1
             page_view_type = 'document'
 
+    # Sanitize sensitive query parameters from raw URI before recording
+    sanitized_uri = sanitize_uri(uri)
+
     # Compute deterministic request hash for idempotency and deduplication
     hash_seed = f"{ts:.6f}_{remote_ip}_{method}_{uri}_{status}_{ua_str}"
     request_hash = hashlib.sha256(hash_seed.encode('utf-8')).hexdigest()
@@ -273,7 +304,7 @@ def parse_log_line(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         'ip': remote_ip,
         'is_masked': is_masked,
         'method': method,
-        'uri': uri,
+        'uri': sanitized_uri,
         'path': final_path,
         'status': status,
         'duration': duration,
