@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>周末去哪 · 张年的人生档案</title>
+  <meta name="description" content="张年家庭周末出行决策与现场行程工作台。" />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="site-header">
+      <div class="site-header-inner">
+        <a href="#home" class="brand-link" data-nav="home" aria-label="回到张年的人生档案首页">
+          <span class="brand-badge" aria-hidden="true">年</span>
+          <span class="brand-name">张年的人生档案</span>
+        </a>
+
+        <nav class="primary-nav" aria-label="主导航">
+          <button type="button" class="nav-item is-active" data-nav="home">首页</button>
+          <button type="button" class="nav-item" data-nav="memories">记忆</button>
+          <button type="button" class="nav-item" data-nav="health">健康</button>
+          <button type="button" class="nav-item" data-nav="travel">旅行</button>
+          <button type="button" class="nav-item" data-nav="report">妈妈月报</button>
+        </nav>
+
+        <div class="header-right">
+          <span class="header-chip num">11.21 至 22 本周提案</span>
+          <div class="studio-wrap" id="studioDock">
+            <button type="button" class="studio-trigger" id="studioTrigger" aria-expanded="false">切换演示</button>
+            <div class="studio-panel" id="studioPanel" hidden>
+              <div class="studio-panel-title">快速切换视图</div>
+              <div class="studio-btn-grid">
+                <button type="button" class="btn btn-quiet" data-proto-view="home">首页入口</button>
+                <button type="button" class="btn btn-quiet" data-proto-view="travel">三方案页</button>
+                <button type="button" class="btn btn-quiet" data-proto-view="detail">方案详情</button>
+                <button type="button" class="btn btn-quiet" data-proto-view="live">周六现场</button>
+              </div>
+              <label class="studio-panel-title" for="stateSelect">周期状态演示</label>
+              <select id="stateSelect">
+                <option value="published">周三晚已发布</option>
+                <option value="weather_shift">周五天气微调</option>
+                <option value="unavailable">演示：亚朵满房备用</option>
+                <option value="collecting">周二搜集中</option>
+                <option value="expired_rest">已过周末 / 休整</option>
+              </select>
+              <label class="studio-check-row">
+                <input type="checkbox" id="toggleHomeEntry" />
+                <span>对照：隐藏首页周末轻入口</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="mobile-nav-strip" aria-label="移动端导航">
+        <button type="button" class="nav-item is-active" data-nav="home">首页</button>
+        <button type="button" class="nav-item" data-nav="memories">记忆</button>
+        <button type="button" class="nav-item" data-nav="health">健康</button>
+        <button type="button" class="nav-item" data-nav="travel">旅行</button>
+        <button type="button" class="nav-item" data-nav="report">月报</button>
+      </nav>
+    </header>
+
+    <main id="appMain" class="main-wrap" tabindex="-1"></main>
+
+    <footer class="site-footer">
+      <div class="site-footer-inner">
+        <span>张年的人生档案</span>
+        <span>实景照片来源：Wikimedia Commons（CC BY / CC BY-SA）、Mooool 景观摄影、杭州媒体实拍图及携程酒店相册</span>
+      </div>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast-bar" role="status" aria-live="polite"></div>
+
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
