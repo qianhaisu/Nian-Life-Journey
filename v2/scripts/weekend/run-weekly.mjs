@@ -155,6 +155,8 @@ export async function runWeeklyStage(stage, options = {}) {
       : readExcludedTypesFile(path.join(opsStateDir, "excluded-types.json"));
 
     if (stage === "collect-init") {
+      const ctx = loadLocalWeekendContext(opsStateDir);
+      const visitedPlaceNames = (ctx.visitedContext?.spots ?? []).flatMap((s) => s.aliases ?? [s.canonicalSpot]);
       const weather = options.offline
         ? readJsonSafe(path.join(opsStateDir, "cache", `weather-bundle-${weekId}.json`), null)
         : await fetchWeekendWeatherBundle({
@@ -167,16 +169,52 @@ export async function runWeeklyStage(stage, options = {}) {
         writeJsonAtomic(path.join(opsStateDir, "cache", `weather-bundle-${weekId}.json`), weather);
       }
 
-      const xhs = await crawlXhsBatch({
-        weekId,
-        targetFromDay: satDay,
-        todayYmd,
-        excludedTypes,
-        baseDir,
-        opsStateDir,
-        dryRun: Boolean(options.dryRun),
-        headless: true,
-      });
+      const xhs = options.offline
+        ? { ok: true, reusedCount: 0, newNotesCount: 0, notes: [], stoppedByRiskOrAuth: false, manifest: null }
+        : await crawlXhsBatch({
+            weekId,
+            targetFromDay: satDay,
+            todayYmd,
+            excludedTypes,
+            visitedPlaceNames,
+            baseDir,
+            opsStateDir,
+            dryRun: Boolean(options.dryRun),
+            headless: true,
+          });
+
+      if (!options.dryRun) {
+        const prevDoc = readJsonSafe(candidatesPath, null);
+        const keepCurated = prevDoc?.weekId === weekId && prevDoc?.editorialCurated === true;
+        const rawNotesDigest = (xhs.notes ?? []).map((n) => ({
+          seq: n.seq,
+          noteId: n.noteId,
+          title: n.title,
+          keyword: n.keyword,
+          publishDate: n.publishDate ?? n.publishedAt,
+          likes: n.likes,
+          commentsCaptured: n.commentsCaptured ?? 0,
+          url: n.url ?? n.noteUrl,
+          bodyPreview100: n.bodyPreview100 ?? "",
+          reusedFromRaw: Boolean(n.reusedFromRaw),
+        }));
+        const nextDoc = {
+          schema: "nianlife.weekend-candidates/1",
+          weekId,
+          collectedAt: new Date().toISOString(),
+          editorialStatus: keepCurated ? "curated_ready" : "pending_session_review",
+          editorialCurated: keepCurated,
+          xhsCrawlSummary: xhs.manifest?.summary ?? null,
+          visitedPlacesCount: ctx.visitedContext?.spots?.length ?? 0,
+          rawNotesDigest,
+          candidates: keepCurated ? (prevDoc.candidates ?? []) : [],
+          inspirationPool: keepCurated ? (prevDoc.inspirationPool ?? []) : [],
+          noGoAlerts: keepCurated ? (prevDoc.noGoAlerts ?? []) : [],
+          hotelCandidates: prevDoc?.weekId === weekId ? (prevDoc.hotelCandidates ?? []) : [],
+          sources: prevDoc?.weekId === weekId ? (prevDoc.sources ?? []) : [],
+        };
+        writeJsonAtomic(candidatesPath, nextDoc);
+      }
 
       updateRunLedger(ledgerPath, weekId, stage, {
         ok: xhs.ok,
@@ -185,15 +223,31 @@ export async function runWeeklyStage(stage, options = {}) {
         stoppedByRiskOrAuth: xhs.stoppedByRiskOrAuth,
         authStatus: xhs.authStatus?.status ?? "healthy",
         weatherCities: weather?.cities?.length ?? 0,
+        candidatesWritten: !options.dryRun,
       });
 
       return { ok: xhs.ok, stage, weekId, weatherCities: weather?.cities?.length ?? 0, xhs };
     }
 
     if (stage === "verify-deep") {
-      const existingCandidatesDoc = readJsonSafe(candidatesPath, { candidates: [], hotelCandidates: [], sources: [] });
-      const { cooldown } = loadLocalWeekendContext(opsStateDir);
+      const existingCandidatesDoc = readJsonSafe(candidatesPath, { weekId, candidates: [], hotelCandidates: [], sources: [] });
+      if (existingCandidatesDoc?.weekId === weekId && existingCandidatesDoc?.editorialCurated === true && existingCandidatesDoc?.curatedAt && !options.force) {
+        updateRunLedger(ledgerPath, weekId, stage, {
+          ok: true,
+          skipped: true,
+          reason: "already_editorial_curated",
+        });
+        return {
+          ok: true,
+          stage,
+          weekId,
+          skipped: true,
+          reason: "already_editorial_curated",
+        };
+      }
+      const { cooldown, visitedContext } = loadLocalWeekendContext(opsStateDir);
       const cooldownNames = (cooldown.venues ?? []).map((v) => v.venueName).filter(Boolean);
+      const visitedNames = (visitedContext?.spots ?? []).flatMap((s) => s.aliases ?? [s.canonicalSpot]);
 
       const candidatePlaces = (existingCandidatesDoc.candidates ?? [])
         .filter((c) => c?.title || c?.region)
@@ -201,7 +255,7 @@ export async function runWeeklyStage(stage, options = {}) {
       const s2Keywords = generateStage2PlaceKeywords({
         candidatePlaces,
         excludedTypes,
-        cooldownVenueNames: cooldownNames,
+        cooldownVenueNames: [...cooldownNames, ...visitedNames],
         maxKeywords: 3,
       });
 
@@ -214,6 +268,8 @@ export async function runWeeklyStage(stage, options = {}) {
             stage1Keywords: [],
             stage2Keywords: s2Keywords,
             excludedTypes,
+            cooldownVenueNames: cooldownNames,
+            visitedPlaceNames: visitedNames,
             baseDir,
             opsStateDir,
             dryRun: Boolean(options.dryRun),
@@ -239,6 +295,7 @@ export async function runWeeklyStage(stage, options = {}) {
 
       const outBundle = {
         ...existingCandidatesDoc,
+        schema: "nianlife.weekend-candidates/1",
         weekId,
         verifiedAt: new Date().toISOString(),
         xhsNotes: xhs.notes ?? existingCandidatesDoc.xhsNotes ?? [],
@@ -262,7 +319,32 @@ export async function runWeeklyStage(stage, options = {}) {
     if (stage === "build-and-publish") {
       const ctx = loadLocalWeekendContext(opsStateDir);
       const authStatus = readJsonSafe(path.join(opsStateDir, "auth-status.json"), { ok: true, status: "healthy" });
-      const candidatesDoc = readJsonSafe(candidatesPath, { candidates: [], inspirationPool: [], noGoAlerts: [] });
+      const rawCandidatesDoc = readJsonSafe(candidatesPath, { weekId, candidates: [], inspirationPool: [], noGoAlerts: [] });
+      const isMatchingWeek = !rawCandidatesDoc.weekId || rawCandidatesDoc.weekId === weekId;
+      const candidatesDoc = isMatchingWeek
+        ? rawCandidatesDoc
+        : { weekId, candidates: [], inspirationPool: [], noGoAlerts: [], staleWeekRejected: rawCandidatesDoc.weekId };
+
+      const prevLedger = readRunLedger(ledgerPath).weeks?.[weekId]?.stages?.["build-and-publish"];
+      if (
+        !options.force &&
+        !options.dryRun &&
+        prevLedger?.ok &&
+        prevLedger?.status === "published" &&
+        prevLedger?.deployed &&
+        candidatesDoc?.curatedAt &&
+        prevLedger?.curatedAt === candidatesDoc.curatedAt
+      ) {
+        return {
+          ok: true,
+          stage,
+          weekId,
+          status: prevLedger.status,
+          skippedAlreadyPublished: true,
+          curatedAt: candidatesDoc.curatedAt,
+        };
+      }
+
       const weatherBundle = readJsonSafe(path.join(opsStateDir, "cache", `weather-bundle-${weekId}.json`), null)
         ?? (!options.offline
           ? await fetchWeekendWeatherBundle({ satDay, sunDay, cacheDir: path.join(opsStateDir, "cache") })
@@ -295,7 +377,7 @@ export async function runWeeklyStage(stage, options = {}) {
           testedAt: new Date().toISOString(),
           manifestPath: path.join(baseDir, "raw", weekId, `xhs-crawl-manifest-${weekId}.json`),
           manifestMdPath: path.join(baseDir, "raw", weekId, `xhs-crawl-manifest-${weekId}.md`),
-          xiaohongshuLoggedIn: { profileDir: path.join(baseDir, "browser-profile"), authBackupPath: path.join(baseDir, "storage-state.backup.json"), rateLimitPolicy: { concurrency: 1, randomDelayMsRange: "8000–20000", riskStopRule: "遇验证码/登录墙立即停抓", riskStopTriggered: crawlStatus.riskStopped }, summary: {} },
+          xiaohongshuLoggedIn: { profileDir: path.join(baseDir, "browser-profile"), authBackupPath: path.join(baseDir, "storage-state.backup.json"), rateLimitPolicy: { concurrency: 1, randomDelayMsRange: "8000–20000", riskStopRule: "遇验证码/登录墙立即停抓", riskStopTriggered: crawlStatus.riskStopped }, summary: candidatesDoc.xhsCrawlSummary ?? {} },
           ctripLoggedIn: candidatesDoc.ctripResult ?? {},
           weatherAndOfficial: {},
         },
@@ -303,6 +385,7 @@ export async function runWeeklyStage(stage, options = {}) {
         excludedExperienceTypes: excludedTypes,
         weights: ctx.weights,
         cooldown: ctx.cooldown,
+        visitedContext: ctx.visitedContext,
         fallbackArchiveWeekId: options.fallbackArchiveWeekId ?? null,
         requireOssMedia: options.requireOssMedia !== false,
       });
@@ -334,6 +417,9 @@ export async function runWeeklyStage(stage, options = {}) {
       updateRunLedger(ledgerPath, weekId, stage, {
         ok: true,
         status: built.snapshot.status,
+        editorialCurated: Boolean(candidatesDoc.editorialCurated),
+        editorialSelectionMode: built.editorialSelectionMode ?? null,
+        curatedAt: candidatesDoc.curatedAt ?? null,
         proposalsCount: built.snapshot.proposals.length,
         deployed: deployResult.deployed,
       });

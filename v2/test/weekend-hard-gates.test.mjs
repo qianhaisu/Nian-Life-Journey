@@ -34,6 +34,8 @@ import {
   keywordContainsSpecificPlace,
   keywordHitsExcludedTerm,
   loadReusableRawNotes,
+  normalizeXhsCardHref,
+  selectSearchCardsToOpen,
 } from "../scripts/weekend/sources-xhs.mjs";
 import {
   buildCtripHotelUrl,
@@ -51,7 +53,12 @@ import {
 import {
   applyFridayRefresh,
   buildWeekendSnapshot,
+  selectOrthogonalProposals,
 } from "../scripts/weekend/rank-and-build.mjs";
+import {
+  checkCandidateVisitedSpot,
+  loadVisitedPlacesContext,
+} from "../scripts/weekend/visited-places.mjs";
 import {
   loadOverlappingTripHints,
   writeCandidateTripHint,
@@ -762,4 +769,151 @@ test("infra contracts: Caddyfile.ecs C1, ecs-swap.sh C2, deploy-ecs-public.sh py
   const receipt = JSON.parse(fs.readFileSync(receiptPath.replace(/^\uFEFF/, ""), "utf8").replace(/^\uFEFF/, ""));
   assert.equal(receipt.tasks.length, 5);
   assert.equal(receipt.sidecarExists, true);
+});
+
+test("editorial curation order, visited-places spot aliasing, XHS card selection, and idempotent publish", async (t) => {
+  // 1. normalizeXhsCardHref + selectSearchCardsToOpen
+  const norm = normalizeXhsCardHref("https://www.xiaohongshu.com/search_result/6af6fa50000000002a00e5fe?xsec_token=ABC123&xsec_source=");
+  assert.equal(norm, "https://www.xiaohongshu.com/explore/6af6fa50000000002a00e5fe?xsec_token=ABC123&xsec_source=pc_search");
+
+  const cardSel = selectSearchCardsToOpen({
+    cards: [
+      { href: "/search_result/old111?xsec_token=T1", cardText: "杭州 08-29 逛市集", likesText: "500" },
+      { href: "/search_result/art222?xsec_token=T2", cardText: "周末美术馆看展攻略", likesText: "300" },
+      { href: "/search_result/seen333?xsec_token=T3", cardText: "11月15日 周末公园推车", likesText: "200" },
+      { href: "/search_result/good444?xsec_token=T4", cardText: "11.21实拍 推车平路市集停车免费", likesText: "80" },
+    ],
+    seenNoteIds: new Set(["seen333"]),
+    excludedTypes: ["art_museum_exhibition"],
+    targetFromDay: "2026-11-21",
+    todayYmd: "2026-11-17",
+    maxToOpen: 4,
+  });
+  assert.equal(cardSel.selected.length, 1);
+  assert.equal(cardSel.selected[0].noteId, "good444");
+  assert.equal(cardSel.skipped.outside30DaysCard.length, 1);
+  assert.equal(cardSel.skipped.excludedType.length, 1);
+  assert.equal(cardSel.skipped.alreadyCollected.length, 1);
+
+  // 2. Spot-level visited check (city visited != all spots visited)
+  const tmpOps = fs.mkdtempSync(path.join(os.tmpdir(), "nianlife-vis-test-"));
+  t.after(() => fs.rmSync(tmpOps, { recursive: true, force: true }));
+  fs.writeFileSync(
+    path.join(tmpOps, "visited-places.json"),
+    JSON.stringify({
+      schema: "nianlife.weekend-visited-places/1",
+      spots: [{ canonicalSpot: "德清下渚湖湿地公园", city: "德清", aliases: ["下渚湖", "下渚湖湿地"], sourceKind: "teddy", sourceRef: "chat" }],
+    }),
+  );
+  const visitedCtx = loadVisitedPlacesContext({ opsStateDir: tmpOps });
+  assert.equal(checkCandidateVisitedSpot({ title: "下渚湖湿地船游" }, visitedCtx).visited, true);
+  assert.equal(checkCandidateVisitedSpot({ title: "德清莫干山新市古镇漫步" }, visitedCtx).visited, true); // 莫干山 from trips.json
+  assert.equal(checkCandidateVisitedSpot({ title: "上海长宁上生新所漫步" }, visitedCtx).visited, false); // Shanghai city visited != all spots
+
+  // 3. Editorial order is NOT overturned by scoreCandidate regex weights
+  const ed1 = makeCandidate({ id: "ed-1", title: "杭州经纬创意园", experienceType: "city_block_walk", editorialCurated: true, editorialOrder: 1 });
+  const ed2 = makeCandidate({ id: "ed-2", title: "德清摇橹船湿地", experienceType: "wetland_boat_folk_craft", editorialCurated: true, editorialOrder: 2 });
+  const picked = selectOrthogonalProposals([
+    { candidate: ed2, score: 999, gate: { signalStrength: "strong" } },
+    { candidate: ed1, score: 10, gate: { signalStrength: "strong" } },
+  ]);
+  assert.equal(picked[0].candidate.id, "ed-1");
+  assert.equal(picked[1].candidate.id, "ed-2");
+
+  // 4. Stale week candidates rejected & idempotent skip on same curatedAt
+  const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "nianlife-ed-base-"));
+  const tmpOps2 = fs.mkdtempSync(path.join(os.tmpdir(), "nianlife-ed-ops-"));
+  t.after(() => {
+    fs.rmSync(tmpBase, { recursive: true, force: true });
+    fs.rmSync(tmpOps2, { recursive: true, force: true });
+  });
+  const candDir = path.join(tmpOps2, "candidates");
+  fs.mkdirSync(candDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(candDir, "2026-11-28.json"),
+    JSON.stringify({ weekId: "2026-11-21", editorialCurated: true, candidates: [ed1] }),
+  );
+  const staleRes = await runWeeklyStage("build-and-publish", {
+    weekId: "2026-11-28",
+    today: "2026-11-25",
+    baseDir: tmpBase,
+    opsStateDir: tmpOps2,
+    offline: true,
+    noDeploy: true,
+  });
+  assert.equal(staleRes.status, "unavailable");
+
+  // 5. Isolated future-week collect-init -> editorial curation -> verify-deep preservation -> build-and-publish
+  const futureWeek = "2099-01-04";
+  const cacheDir = path.join(tmpOps2, "cache");
+  fs.mkdirSync(cacheDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(cacheDir, `weather-bundle-${futureWeek}.json`),
+    JSON.stringify({
+      testedAt: "2099-01-01T10:00:00Z",
+      horizonConfidenceLabel: "测试全晴",
+      cities: [{ city: "余杭", code: "101210106", sourceUrl: "https://www.weather.com.cn/weather/101210106.shtml", daysSummary: [], hour3Segments: {}, weekendTip: "全晴" }],
+    }),
+  );
+  const initRes = await runWeeklyStage("collect-init", {
+    weekId: futureWeek,
+    today: "2099-01-01",
+    baseDir: tmpBase,
+    opsStateDir: tmpOps2,
+    offline: true,
+  });
+  assert.equal(initRes.ok, true);
+  const initDoc = JSON.parse(fs.readFileSync(path.join(candDir, `${futureWeek}.json`), "utf8"));
+  assert.equal(initDoc.editorialStatus, "pending_session_review");
+  assert.equal(initDoc.editorialCurated, false);
+
+  const isoEd = makeCandidate({
+    id: "2099-01-04-liangzhu-test",
+    title: "良渚古城鹿苑与芦苇",
+    experienceType: "heritage_park_deer_market",
+    editorialCurated: true,
+    editorialOrder: 1,
+    xhsNotes: [
+      makeNote({ noteId: "n2099a", publishedAt: "2098-12-20", likes: "180", commentsCaptured: 15 }),
+      makeNote({ noteId: "n2099b", publishedAt: "2098-12-28", likes: "65", commentsCaptured: 12 }),
+    ],
+  });
+  fs.writeFileSync(
+    path.join(candDir, `${futureWeek}.json`),
+    JSON.stringify({
+      schema: "nianlife.weekend-candidates/1",
+      weekId: futureWeek,
+      editorialCurated: true,
+      editorialStatus: "curated_ready",
+      curatedAt: "2099-01-01T20:00:00Z",
+      candidates: [isoEd],
+      inspirationPool: [],
+      noGoAlerts: [],
+    }),
+  );
+
+  // verify-deep must preserve curated candidates without overwriting
+  const verifyKeep = await runWeeklyStage("verify-deep", {
+    weekId: futureWeek,
+    today: "2099-01-01",
+    baseDir: tmpBase,
+    opsStateDir: tmpOps2,
+    offline: true,
+  });
+  assert.equal(verifyKeep.skipped, true);
+  assert.equal(verifyKeep.reason, "already_editorial_curated");
+
+  const pubRes = await runWeeklyStage("build-and-publish", {
+    weekId: futureWeek,
+    today: "2099-01-01",
+    baseDir: tmpBase,
+    opsStateDir: tmpOps2,
+    offline: true,
+    noDeploy: true,
+  });
+  assert.equal(pubRes.ok, true);
+  assert.equal(pubRes.status, "published");
+  const builtSnap = JSON.parse(fs.readFileSync(pubRes.snapshotPath, "utf8"));
+  assert.equal(builtSnap.crawlAudit.editorialSelectionMode, "editorial_curated");
+  assert.equal(builtSnap.proposals[0].id, "2099-01-04-liangzhu-test");
 });

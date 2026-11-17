@@ -1,9 +1,19 @@
 {
   "schema": "nianlife.weekend-media-manifest/1",
-  "generatedAt": "2026-11-17T08:49:10.047Z",
+  "generatedAt": "2026-11-17T12:08:38.309Z",
   "provider": "oss",
-  "count": 14,
+  "count": 34,
   "assets": [
+    {
+      "filename": "atour-gaoke-ext.jpg",
+      "originalKey": "media/weekend/assets/originals/atour-gaoke-ext.jpg",
+      "webKey": "media/weekend/assets/web/atour-gaoke-ext.jpg",
+      "sha256": "3894e344823f2400748f3ea9415ecce73f77c371f7e92a032cc0f8cdfa20d59f",
+      "bytes": 175541,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hotels.ctrip.com/hotels/detail/?hotelId=71796577",
+      "alt": "上海世博高科西路地铁站亚朵酒店外观（高性价比有窗对比）"
+    },
     {
       "filename": "atour-intl-ext.jpg",
       "originalKey": "media/weekend/assets/originals/atour-intl-ext.jpg",
@@ -45,6 +55,46 @@
       "alt": "上海浦东金桥地铁站亚朵酒店高级大床房（26㎡ / 1.8m 大床）"
     },
     {
+      "filename": "atour-qiantan-jianye-ext.jpg",
+      "originalKey": "media/weekend/assets/originals/atour-qiantan-jianye-ext.jpg",
+      "webKey": "media/weekend/assets/web/atour-qiantan-jianye-ext.jpg",
+      "sha256": "21107760c542ef777e6f64cb704cc7c9d22b1c499073f895a927be7454375932",
+      "bytes": 128625,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hotels.ctrip.com/hotels/detail/?hotelId=135323737",
+      "alt": "上海前滩东方体育中心亚朵见野酒店外观（首选酒店）"
+    },
+    {
+      "filename": "atour-qiantan-jianye-lobby.jpg",
+      "originalKey": "media/weekend/assets/originals/atour-qiantan-jianye-lobby.jpg",
+      "webKey": "media/weekend/assets/web/atour-qiantan-jianye-lobby.jpg",
+      "sha256": "b77eebbe7b0da849d9a5174b778ae54291bb3419ebe69bc5f2cba6c92d4ed1f7",
+      "bytes": 132765,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hotels.ctrip.com/hotels/detail/?hotelId=135323737",
+      "alt": "上海前滩东方体育中心亚朵见野酒店大堂茶叙区"
+    },
+    {
+      "filename": "atour-qiantan-jianye-room.jpg",
+      "originalKey": "media/weekend/assets/originals/atour-qiantan-jianye-room.jpg",
+      "webKey": "media/weekend/assets/web/atour-qiantan-jianye-room.jpg",
+      "sha256": "22ddc13a41410c4f2b38e960bc22461f26dab16a295edcf7249ea786d825bd02",
+      "bytes": 63768,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hotels.ctrip.com/hotels/detail/?hotelId=135323737",
+      "alt": "上海前滩东方体育中心亚朵见野酒店行政大床房（26–28㎡ / 1.8m 大床）"
+    },
+    {
+      "filename": "atour-yaohualu-ext.jpg",
+      "originalKey": "media/weekend/assets/originals/atour-yaohualu-ext.jpg",
+      "webKey": "media/weekend/assets/web/atour-yaohualu-ext.jpg",
+      "sha256": "ed159fb963b216aed54d58fa94707c243812c67804ed92d2e148680601f68436",
+      "bytes": 186010,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hotels.ctrip.com/hotels/detail/?hotelId=62656752",
+      "alt": "上海世博中心耀华路亚朵酒店独栋庭院外观（近世博文化公园对比）"
+    },
+    {
       "filename": "deqing-xiazhuhu-reeds.jpg",
       "originalKey": "media/weekend/assets/originals/deqing-xiazhuhu-reeds.jpg",
       "webKey": "media/weekend/assets/web/deqing-xiazhuhu-reeds.jpg",
@@ -73,6 +123,16 @@
       "mimeType": "image/jpeg",
       "sourcePage": "https://hznews.hangzhou.com.cn/chengshi/content/2024-03/16/content_8702239_0.htm",
       "alt": "杭州白塔公园·复古绿皮火车车厢实景"
+    },
+    {
+      "filename": "insp-hz-chrysanthemum.jpg",
+      "originalKey": "media/weekend/assets/originals/insp-hz-chrysanthemum.jpg",
+      "webKey": "media/weekend/assets/web/insp-hz-chrysanthemum.jpg",
+      "sha256": "dc84e58820b2a98c49c9544b975782fc729c3f19c78fff4ef617c954af2e1e6f",
+      "bytes": 452770,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://tidenews.com.cn/news.html?id=3604498",
+      "alt": "2026第六届长三角菊花精品展·杭州植物园菊艺土拨鼠造景"
     },
     {
       "filename": "insp-jingwei-street.jpg",
@@ -105,6 +165,116 @@
       "alt": "萧山山末址村·甘蔗田实地采收实景"
     },
     {
+      "filename": "liangzhu-deer-feeding.jpg",
+      "originalKey": "media/weekend/assets/originals/liangzhu-deer-feeding.jpg",
+      "webKey": "media/weekend/assets/web/liangzhu-deer-feeding.jpg",
+      "sha256": "f4046076cf0d205c0dd33e8c441bd819f24f4e925d0267fba653f11910793783",
+      "bytes": 79242,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://ori.hangzhou.com.cn/ornews/content/2020-05/24/content_7741151.htm",
+      "alt": "良渚古城遗址公园·鹿苑梅花鹿近距离投喂草叶互动实景"
+    },
+    {
+      "filename": "liangzhu-deer-meadow.jpg",
+      "originalKey": "media/weekend/assets/originals/liangzhu-deer-meadow.jpg",
+      "webKey": "media/weekend/assets/web/liangzhu-deer-meadow.jpg",
+      "sha256": "c9d19112f46679e9565a83e91112063eaf90f533c95c919c05ae448c87755172",
+      "bytes": 48152,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://ori.hangzhou.com.cn/ornews/content/2020-05/24/content_7741151.htm",
+      "alt": "良渚古城遗址公园·林间草地梅花鹿群实景"
+    },
+    {
+      "filename": "liangzhu-paddy-shade.jpg",
+      "originalKey": "media/weekend/assets/originals/liangzhu-paddy-shade.jpg",
+      "webKey": "media/weekend/assets/web/liangzhu-paddy-shade.jpg",
+      "sha256": "23636cfc86445c53f45ea599c39113b31a716d5f4696ece8b42c4dd5b51734d8",
+      "bytes": 241933,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://www.jfdaily.com/staticsg/res/html/web/newsDetail.html?id=1210342",
+      "alt": "良渚古城遗址公园·金黄稻田与大樟树下平地座椅"
+    },
+    {
+      "filename": "liangzhu-reeds-shuttle.jpg",
+      "originalKey": "media/weekend/assets/originals/liangzhu-reeds-shuttle.jpg",
+      "webKey": "media/weekend/assets/web/liangzhu-reeds-shuttle.jpg",
+      "sha256": "5de002bb63bb422cdf5f330176df0f6e578137f6d612d51d4bf4b5feb13cd44d",
+      "bytes": 198826,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://www.jfdaily.com/staticsg/res/html/web/newsDetail.html?id=1210342",
+      "alt": "良渚古城遗址公园·秋日金色芦苇荡、观光车道与古台茅亭"
+    },
+    {
+      "filename": "liangzhu-yuniaojie-plaza.jpg",
+      "originalKey": "media/weekend/assets/originals/liangzhu-yuniaojie-plaza.jpg",
+      "webKey": "media/weekend/assets/web/liangzhu-yuniaojie-plaza.jpg",
+      "sha256": "057cbb04a0113029f6615367fe9d1326dfa28a2e70efbac918cca706a3c024ad",
+      "bytes": 376097,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://mooool.com/birland-food-market-outdoor-renewal-by-parallect-design.html",
+      "alt": "杭州良渚·玉鸟集开放式慢街区、遮阳长廊与亲子散步场景"
+    },
+    {
+      "filename": "qiantan-crystal-plaza.jpg",
+      "originalKey": "media/weekend/assets/originals/qiantan-crystal-plaza.jpg",
+      "webKey": "media/weekend/assets/web/qiantan-crystal-plaza.jpg",
+      "sha256": "a93602ff22e8341b6a97a63b1cc1777da6cf31d71f1d44129dc5c52848e10f0c",
+      "bytes": 436520,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://mooool.com/crystal-pool-by-100architects.html",
+      "alt": "上海浦东晶耀前滩·室外公共儿童游乐场「水晶池」与开放广场"
+    },
+    {
+      "filename": "qiantan-festival-stage.jpg",
+      "originalKey": "media/weekend/assets/originals/qiantan-festival-stage.jpg",
+      "webKey": "media/weekend/assets/web/qiantan-festival-stage.jpg",
+      "sha256": "59eed2007334749aaa62ccaf6c7c35ae55f0f1e211d77e02875f7511ec076e30",
+      "bytes": 89424,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://www.jfdaily.com/sgh/detail?id=4093028",
+      "alt": "上海前滩商圈·户外艺术节演艺广场与亲子人群聚集实景"
+    },
+    {
+      "filename": "qiantan-park-aerial.jpg",
+      "originalKey": "media/weekend/assets/originals/qiantan-park-aerial.jpg",
+      "webKey": "media/weekend/assets/web/qiantan-park-aerial.jpg",
+      "sha256": "d6533c264d5674ead3259f504f2b27741306bc8d01eee5b5bce26d67a1c263d0",
+      "bytes": 352019,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://mooool.com/shanghai-qiantan-leisure-park-renovation-and-upgrading-project-by-myp.html",
+      "alt": "上海前滩休闲公园·黄浦江岸线、粉红沙滩与绿树草坪实景"
+    },
+    {
+      "filename": "qiantan-park-beach.jpg",
+      "originalKey": "media/weekend/assets/originals/qiantan-park-beach.jpg",
+      "webKey": "media/weekend/assets/web/qiantan-park-beach.jpg",
+      "sha256": "c69cbd589b140ab8685ebf00cb031a80e4927b46d0340c61ac37ba2e457ba647",
+      "bytes": 261389,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://mooool.com/shanghai-qiantan-leisure-park-renovation-and-upgrading-project-by-myp.html",
+      "alt": "上海前滩休闲公园·滨江沙滩挖沙区与对岸城市天际线"
+    },
+    {
+      "filename": "qiantan-park-lawn.jpg",
+      "originalKey": "media/weekend/assets/originals/qiantan-park-lawn.jpg",
+      "webKey": "media/weekend/assets/web/qiantan-park-lawn.jpg",
+      "sha256": "eaf0bf37094dca9edddc68164a264a9dee7f3eda1dc3ddac7706fcee9ee6d869",
+      "bytes": 306567,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://mooool.com/shanghai-qiantan-leisure-park-renovation-and-upgrading-project-by-myp.html",
+      "alt": "上海前滩休闲公园·平坦林荫步道、婴儿车动线与草坪野餐区"
+    },
+    {
+      "filename": "shanghai-expopark-twin.jpg",
+      "originalKey": "media/weekend/assets/originals/shanghai-expopark-twin.jpg",
+      "webKey": "media/weekend/assets/web/shanghai-expopark-twin.jpg",
+      "sha256": "acb47a0ea962eed56ec174642e566264e1644e809ef28876a83b731771759768",
+      "bytes": 274011,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://www.expoculturepark.cn/shuangzishan",
+      "alt": "上海世博文化公园·双子山叠瀑与环湖绿荫步道实景"
+    },
+    {
       "filename": "shanghai-jufuchang-alt.jpg",
       "originalKey": "media/weekend/assets/originals/shanghai-jufuchang-alt.jpg",
       "webKey": "media/weekend/assets/web/shanghai-jufuchang-alt.jpg",
@@ -123,6 +293,36 @@
       "mimeType": "image/jpeg",
       "sourcePage": "Replaced cand-jufuchang-changle-2.jpg from Wikimedia Commons (Shanghai French Concession streetscape)",
       "alt": "上海静安·长乐路梧桐与沿街小店（巨富长街区）"
+    },
+    {
+      "filename": "xianghu-hz-metasequoia.jpg",
+      "originalKey": "media/weekend/assets/originals/xianghu-hz-metasequoia.jpg",
+      "webKey": "media/weekend/assets/web/xianghu-hz-metasequoia.jpg",
+      "sha256": "61eef9aa3aea86bcef06ec45f6cf7f965681cbd4c992104f6dcab2326cfdf5ab",
+      "bytes": 79708,
+      "mimeType": "image/jpeg",
+      "sourcePage": "https://hznews.hangzhou.com.cn/xinzheng/tujian/content/2019-12/05/content_7315956.htm",
+      "alt": "杭州萧山湘湖·深秋金橙色水杉林树冠仰拍实景"
+    },
+    {
+      "filename": "xianghu-zjol-boardwalk.jpg",
+      "originalKey": "media/weekend/assets/originals/xianghu-zjol-boardwalk.jpg",
+      "webKey": "media/weekend/assets/web/xianghu-zjol-boardwalk.jpg",
+      "sha256": "56d124f3d8cc90cc22f038c804aabb94a6b22ae539a7c687c0bc634541b81130",
+      "bytes": 122089,
+      "mimeType": "image/jpeg",
+      "sourcePage": "http://hangzhou.zjol.com.cn/ztjj16730/201810/t20181019_8521250.shtml",
+      "alt": "杭州萧山湘湖·深秋湖畔木栈道、平路草坪与水杉彩林航拍"
+    },
+    {
+      "filename": "xianghu-zjol-island.jpg",
+      "originalKey": "media/weekend/assets/originals/xianghu-zjol-island.jpg",
+      "webKey": "media/weekend/assets/web/xianghu-zjol-island.jpg",
+      "sha256": "5687af08249796c033e90a0ec1cf6bb91d314e4ceddfa081d5be20d37db940aa",
+      "bytes": 61034,
+      "mimeType": "image/jpeg",
+      "sourcePage": "http://hangzhou.zjol.com.cn/ztjj16730/201810/t20181019_8521250.shtml",
+      "alt": "杭州萧山湘湖·开阔湖面与青山环绕水湾全景"
     },
     {
       "filename": "yaao-mixc-street.jpg",

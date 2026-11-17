@@ -90,8 +90,8 @@ async function main() {
     .map((entry) => entry.name)
     .sort();
 
-  if (jpgFiles.length !== 14) {
-    throw new Error(`Expected 14 .jpg assets in ${ASSETS_DIR}, found ${jpgFiles.length}`);
+  if (jpgFiles.length < 14) {
+    throw new Error(`Expected >= 14 .jpg assets in ${ASSETS_DIR}, found ${jpgFiles.length}`);
   }
 
   const assets = [];

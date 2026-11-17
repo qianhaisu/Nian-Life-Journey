@@ -55,16 +55,16 @@ const EXCLUDED_TYPE_TERMS_MAP = {
 };
 
 const STAGE1_CANDIDATE_TEMPLATES = [
-  { keyword: "上海 周末 草坪 人少", type: "lawn_waterfront", terms: ["草坪"] },
+  { keyword: "杭州 周末 逛街 不挤 好逛", type: "shopping_mall_leisure", terms: ["逛街", "好逛"] },
+  { keyword: "杭州周边 11月 周末 带娃 动物 火车", type: "transport_animal_nature", terms: ["动物", "火车"] },
+  { keyword: "上海 周末 公园 街区 市集 推车", type: "city_district_market", terms: ["市集", "街区"] },
   { keyword: "杭州周边 开车直达 风景 不用爬", type: "scenic_flat_drive", terms: ["风景", "不用爬"] },
-  { keyword: "江浙沪 周末 带娃 放空", type: "relaxed_getaway", terms: ["带娃", "放空"] },
   { keyword: "杭州周边 农场 采摘 不挤", type: "rural_farming_harvest", terms: ["农场", "采摘"] },
+  { keyword: "上海 周末 草坪 人少", type: "lawn_waterfront", terms: ["草坪"] },
+  { keyword: "江浙沪 周末 带娃 放空", type: "relaxed_getaway", terms: ["带娃", "放空"] },
   { keyword: "上海周边 水边 住一晚", type: "waterfront_overnight", terms: ["水边", "住一晚"] },
-  { keyword: "杭州 周末 逛街 不挤 好逛", type: "shopping_mall_leisure", terms: ["逛街"] },
   { keyword: "杭州周边 湿地 坐船 推车", type: "wetland_boat_folk_craft", terms: ["湿地", "坐船"] },
-  { keyword: "上海 周末 市集 街区 平路", type: "city_district_market", terms: ["市集", "街区"] },
   { keyword: "杭州 本地 公园 绿道 推车", type: "urban_greenway", terms: ["公园", "绿道"] },
-  { keyword: "杭州周边 动物 牧场 平缓", type: "gentle_animals", terms: ["动物", "牧场"] },
 ];
 
 function writeJsonAtomicOutsideRepo(filePath, value) {
@@ -290,7 +290,7 @@ function randomDelayMs(minMs = MIN_DELAY_MS, maxMs = MAX_DELAY_MS) {
 }
 
 export function parseRelativeOrAbsolutePublishDate(rawText, todayYmd) {
-  const raw = String(rawText ?? "").trim();
+  const raw = String(rawText ?? "").replace(/^编辑于\s*/, "").trim();
   if (!raw) return null;
   const fullMatch = raw.match(/(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (fullMatch) {
@@ -320,6 +320,126 @@ export function parseRelativeOrAbsolutePublishDate(rawText, todayYmd) {
   return null;
 }
 
+export function scoreSearchCardDiscovery(cardText = "") {
+  const text = String(cardText ?? "").replace(/\s+/g, " ").trim();
+  let score = 0;
+  if (text.length >= 18) score += 2;
+  if (/(实拍|攻略|路线|营业|门票|免费|预约|推车|停车|平路|市集|动物|火车|采摘|公园|街区|书店|木偶)/.test(text)) score += 4;
+  if (/(11月|十一月|11\.2|本周末|这周末|周六|周日|秋季|深秋)/.test(text)) score += 3;
+  if (/(只吃|美食合集|探店菜单|酒吧夜店|蹦迪|爬山|徒步\d+公里|好汉坡|夜爬)/.test(text)) score -= 5;
+  return score;
+}
+
+export function normalizeXhsCardHref(rawHref = "") {
+  const s = String(rawHref ?? "").trim();
+  const idMatch = s.match(/\/(?:explore|search_result)\/([a-zA-Z0-9]+)/);
+  if (!idMatch) return s;
+  const noteId = idMatch[1];
+  const tokenMatch = s.match(/[?&]xsec_token=([^&#]+)/);
+  if (!tokenMatch) return s;
+  const token = tokenMatch[1];
+  return `https://www.xiaohongshu.com/explore/${noteId}?xsec_token=${token}&xsec_source=pc_search`;
+}
+
+export function isCardDateVisiblyOutside30Days(cardText = "", targetFromDay = "", todayYmd = "") {
+  if (!targetFromDay || !todayYmd) return false;
+  const m = String(cardText).match(/(?:^|\s)(20\d{2}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2})(?:\s|$)/);
+  if (!m) return false;
+  const parsed = parseRelativeOrAbsolutePublishDate(m[1], todayYmd);
+  if (!parsed) return false;
+  return !isNoteWithin30Days(parsed, targetFromDay).ok;
+}
+
+/**
+ * Selects visible search cards to open by relevance, information density, and novelty
+ * instead of blindly taking `.slice(0, 6)`. Separates opened vs skipped-summary accounting.
+ */
+export function selectSearchCardsToOpen({
+  cards = [],
+  seenNoteIds = new Set(),
+  excludedTypes = [],
+  cooldownVenueNames = [],
+  visitedPlaceNames = [],
+  targetFromDay = "",
+  todayYmd = "",
+  maxToOpen = 6,
+} = {}) {
+  const batchSeen = new Set();
+  const eligible = [];
+  const skipped = {
+    alreadyCollected: [],
+    duplicateInSearch: [],
+    invalidUrl: [],
+    outside30DaysCard: [],
+    excludedType: [],
+    cooldownOrVisited: [],
+    budgetOrLowDensity: [],
+  };
+
+  const cdTerms = [...cooldownVenueNames, ...visitedPlaceNames]
+    .map((v) => String(v ?? "").trim().toLowerCase())
+    .filter((v) => v.length >= 2);
+
+  for (const c of cards) {
+    const href = normalizeXhsCardHref(c?.href ?? "");
+    const cardText = String(c?.cardText ?? "").replace(/\s+/g, " ").trim();
+    const noteIdMatch = href.match(/\/explore\/([a-zA-Z0-9]+)/);
+    const noteId = noteIdMatch?.[1] ?? null;
+
+    if (!isValidXhsExploreUrl(href) || !noteId) {
+      skipped.invalidUrl.push({ noteId, cardText: cardText.slice(0, 60) });
+      continue;
+    }
+    if (batchSeen.has(noteId)) {
+      skipped.duplicateInSearch.push({ noteId, cardText: cardText.slice(0, 60) });
+      continue;
+    }
+    batchSeen.add(noteId);
+
+    if (seenNoteIds.has(noteId)) {
+      skipped.alreadyCollected.push({ noteId, cardText: cardText.slice(0, 60) });
+      continue;
+    }
+    if (isCardDateVisiblyOutside30Days(cardText, targetFromDay, todayYmd)) {
+      skipped.outside30DaysCard.push({ noteId, cardText: cardText.slice(0, 60) });
+      continue;
+    }
+    if (keywordHitsExcludedTerm(cardText, excludedTypes)) {
+      skipped.excludedType.push({ noteId, cardText: cardText.slice(0, 60) });
+      continue;
+    }
+    const lowerText = cardText.toLowerCase();
+    if (cdTerms.some((term) => lowerText.includes(term))) {
+      skipped.cooldownOrVisited.push({ noteId, cardText: cardText.slice(0, 60) });
+      continue;
+    }
+
+    const densityScore = scoreSearchCardDiscovery(cardText);
+    const likesNum = parseXhsCount(c?.likesText ?? "");
+    eligible.push({
+      ...c,
+      href,
+      noteId,
+      cardText,
+      densityScore,
+      likesNum,
+    });
+  }
+
+  eligible.sort((a, b) => b.densityScore - a.densityScore || b.likesNum - a.likesNum);
+
+  const selected = [];
+  for (const item of eligible) {
+    if (selected.length < maxToOpen) {
+      selected.push(item);
+    } else {
+      skipped.budgetOrLowDensity.push({ noteId: item.noteId, cardText: item.cardText.slice(0, 60), densityScore: item.densityScore });
+    }
+  }
+
+  return { selected, skipped, uniqueCandidateCount: batchSeen.size };
+}
+
 /**
  * Runs a bounded, serial XHS crawl batch using persistent Chrome profile.
  * Returns structured manifest + reused + newly crawled notes, or halts cleanly on risk/auth block.
@@ -332,10 +452,12 @@ export async function crawlXhsBatch({
   stage2Keywords = [],
   excludedTypes = null,
   cooldownVenueNames = [],
+  visitedPlaceNames = [],
   baseDir = DEFAULT_WEEKEND_BASE_DIR,
   opsStateDir = DEFAULT_OPS_WEEKEND_STATE_DIR,
   maxKeywords = MAX_KEYWORDS_PER_BATCH,
   maxNotes = MAX_NOTES_PER_BATCH,
+  openPerKeywordCap = 6,
   minDelayMs = MIN_DELAY_MS,
   maxDelayMs = MAX_DELAY_MS,
   headless = true,
@@ -400,10 +522,31 @@ export async function crawlXhsBatch({
   const keywordBatches = [];
   const collectedNotes = [...reusedNotes];
   const seenNoteIds = new Set(reusedNotes.map((n) => n.noteId));
+  const uniqueCardsAcrossSearch = new Set();
   let newNotesCount = 0;
+  let newNotesAttempted = 0;
+  let newBodiesNonEmpty = 0;
+  let totalCardElementsObserved = 0;
   let totalNavRequests = 0;
   let stoppedReason = null;
   let webhookResult = null;
+  const skippedCounts = {
+    alreadyCollected: 0,
+    duplicateInSearch: 0,
+    invalidUrl: 0,
+    outside30DaysCard: 0,
+    excludedType: 0,
+    cooldownOrVisited: 0,
+    budgetOrLowDensity: 0,
+  };
+
+  const existingFilesMaxSeq = fs.existsSync(rawDir)
+    ? fs.readdirSync(rawDir)
+        .map((f) => f.match(/^note-(\d+)-/)?.[1])
+        .filter(Boolean)
+        .reduce((m, s) => Math.max(m, Number(s)), 0)
+    : 0;
+  let nextNewSeq = Math.max(existingFilesMaxSeq, collectedNotes.length) + 1;
 
   try {
     context = await openContext(profileDir);
@@ -440,7 +583,7 @@ export async function crawlXhsBatch({
     };
 
     for (let bIdx = 0; bIdx < keywordQueue.length; bIdx += 1) {
-      if (newNotesCount >= Math.min(MAX_NOTES_PER_BATCH, maxNotes)) break;
+      if (newNotesAttempted >= Math.min(MAX_NOTES_PER_BATCH, maxNotes)) break;
       const { keyword, crawlStage } = keywordQueue[bIdx];
       const searchUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(keyword)}&source=web_search_result_notes`;
       if (totalNavRequests > 0) {
@@ -456,13 +599,25 @@ export async function crawlXhsBatch({
         const bodyText = document.body?.innerText || "";
         const hasLoginModal = Boolean(document.querySelector(".login-container, .login-modal, [class*='login-dialog']"));
         const hasCaptchaIframe = Boolean(document.querySelector("iframe[src*='captcha'], #captcha-container, .nc_wrapper, .yidun"));
-        const anchors = [...document.querySelectorAll("a[href*='/explore/']")];
-        const cards = anchors.map((a) => {
-          const href = a.getAttribute("href") || "";
-          const fullUrl = href.startsWith("http") ? href : `https://www.xiaohongshu.com${href}`;
-          const cardText = a.closest("section, [class*='note-item'], div")?.innerText || a.innerText || "";
-          return { href: fullUrl, cardText };
-        });
+        const noteItems = [...document.querySelectorAll("section.note-item, [class*='note-item']")];
+        const cards = noteItems.length > 0
+          ? noteItems.map((container) => {
+              const tokenLink = container.querySelector("a[href*='xsec_token'][href*='/search_result/'], a[href*='xsec_token'][href*='/explore/']");
+              const exploreLink = container.querySelector("a[href*='/explore/']");
+              const rawHref = tokenLink?.getAttribute("href") || exploreLink?.getAttribute("href") || "";
+              const fullUrl = rawHref.startsWith("http") ? rawHref : `https://www.xiaohongshu.com${rawHref}`;
+              const cardText = container.innerText || "";
+              const likesText = container.querySelector("[class*='like'] .count, .like-wrapper .count, .count")?.textContent?.trim() || "";
+              return { href: fullUrl, cardText, likesText };
+            })
+          : [...document.querySelectorAll("a[href*='/explore/']")].map((a) => {
+              const href = a.getAttribute("href") || "";
+              const fullUrl = href.startsWith("http") ? href : `https://www.xiaohongshu.com${href}`;
+              const container = a.closest("section, [class*='note-item'], div");
+              const cardText = container?.innerText || a.innerText || "";
+              const likesText = container?.querySelector("[class*='like'] .count, .like-wrapper .count, .count")?.textContent?.trim() || "";
+              return { href: fullUrl, cardText, likesText };
+            });
         return { title, bodyText, hasLoginModal, hasCaptchaIframe, cards };
       });
 
@@ -484,27 +639,41 @@ export async function crawlXhsBatch({
           usedFilter: "综合(默认)",
           elapsedMs: Date.now() - t0,
           totalCardsLoaded: searchEval.cards.length,
-          recent30DayCandidateCount: 0,
+          uniqueCardsObserved: 0,
           pickedCount: 0,
           success: false,
         });
         break;
       }
 
-      const candidates = searchEval.cards
-        .filter((c) => isValidXhsExploreUrl(c.href))
-        .filter((c) => !keywordHitsExcludedTerm(c.cardText, effectiveExcluded))
-        .slice(0, 6);
+      totalCardElementsObserved += searchEval.cards.length;
+      const selection = selectSearchCardsToOpen({
+        cards: searchEval.cards,
+        seenNoteIds,
+        excludedTypes: effectiveExcluded,
+        cooldownVenueNames,
+        visitedPlaceNames,
+        targetFromDay,
+        todayYmd: effectiveToday,
+        maxToOpen: Math.min(openPerKeywordCap, Math.max(0, Math.min(MAX_NOTES_PER_BATCH, maxNotes) - newNotesAttempted)),
+      });
+      for (const c of selection.selected) uniqueCardsAcrossSearch.add(c.noteId);
+      for (const [k, arr] of Object.entries(selection.skipped)) {
+        skippedCounts[k] = (skippedCounts[k] ?? 0) + arr.length;
+        for (const item of arr) {
+          if (item.noteId) uniqueCardsAcrossSearch.add(item.noteId);
+        }
+      }
 
       let pickedCount = 0;
-      for (const card of candidates) {
-        if (newNotesCount >= Math.min(MAX_NOTES_PER_BATCH, maxNotes)) break;
-        const noteIdMatch = card.href.match(/\/explore\/([a-zA-Z0-9]+)/);
-        const noteId = noteIdMatch?.[1];
+      for (const card of selection.selected) {
+        if (newNotesAttempted >= Math.min(MAX_NOTES_PER_BATCH, maxNotes)) break;
+        const noteId = card.noteId;
         if (!noteId || seenNoteIds.has(noteId)) continue;
 
         await sleepImpl(randomDelayMs(minDelayMs, maxDelayMs));
         totalNavRequests += 1;
+        newNotesAttempted += 1;
         const nt0 = Date.now();
         await page.goto(card.href, { waitUntil: "domcontentloaded", timeout: 30_000 });
         await sleepImpl(1500);
@@ -540,10 +709,14 @@ export async function crawlXhsBatch({
         }
 
         const publishDate = parseRelativeOrAbsolutePublishDate(noteEval.publishDateRaw, effectiveToday) || effectiveToday;
-        const seq = collectedNotes.length + 1;
+        const seq = nextNewSeq;
+        nextNewSeq += 1;
         const rawJsonPath = path.join(rawDir, `note-${String(seq).padStart(2, "0")}-${noteId}.json`);
         const rawPngPath = path.join(rawDir, `note-${String(seq).padStart(2, "0")}-${noteId}.png`);
         await page.screenshot({ path: rawPngPath, fullPage: false }).catch(() => {});
+
+        const bodyOk = noteEval.bodyText.length > 0;
+        if (bodyOk) newBodiesNonEmpty += 1;
 
         const noteRecord = {
           seq,
@@ -567,7 +740,7 @@ export async function crawlXhsBatch({
           bodyPreview100: noteEval.bodyText.replace(/\s+/g, " ").slice(0, 100),
           bodyTextLength: noteEval.bodyText.length,
           comments: noteEval.comments,
-          bodyReadSuccess: noteEval.bodyText.length > 0,
+          bodyReadSuccess: bodyOk,
           noImageUsed: true,
           crawledAt: new Date().toISOString(),
           elapsedMs: Date.now() - nt0,
@@ -590,7 +763,9 @@ export async function crawlXhsBatch({
         usedFilter: "综合(默认)",
         elapsedMs: Date.now() - t0,
         totalCardsLoaded: searchEval.cards.length,
-        recent30DayCandidateCount: candidates.length,
+        uniqueCardsObserved: selection.uniqueCandidateCount,
+        skippedCounts: Object.fromEntries(Object.entries(selection.skipped).map(([k, v]) => [k, v.length])),
+        openedNoteIds: selection.selected.slice(0, pickedCount).map((s) => s.noteId),
         pickedCount,
         success: !stoppedReason,
       });
@@ -606,12 +781,18 @@ export async function crawlXhsBatch({
         weekId,
         notesCollected: collectedNotes.length,
         newNotesCount,
+        newNotesAttempted,
+        newBodiesNonEmpty,
         reusedCount: reusedNotes.length,
       });
     }
   } finally {
     if (context) await context.close().catch(() => {});
   }
+
+  const totalWithComments = collectedNotes.filter((n) => Array.isArray(n.comments) && n.comments.length > 0).length;
+  const totalCommentRows = collectedNotes.reduce((sum, n) => sum + (Array.isArray(n.comments) ? n.comments.length : 0), 0);
+  const newBodiesEmpty = Math.max(0, newNotesAttempted - newBodiesNonEmpty);
 
   const manifest = {
     schema: "nianlife.xhs-crawl-manifest/1",
@@ -633,10 +814,22 @@ export async function crawlXhsBatch({
       searchSuccessCount: keywordBatches.filter((b) => b.success).length,
       searchSuccessRate: `${keywordBatches.filter((b) => b.success).length}/${keywordBatches.length}`,
       totalNavRequests,
-      notesAttempted: newNotesCount,
+      totalCardElementsObserved,
+      uniqueCandidateCardsObserved: uniqueCardsAcrossSearch.size,
+      skippedSummaryCounts: skippedCounts,
+      uniqueNotesAttempted: newNotesAttempted,
+      notesAttempted: newNotesAttempted,
       notesSucceeded: newNotesCount,
+      bodiesNonEmptyCount: newBodiesNonEmpty,
+      bodiesEmptyCount: newBodiesEmpty,
+      bodyReadSuccessRate: newNotesAttempted > 0
+        ? `${newBodiesNonEmpty}/${newNotesAttempted}`
+        : "0/0",
       reusedNotesCount: reusedNotes.length,
-      bodyReadSuccessRate: `${collectedNotes.length}/${collectedNotes.length}`,
+      newNotesCount,
+      totalPoolNotesCount: collectedNotes.length,
+      notesWithCommentsCount: totalWithComments,
+      commentRowsTotal: totalCommentRows,
       within30DaysCount: collectedNotes.filter((n) => n.within30Days).length,
       signalStrengthOverall: evaluateXhsSignalStrength(collectedNotes),
       riskStopCount: stoppedReason ? 1 : 0,
@@ -657,6 +850,8 @@ export async function crawlXhsBatch({
     webhookResult,
     reusedCount: reusedNotes.length,
     newNotesCount,
+    newNotesAttempted,
+    newBodiesNonEmpty,
     notes: collectedNotes,
     manifest,
   };

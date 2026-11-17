@@ -673,7 +673,7 @@ export function WeekendDetailView({
             <span className="wd-muted-small">实景图片仅供参考</span>
           </div>
           <div className="wd-gallery-grid">
-            {sceneGallery.slice(0, 4).map((img) => (
+            {sceneGallery.map((img) => (
               <figure key={img.src} className="wd-gallery-item">
                 <div className="wd-gallery-frame">
                   <Image
@@ -685,7 +685,12 @@ export function WeekendDetailView({
                     sizes="(max-width: 760px) 50vw, 240px"
                   />
                 </div>
-                {img.caption ? <figcaption>{img.caption}</figcaption> : null}
+                {img.caption || img.timeNote ? (
+                  <figcaption>
+                    {img.caption}
+                    {img.timeNote ? `（${img.timeNote}）` : ""}
+                  </figcaption>
+                ) : null}
               </figure>
             ))}
           </div>

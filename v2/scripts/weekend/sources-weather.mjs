@@ -12,9 +12,14 @@ export const FORBIDDEN_WEATHER_HOST_RE = /open-meteo\.com/i;
 
 export const WEATHER_STATIONS = {
   "101210204": { code: "101210204", city: "德清", titleMustInclude: "德清", lat: 30.54, lng: 119.97 },
+  "101210203": { code: "101210203", city: "安吉", titleMustInclude: "安吉", lat: 30.64, lng: 119.68 },
   "101210102": { code: "101210102", city: "萧山", titleMustInclude: "萧山", lat: 30.18, lng: 120.26 },
+  "101210106": { code: "101210106", city: "余杭", titleMustInclude: "余杭", lat: 30.42, lng: 120.30 },
   "101210107": { code: "101210107", city: "临安", titleMustInclude: "临安", lat: 30.23, lng: 119.72 },
+  "101210108": { code: "101210108", city: "富阳", titleMustInclude: "富阳", lat: 30.05, lng: 119.96 },
   "101210101": { code: "101210101", city: "杭州", titleMustInclude: "杭州", lat: 30.27, lng: 120.15 },
+  "101210301": { code: "101210301", city: "嘉兴", titleMustInclude: "嘉兴", lat: 30.75, lng: 120.75 },
+  "101210501": { code: "101210501", city: "绍兴", titleMustInclude: "越城", lat: 30.03, lng: 120.58 },
   "101020100": { code: "101020100", city: "上海", titleMustInclude: "上海", lat: 31.23, lng: 121.47 },
   "101020600": { code: "101020600", city: "浦东", titleMustInclude: "浦东", lat: 31.22, lng: 121.54 },
 };
@@ -23,6 +28,7 @@ export const DEFAULT_WEEKEND_STATION_CODES = [
   "101020600", // 浦东
   "101020100", // 上海
   "101210101", // 杭州
+  "101210106", // 余杭
   "101210102", // 萧山
   "101210204", // 德清
   "101210107", // 临安

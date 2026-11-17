@@ -23,6 +23,7 @@ import {
   readCooldownPool,
   readPreferenceWeights,
 } from "./feedback-tune.mjs";
+import { checkCandidateVisitedSpot, loadVisitedPlacesContext } from "./visited-places.mjs";
 import { readExcludedTypesFile } from "./sources-xhs.mjs";
 import { buildProposalWeatherSlots } from "./sources-weather.mjs";
 
@@ -46,7 +47,11 @@ function formatRangeLabel(from, to) {
   };
 }
 
-export function scoreCandidate(candidate, weights = defaultPreferenceWeights(), cooldownPool = defaultCooldownPool(), weekStartDay = "") {
+/**
+ * Retrieval-only triage helper (NOT used for final destination selection when editorialOrder/editorialCurated is set).
+ * Hotel brand (Atour) never boosts destination score — brand preference applies only after a destination wins.
+ */
+export function computeRetrievalHintScore(candidate, weights = defaultPreferenceWeights(), cooldownPool = defaultCooldownPool(), weekStartDay = "") {
   const w = weights ?? defaultPreferenceWeights();
   const h = w.hypotheses ?? defaultPreferenceWeights().hypotheses;
   let score = 0;
@@ -56,10 +61,6 @@ export function scoreCandidate(candidate, weights = defaultPreferenceWeights(), 
   if (/train|farm|harvest|rail|火车|农|采摘|牧场/.test(text)) score += h.H2_transport_farm ?? 16;
   if (/animal|bird|pigeon|羊|鸽|动物|鱼/.test(text)) score += h.H3_gentle_animals ?? 15;
   if (/street|market|mall|shop|逛|街|市集|草坪|放空|风物/.test(text)) score += h.H4_adult_scenery_food ?? 14;
-  if (candidate?.isOvernight) {
-    const hasAtour = (candidate?.hotelOptions ?? candidate?.hotel?.options ?? []).some((opt) => /亚朵|atour/i.test(opt?.name ?? ""));
-    if (hasAtour) score += h.H5_overnight_atour ?? 12;
-  }
   if (!candidate?.hasMountainClimb && !candidate?.hasLongStairs) score += h.H6_flat_stroller ?? 15;
   if (/芦苇|水杉|银杏|季节|红叶|秋|春/.test(text)) score += h.H7_seasonal_texture ?? 15;
 
@@ -98,10 +99,38 @@ export function scoreCandidate(candidate, weights = defaultPreferenceWeights(), 
   return score;
 }
 
+export const scoreCandidate = computeRetrievalHintScore;
+
 /**
  * Selects up to 3 orthogonal slots (`preferred`, `alt_local`, `alt_1h`) with distinct `experienceType`.
+ * When `editorialCurated` or `editorialOrder` is present on candidates, preserves the editor session's
+ * comparative judgment strictly instead of overriding it with regex tag scores.
  */
 export function selectOrthogonalProposals(scoredItems = []) {
+  const hasEditorialOrder = scoredItems.some(
+    (item) => Number.isFinite(Number(item?.candidate?.editorialOrder)) || item?.candidate?.editorialCurated === true,
+  );
+
+  if (hasEditorialOrder) {
+    const curatedSorted = [...scoredItems]
+      .filter((item) => Number.isFinite(Number(item?.candidate?.editorialOrder)) || item?.candidate?.editorialCurated === true)
+      .sort((a, b) => Number(a.candidate.editorialOrder ?? 99) - Number(b.candidate.editorialOrder ?? 99));
+
+    const picked = [];
+    const usedTypes = new Set();
+    const defaultSlots = ["preferred", "alt_local", "alt_1h"];
+    for (const item of curatedSorted) {
+      if (picked.length >= 3) break;
+      const expType = item.candidate.experienceType;
+      if (usedTypes.has(expType)) continue;
+      usedTypes.add(expType);
+      const rank = picked.length + 1;
+      const slot = item.candidate.slot || defaultSlots[picked.length] || "alt_1h";
+      picked.push({ ...item, slot, rank });
+    }
+    return picked;
+  }
+
   const sorted = [...scoredItems].sort((a, b) => {
     const sigOrder = (x) => (x.gate?.signalStrength === "strong" ? 1 : 0);
     return sigOrder(b) - sigOrder(a) || b.score - a.score;
@@ -255,6 +284,13 @@ function buildFinalProposal(item, weekStartDay) {
   delete built.walkCapKm;
   delete built.nearbyIndoorAlternatives;
   delete built.totalTripBudget;
+  delete built.editorialOrder;
+  delete built.editorialCurated;
+  delete built.isRevisitWithNewAnchor;
+  delete built.placeQueryName;
+  delete built.venueName;
+  delete built.inCooldownPool;
+  delete built.inVisitedPool;
 
   return built;
 }
@@ -273,6 +309,7 @@ export function buildWeekendSnapshot({
   excludedExperienceTypes = ["art_museum_exhibition"],
   weights = defaultPreferenceWeights(),
   cooldown = defaultCooldownPool(),
+  visitedContext = null,
   fallbackArchiveWeekId = null,
   nowIso = new Date().toISOString(),
   requireOssMedia = true,
@@ -287,10 +324,17 @@ export function buildWeekendSnapshot({
     ? excludedExperienceTypes
     : excludedExperienceTypes?.excludedExperienceTypes ?? [];
 
-  // Filter out active 90-day cooldown venues before hard-gate pass
+  // Annotate active 90-day cooldown venues and spot-level visited places (unless explicitly revisited with new anchor)
   const annotatedCandidates = candidates.map((c) => {
     const cd = isVenueInCooldown(c?.title || c?.region || c?.id, cooldown, from);
-    return cd.active ? { ...c, inCooldownPool: true } : c;
+    const vis = visitedContext ? checkCandidateVisitedSpot(c, visitedContext) : { visited: false };
+    const blockedByVisited = vis.visited && !c?.isRevisitWithNewAnchor;
+    if (!cd.active && !blockedByVisited) return c;
+    return {
+      ...c,
+      ...(cd.active ? { inCooldownPool: true } : {}),
+      ...(blockedByVisited ? { inVisitedPool: true, isVenueClosed: true } : {}),
+    };
   });
 
   const availability = evaluatePublishAvailability({
@@ -310,7 +354,9 @@ export function buildWeekendSnapshot({
     const notes = insp?.xhsEvidence ?? [];
     const hasRecent = notes.some((n) => evaluateXhsNote(n, from).ok);
     const notExcluded = !normalizeExcludedTypes(normalizedExcluded).typeSet.has(insp?.experienceType ?? "");
-    return hasRecent && notExcluded;
+    const vis = visitedContext ? checkCandidateVisitedSpot(insp, visitedContext) : { visited: false };
+    const notVisited = !vis.visited || Boolean(insp?.isRevisitWithNewAnchor);
+    return hasRecent && notExcluded && notVisited;
   });
 
   const baseEnvelope = {
@@ -407,19 +453,32 @@ export function buildWeekendSnapshot({
 
   const eligible = [...availability.passingStrong, ...availability.passingWeak].map((item) => ({
     ...item,
-    score: scoreCandidate(item.candidate, weights, cooldown, from),
+    score: computeRetrievalHintScore(item.candidate, weights, cooldown, from),
   }));
+  const usesEditorialSelection = eligible.some(
+    (item) => Number.isFinite(Number(item?.candidate?.editorialOrder)) || item?.candidate?.editorialCurated === true,
+  );
   const selected = selectOrthogonalProposals(eligible);
   const proposals = selected.map((item) => buildFinalProposal(item, from));
 
   const snapshot = {
     ...baseEnvelope,
+    crawlAudit: {
+      ...crawlAudit,
+      editorialSelectionMode: usesEditorialSelection ? "editorial_curated" : "retrieval_triage_fallback",
+    },
     status: "published",
     proposals,
   };
 
   const check = validateSnapshotHardGates(snapshot, { requireOssMedia });
-  return { ok: check.ok, errors: check.errors, snapshot, availability };
+  return {
+    ok: check.ok,
+    errors: check.errors,
+    snapshot,
+    availability,
+    editorialSelectionMode: usesEditorialSelection ? "editorial_curated" : "retrieval_triage_fallback",
+  };
 }
 
 /**
@@ -507,5 +566,6 @@ export function loadLocalWeekendContext(opsStateDir = path.join(os.homedir(), "N
     weights: readPreferenceWeights(path.join(opsStateDir, "preference-weights.json")),
     cooldown: readCooldownPool(path.join(opsStateDir, "cooldown-venues.json")),
     excludedExperienceTypes: readExcludedTypesFile(path.join(opsStateDir, "excluded-types.json")),
+    visitedContext: loadVisitedPlacesContext({ opsStateDir }),
   };
 }
