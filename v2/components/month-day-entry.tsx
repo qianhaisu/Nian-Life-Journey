@@ -22,10 +22,11 @@ import type { TimelineDay } from "@/lib/month-timeline";
 //
 // No "use client": this renders on the server for the first week, and inside MonthTimeline (a client
 // component) for every week loaded after it.
-export function MonthDayEntry({ entry, year, monthAgeLabel: _monthAgeLabel }: {
+export function MonthDayEntry({ entry, year, monthAgeLabel: _monthAgeLabel, priority = false }: {
   entry: TimelineDay;
   year: string;
   monthAgeLabel?: string;
+  priority?: boolean;
 }) {
   const isPrebirth = Boolean(entry.ageLabel?.startsWith("出生前"));
   const ageText = entry.ageLabel
@@ -51,7 +52,7 @@ export function MonthDayEntry({ entry, year, monthAgeLabel: _monthAgeLabel }: {
             {story.paragraphs.map((text, index) => <p className="day-entry-text" key={index}>{text}</p>)}
           </div>
         ))}
-        {entry.photos.length > 0 ? <DayPhotos photos={entry.photos} dateLabel={entry.dateLabel} ageLabel={entry.ageLabel} quietLabel /> : null}
+        {entry.photos.length > 0 ? <DayPhotos photos={entry.photos} dateLabel={entry.dateLabel} ageLabel={entry.ageLabel} quietLabel priority={priority} /> : null}
         {/* prefetch={false} (2026-09-20): a month page holds one of these per day, and Next's default
             prefetch turned each into a real server render of that day — twenty-odd cold renders queued
             in front of the reader's photographs. Clicking still costs exactly one render. */}

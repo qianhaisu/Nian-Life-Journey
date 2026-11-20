@@ -46,6 +46,7 @@ export default async function MemoryPage() {
   }>();
   const mediaById = new Map(media.map((item) => [item.id, item]));
   const months = index.years.flatMap((year) => year.months);
+  const priorityMonths = new Set(months.slice(0, 2).map((month) => month.chapter.month));
   const loadedMonthContents = await Promise.all(
     months.map((month) => loadMonthContent(month.chapter.month)),
   );
@@ -161,6 +162,7 @@ export default async function MemoryPage() {
                     cover={editedCards.get(month.chapter.month)?.cover}
                     coverFocal={editedCards.get(month.chapter.month)?.coverFocal}
                     coverFrame={editedCards.get(month.chapter.month)?.coverFrame}
+                    priority={priorityMonths.has(month.chapter.month)}
                   />
                 ))}
               </div>

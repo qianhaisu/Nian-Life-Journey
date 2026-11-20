@@ -261,6 +261,7 @@ export function MonthTimeline({
   );
 
   const hasCalendar = Boolean(resolvedMonth && resolvedCalendarDays.length > 0);
+  const firstPhotoDay = weekData[0]?.find((entry) => entry.photos.length > 0)?.day;
 
   return <>
     <div className={hasCalendar ? "month-timeline-shell has-calendar" : "month-timeline-shell"}>
@@ -284,7 +285,12 @@ export function MonthTimeline({
                 className={highlightedDay === entry.day ? "month-day is-calendar-target" : "month-day"}
                 key={entry.day}
               >
-                <MonthDayEntry entry={entry} year={year} monthAgeLabel={monthAgeLabel} />
+                <MonthDayEntry
+                  entry={entry}
+                  year={year}
+                  monthAgeLabel={monthAgeLabel}
+                  priority={entry.day === firstPhotoDay}
+                />
               </li>
             )),
           )}

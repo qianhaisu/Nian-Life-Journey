@@ -162,6 +162,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
 
       const weeks = groupIntoWeeks(timelineMoments);
       const weekCount = weeks.length;
+      const firstPhotoDay = timelineMoments.find((m) => chapterDaySet.has(m.day) && dayGroups.has(m.day))?.day;
 
       return <>
         {/* Week jump nav — only when the month has more than one week of content */}
@@ -203,7 +204,7 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
                   priority={globalIndex === 0}
                   continued={prevMoment?.day === moment.day}
                 />
-                {group ? <DayPhotos photos={group.photos} dateLabel={group.dateLabel} ageLabel={group.ageLabel} /> : null}
+                {group ? <DayPhotos photos={group.photos} dateLabel={group.dateLabel} ageLabel={group.ageLabel} priority={moment.day === firstPhotoDay} /> : null}
                 {albumEntry ? <DayAlbumLink year={year} month={monthSegment} day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} afterDayPhotos={Boolean(group)} /> : null}
                 {chronicleEntry && !albumEntry ? <DayAlbumLink year={year} month={monthSegment} day={moment.day} dateLabel={moment.dateLabel} ageLabel={moment.ageLabel} /> : null}
               </Fragment>;

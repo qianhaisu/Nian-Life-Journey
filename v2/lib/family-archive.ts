@@ -23,6 +23,7 @@ import { invalidateTopicCache } from "./home-memory-topics-load";
 import { invalidateQualityCache } from "./home-photo-quality";
 import { invalidateUpcomingCache } from "./db/upcoming-store";
 import { invalidateHabitDisplayCache } from "./db/habit-display-store";
+import { invalidateMediaDeliveryCache } from "./media/delivery-cache";
 
 // The one set of clocks every page reads (lib/time-truth.ts). Pages never compute their own "now".
 export type ArchiveTime = RecencyReference & {
@@ -222,6 +223,7 @@ export function __resetOnDemandArchiveForTests(): void {
   invalidateQualityCache();
   invalidateUpcomingCache();
   invalidateHabitDisplayCache();
+  invalidateMediaDeliveryCache();
 }
 
 // Drop the memo so the next request re-reads the archive.
@@ -243,6 +245,7 @@ export function invalidateOnDemandArchive(): void {
   invalidateQualityCache();
   invalidateUpcomingCache();
   invalidateHabitDisplayCache();
+  invalidateMediaDeliveryCache();
 }
 
 // The archive read for pages that are rendered on demand rather than prerendered
