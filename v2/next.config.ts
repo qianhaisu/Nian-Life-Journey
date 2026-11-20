@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   // Let Caddy handle HTTP compression (zstd preferred over gzip) without double-compressing in Node.
   compress: false,
   outputFileTracingExcludes: {
-    "*": ["./.data/**", "./.next-*/**", "./test/**"],
+    "*": [".data/**", "**/.data/**", ".next-*/**", "**/.next-*/**", "test/**"],
   },
   images: {
     formats: ["image/avif", "image/webp"],

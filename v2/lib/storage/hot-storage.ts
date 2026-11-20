@@ -20,14 +20,17 @@ function abortable(stream: ReturnType<typeof createReadStream>, signal?: AbortSi
   return Readable.toWeb(stream) as ReadableStream<Uint8Array>;
 }
 
+const joinRuntimePath = (...parts: string[]) => path.join(...parts);
+
 // The local adapter is intentionally credential-free and is also the staging
 // implementation used by the development repository.
 export class LocalHotStorage implements HotStorage {
-  private readonly root = path.join(process.cwd(), ".data");
+  // Helper prevents @vercel/nft from glob-tracing the entire local .data directory into standalone builds.
+  private readonly root = joinRuntimePath(process.cwd(), ".data");
 
   async put(input: HotStorageInput) {
     const key = safeKey(input.key);
-    const target = path.join(this.root, key);
+    const target = joinRuntimePath(this.root, key);
     await fs.mkdir(path.dirname(target), { recursive: true });
     if (input.body instanceof Uint8Array) await fs.writeFile(target, input.body);
     else await pipeline(Readable.from(input.body), createWriteStream(target));
@@ -35,7 +38,7 @@ export class LocalHotStorage implements HotStorage {
   }
 
   async get(key: string, signal?: AbortSignal) {
-    try { return await fs.readFile(path.join(this.root, safeKey(key)), { signal }); }
+    try { return await fs.readFile(joinRuntimePath(this.root, safeKey(key)), { signal }); }
     catch { return null; }
   }
 
@@ -44,23 +47,23 @@ export class LocalHotStorage implements HotStorage {
   // leaving it to the stream's own cancel path.
   async getStream(key: string, signal?: AbortSignal) {
     try {
-      await fs.access(path.join(this.root, safeKey(key)));
-      return abortable(createReadStream(path.join(this.root, safeKey(key))), signal);
+      await fs.access(joinRuntimePath(this.root, safeKey(key)));
+      return abortable(createReadStream(joinRuntimePath(this.root, safeKey(key))), signal);
     } catch { return null; }
   }
 
   async getRange(key: string, start: number, end: number, signal?: AbortSignal) {
     try {
-      const target = path.join(this.root, safeKey(key));
+      const target = joinRuntimePath(this.root, safeKey(key));
       await fs.access(target);
       return abortable(createReadStream(target, { start, end }), signal);
     } catch { return null; }
   }
 
-  async delete(key: string) { await fs.rm(path.join(this.root, safeKey(key)), { force: true }); }
+  async delete(key: string) { await fs.rm(joinRuntimePath(this.root, safeKey(key)), { force: true }); }
   async verify(key: string, checksum: string) {
     try {
-      const stream = createReadStream(path.join(this.root, safeKey(key)));
+      const stream = createReadStream(joinRuntimePath(this.root, safeKey(key)));
       const hash = createHash("sha256");
       let fileSize = 0;
       for await (const chunk of stream) { hash.update(chunk); fileSize += chunk.byteLength; }

@@ -54,8 +54,10 @@ function jsonRefuseIfSharedWithProtected(store: Store, input: { operation: strin
   });
 }
 
-const dataDir = path.join(process.cwd(), ".data");
-const storeFile = path.join(dataDir, "nian-life.json");
+// Helper prevents @vercel/nft from glob-tracing the local .data tree into Next.js standalone builds.
+const joinRuntimePath = (...parts: string[]) => path.join(...parts);
+const dataDir = joinRuntimePath(process.cwd(), ".data");
+const storeFile = joinRuntimePath(dataDir, "nian-life.json");
 
 const initialStore = (): Store => ({ profile, contributors, media: seedMedia, mediaAssets: [], mediaLocations: [], connectorStates: [], rawSources: seedSources.map((source) => ({ ...source, status: source.status === "inbox" ? "organized" : source.status })), events: seedEvents, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, organizerRuns: [], organizerJobs: [], chatImportTasks: [], qualityReviews: [], links: seedSources.flatMap((source) => source.relatedLifeEventId ? [{ rawSourceId: source.id, lifeEventId: source.relatedLifeEventId, role: "supporting" as const, createdAt: source.importedAt }] : []), monthlySnapshots: [monthlySnapshot] });
 

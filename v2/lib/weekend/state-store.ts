@@ -20,6 +20,9 @@ import type {
   WeekendStateFile,
 } from "./types";
 
+const joinRuntimePath = (...parts: string[]) => path.join(...parts);
+const resolveRuntimePath = (...parts: string[]) => path.resolve(...parts);
+
 export const WEEKEND_STATE_SCHEMA = "nianlife.weekend-state/1";
 export const WEEKEND_EXCLUDED_TYPES_SCHEMA = "nianlife.weekend-excluded-types/1";
 const WEEKEND_STATE_CACHE_TTL_MS = 300_000;
@@ -142,7 +145,7 @@ function resolveContainmentBoundary(): { literal: string; real: string } {
   }
 
   // Standalone Docker image (/app) has no .git directory: guard against writing inside the app root.
-  const fallback = path.resolve(process.cwd());
+  const fallback = resolveRuntimePath(process.cwd());
   return { literal: fallback, real: realpathSync.native(fallback) };
 }
 
@@ -259,7 +262,7 @@ export class WeekendStateStore {
   private readonly hooks: Pick<WeekendStateStoreOptions, "failBeforeRename" | "beforeCommit" | "afterAcquire">;
 
   constructor(dir: string = resolveWeekendStateDir(), opts: WeekendStateStoreOptions = {}) {
-    this.dir = path.resolve(dir);
+    this.dir = resolveRuntimePath(dir);
     this.lockTimeoutMs = opts.lockTimeoutMs ?? 30_000;
     this.staleLockMs = opts.staleLockMs ?? 60_000;
     this.hooks = {
@@ -270,20 +273,20 @@ export class WeekendStateStore {
   }
 
   private get lockDir(): string {
-    return path.join(this.dir, "weekend-state.lock");
+    return joinRuntimePath(this.dir, "weekend-state.lock");
   }
 
   private get ownerFile(): string {
-    return path.join(this.lockDir, "owner.json");
+    return joinRuntimePath(this.lockDir, "owner.json");
   }
 
   private get excludedTypesFile(): string {
-    return path.join(this.dir, "excluded-types.json");
+    return joinRuntimePath(this.dir, "excluded-types.json");
   }
 
   private weekStateFile(weekId: string): string {
     assertValidWeekIdOrThrow(weekId);
-    const resolved = path.resolve(this.dir, `${weekId}.json`);
+    const resolved = resolveRuntimePath(this.dir, `${weekId}.json`);
     if (path.dirname(resolved) !== this.dir) {
       throw new WeekendStateError(400, "INVALID_WEEK_ID", "weekId path resolution mismatch");
     }
