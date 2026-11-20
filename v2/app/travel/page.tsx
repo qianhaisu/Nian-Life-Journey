@@ -1,8 +1,15 @@
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { TravelAtlas, type AtlasPlace, type AtlasStamp, type AtlasTrip, type AtlasUnit } from "@/components/travel-atlas";
+import type { AtlasPlace, AtlasStamp, AtlasTrip, AtlasUnit } from "@/components/travel-atlas";
 import { HOME_COLOR, STICKER_COLORS } from "@/components/travel-map-svg";
-import { WeekendPlanView } from "@/components/weekend-plan-view";
+
+const TravelAtlas = dynamic(() =>
+  import("@/components/travel-atlas").then((mod) => mod.TravelAtlas),
+);
+const WeekendPlanView = dynamic(() =>
+  import("@/components/weekend-plan-view").then((mod) => mod.WeekendPlanView),
+);
 import { renderOnDemand } from "@/lib/render-on-demand";
 import { ageOn, formatMonth } from "@/lib/time-signature";
 import { productToday } from "@/lib/time-truth";

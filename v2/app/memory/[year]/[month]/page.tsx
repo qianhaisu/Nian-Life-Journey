@@ -9,7 +9,6 @@ import { SnapshotSummary } from "@/components/snapshot-summary";
 import { MonthMoment } from "@/components/month-moment";
 import { MonthlyFocusGoals } from "@/components/monthly-focus-goals";
 import { MonthTimeline } from "@/components/month-timeline";
-import { resolveCardThumbnail } from "@/lib/day-photo-layout";
 import { groupIntoWeeks } from "@/lib/month-day-weight";
 import { loadMonthContent } from "@/lib/month-content";
 import { buildMonthTimeline, weekEntries } from "@/lib/month-timeline";
@@ -60,33 +59,23 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
   const { year, month: monthSegment } = await params;
   if (!/^\d{4}$/.test(year) || !/^\d{2}$/.test(monthSegment)) notFound();
   const month = `${year}-${monthSegment}`;
-  const archive = await loadFamilyArchiveForIsr();
+  const [archive, content] = await Promise.all([
+    loadFamilyArchiveForIsr(),
+    loadMonthContent(month),
+  ]);
   const { chapters, store, snapshots, privilege, traceEvents, birthDay } = archive;
-  const content = await loadMonthContent(month);
   const chapter = findMonth(chapters, month) ?? (content && content.days.length > 0 ? contentOnlyChapter(month, birthDay) : null);
   if (!chapter) notFound();
 
   const birthYear = birthDay ? Number(birthDay.slice(0, 4)) : 2025;
   const isPrebirth = Number(year) < birthYear;
   const ageLine = monthAgeLine(month, productToday(), chapter.ageLabel);
-  const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay, content?.coverMediaId);
   const summary = snapshots.find((item) => item.month === month);
   const focusGoals = summary ? focusGoalsForSnapshot(store.monthlyFocusGoals, month) : [];
   const yearChapter = chapters.find((item) => item.year === year);
   const siblings = yearChapter?.months.filter((item) => item.month !== month) ?? [];
   const allArchiveMonths = [...new Set([...chapters.flatMap((yc) => yc.months.map((m) => m.month)), month])]
     .sort((a, b) => a.localeCompare(b));
-  const archivePhotoCount = composition.archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
-  const dayGroups = new Map(composition.dayPhotoGroups.map((day) => [day.day, day]));
-  const albumDays = dayAlbumDays(composition);
-  const chronicleAlbum = chronicleAlbumDays(composition);
-  // The section is named for what is actually in it. A month with a playable clip says so; a month
-  // without one is not promised a video it does not have.
-  const albumHasVideo = composition.archiveDays.some((day) => day.photos.some((item) => item.type === "video"));
-  const albumLabel = albumHasVideo ? "这个月的照片与视频" : "这个月的照片";
-  // Emptiness is about the whole month, not one section: a month whose photographs all sit in day
-  // groups has plenty to read even when 「这个月的照片」 is empty.
-  const empty = composition.chapter.length === 0 && composition.chronicle.length === 0 && composition.quietDays.length === 0 && composition.totalPhotoCount === 0;
 
   // An edited month is ONE timeline of days (lib/month-timeline.ts): month title → summary → days.
   // Stories the content file did not already write are folded into their day there, so there is no
@@ -119,21 +108,25 @@ export default async function MonthPage({ params }: { params: Promise<{ year: st
         availableMonths={allArchiveMonths}
         weeks={timeline.weeks}
         entries={entries}
-        calendarDays={[...timeline.byDay.values()].map((day) => ({
-          day: day.day,
-          title: day.title ?? day.dateLabel,
-          summary: day.paragraphs[0],
-          thumbnail: resolveCardThumbnail(day.photos, day.firstScreenMediaIds),
-          hasPhotos: day.photos.length > 0,
-          isMilestone: Boolean(day.milestone || day.emphasis === "lead"),
-          badge: day.milestone?.badge,
-        }))}
       /> : null}
 
       {summary && focusGoals.length > 0 ? <MonthlyFocusGoals goals={focusGoals} snapshotMonth={month} variant="review" /> : null}
       {siblings.length > 0 ? <footer className="other-years"><span className="section-mark">{year} 年的其他月份</span><p className="serif">{siblings.map((item) => <Link key={item.month} href={`/memory/${year}/${item.month.slice(5, 7)}`} prefetch={false}>{item.shortLabel}</Link>)}</p></footer> : null}
     </div>;
   }
+
+  const composition = buildMonthComposition(chapter, privilege, traceEvents, birthDay);
+  const archivePhotoCount = composition.archiveDays.reduce((sum, day) => sum + day.photos.length, 0);
+  const dayGroups = new Map(composition.dayPhotoGroups.map((day) => [day.day, day]));
+  const albumDays = dayAlbumDays(composition);
+  const chronicleAlbum = chronicleAlbumDays(composition);
+  // The section is named for what is actually in it. A month with a playable clip says so; a month
+  // without one is not promised a video it does not have.
+  const albumHasVideo = composition.archiveDays.some((day) => day.photos.some((item) => item.type === "video"));
+  const albumLabel = albumHasVideo ? "这个月的照片与视频" : "这个月的照片";
+  // Emptiness is about the whole month, not one section: a month whose photographs all sit in day
+  // groups has plenty to read even when 「这个月的照片」 is empty.
+  const empty = composition.chapter.length === 0 && composition.chronicle.length === 0 && composition.quietDays.length === 0 && composition.totalPhotoCount === 0;
 
   return <div className="month-page reading-wrap">
     <header className="chapter-masthead">

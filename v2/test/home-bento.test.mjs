@@ -20,12 +20,14 @@ import {
 } from "../lib/home-bento.ts";
 import {
   FamilyVoicesTile,
-  GrowthHighlightTile,
-  LatestDayTile,
   RecentJournalSection,
   TimeCapsuleSection,
-  TravelFootprintCard,
 } from "../components/home-bento-sections.tsx";
+import {
+  GrowthHighlightTile,
+  LatestDayTile,
+  TravelFootprintCard,
+} from "../components/home-bento-static.tsx";
 
 function makeMedia(id, takenAt, overrides = {}) {
   return {

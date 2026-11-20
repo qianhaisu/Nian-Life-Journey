@@ -154,9 +154,9 @@ export type HomeMemory = {
   coverIndex: number;
   durationSeconds: number;
   mood: MemoryMood;
-  moodReason: string;
+  moodReason?: string;
   /** 为什么是这一段、依据是什么、折叠掉多少。供审计，不显示。 */
-  reason: string;
+  reason?: string;
 };
 
 export type HomeMemoryAbsence = { kind: "empty_archive" | "no_qualified_theme"; reason: string };

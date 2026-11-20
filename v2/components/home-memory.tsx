@@ -179,59 +179,37 @@ function MemoryPreview({
         }}
       >
         {showHeroCover && heroCover ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              key={`bg-hero-${heroCover.media.id}`}
-              className="memory-backdrop is-current"
-              src={heroCover.media.thumbnailSrc ?? mediaDeliveryUrl(heroCover.media.id, "thumbnail")}
-              alt=""
-              aria-hidden="true"
-            />
-            <Image
-              key={`hero-${heroCover.media.id}`}
-              className="memory-frame is-current memory-frame--pinned"
-              src={heroCover.media.src || mediaDeliveryUrl(heroCover.media.id, "web")}
-              alt={heroCover.media.alt}
-              width={heroCover.media.width || 4}
-              height={heroCover.media.height || 5}
-              sizes="(max-width: 899px) 96vw, 580px"
-              priority
-              unoptimized
-            />
-          </>
+          <Image
+            key={`hero-${heroCover.media.id}`}
+            className="memory-frame is-current memory-frame--pinned"
+            src={heroCover.media.src || mediaDeliveryUrl(heroCover.media.id, "web")}
+            alt={heroCover.media.alt}
+            width={heroCover.media.width || 4}
+            height={heroCover.media.height || 5}
+            sizes="(max-width: 899px) 96vw, 580px"
+            priority
+            fetchPriority="high"
+            unoptimized
+          />
         ) : memory ? (
-          <>
-            {memory.slides.map((slide, i) =>
-              isNear(i, index, memory.slides.length) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={`bg-${slide.key}`}
-                  className={i === index ? "memory-backdrop is-current" : "memory-backdrop"}
-                  src={slide.media.thumbnailSrc ?? mediaDeliveryUrl(slide.media.id, "thumbnail")}
-                  alt=""
-                  aria-hidden="true"
-                />
-              ) : null,
-            )}
-            {memory.slides.map((slide, i) =>
-              isNear(i, index, memory.slides.length) ? (
-                <Image
-                  key={slide.key}
-                  className={i === index ? "memory-frame is-current" : "memory-frame"}
-                  data-fx={i % 4}
-                  src={slide.media.src || mediaDeliveryUrl(slide.media.id, "web")}
-                  alt={slide.media.alt}
-                  width={slide.media.width || 4}
-                  height={slide.media.height || 3}
-                  sizes="(max-width: 899px) 96vw, 580px"
-                  priority={i === memory.coverIndex}
-                  unoptimized
-                  aria-hidden={i !== index}
-                />
-              ) : null,
-            )}
-          </>
+          memory.slides.map((slide, i) =>
+            isNear(i, index, memory.slides.length) ? (
+              <Image
+                key={slide.key}
+                className={i === index ? "memory-frame is-current" : "memory-frame"}
+                data-fx={i % 4}
+                src={slide.media.src || mediaDeliveryUrl(slide.media.id, "web")}
+                alt={slide.media.alt}
+                width={slide.media.width || 4}
+                height={slide.media.height || 3}
+                sizes="(max-width: 899px) 96vw, 580px"
+                priority={i === memory.coverIndex}
+                fetchPriority={i === memory.coverIndex ? "high" : undefined}
+                unoptimized
+                aria-hidden={i !== index}
+              />
+            ) : null,
+          )
         ) : null}
 
         <div className="memory-scrim" aria-hidden="true" />

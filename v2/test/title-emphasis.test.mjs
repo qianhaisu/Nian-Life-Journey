@@ -179,7 +179,10 @@ test("home-lead.tsx：三个 Hook（useState ×2、useEffect）都在 `if (!slid
 // 手机第一屏必须同时读得到照片、日期和题签（2026-09-16 那次题签被顶到底栏下面就是没守住），
 // 宽屏上竖照不能铺成一堵墙，照片本身不许加滤镜。
 test("app/home.css：回忆舞台限高保住第一屏的题签与日期，宽屏不铺成一堵墙，照片不加滤镜", () => {
-  const css = fs.readFileSync(new URL("../app/home.css", import.meta.url), "utf8");
+  const css =
+    fs.readFileSync(new URL("../app/home-memory.css", import.meta.url), "utf8") +
+    "\n" +
+    fs.readFileSync(new URL("../app/home.css", import.meta.url), "utf8");
   const stage = css.match(/\.memory-frames \{([^}]*)\}/);
   assert.ok(stage, "找不到 .memory-frames 的规则");
   // 限高用视口单位 + 像素天花板：纯百分比在小屏（667）上会把题签重新顶下去。

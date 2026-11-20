@@ -200,25 +200,36 @@ export function WeekendPlanView({
   const [openInsp, setOpenInsp] = useState<Record<string, boolean>>({});
   const [statusMessage, setStatusMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const didMutateRef = useRef(false);
+  const mutationSeqRef = useRef(0);
 
   useEffect(() => {
     if (!activeWeekId) return;
     let alive = true;
-    fetch(`/api/weekend-state?weekId=${encodeURIComponent(activeWeekId)}`, { cache: "no-store" })
-      .then((res) => (res.ok ? (res.json() as Promise<WeekendStateGetResponse>) : null))
-      .then((data) => {
-        if (!alive || !data?.ok || didMutateRef.current) return;
-        setWeekState(data.state);
-        setExcludedTypes(data.excludedExperienceTypes);
-      })
-      .catch(() => {
-        // Keep SSR-rendered state if network fetch is unavailable.
-      });
+    const refreshState = () => {
+      const seq = mutationSeqRef.current;
+      fetch(`/api/weekend-state?weekId=${encodeURIComponent(activeWeekId)}`, { cache: "no-store" })
+        .then((res) => (res.ok ? (res.json() as Promise<WeekendStateGetResponse>) : null))
+        .then((data) => {
+          if (!alive || !data?.ok || mutationSeqRef.current !== seq) return;
+          setWeekState(data.state);
+          setExcludedTypes(data.excludedExperienceTypes);
+        })
+        .catch(() => {
+          // Keep SSR-rendered state if network fetch is unavailable.
+        });
+    };
+    if (!initialState) {
+      refreshState();
+    }
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) refreshState();
+    };
+    window.addEventListener("pageshow", handlePageShow);
     return () => {
       alive = false;
+      window.removeEventListener("pageshow", handlePageShow);
     };
-  }, [activeWeekId]);
+  }, [activeWeekId, initialState]);
 
   const excludedSet = useMemo(
     () => new Set(excludedTypes.map((item) => item.experienceType)),
@@ -254,7 +265,7 @@ export function WeekendPlanView({
     key: string,
     successText: string,
   ): Promise<boolean> {
-    didMutateRef.current = true;
+    mutationSeqRef.current += 1;
     setBusyKey(key);
     setStatusMessage(null);
     try {

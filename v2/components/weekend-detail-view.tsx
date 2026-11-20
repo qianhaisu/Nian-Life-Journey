@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CrowdRiskLevel,
   DegradationBranch,
@@ -157,6 +157,7 @@ export function WeekendDetailView({
   const [activeEmergency, setActiveEmergency] = useState<EmergencyKey | null>(null);
   const [savingHint, setSavingHint] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<boolean>(false);
+  const mutationSeqRef = useRef(0);
 
   const proposal = useMemo(() => {
     return (
@@ -171,22 +172,33 @@ export function WeekendDetailView({
 
   useEffect(() => {
     let active = true;
-    fetch(`/api/weekend-state?weekId=${encodeURIComponent(weekId)}`, {
-      cache: "no-store",
-    })
-      .then((res) => (res.ok ? (res.json() as Promise<WeekendStateGetResponse>) : null))
-      .then((data) => {
-        if (!active || !data?.ok) return;
-        setWeekState(data.state);
-        setExcludedTypes(data.excludedExperienceTypes);
+    const refreshState = () => {
+      const seq = mutationSeqRef.current;
+      fetch(`/api/weekend-state?weekId=${encodeURIComponent(weekId)}`, {
+        cache: "no-store",
       })
-      .catch(() => {
-        // 保持服务端初始快照，不阻断阅读
-      });
+        .then((res) => (res.ok ? (res.json() as Promise<WeekendStateGetResponse>) : null))
+        .then((data) => {
+          if (!active || !data?.ok || mutationSeqRef.current !== seq) return;
+          setWeekState(data.state);
+          setExcludedTypes(data.excludedExperienceTypes);
+        })
+        .catch(() => {
+          // 保持服务端初始快照，不阻断阅读
+        });
+    };
+    if (!initialState) {
+      refreshState();
+    }
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) refreshState();
+    };
+    window.addEventListener("pageshow", handlePageShow);
     return () => {
       active = false;
+      window.removeEventListener("pageshow", handlePageShow);
     };
-  }, [weekId]);
+  }, [weekId, initialState]);
 
   useEffect(() => {
     const syncFromLocation = () => {
@@ -221,6 +233,7 @@ export function WeekendDetailView({
     nextDeparture: DepartureKey,
     labelHint: string
   ) {
+    mutationSeqRef.current += 1;
     setPendingAction(true);
     setSavingHint(null);
     try {
@@ -274,6 +287,7 @@ export function WeekendDetailView({
   }
 
   async function handleToggleExcludeType(target: WeekendProposal) {
+    mutationSeqRef.current += 1;
     const isAlreadyExcluded = excludedTypes.some(
       (item) => item.experienceType === target.experienceType
     );

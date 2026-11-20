@@ -45,27 +45,29 @@ export default async function MemoryPage() {
     line?: string; cover?: (typeof media)[number]; coverFocal?: { mobilePercent: number; desktopPercent: number }; coverFrame?: "square" | "full";
   }>();
   const mediaById = new Map(media.map((item) => [item.id, item]));
-  for (const year of index.years) {
-    for (const month of year.months) {
-      const content = await loadMonthContent(month.chapter.month);
-      if (!content) continue;
-      // The chosen cover has to clear the same bar `preview` is built behind, stated once in
-      // pinnedCoverAllowed rather than borrowed: deliverable and family-visible (it is in `media` at
-      // all), somebody opened the file and recorded what is in it (`checked`), no later review took it
-      // back (`excluded`), and it was taken in this month (`mediaById` spans the whole archive, so the
-      // month match is checked here, not assumed). A cover that fails is dropped and the card keeps
-      // its own. Pre-birth months are no exception: their pregnancy review writes the same `checked`.
-      const candidate = content.coverMediaId ? mediaById.get(content.coverMediaId) : undefined;
-      const allowed = candidate && pinnedCoverAllowed(candidate, privilege, month.chapter.month);
-      // The focal point belongs to the chosen photograph: it travels with the cover and is dropped with it.
-      editedCards.set(month.chapter.month, {
-        line: content.cardLine,
-        cover: allowed ? candidate : undefined,
-        coverFocal: allowed ? content.coverFocal : undefined,
-        coverFrame: allowed ? content.coverFrame : undefined,
-      });
-    }
-  }
+  const months = index.years.flatMap((year) => year.months);
+  const loadedMonthContents = await Promise.all(
+    months.map((month) => loadMonthContent(month.chapter.month)),
+  );
+  months.forEach((month, idx) => {
+    const content = loadedMonthContents[idx];
+    if (!content) return;
+    // The chosen cover has to clear the same bar `preview` is built behind, stated once in
+    // pinnedCoverAllowed rather than borrowed: deliverable and family-visible (it is in `media` at
+    // all), somebody opened the file and recorded what is in it (`checked`), no later review took it
+    // back (`excluded`), and it was taken in this month (`mediaById` spans the whole archive, so the
+    // month match is checked here, not assumed). A cover that fails is dropped and the card keeps
+    // its own. Pre-birth months are no exception: their pregnancy review writes the same `checked`.
+    const candidate = content.coverMediaId ? mediaById.get(content.coverMediaId) : undefined;
+    const allowed = candidate && pinnedCoverAllowed(candidate, privilege, month.chapter.month);
+    // The focal point belongs to the chosen photograph: it travels with the cover and is dropped with it.
+    editedCards.set(month.chapter.month, {
+      line: content.cardLine,
+      cover: allowed ? candidate : undefined,
+      coverFocal: allowed ? content.coverFocal : undefined,
+      coverFrame: allowed ? content.coverFrame : undefined,
+    });
+  });
 
   const newestYear = index.years[0]?.year;
   const firstPrebirthYear = index.years.find((year) => Number(year.year) < birthYear)?.year;

@@ -430,6 +430,8 @@
 .memory-page .month-card {
   display: flex;
   flex-direction: column;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
   background: var(--mem-surface);
   border: 1px solid var(--mem-border);
   border-radius: var(--mem-r-card);
@@ -454,6 +456,7 @@
 
 .memory-page .month-card--compact {
   align-self: start;
+  contain-intrinsic-size: auto 160px;
   border-top: 1px solid var(--mem-border);
   background: var(--mem-surface);
 }

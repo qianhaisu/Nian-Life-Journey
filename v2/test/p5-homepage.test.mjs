@@ -34,12 +34,14 @@ import {
 import { HomeMemory } from "../components/home-memory.tsx";
 import {
   FamilyVoicesTile,
-  GrowthHighlightTile,
-  LatestDayTile,
   RecentJournalSection,
   TimeCapsuleSection,
-  TravelFootprintCard,
 } from "../components/home-bento-sections.tsx";
+import {
+  GrowthHighlightTile,
+  LatestDayTile,
+  TravelFootprintCard,
+} from "../components/home-bento-static.tsx";
 
 function makePhoto(id, takenAt, overrides = {}) {
   return {

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { MouseEvent } from "react";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { useContext, type MouseEvent } from "react";
 import { CardThumbnail } from "@/components/card-thumbnail";
 import { MonthTextSticker } from "@/components/month-text-sticker";
 import type { ThumbnailChoice } from "@/lib/day-photo-layout";
@@ -89,6 +90,7 @@ export function MonthCalendar({
   onSelectDay: (event: MouseEvent<HTMLAnchorElement>, day: string) => void;
   onBeforeNavigate?: () => void;
 }) {
+  const router = useContext(AppRouterContext);
   const cells = buildMonthCalendarGrid(year, month, days);
   if (cells.length === 0) return null;
 
@@ -162,7 +164,9 @@ export function MonthCalendar({
                 const target = event.target.value;
                 if (!target || target === currentMonthKey) return;
                 onBeforeNavigate?.();
-                window.location.assign(monthHref(target));
+                const href = monthHref(target);
+                if (router) router.push(href);
+                else window.location.assign(href);
               }}
             >
               {[...monthGroupsByYear.entries()]

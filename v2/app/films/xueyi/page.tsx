@@ -16,7 +16,7 @@ export default function XueyiFilmPage() {
   return (
     <div className="film-page">
       <span className="film-share-image" aria-hidden="true">
-        <Image src={SHARE_IMAGE} alt="" width={600} height={600} unoptimized priority />
+        <Image src={SHARE_IMAGE} alt="" width={600} height={600} unoptimized />
       </span>
       <Link className="film-home" href="/" aria-label="回到张年的人生档案首页">
         <span className="film-home-mark" aria-hidden="true">年</span>

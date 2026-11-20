@@ -24,6 +24,14 @@ import {
   type Trip,
 } from "@/lib/travel/model";
 import { mergeReviewedTravelRecords } from "@/lib/travel/reviewed-records";
+import {
+  daysBetween,
+  pickRotatedCapsules,
+  pickRotatedJournalDays,
+  pickRotatedVoices,
+} from "@/lib/home-bento-rotate";
+
+export { daysBetween, pickRotatedCapsules, pickRotatedJournalDays, pickRotatedVoices };
 
 // 首页模块化画布（Concept 02 · Modular Canvas）的纯内存选择器。
 //
@@ -193,19 +201,6 @@ const SPEAKER_MAP = new Map(CONFIRMED_SPEAKERS.map((item) => [item.label, item])
 
 const norm = (text: string): string =>
   text.replace(/[\s，。！？、；：“”「」『』（）()·—\-]/g, "").toLowerCase();
-
-function parseUtcDay(day: string): number {
-  const [y, m, d] = day.split("-").map(Number);
-  if ([y, m, d].some((n) => Number.isNaN(n))) return NaN;
-  return Date.UTC(y, m - 1, d) / 86_400_000;
-}
-
-export function daysBetween(earlier: string, later: string): number {
-  const a = parseUtcDay(earlier);
-  const b = parseUtcDay(later);
-  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
-  return Math.round(b - a);
-}
 
 export function shortDateLabel(day: string): string {
   const m = Number(day.slice(5, 7));
@@ -1999,6 +1994,17 @@ export function selectTimeCapsules(
   return ordered.map(({ score: _score, daysAgo: _daysAgo, topic: _topic, ...capsule }) => capsule);
 }
 
+const NON_HOME_CITY_TRIP_PATTERNS = PLACES
+  .filter((item) => item.level === "city" && !item.home)
+  .map((place) => {
+    const names = [place.name, ...(place.aliases ?? [])].filter((name) => name.length >= 2);
+    const escaped = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    return {
+      place,
+      pattern: new RegExp(`(?:出发(?:回|去|到)?|回到|到了|抵达|到达|来到)(?:${escaped})`),
+    };
+  });
+
 function collectSyncedTrips(monthContents: readonly MonthContent[], today: string): Trip[] {
   const trips = [...TRIPS];
   for (const place of PLACES) {
@@ -2019,10 +2025,8 @@ function collectSyncedTrips(monthContents: readonly MonthContent[], today: strin
     for (const day of content.days) {
       const title = day.title ?? "";
       if (/准备|计划|打算|想去|明天|下周|可能|如果|没去|没有|取消|不去|爸爸|妈妈|爷爷|奶奶|外公|外婆|[？?]|说要/.test(title)) continue;
-      for (const place of PLACES.filter((item) => item.level === "city" && !item.home)) {
-        const names = [place.name, ...(place.aliases ?? [])].filter((name) => name.length >= 2);
-        const escaped = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-        if (!new RegExp(`(?:出发(?:回|去|到)?|回到|到了|抵达|到达|来到)(?:${escaped})`).test(title)) continue;
+      for (const { place, pattern } of NON_HOME_CITY_TRIP_PATTERNS) {
+        if (!pattern.test(title)) continue;
         if (trips.some((trip) => trip.placeIds.includes(place.id) && trip.from <= day.day && trip.to >= day.day)) continue;
         trips.push({
           id: `record-${day.day}-${place.id}`,
@@ -2190,100 +2194,6 @@ export function computeHomeRotationSeed(now?: Date | number): number {
   const ms = typeof now === "number" ? now : now.getTime();
   if (!Number.isFinite(ms) || ms < 0) return 0;
   return Math.floor(ms / HOME_ROTATION_WINDOW_MS);
-}
-
-export function pickRotatedVoices(
-  pool: readonly BentoFamilyVoice[],
-  count: number,
-  slot: number,
-): BentoFamilyVoice[] {
-  if (pool.length <= count) return [...pool];
-  const step = Math.min(count, Math.max(1, pool.length - count));
-  const offset = (((slot * step) % pool.length) + pool.length) % pool.length;
-  const picked: BentoFamilyVoice[] = [];
-  const usedIds = new Set<string>();
-  const usedSpeakers = new Set<string>();
-
-  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
-    const item = pool[(offset + i) % pool.length];
-    if (usedIds.has(item.id) || usedSpeakers.has(item.speaker)) continue;
-    usedIds.add(item.id);
-    usedSpeakers.add(item.speaker);
-    picked.push(item);
-  }
-  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
-    const item = pool[(offset + i) % pool.length];
-    if (usedIds.has(item.id)) continue;
-    usedIds.add(item.id);
-    picked.push(item);
-  }
-  return picked;
-}
-
-export function pickRotatedJournalDays(
-  pool: readonly BentoDayCard[],
-  count: number,
-  slot: number,
-): BentoDayCard[] {
-  if (pool.length <= count) return [...pool];
-  const offset = (((slot * count) % pool.length) + pool.length) % pool.length;
-  const picked: BentoDayCard[] = [];
-  const usedDays = new Set<string>();
-  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
-    const item = pool[(offset + i) % pool.length];
-    if (usedDays.has(item.day)) continue;
-    usedDays.add(item.day);
-    picked.push(item);
-  }
-  return picked.sort((a, b) => b.day.localeCompare(a.day));
-}
-
-export function pickRotatedCapsules(
-  pool: readonly BentoTimeCapsule[],
-  count: number,
-  slot: number,
-): BentoTimeCapsule[] {
-  if (pool.length <= count) return [...pool].sort((a, b) => b.day.localeCompare(a.day));
-  const offset = (((slot * count) % pool.length) + pool.length) % pool.length;
-  const picked: BentoTimeCapsule[] = [];
-  const usedDays = new Set<string>();
-  const usedMonths = new Set<string>();
-  const usedAgeLabels = new Set<string>();
-  const usedPhotoIds = new Set<string>();
-  const usedDisplayKeys = new Set<string>();
-
-  const recordPick = (item: BentoTimeCapsule) => {
-    usedDays.add(item.day);
-    usedMonths.add(item.month);
-    if (item.badgeLabel !== "出生前") usedAgeLabels.add(item.badgeLabel);
-    usedPhotoIds.add(item.photo.id);
-    const dk = (item.photo as { displayKey?: string }).displayKey;
-    if (dk) usedDisplayKeys.add(dk);
-    picked.push(item);
-  };
-
-  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
-    const item = pool[(offset + i) % pool.length];
-    const dk = (item.photo as { displayKey?: string }).displayKey;
-    if (
-      usedDays.has(item.day) ||
-      usedMonths.has(item.month) ||
-      (item.badgeLabel !== "出生前" && usedAgeLabels.has(item.badgeLabel)) ||
-      usedPhotoIds.has(item.photo.id) ||
-      (dk && usedDisplayKeys.has(dk)) ||
-      picked.some((p) => Math.abs(daysBetween(p.day, item.day)) < 20)
-    ) {
-      continue;
-    }
-    recordPick(item);
-  }
-  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
-    const item = pool[(offset + i) % pool.length];
-    const dk = (item.photo as { displayKey?: string }).displayKey;
-    if (usedDays.has(item.day) || usedPhotoIds.has(item.photo.id) || (dk && usedDisplayKeys.has(dk))) continue;
-    recordPick(item);
-  }
-  return picked.sort((a, b) => b.day.localeCompare(a.day));
 }
 
 export function buildHomeBentoModel({

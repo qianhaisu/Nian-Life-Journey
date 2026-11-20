@@ -6,12 +6,14 @@ import { HomeMemory } from "@/components/home-memory";
 import { HomeFilmEntry } from "@/components/home-film-entry";
 import {
   FamilyVoicesTile,
-  GrowthHighlightTile,
-  LatestDayTile,
   RecentJournalSection,
   TimeCapsuleSection,
-  TravelFootprintCard,
 } from "@/components/home-bento-sections";
+import {
+  GrowthHighlightTile,
+  LatestDayTile,
+  TravelFootprintCard,
+} from "@/components/home-bento-static";
 import { WeekendProposalStrip } from "@/components/weekend-proposal-strip";
 import { readHomeFeed, type HomeFeed } from "@/lib/home-feed";
 import { loadFamilyArchiveOnDemand } from "@/lib/family-archive";
@@ -25,6 +27,7 @@ import { listEditedMonthContents, loadMonthContent } from "@/lib/month-content";
 import { readCurrentWeekendBundle } from "@/lib/weekend/content";
 import { DEFAULT_EXCLUDED_EXPERIENCE_TYPES, WeekendStateStore } from "@/lib/weekend/state-store";
 import type { ExcludedExperienceTypeItem, WeekendStateFile } from "@/lib/weekend/types";
+import "./home-memory.css";
 import "./home.css";
 
 // 首页（Modular Canvas · 模块化生活画布）：
@@ -60,10 +63,14 @@ export default async function HomePage() {
   } catch {
     // Keep graceful read-only fallback if state files are unavailable.
   }
-  const feed = await readHomeFeed({ archive });
-  const topics = topicLookupFrom(await loadTopicCache());
-  // 复用月稿进程内缓存（loadFamilyArchive 已预热过，零数据库查询）。
-  const monthContents = await listEditedMonthContents();
+  const [feed, topicCache, monthContents] = await Promise.all([
+    readHomeFeed({ archive }),
+    loadTopicCache(),
+    // 复用月稿进程内缓存（loadFamilyArchive 已预热过，零数据库查询）。
+    listEditedMonthContents(),
+  ]);
+  const topics = topicLookupFrom(topicCache);
+  const contentByMonth = new Map(monthContents.map((content) => [content.month, content]));
   const dayContext = new Map(
     monthContents.flatMap((content) =>
       content.days.map((d) => [
@@ -80,10 +87,13 @@ export default async function HomePage() {
   const todayMonth = feed.clock.today.slice(0, 7);
   const editedLines = (
     await Promise.all(
-      [todayMonth, prevMonth(todayMonth)].map(async (month) => ({
-        month,
-        line: (await loadMonthContent(month))?.cardLine ?? "",
-      })),
+      [todayMonth, prevMonth(todayMonth)].map(async (month) => {
+        const content = contentByMonth.get(month) ?? (await loadMonthContent(month));
+        return {
+          month,
+          line: content?.cardLine ?? "",
+        };
+      }),
     )
   ).filter((item) => item.line);
 
@@ -145,6 +155,8 @@ export default async function HomePage() {
     .filter(Boolean)
     .join(" ");
 
+  const clientMemories = memories.map(({ reason: _reason, moodReason: _moodReason, ...rest }) => rest);
+
   return (
     <div className="home-v2">
       <div className="home-canvas">
@@ -168,8 +180,8 @@ export default async function HomePage() {
         />
 
         <div className={bentoClasses}>
-          {memories.length > 0 || heroCover ? (
-            <HomeMemory memories={memories} heroCover={heroCover} />
+          {clientMemories.length > 0 || heroCover ? (
+            <HomeMemory memories={clientMemories} heroCover={heroCover} />
           ) : (
             <MemoryFallback feed={feed} reason={absence?.reason} />
           )}
@@ -223,6 +235,7 @@ function RecentAnswer({ answer }: { answer: HomeAnswer | undefined }) {
   const sourceClassName = answer.isCurrentMonth
     ? "home-answer-source home-answer-source--inline"
     : "home-answer-source home-answer-source--pill";
+
   return (
     <p className={answerClassName}>
       <span className="home-answer-text">
@@ -262,6 +275,7 @@ function MemoryFallback({ feed, reason }: { feed: HomeFeed; reason?: string }) {
     );
   }
   const photo = lead.photo;
+
   return (
     <section
       className={
