@@ -42,18 +42,18 @@ export type HabitDisplayOptions = {
   db?: HabitDisplayDb;
 };
 
-/**
- * 读出这些事项各自露出过的自然日。
- *
- * 只读给定的 itemIds，不整表扫——首页一次最多问几条。表不存在（迁移还没跑）时返回空，
- * **不抛**：上限因此不生效，而不生效的后果是「不误伤任何人」，比让首页 500 好。
- */
-export async function readHabitDisplayDays(
+const HABIT_DISPLAY_CACHE_TTL_MS = 30_000;
+let habitDisplayCache = new Map<string, { at: number; promise: Promise<Map<string, string[]>> }>();
+
+export function invalidateHabitDisplayCache(): void {
+  habitDisplayCache = new Map();
+}
+
+async function queryHabitDisplayDays(
   itemIds: readonly string[],
-  options: HabitDisplayOptions = {},
+  options: HabitDisplayOptions,
 ): Promise<Map<string, string[]>> {
   const byItem = new Map<string, string[]>();
-  if (itemIds.length === 0) return byItem;
   const profileId = options.profileId ?? CANONICAL_PROFILE_ID;
   let db: HabitDisplayDb;
   try { db = dbFor(options); }
@@ -75,6 +75,37 @@ export async function readHabitDisplayDays(
     if (!isMissingTable(error)) throw error;
   }
   return byItem;
+}
+
+/**
+ * 读出这些事项各自露出过的自然日。
+ *
+ * 只读给定的 itemIds，不整表扫——首页一次最多问几条。表不存在（迁移还没跑）时返回空，
+ * **不抛**：上限因此不生效，而不生效的后果是「不误伤任何人」，比让首页 500 好。
+ */
+export async function readHabitDisplayDays(
+  itemIds: readonly string[],
+  options: HabitDisplayOptions = {},
+): Promise<Map<string, string[]>> {
+  if (itemIds.length === 0) return new Map<string, string[]>();
+  if (options.db || options.env) {
+    return queryHabitDisplayDays(itemIds, options);
+  }
+  const profileId = options.profileId ?? CANONICAL_PROFILE_ID;
+  const key = `${profileId}|${[...new Set(itemIds)].sort().join(",")}`;
+  const now = Date.now();
+  const held = habitDisplayCache.get(key);
+  if (held && now - held.at < HABIT_DISPLAY_CACHE_TTL_MS) {
+    const cached = await held.promise;
+    return new Map([...cached.entries()].map(([k, v]) => [k, [...v]]));
+  }
+  const promise = queryHabitDisplayDays(itemIds, options);
+  habitDisplayCache.set(key, { at: now, promise });
+  promise.catch(() => {
+    if (habitDisplayCache.get(key)?.promise === promise) habitDisplayCache.delete(key);
+  });
+  const resolved = await promise;
+  return new Map([...resolved.entries()].map(([k, v]) => [k, [...v]]));
 }
 
 /** 首页用的日志：先读一次，再交给 `capHabitByShownDays`。 */
@@ -112,6 +143,7 @@ export async function recordHabitShown(
     await db.insert(t.habitDisplayDays)
       .values(ids.map((itemId) => ({ profileId, itemId, shownDay: day })))
       .onConflictDoNothing();
+    if (!options.db && !options.env) invalidateHabitDisplayCache();
     return { attempted: ids.length };
   } catch (error) {
     if (isMissingTable(error)) return { attempted: 0, skipped: "habit_display_days 还不存在（迁移未跑）" };

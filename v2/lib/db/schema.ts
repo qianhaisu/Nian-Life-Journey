@@ -50,7 +50,13 @@ export const rawSources = pgTable("raw_sources", {
   extractedMedicalFacts: jsonb("extracted_medical_facts").$type<{ hospital?: string; examinationType?: string; recordedAt?: string; facts: string[] }>(),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
-}, (table) => ({ byProfile: index("raw_sources_profile_idx").on(table.profileId), byStatus: index("raw_sources_status_idx").on(table.status), byCapturedAt: index("raw_sources_captured_at_idx").on(table.capturedAt), canonicalIdentity: uniqueIndex("raw_sources_provider_external_id_unique").on(table.provider, table.providerExternalId) }));
+}, (table) => ({
+  byProfile: index("raw_sources_profile_idx").on(table.profileId),
+  byStatus: index("raw_sources_status_idx").on(table.status),
+  byCapturedAt: index("raw_sources_captured_at_idx").on(table.capturedAt),
+  byProfileActiveCaptured: index("raw_sources_profile_active_captured_idx").on(table.profileId, table.capturedAt).where(sql`${table.deletedAt} is null`),
+  canonicalIdentity: uniqueIndex("raw_sources_provider_external_id_unique").on(table.provider, table.providerExternalId),
+}));
 
 export const mediaAssets = pgTable("media_assets", {
   id: text("id").primaryKey(),
@@ -68,7 +74,11 @@ export const mediaAssets = pgTable("media_assets", {
   archiveVerifiedAt: timestamp("archive_verified_at", { mode: "string" }),
   archiveLastError: text("archive_last_error"),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
-}, (table) => ({ byRawSource: index("media_assets_raw_source_idx").on(table.rawSourceId), checksum: uniqueIndex("media_assets_checksum_unique").on(table.checksum) }));
+}, (table) => ({
+  byProfile: index("media_assets_profile_idx").on(table.profileId),
+  byRawSource: index("media_assets_raw_source_idx").on(table.rawSourceId),
+  checksum: uniqueIndex("media_assets_checksum_unique").on(table.checksum),
+}));
 
 // providerRef is the stable location identity. A checksum can have several WeChat source
 // references, so a location is not unique by (asset, provider, variant).
@@ -100,6 +110,7 @@ export const mediaLocations = pgTable("media_locations", {
   // stall for seconds after a month page. Noted as a known one-line fix on 2026-09-12 and left
   // unapplied; the table has grown since.
   byAsset: index("media_locations_media_asset_idx").on(table.mediaAssetId),
+  byProviderStatusVariant: index("media_locations_provider_status_variant_idx").on(table.provider, table.status, table.variant),
 }));
 
 // Permanent rejection list for photo/video ingest (2026-09-17, Teddy: "永久删除…不想再任何地方看到" +
@@ -170,6 +181,7 @@ export const media = pgTable("media", {
   byAsset: index("media_asset_idx").on(table.mediaAssetId),
   // P1-5: getMonthArchive filters this column by month range on every archive-expander click.
   byTakenAt: index("media_taken_at_idx").on(table.takenAt),
+  byProfileTakenAt: index("media_profile_taken_at_idx").on(table.profileId, table.takenAt),
 }));
 
 // Rebuilt field-for-field against LifeEvent. `featured`/`yearbook_selected` from the old table
@@ -204,6 +216,7 @@ export const lifeEvents = pgTable("life_events", {
 }, (table) => ({
   byProfile: index("life_events_profile_idx").on(table.profileId),
   byOccurredAt: index("life_events_occurred_idx").on(table.occurredAt),
+  byProfileVisOccurred: index("life_events_profile_vis_occurred_idx").on(table.profileId, table.visibility, table.occurredAt),
   byFingerprint: uniqueIndex("life_events_fingerprint_unique_idx").on(table.organizationFingerprint),
 }));
 
@@ -212,7 +225,10 @@ export const sourceMemoryLinks = pgTable("source_memory_links", {
   lifeEventId: text("life_event_id").notNull().references(() => lifeEvents.id),
   role: text("role").notNull(),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
-}, (table) => ({ pk: primaryKey({ columns: [table.rawSourceId, table.lifeEventId] }) }));
+}, (table) => ({
+  pk: primaryKey({ columns: [table.rawSourceId, table.lifeEventId] }),
+  byLifeEvent: index("source_memory_links_life_event_idx").on(table.lifeEventId),
+}));
 
 // Untouched — Quark connector boundary, not part of this slice's scope.
 export const connectorStates = pgTable("connector_states", {
@@ -288,6 +304,7 @@ export const dailyTraces = pgTable("daily_traces", {
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => ({
   byProfile: index("daily_traces_profile_idx").on(table.profileId),
+  byProfileOccurred: index("daily_traces_profile_occurred_idx").on(table.profileId, table.occurredAt),
   byFingerprint: uniqueIndex("daily_traces_fingerprint_unique_idx").on(table.organizationFingerprint),
 }));
 
@@ -436,6 +453,7 @@ export const contentQualityReviews = pgTable("content_quality_reviews", {
   reviewedAt: timestamp("reviewed_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => ({
   byTarget: uniqueIndex("content_quality_reviews_target_idx").on(table.targetKind, table.targetId, table.promptVersion),
+  byTargetReviewed: index("content_quality_reviews_target_reviewed_idx").on(table.targetId, table.reviewedAt),
   byProfile: index("content_quality_reviews_profile_idx").on(table.profileId),
 }));
 
@@ -491,6 +509,7 @@ export const upcomingItems = pgTable("upcoming_items", {
   byProfile: index("upcoming_items_profile_idx").on(table.profileId),
   byAnchor: uniqueIndex("upcoming_items_anchor_idx").on(table.profileId, table.anchorSourceId, table.title),
   byStatus: index("upcoming_items_status_idx").on(table.profileId, table.status),
+  byProfileReviewDecision: index("upcoming_items_profile_review_decision_idx").on(table.profileId, table.reviewDecision),
 }));
 
 // Every change to an item, with the message that proves it. A `done` row cannot exist without one:

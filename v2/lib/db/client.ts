@@ -9,7 +9,15 @@ let pool: Pool | undefined;
 // REPOSITORY_BACKEND=json never touches this module's connection path at all.
 export function getPool(env: NodeJS.ProcessEnv = process.env): Pool {
   if (!pool) {
-    pool = new Pool({ connectionString: requireDatabaseUrl(env) });
+    const parsedMax = Number(env.PG_POOL_MAX);
+    const max = Number.isFinite(parsedMax) && parsedMax > 0 ? Math.floor(parsedMax) : 20;
+    pool = new Pool({
+      connectionString: requireDatabaseUrl(env),
+      max,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+      statement_timeout: 30_000,
+    });
     // pg emits 'error' on the pool for a client that fails while idle (e.g. the server or a
     // connection recycler drops it) — that event fires outside any query's promise chain, so
     // without a listener here it becomes an uncaught exception that kills the whole process,

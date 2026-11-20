@@ -167,13 +167,14 @@ export function parseVisionScores(text: string): { scores?: ParsedScores; error?
   return { scores };
 }
 
-/**
- * 读缓存文件。任何一步出问题都返回 undefined——首页照样渲染，只是分数标成降级。
- * 同步读、只在离线脚本和服务启动路径上用；SSR 里由调用方把结果传给 buildHomeFeed。
- */
-export async function loadQualityCache(path?: string, env: NodeJS.ProcessEnv = process.env): Promise<HomePhotoQualityCache | undefined> {
-  const file = path ?? env[HOME_PHOTO_QUALITY_PATH_ENV];
-  if (!file) return undefined;
+const QUALITY_CACHE_TTL_MS = 300_000;
+let qualityCacheMemo: { key: string; at: number; promise: Promise<HomePhotoQualityCache | undefined> } | undefined;
+
+export function invalidateQualityCache(): void {
+  qualityCacheMemo = undefined;
+}
+
+async function readQualityCacheUncached(file: string): Promise<HomePhotoQualityCache | undefined> {
   try {
     const { readFile } = await import("node:fs/promises");
     const parsed = JSON.parse(await readFile(file, "utf8")) as HomePhotoQualityCache;
@@ -181,4 +182,28 @@ export async function loadQualityCache(path?: string, env: NodeJS.ProcessEnv = p
     if (!parsed.model || !parsed.assessedAt) return undefined;
     return parsed;
   } catch { return undefined; }
+}
+
+/**
+ * 读缓存文件。任何一步出问题都返回 undefined——首页照样渲染，只是分数标成降级。
+ * 同步读、只在离线脚本和服务启动路径上用；SSR 里由调用方把结果传给 buildHomeFeed。
+ */
+export async function loadQualityCache(path?: string, env: NodeJS.ProcessEnv = process.env): Promise<HomePhotoQualityCache | undefined> {
+  const file = path ?? env[HOME_PHOTO_QUALITY_PATH_ENV];
+  if (!file) return undefined;
+  if (path !== undefined || env !== process.env) {
+    return readQualityCacheUncached(file);
+  }
+  const now = Date.now();
+  if (qualityCacheMemo && qualityCacheMemo.key === file && now - qualityCacheMemo.at < QUALITY_CACHE_TTL_MS) {
+    return qualityCacheMemo.promise;
+  }
+  const promise = readQualityCacheUncached(file);
+  qualityCacheMemo = { key: file, at: now, promise };
+  promise.then((resolved) => {
+    if (resolved === undefined && qualityCacheMemo?.promise === promise) qualityCacheMemo = undefined;
+  }).catch(() => {
+    if (qualityCacheMemo?.promise === promise) qualityCacheMemo = undefined;
+  });
+  return promise;
 }

@@ -9,10 +9,49 @@
 //
 // 所以类型与纯函数留在那边，**读文件、读环境变量的部分全部在这里**，只给服务端组件用
 // （目前只有 app/page.tsx 引用）。另外那份 JSON 有 358KB，也只应该出现在服务端产物里。
-import type { PhotoTopicCache } from "@/lib/home-memory-topics";
+import { topicLookupFrom, type PhotoTopicCache } from "@/lib/home-memory-topics";
 
 /** 覆盖缓存路径用（测试与本地实验）。不设就读随仓库发布的那一份。 */
 export const HOME_PHOTO_TOPICS_PATH_ENV = "HOME_PHOTO_TOPICS_PATH";
+
+const TOPIC_CACHE_TTL_MS = 300_000;
+let topicCacheMemo: { key: string; at: number; promise: Promise<PhotoTopicCache | undefined> } | undefined;
+
+export function invalidateTopicCache(): void {
+  topicCacheMemo = undefined;
+}
+
+async function readTopicCacheUncached(
+  path?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<PhotoTopicCache | undefined> {
+  try {
+    const file = path ?? env[HOME_PHOTO_TOPICS_PATH_ENV];
+    if (file) {
+      const { readFile } = await import("node:fs/promises");
+      const parsed = sane(JSON.parse(await readFile(file, "utf8")));
+      if (parsed) topicLookupFrom(parsed);
+      return parsed;
+    }
+    // Versioned nightly cache shares the existing read-only content mount. A missing file
+    // keeps the initial release usable; a corrupt installed file fails closed.
+    if (env.MONTH_CONTENT_DIR) {
+      const { readFile } = await import("node:fs/promises");
+      try {
+        const parsed = sane(JSON.parse(await readFile(`${env.MONTH_CONTENT_DIR}/photo-topics.json`, "utf8")));
+        if (parsed) topicLookupFrom(parsed);
+        return parsed;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined;
+      }
+    }
+    // 没设路径就读随仓库发布的那一份：走打包器解析，生产上不依赖任何外部路径或环境变量。
+    const mod = await import("@/data/photo-topics.json");
+    const parsed = sane((mod as { default?: unknown }).default ?? mod);
+    if (parsed) topicLookupFrom(parsed);
+    return parsed;
+  } catch { return undefined; }
+}
 
 /**
  * 读缓存。默认读随仓库发布的 `data/photo-topics.json`。
@@ -24,23 +63,22 @@ export async function loadTopicCache(
   path?: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<PhotoTopicCache | undefined> {
-  try {
-    const file = path ?? env[HOME_PHOTO_TOPICS_PATH_ENV];
-    if (file) {
-      const { readFile } = await import("node:fs/promises");
-      return sane(JSON.parse(await readFile(file, "utf8")));
-    }
-    // Versioned nightly cache shares the existing read-only content mount. A missing file
-    // keeps the initial release usable; a corrupt installed file fails closed.
-    if (env.MONTH_CONTENT_DIR) {
-      const { readFile } = await import("node:fs/promises");
-      try { return sane(JSON.parse(await readFile(`${env.MONTH_CONTENT_DIR}/photo-topics.json`, "utf8"))); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined; }
-    }
-    // 没设路径就读随仓库发布的那一份：走打包器解析，生产上不依赖任何外部路径或环境变量。
-    const mod = await import("@/data/photo-topics.json");
-    return sane((mod as { default?: unknown }).default ?? mod);
-  } catch { return undefined; }
+  if (path !== undefined || env !== process.env) {
+    return readTopicCacheUncached(path, env);
+  }
+  const key = `${env[HOME_PHOTO_TOPICS_PATH_ENV] ?? ""}|${env.MONTH_CONTENT_DIR ?? ""}`;
+  const now = Date.now();
+  if (topicCacheMemo && topicCacheMemo.key === key && now - topicCacheMemo.at < TOPIC_CACHE_TTL_MS) {
+    return topicCacheMemo.promise;
+  }
+  const promise = readTopicCacheUncached(undefined, env);
+  topicCacheMemo = { key, at: now, promise };
+  promise.then((resolved) => {
+    if (resolved === undefined && topicCacheMemo?.promise === promise) topicCacheMemo = undefined;
+  }).catch(() => {
+    if (topicCacheMemo?.promise === promise) topicCacheMemo = undefined;
+  });
+  return promise;
 }
 
 /** 缓存自身的形状检查。缺 model / promptVersion 就是「没有可核对的来源」，当读不到处理。 */

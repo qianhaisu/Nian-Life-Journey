@@ -1,4 +1,5 @@
 import { reportHabitDisplay } from "@/lib/home-feed";
+import { invalidateHabitDisplayCache } from "@/lib/db/habit-display-store";
 
 // 习惯提醒的露出上报（§6.3「最多两个不同自然日露出」）。
 //
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
   if (asked.length === 0) return Response.json({ recorded: [], skipped: "ids 里没有一条可用的事项" }, { status: 400 });
 
   const report = await reportHabitDisplay({ claimedItemIds: asked });
+  if (report.recorded.length > 0) invalidateHabitDisplayCache();
   // 一行可核对的记录：哪天、记了哪几条、拒了哪几条。id 是库里的主键，不是家人的原话。
   console.log(`[habit-shown] day=${report.day} recorded=${report.recorded.join(",") || "-"} rejected=${report.rejected.map((item) => item.id).join(",") || "-"}${report.skipped ? ` skipped=${report.skipped}` : ""}`);
   return Response.json(report);

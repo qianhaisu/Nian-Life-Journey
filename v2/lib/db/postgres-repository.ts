@@ -19,7 +19,6 @@ import {
 import { ledgerOnlyStoryPhotoIds, storyPhotoConfirmationsFrom } from "@/lib/media/story-binding";
 import { storyNeighbours } from "@/lib/story-neighbours";
 import { birthDayOf } from "@/lib/time-signature";
-import { calendarMonthOf } from "@/lib/timeline-dates";
 import { ChatImportStateError, acknowledgeChatImportCancel, claimChatImportTask, completeChatImportTask, completeChatImportWithWarnings, createChatImportTask, failChatImportTask, heartbeatChatImportTask, listChatImportTasks, requestChatImportCancel, retryChatImportTask, saveChatImportCheckpoint } from "./chat-import-state";
 
 // tx.rollback() doesn't make db.transaction() resolve to whatever the callback returns after it —
@@ -708,25 +707,34 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
    * whole rows from it, and narrowing it would break paths that have nothing to do with rendering.
    */
   async function assembleFamilyArchiveInput() {
-    const [profileRows, contributors, media, mediaAssets, mediaLocations, mediaBackedSources, activityRows, events, dailyTraces, growthRecords, careRecords, careEpisodes, monthlyFocusGoals, links, qualityReviewRows, snapshotRows] = await Promise.all([
+    const [profileRows, contributors, media, mediaAssets, mediaLocations, mediaBackedSources, activityRows, events, dailyTraces, monthlyFocusGoals, qualityReviewRows, snapshotRows] = await Promise.all([
       db.select().from(t.profiles).where(eq(t.profiles.id, CANONICAL_PROFILE_ID)).limit(1),
-      db.select().from(t.contributors),
+      db.select().from(t.contributors).where(eq(t.contributors.profileId, CANONICAL_PROFILE_ID)),
       db.select().from(t.media).where(eq(t.media.profileId, CANONICAL_PROFILE_ID)),
-      db.select({ id: t.mediaAssets.id, profileId: t.mediaAssets.profileId, mediaType: t.mediaAssets.mediaType, mimeType: t.mediaAssets.mimeType, checksum: t.mediaAssets.checksum }).from(t.mediaAssets),
+      db.select({ id: t.mediaAssets.id, profileId: t.mediaAssets.profileId, mediaType: t.mediaAssets.mediaType, mimeType: t.mediaAssets.mimeType, checksum: t.mediaAssets.checksum }).from(t.mediaAssets).where(eq(t.mediaAssets.profileId, CANONICAL_PROFILE_ID)),
       db.select({ mediaAssetId: t.mediaLocations.mediaAssetId, provider: t.mediaLocations.provider, variant: t.mediaLocations.variant, status: t.mediaLocations.status }).from(t.mediaLocations),
       db.select({ id: t.rawSources.id, profileId: t.rawSources.profileId, sourceType: t.rawSources.sourceType, sourceLabel: t.rawSources.sourceLabel, deletedAt: t.rawSources.deletedAt })
         .from(t.rawSources)
-        .where(sql`${t.rawSources.id} in (select ${t.media.rawSourceId} from ${t.media} where ${t.media.rawSourceId} is not null)`),
+        .where(and(
+          eq(t.rawSources.profileId, CANONICAL_PROFILE_ID),
+          sql`${t.rawSources.id} in (select ${t.media.rawSourceId} from ${t.media} where ${t.media.profileId} = ${CANONICAL_PROFILE_ID} and ${t.media.rawSourceId} is not null)`,
+        )),
       db.select({ day: sql<string | null>`max(${t.rawSources.capturedAt})` }).from(t.rawSources)
         .where(and(eq(t.rawSources.profileId, CANONICAL_PROFILE_ID), sql`${t.rawSources.deletedAt} is null`)),
       canonicalEvents(),
-      db.select().from(t.dailyTraces),
-      db.select().from(t.growthRecords),
-      db.select().from(t.careRecords),
-      db.select().from(t.careEpisodes),
-      db.select().from(t.monthlyFocusGoals),
-      db.select().from(t.sourceMemoryLinks),
-      db.select().from(t.contentQualityReviews),
+      db.select().from(t.dailyTraces).where(eq(t.dailyTraces.profileId, CANONICAL_PROFILE_ID)),
+      db.select().from(t.monthlyFocusGoals).where(eq(t.monthlyFocusGoals.profileId, CANONICAL_PROFILE_ID)),
+      db.select({
+        id: t.contentQualityReviews.id,
+        profileId: t.contentQualityReviews.profileId,
+        targetKind: t.contentQualityReviews.targetKind,
+        targetId: t.contentQualityReviews.targetId,
+        decision: t.contentQualityReviews.decision,
+        provider: t.contentQualityReviews.provider,
+        promptVersion: t.contentQualityReviews.promptVersion,
+        reviewedAt: t.contentQualityReviews.reviewedAt,
+        reasonCodes: sql<string[]>`case when ${t.contentQualityReviews.targetKind} = 'monthly_review_draft' then ${t.contentQualityReviews.reasonCodes} else '[]'::jsonb end`,
+      }).from(t.contentQualityReviews).where(eq(t.contentQualityReviews.profileId, CANONICAL_PROFILE_ID)),
       db.select().from(t.monthlySnapshot).where(eq(t.monthlySnapshot.profileId, CANONICAL_PROFILE_ID)),
     ]);
     if (!profileRows[0]) throw new Error(`PostgreSQL repository: no profile row "${CANONICAL_PROFILE_ID}" found. Run the JSON→Postgres migration first.`);
@@ -743,14 +751,14 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
       rawSources: mediaBackedSources as unknown as Store["rawSources"],
       events: publishableEvents as unknown as Store["events"],
       dailyTraces: (dailyTraces as unknown as DailyTrace[]).filter((trace) => isTracePublishable(trace, reviews)) as unknown as Store["dailyTraces"],
-      growthRecords: growthRecords as unknown as Store["growthRecords"],
-      careRecords: careRecords as unknown as Store["careRecords"],
-      careEpisodes: careEpisodes as unknown as Store["careEpisodes"],
+      growthRecords: [],
+      careRecords: [],
+      careEpisodes: [],
       monthlyFocusGoals: monthlyFocusGoals as unknown as Store["monthlyFocusGoals"],
       organizerRuns: [],
       organizerJobs: [],
       chatImportTasks: [],
-      links: links as Store["links"],
+      links: [],
       qualityReviews: qualityReviewRows.map((row) => reviewFromRow(row as unknown as Record<string, unknown>)),
       monthlySnapshots: snapshotRows as unknown as Store["monthlySnapshots"],
     };
@@ -932,7 +940,13 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
       // An unreviewed rule-derived event must 404 rather than stay reachable by direct URL. The
       // rows are kept rather than discarded: Basis C (lib/media/story-binding.ts) needs the same
       // read, and asking twice would double a whole-table query on a render path.
-      const reviewRows = await db.select().from(t.contentQualityReviews);
+      const reviewRows = await db.select({
+        id: t.contentQualityReviews.id,
+        targetKind: t.contentQualityReviews.targetKind,
+        targetId: t.contentQualityReviews.targetId,
+        decision: t.contentQualityReviews.decision,
+        reviewedAt: t.contentQualityReviews.reviewedAt,
+      }).from(t.contentQualityReviews);
       const reviews = indexReviews(reviewRows as unknown as Array<Omit<QualityReview, "decision"> & { decision: unknown }>);
       if (!isEventPublishable(e, reviews)) return null;
       // A-12-1 (2026-09-06, docs/INCIDENT-2026-09-06-neon-egress.md §3.2): this used to
@@ -950,7 +964,7 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
       // media_ids are read too — still id-scoped (a handful of ids from rows already in memory).
       const photoConfirmations = storyPhotoConfirmationsFrom(reviewRows as unknown as Array<{ id?: string; targetKind?: string; targetId?: string; decision?: unknown; reviewedAt?: string }>);
       const storyMediaIds = [...e.mediaIds, ...ledgerOnlyStoryPhotoIds(e.id, e.mediaIds, photoConfirmations)];
-      const [mediaRows, sourceRows, growthRows, careRows, contributorRows, linkRows, profileRows] = await Promise.all([
+      const [mediaRows, sourceRows, growthRows, careRows, contributorRows, linkRows, profileRows, orderRows] = await Promise.all([
         storyMediaIds.length ? db.select().from(t.media).where(inArray(t.media.id, storyMediaIds)) : Promise.resolve(emptyRows),
         e.sourceIds.length
           ? db.select({
@@ -974,23 +988,20 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
         // Phase 3A: same narrow birthDate-only select assembleMonthArchive already uses — the page
         // needs an age, never the rest of the profile row.
         db.select({ birthDate: t.profiles.birthDate }).from(t.profiles).where(eq(t.profiles.id, e.profileId)).limit(1),
+        // The reading order this story sits in (lib/story-neighbours.ts). ONE query on life_events,
+        // for one profile, selecting only what the publication gate and the link text need: no
+        // `story`, no `story_sections`, no joins, and `organizer_run` reduced to the single field
+        // requiresQualityReview() reads rather than shipped as jsonb.
+        db.select({
+          id: t.lifeEvents.id,
+          title: t.lifeEvents.title,
+          occurredAt: t.lifeEvents.occurredAt,
+          visibility: t.lifeEvents.visibility,
+          createdBy: t.lifeEvents.createdBy,
+          organizerVersion: t.lifeEvents.organizerVersion,
+          organizerType: sql<string | null>`${t.lifeEvents.organizerRun}->>'organizerType'`,
+        }).from(t.lifeEvents).where(eq(t.lifeEvents.profileId, e.profileId)),
       ]);
-      // The reading order this story sits in (lib/story-neighbours.ts). ONE query on life_events,
-      // for one profile, selecting only what the publication gate and the link text need: no
-      // `story`, no `story_sections`, no joins, and `organizer_run` reduced to the single field
-      // requiresQualityReview() reads rather than shipped as jsonb. That shape is deliberate — the
-      // 2026-09-06 egress incident was a render path pulling whole tables for a handful of fields.
-      // `visibility` applies the same rule getHomeEvents() publishes under, so a private story is
-      // never offered as somewhere to go next.
-      const orderRows = await db.select({
-        id: t.lifeEvents.id,
-        title: t.lifeEvents.title,
-        occurredAt: t.lifeEvents.occurredAt,
-        visibility: t.lifeEvents.visibility,
-        createdBy: t.lifeEvents.createdBy,
-        organizerVersion: t.lifeEvents.organizerVersion,
-        organizerType: sql<string | null>`${t.lifeEvents.organizerRun}->>'organizerType'`,
-      }).from(t.lifeEvents).where(eq(t.lifeEvents.profileId, e.profileId));
       const readable = orderRows
         .filter((row) => row.visibility !== "private")
         .filter((row) => isEventPublishable({ ...row, organizerRun: row.organizerType ? { organizerType: row.organizerType } : null } as unknown as LifeEvent, reviews))
@@ -1059,14 +1070,17 @@ function dropRejectedMedia<A extends { id: string; checksum?: string | null }, M
     async getMonthArchive(month: string) { return assembleMonthArchive(month); },
     async listArchiveMonths() {
       const [events, traces, media] = await Promise.all([
-        db.select({ occurredAt: t.lifeEvents.occurredAt }).from(t.lifeEvents).where(eq(t.lifeEvents.profileId, CANONICAL_PROFILE_ID)),
-        db.select({ occurredAt: t.dailyTraces.occurredAt }).from(t.dailyTraces).where(eq(t.dailyTraces.profileId, CANONICAL_PROFILE_ID)),
-        db.select({ takenAt: t.media.takenAt }).from(t.media).where(eq(t.media.profileId, CANONICAL_PROFILE_ID)),
+        db.selectDistinct({ month: sql<string>`substring(${t.lifeEvents.occurredAt}::text from 1 for 7)` })
+          .from(t.lifeEvents).where(eq(t.lifeEvents.profileId, CANONICAL_PROFILE_ID)),
+        db.selectDistinct({ month: sql<string>`substring(${t.dailyTraces.occurredAt}::text from 1 for 7)` })
+          .from(t.dailyTraces).where(eq(t.dailyTraces.profileId, CANONICAL_PROFILE_ID)),
+        db.selectDistinct({ month: sql<string>`substring(${t.media.takenAt}::text from 1 for 7)` })
+          .from(t.media).where(eq(t.media.profileId, CANONICAL_PROFILE_ID)),
       ]);
       const months = new Set<string>();
-      for (const row of events) { const m = calendarMonthOf(row.occurredAt); if (m) months.add(m); }
-      for (const row of traces) { const m = calendarMonthOf(row.occurredAt); if (m) months.add(m); }
-      for (const row of media) { const m = calendarMonthOf(row.takenAt); if (m) months.add(m); }
+      for (const row of [...events, ...traces, ...media]) {
+        if (/^\d{4}-\d{2}$/.test(row.month)) months.add(row.month);
+      }
       return [...months].sort();
     },
     async appendUpload(input) { return (await persistUpload(input)).source; },

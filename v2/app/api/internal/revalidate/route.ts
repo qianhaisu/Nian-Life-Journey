@@ -5,6 +5,7 @@ import { parseRefreshRequest } from "@/lib/archive-refresh";
 import { invalidateOnDemandArchive } from "@/lib/family-archive";
 import { invalidateMonthContent } from "@/lib/month-content";
 import { invalidateWeekendContent } from "@/lib/weekend/content";
+import { invalidateWeekendStateCache } from "@/lib/weekend/state-store";
 
 function authorized(request: Request) {
   const expected = process.env.INGESTION_TOKEN;
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
   }
   if (parsed.clearsWeekendContent) {
     invalidateWeekendContent();
+    invalidateWeekendStateCache();
   }
   return NextResponse.json({
     scope: parsed.scope,

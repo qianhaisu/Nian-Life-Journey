@@ -1283,18 +1283,15 @@ export async function readHomeFeed(options: BuildHomeFeedOptions = {}): Promise<
     import("@/lib/family-archive"),
     import("@/lib/upcoming"),
   ]);
-  const archive = options.archive ?? await loadFamilyArchiveOnDemand();
-  const upcoming = options.upcoming ?? await readHomeUpcoming();
-  const upcomingSources = options.upcomingSources
-    ?? (upcoming.status === "ready" ? await readHomeUpcomingSources() : undefined);
-  // 离线质量缓存的**最后一段线**。2026-09-13 之前这一段是断的：批次脚本会写出一份缓存，
-  // `buildHomeFeed` 会用传进来的 `quality`，但 `readHomeFeed` 从来没有去读那份文件——
-  // 于是就算批次跑成功了，首页也永远看不到它，每张照片都停在确定性降级分上。
-  // 三个部件都对，中间没人接线，而每一段单独看都是「已实现」。
-  const quality = options.quality ?? await loadHomePhotoQuality();
-  // 习惯上限要的「露出过哪些自然日」。只按本次要判的那几条 id 去查，不整表扫；
-  // 表还不存在（迁移随统一发布执行）时返回空日志，上限因此不生效——不生效的后果是不误伤任何人。
-  const habitLog = options.habitLog ?? await loadHabitDisplayLog(upcoming);
+  const [archive, upcoming, quality] = await Promise.all([
+    options.archive ?? loadFamilyArchiveOnDemand(),
+    options.upcoming ?? readHomeUpcoming(),
+    options.quality ?? loadHomePhotoQuality(),
+  ]);
+  const [upcomingSources, habitLog] = await Promise.all([
+    options.upcomingSources ?? (upcoming.status === "ready" ? readHomeUpcomingSources() : undefined),
+    options.habitLog ?? loadHabitDisplayLog(upcoming),
+  ]);
   return buildHomeFeed(archive, { ...options, quality, upcoming, upcomingSources, habitLog });
 }
 

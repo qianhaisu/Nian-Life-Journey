@@ -60,6 +60,16 @@ export { mergeKeyOf, upcomingItemId } from "@/lib/upcoming-merge";
 export type UpcomingDb = Pick<ReturnType<typeof getDb>, "select" | "insert" | "update">;
 const dbFor = (options: { db?: UpcomingDb; env?: NodeJS.ProcessEnv }) => options.db ?? getDb(options.env);
 
+const UPCOMING_CACHE_TTL_MS = 30_000;
+type RunsRow = typeof t.upcomingExtractionRuns.$inferSelect;
+let upcomingRunsCache = new Map<string, { at: number; promise: Promise<RunsRow[]> }>();
+let upcomingRecordsCache = new Map<string, { at: number; promise: Promise<UpcomingItemRecord[]> }>();
+
+export function invalidateUpcomingCache(): void {
+  upcomingRunsCache = new Map();
+  upcomingRecordsCache = new Map();
+}
+
 /** Postgres says 42P01 when a relation does not exist. That is "the migration has not been run
  *  here yet" — a different answer from "the read broke", and a very different one from
  *  "the family has nothing to do".
@@ -294,6 +304,7 @@ export async function mergeUpcomingCandidates(
       result.changesRecorded += 1;
     }
   }
+  if (!options.db && !options.env) invalidateUpcomingCache();
   return result;
 }
 
@@ -334,6 +345,7 @@ export async function recordUpcomingRun(input: UpcomingRunInput, options: { prof
     promptVersion: input.promptVersion, model: input.model ?? null,
     startedAt: input.startedAt, finishedAt: input.finishedAt,
   }).onConflictDoNothing();
+  if (!options.db && !options.env) invalidateUpcomingCache();
   return { batchId: input.batchId, status };
 }
 
@@ -472,7 +484,121 @@ export async function readUpcomingFeed(options: ReadUpcomingOptions = {}): Promi
  * reason that says plainly what is really going on. The count is still available to a reviewer
  * through readUpcomingFeed() / readUpcomingRecords(), which see every status.
  */
+async function readUpcomingRunsUncached(db: UpcomingDb, profileId: string): Promise<RunsRow[]> {
+  return db.select().from(t.upcomingExtractionRuns)
+    .where(eq(t.upcomingExtractionRuns.profileId, profileId))
+    .orderBy(asc(t.upcomingExtractionRuns.startedAt));
+}
+
+async function readUpcomingRunsCached(db: UpcomingDb, profileId: string): Promise<RunsRow[]> {
+  const now = Date.now();
+  const held = upcomingRunsCache.get(profileId);
+  if (held && now - held.at < UPCOMING_CACHE_TTL_MS) return held.promise;
+  const promise = readUpcomingRunsUncached(db, profileId);
+  upcomingRunsCache.set(profileId, { at: now, promise });
+  promise.catch(() => {
+    if (upcomingRunsCache.get(profileId)?.promise === promise) upcomingRunsCache.delete(profileId);
+  });
+  return promise;
+}
+
+class UpcomingStageError extends Error {
+  readonly stage: "items" | "changes";
+  override readonly cause: unknown;
+  constructor(stage: "items" | "changes", cause: unknown) {
+    super(String((cause as Error)?.message ?? cause));
+    this.stage = stage;
+    this.cause = cause;
+  }
+}
+
+async function readUpcomingRecordsUncached(db: UpcomingDb, profileId: string): Promise<UpcomingItemRecord[]> {
+  let itemRows: Array<typeof t.upcomingItems.$inferSelect>;
+  try {
+    itemRows = await selectUpcomingItems(db, eq(t.upcomingItems.profileId, profileId));
+  } catch (error) {
+    throw new UpcomingStageError("items", error);
+  }
+  if (!itemRows.length) return [];
+  let changeRows: Array<typeof t.upcomingItemChanges.$inferSelect> = [];
+  try {
+    changeRows = await db.select().from(t.upcomingItemChanges)
+      .where(inArray(t.upcomingItemChanges.itemId, itemRows.map((row) => row.id)))
+      .orderBy(asc(t.upcomingItemChanges.day));
+  } catch (error) {
+    if (!isMissingTable(error)) throw new UpcomingStageError("changes", error);
+  }
+  const byItem = new Map<string, UpcomingChange[]>();
+  for (const row of changeRows) {
+    const list = byItem.get(row.itemId) ?? [];
+    list.push({
+      at: row.createdAt, day: row.day, change: row.change as UpcomingChange["change"],
+      fromStatus: (row.fromStatus ?? undefined) as UpcomingStatus | undefined,
+      toStatus: row.toStatus as UpcomingStatus,
+      fromWhen: row.fromWhen as unknown as UpcomingWhen | undefined,
+      toWhen: row.toWhen as unknown as UpcomingWhen | undefined,
+      note: row.note ?? undefined, quote: row.quote ?? undefined,
+      sourceIds: row.sourceIds ?? [], batchId: row.batchId,
+    });
+    byItem.set(row.itemId, list);
+  }
+  return itemRows.map((row) => recordOf(row, byItem.get(row.id) ?? []));
+}
+
+async function readUpcomingRecordsCached(db: UpcomingDb, profileId: string): Promise<UpcomingItemRecord[]> {
+  const now = Date.now();
+  const held = upcomingRecordsCache.get(profileId);
+  if (held && now - held.at < UPCOMING_CACHE_TTL_MS) return held.promise;
+  const promise = readUpcomingRecordsUncached(db, profileId);
+  upcomingRecordsCache.set(profileId, { at: now, promise });
+  promise.catch(() => {
+    if (upcomingRecordsCache.get(profileId)?.promise === promise) upcomingRecordsCache.delete(profileId);
+  });
+  return promise;
+}
+
 export async function readUpcomingFeedForFamily(options: Omit<ReadUpcomingOptions, "decisions" | "includePrivate"> = {}): Promise<UpcomingFeedResult> {
+  if (!options.db && !options.env) {
+    const profileId = options.profileId ?? CANONICAL_PROFILE_ID;
+    let db: UpcomingDb;
+    try { db = dbFor(options); }
+    catch (error) { return { state: "read_failed", reason: "no database connection is configured", error: String((error as Error)?.message ?? error) }; }
+
+    let runRows: RunsRow[];
+    let allRecords: UpcomingItemRecord[];
+    try {
+      [runRows, allRecords] = await Promise.all([
+        readUpcomingRunsCached(db, profileId),
+        readUpcomingRecordsCached(db, profileId),
+      ]);
+    } catch (error) {
+      const cause = error instanceof UpcomingStageError ? error.cause : error;
+      if (isMissingTable(cause)) return { state: "not_extracted", reason: "the upcoming tables do not exist in this database yet" };
+      if (error instanceof UpcomingStageError) {
+        return error.stage === "items"
+          ? { state: "read_failed", reason: "could not read the upcoming items", error: String((cause as Error)?.message ?? cause) }
+          : { state: "read_failed", reason: "could not read the status-change evidence", error: String((cause as Error)?.message ?? cause) };
+      }
+      return { state: "read_failed", reason: "could not read the extraction runs", error: String((cause as Error)?.message ?? cause) };
+    }
+    if (!runRows.length) return { state: "not_extracted", reason: "no extraction run has been recorded for this profile" };
+
+    const runs = runRows.map((row) => ({
+      id: row.id, windowFrom: row.windowFrom, windowToMessageAt: row.windowToMessageAt,
+      startedAt: row.startedAt, status: row.status, conversations: row.conversations,
+      unitsTotal: row.unitsTotal, unitsCovered: row.unitsCovered, unitsFailed: row.unitsFailed,
+    }));
+    const approved = upcomingFeedFrom({
+      runs,
+      records: allRecords.filter((record) => record.reviewDecision === "approved"),
+    });
+    if (approved.state !== "no_items") return approved;
+    const everything = upcomingFeedFrom({
+      runs,
+      records: allRecords.filter((record) => record.reviewDecision === "approved" || record.reviewDecision === "needs_human_review"),
+    });
+    return familyFeedFrom(approved, everything.state === "ready" ? everything.items.length : 0);
+  }
   const approved = await readUpcomingFeed({ ...options, decisions: ["approved"] });
   if (approved.state !== "no_items") return approved;
   const everything = await readUpcomingFeed({ ...options, decisions: ["needs_human_review", "approved"] });
@@ -504,6 +630,7 @@ export async function setUpcomingReviewDecision(
       inArray(t.upcomingItems.id, itemIds),
     ))
     .returning({ id: t.upcomingItems.id });
+  if (!options.db && !options.env) invalidateUpcomingCache();
   return { updated: rows.length, ids: rows.map((row) => row.id) };
 }
 
@@ -539,6 +666,13 @@ export async function readUpcomingProvenanceForFamily(
 export async function readUpcomingRecords(options: ReadUpcomingOptions = {}): Promise<UpcomingItemRecord[]> {
   const db = dbFor(options);
   const profileId = options.profileId ?? CANONICAL_PROFILE_ID;
+  if (!options.db && !options.env) {
+    try {
+      return await readUpcomingRecordsCached(db, profileId);
+    } catch (error) {
+      throw error instanceof UpcomingStageError ? error.cause : error;
+    }
+  }
   const itemRows = await selectUpcomingItems(db, eq(t.upcomingItems.profileId, profileId));
   if (!itemRows.length) return [];
   const changeRows = await db.select().from(t.upcomingItemChanges)

@@ -33,7 +33,7 @@ export type RefreshTarget = { path: string; type?: "page" };
 // archive, so a future page that reads it through a helper cannot go missing the same way.
 // The year route now redirects on demand to the matching section of /memory while its book is
 // unpublished; it has no ISR page to invalidate.
-export const ARCHIVE_ISR_ROUTES: readonly string[] = ["/memory/[year]/[month]", "/memory/[year]/[month]/[day]", "/events/[id]"];
+export const ARCHIVE_ISR_ROUTES: readonly string[] = ["/memory/[year]/[month]", "/memory/[year]/[month]/[day]", "/events/[id]", "/travel/[tripId]"];
 
 // Pages rendered on demand that read the archive through the shared memo. /preview is the private
 // preview surface; it reads the same memo, so it is cleared by the same notice.

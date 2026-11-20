@@ -19,6 +19,10 @@ import type { LifeEvent, Media, MonthlySnapshot, RawSource } from "@/lib/types";
 import { listEditedMonthContents } from "./month-content";
 import { withEditedChapters } from "./edited-chapters";
 import { prenatalStoryForFamily } from "./prenatal-story";
+import { invalidateTopicCache } from "./home-memory-topics-load";
+import { invalidateQualityCache } from "./home-photo-quality";
+import { invalidateUpcomingCache } from "./db/upcoming-store";
+import { invalidateHabitDisplayCache } from "./db/habit-display-store";
 
 // The one set of clocks every page reads (lib/time-truth.ts). Pages never compute their own "now".
 export type ArchiveTime = RecencyReference & {
@@ -211,7 +215,14 @@ export const ISR_ARCHIVE_TTL_MS = 30_000;
 let isrArchive: { at: number; archive: Promise<FamilyArchive> } | undefined;
 
 // Test-only: the memos below are module state, so a test that exercises them must be able to clear them.
-export function __resetOnDemandArchiveForTests(): void { onDemandArchive = undefined; isrArchive = undefined; }
+export function __resetOnDemandArchiveForTests(): void {
+  onDemandArchive = undefined;
+  isrArchive = undefined;
+  invalidateTopicCache();
+  invalidateQualityCache();
+  invalidateUpcomingCache();
+  invalidateHabitDisplayCache();
+}
 
 // Drop the memo so the next request re-reads the archive.
 //
@@ -225,7 +236,14 @@ export function __resetOnDemandArchiveForTests(): void { onDemandArchive = undef
 // the second; a write that makes the on-demand pages stale makes the ISR pages stale by the same
 // act, and leaving either behind would be the "reported success and changed nothing" bug this
 // function exists to prevent.
-export function invalidateOnDemandArchive(): void { onDemandArchive = undefined; isrArchive = undefined; }
+export function invalidateOnDemandArchive(): void {
+  onDemandArchive = undefined;
+  isrArchive = undefined;
+  invalidateTopicCache();
+  invalidateQualityCache();
+  invalidateUpcomingCache();
+  invalidateHabitDisplayCache();
+}
 
 // The archive read for pages that are rendered on demand rather than prerendered
 // (lib/render-on-demand.ts: /, /memory, /mom-reports — they must never be built from the build's mock
@@ -264,6 +282,9 @@ export function loadFamilyArchiveForIsr(
   load: () => Promise<FamilyArchive> = loadFamilyArchive,
   nowMs: number = Date.now(),
 ): Promise<FamilyArchive> {
+  if (load === loadFamilyArchive && onDemandArchive && nowMs - onDemandArchive.at < ISR_ARCHIVE_TTL_MS) {
+    return onDemandArchive.archive;
+  }
   if (!isrArchive || nowMs - isrArchive.at >= ISR_ARCHIVE_TTL_MS) {
     const archive = load();
     isrArchive = { at: nowMs, archive };
@@ -282,7 +303,10 @@ export async function loadFamilyArchive(): Promise<FamilyArchive> {
   // getFamilyArchiveInput() answers the same three questions in one read, with the columns this
   // path actually consults. Its rows are PARTIAL by design — see the type's doc comment before
   // reading a new field off store.mediaAssets, store.mediaLocations or store.rawSources here.
-  const input = await getFamilyArchiveInput();
+  const [input, editedMonths] = await Promise.all([
+    getFamilyArchiveInput(),
+    listEditedMonthContents(),
+  ]);
   const archive = composeFamilyArchive(
     input.store,
     input.events,
@@ -290,6 +314,6 @@ export async function loadFamilyArchive(): Promise<FamilyArchive> {
     input.eventIdentities as unknown as LifeEvent[],
     input.latestSourceCapturedAt,
   );
-  archive.chapters = withEditedChapters(archive.chapters, await listEditedMonthContents(), archive.birthDay);
+  archive.chapters = withEditedChapters(archive.chapters, editedMonths, archive.birthDay);
   return archive;
 }

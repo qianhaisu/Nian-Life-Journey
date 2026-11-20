@@ -78,13 +78,23 @@ export class HealthPageService {
 
   async page(): Promise<HealthPage> {
     const nowWall = wallOf(this.now(), false);
-    const rec = await this.records.ledgerSignature();
-    const sig = [rec, await sigOf(this.cfg.historyLedgerDir && path.join(this.cfg.historyLedgerDir, "ledger.json")), await sigOf(this.cfg.intervalsFile), await sigOf(this.cfg.materialsFile), await sigOf(this.cfg.derivedFile ?? null), await sigOf(this.cfg.analysesFile ?? null), await sigOf(this.cfg.displayFile ?? null), await this.evidenceSig(), await this.materialSourceSig()].join("|");
-    if (this.cache && this.cache.sig === sig && this.cache.day === nowWall.slice(0, 10)) return this.cache.page;
-    const [history, record, intervals, materials, derived, analyses, display] = await Promise.all([
-      this.historyLedger(), this.records.readLedger(), readJson(this.cfg.intervalsFile, isIntervals), readJson(this.cfg.materialsFile, isMaterials), readJson(this.cfg.derivedFile ?? null, isDerived), readJson<AnalysisFile>(this.cfg.analysesFile ?? null, isAnalysisFile), readJson(this.cfg.displayFile ?? null, isDisplay),
+    const [rec, histSig, intSig, matFileSig, derSig, anaSig, disSig, evSig, matSource] = await Promise.all([
+      this.records.ledgerSignature(),
+      sigOf(this.cfg.historyLedgerDir && path.join(this.cfg.historyLedgerDir, "ledger.json")),
+      sigOf(this.cfg.intervalsFile),
+      sigOf(this.cfg.materialsFile),
+      sigOf(this.cfg.derivedFile ?? null),
+      sigOf(this.cfg.analysesFile ?? null),
+      sigOf(this.cfg.displayFile ?? null),
+      this.evidenceSig(),
+      this.materialSourceSig(),
     ]);
-    const hashes = await this.materialSourceHashes(materials);
+    const sig = [rec, histSig, intSig, matFileSig, derSig, anaSig, disSig, evSig, matSource.sig].join("|");
+    if (this.cache && this.cache.sig === sig && this.cache.day === nowWall.slice(0, 10)) return this.cache.page;
+    const materials = matSource.materials;
+    const [history, record, intervals, derived, analyses, display, hashes] = await Promise.all([
+      this.historyLedger(), this.records.readLedger(), readJson(this.cfg.intervalsFile, isIntervals), readJson(this.cfg.derivedFile ?? null, isDerived), readJson<AnalysisFile>(this.cfg.analysesFile ?? null, isAnalysisFile), readJson(this.cfg.displayFile ?? null, isDisplay), this.materialSourceHashes(materials),
+    ]);
     const page = buildHealthPage({ history, record, intervals, materials, derived, analyses, display, evidence: evidenceResolverFromFile(this.cfg.evidenceFile), now: nowWall, materialSourceHash: materials && this.cfg.materialRoot ? (file) => hashes.get(file) : undefined /* no root configured: the model reports "not verified" */ });
     this.cache = { sig, day: nowWall.slice(0, 10), page, history };
     return page;
@@ -104,10 +114,12 @@ export class HealthPageService {
     const p = path.resolve(root, file);
     try { const real = resolveThroughLinks(p); return isInside(real, root) ? real : null; } catch { return null; }
   }
-  private async materialSourceSig(): Promise<string> {
-    const m = await readJson(this.cfg.materialsFile, isMaterials); if (!m || !this.cfg.materialRoot) return "-";
+  private async materialSourceSig(): Promise<{ sig: string; materials: MaterialsFile | null }> {
+    const m = await readJson(this.cfg.materialsFile, isMaterials);
+    if (!m || !this.cfg.materialRoot) return { sig: "-", materials: m };
     const files = [...new Set(m.items.map((i) => i.source.file))].sort();
-    return (await Promise.all(files.map(async (f) => { const p = this.materialPath(f); return p ? sigOf(p) : "none"; }))).join(",");
+    const sig = (await Promise.all(files.map(async (f) => { const p = this.materialPath(f); return p ? sigOf(p) : "none"; }))).join(",");
+    return { sig, materials: m };
   }
   private async materialSourceHashes(m: MaterialsFile | null): Promise<Map<string, string | undefined>> {
     const out = new Map<string, string | undefined>();

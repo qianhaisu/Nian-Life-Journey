@@ -18,6 +18,7 @@ import { isSubjectChecked } from "@/lib/publication-moments";
 import { calendarDayOf } from "@/lib/timeline-dates";
 import { ageOn } from "@/lib/time-signature";
 import { loadTopicCache } from "@/lib/home-memory-topics-load";
+import type { PhotoTopicCache } from "@/lib/home-memory-topics";
 import { coverScore, daysOf, isHomeTrip, tripNeighbors, type CoverScore, type Trip } from "./model";
 import { syncTrips } from "./sync";
 import sceneryFile from "./scenery.json";
@@ -45,15 +46,27 @@ export type TripCard = { trip: Trip; cover?: MediaRef; scenery?: MediaRef; ageLa
 
 const dateLabelOf = (day: string) => `${Number(day.slice(5, 7))} 月 ${Number(day.slice(8, 10))} 日`;
 
-async function monthsFor(days: string[]): Promise<Map<string, MonthContent | null>> {
+async function monthsFor(days: string[], preloaded?: readonly MonthContent[]): Promise<Map<string, MonthContent | null>> {
+  const preloadedMap = preloaded ? new Map(preloaded.map((item) => [item.month, item])) : undefined;
   const months = [...new Set(days.map((d) => d.slice(0, 7)))];
-  const loaded = await Promise.all(months.map((m) => loadMonthContent(m)));
+  const loaded = await Promise.all(months.map((m) => preloadedMap?.has(m) ? Promise.resolve(preloadedMap.get(m)!) : loadMonthContent(m)));
   return new Map(months.map((m, i) => [m, loaded[i]]));
 }
 
 type Archive = Awaited<ReturnType<typeof loadFamilyArchiveOnDemand>>;
-function gate(archive: Archive) {
-  const available = new Map(archive.media.map((item) => [item.id, item]));
+type AvailableMediaMap = ReadonlyMap<string, Archive["media"][number]>;
+const availableMediaCache = new WeakMap<Archive, AvailableMediaMap>();
+
+function availableMediaOf(archive: Archive): AvailableMediaMap {
+  let map = availableMediaCache.get(archive);
+  if (!map) {
+    map = new Map(archive.media.map((item) => [item.id, item]));
+    availableMediaCache.set(archive, map);
+  }
+  return map;
+}
+
+function gate(archive: Archive, available: AvailableMediaMap = availableMediaOf(archive)) {
   return (ids: readonly string[], context: string) =>
     resolveMonthContentMedia(ids, available, archive.privilege.excluded).map((m) => toMediaRef(m, context));
 }
@@ -80,8 +93,7 @@ function approvedPhotosByDay(archive: Archive) {
 }
 
 /** 某一天白名单里的风景照，按好看程度排；alt 用 GLM 写的那句画面描述。 */
-function sceneryOf(archive: Archive, day: string): MediaRef[] {
-  const available = new Map(archive.media.map((item) => [item.id, item]));
+function sceneryOf(available: AvailableMediaMap, day: string): MediaRef[] {
   return (SCENERY_BY_DAY[day] ?? []).flatMap((s) => {
     const media = available.get(s.id);
     return media && media.type !== "video" ? [toMediaRef(media, s.caption)] : [];
@@ -125,15 +137,21 @@ export function resolveTripDayPhotos(input: {
 }
 
 type Scores = ReadonlyMap<string, CoverScore>;
+const coverScoresCache = new WeakMap<PhotoTopicCache, Map<string, CoverScore>>();
+
 async function coverScores(): Promise<Map<string, CoverScore>> {
   // 首页轮播已经用模型给照片打过分（data/photo-topics.json，随仓库发布，夜间任务更新）。复用它，
   // 不为旅行封面另外识图（CLAUDE.md：优先复用有效的解析结果）。读不到就是空表，封面退回旧规则。
   const cache = await loadTopicCache();
+  if (!cache) return new Map();
+  const held = coverScoresCache.get(cache);
+  if (held) return held;
   const out = new Map<string, CoverScore>();
-  for (const [id, topic] of Object.entries(cache?.topics ?? {})) {
+  for (const [id, topic] of Object.entries(cache.topics ?? {})) {
     const carousel = (topic as { carousel?: CoverScore }).carousel;
     if (carousel) out.set(id, carousel);
   }
+  coverScoresCache.set(cache, out);
   return out;
 }
 
@@ -213,10 +231,9 @@ function buildTripDayPoolsForDays(
   months: Map<string, MonthContent | null>,
   photosOf: ReturnType<typeof gate>,
   approvedOfDay: ReturnType<typeof approvedPhotosByDay>,
-  archive: Archive,
+  available: AvailableMediaMap,
   publishedByDay?: ReadonlyMap<string, readonly MediaRef[]>,
 ): TripDayCoverPool[] {
-  const available = new Map(archive.media.map((item) => [item.id, item]));
   const curated = CURATION[trip.id];
   const curatedOf = (items: CuratedItem[], title: string): MediaRef[] => items.flatMap((it) => {
     if (it.pool === "A") return photosOf([it.id], title);
@@ -229,7 +246,7 @@ function buildTripDayPoolsForDays(
     const entryExpanded = entry ? photosOf(entry.expandedMediaIds, trip.title).filter((m) => m.type !== "video") : [];
     const published = (publishedByDay?.get(day) ?? []).filter((m) => m.type !== "video");
     const approved = approvedOfDay(day, trip.title);
-    const scenery = sceneryOf(archive, day);
+    const scenery = sceneryOf(available, day);
     const photos = curatedDay.length > 0
       ? curatedDay
       : entryExpanded.length > 0
@@ -249,11 +266,16 @@ function buildTripDayPoolsForDays(
 
 /** 总览页：每条旅程一张卡。 */
 export async function readTravelIndex(): Promise<{ cards: TripCard[]; trips: Trip[]; birthDay?: string }> {
-  const [archive, scores] = await Promise.all([loadFamilyArchiveOnDemand(), coverScores()]);
-  const trips = syncTrips(await listEditedMonthContents());
-  const photosOf = gate(archive);
+  const [archive, scores, editedMonths] = await Promise.all([
+    loadFamilyArchiveOnDemand(),
+    coverScores(),
+    listEditedMonthContents(),
+  ]);
+  const trips = syncTrips(editedMonths);
+  const available = availableMediaOf(archive);
+  const photosOf = gate(archive, available);
   const approvedOfDay = approvedPhotosByDay(archive);
-  const months = await monthsFor(trips.flatMap((t) => daysOf(t)));
+  const months = await monthsFor(trips.flatMap((t) => daysOf(t)), editedMonths);
   const usedCoverIds = new Set<string>();
   const recordCover = (cover?: MediaRef) => {
     if (!cover) return;
@@ -263,8 +285,8 @@ export async function readTravelIndex(): Promise<{ cards: TripCard[]; trips: Tri
   const drafts = trips.map((trip) => {
     // 明信片角上叠一张这次旅行最好看的风景
     const scenery = daysOf(trip).flatMap((d) => (SCENERY_BY_DAY[d] ?? []).map((s) => ({ ...s, day: d })))
-      .sort((a, b) => b.scenic - a.scenic).map((s) => sceneryOf(archive, s.day).find((m) => m.id === s.id)).find(Boolean);
-    const ownPools = buildTripDayPoolsForDays(daysOf(trip), trip, months, photosOf, approvedOfDay, archive);
+      .sort((a, b) => b.scenic - a.scenic).map((s) => sceneryOf(available, s.day).find((m) => m.id === s.id)).find(Boolean);
+    const ownPools = buildTripDayPoolsForDays(daysOf(trip), trip, months, photosOf, approvedOfDay, available);
     const hasOwnPhotos = ownPools.some((p) => p.photos.some((m) => m.type !== "video"));
     const ownCover = hasOwnPhotos ? pickTripCover(trip, ownPools, scores) : undefined;
     recordCover(ownCover);
@@ -278,7 +300,7 @@ export async function readTravelIndex(): Promise<{ cards: TripCard[]; trips: Tri
       months,
       photosOf,
       approvedOfDay,
-      archive,
+      available,
     );
     const cover = pickTripCover(trip, fallbackPools, scores, usedCoverIds);
     recordCover(cover);
@@ -317,11 +339,13 @@ export function resolveEssayPhotos(
 }
 
 export async function readTrip(id: string): Promise<TripReadingData | null> {
-  const allTrips = syncTrips(await listEditedMonthContents());
+  const editedMonths = await listEditedMonthContents();
+  const allTrips = syncTrips(editedMonths);
   const trip = allTrips.find((item) => item.id === id);
   if (!trip) return null;
   const [archive, scores] = await Promise.all([loadFamilyArchiveOnDemand(), coverScores()]);
-  const photosOf = gate(archive);
+  const available = availableMediaOf(archive);
+  const photosOf = gate(archive, available);
   const approvedOfDay = approvedPhotosByDay(archive);
   const range = daysOf(trip);
   const fallbackRange = connectedTripFallbackDays(trip, allTrips);
@@ -329,11 +353,10 @@ export async function readTrip(id: string): Promise<TripReadingData | null> {
   const sameGroup = allTrips.filter((t) => isHomeTrip(t, allTrips) === home);
   const { prev, next } = tripNeighbors(trip, sameGroup);
   const neighborDays = [prev, next].flatMap((t) => (t ? [...daysOf(t), ...connectedTripFallbackDays(t, allTrips)] : []));
-  const months = await monthsFor([...range, ...fallbackRange, ...neighborDays]);
+  const months = await monthsFor([...range, ...fallbackRange, ...neighborDays], editedMonths);
   const timelines = new Map(await Promise.all([...months.keys()].map(async (month) => [month, await buildMonthTimeline(archive, month.slice(0, 4), month.slice(5, 7))] as const)));
   const days: TripDay[] = [];
   const curated = CURATION[trip.id];
-  const available = new Map(archive.media.map((item) => [item.id, item]));
   const curatedOf = (items: CuratedItem[], title: string): MediaRef[] => items.flatMap((it) => {
     if (it.pool === "A") return photosOf([it.id], title);
     const media = available.get(it.id);
@@ -348,7 +371,7 @@ export async function readTrip(id: string): Promise<TripReadingData | null> {
       const fallbackPhotos = resolveTripDayPhotos({
         curated: allowCurated && curated ? curatedOf(curated.byDay[day] ?? [], trip.title) : undefined,
         approvedDay: approvedOfDay(day, trip.title),
-        scenery: sceneryOf(archive, day),
+        scenery: sceneryOf(available, day),
       });
       if (!fallbackPhotos.length) return null;
       return { day, dateLabel: dateLabelOf(day), ageLabel: ageOn(archive.birthDay, day), photos: fallbackPhotos };
@@ -367,7 +390,7 @@ export async function readTrip(id: string): Promise<TripReadingData | null> {
         expanded: entry ? photosOf(entry.expandedMediaIds, title) : undefined,
         published: publishedDay.photos,
         approvedDay: approvedOfDay(day, title),
-        scenery: sceneryOf(archive, day),
+        scenery: sceneryOf(available, day),
       }),
     };
   };
@@ -379,16 +402,16 @@ export async function readTrip(id: string): Promise<TripReadingData | null> {
   const fallbackTripDays = hasOwnPhotos
     ? []
     : fallbackRange.map((d) => buildDayRecord(d, false)).filter((d): d is TripDay => d !== null && d.photos.length > 0);
-  const ownPools = buildTripDayPoolsForDays(range, trip, months, photosOf, approvedOfDay, archive, publishedByDay);
+  const ownPools = buildTripDayPoolsForDays(range, trip, months, photosOf, approvedOfDay, available, publishedByDay);
   const hasOwnPoolPhotos = ownPools.some((p) => p.photos.some((m) => m.type !== "video"));
   const effectivePools = hasOwnPoolPhotos
     ? ownPools
-    : buildTripDayPoolsForDays(fallbackRange, trip, months, photosOf, approvedOfDay, archive, publishedByDay);
+    : buildTripDayPoolsForDays(fallbackRange, trip, months, photosOf, approvedOfDay, available, publishedByDay);
   const siblingUsedCoverIds = new Set<string>();
   if (!hasOwnPoolPhotos) {
     for (const other of allTrips) {
       if (other.id === trip.id || other.from > trip.to || trip.from > other.to) continue;
-      const otherPools = buildTripDayPoolsForDays(daysOf(other), other, months, photosOf, approvedOfDay, archive, publishedByDay);
+      const otherPools = buildTripDayPoolsForDays(daysOf(other), other, months, photosOf, approvedOfDay, available, publishedByDay);
       if (!otherPools.some((p) => p.photos.some((m) => m.type !== "video"))) continue;
       const otherCover = pickTripCover(other, otherPools, scores);
       if (otherCover) {
@@ -403,10 +426,10 @@ export async function readTrip(id: string): Promise<TripReadingData | null> {
   const essayMedia = resolveEssayPhotos(essay, (ids) => photosOf(ids, trip.title));
   const neighborOf = (t: Trip | undefined): TripNeighbor | undefined => {
     if (!t) return undefined;
-    const own = buildTripDayPoolsForDays(daysOf(t), t, months, photosOf, approvedOfDay, archive);
+    const own = buildTripDayPoolsForDays(daysOf(t), t, months, photosOf, approvedOfDay, available);
     const pools = own.some((p) => p.photos.some((m) => m.type !== "video"))
       ? own
-      : buildTripDayPoolsForDays(connectedTripFallbackDays(t, allTrips), t, months, photosOf, approvedOfDay, archive);
+      : buildTripDayPoolsForDays(connectedTripFallbackDays(t, allTrips), t, months, photosOf, approvedOfDay, available);
     return { trip: t, cover: pickTripCover(t, pools, scores), ageLabel: ageOn(archive.birthDay, t.from) };
   };
   return {

@@ -183,12 +183,22 @@ function validLabel(raw: unknown): PhotoTopicLabel | undefined {
   return label;
 }
 
+const validatedLookups = new WeakMap<PhotoTopicCache, PhotoTopicLookup>();
+
 /** 缓存 → lookup。缓存本身不合格（缺 model / promptVersion / topics）时返回空 lookup。 */
 export function topicLookupFrom(cache: PhotoTopicCache | undefined): PhotoTopicLookup {
   if (!cache || !cache.topics || typeof cache.topics !== "object") return NO_TOPICS;
   if (!cache.model || !cache.promptVersion) return NO_TOPICS;
-  const table = cache.topics;
-  return (mediaId: string) => validLabel(table[mediaId]);
+  const cached = validatedLookups.get(cache);
+  if (cached) return cached;
+  const validated = new Map<string, PhotoTopicLabel>();
+  for (const [id, raw] of Object.entries(cache.topics)) {
+    const label = validLabel(raw);
+    if (label) validated.set(id, label);
+  }
+  const lookup: PhotoTopicLookup = (mediaId: string) => validated.get(mediaId);
+  validatedLookups.set(cache, lookup);
+  return lookup;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

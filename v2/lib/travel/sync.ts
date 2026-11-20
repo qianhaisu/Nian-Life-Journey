@@ -3,6 +3,15 @@ import { productToday } from "@/lib/time-truth";
 import { mergeReviewedTravelRecords } from "./reviewed-records";
 import { PLACES, TRIPS, type Trip } from "./model";
 
+const SKIP_TITLE_RE = /准备|计划|打算|想去|明天|下周|可能|如果|没去|没有|取消|不去|爸爸|妈妈|爷爷|奶奶|外公|外婆|[？?]|说要/;
+const CITY_PLACE_PATTERNS = PLACES
+  .filter((item) => item.level === "city" && !item.home)
+  .map((place) => {
+    const names = [place.name, ...(place.aliases ?? [])].filter((name) => name.length >= 2);
+    const escaped = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    return { place, pattern: new RegExp(`(?:出发(?:回|去|到)?|回到|到了|抵达|到达|来到)(?:${escaped})`) };
+  });
+
 /** Manual journeys win. A new published departure is a dated record, never a guessed stay. */
 export function syncTrips(contents: readonly MonthContent[], curated: readonly Trip[] = TRIPS): Trip[] {
   const trips = [...curated];
@@ -17,11 +26,9 @@ export function syncTrips(contents: readonly MonthContent[], curated: readonly T
     // Only explicit, completed departures/arrivals in the published day's own title.
     // Plans, other people's journeys, cancelled journeys and quoted questions never become stamps.
     const title = day.title ?? "";
-    if (/准备|计划|打算|想去|明天|下周|可能|如果|没去|没有|取消|不去|爸爸|妈妈|爷爷|奶奶|外公|外婆|[？?]|说要/.test(title)) continue;
-    for (const place of PLACES.filter((item) => item.level === "city" && !item.home)) {
-      const names = [place.name, ...(place.aliases ?? [])].filter((name) => name.length >= 2);
-      const escaped = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-      if (!new RegExp(`(?:出发(?:回|去|到)?|回到|到了|抵达|到达|来到)(?:${escaped})`).test(title)) continue;
+    if (SKIP_TITLE_RE.test(title)) continue;
+    for (const { place, pattern } of CITY_PLACE_PATTERNS) {
+      if (!pattern.test(title)) continue;
       if (trips.some((trip) => trip.placeIds.includes(place.id) && trip.from <= day.day && trip.to >= day.day)) continue;
       trips.push({ id: `record-${day.day}-${place.id}`, title, kind: place.hometown || place.name === "温州" ? "hometown" : "travel",
         from: day.day, to: day.day, placeIds: [place.id], coverDay: day.day,

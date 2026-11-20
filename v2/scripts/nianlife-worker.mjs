@@ -212,14 +212,6 @@ async function revalidateAffectedMonths(months) {
     return;
   }
 
-  const paths = new Set(["/", "/memory"]);
-  for (const month of months) {
-    const [year] = month.split("-");
-    paths.add(`/memory/${year}`);
-    paths.add(`/memory/${month.replace("-", "/")}`);
-  }
-  const pathList = [...paths].slice(0, 50);
-
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -229,7 +221,7 @@ async function revalidateAffectedMonths(months) {
         "content-type": "application/json",
         authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ paths: pathList }),
+      body: JSON.stringify({ scope: "archive" }),
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout));
 
@@ -238,7 +230,8 @@ async function revalidateAffectedMonths(months) {
       log(`[revalidate] request failed: ${response.status} ${text.slice(0, 200)}`);
       return;
     }
-    log(`[revalidate] ok — revalidated ${pathList.length} path(s): ${pathList.join(", ")}`);
+    const touched = months instanceof Set || Array.isArray(months) ? [...months] : [];
+    log(`[revalidate] ok — revalidated scope=archive (${touched.length} affected month(s))`);
   } catch (error) {
     const info = safeErrorInfo(error);
     log(`[revalidate] threw ${info.code}: ${info.message} — pages still fall back to 300s ISR`);

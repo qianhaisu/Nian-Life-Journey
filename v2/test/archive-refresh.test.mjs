@@ -39,7 +39,7 @@ test("scope archive reaches every ISR route that renders the archive — found b
     // the archive through lib/day-reading.ts rather than calling loadFamilyArchive itself, so a
     // matcher that only looked for the direct call declared the day route "not an archive page"
     // and it sat outside ARCHIVE_ISR_ROUTES with a 300s route cache. A helper is still a read.
-    if (!/loadFamilyArchive(ForIsr)?\(|\bgetEventDetail\b|\breadDay\b/.test(source)) continue;
+    if (!/loadFamilyArchive(ForIsr)?\(|\bgetEventDetail\b|\breadDay\b|\breadTrip\b/.test(source)) continue;
     isr.push("/" + path.relative(appDir, path.dirname(file)).split(path.sep).join("/"));
   }
   assert.deepEqual([...isr].sort(), [...ARCHIVE_ISR_ROUTES].sort());

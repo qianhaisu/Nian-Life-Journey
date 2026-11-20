@@ -22,6 +22,27 @@ import type {
 
 export const WEEKEND_STATE_SCHEMA = "nianlife.weekend-state/1";
 export const WEEKEND_EXCLUDED_TYPES_SCHEMA = "nianlife.weekend-excluded-types/1";
+const WEEKEND_STATE_CACHE_TTL_MS = 300_000;
+
+let weekStateCache = new Map<string, { at: number; promise: Promise<WeekendStateFile> }>();
+let excludedTypesCache = new Map<string, { at: number; promise: Promise<ExcludedExperienceTypeItem[]> }>();
+
+export function invalidateWeekendStateCache(dir?: string, weekId?: string): void {
+  if (!dir) {
+    weekStateCache = new Map();
+    excludedTypesCache = new Map();
+    return;
+  }
+  const resolved = path.resolve(dir);
+  if (weekId) {
+    weekStateCache.delete(`${resolved}::${weekId}`);
+    return;
+  }
+  for (const key of weekStateCache.keys()) {
+    if (key.startsWith(`${resolved}::`)) weekStateCache.delete(key);
+  }
+  excludedTypesCache.delete(resolved);
+}
 
 export const DEFAULT_EXCLUDED_EXPERIENCE_TYPES: readonly ExcludedExperienceTypeItem[] = [
   {
@@ -482,7 +503,7 @@ export class WeekendStateStore {
     }
   }
 
-  async readWeekState(weekId: string): Promise<WeekendStateFile> {
+  private async readWeekStateFromDisk(weekId: string): Promise<WeekendStateFile> {
     const file = this.weekStateFile(weekId);
     let text: string;
     try {
@@ -502,7 +523,24 @@ export class WeekendStateStore {
     return normalizeWeekState(parsed, weekId);
   }
 
-  async readExcludedTypes(): Promise<ExcludedExperienceTypeItem[]> {
+  async readWeekState(weekId: string): Promise<WeekendStateFile> {
+    const file = this.weekStateFile(weekId);
+    void file;
+    const key = `${this.dir}::${weekId}`;
+    const now = Date.now();
+    const held = weekStateCache.get(key);
+    if (held && now - held.at < WEEKEND_STATE_CACHE_TTL_MS) {
+      return structuredClone(await held.promise);
+    }
+    const promise = this.readWeekStateFromDisk(weekId);
+    weekStateCache.set(key, { at: now, promise });
+    promise.catch(() => {
+      if (weekStateCache.get(key)?.promise === promise) weekStateCache.delete(key);
+    });
+    return structuredClone(await promise);
+  }
+
+  private async readExcludedTypesFromDisk(): Promise<ExcludedExperienceTypeItem[]> {
     let text: string;
     try {
       text = await readFile(this.excludedTypesFile, "utf8");
@@ -521,6 +559,20 @@ export class WeekendStateStore {
     return parseExcludedTypesFile(parsed);
   }
 
+  async readExcludedTypes(): Promise<ExcludedExperienceTypeItem[]> {
+    const now = Date.now();
+    const held = excludedTypesCache.get(this.dir);
+    if (held && now - held.at < WEEKEND_STATE_CACHE_TTL_MS) {
+      return (await held.promise).map((item) => ({ ...item }));
+    }
+    const promise = this.readExcludedTypesFromDisk();
+    excludedTypesCache.set(this.dir, { at: now, promise });
+    promise.catch(() => {
+      if (excludedTypesCache.get(this.dir)?.promise === promise) excludedTypesCache.delete(this.dir);
+    });
+    return (await promise).map((item) => ({ ...item }));
+  }
+
   async selectProposal(input: {
     weekId: string;
     proposalId: string | null;
@@ -529,8 +581,8 @@ export class WeekendStateStore {
   }): Promise<WeekendStateFile> {
     const file = this.weekStateFile(input.weekId);
     const nowIso = (input.now ?? new Date()).toISOString();
-    return this.withWriteLock<WeekendStateFile>(file, async () => {
-      const current = await this.readWeekState(input.weekId);
+    const result = await this.withWriteLock<WeekendStateFile>(file, async () => {
+      const current = await this.readWeekStateFromDisk(input.weekId);
       const next: WeekendStateFile = {
         ...current,
         updatedAt: nowIso,
@@ -539,6 +591,8 @@ export class WeekendStateStore {
       };
       return { payloadToWrite: next, result: next };
     });
+    invalidateWeekendStateCache(this.dir, input.weekId);
+    return result;
   }
 
   async ackFridayAlert(input: {
@@ -548,8 +602,8 @@ export class WeekendStateStore {
   }): Promise<WeekendStateFile> {
     const file = this.weekStateFile(input.weekId);
     const nowIso = (input.now ?? new Date()).toISOString();
-    return this.withWriteLock<WeekendStateFile>(file, async () => {
-      const current = await this.readWeekState(input.weekId);
+    const result = await this.withWriteLock<WeekendStateFile>(file, async () => {
+      const current = await this.readWeekStateFromDisk(input.weekId);
       const next: WeekendStateFile = {
         ...current,
         updatedAt: nowIso,
@@ -560,6 +614,8 @@ export class WeekendStateStore {
       };
       return { payloadToWrite: next, result: next };
     });
+    invalidateWeekendStateCache(this.dir, input.weekId);
+    return result;
   }
 
   async submitSundayFeedback(input: {
@@ -572,8 +628,8 @@ export class WeekendStateStore {
   }): Promise<{ state: WeekendStateFile; deduplicated: boolean }> {
     const file = this.weekStateFile(input.weekId);
     const nowIso = (input.now ?? new Date()).toISOString();
-    return this.withWriteLock<{ state: WeekendStateFile; deduplicated: boolean }>(file, async () => {
-      const current = await this.readWeekState(input.weekId);
+    const outcome = await this.withWriteLock<{ state: WeekendStateFile; deduplicated: boolean }>(file, async () => {
+      const current = await this.readWeekStateFromDisk(input.weekId);
       if (input.receiptKey && current.feedbackReceiptKeys.includes(input.receiptKey)) {
         return { result: { state: current, deduplicated: true } };
       }
@@ -599,6 +655,8 @@ export class WeekendStateStore {
       };
       return { payloadToWrite: next, result: { state: next, deduplicated: false } };
     });
+    invalidateWeekendStateCache(this.dir, input.weekId);
+    return outcome;
   }
 
   async updateExcludedType(input: {
@@ -611,8 +669,8 @@ export class WeekendStateStore {
   }): Promise<ExcludedExperienceTypeItem[]> {
     const nowIso = (input.now ?? new Date()).toISOString();
     const experienceType = input.experienceType.trim();
-    return this.withWriteLock(this.excludedTypesFile, async () => {
-      const current = await this.readExcludedTypes();
+    const result = await this.withWriteLock(this.excludedTypesFile, async () => {
+      const current = await this.readExcludedTypesFromDisk();
       let nextList: ExcludedExperienceTypeItem[];
 
       if (input.mode === "add") {
@@ -638,5 +696,7 @@ export class WeekendStateStore {
       };
       return { payloadToWrite: payload, result: nextList };
     });
+    excludedTypesCache.delete(this.dir);
+    return result;
   }
 }
