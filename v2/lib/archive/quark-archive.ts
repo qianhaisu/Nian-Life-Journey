@@ -1,6 +1,6 @@
 import { getConnectorState, getStore, markArchiveStatus, recordArchivedOriginal, removeMediaLocation, upsertConnectorState, updateMediaLocation } from "@/lib/db/repository";
 import type { ConnectorState, MediaAsset } from "@/lib/types";
-import { hotStorage } from "@/lib/storage/hot-storage";
+import { getStorageForProvider } from "@/lib/storage/hot-storage";
 
 export type QuarkArchiveClient = {
   archive(input: { filename: string; body: Uint8Array; checksum?: string; size?: number }): Promise<{ providerRef: string; path?: string; size?: number }>;
@@ -22,7 +22,7 @@ export async function getOrCreateQuarkState(profileId: string) {
 
 function pendingOriginals(store: Awaited<ReturnType<typeof getStore>>) {
   const pending = new Set(["awaiting_archive", "archive_failed", "paused_auth_required"]);
-  return store.mediaLocations.filter((location) => location.provider === "hot" && location.variant === "original" && pending.has(location.status)).map((location) => ({ location, asset: store.mediaAssets.find((asset) => asset.id === location.mediaAssetId) })).filter((item): item is { location: (typeof store.mediaLocations)[number]; asset: MediaAsset } => Boolean(item.asset));
+  return store.mediaLocations.filter((location) => (location.provider === "oss" || location.provider === "hot") && location.variant === "original" && pending.has(location.status)).map((location) => ({ location, asset: store.mediaAssets.find((asset) => asset.id === location.mediaAssetId) })).filter((item): item is { location: (typeof store.mediaLocations)[number]; asset: MediaAsset } => Boolean(item.asset));
 }
 
 export async function archivePendingOriginals(client: QuarkArchiveClient, profileId: string) {
@@ -33,14 +33,15 @@ export async function archivePendingOriginals(client: QuarkArchiveClient, profil
   for (const { location, asset } of pending) {
     await updateMediaLocation(location.id, { status: "archiving" });
     try {
-      const body = await hotStorage.get(location.providerRef);
+      const storage = getStorageForProvider(location.provider);
+      const body = await storage.get(location.providerRef);
       if (!body) throw new Error("staging original is missing");
       const result = await client.archive({ filename: asset.originalFilename ?? `${asset.id}.${asset.mediaType}`, body, checksum: asset.checksum ?? undefined, size: location.fileSize });
       if (!result.providerRef) throw new Error("Quark archive did not return providerRef");
       const verification = await client.verify({ providerRef: result.providerRef, size: location.fileSize, checksum: asset.checksum ?? undefined });
       if (!verification.exists || (location.fileSize !== undefined && verification.size !== undefined && verification.size !== location.fileSize) || verification.checksumVerified === false) throw new Error("Quark archive verification failed");
       await recordArchivedOriginal({ assetId: asset.id, providerRef: result.providerRef, path: result.path, fileSize: verification.size ?? location.fileSize, checksumVerified: verification.checksumVerified });
-      await hotStorage.delete(location.providerRef);
+      await storage.delete(location.providerRef);
       await removeMediaLocation(location.id);
       archived += 1;
     } catch (error) {

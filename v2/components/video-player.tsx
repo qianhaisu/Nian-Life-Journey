@@ -152,15 +152,17 @@ function PlayableClip({ mediaId, alt, durationSeconds }: { mediaId: string; alt:
     setFullscreenRefused(!accepted);
   }, []);
 
+  const posterSrc = mediaDeliveryUrl(mediaId, "poster");
+
   return (
     <div className="video-frame" ref={frameRef}>
       <video
         ref={ref}
         className="video-player"
         controls={hasStarted}
-        preload="metadata"
+        preload={posterSrc ? "none" : "metadata"}
         playsInline
-        poster={mediaDeliveryUrl(mediaId, "poster")}
+        poster={posterSrc}
         aria-label={alt}
         data-duration={durationSeconds ?? undefined}
         onPlay={() => { setPlaying(true); setHasStarted(true); }}

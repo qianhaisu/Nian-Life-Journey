@@ -12,7 +12,7 @@ export function MomReportMoments({ items }: { items: MomReportMoment[] }) {
   return <div className="mr-moments-list">
     {items.map((item) => <article className="mr-moment" key={item.id}>
       <div className="mr-moment-media">
-        <Image src={item.image} alt={item.alt} width={item.width} height={item.height} sizes="(max-width: 700px) 90vw, 420px" />
+        <Image src={item.image} alt={item.alt} width={item.width} height={item.height} sizes="(max-width: 700px) 90vw, 420px" unoptimized />
       </div>
       <div className="mr-moment-copy">
         <h3 className="mr-serif">{item.title}</h3>

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { uniqueDisplayMedia } from "@/lib/media/display-identity";
+import { mediaDeliveryUrl } from "@/lib/media/paths";
 import type { Media, RawSource, SourceType } from "@/lib/types";
 import { presentableEvidenceText, presentableSourceLabel, stripWechatEmoticons } from "@/lib/organizer/evidence-text";
 import { isThumbnailEligible } from "@/lib/media/hero";
@@ -75,7 +76,7 @@ export function DayMaterial({ sources, media, speakerBySourceId, deliverableIds 
                   <div className="evidence-media">
                     {withImages.map((item) => (
                       <div className="evidence-media-item" key={item.id}>
-                        <Image src={item.thumbnailSrc ?? item.src} alt={presentableAlt(item)} fill sizes="(max-width: 700px) 42vw, 220px" style={{ objectFit: "cover" }} unoptimized />
+                        <Image src={item.type === "video" ? (item.posterSrc ?? mediaDeliveryUrl(item.id, "poster")) : (item.thumbnailSrc ?? mediaDeliveryUrl(item.id, "thumbnail"))} alt={presentableAlt(item)} fill sizes="(max-width: 700px) 42vw, 220px" style={{ objectFit: "cover" }} unoptimized />
                         <span className="evidence-media-label">{item.type === "video" ? `视频 ${formatDuration(item.durationSeconds)}`.trim() : "照片"}</span>
                       </div>
                     ))}

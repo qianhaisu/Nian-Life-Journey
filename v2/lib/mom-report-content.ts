@@ -126,7 +126,7 @@ const AUGUST_2026: MomReportContent = {
   title: "张小年",
   release: "2026.08 · V1.3",
   heroBadge: "✨ 这个月的张小年",
-  heroImage: { src: `${IMG}/hero.jpg`, width: 958, height: 1704, alt: "张小年笑着向前走的近期照片" },
+  heroImage: { src: `${IMG}/hero.webp`, width: 958, height: 1704, alt: "张小年笑着向前走的近期照片" },
   heroStats: { heightLabel: "86 cm", weightLabel: "12.1 kg", ageLabel: "1 岁 7 个月" },
   summaryBody:
     "8 月又长大了一点。夜间睡眠更稳定，开始进入自主入睡的新阶段；吃饭越来越喜欢自己来。这个月又经历了一轮流鼻涕和咳嗽，也开始偶尔叫“妈妈”、喜欢翻绘本了。每天都有一点新的变化，也还是一样可爱。",
@@ -272,7 +272,7 @@ const AUGUST_2026: MomReportContent = {
     items: [
       {
         id: "xiaoai",
-        image: `${IMG}/moment-xiaoai.png`,
+        image: `${IMG}/moment-xiaoai.webp`,
         width: 1064,
         height: 1398,
         alt: "睡前小年回应小爱同学的插画",
@@ -283,7 +283,7 @@ const AUGUST_2026: MomReportContent = {
       },
       {
         id: "dongqian-lake",
-        image: `${IMG}/moment-dongqian-lake.png`,
+        image: `${IMG}/moment-dongqian-lake.webp`,
         width: 1056,
         height: 1408,
         alt: "小年认真看东钱湖暴雨湖面的插画",
@@ -343,10 +343,10 @@ const AUGUST_2026: MomReportContent = {
     entryNote: "便利店、面包店、餐厅、面馆直接照着选。",
     principle: "不知道买什么：原味 · 软一点 · 少馅料",
     scenes: [
-      { id: "convenience-store", image: `${IMG}/food-convenience-store.jpg`, width: 720, height: 478, alt: "便利店可选的香蕉、白煮蛋、原味玉米和纯牛奶", title: "便利店", items: "香蕉 · 白煮蛋 · 玉米 · 纯牛奶", tip: "拿 2–3 样就行" },
-      { id: "bakery", image: `${IMG}/food-bakery.jpg`, width: 720, height: 478, alt: "面包店可选的原味吐司、小餐包、纯牛奶和香蕉", title: "面包店", items: "原味吐司 · 小餐包 · 牛奶 · 香蕉", tip: "撕小块，少夹心" },
-      { id: "restaurant", image: `${IMG}/food-restaurant.jpg`, width: 720, height: 478, alt: "餐馆可选的米饭、蒸蛋和软青菜", title: "餐馆", items: "米饭 · 蒸蛋 · 软青菜", tip: "宝宝吃，少盐" },
-      { id: "noodles", image: `${IMG}/food-noodles.jpg`, width: 720, height: 478, alt: "面馆可选的清汤面和鸡蛋", title: "面馆", items: "清汤面 · 鸡蛋", tip: "剪短 · 不辣 · 少喝汤" },
+      { id: "convenience-store", image: `${IMG}/food-convenience-store.webp`, width: 720, height: 478, alt: "便利店可选的香蕉、白煮蛋、原味玉米和纯牛奶", title: "便利店", items: "香蕉 · 白煮蛋 · 玉米 · 纯牛奶", tip: "拿 2–3 样就行" },
+      { id: "bakery", image: `${IMG}/food-bakery.webp`, width: 720, height: 478, alt: "面包店可选的原味吐司、小餐包、纯牛奶和香蕉", title: "面包店", items: "原味吐司 · 小餐包 · 牛奶 · 香蕉", tip: "撕小块，少夹心" },
+      { id: "restaurant", image: `${IMG}/food-restaurant.webp`, width: 720, height: 478, alt: "餐馆可选的米饭、蒸蛋和软青菜", title: "餐馆", items: "米饭 · 蒸蛋 · 软青菜", tip: "宝宝吃，少盐" },
+      { id: "noodles", image: `${IMG}/food-noodles.webp`, width: 720, height: 478, alt: "面馆可选的清汤面和鸡蛋", title: "面馆", items: "清汤面 · 鸡蛋", tip: "剪短 · 不辣 · 少喝汤" },
     ],
     fallbackQuestion: "实在不知道怎么选？",
     fallbackAnswer: "饭 + 蛋 + 软蔬菜。",

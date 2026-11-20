@@ -8,10 +8,14 @@ export function CardThumbnail({
   thumbnail,
   className,
   sizes = "64px",
+  priority = false,
+  loading,
 }: {
   thumbnail: ThumbnailChoice;
   className: string;
   sizes?: string;
+  priority?: boolean;
+  loading?: "eager" | "lazy";
 }) {
   const [useFallback, setUseFallback] = useState(false);
   const src = useFallback && thumbnail.fallbackSrc ? thumbnail.fallbackSrc : thumbnail.src;
@@ -24,6 +28,9 @@ export function CardThumbnail({
         alt=""
         fill
         sizes={sizes}
+        priority={priority}
+        loading={loading}
+        fetchPriority={priority ? "high" : undefined}
         unoptimized
         style={{ objectFit: "cover", objectPosition: "50% 25%" }}
         onError={() => {

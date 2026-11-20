@@ -35,6 +35,7 @@ export function DayPhotos({
   ageLabel,
   previewCount = DAY_GROUP_PREVIEW_MAX,
   quietLabel = false,
+  priority = false,
 }: {
   photos: MediaRef[];
   dateLabel: string;
@@ -46,6 +47,7 @@ export function DayPhotos({
    * page). The heading stays in the DOM for screen readers; it is just not drawn.
    */
   quietLabel?: boolean;
+  priority?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (photos.length === 0) return null;
@@ -60,6 +62,7 @@ export function DayPhotos({
         photos={photos}
         dateLabel={dateLabel}
         ageLabel={ageLabel}
+        priority={priority}
         limit={limited ? previewCount : undefined}
         onExpand={() => setExpanded(true)}
       />

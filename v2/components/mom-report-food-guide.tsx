@@ -24,7 +24,7 @@ export function MomReportFoodGuideSection({ principle, scenes, fallbackQuestion,
     <div className="mr-food-grid">
       {scenes.map((scene) => <article className="mr-food-scene" key={scene.id}>
         <div className="mr-food-photo">
-          <Image src={scene.image} alt={scene.alt} width={scene.width} height={scene.height} sizes="(max-width: 700px) 45vw, 220px" />
+          <Image src={scene.image} alt={scene.alt} width={scene.width} height={scene.height} sizes="(max-width: 700px) 45vw, 220px" unoptimized />
         </div>
         <div className="mr-food-copy">
           <h3>{scene.title}</h3>

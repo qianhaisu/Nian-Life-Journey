@@ -35,12 +35,10 @@ export function Photo({ media, sizes, priority = false, loading, variant = "web"
   const shape = actual ? { ...media, ...actual } : media;
   const figureClassName = `photo photo-${orientationOf(shape)}${fit === "crop" ? " photo-crop" : ""} ${className}`.trim();
   const figureStyle = fit === "crop" ? undefined : { aspectRatio: aspectRatioOf(shape) };
-  // Final fallback: Next optimizer timed out or the derivative is missing — serve the thumbnail
-  // directly (bypasses optimizer) so the slot never goes blank. Use stored metadata for shape since
-  // no successful load occurred.
+  // Both thumbnail and full-size derivatives failed to load; keep a quiet zero-CLS container
+  // rather than re-requesting the failed thumbnail URL in a raw <img>.
   if (failed) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <figure className={figureClassName} style={figureStyle}><img src={mediaDeliveryUrl(media.id, "thumbnail")} alt={media.alt} /></figure>;
+    return <figure className={figureClassName} style={figureStyle} aria-label={media.alt} />;
   }
   const wantsThumbnail = variant === "thumbnail" && !fullSize;
   const src = wantsThumbnail ? media.thumbnailSrc ?? mediaDeliveryUrl(media.id, "thumbnail") : media.src;
@@ -54,6 +52,7 @@ export function Photo({ media, sizes, priority = false, loading, variant = "web"
     <Image
       key={src}
       src={src} alt={media.alt} width={width} height={height} sizes={sizes} priority={priority} loading={loading}
+      fetchPriority={priority ? "high" : undefined}
       unoptimized
       onError={() => (wantsThumbnail ? setFullSize(true) : setFailed(true))}
       onLoad={(event) => {

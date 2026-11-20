@@ -18,7 +18,12 @@ export async function createDerivatives(asset: MediaAsset, bytes: Uint8Array): P
   const image = sharp(bytes).rotate();
   const outputs: DerivativeOutput[] = [];
   for (const [variant, width] of [["thumbnail", 480], ["web", 1280]] as const) {
-    const result = await image.clone().resize({ width, fit: "inside", withoutEnlargement: true }).webp({ quality: variant === "thumbnail" ? 78 : 84 }).toBuffer({ resolveWithObject: true });
+    const quality = variant === "thumbnail" ? 78 : 84;
+    const result = await image
+      .clone()
+      .resize({ width, height: width * 2, fit: "inside", withoutEnlargement: true })
+      .webp({ quality, effort: 6, smartSubsample: true })
+      .toBuffer({ resolveWithObject: true });
     outputs.push({ variant, body: result.data, mimeType: "image/webp", width: result.info.width, height: result.info.height });
   }
   return outputs;

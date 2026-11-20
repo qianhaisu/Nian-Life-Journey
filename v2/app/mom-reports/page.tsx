@@ -54,7 +54,7 @@ export default async function MomReportsPage({ searchParams }: { searchParams: S
 
       <div className="mr-hero-wrap">
         <figure className="mr-hero-photo">
-          <Image src={content.heroImage.src} alt={content.heroImage.alt} width={content.heroImage.width} height={content.heroImage.height} priority sizes="(max-width: 860px) 100vw, 860px" />
+          <Image src={content.heroImage.src} alt={content.heroImage.alt} width={content.heroImage.width} height={content.heroImage.height} priority unoptimized sizes="(max-width: 860px) 100vw, 860px" />
           <figcaption className="mr-hero-badge">{content.heroBadge}</figcaption>
         </figure>
         <div className="mr-hero-panel">

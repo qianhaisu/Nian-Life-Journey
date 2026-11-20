@@ -175,7 +175,32 @@ export function createHotStorage(env: NodeJS.ProcessEnv = process.env): HotStora
   return resolveHotBackend(env) === "r2" ? new R2HotStorage(getR2Config(env)) : new LocalHotStorage();
 }
 
-export const hotStorage = createHotStorage();
+let hotSingleton: HotStorage | undefined;
+
+function getHotStorage(): HotStorage {
+  if (!hotSingleton) hotSingleton = createHotStorage();
+  return hotSingleton;
+}
+
+export const hotStorage: HotStorage = new Proxy({} as HotStorage, {
+  get(_target, prop) {
+    const target = getHotStorage();
+    const value = Reflect.get(target, prop, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  },
+  set(_target, prop, value) {
+    return Reflect.set(getHotStorage(), prop, value);
+  },
+  has(_target, prop) {
+    return prop in getHotStorage();
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    return Reflect.getOwnPropertyDescriptor(getHotStorage(), prop);
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getHotStorage());
+  },
+});
 
 // OSS is a genuinely separate tier, constructed lazily (only when something actually needs it, so
 // an app with no OSS_* vars configured never pays getOssConfig()'s throw just for importing this

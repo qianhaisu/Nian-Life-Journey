@@ -1,3 +1,4 @@
+import { matchesIfNoneMatch } from "@/lib/media/delivery-cache";
 import { getStorageForProvider } from "@/lib/storage/hot-storage";
 import { NextResponse } from "next/server";
 
@@ -13,8 +14,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   const { file } = await params;
   const film = Object.prototype.hasOwnProperty.call(FILMS, file) ? FILMS[file] : undefined;
   if (!film || film.size <= 0) return new NextResponse("Not found", { status: 404, headers: NO_STORE });
+  const etag = `"film-${file}"`;
+  const cacheHeaders = { "Cache-Control": "public, max-age=31536000, immutable", ETag: etag };
+  if (matchesIfNoneMatch(request.headers.get("if-none-match"), etag)) {
+    return new NextResponse(null, { status: 304, headers: cacheHeaders });
+  }
   const storage = getStorageForProvider("oss");
-  const base = { "Content-Type": film.type, "Accept-Ranges": "bytes", "Cache-Control": "public, max-age=31536000, immutable" };
+  const base = { "Content-Type": film.type, "Accept-Ranges": "bytes", ...cacheHeaders };
   const m = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get("range")?.trim() ?? "");
   if (m && (m[1] || m[2])) {
     const total = film.size;

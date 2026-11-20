@@ -1,5 +1,6 @@
-import { getMediaForDelivery } from "@/lib/db/repository";
+import { getCachedMediaForDelivery, matchesIfNoneMatch } from "@/lib/media/delivery-cache";
 import { getStorageForProvider, selectLocation } from "@/lib/storage/hot-storage";
+import type { HotStorage } from "@/lib/storage/storage-types";
 import type { MediaVariant } from "@/lib/types";
 import { NextResponse } from "next/server";
 
@@ -7,7 +8,7 @@ const NOT_CACHEABLE = { "Cache-Control": "no-store" };
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const record = await getMediaForDelivery(id);
+  const record = await getCachedMediaForDelivery(id);
   if (!record?.asset || record.media.visibility === "private") return new NextResponse("Not found", { status: 404, headers: NOT_CACHEABLE });
   const { media, asset, locations } = record;
   const value = new URL(request.url).searchParams.get("variant");
@@ -23,7 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // (id, variant), so this is safe to cache for a year at both the browser and the CDN.
   const etag = `"${(asset.checksum ?? asset.id).replace(/^sha256:/i, "")}-${location.variant}"`;
   const cacheHeaders = { "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable", ETag: etag };
-  if (request.headers.get("if-none-match") === etag) return new NextResponse(null, { status: 304, headers: cacheHeaders });
+  if (matchesIfNoneMatch(request.headers.get("if-none-match"), etag)) return new NextResponse(null, { status: 304, headers: cacheHeaders });
 
   const contentType = location.mimeType || media.mimeType || "application/octet-stream";
 
@@ -72,8 +73,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
   }
 
-  const stream = await storage.getStream(location.providerRef, request.signal);
-  if (stream) {
+  const maybeGetStream = (storage as { getStream?: HotStorage["getStream"] }).getStream;
+  if (typeof maybeGetStream === "function") {
+    const stream = await maybeGetStream.call(storage, location.providerRef, request.signal);
+    if (!stream) return new NextResponse("Media derivative is not ready", { status: 404, headers: NOT_CACHEABLE });
     const headers: Record<string, string> = { "Content-Type": contentType, "Accept-Ranges": "bytes", ...cacheHeaders };
     if (location.fileSize) headers["Content-Length"] = String(location.fileSize);
     return new NextResponse(stream, { headers });

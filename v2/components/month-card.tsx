@@ -9,11 +9,12 @@ import { productToday } from "@/lib/time-truth";
 // One month as a tappable card on /memory: a cropped cover photo, the month and age, and the first
 // line of the month's snapshot (or the first memory's title). No counts — the card is an invitation,
 // not a summary.
-export function MonthCard({ entry, blurb, cover, coverFocal, coverFrame }: {
+export function MonthCard({ entry, blurb, cover, coverFocal, coverFrame, priority = false }: {
   entry: MonthIndexEntry; blurb?: string; cover?: MediaRef;
   /** Where an edited cover's crop sits, measured for that photograph in the real card at both widths. */
   coverFocal?: { mobilePercent: number; desktopPercent: number };
   coverFrame?: "square" | "full";
+  priority?: boolean;
 }) {
   const { chapter, href, preview, featured } = entry;
   // The month's face comes from `preview`, and only from `preview`.
@@ -58,6 +59,7 @@ export function MonthCard({ entry, blurb, cover, coverFocal, coverFrame }: {
             media={coverPhoto}
             variant={cover && coverFrame ? "web" : "thumbnail"}
             fit="crop"
+            priority={priority}
             sizes="(max-width: 720px) calc(100vw - 32px), 340px"
           />
         </div>
