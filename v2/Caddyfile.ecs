@@ -97,6 +97,18 @@ nianlife.cn {
 	handle /api/internal/* {
 		respond "Not Found" 404
 	}
+	@scanner {
+		path /.env* *.env /.git* /wp-admin* /wp-login* /wp-includes* /wp-content* /wp-json* /xmlrpc.php /phpmyadmin* /.aws* /.DS_Store *.php *.asp *.aspx *.jsp *.cgi
+	}
+	handle @scanner {
+		respond "Not Found" 404
+	}
+	@binaryMedia {
+		path /api/media/* /api/films/* /api/weekend-media/*
+	}
+	handle @binaryMedia {
+		reverse_proxy 127.0.0.1:3000
+	}
 	handle {
 		encode zstd gzip
 		reverse_proxy 127.0.0.1:3000

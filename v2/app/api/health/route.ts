@@ -13,10 +13,20 @@ import type { MediaProvider } from "@/lib/types";
 // (Dockerfile build arg; null for a build that was not given one), `id` is Next's own BUILD_ID,
 // which every rendered page also carries in its flight data, so a page can be matched to the
 // build that rendered it rather than assumed to be current.
+let cachedBuildId: string | null | undefined;
+
+function readBuildIdOnce(): string | null {
+  if (cachedBuildId !== undefined) return cachedBuildId;
+  try {
+    cachedBuildId = readFileSync(path.join(process.cwd(), ".next", "BUILD_ID"), "utf8").trim() || null;
+  } catch {
+    cachedBuildId = null;
+  }
+  return cachedBuildId;
+}
+
 function buildInfo() {
-  let id: string | null = null;
-  try { id = readFileSync(path.join(process.cwd(), ".next", "BUILD_ID"), "utf8").trim() || null; } catch { id = null; }
-  return { sha: process.env.NIANLIFE_BUILD_SHA?.trim() || null, id };
+  return { sha: process.env.NIANLIFE_BUILD_SHA?.trim() || null, id: readBuildIdOnce() };
 }
 
 /**
@@ -78,10 +88,18 @@ async function mediaProbe(): Promise<{ reachable: boolean; provider: string | nu
 
 // Minimal connectivity probe for Cowork's巡检, not a full readiness contract. Never cacheable —
 // a stale "ok" is worse than a slow real check.
-export async function GET() {
+export async function GET(request: Request) {
   const startedAt = Date.now();
   const build = buildInfo();
+  const isLite = new URL(request.url).searchParams.get("lite") === "1";
   try {
+    if (isLite) {
+      await getDb().execute(sql`SELECT 1`);
+      return NextResponse.json(
+        { ok: true, db: "connected", build },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
     const [{ count: rawSourceCount }] = await getDb().select({ count: sql<number>`count(*)` }).from(t.rawSources);
     const [{ count: mediaCount }] = await getDb().select({ count: sql<number>`count(*)` }).from(t.media);
     const media = await mediaProbe();

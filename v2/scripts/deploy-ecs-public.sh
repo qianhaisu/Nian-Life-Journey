@@ -23,7 +23,8 @@
 #   swap <short>             闸 a：线上 SHA 必须是 <short> 的祖先，否则 STOP（exit 11，无旁路）；
 #                            换 Web 容器，旧容器改名 nianlife-diag-web-pre-<short>-<时间> 保留；
 #                            闸 b：切换后真实页面冒烟（SMOKE_PAGES），失败自动 rollback-app 并 exit 12/13；
-#                            通过后才跑保留策略
+#                            通过后才跑保留策略并顺序预热缓存
+#   warmup                   顺序预热首页、记忆、旅行、妈妈月报及核心月/旅行页面缓存
 #   caddy-up                 解析已指向 ECS_PUBLIC_IP 才启动 Caddy（自动申请证书）
 #   verify                   本机外部验证：跳转、证书、首页、健康检查的 SHA
 #   health-data-install <本地目录>  健康模块私有数据装到 /srv/nianlife-health（只换只读部分，绝不碰 record/）
@@ -134,6 +135,39 @@ smoke() {
   fi
   rm -f "$body"
   [ "$ok" = 1 ]
+}
+
+WARMUP_PATHS=(
+  "/"
+  "/memory"
+  "/travel"
+  "/mom-reports"
+  "/films/xueyi"
+  "/memory/2026/11"
+  "/memory/2026/10"
+  "/memory/2026/09"
+  "/memory/2026/08"
+  "/memory/2025/12"
+  "/travel/2026-02-newyear"
+  "/travel/2025-12-sichuan"
+  "/travel/2025-09-xian"
+  "/travel/2025-01-losangeles"
+)
+
+warmup() {
+  local path code ok=0 fail=0
+  for path in "${WARMUP_PATHS[@]}"; do
+    code=$(curl --noproxy '*' -s -o /dev/null -m 30 -w '%{http_code}' "$SITE$path" || echo 000)
+    if [ "$code" = 200 ]; then
+      ok=$((ok + 1))
+      echo "warmup $path -> $code"
+    else
+      fail=$((fail + 1))
+      echo "warmup WARN $path -> $code"
+    fi
+    sleep 0.2
+  done
+  echo "WARMUP_DONE ok=$ok fail=$fail"
 }
 
 rollback_app() {
@@ -616,6 +650,11 @@ if ! python3 /home/ecs-user/ecs-retention.py --apply 2>&1 | tee "$1/retention.lo
   exit 10
 fi
 EOF
+    warmup || echo "WARN: post-swap warmup encountered errors (release unaffected)"
+    ;;
+
+  warmup)
+    warmup
     ;;
 
   caddy-up)
@@ -770,5 +809,5 @@ docker ps -a --filter name=^nianlife-caddy$ --format '{{.Names}} {{.Status}} (co
 EOF
     ;;
 
-  *) sed -n '2,26p' "$0"; exit 2 ;;
+  *) sed -n '2,27p' "$0"; exit 2 ;;
 esac

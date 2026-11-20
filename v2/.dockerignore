@@ -16,6 +16,7 @@ node_modules
 .next-*/
 out
 *.tsbuildinfo
+**/*.tsbuildinfo
 
 # Local data stores, media manifests, and ad hoc dev artifacts.
 .data
@@ -43,3 +44,4 @@ test
 
 # Docs/reports — not runtime files, keep the image minimal.
 *.md
+docs
